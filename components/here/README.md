@@ -20,8 +20,8 @@ triggered.
 
 | Setting | Value |
 | --- | --- |
-| Package | `autostamp:here@0.3.0` |
-| Published version | `0.3.0+here-2.1.1` |
+| Package | `autostamp:here@0.5.0` |
+| Published version | `0.5.0+here-2.1.1` |
 | Tag filter | all tags |
 | Operations generated | 3 |
 | Infer API-key credentials | enabled — not triggered |

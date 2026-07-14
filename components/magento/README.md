@@ -11,8 +11,8 @@ triggered.
 
 | Setting | Value |
 | --- | --- |
-| Package | `autostamp:magento@0.3.0` |
-| Published version | `0.3.0+magento-2.2.10` |
+| Package | `autostamp:magento@0.5.0` |
+| Published version | `0.5.0+magento-2.2.10` |
 | Tag filter | all tags |
 | Operations generated | 455 |
 | Infer API-key credentials | enabled — not triggered |

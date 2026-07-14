@@ -6,15 +6,622 @@
 /// | Secret name | Applied to each request as |
 /// | --- | --- |
 /// | `api_key` | query `api_key` |
-package autostamp:giphy@0.3.0;
+package autostamp:giphy@0.5.0;
 
 interface gifs {
+  enum gif-type-op-enum {
+    gif,
+  }
+
+  record get-gifs-by-id-response {
+    data: option<list<gif>>,
+    meta: option<meta>,
+    pagination: option<pagination>
+  }
+
+  record gif {
+    /// The unique bit.ly URL for this GIF
+    bitly-url: option<string>,
+    /// Currently unused
+    content-url: option<string>,
+    /// The date this GIF was added to the GIPHY database.
+    create-datetime: option<string>,
+    /// A URL used for embedding this GIF
+    embded-url: option<string>,
+    /// An array of featured tags for this GIF (Note: Not available when using the Public Beta Key)
+    featured-tags: option<list<string>>,
+    /// This GIF's unique ID
+    id: option<string>,
+    /// An object containing data for various available formats and sizes of this GIF.
+    images: option<gif-images>,
+    /// The creation or upload date from this GIF's source.
+    import-datetime: option<string>,
+    /// The MPAA-style rating for this content. Examples include Y, G, PG, PG-13 and R
+    rating: option<string>,
+    /// The unique slug used in this GIF's URL
+    slug: option<string>,
+    /// The page on which this GIF was found
+    source: option<string>,
+    /// The URL of the webpage on which this GIF was found.
+    source-post-url: option<string>,
+    /// The top level domain of the source URL.
+    source-tld: option<string>,
+    /// An array of tags for this GIF (Note: Not available when using the Public Beta Key)
+    tags: option<list<string>>,
+    /// The date on which this gif was marked trending, if applicable.
+    trending-datetime: option<string>,
+    /// Type of the gif. By default, this is almost always gif
+    type-op: option<gif-type-op-enum>,
+    /// The date on which this GIF was last updated.
+    update-datetime: option<string>,
+    /// The unique URL for this GIF
+    url: option<string>,
+    user: option<user>,
+    /// The username this GIF is attached to, if applicable
+    username: option<string>
+  }
+
+  /// An object containing data for various available formats and sizes of this GIF.
+  record gif-images {
+    downsized: option<gif-images-downsized>,
+    downsized-large: option<gif-images-downsized-large>,
+    downsized-medium: option<gif-images-downsized-medium>,
+    downsized-small: option<gif-images-downsized-small>,
+    downsized-still: option<gif-images-downsized-still>,
+    fixed-height: option<gif-images-fixed-height>,
+    fixed-height-downsampled: option<gif-images-fixed-height-downsampled>,
+    fixed-height-small: option<gif-images-fixed-height-small>,
+    fixed-height-small-still: option<gif-images-fixed-height-small-still>,
+    fixed-height-still: option<gif-images-fixed-height-still>,
+    fixed-width: option<gif-images-fixed-width>,
+    fixed-width-downsampled: option<gif-images-fixed-width-downsampled>,
+    fixed-width-small: option<gif-images-fixed-width-small>,
+    fixed-width-small-still: option<gif-images-fixed-width-small-still>,
+    fixed-width-still: option<gif-images-fixed-width-still>,
+    looping: option<gif-images-looping>,
+    original: option<gif-images-original>,
+    original-still: option<gif-images-original-still>,
+    preview: option<gif-images-preview>,
+    preview-gif: option<gif-images-preview-gif>
+  }
+
+  record gif-images-downsized {
+    /// The number of frames in this GIF.
+    frames: option<string>,
+    /// The height of this GIF in pixels.
+    height: option<string>,
+    /// The URL for this GIF in .MP4 format.
+    mp4: option<string>,
+    /// The size in bytes of the .MP4 file corresponding to this GIF.
+    mp4-size: option<string>,
+    /// The size of this GIF in bytes.
+    size: option<string>,
+    /// The publicly-accessible direct URL for this GIF.
+    url: option<string>,
+    /// The URL for this GIF in .webp format.
+    webp: option<string>,
+    /// The size in bytes of the .webp file corresponding to this GIF.
+    webp-size: option<string>,
+    /// The width of this GIF in pixels.
+    width: option<string>
+  }
+
+  record gif-images-downsized-large {
+    /// The number of frames in this GIF.
+    frames: option<string>,
+    /// The height of this GIF in pixels.
+    height: option<string>,
+    /// The URL for this GIF in .MP4 format.
+    mp4: option<string>,
+    /// The size in bytes of the .MP4 file corresponding to this GIF.
+    mp4-size: option<string>,
+    /// The size of this GIF in bytes.
+    size: option<string>,
+    /// The publicly-accessible direct URL for this GIF.
+    url: option<string>,
+    /// The URL for this GIF in .webp format.
+    webp: option<string>,
+    /// The size in bytes of the .webp file corresponding to this GIF.
+    webp-size: option<string>,
+    /// The width of this GIF in pixels.
+    width: option<string>
+  }
+
+  record gif-images-downsized-medium {
+    /// The number of frames in this GIF.
+    frames: option<string>,
+    /// The height of this GIF in pixels.
+    height: option<string>,
+    /// The URL for this GIF in .MP4 format.
+    mp4: option<string>,
+    /// The size in bytes of the .MP4 file corresponding to this GIF.
+    mp4-size: option<string>,
+    /// The size of this GIF in bytes.
+    size: option<string>,
+    /// The publicly-accessible direct URL for this GIF.
+    url: option<string>,
+    /// The URL for this GIF in .webp format.
+    webp: option<string>,
+    /// The size in bytes of the .webp file corresponding to this GIF.
+    webp-size: option<string>,
+    /// The width of this GIF in pixels.
+    width: option<string>
+  }
+
+  record gif-images-downsized-small {
+    /// The number of frames in this GIF.
+    frames: option<string>,
+    /// The height of this GIF in pixels.
+    height: option<string>,
+    /// The URL for this GIF in .MP4 format.
+    mp4: option<string>,
+    /// The size in bytes of the .MP4 file corresponding to this GIF.
+    mp4-size: option<string>,
+    /// The size of this GIF in bytes.
+    size: option<string>,
+    /// The publicly-accessible direct URL for this GIF.
+    url: option<string>,
+    /// The URL for this GIF in .webp format.
+    webp: option<string>,
+    /// The size in bytes of the .webp file corresponding to this GIF.
+    webp-size: option<string>,
+    /// The width of this GIF in pixels.
+    width: option<string>
+  }
+
+  record gif-images-downsized-still {
+    /// The number of frames in this GIF.
+    frames: option<string>,
+    /// The height of this GIF in pixels.
+    height: option<string>,
+    /// The URL for this GIF in .MP4 format.
+    mp4: option<string>,
+    /// The size in bytes of the .MP4 file corresponding to this GIF.
+    mp4-size: option<string>,
+    /// The size of this GIF in bytes.
+    size: option<string>,
+    /// The publicly-accessible direct URL for this GIF.
+    url: option<string>,
+    /// The URL for this GIF in .webp format.
+    webp: option<string>,
+    /// The size in bytes of the .webp file corresponding to this GIF.
+    webp-size: option<string>,
+    /// The width of this GIF in pixels.
+    width: option<string>
+  }
+
+  record gif-images-fixed-height {
+    /// The number of frames in this GIF.
+    frames: option<string>,
+    /// The height of this GIF in pixels.
+    height: option<string>,
+    /// The URL for this GIF in .MP4 format.
+    mp4: option<string>,
+    /// The size in bytes of the .MP4 file corresponding to this GIF.
+    mp4-size: option<string>,
+    /// The size of this GIF in bytes.
+    size: option<string>,
+    /// The publicly-accessible direct URL for this GIF.
+    url: option<string>,
+    /// The URL for this GIF in .webp format.
+    webp: option<string>,
+    /// The size in bytes of the .webp file corresponding to this GIF.
+    webp-size: option<string>,
+    /// The width of this GIF in pixels.
+    width: option<string>
+  }
+
+  record gif-images-fixed-height-downsampled {
+    /// The number of frames in this GIF.
+    frames: option<string>,
+    /// The height of this GIF in pixels.
+    height: option<string>,
+    /// The URL for this GIF in .MP4 format.
+    mp4: option<string>,
+    /// The size in bytes of the .MP4 file corresponding to this GIF.
+    mp4-size: option<string>,
+    /// The size of this GIF in bytes.
+    size: option<string>,
+    /// The publicly-accessible direct URL for this GIF.
+    url: option<string>,
+    /// The URL for this GIF in .webp format.
+    webp: option<string>,
+    /// The size in bytes of the .webp file corresponding to this GIF.
+    webp-size: option<string>,
+    /// The width of this GIF in pixels.
+    width: option<string>
+  }
+
+  record gif-images-fixed-height-small {
+    /// The number of frames in this GIF.
+    frames: option<string>,
+    /// The height of this GIF in pixels.
+    height: option<string>,
+    /// The URL for this GIF in .MP4 format.
+    mp4: option<string>,
+    /// The size in bytes of the .MP4 file corresponding to this GIF.
+    mp4-size: option<string>,
+    /// The size of this GIF in bytes.
+    size: option<string>,
+    /// The publicly-accessible direct URL for this GIF.
+    url: option<string>,
+    /// The URL for this GIF in .webp format.
+    webp: option<string>,
+    /// The size in bytes of the .webp file corresponding to this GIF.
+    webp-size: option<string>,
+    /// The width of this GIF in pixels.
+    width: option<string>
+  }
+
+  record gif-images-fixed-height-small-still {
+    /// The number of frames in this GIF.
+    frames: option<string>,
+    /// The height of this GIF in pixels.
+    height: option<string>,
+    /// The URL for this GIF in .MP4 format.
+    mp4: option<string>,
+    /// The size in bytes of the .MP4 file corresponding to this GIF.
+    mp4-size: option<string>,
+    /// The size of this GIF in bytes.
+    size: option<string>,
+    /// The publicly-accessible direct URL for this GIF.
+    url: option<string>,
+    /// The URL for this GIF in .webp format.
+    webp: option<string>,
+    /// The size in bytes of the .webp file corresponding to this GIF.
+    webp-size: option<string>,
+    /// The width of this GIF in pixels.
+    width: option<string>
+  }
+
+  record gif-images-fixed-height-still {
+    /// The number of frames in this GIF.
+    frames: option<string>,
+    /// The height of this GIF in pixels.
+    height: option<string>,
+    /// The URL for this GIF in .MP4 format.
+    mp4: option<string>,
+    /// The size in bytes of the .MP4 file corresponding to this GIF.
+    mp4-size: option<string>,
+    /// The size of this GIF in bytes.
+    size: option<string>,
+    /// The publicly-accessible direct URL for this GIF.
+    url: option<string>,
+    /// The URL for this GIF in .webp format.
+    webp: option<string>,
+    /// The size in bytes of the .webp file corresponding to this GIF.
+    webp-size: option<string>,
+    /// The width of this GIF in pixels.
+    width: option<string>
+  }
+
+  record gif-images-fixed-width {
+    /// The number of frames in this GIF.
+    frames: option<string>,
+    /// The height of this GIF in pixels.
+    height: option<string>,
+    /// The URL for this GIF in .MP4 format.
+    mp4: option<string>,
+    /// The size in bytes of the .MP4 file corresponding to this GIF.
+    mp4-size: option<string>,
+    /// The size of this GIF in bytes.
+    size: option<string>,
+    /// The publicly-accessible direct URL for this GIF.
+    url: option<string>,
+    /// The URL for this GIF in .webp format.
+    webp: option<string>,
+    /// The size in bytes of the .webp file corresponding to this GIF.
+    webp-size: option<string>,
+    /// The width of this GIF in pixels.
+    width: option<string>
+  }
+
+  record gif-images-fixed-width-downsampled {
+    /// The number of frames in this GIF.
+    frames: option<string>,
+    /// The height of this GIF in pixels.
+    height: option<string>,
+    /// The URL for this GIF in .MP4 format.
+    mp4: option<string>,
+    /// The size in bytes of the .MP4 file corresponding to this GIF.
+    mp4-size: option<string>,
+    /// The size of this GIF in bytes.
+    size: option<string>,
+    /// The publicly-accessible direct URL for this GIF.
+    url: option<string>,
+    /// The URL for this GIF in .webp format.
+    webp: option<string>,
+    /// The size in bytes of the .webp file corresponding to this GIF.
+    webp-size: option<string>,
+    /// The width of this GIF in pixels.
+    width: option<string>
+  }
+
+  record gif-images-fixed-width-small {
+    /// The number of frames in this GIF.
+    frames: option<string>,
+    /// The height of this GIF in pixels.
+    height: option<string>,
+    /// The URL for this GIF in .MP4 format.
+    mp4: option<string>,
+    /// The size in bytes of the .MP4 file corresponding to this GIF.
+    mp4-size: option<string>,
+    /// The size of this GIF in bytes.
+    size: option<string>,
+    /// The publicly-accessible direct URL for this GIF.
+    url: option<string>,
+    /// The URL for this GIF in .webp format.
+    webp: option<string>,
+    /// The size in bytes of the .webp file corresponding to this GIF.
+    webp-size: option<string>,
+    /// The width of this GIF in pixels.
+    width: option<string>
+  }
+
+  record gif-images-fixed-width-small-still {
+    /// The number of frames in this GIF.
+    frames: option<string>,
+    /// The height of this GIF in pixels.
+    height: option<string>,
+    /// The URL for this GIF in .MP4 format.
+    mp4: option<string>,
+    /// The size in bytes of the .MP4 file corresponding to this GIF.
+    mp4-size: option<string>,
+    /// The size of this GIF in bytes.
+    size: option<string>,
+    /// The publicly-accessible direct URL for this GIF.
+    url: option<string>,
+    /// The URL for this GIF in .webp format.
+    webp: option<string>,
+    /// The size in bytes of the .webp file corresponding to this GIF.
+    webp-size: option<string>,
+    /// The width of this GIF in pixels.
+    width: option<string>
+  }
+
+  record gif-images-fixed-width-still {
+    /// The number of frames in this GIF.
+    frames: option<string>,
+    /// The height of this GIF in pixels.
+    height: option<string>,
+    /// The URL for this GIF in .MP4 format.
+    mp4: option<string>,
+    /// The size in bytes of the .MP4 file corresponding to this GIF.
+    mp4-size: option<string>,
+    /// The size of this GIF in bytes.
+    size: option<string>,
+    /// The publicly-accessible direct URL for this GIF.
+    url: option<string>,
+    /// The URL for this GIF in .webp format.
+    webp: option<string>,
+    /// The size in bytes of the .webp file corresponding to this GIF.
+    webp-size: option<string>,
+    /// The width of this GIF in pixels.
+    width: option<string>
+  }
+
+  record gif-images-looping {
+    /// The number of frames in this GIF.
+    frames: option<string>,
+    /// The height of this GIF in pixels.
+    height: option<string>,
+    /// The URL for this GIF in .MP4 format.
+    mp4: option<string>,
+    /// The size in bytes of the .MP4 file corresponding to this GIF.
+    mp4-size: option<string>,
+    /// The size of this GIF in bytes.
+    size: option<string>,
+    /// The publicly-accessible direct URL for this GIF.
+    url: option<string>,
+    /// The URL for this GIF in .webp format.
+    webp: option<string>,
+    /// The size in bytes of the .webp file corresponding to this GIF.
+    webp-size: option<string>,
+    /// The width of this GIF in pixels.
+    width: option<string>
+  }
+
+  record gif-images-original {
+    /// The number of frames in this GIF.
+    frames: option<string>,
+    /// The height of this GIF in pixels.
+    height: option<string>,
+    /// The URL for this GIF in .MP4 format.
+    mp4: option<string>,
+    /// The size in bytes of the .MP4 file corresponding to this GIF.
+    mp4-size: option<string>,
+    /// The size of this GIF in bytes.
+    size: option<string>,
+    /// The publicly-accessible direct URL for this GIF.
+    url: option<string>,
+    /// The URL for this GIF in .webp format.
+    webp: option<string>,
+    /// The size in bytes of the .webp file corresponding to this GIF.
+    webp-size: option<string>,
+    /// The width of this GIF in pixels.
+    width: option<string>
+  }
+
+  record gif-images-original-still {
+    /// The number of frames in this GIF.
+    frames: option<string>,
+    /// The height of this GIF in pixels.
+    height: option<string>,
+    /// The URL for this GIF in .MP4 format.
+    mp4: option<string>,
+    /// The size in bytes of the .MP4 file corresponding to this GIF.
+    mp4-size: option<string>,
+    /// The size of this GIF in bytes.
+    size: option<string>,
+    /// The publicly-accessible direct URL for this GIF.
+    url: option<string>,
+    /// The URL for this GIF in .webp format.
+    webp: option<string>,
+    /// The size in bytes of the .webp file corresponding to this GIF.
+    webp-size: option<string>,
+    /// The width of this GIF in pixels.
+    width: option<string>
+  }
+
+  record gif-images-preview {
+    /// The number of frames in this GIF.
+    frames: option<string>,
+    /// The height of this GIF in pixels.
+    height: option<string>,
+    /// The URL for this GIF in .MP4 format.
+    mp4: option<string>,
+    /// The size in bytes of the .MP4 file corresponding to this GIF.
+    mp4-size: option<string>,
+    /// The size of this GIF in bytes.
+    size: option<string>,
+    /// The publicly-accessible direct URL for this GIF.
+    url: option<string>,
+    /// The URL for this GIF in .webp format.
+    webp: option<string>,
+    /// The size in bytes of the .webp file corresponding to this GIF.
+    webp-size: option<string>,
+    /// The width of this GIF in pixels.
+    width: option<string>
+  }
+
+  record gif-images-preview-gif {
+    /// The number of frames in this GIF.
+    frames: option<string>,
+    /// The height of this GIF in pixels.
+    height: option<string>,
+    /// The URL for this GIF in .MP4 format.
+    mp4: option<string>,
+    /// The size in bytes of the .MP4 file corresponding to this GIF.
+    mp4-size: option<string>,
+    /// The size of this GIF in bytes.
+    size: option<string>,
+    /// The publicly-accessible direct URL for this GIF.
+    url: option<string>,
+    /// The URL for this GIF in .webp format.
+    webp: option<string>,
+    /// The size in bytes of the .webp file corresponding to this GIF.
+    webp-size: option<string>,
+    /// The width of this GIF in pixels.
+    width: option<string>
+  }
+
+  /// The User Object contains information about the user associated with a GIF and URLs to assets such as that user's avatar image, profile, and more.
+  record user {
+    /// The URL for this user's avatar image.
+    avatar-url: option<string>,
+    /// The URL for the banner image that appears atop this user's profile page.
+    banner-url: option<string>,
+    /// The display name associated with this user (contains formatting the base username might not).
+    display-name: option<string>,
+    /// The URL for this user's profile.
+    profile-url: option<string>,
+    /// The Twitter username associated with this user, if applicable.
+    twitter: option<string>,
+    /// The username associated with this user.
+    username: option<string>
+  }
+
+  /// The Meta Object contains basic information regarding the request, whether it was successful, and the response given by the API.  Check `responses` to see a description of types of response codes the API might give you under different cirumstances.
+  record meta {
+    /// HTTP Response Message
+    msg: option<string>,
+    /// A unique ID paired with this response from the API.
+    response-id: option<string>,
+    /// HTTP Response Code
+    status: option<s32>
+  }
+
+  /// The Pagination Object contains information relating to the number of total results available as well as the number of results fetched and their relative positions.
+  record pagination {
+    /// Total number of items returned.
+    count: option<s32>,
+    /// Position in pagination.
+    offset: option<s32>,
+    /// Total number of items available.
+    total-count: option<s32>
+  }
+
+  record random-gif-response {
+    data: option<gif>,
+    meta: option<meta>
+  }
+
+  record search-gifs-response {
+    data: option<list<gif>>,
+    meta: option<meta>,
+    pagination: option<pagination>
+  }
+
+  record translate-gif-response {
+    data: option<gif>,
+    meta: option<meta>
+  }
+
+  record trending-gifs-response {
+    data: option<list<gif>>,
+    meta: option<meta>,
+    pagination: option<pagination>
+  }
+
+  record get-gif-by-id-response {
+    data: option<gif>,
+    meta: option<meta>
+  }
+
+  variant get-gifs-by-id-error {
+    bad-request(string),
+    forbidden(string),
+    not-found(string),
+    too-many-requests(string),
+    other(string)
+  }
+
+  variant random-gif-error {
+    bad-request(string),
+    forbidden(string),
+    not-found(string),
+    too-many-requests(string),
+    other(string)
+  }
+
+  variant search-gifs-error {
+    bad-request(string),
+    forbidden(string),
+    not-found(string),
+    too-many-requests(string),
+    other(string)
+  }
+
+  variant translate-gif-error {
+    bad-request(string),
+    forbidden(string),
+    not-found(string),
+    too-many-requests(string),
+    other(string)
+  }
+
+  variant trending-gifs-error {
+    bad-request(string),
+    forbidden(string),
+    not-found(string),
+    too-many-requests(string),
+    other(string)
+  }
+
+  variant get-gif-by-id-error {
+    bad-request(string),
+    forbidden(string),
+    not-found(string),
+    too-many-requests(string),
+    other(string)
+  }
+
   /// Get GIFs by ID
   record get-gifs-by-id-params {
     /// Filters results by specified GIF IDs, separated by commas.
     ids: option<string>
   }
-  get-gifs-by-id: func(params: get-gifs-by-id-params) -> result<string, string>;
+  get-gifs-by-id: func(params: get-gifs-by-id-params) -> result<get-gifs-by-id-response, get-gifs-by-id-error>;
 
   /// Random GIF
   record random-gif-params {
@@ -23,7 +630,7 @@ interface gifs {
     /// Filters results by specified rating.
     rating: option<string>
   }
-  random-gif: func(params: random-gif-params) -> result<string, string>;
+  random-gif: func(params: random-gif-params) -> result<random-gif-response, random-gif-error>;
 
   /// Search GIFs
   record search-gifs-params {
@@ -38,14 +645,14 @@ interface gifs {
     /// Specify default language for regional content; use a 2-letter ISO 639-1 language code.
     lang: option<string>
   }
-  search-gifs: func(params: search-gifs-params) -> result<string, string>;
+  search-gifs: func(params: search-gifs-params) -> result<search-gifs-response, search-gifs-error>;
 
   /// Translate phrase to GIF
   record translate-gif-params {
     /// Search term.
     s: string
   }
-  translate-gif: func(params: translate-gif-params) -> result<string, string>;
+  translate-gif: func(params: translate-gif-params) -> result<translate-gif-response, translate-gif-error>;
 
   /// Trending GIFs
   record trending-gifs-params {
@@ -56,19 +663,599 @@ interface gifs {
     /// Filters results by specified rating.
     rating: option<string>
   }
-  trending-gifs: func(params: trending-gifs-params) -> result<string, string>;
+  trending-gifs: func(params: trending-gifs-params) -> result<trending-gifs-response, trending-gifs-error>;
 
   /// Get GIF by Id
   record get-gif-by-id-params {
     /// Filters results by specified GIF ID.
     gif-id: string
   }
-  get-gif-by-id: func(params: get-gif-by-id-params) -> result<string, string>;
+  get-gif-by-id: func(params: get-gif-by-id-params) -> result<get-gif-by-id-response, get-gif-by-id-error>;
 
 }
 
 
 interface stickers {
+  enum gif-type-op-enum {
+    gif,
+  }
+
+  record random-sticker-response {
+    data: option<gif>,
+    meta: option<meta>
+  }
+
+  record gif {
+    /// The unique bit.ly URL for this GIF
+    bitly-url: option<string>,
+    /// Currently unused
+    content-url: option<string>,
+    /// The date this GIF was added to the GIPHY database.
+    create-datetime: option<string>,
+    /// A URL used for embedding this GIF
+    embded-url: option<string>,
+    /// An array of featured tags for this GIF (Note: Not available when using the Public Beta Key)
+    featured-tags: option<list<string>>,
+    /// This GIF's unique ID
+    id: option<string>,
+    /// An object containing data for various available formats and sizes of this GIF.
+    images: option<gif-images>,
+    /// The creation or upload date from this GIF's source.
+    import-datetime: option<string>,
+    /// The MPAA-style rating for this content. Examples include Y, G, PG, PG-13 and R
+    rating: option<string>,
+    /// The unique slug used in this GIF's URL
+    slug: option<string>,
+    /// The page on which this GIF was found
+    source: option<string>,
+    /// The URL of the webpage on which this GIF was found.
+    source-post-url: option<string>,
+    /// The top level domain of the source URL.
+    source-tld: option<string>,
+    /// An array of tags for this GIF (Note: Not available when using the Public Beta Key)
+    tags: option<list<string>>,
+    /// The date on which this gif was marked trending, if applicable.
+    trending-datetime: option<string>,
+    /// Type of the gif. By default, this is almost always gif
+    type-op: option<gif-type-op-enum>,
+    /// The date on which this GIF was last updated.
+    update-datetime: option<string>,
+    /// The unique URL for this GIF
+    url: option<string>,
+    user: option<user>,
+    /// The username this GIF is attached to, if applicable
+    username: option<string>
+  }
+
+  /// An object containing data for various available formats and sizes of this GIF.
+  record gif-images {
+    downsized: option<gif-images-downsized>,
+    downsized-large: option<gif-images-downsized-large>,
+    downsized-medium: option<gif-images-downsized-medium>,
+    downsized-small: option<gif-images-downsized-small>,
+    downsized-still: option<gif-images-downsized-still>,
+    fixed-height: option<gif-images-fixed-height>,
+    fixed-height-downsampled: option<gif-images-fixed-height-downsampled>,
+    fixed-height-small: option<gif-images-fixed-height-small>,
+    fixed-height-small-still: option<gif-images-fixed-height-small-still>,
+    fixed-height-still: option<gif-images-fixed-height-still>,
+    fixed-width: option<gif-images-fixed-width>,
+    fixed-width-downsampled: option<gif-images-fixed-width-downsampled>,
+    fixed-width-small: option<gif-images-fixed-width-small>,
+    fixed-width-small-still: option<gif-images-fixed-width-small-still>,
+    fixed-width-still: option<gif-images-fixed-width-still>,
+    looping: option<gif-images-looping>,
+    original: option<gif-images-original>,
+    original-still: option<gif-images-original-still>,
+    preview: option<gif-images-preview>,
+    preview-gif: option<gif-images-preview-gif>
+  }
+
+  record gif-images-downsized {
+    /// The number of frames in this GIF.
+    frames: option<string>,
+    /// The height of this GIF in pixels.
+    height: option<string>,
+    /// The URL for this GIF in .MP4 format.
+    mp4: option<string>,
+    /// The size in bytes of the .MP4 file corresponding to this GIF.
+    mp4-size: option<string>,
+    /// The size of this GIF in bytes.
+    size: option<string>,
+    /// The publicly-accessible direct URL for this GIF.
+    url: option<string>,
+    /// The URL for this GIF in .webp format.
+    webp: option<string>,
+    /// The size in bytes of the .webp file corresponding to this GIF.
+    webp-size: option<string>,
+    /// The width of this GIF in pixels.
+    width: option<string>
+  }
+
+  record gif-images-downsized-large {
+    /// The number of frames in this GIF.
+    frames: option<string>,
+    /// The height of this GIF in pixels.
+    height: option<string>,
+    /// The URL for this GIF in .MP4 format.
+    mp4: option<string>,
+    /// The size in bytes of the .MP4 file corresponding to this GIF.
+    mp4-size: option<string>,
+    /// The size of this GIF in bytes.
+    size: option<string>,
+    /// The publicly-accessible direct URL for this GIF.
+    url: option<string>,
+    /// The URL for this GIF in .webp format.
+    webp: option<string>,
+    /// The size in bytes of the .webp file corresponding to this GIF.
+    webp-size: option<string>,
+    /// The width of this GIF in pixels.
+    width: option<string>
+  }
+
+  record gif-images-downsized-medium {
+    /// The number of frames in this GIF.
+    frames: option<string>,
+    /// The height of this GIF in pixels.
+    height: option<string>,
+    /// The URL for this GIF in .MP4 format.
+    mp4: option<string>,
+    /// The size in bytes of the .MP4 file corresponding to this GIF.
+    mp4-size: option<string>,
+    /// The size of this GIF in bytes.
+    size: option<string>,
+    /// The publicly-accessible direct URL for this GIF.
+    url: option<string>,
+    /// The URL for this GIF in .webp format.
+    webp: option<string>,
+    /// The size in bytes of the .webp file corresponding to this GIF.
+    webp-size: option<string>,
+    /// The width of this GIF in pixels.
+    width: option<string>
+  }
+
+  record gif-images-downsized-small {
+    /// The number of frames in this GIF.
+    frames: option<string>,
+    /// The height of this GIF in pixels.
+    height: option<string>,
+    /// The URL for this GIF in .MP4 format.
+    mp4: option<string>,
+    /// The size in bytes of the .MP4 file corresponding to this GIF.
+    mp4-size: option<string>,
+    /// The size of this GIF in bytes.
+    size: option<string>,
+    /// The publicly-accessible direct URL for this GIF.
+    url: option<string>,
+    /// The URL for this GIF in .webp format.
+    webp: option<string>,
+    /// The size in bytes of the .webp file corresponding to this GIF.
+    webp-size: option<string>,
+    /// The width of this GIF in pixels.
+    width: option<string>
+  }
+
+  record gif-images-downsized-still {
+    /// The number of frames in this GIF.
+    frames: option<string>,
+    /// The height of this GIF in pixels.
+    height: option<string>,
+    /// The URL for this GIF in .MP4 format.
+    mp4: option<string>,
+    /// The size in bytes of the .MP4 file corresponding to this GIF.
+    mp4-size: option<string>,
+    /// The size of this GIF in bytes.
+    size: option<string>,
+    /// The publicly-accessible direct URL for this GIF.
+    url: option<string>,
+    /// The URL for this GIF in .webp format.
+    webp: option<string>,
+    /// The size in bytes of the .webp file corresponding to this GIF.
+    webp-size: option<string>,
+    /// The width of this GIF in pixels.
+    width: option<string>
+  }
+
+  record gif-images-fixed-height {
+    /// The number of frames in this GIF.
+    frames: option<string>,
+    /// The height of this GIF in pixels.
+    height: option<string>,
+    /// The URL for this GIF in .MP4 format.
+    mp4: option<string>,
+    /// The size in bytes of the .MP4 file corresponding to this GIF.
+    mp4-size: option<string>,
+    /// The size of this GIF in bytes.
+    size: option<string>,
+    /// The publicly-accessible direct URL for this GIF.
+    url: option<string>,
+    /// The URL for this GIF in .webp format.
+    webp: option<string>,
+    /// The size in bytes of the .webp file corresponding to this GIF.
+    webp-size: option<string>,
+    /// The width of this GIF in pixels.
+    width: option<string>
+  }
+
+  record gif-images-fixed-height-downsampled {
+    /// The number of frames in this GIF.
+    frames: option<string>,
+    /// The height of this GIF in pixels.
+    height: option<string>,
+    /// The URL for this GIF in .MP4 format.
+    mp4: option<string>,
+    /// The size in bytes of the .MP4 file corresponding to this GIF.
+    mp4-size: option<string>,
+    /// The size of this GIF in bytes.
+    size: option<string>,
+    /// The publicly-accessible direct URL for this GIF.
+    url: option<string>,
+    /// The URL for this GIF in .webp format.
+    webp: option<string>,
+    /// The size in bytes of the .webp file corresponding to this GIF.
+    webp-size: option<string>,
+    /// The width of this GIF in pixels.
+    width: option<string>
+  }
+
+  record gif-images-fixed-height-small {
+    /// The number of frames in this GIF.
+    frames: option<string>,
+    /// The height of this GIF in pixels.
+    height: option<string>,
+    /// The URL for this GIF in .MP4 format.
+    mp4: option<string>,
+    /// The size in bytes of the .MP4 file corresponding to this GIF.
+    mp4-size: option<string>,
+    /// The size of this GIF in bytes.
+    size: option<string>,
+    /// The publicly-accessible direct URL for this GIF.
+    url: option<string>,
+    /// The URL for this GIF in .webp format.
+    webp: option<string>,
+    /// The size in bytes of the .webp file corresponding to this GIF.
+    webp-size: option<string>,
+    /// The width of this GIF in pixels.
+    width: option<string>
+  }
+
+  record gif-images-fixed-height-small-still {
+    /// The number of frames in this GIF.
+    frames: option<string>,
+    /// The height of this GIF in pixels.
+    height: option<string>,
+    /// The URL for this GIF in .MP4 format.
+    mp4: option<string>,
+    /// The size in bytes of the .MP4 file corresponding to this GIF.
+    mp4-size: option<string>,
+    /// The size of this GIF in bytes.
+    size: option<string>,
+    /// The publicly-accessible direct URL for this GIF.
+    url: option<string>,
+    /// The URL for this GIF in .webp format.
+    webp: option<string>,
+    /// The size in bytes of the .webp file corresponding to this GIF.
+    webp-size: option<string>,
+    /// The width of this GIF in pixels.
+    width: option<string>
+  }
+
+  record gif-images-fixed-height-still {
+    /// The number of frames in this GIF.
+    frames: option<string>,
+    /// The height of this GIF in pixels.
+    height: option<string>,
+    /// The URL for this GIF in .MP4 format.
+    mp4: option<string>,
+    /// The size in bytes of the .MP4 file corresponding to this GIF.
+    mp4-size: option<string>,
+    /// The size of this GIF in bytes.
+    size: option<string>,
+    /// The publicly-accessible direct URL for this GIF.
+    url: option<string>,
+    /// The URL for this GIF in .webp format.
+    webp: option<string>,
+    /// The size in bytes of the .webp file corresponding to this GIF.
+    webp-size: option<string>,
+    /// The width of this GIF in pixels.
+    width: option<string>
+  }
+
+  record gif-images-fixed-width {
+    /// The number of frames in this GIF.
+    frames: option<string>,
+    /// The height of this GIF in pixels.
+    height: option<string>,
+    /// The URL for this GIF in .MP4 format.
+    mp4: option<string>,
+    /// The size in bytes of the .MP4 file corresponding to this GIF.
+    mp4-size: option<string>,
+    /// The size of this GIF in bytes.
+    size: option<string>,
+    /// The publicly-accessible direct URL for this GIF.
+    url: option<string>,
+    /// The URL for this GIF in .webp format.
+    webp: option<string>,
+    /// The size in bytes of the .webp file corresponding to this GIF.
+    webp-size: option<string>,
+    /// The width of this GIF in pixels.
+    width: option<string>
+  }
+
+  record gif-images-fixed-width-downsampled {
+    /// The number of frames in this GIF.
+    frames: option<string>,
+    /// The height of this GIF in pixels.
+    height: option<string>,
+    /// The URL for this GIF in .MP4 format.
+    mp4: option<string>,
+    /// The size in bytes of the .MP4 file corresponding to this GIF.
+    mp4-size: option<string>,
+    /// The size of this GIF in bytes.
+    size: option<string>,
+    /// The publicly-accessible direct URL for this GIF.
+    url: option<string>,
+    /// The URL for this GIF in .webp format.
+    webp: option<string>,
+    /// The size in bytes of the .webp file corresponding to this GIF.
+    webp-size: option<string>,
+    /// The width of this GIF in pixels.
+    width: option<string>
+  }
+
+  record gif-images-fixed-width-small {
+    /// The number of frames in this GIF.
+    frames: option<string>,
+    /// The height of this GIF in pixels.
+    height: option<string>,
+    /// The URL for this GIF in .MP4 format.
+    mp4: option<string>,
+    /// The size in bytes of the .MP4 file corresponding to this GIF.
+    mp4-size: option<string>,
+    /// The size of this GIF in bytes.
+    size: option<string>,
+    /// The publicly-accessible direct URL for this GIF.
+    url: option<string>,
+    /// The URL for this GIF in .webp format.
+    webp: option<string>,
+    /// The size in bytes of the .webp file corresponding to this GIF.
+    webp-size: option<string>,
+    /// The width of this GIF in pixels.
+    width: option<string>
+  }
+
+  record gif-images-fixed-width-small-still {
+    /// The number of frames in this GIF.
+    frames: option<string>,
+    /// The height of this GIF in pixels.
+    height: option<string>,
+    /// The URL for this GIF in .MP4 format.
+    mp4: option<string>,
+    /// The size in bytes of the .MP4 file corresponding to this GIF.
+    mp4-size: option<string>,
+    /// The size of this GIF in bytes.
+    size: option<string>,
+    /// The publicly-accessible direct URL for this GIF.
+    url: option<string>,
+    /// The URL for this GIF in .webp format.
+    webp: option<string>,
+    /// The size in bytes of the .webp file corresponding to this GIF.
+    webp-size: option<string>,
+    /// The width of this GIF in pixels.
+    width: option<string>
+  }
+
+  record gif-images-fixed-width-still {
+    /// The number of frames in this GIF.
+    frames: option<string>,
+    /// The height of this GIF in pixels.
+    height: option<string>,
+    /// The URL for this GIF in .MP4 format.
+    mp4: option<string>,
+    /// The size in bytes of the .MP4 file corresponding to this GIF.
+    mp4-size: option<string>,
+    /// The size of this GIF in bytes.
+    size: option<string>,
+    /// The publicly-accessible direct URL for this GIF.
+    url: option<string>,
+    /// The URL for this GIF in .webp format.
+    webp: option<string>,
+    /// The size in bytes of the .webp file corresponding to this GIF.
+    webp-size: option<string>,
+    /// The width of this GIF in pixels.
+    width: option<string>
+  }
+
+  record gif-images-looping {
+    /// The number of frames in this GIF.
+    frames: option<string>,
+    /// The height of this GIF in pixels.
+    height: option<string>,
+    /// The URL for this GIF in .MP4 format.
+    mp4: option<string>,
+    /// The size in bytes of the .MP4 file corresponding to this GIF.
+    mp4-size: option<string>,
+    /// The size of this GIF in bytes.
+    size: option<string>,
+    /// The publicly-accessible direct URL for this GIF.
+    url: option<string>,
+    /// The URL for this GIF in .webp format.
+    webp: option<string>,
+    /// The size in bytes of the .webp file corresponding to this GIF.
+    webp-size: option<string>,
+    /// The width of this GIF in pixels.
+    width: option<string>
+  }
+
+  record gif-images-original {
+    /// The number of frames in this GIF.
+    frames: option<string>,
+    /// The height of this GIF in pixels.
+    height: option<string>,
+    /// The URL for this GIF in .MP4 format.
+    mp4: option<string>,
+    /// The size in bytes of the .MP4 file corresponding to this GIF.
+    mp4-size: option<string>,
+    /// The size of this GIF in bytes.
+    size: option<string>,
+    /// The publicly-accessible direct URL for this GIF.
+    url: option<string>,
+    /// The URL for this GIF in .webp format.
+    webp: option<string>,
+    /// The size in bytes of the .webp file corresponding to this GIF.
+    webp-size: option<string>,
+    /// The width of this GIF in pixels.
+    width: option<string>
+  }
+
+  record gif-images-original-still {
+    /// The number of frames in this GIF.
+    frames: option<string>,
+    /// The height of this GIF in pixels.
+    height: option<string>,
+    /// The URL for this GIF in .MP4 format.
+    mp4: option<string>,
+    /// The size in bytes of the .MP4 file corresponding to this GIF.
+    mp4-size: option<string>,
+    /// The size of this GIF in bytes.
+    size: option<string>,
+    /// The publicly-accessible direct URL for this GIF.
+    url: option<string>,
+    /// The URL for this GIF in .webp format.
+    webp: option<string>,
+    /// The size in bytes of the .webp file corresponding to this GIF.
+    webp-size: option<string>,
+    /// The width of this GIF in pixels.
+    width: option<string>
+  }
+
+  record gif-images-preview {
+    /// The number of frames in this GIF.
+    frames: option<string>,
+    /// The height of this GIF in pixels.
+    height: option<string>,
+    /// The URL for this GIF in .MP4 format.
+    mp4: option<string>,
+    /// The size in bytes of the .MP4 file corresponding to this GIF.
+    mp4-size: option<string>,
+    /// The size of this GIF in bytes.
+    size: option<string>,
+    /// The publicly-accessible direct URL for this GIF.
+    url: option<string>,
+    /// The URL for this GIF in .webp format.
+    webp: option<string>,
+    /// The size in bytes of the .webp file corresponding to this GIF.
+    webp-size: option<string>,
+    /// The width of this GIF in pixels.
+    width: option<string>
+  }
+
+  record gif-images-preview-gif {
+    /// The number of frames in this GIF.
+    frames: option<string>,
+    /// The height of this GIF in pixels.
+    height: option<string>,
+    /// The URL for this GIF in .MP4 format.
+    mp4: option<string>,
+    /// The size in bytes of the .MP4 file corresponding to this GIF.
+    mp4-size: option<string>,
+    /// The size of this GIF in bytes.
+    size: option<string>,
+    /// The publicly-accessible direct URL for this GIF.
+    url: option<string>,
+    /// The URL for this GIF in .webp format.
+    webp: option<string>,
+    /// The size in bytes of the .webp file corresponding to this GIF.
+    webp-size: option<string>,
+    /// The width of this GIF in pixels.
+    width: option<string>
+  }
+
+  /// The User Object contains information about the user associated with a GIF and URLs to assets such as that user's avatar image, profile, and more.
+  record user {
+    /// The URL for this user's avatar image.
+    avatar-url: option<string>,
+    /// The URL for the banner image that appears atop this user's profile page.
+    banner-url: option<string>,
+    /// The display name associated with this user (contains formatting the base username might not).
+    display-name: option<string>,
+    /// The URL for this user's profile.
+    profile-url: option<string>,
+    /// The Twitter username associated with this user, if applicable.
+    twitter: option<string>,
+    /// The username associated with this user.
+    username: option<string>
+  }
+
+  /// The Meta Object contains basic information regarding the request, whether it was successful, and the response given by the API.  Check `responses` to see a description of types of response codes the API might give you under different cirumstances.
+  record meta {
+    /// HTTP Response Message
+    msg: option<string>,
+    /// A unique ID paired with this response from the API.
+    response-id: option<string>,
+    /// HTTP Response Code
+    status: option<s32>
+  }
+
+  record search-stickers-response {
+    data: option<list<gif>>,
+    meta: option<meta>,
+    pagination: option<pagination>
+  }
+
+  /// The Pagination Object contains information relating to the number of total results available as well as the number of results fetched and their relative positions.
+  record pagination {
+    /// Total number of items returned.
+    count: option<s32>,
+    /// Position in pagination.
+    offset: option<s32>,
+    /// Total number of items available.
+    total-count: option<s32>
+  }
+
+  record translate-sticker-response {
+    data: option<gif>,
+    meta: option<meta>
+  }
+
+  record trending-stickers-response {
+    data: option<list<gif>>,
+    meta: option<meta>,
+    pagination: option<pagination>
+  }
+
+  variant random-sticker-error {
+    bad-request(string),
+    forbidden(string),
+    not-found(string),
+    too-many-requests(string),
+    other(string)
+  }
+
+  variant search-stickers-error {
+    bad-request(string),
+    forbidden(string),
+    not-found(string),
+    too-many-requests(string),
+    other(string)
+  }
+
+  variant translate-sticker-error {
+    bad-request(string),
+    forbidden(string),
+    not-found(string),
+    too-many-requests(string),
+    other(string)
+  }
+
+  variant trending-stickers-error {
+    bad-request(string),
+    forbidden(string),
+    not-found(string),
+    too-many-requests(string),
+    other(string)
+  }
+
   /// Random Sticker
   record random-sticker-params {
     /// Filters results by specified tag.
@@ -76,7 +1263,7 @@ interface stickers {
     /// Filters results by specified rating.
     rating: option<string>
   }
-  random-sticker: func(params: random-sticker-params) -> result<string, string>;
+  random-sticker: func(params: random-sticker-params) -> result<random-sticker-response, random-sticker-error>;
 
   /// Search Stickers
   record search-stickers-params {
@@ -91,14 +1278,14 @@ interface stickers {
     /// Specify default language for regional content; use a 2-letter ISO 639-1 language code.
     lang: option<string>
   }
-  search-stickers: func(params: search-stickers-params) -> result<string, string>;
+  search-stickers: func(params: search-stickers-params) -> result<search-stickers-response, search-stickers-error>;
 
   /// Translate phrase to Sticker
   record translate-sticker-params {
     /// Search term.
     s: string
   }
-  translate-sticker: func(params: translate-sticker-params) -> result<string, string>;
+  translate-sticker: func(params: translate-sticker-params) -> result<translate-sticker-response, translate-sticker-error>;
 
   /// Trending Stickers
   record trending-stickers-params {
@@ -109,7 +1296,7 @@ interface stickers {
     /// Filters results by specified rating.
     rating: option<string>
   }
-  trending-stickers: func(params: trending-stickers-params) -> result<string, string>;
+  trending-stickers: func(params: trending-stickers-params) -> result<trending-stickers-response, trending-stickers-error>;
 
 }
 /// The component world: imports the secrets host capability

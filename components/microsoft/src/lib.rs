@@ -44,10 +44,15 @@ pub(crate) enum FieldLocation {
     Body,
 }
 
-/// A single operation parameter: the snake-case key it carries in the params JSON and where
-/// it belongs in the request.
+/// A single operation parameter. `snake` keys the field in the internal params JSON (and, for a
+/// path field, matches the `{snake}` placeholder in the path template); `wire` is the verbatim name
+/// the field takes on the HTTP wire (query key, header name, or body property). The two differ
+/// whenever the source name isn't already snake_case (e.g. `dryRun` → snake `dry_run`, wire
+/// `dryRun`), and let distinct inputs that share a snake key (`DateCreated`, `DateCreated<`) still
+/// travel under their true names.
 pub(crate) struct FieldSpec {
     pub(crate) snake: &'static str,
+    pub(crate) wire: &'static str,
     pub(crate) location: FieldLocation,
 }
 
@@ -71,6 +76,16 @@ pub(crate) struct AuthApply {
     pub(crate) kind: AuthKind,
 }
 
+/// The failure modes of [`dispatch`], kept structured so each generated operation can map them
+/// onto its own typed error: an `Http` failure carries the response status and body (routed to
+/// the matching error-variant case), while a `Transport` failure carries a message for the
+/// catch-all case (a secret lookup, connection, or decode failure that never produced an HTTP
+/// status).
+pub(crate) enum DispatchError {
+    Http { status: u16, body: String },
+    Transport(String),
+}
+
 /// A single API operation: HTTP method, path template (with `{snake}` placeholders), the
 /// parameter fields, and the security schemes to apply.
 pub(crate) struct OpSpec {
@@ -81,8 +96,9 @@ pub(crate) struct OpSpec {
 }
 
 /// Execute `op` with the supplied `params` (a JSON object keyed by snake-case field names)
-/// and return the response body as a string, or an error message.
-pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, String> {
+/// and return the raw 2xx response body, or a structured [`DispatchError`] the caller maps
+/// onto the operation's typed error.
+pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, DispatchError> {
     let obj = match &params {
         Value::Object(map) => Some(map),
         _ => None,
@@ -105,10 +121,10 @@ pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, String> {
                 let placeholder = format!("{{{}}}", field.snake);
                 path = path.replace(&placeholder, &percent_encode(&scalar(value)));
             }
-            FieldLocation::Query => query.push((field.snake.to_string(), scalar(value))),
-            FieldLocation::Header => headers.push((field.snake.to_string(), scalar(value))),
+            FieldLocation::Query => query.push((field.wire.to_string(), scalar(value))),
+            FieldLocation::Header => headers.push((field.wire.to_string(), scalar(value))),
             FieldLocation::Body => {
-                body.insert(field.snake.to_string(), value.clone());
+                body.insert(field.wire.to_string(), value.clone());
             }
         }
     }
@@ -116,7 +132,7 @@ pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, String> {
     // Apply each resolved security scheme, sourcing its value from wasmcloud:secrets.
     let mut cookies: Vec<String> = Vec::new();
     for apply in op.auth {
-        let secret = fetch_secret(apply.secret_key)?;
+        let secret = fetch_secret(apply.secret_key).map_err(DispatchError::Transport)?;
         match &apply.kind {
             AuthKind::Bearer => headers.push(("authorization".into(), format!("Bearer {secret}"))),
             AuthKind::Basic => {
@@ -177,17 +193,18 @@ fn fetch_secret(key: &str) -> Result<String, String> {
 }
 
 /// Build and send the outgoing request with `wstd`, returning the response body on a 2xx
-/// status. The generated guest exports are synchronous, so the async `wstd` client is driven
-/// to completion on a local reactor via `wstd::runtime::block_on`.
+/// status and a structured [`DispatchError`] otherwise. The generated guest exports are
+/// synchronous, so the async `wstd` client is driven to completion on a local reactor via
+/// `wstd::runtime::block_on`.
 fn perform(
     method: &str,
     path_with_query: &str,
     headers: &[(String, String)],
     body: &[u8],
-) -> Result<String, String> {
+) -> Result<String, DispatchError> {
     let url = join_url(crate::BASE_URL, path_with_query);
     let method = Method::from_bytes(method.as_bytes())
-        .map_err(|err| format!("invalid HTTP method `{method}`: {err}"))?;
+        .map_err(|err| DispatchError::Transport(format!("invalid HTTP method `{method}`: {err}")))?;
 
     let mut builder = Request::builder().method(method).uri(url);
     for (name, value) in headers {
@@ -199,27 +216,29 @@ fn perform(
         } else {
             Body::from(body.to_vec())
         })
-        .map_err(|err| format!("failed to build request: {err}"))?;
+        .map_err(|err| DispatchError::Transport(format!("failed to build request: {err}")))?;
 
     wstd::runtime::block_on(async move {
         let client = Client::new();
         let response = client
             .send(request)
             .await
-            .map_err(|err| format!("request failed: {err:#}"))?;
+            .map_err(|err| DispatchError::Transport(format!("request failed: {err:#}")))?;
 
         let status = response.status().as_u16();
         let mut response_body = response.into_body();
-        let bytes = response_body
-            .contents()
-            .await
-            .map_err(|err| format!("failed to read response body: {err:#}"))?;
+        let bytes = response_body.contents().await.map_err(|err| {
+            DispatchError::Transport(format!("failed to read response body: {err:#}"))
+        })?;
         let body_text = String::from_utf8_lossy(bytes).into_owned();
 
         if (200..300).contains(&status) {
             Ok(body_text)
         } else {
-            Err(format!("HTTP {status}: {body_text}"))
+            Err(DispatchError::Http {
+                status,
+                body: body_text,
+            })
         }
     })
 }
@@ -279,340 +298,13 @@ fn base64(input: &[u8]) -> String {
 }
 }
 
-use crate::runtime::{dispatch, AuthApply, AuthKind, FieldLocation, FieldSpec, OpSpec};
-use serde_json::{Map, Value};
-
-use crate::exports::autostamp::microsoft::analyze as iface_analyze;
-
-const OP_ANALYZE_IMAGE: OpSpec = OpSpec {
-    method: "POST",
-    path_template: "/analyze",
-    fields: &[
-        FieldSpec { snake: "visual_features", location: FieldLocation::Query },
-        FieldSpec { snake: "details", location: FieldLocation::Query },
-        FieldSpec { snake: "language", location: FieldLocation::Query },
-        FieldSpec { snake: "url", location: FieldLocation::Body },
-    ],
-    auth: &[
-        AuthApply { secret_key: "apim_key", kind: AuthKind::ApiKeyHeader("Ocp-Apim-Subscription-Key") },
-    ],
-};
-
-fn iface_analyze__image_visual_features_item_enum__to_str(e: &iface_analyze::ImageVisualFeaturesItemEnum) -> &'static str {
-    match e {
-        iface_analyze::ImageVisualFeaturesItemEnum::ImageType => "ImageType",
-        iface_analyze::ImageVisualFeaturesItemEnum::Faces => "Faces",
-        iface_analyze::ImageVisualFeaturesItemEnum::Adult => "Adult",
-        iface_analyze::ImageVisualFeaturesItemEnum::Categories => "Categories",
-        iface_analyze::ImageVisualFeaturesItemEnum::Color => "Color",
-        iface_analyze::ImageVisualFeaturesItemEnum::Tags => "Tags",
-        iface_analyze::ImageVisualFeaturesItemEnum::Description => "Description",
-        iface_analyze::ImageVisualFeaturesItemEnum::Objects => "Objects",
-        iface_analyze::ImageVisualFeaturesItemEnum::Brands => "Brands",
-    }
-}
-
-fn iface_analyze__image_details_item_enum__to_str(e: &iface_analyze::ImageDetailsItemEnum) -> &'static str {
-    match e {
-        iface_analyze::ImageDetailsItemEnum::Celebrities => "Celebrities",
-        iface_analyze::ImageDetailsItemEnum::Landmarks => "Landmarks",
-    }
-}
-
-fn iface_analyze__image_language_enum__to_str(e: &iface_analyze::ImageLanguageEnum) -> &'static str {
-    match e {
-        iface_analyze::ImageLanguageEnum::En => "en",
-        iface_analyze::ImageLanguageEnum::Es => "es",
-        iface_analyze::ImageLanguageEnum::Ja => "ja",
-        iface_analyze::ImageLanguageEnum::Pt => "pt",
-        iface_analyze::ImageLanguageEnum::Zh => "zh",
-    }
-}
-
-fn iface_analyze__image_params__to_json(p: &iface_analyze::ImageParams) -> Value {
-    let mut m = Map::new();
-    m.insert("visual_features".into(), match (&p.visual_features) { Some(v) => Value::Array((v).iter().map(|v| Value::String(iface_analyze__image_visual_features_item_enum__to_str(v).into())).collect()), None => Value::Null });
-    m.insert("details".into(), match (&p.details) { Some(v) => Value::Array((v).iter().map(|v| Value::String(iface_analyze__image_details_item_enum__to_str(v).into())).collect()), None => Value::Null });
-    m.insert("language".into(), match (&p.language) { Some(v) => Value::String(iface_analyze__image_language_enum__to_str(v).into()), None => Value::Null });
-    m.insert("url".into(), Value::String((&p.url).clone()));
-    Value::Object(m)
-}
-
-impl iface_analyze::Guest for crate::Component {
-    fn image(params: iface_analyze::ImageParams) -> Result<String, String> {
-        let json = iface_analyze__image_params__to_json(&params);
-        dispatch(&OP_ANALYZE_IMAGE, json)
-    }
-}
-use crate::exports::autostamp::microsoft::area_of_interest as iface_area_of_interest;
-
-const OP_AREA_OF_INTEREST_GET_AREA_OF_INTEREST: OpSpec = OpSpec {
-    method: "POST",
-    path_template: "/areaOfInterest",
-    fields: &[
-        FieldSpec { snake: "url", location: FieldLocation::Body },
-    ],
-    auth: &[
-        AuthApply { secret_key: "apim_key", kind: AuthKind::ApiKeyHeader("Ocp-Apim-Subscription-Key") },
-    ],
-};
-
-fn iface_area_of_interest__get_area_of_interest_params__to_json(p: &iface_area_of_interest::GetAreaOfInterestParams) -> Value {
-    let mut m = Map::new();
-    m.insert("url".into(), Value::String((&p.url).clone()));
-    Value::Object(m)
-}
-
-impl iface_area_of_interest::Guest for crate::Component {
-    fn get_area_of_interest(params: iface_area_of_interest::GetAreaOfInterestParams) -> Result<String, String> {
-        let json = iface_area_of_interest__get_area_of_interest_params__to_json(&params);
-        dispatch(&OP_AREA_OF_INTEREST_GET_AREA_OF_INTEREST, json)
-    }
-}
-use crate::exports::autostamp::microsoft::describe as iface_describe;
-
-const OP_DESCRIBE_IMAGE: OpSpec = OpSpec {
-    method: "POST",
-    path_template: "/describe",
-    fields: &[
-        FieldSpec { snake: "max_candidates", location: FieldLocation::Query },
-        FieldSpec { snake: "language", location: FieldLocation::Query },
-        FieldSpec { snake: "url", location: FieldLocation::Body },
-    ],
-    auth: &[
-        AuthApply { secret_key: "apim_key", kind: AuthKind::ApiKeyHeader("Ocp-Apim-Subscription-Key") },
-    ],
-};
-
-fn iface_describe__image_language_enum__to_str(e: &iface_describe::ImageLanguageEnum) -> &'static str {
-    match e {
-        iface_describe::ImageLanguageEnum::En => "en",
-        iface_describe::ImageLanguageEnum::Es => "es",
-        iface_describe::ImageLanguageEnum::Ja => "ja",
-        iface_describe::ImageLanguageEnum::Pt => "pt",
-        iface_describe::ImageLanguageEnum::Zh => "zh",
-    }
-}
-
-fn iface_describe__image_params__to_json(p: &iface_describe::ImageParams) -> Value {
-    let mut m = Map::new();
-    m.insert("max_candidates".into(), match (&p.max_candidates) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    m.insert("language".into(), match (&p.language) { Some(v) => Value::String(iface_describe__image_language_enum__to_str(v).into()), None => Value::Null });
-    m.insert("url".into(), Value::String((&p.url).clone()));
-    Value::Object(m)
-}
-
-impl iface_describe::Guest for crate::Component {
-    fn image(params: iface_describe::ImageParams) -> Result<String, String> {
-        let json = iface_describe__image_params__to_json(&params);
-        dispatch(&OP_DESCRIBE_IMAGE, json)
-    }
-}
-use crate::exports::autostamp::microsoft::detect as iface_detect;
-
-const OP_DETECT_OBJECTS: OpSpec = OpSpec {
-    method: "POST",
-    path_template: "/detect",
-    fields: &[
-        FieldSpec { snake: "url", location: FieldLocation::Body },
-    ],
-    auth: &[
-        AuthApply { secret_key: "apim_key", kind: AuthKind::ApiKeyHeader("Ocp-Apim-Subscription-Key") },
-    ],
-};
-
-fn iface_detect__objects_params__to_json(p: &iface_detect::ObjectsParams) -> Value {
-    let mut m = Map::new();
-    m.insert("url".into(), Value::String((&p.url).clone()));
-    Value::Object(m)
-}
-
-impl iface_detect::Guest for crate::Component {
-    fn objects(params: iface_detect::ObjectsParams) -> Result<String, String> {
-        let json = iface_detect__objects_params__to_json(&params);
-        dispatch(&OP_DETECT_OBJECTS, json)
-    }
-}
-use crate::exports::autostamp::microsoft::generate_thumbnail as iface_generate_thumbnail;
-
-const OP_GENERATE_THUMBNAIL_GENERATE_THUMBNAIL: OpSpec = OpSpec {
-    method: "POST",
-    path_template: "/generateThumbnail",
-    fields: &[
-        FieldSpec { snake: "width", location: FieldLocation::Query },
-        FieldSpec { snake: "height", location: FieldLocation::Query },
-        FieldSpec { snake: "smart_cropping", location: FieldLocation::Query },
-        FieldSpec { snake: "url", location: FieldLocation::Body },
-    ],
-    auth: &[
-        AuthApply { secret_key: "apim_key", kind: AuthKind::ApiKeyHeader("Ocp-Apim-Subscription-Key") },
-    ],
-};
-
-fn iface_generate_thumbnail__generate_thumbnail_params__to_json(p: &iface_generate_thumbnail::GenerateThumbnailParams) -> Value {
-    let mut m = Map::new();
-    m.insert("width".into(), Value::Number(serde_json::Number::from(*(&p.width))));
-    m.insert("height".into(), Value::Number(serde_json::Number::from(*(&p.height))));
-    m.insert("smart_cropping".into(), match (&p.smart_cropping) { Some(v) => Value::Bool(*(v)), None => Value::Null });
-    m.insert("url".into(), Value::String((&p.url).clone()));
-    Value::Object(m)
-}
-
-impl iface_generate_thumbnail::Guest for crate::Component {
-    fn generate_thumbnail(params: iface_generate_thumbnail::GenerateThumbnailParams) -> Result<String, String> {
-        let json = iface_generate_thumbnail__generate_thumbnail_params__to_json(&params);
-        dispatch(&OP_GENERATE_THUMBNAIL_GENERATE_THUMBNAIL, json)
-    }
-}
-use crate::exports::autostamp::microsoft::models as iface_models;
-
-const OP_MODELS_LIST_MODELS: OpSpec = OpSpec {
-    method: "GET",
-    path_template: "/models",
-    fields: &[
-    ],
-    auth: &[
-        AuthApply { secret_key: "apim_key", kind: AuthKind::ApiKeyHeader("Ocp-Apim-Subscription-Key") },
-    ],
-};
-
-const OP_MODELS_ANALYZE_IMAGE_BY_DOMAIN: OpSpec = OpSpec {
-    method: "POST",
-    path_template: "/models/{model}/analyze",
-    fields: &[
-        FieldSpec { snake: "model", location: FieldLocation::Path },
-        FieldSpec { snake: "language", location: FieldLocation::Query },
-        FieldSpec { snake: "url", location: FieldLocation::Body },
-    ],
-    auth: &[
-        AuthApply { secret_key: "apim_key", kind: AuthKind::ApiKeyHeader("Ocp-Apim-Subscription-Key") },
-    ],
-};
-
-fn iface_models__analyze_image_by_domain_language_enum__to_str(e: &iface_models::AnalyzeImageByDomainLanguageEnum) -> &'static str {
-    match e {
-        iface_models::AnalyzeImageByDomainLanguageEnum::En => "en",
-        iface_models::AnalyzeImageByDomainLanguageEnum::Es => "es",
-        iface_models::AnalyzeImageByDomainLanguageEnum::Ja => "ja",
-        iface_models::AnalyzeImageByDomainLanguageEnum::Pt => "pt",
-        iface_models::AnalyzeImageByDomainLanguageEnum::Zh => "zh",
-    }
-}
-
-fn iface_models__analyze_image_by_domain_params__to_json(p: &iface_models::AnalyzeImageByDomainParams) -> Value {
-    let mut m = Map::new();
-    m.insert("model".into(), Value::String((&p.model).clone()));
-    m.insert("language".into(), match (&p.language) { Some(v) => Value::String(iface_models__analyze_image_by_domain_language_enum__to_str(v).into()), None => Value::Null });
-    m.insert("url".into(), Value::String((&p.url).clone()));
-    Value::Object(m)
-}
-
-impl iface_models::Guest for crate::Component {
-    fn list_models() -> Result<String, String> {
-        dispatch(&OP_MODELS_LIST_MODELS, Value::Object(Map::new()))
-    }
-    fn analyze_image_by_domain(params: iface_models::AnalyzeImageByDomainParams) -> Result<String, String> {
-        let json = iface_models__analyze_image_by_domain_params__to_json(&params);
-        dispatch(&OP_MODELS_ANALYZE_IMAGE_BY_DOMAIN, json)
-    }
-}
-use crate::exports::autostamp::microsoft::ocr as iface_ocr;
-
-const OP_OCR_RECOGNIZE_PRINTED_TEXT: OpSpec = OpSpec {
-    method: "POST",
-    path_template: "/ocr",
-    fields: &[
-        FieldSpec { snake: "detect_orientation", location: FieldLocation::Query },
-        FieldSpec { snake: "language", location: FieldLocation::Query },
-        FieldSpec { snake: "url", location: FieldLocation::Body },
-    ],
-    auth: &[
-        AuthApply { secret_key: "apim_key", kind: AuthKind::ApiKeyHeader("Ocp-Apim-Subscription-Key") },
-    ],
-};
-
-fn iface_ocr__recognize_printed_text_language_enum__to_str(e: &iface_ocr::RecognizePrintedTextLanguageEnum) -> &'static str {
-    match e {
-        iface_ocr::RecognizePrintedTextLanguageEnum::Unk => "unk",
-        iface_ocr::RecognizePrintedTextLanguageEnum::ZhHans => "zh-Hans",
-        iface_ocr::RecognizePrintedTextLanguageEnum::ZhHant => "zh-Hant",
-        iface_ocr::RecognizePrintedTextLanguageEnum::Cs => "cs",
-        iface_ocr::RecognizePrintedTextLanguageEnum::Da => "da",
-        iface_ocr::RecognizePrintedTextLanguageEnum::Nl => "nl",
-        iface_ocr::RecognizePrintedTextLanguageEnum::En => "en",
-        iface_ocr::RecognizePrintedTextLanguageEnum::Fi => "fi",
-        iface_ocr::RecognizePrintedTextLanguageEnum::Fr => "fr",
-        iface_ocr::RecognizePrintedTextLanguageEnum::De => "de",
-        iface_ocr::RecognizePrintedTextLanguageEnum::El => "el",
-        iface_ocr::RecognizePrintedTextLanguageEnum::Hu => "hu",
-        iface_ocr::RecognizePrintedTextLanguageEnum::It => "it",
-        iface_ocr::RecognizePrintedTextLanguageEnum::Ja => "ja",
-        iface_ocr::RecognizePrintedTextLanguageEnum::Ko => "ko",
-        iface_ocr::RecognizePrintedTextLanguageEnum::Nb => "nb",
-        iface_ocr::RecognizePrintedTextLanguageEnum::Pl => "pl",
-        iface_ocr::RecognizePrintedTextLanguageEnum::Pt => "pt",
-        iface_ocr::RecognizePrintedTextLanguageEnum::Ru => "ru",
-        iface_ocr::RecognizePrintedTextLanguageEnum::Es => "es",
-        iface_ocr::RecognizePrintedTextLanguageEnum::Sv => "sv",
-        iface_ocr::RecognizePrintedTextLanguageEnum::Tr => "tr",
-        iface_ocr::RecognizePrintedTextLanguageEnum::Ar => "ar",
-        iface_ocr::RecognizePrintedTextLanguageEnum::Ro => "ro",
-        iface_ocr::RecognizePrintedTextLanguageEnum::SrCyrl => "sr-Cyrl",
-        iface_ocr::RecognizePrintedTextLanguageEnum::SrLatn => "sr-Latn",
-        iface_ocr::RecognizePrintedTextLanguageEnum::Sk => "sk",
-    }
-}
-
-fn iface_ocr__recognize_printed_text_params__to_json(p: &iface_ocr::RecognizePrintedTextParams) -> Value {
-    let mut m = Map::new();
-    m.insert("detect_orientation".into(), Value::Bool(*(&p.detect_orientation)));
-    m.insert("language".into(), match (&p.language) { Some(v) => Value::String(iface_ocr__recognize_printed_text_language_enum__to_str(v).into()), None => Value::Null });
-    m.insert("url".into(), Value::String((&p.url).clone()));
-    Value::Object(m)
-}
-
-impl iface_ocr::Guest for crate::Component {
-    fn recognize_printed_text(params: iface_ocr::RecognizePrintedTextParams) -> Result<String, String> {
-        let json = iface_ocr__recognize_printed_text_params__to_json(&params);
-        dispatch(&OP_OCR_RECOGNIZE_PRINTED_TEXT, json)
-    }
-}
-use crate::exports::autostamp::microsoft::tag as iface_tag;
-
-const OP_TAG_IMAGE: OpSpec = OpSpec {
-    method: "POST",
-    path_template: "/tag",
-    fields: &[
-        FieldSpec { snake: "language", location: FieldLocation::Query },
-        FieldSpec { snake: "url", location: FieldLocation::Body },
-    ],
-    auth: &[
-        AuthApply { secret_key: "apim_key", kind: AuthKind::ApiKeyHeader("Ocp-Apim-Subscription-Key") },
-    ],
-};
-
-fn iface_tag__image_language_enum__to_str(e: &iface_tag::ImageLanguageEnum) -> &'static str {
-    match e {
-        iface_tag::ImageLanguageEnum::En => "en",
-        iface_tag::ImageLanguageEnum::Es => "es",
-        iface_tag::ImageLanguageEnum::Ja => "ja",
-        iface_tag::ImageLanguageEnum::Pt => "pt",
-        iface_tag::ImageLanguageEnum::Zh => "zh",
-    }
-}
-
-fn iface_tag__image_params__to_json(p: &iface_tag::ImageParams) -> Value {
-    let mut m = Map::new();
-    m.insert("language".into(), match (&p.language) { Some(v) => Value::String(iface_tag__image_language_enum__to_str(v).into()), None => Value::Null });
-    m.insert("url".into(), Value::String((&p.url).clone()));
-    Value::Object(m)
-}
-
-impl iface_tag::Guest for crate::Component {
-    fn image(params: iface_tag::ImageParams) -> Result<String, String> {
-        let json = iface_tag__image_params__to_json(&params);
-        dispatch(&OP_TAG_IMAGE, json)
-    }
-}
+mod iface_analyze;
+mod iface_area_of_interest;
+mod iface_describe;
+mod iface_detect;
+mod iface_generate_thumbnail;
+mod iface_models;
+mod iface_ocr;
+mod iface_tag;
 
 export!(Component);

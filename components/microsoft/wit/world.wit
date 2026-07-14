@@ -6,7 +6,7 @@
 /// | Secret name | Applied to each request as |
 /// | --- | --- |
 /// | `apim_key` | header `Ocp-Apim-Subscription-Key` |
-package autostamp:microsoft@0.3.0;
+package autostamp:microsoft@0.5.0;
 
 interface analyze {
   enum image-visual-features-item-enum {
@@ -34,6 +34,197 @@ interface analyze {
     zh,
   }
 
+  enum face-description-gender-enum {
+    male,
+    female,
+  }
+
+  /// Result of AnalyzeImage operation.
+  record image-analysis {
+    adult: option<adult-info>,
+    /// Array of brands detected in the image.
+    brands: option<list<detected-brand>>,
+    /// An array indicating identified categories.
+    categories: option<list<category>>,
+    color: option<color-info>,
+    description: option<image-description-details>,
+    /// An array of possible faces within the image.
+    faces: option<list<face-description>>,
+    image-type: option<image-type>,
+    metadata: option<image-metadata>,
+    /// Array of objects describing what was detected in the image.
+    objects: option<list<detected-object>>,
+    /// Id of the REST API request.
+    request-id: option<string>,
+    /// A list of tags with confidence level.
+    tags: option<list<image-tag>>
+  }
+
+  /// An object describing whether the image contains adult-oriented content and/or is racy.
+  record adult-info {
+    /// Score from 0 to 1 that indicates how much the content is considered adult-oriented within the image.
+    adult-score: option<f64>,
+    /// A value indicating if the image contains adult-oriented content.
+    is-adult-content: option<bool>,
+    /// A value indicating if the image is racy.
+    is-racy-content: option<bool>,
+    /// Score from 0 to 1 that indicates how suggestive is the image.
+    racy-score: option<f64>
+  }
+
+  /// A brand detected in an image.
+  record detected-brand {
+    /// Confidence score of having observed the brand in the image, as a value ranging from 0 to 1.
+    confidence: option<f64>,
+    /// Label for the brand.
+    name: option<string>,
+    rectangle: option<bounding-rect>
+  }
+
+  /// A bounding box for an area inside an image.
+  record bounding-rect {
+    /// Height measured from the top-left point of the area, in pixels.
+    h: option<s32>,
+    /// Width measured from the top-left point of the area, in pixels.
+    w: option<s32>,
+    /// X-coordinate of the top left point of the area, in pixels.
+    x: option<s32>,
+    /// Y-coordinate of the top left point of the area, in pixels.
+    y: option<s32>
+  }
+
+  /// An object describing identified category.
+  record category {
+    detail: option<category-detail>,
+    /// Name of the category.
+    name: option<string>,
+    /// Scoring of the category.
+    score: option<f64>
+  }
+
+  /// An object describing additional category details.
+  record category-detail {
+    /// An array of celebrities if any identified.
+    celebrities: option<list<celebrities-model>>,
+    /// An array of landmarks if any identified.
+    landmarks: option<list<landmarks-model>>
+  }
+
+  /// An object describing possible celebrity identification.
+  record celebrities-model {
+    /// Confidence level for the celebrity recognition as a value ranging from 0 to 1.
+    confidence: option<f64>,
+    face-rectangle: option<face-rectangle>,
+    /// Name of the celebrity.
+    name: option<string>
+  }
+
+  /// An object describing face rectangle.
+  record face-rectangle {
+    /// Height measured from the top-left point of the face, in pixels.
+    height: option<s32>,
+    /// X-coordinate of the top left point of the face, in pixels.
+    left: option<s32>,
+    /// Y-coordinate of the top left point of the face, in pixels.
+    top: option<s32>,
+    /// Width measured from the top-left point of the face, in pixels.
+    width: option<s32>
+  }
+
+  /// A landmark recognized in the image.
+  record landmarks-model {
+    /// Confidence level for the landmark recognition as a value ranging from 0 to 1.
+    confidence: option<f64>,
+    /// Name of the landmark.
+    name: option<string>
+  }
+
+  /// An object providing additional metadata describing color attributes.
+  record color-info {
+    /// Possible accent color.
+    accent-color: option<string>,
+    /// Possible dominant background color.
+    dominant-color-background: option<string>,
+    /// Possible dominant foreground color.
+    dominant-color-foreground: option<string>,
+    /// An array of possible dominant colors.
+    dominant-colors: option<list<string>>,
+    /// A value indicating if the image is black and white.
+    is-bw-img: option<bool>
+  }
+
+  /// A collection of content tags, along with a list of captions sorted by confidence level, and image metadata.
+  record image-description-details {
+    /// A list of captions, sorted by confidence level.
+    captions: option<list<image-caption>>,
+    /// A collection of image tags.
+    tags: option<list<string>>
+  }
+
+  /// An image caption, i.e. a brief description of what the image depicts.
+  record image-caption {
+    /// The level of confidence the service has in the caption.
+    confidence: option<f64>,
+    /// The text of the caption.
+    text: option<string>
+  }
+
+  /// An object describing a face identified in the image.
+  record face-description {
+    /// Possible age of the face.
+    age: option<s32>,
+    face-rectangle: option<face-rectangle>,
+    /// Possible gender of the face.
+    gender: option<face-description-gender-enum>
+  }
+
+  /// An object providing possible image types and matching confidence levels.
+  record image-type {
+    /// Confidence level that the image is a clip art.
+    clip-art-type: option<s32>,
+    /// Confidence level that the image is a line drawing.
+    line-drawing-type: option<s32>
+  }
+
+  /// Image metadata.
+  record image-metadata {
+    /// Image format.
+    format: option<string>,
+    /// Image height, in pixels.
+    height: option<s32>,
+    /// Image width, in pixels.
+    width: option<s32>
+  }
+
+  /// An object detected in an image.
+  record detected-object {
+    /// Confidence score of having observed the object in the image, as a value ranging from 0 to 1.
+    confidence: option<f64>,
+    /// Label for the object.
+    object: option<string>,
+    parent: option<object-hierarchy>,
+    rectangle: option<bounding-rect>
+  }
+
+  /// An object detected inside an image.
+  record object-hierarchy {
+    /// Confidence score of having observed the object in the image, as a value ranging from 0 to 1.
+    confidence: option<f64>,
+    /// Label for the object.
+    object: option<string>,
+    parent: option<string>
+  }
+
+  /// An entity observation in the image, along with the confidence score.
+  record image-tag {
+    /// The level of confidence that the entity was observed.
+    confidence: option<f64>,
+    /// Optional hint/details for this tag.
+    hint: option<string>,
+    /// Name of the entity.
+    name: option<string>
+  }
+
   record image-params {
     /// A string indicating what visual feature types to return. Multiple values should be comma-separated. Valid visual feature types include: Categories - categorizes image content according to a taxonomy defined in documentation. Tags - tags the image with a detailed list of words related to the image content. Description - describes the image content with a complete English sentence. Faces - detects if faces are present. If present, generate coordinates, gender and age. ImageType - detects if image is clipart or a line drawing. Color - determines the accent color, dominant color, and whether an image is black&white. Adult - detects if the image is pornographic in nature (depicts nudity or a sex act).  Sexually suggestive content is also detected. Objects - detects various objects within an image, including the approximate location. The Objects argument is only available in English. Brands - detects various brands within an image, including the approximate location. The Brands argument is only available in English.
     visual-features: option<list<image-visual-features-item-enum>>,
@@ -44,17 +235,47 @@ interface analyze {
     /// Publicly reachable URL of an image.
     url: string
   }
-  image: func(params: image-params) -> result<string, string>;
+  image: func(params: image-params) -> result<image-analysis, string>;
 
 }
 
 
 interface area-of-interest {
+  /// Result of AreaOfInterest operation.
+  record result-op {
+    area-of-interest: option<bounding-rect>,
+    metadata: option<image-metadata>,
+    /// Id of the REST API request.
+    request-id: option<string>
+  }
+
+  /// A bounding box for an area inside an image.
+  record bounding-rect {
+    /// Height measured from the top-left point of the area, in pixels.
+    h: option<s32>,
+    /// Width measured from the top-left point of the area, in pixels.
+    w: option<s32>,
+    /// X-coordinate of the top left point of the area, in pixels.
+    x: option<s32>,
+    /// Y-coordinate of the top left point of the area, in pixels.
+    y: option<s32>
+  }
+
+  /// Image metadata.
+  record image-metadata {
+    /// Image format.
+    format: option<string>,
+    /// Image height, in pixels.
+    height: option<s32>,
+    /// Image width, in pixels.
+    width: option<s32>
+  }
+
   record get-area-of-interest-params {
     /// Publicly reachable URL of an image.
     url: string
   }
-  get-area-of-interest: func(params: get-area-of-interest-params) -> result<string, string>;
+  get-area-of-interest: func(params: get-area-of-interest-params) -> result<result-op, string>;
 
 }
 
@@ -67,6 +288,40 @@ interface describe {
     zh,
   }
 
+  /// A collection of content tags, along with a list of captions sorted by confidence level, and image metadata.
+  record image-description {
+    description: option<image-description-details>,
+    metadata: option<image-metadata>,
+    /// Id of the REST API request.
+    request-id: option<string>
+  }
+
+  /// A collection of content tags, along with a list of captions sorted by confidence level, and image metadata.
+  record image-description-details {
+    /// A list of captions, sorted by confidence level.
+    captions: option<list<image-caption>>,
+    /// A collection of image tags.
+    tags: option<list<string>>
+  }
+
+  /// An image caption, i.e. a brief description of what the image depicts.
+  record image-caption {
+    /// The level of confidence the service has in the caption.
+    confidence: option<f64>,
+    /// The text of the caption.
+    text: option<string>
+  }
+
+  /// Image metadata.
+  record image-metadata {
+    /// Image format.
+    format: option<string>,
+    /// Image height, in pixels.
+    height: option<s32>,
+    /// Image width, in pixels.
+    width: option<s32>
+  }
+
   record image-params {
     /// Maximum number of candidate descriptions to be returned.  The default is 1.
     max-candidates: option<s32>,
@@ -75,16 +330,66 @@ interface describe {
     /// Publicly reachable URL of an image.
     url: string
   }
-  image: func(params: image-params) -> result<string, string>;
+  image: func(params: image-params) -> result<image-description, string>;
 
 }
 
 interface detect {
+  /// Result of a DetectImage call.
+  record result-op {
+    metadata: option<image-metadata>,
+    /// An array of detected objects.
+    objects: option<list<detected-object>>,
+    /// Id of the REST API request.
+    request-id: option<string>
+  }
+
+  /// Image metadata.
+  record image-metadata {
+    /// Image format.
+    format: option<string>,
+    /// Image height, in pixels.
+    height: option<s32>,
+    /// Image width, in pixels.
+    width: option<s32>
+  }
+
+  /// An object detected in an image.
+  record detected-object {
+    /// Confidence score of having observed the object in the image, as a value ranging from 0 to 1.
+    confidence: option<f64>,
+    /// Label for the object.
+    object: option<string>,
+    parent: option<object-hierarchy>,
+    rectangle: option<bounding-rect>
+  }
+
+  /// An object detected inside an image.
+  record object-hierarchy {
+    /// Confidence score of having observed the object in the image, as a value ranging from 0 to 1.
+    confidence: option<f64>,
+    /// Label for the object.
+    object: option<string>,
+    parent: option<string>
+  }
+
+  /// A bounding box for an area inside an image.
+  record bounding-rect {
+    /// Height measured from the top-left point of the area, in pixels.
+    h: option<s32>,
+    /// Width measured from the top-left point of the area, in pixels.
+    w: option<s32>,
+    /// X-coordinate of the top left point of the area, in pixels.
+    x: option<s32>,
+    /// Y-coordinate of the top left point of the area, in pixels.
+    y: option<s32>
+  }
+
   record objects-params {
     /// Publicly reachable URL of an image.
     url: string
   }
-  objects: func(params: objects-params) -> result<string, string>;
+  objects: func(params: objects-params) -> result<result-op, string>;
 
 }
 
@@ -112,7 +417,46 @@ interface models {
     zh,
   }
 
-  list-models: func() -> result<string, string>;
+  /// Result of the List Domain Models operation.
+  record list-models-result {
+    /// An array of supported models.
+    models: option<list<model-description>>
+  }
+
+  /// An object describing supported model by name and categories.
+  record model-description {
+    /// Categories of the model.
+    categories: option<list<string>>,
+    /// The name of the model.
+    name: option<string>
+  }
+
+  /// Result of image analysis using a specific domain model including additional metadata.
+  record domain-model-results {
+    metadata: option<image-metadata>,
+    /// Id of the REST API request.
+    request-id: option<string>,
+    /// Model-specific response.
+    result-op: option<domain-model-results-result-op>
+  }
+
+  /// Image metadata.
+  record image-metadata {
+    /// Image format.
+    format: option<string>,
+    /// Image height, in pixels.
+    height: option<s32>,
+    /// Image width, in pixels.
+    width: option<s32>
+  }
+
+  /// Model-specific response.
+  record domain-model-results-result-op {
+    /// JSON-encoded free-form object payload
+    data: option<string>
+  }
+
+  list-models: func() -> result<list-models-result, string>;
 
   record analyze-image-by-domain-params {
     /// The domain-specific content to recognize.
@@ -122,7 +466,7 @@ interface models {
     /// Publicly reachable URL of an image.
     url: string
   }
-  analyze-image-by-domain: func(params: analyze-image-by-domain-params) -> result<string, string>;
+  analyze-image-by-domain: func(params: analyze-image-by-domain-params) -> result<domain-model-results, string>;
 
 }
 
@@ -157,6 +501,41 @@ interface ocr {
     sk,
   }
 
+  record result-op {
+    /// The BCP-47 language code of the text in the image.
+    language: option<string>,
+    /// Orientation of the text recognized in the image. The value (up, down, left, or right) refers to the direction that the top of the recognized text is facing, after the image has been rotated around its center according to the detected text angle (see textAngle property).
+    orientation: option<string>,
+    /// An array of objects, where each object represents a region of recognized text.
+    regions: option<list<region>>,
+    /// The angle, in degrees, of the detected text with respect to the closest horizontal or vertical direction. After rotating the input image clockwise by this angle, the recognized text lines become horizontal or vertical. In combination with the orientation property it can be used to overlay recognition results correctly on the original image, by rotating either the original image or recognition results by a suitable angle around the center of the original image. If the angle cannot be confidently detected, this property is not present. If the image contains text at different angles, only part of the text will be recognized correctly.
+    text-angle: option<f64>
+  }
+
+  /// A region consists of multiple lines (e.g. a column of text in a multi-column document).
+  record region {
+    /// Bounding box of a recognized region. The four integers represent the x-coordinate of the left edge, the y-coordinate of the top edge, width, and height of the bounding box, in the coordinate system of the input image, after it has been rotated around its center according to the detected text angle (see textAngle property), with the origin at the top-left corner, and the y-axis pointing down.
+    bounding-box: option<string>,
+    /// An array of recognized lines of text.
+    lines: option<list<line>>
+  }
+
+  /// An object describing a single recognized line of text.
+  record line {
+    /// Bounding box of a recognized line. The four integers represent the x-coordinate of the left edge, the y-coordinate of the top edge, width, and height of the bounding box, in the coordinate system of the input image, after it has been rotated around its center according to the detected text angle (see textAngle property), with the origin at the top-left corner, and the y-axis pointing down.
+    bounding-box: option<string>,
+    /// An array of objects, where each object represents a recognized word.
+    words: option<list<word>>
+  }
+
+  /// Information on a recognized word.
+  record word {
+    /// Bounding box of a recognized word. The four integers represent the x-coordinate of the left edge, the y-coordinate of the top edge, width, and height of the bounding box, in the coordinate system of the input image, after it has been rotated around its center according to the detected text angle (see textAngle property), with the origin at the top-left corner, and the y-axis pointing down.
+    bounding-box: option<string>,
+    /// String value of a recognized word.
+    text: option<string>
+  }
+
   record recognize-printed-text-params {
     /// Whether detect the text orientation in the image. With detectOrientation=true the OCR service tries to detect the image orientation and correct it before further processing (e.g. if it's upside-down).
     detect-orientation: bool,
@@ -165,7 +544,7 @@ interface ocr {
     /// Publicly reachable URL of an image.
     url: string
   }
-  recognize-printed-text: func(params: recognize-printed-text-params) -> result<string, string>;
+  recognize-printed-text: func(params: recognize-printed-text-params) -> result<result-op, string>;
 
 }
 
@@ -178,13 +557,42 @@ interface tag {
     zh,
   }
 
+  /// The results of a image tag operation, including any tags and image metadata.
+  record result-op {
+    metadata: option<image-metadata>,
+    /// Id of the REST API request.
+    request-id: option<string>,
+    /// A list of tags with confidence level.
+    tags: option<list<image-tag>>
+  }
+
+  /// Image metadata.
+  record image-metadata {
+    /// Image format.
+    format: option<string>,
+    /// Image height, in pixels.
+    height: option<s32>,
+    /// Image width, in pixels.
+    width: option<s32>
+  }
+
+  /// An entity observation in the image, along with the confidence score.
+  record image-tag {
+    /// The level of confidence that the entity was observed.
+    confidence: option<f64>,
+    /// Optional hint/details for this tag.
+    hint: option<string>,
+    /// Name of the entity.
+    name: option<string>
+  }
+
   record image-params {
     /// The desired language for output generation. If this parameter is not specified, the default value is &quot;en&quot;.Supported languages:en - English, Default. es - Spanish, ja - Japanese, pt - Portuguese, zh - Simplified Chinese.
     language: option<image-language-enum>,
     /// Publicly reachable URL of an image.
     url: string
   }
-  image: func(params: image-params) -> result<string, string>;
+  image: func(params: image-params) -> result<result-op, string>;
 
 }
 /// The component world: imports the secrets host capability

@@ -1,6 +1,88 @@
-package autostamp:opencagedata@0.3.0;
+package autostamp:opencagedata@0.5.0;
 
 interface v-version {
+  record response {
+    documentation: option<string>,
+    licenses: option<list<response-licenses-item>>,
+    rate: option<response-rate>,
+    results: option<list<response-results-item>>,
+    status: option<response-status>,
+    stay-informed: option<response-stay-informed>,
+    thanks: option<string>,
+    timestamp: option<response-timestamp>,
+    total-results: option<s32>
+  }
+
+  record response-licenses-item {
+    name: option<string>,
+    url: option<string>
+  }
+
+  record response-rate {
+    limit: option<s32>,
+    remaining: option<s32>,
+    reset: option<s32>
+  }
+
+  record response-results-item {
+    annotations: option<response-results-item-annotations>,
+    bounds: option<response-results-item-bounds>,
+    components: option<response-results-item-components>,
+    confidence: option<s32>,
+    formatted: option<string>,
+    geometry: option<lat-lng>
+  }
+
+  record response-results-item-annotations {
+    /// JSON-encoded free-form object payload
+    data: option<string>
+  }
+
+  record response-results-item-bounds {
+    northeast: option<lat-lng>,
+    southwest: option<lat-lng>
+  }
+
+  record lat-lng {
+    lat: option<f64>,
+    lng: option<f64>
+  }
+
+  record response-results-item-components {
+    /// JSON-encoded free-form object payload
+    data: option<string>
+  }
+
+  record response-status {
+    code: option<s32>,
+    message: option<string>
+  }
+
+  record response-stay-informed {
+    blog: option<string>,
+    twitter: option<string>
+  }
+
+  record response-timestamp {
+    created-http: option<string>,
+    created-unix: option<s32>
+  }
+
+  variant get-v-version-format-error {
+    bad-request(string),
+    unauthorized(string),
+    payment-required(string),
+    forbidden(string),
+    not-found(string),
+    method-not-allowed(string),
+    request-timeout(string),
+    gone(string),
+    upgrade-required(string),
+    too-many-requests(string),
+    service-unavailable(string),
+    other(string)
+  }
+
   record get-v-version-format-params {
     /// API version.
     version: string,
@@ -41,7 +123,7 @@ interface v-version {
     /// match nearest road, include roadinfo annotation
     roadinfo: option<bool>
   }
-  get-v-version-format: func(params: get-v-version-format-params) -> result<string, string>;
+  get-v-version-format: func(params: get-v-version-format-params) -> result<response, get-v-version-format-error>;
 
 }
 

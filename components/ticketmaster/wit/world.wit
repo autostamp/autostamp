@@ -1,4 +1,4 @@
-package autostamp:ticketmaster@0.3.0;
+package autostamp:ticketmaster@0.5.0;
 
 interface discovery {
   enum find-source-enum {
@@ -19,9 +19,557 @@ interface discovery {
     no,
   }
 
+  enum image-ratio-enum {
+    v16-v9,
+    v3-v2,
+    v4-v3,
+  }
+
+  enum attraction-type-op-enum {
+    event,
+    venue,
+    attraction,
+  }
+
   enum get-discovery-v2-events-unit-enum {
     miles,
     km,
+  }
+
+  enum event-status-code-enum {
+    onsale,
+    offsale,
+    canceled,
+    postponed,
+    rescheduled,
+  }
+
+  enum price-range-type-op-enum {
+    standard,
+  }
+
+  enum event-images-type-op-enum {
+    event,
+  }
+
+  enum twitter-handle-enum {
+    a-twitter-handle,
+  }
+
+  /// Attraction
+  record attraction {
+    /// Additional information of the entity
+    additional-info: option<string>,
+    /// Attraction's classifications
+    classifications: option<list<classification>>,
+    /// Description's of the entity
+    description: option<string>,
+    /// List of external links
+    external-links: option<attraction-external-links>,
+    /// Unique id of the entity in the discovery API
+    id: string,
+    /// Images of the entity
+    images: option<list<image>>,
+    /// Locale in which the content is returned
+    locale: option<string>,
+    /// Name of the entity
+    name: option<string>,
+    /// Indicate if this is a test entity, by default test entities won't appear in discovery API
+    test: option<bool>,
+    /// Type of the entity
+    type-op: attraction-type-op-enum,
+    /// number of upcoming events
+    upcoming-events: option<attraction-upcoming-events>,
+    /// URL of a web site detail page of the entity
+    url: option<string>
+  }
+
+  /// Classification
+  record classification {
+    genre: option<level>,
+    /// True if this is the entity's primary classification
+    primary: option<bool>,
+    segment: option<segment>,
+    sub-genre: option<level>,
+    sub-type: option<level>,
+    type-op: option<level>
+  }
+
+  record level {
+    /// The ID of the classification's level
+    id: option<string>,
+    /// The Name of the classification's level
+    name: option<string>
+  }
+
+  /// Segment
+  record segment {
+    /// The ID of the classification's level
+    id: option<string>,
+    /// The Name of the classification's level
+    name: option<string>
+  }
+
+  /// List of external links
+  record attraction-external-links {
+    /// JSON-encoded free-form object payload
+    data: option<string>
+  }
+
+  /// Image
+  record image {
+    /// Attribution of the image
+    attribution: option<string>,
+    /// true if the image is not the event's image but a fallbak image
+    fallback: option<bool>,
+    /// Height of the image
+    height: option<s32>,
+    /// Aspect ratio of the image
+    ratio: option<image-ratio-enum>,
+    /// Public URL of the image
+    url: option<string>,
+    /// Width of the image
+    width: option<s32>
+  }
+
+  /// number of upcoming events
+  record attraction-upcoming-events {
+    /// JSON-encoded free-form object payload
+    data: option<string>
+  }
+
+  /// Secondary Genre
+  record genre {
+    /// The ID of the classification's level
+    id: option<string>,
+    /// The Name of the classification's level
+    name: option<string>
+  }
+
+  /// Event
+  record event {
+    accessibility: option<accessibility>,
+    /// Additional information of the entity
+    additional-info: option<string>,
+    /// Event's classifications
+    classifications: option<list<classification>>,
+    dates: option<event-dates>,
+    /// Description's of the entity
+    description: option<string>,
+    distance: option<f64>,
+    /// List of external links
+    external-links: option<event-external-links>,
+    /// Unique id of the entity in the discovery API
+    id: string,
+    /// Images of the entity
+    images: option<list<image>>,
+    /// Any information related to the event
+    info: option<string>,
+    /// Locale in which the content is returned
+    locale: option<string>,
+    location: option<location>,
+    /// Name of the entity
+    name: option<string>,
+    /// Related outlets informations
+    outlets: option<list<outlet>>,
+    place: option<place>,
+    /// Any notes related to the event
+    please-note: option<string>,
+    /// Price ranges of this event
+    price-ranges: option<list<price-range>>,
+    /// Related products informations
+    products: option<list<product>>,
+    promoter: option<promoter>,
+    /// Event's promoters
+    promoters: option<list<promoter>>,
+    sales: option<event-sales-dates>,
+    seatmap: option<seat-map>,
+    /// Indicate if this is a test entity, by default test entities won't appear in discovery API
+    test: option<bool>,
+    /// Type of the entity
+    type-op: attraction-type-op-enum,
+    units: option<string>,
+    /// URL of a web site detail page of the entity
+    url: option<string>
+  }
+
+  /// Additional information for people who experience disabilities
+  record accessibility {
+    /// Accessibility's information
+    info: option<string>
+  }
+
+  /// Event's Dates
+  record event-dates {
+    access: option<access-dates>,
+    end: option<end-dates>,
+    /// Flag indicating if date spans of multiple days
+    span-multiple-days: option<bool>,
+    start: option<start-dates>,
+    status: option<event-status>,
+    /// Event's timezone
+    timezone: option<string>
+  }
+
+  /// Event's Access Date
+  record access-dates {
+    /// Boolean flag to indicate whether or not the access end date is approximated
+    end-approximate: option<bool>,
+    /// Event's end access time
+    end-date-time: option<string>,
+    /// Boolean flag to indicate whether or not the access start date is approximated
+    start-approximate: option<bool>,
+    /// Event's start access time
+    start-date-time: option<string>
+  }
+
+  /// Event's End Dates
+  record end-dates {
+    /// Boolean flag to indicate whether or not the end date is approximated
+    approximate: option<bool>,
+    /// The event end date time
+    date-time: option<string>,
+    /// The event end date in local date
+    local-date: option<string>,
+    local-time: option<local-time>,
+    /// Boolean flag to indicate whether or not the event end time has no specific time
+    no-specific-time: option<bool>
+  }
+
+  record local-time {
+    chronology: option<chronology>,
+    field-types: option<list<date-time-field-type>>,
+    fields: option<list<date-time-field>>,
+    hour-of-day: option<s32>,
+    millis-of-day: option<s32>,
+    millis-of-second: option<s32>,
+    minute-of-hour: option<s32>,
+    second-of-minute: option<s32>,
+    values: option<list<s32>>
+  }
+
+  record chronology {
+    zone: option<date-time-zone>
+  }
+
+  record date-time-zone {
+    fixed: option<bool>,
+    id: option<string>
+  }
+
+  record date-time-field-type {
+    duration-type: option<duration-field-type>,
+    name: option<string>,
+    range-duration-type: option<duration-field-type>
+  }
+
+  record duration-field-type {
+    name: option<string>
+  }
+
+  record date-time-field {
+    duration-field: option<duration-field>,
+    leap-duration-field: option<duration-field>,
+    lenient: option<bool>,
+    maximum-value: option<s32>,
+    minimum-value: option<s32>,
+    name: option<string>,
+    range-duration-field: option<duration-field>,
+    supported: option<bool>,
+    type-op: option<date-time-field-type>
+  }
+
+  record duration-field {
+    name: option<string>,
+    precise: option<bool>,
+    supported: option<bool>,
+    type-op: option<duration-field-type>,
+    unit-millis: option<s64>
+  }
+
+  /// Event's Start Dates
+  record start-dates {
+    /// Boolean flag to indicate whether or not the start date is TBA
+    date-tba: option<bool>,
+    /// Boolean flag to indicate whether or not the start date is TBD
+    date-tbd: option<bool>,
+    /// The event start datetime
+    date-time: option<string>,
+    /// The event start date in local date
+    local-date: option<string>,
+    local-time: option<local-time>,
+    /// Boolean flag to indicate whether or not the event start time has no specific time
+    no-specific-time: option<bool>,
+    /// Boolean flag to indicate whether or not the start time is TBA
+    time-tba: option<bool>
+  }
+
+  /// Event's Status
+  record event-status {
+    /// The event's status code
+    code: option<event-status-code-enum>
+  }
+
+  /// List of external links
+  record event-external-links {
+    /// JSON-encoded free-form object payload
+    data: option<string>
+  }
+
+  /// Location
+  record location {
+    /// Latitude
+    latitude: option<f64>,
+    /// Longitude
+    longitude: option<f64>
+  }
+
+  /// A selling point for tickets.
+  record outlet {
+    /// Outlet's type
+    type-op: option<string>,
+    /// Outlet's url
+    url: option<string>
+  }
+
+  /// Place
+  record place {
+    address: option<address>,
+    area: option<area>,
+    city: option<city>,
+    country: option<country>,
+    location: option<location>,
+    /// Name of the entity
+    name: option<string>,
+    /// Postal code / zipcode of the place
+    postal-code: option<string>,
+    state: option<state>
+  }
+
+  /// Address
+  record address {
+    /// Address first line
+    line1: option<string>,
+    /// Address second line
+    line2: option<string>,
+    /// Address third line
+    line3: option<string>
+  }
+
+  /// Area
+  record area {
+    /// Name of the entity
+    name: option<string>
+  }
+
+  /// City
+  record city {
+    /// Name of the entity
+    name: option<string>
+  }
+
+  /// Country
+  record country {
+    /// Country code (ISO 3166)
+    country-code: option<string>,
+    /// Name of the entity
+    name: option<string>
+  }
+
+  /// State
+  record state {
+    /// Name of the entity
+    name: option<string>,
+    /// State code
+    state-code: option<string>
+  }
+
+  /// PriceRange
+  record price-range {
+    /// Currency
+    currency: option<string>,
+    /// Maximum price
+    max: option<f64>,
+    /// Minimum price
+    min: option<f64>,
+    /// Type of price
+    type-op: option<price-range-type-op-enum>
+  }
+
+  /// Product
+  record product {
+    /// Product's primary id
+    id: option<string>,
+    /// Name of the entity
+    name: option<string>,
+    /// Product's type
+    type-op: option<string>,
+    /// Product's url
+    url: option<string>
+  }
+
+  /// Promoter
+  record promoter {
+    /// Description of the promoter
+    description: option<string>,
+    /// Id of the promoter
+    id: option<string>,
+    /// Name of the promoter
+    name: option<string>
+  }
+
+  /// Event's Sales Dates
+  record event-sales-dates {
+    /// Presale information on this event
+    presales: option<list<presale>>,
+    public: option<public-sale-dates>
+  }
+
+  /// Event's Presale Info
+  record presale {
+    /// Description of the presame
+    description: option<string>,
+    /// Presale's end dates. The date and time when the presale will end
+    end-date-time: option<string>,
+    /// Name of the presale
+    name: option<string>,
+    /// Presale's start dates. The date and time when the presale will start
+    start-date-time: option<string>,
+    /// Presale link URL
+    url: option<string>
+  }
+
+  /// Event's Public Onsales Dates
+  record public-sale-dates {
+    /// Public sale's end dates. The date and time when the public sale will end
+    end-date-time: option<string>,
+    /// Public sale's start dates. The date and time when the public sale will start
+    start-date-time: option<string>,
+    /// True if the public sale's date is to be determined
+    start-tbd: option<bool>
+  }
+
+  /// Seatmap
+  record seat-map {
+    /// Static Seatmap Url
+    static-url: option<string>
+  }
+
+  /// This class defines an Event with only images view on the Discovery API
+  record event-images {
+    /// Unique id of the entity in the discovery API
+    id: string,
+    /// Images of the entity
+    images: option<list<image>>,
+    /// Type of the entity
+    type-op: event-images-type-op-enum
+  }
+
+  /// Venue
+  record venue {
+    /// Venue accessible seating detail
+    accessible-seating-detail: option<string>,
+    /// Additional information of the entity
+    additional-info: option<string>,
+    address: option<address>,
+    box-office-info: option<venue-box-office-info>,
+    city: option<city>,
+    country: option<country>,
+    /// Default currency of ticket prices for events in this venue
+    currency: option<string>,
+    /// Description's of the entity
+    description: option<string>,
+    distance: option<f64>,
+    /// The list of associated DMAs (Designated Market Areas) of the venue
+    dma: option<list<dma>>,
+    /// List of external links
+    external-links: option<venue-external-links>,
+    general-info: option<venue-general-info>,
+    /// Unique id of the entity in the discovery API
+    id: string,
+    /// Images of the entity
+    images: option<list<image>>,
+    /// Locale in which the content is returned
+    locale: option<string>,
+    location: option<location>,
+    /// Markets of the venue
+    markets: option<list<market>>,
+    /// Name of the entity
+    name: option<string>,
+    /// Venue parking info
+    parking-detail: option<string>,
+    /// Postal code / zipcode of the venue
+    postal-code: option<string>,
+    social: option<social>,
+    state: option<state>,
+    /// Indicate if this is a test entity, by default test entities won't appear in discovery API
+    test: option<bool>,
+    /// Timezone of the venue
+    timezone: option<string>,
+    /// Type of the entity
+    type-op: attraction-type-op-enum,
+    units: option<string>,
+    /// number of upcoming events
+    upcoming-events: option<venue-upcoming-events>,
+    /// URL of a web site detail page of the entity
+    url: option<string>
+  }
+
+  /// Venue box office information
+  record venue-box-office-info {
+    /// Venue box office accepted payment details
+    accepted-payment-detail: option<string>,
+    /// Venue box office opening hours
+    open-hours-detail: option<string>,
+    /// Venue box office phone number
+    phone-number-detail: option<string>,
+    /// Venue box office will call details
+    will-call-detail: option<string>
+  }
+
+  /// DMA (Designated Market Area)
+  record dma {
+    /// DMS's id
+    id: option<s32>
+  }
+
+  /// List of external links
+  record venue-external-links {
+    /// JSON-encoded free-form object payload
+    data: option<string>
+  }
+
+  /// Venue general information
+  record venue-general-info {
+    /// Venue children rule
+    child-rule: option<string>,
+    /// Venue general rules
+    general-rule: option<string>
+  }
+
+  /// Market
+  record market {
+    /// Market's id
+    id: option<string>
+  }
+
+  /// Social networks data
+  record social {
+    twitter: option<twitter>
+  }
+
+  /// Twitter data
+  record twitter {
+    /// Twitter handle
+    handle: option<twitter-handle-enum>,
+    /// Twitter hashtags
+    hashtags: option<list<string>>
+  }
+
+  /// number of upcoming events
+  record venue-upcoming-events {
+    /// JSON-encoded free-form object payload
+    data: option<string>
   }
 
   /// Attraction Search
@@ -51,7 +599,7 @@ interface discovery {
     /// yes, to include spell check suggestions in the response.
     include-spellcheck: option<find-include-licensed-content-enum>
   }
-  find: func(params: find-params) -> result<string, string>;
+  find: func(params: find-params) -> result<list<attraction>, string>;
 
   /// Get Attraction Details
   record get-params {
@@ -62,7 +610,7 @@ interface discovery {
     /// True if you want to display licensed content
     include-licensed-content: option<find-include-licensed-content-enum>
   }
-  get: func(params: get-params) -> result<string, string>;
+  get: func(params: get-params) -> result<attraction, string>;
 
   /// Classification Search
   record get-discovery-v2-classifications-params {
@@ -87,7 +635,7 @@ interface discovery {
     /// yes, to include spell check suggestions in the response.
     include-spellcheck: option<find-include-licensed-content-enum>
   }
-  get-discovery-v2-classifications: func(params: get-discovery-v2-classifications-params) -> result<string, string>;
+  get-discovery-v2-classifications: func(params: get-discovery-v2-classifications-params) -> result<list<classification>, string>;
 
   /// Get Genre Details
   record get-genre-params {
@@ -98,7 +646,7 @@ interface discovery {
     /// True if you want to display licensed content
     include-licensed-content: option<find-include-licensed-content-enum>
   }
-  get-genre: func(params: get-genre-params) -> result<string, string>;
+  get-genre: func(params: get-genre-params) -> result<genre, string>;
 
   /// Get Segment Details
   record get-segment-params {
@@ -109,7 +657,7 @@ interface discovery {
     /// True if you want to display licensed content
     include-licensed-content: option<find-include-licensed-content-enum>
   }
-  get-segment: func(params: get-segment-params) -> result<string, string>;
+  get-segment: func(params: get-segment-params) -> result<segment, string>;
 
   /// Get Sub-Genre Details
   record get-subgenre-params {
@@ -120,7 +668,7 @@ interface discovery {
     /// True if you want to display licensed content
     include-licensed-content: option<find-include-licensed-content-enum>
   }
-  get-subgenre: func(params: get-subgenre-params) -> result<string, string>;
+  get-subgenre: func(params: get-subgenre-params) -> result<level, string>;
 
   /// Get Classification Details
   record get-discovery-v2-classifications-id-params {
@@ -131,7 +679,7 @@ interface discovery {
     /// True if you want to display licensed content
     include-licensed-content: option<find-include-licensed-content-enum>
   }
-  get-discovery-v2-classifications-id: func(params: get-discovery-v2-classifications-id-params) -> result<string, string>;
+  get-discovery-v2-classifications-id: func(params: get-discovery-v2-classifications-id-params) -> result<classification, string>;
 
   /// Event Search
   record get-discovery-v2-events-params {
@@ -208,7 +756,7 @@ interface discovery {
     /// yes, to include spell check suggestions in the response.
     include-spellcheck: option<find-include-licensed-content-enum>
   }
-  get-discovery-v2-events: func(params: get-discovery-v2-events-params) -> result<string, string>;
+  get-discovery-v2-events: func(params: get-discovery-v2-events-params) -> result<list<event>, string>;
 
   /// Get Event Details
   record get-discovery-v2-events-id-params {
@@ -219,7 +767,7 @@ interface discovery {
     /// True if you want to display licensed content
     include-licensed-content: option<find-include-licensed-content-enum>
   }
-  get-discovery-v2-events-id: func(params: get-discovery-v2-events-id-params) -> result<string, string>;
+  get-discovery-v2-events-id: func(params: get-discovery-v2-events-id-params) -> result<event, string>;
 
   /// Get Event Images
   record get-images-params {
@@ -230,7 +778,7 @@ interface discovery {
     /// True if you want to display licensed content
     include-licensed-content: option<find-include-licensed-content-enum>
   }
-  get-images: func(params: get-images-params) -> result<string, string>;
+  get-images: func(params: get-images-params) -> result<event-images, string>;
 
   /// Venue Search
   record get-discovery-v2-venues-params {
@@ -267,7 +815,7 @@ interface discovery {
     /// yes, to include spell check suggestions in the response.
     include-spellcheck: option<find-include-licensed-content-enum>
   }
-  get-discovery-v2-venues: func(params: get-discovery-v2-venues-params) -> result<string, string>;
+  get-discovery-v2-venues: func(params: get-discovery-v2-venues-params) -> result<list<venue>, string>;
 
   /// Get Venue Details
   record get-discovery-v2-venues-id-params {
@@ -278,7 +826,7 @@ interface discovery {
     /// True if you want to display licensed content
     include-licensed-content: option<find-include-licensed-content-enum>
   }
-  get-discovery-v2-venues-id: func(params: get-discovery-v2-venues-id-params) -> result<string, string>;
+  get-discovery-v2-venues-id: func(params: get-discovery-v2-venues-id-params) -> result<venue, string>;
 
 }
 

@@ -1,17 +1,155 @@
-package autostamp:googleapis@0.3.0;
+package autostamp:googleapis@0.5.0;
 
 interface violating-sites {
-  abusiveexperiencereport-violating-sites-list: func() -> result<string, string>;
+  enum abusiveexperiencereport-violating-sites-list-xgafv-enum {
+    v1,
+    v2,
+  }
+
+  enum abusiveexperiencereport-violating-sites-list-alt-enum {
+    json,
+    media,
+    proto,
+  }
+
+  enum site-summary-response-abusive-status-enum {
+    unknown,
+    passing,
+    failing,
+  }
+
+  enum site-summary-response-filter-status-enum {
+    unknown,
+    on,
+    off,
+    paused,
+    pending,
+  }
+
+  /// Response message for ListViolatingSites.
+  record response {
+    /// The list of violating sites.
+    violating-sites: option<list<site-summary-response>>
+  }
+
+  /// Response message for GetSiteSummary.
+  record site-summary-response {
+    /// The site's Abusive Experience Report status.
+    abusive-status: option<site-summary-response-abusive-status-enum>,
+    /// The time at which [enforcement](https://support.google.com/webtools/answer/7538608) against the site began or will begin. Not set when the filter_status is OFF.
+    enforcement-time: option<string>,
+    /// The site's [enforcement status](https://support.google.com/webtools/answer/7538608).
+    filter-status: option<site-summary-response-filter-status-enum>,
+    /// The time at which the site's status last changed.
+    last-change-time: option<string>,
+    /// A link to the full Abusive Experience Report for the site. Not set in ViolatingSitesResponse. Note that you must complete the [Search Console verification process](https://support.google.com/webmasters/answer/9008080) for the site before you can access the full report.
+    report-url: option<string>,
+    /// The name of the reviewed site, e.g. `google.com`.
+    reviewed-site: option<string>,
+    /// Whether the site is currently under review.
+    under-review: option<bool>
+  }
+
+  record abusiveexperiencereport-violating-sites-list-params {
+    /// V1 error format.
+    xgafv: option<abusiveexperiencereport-violating-sites-list-xgafv-enum>,
+    /// OAuth access token.
+    access-token: option<string>,
+    /// Data format for response.
+    alt: option<abusiveexperiencereport-violating-sites-list-alt-enum>,
+    /// JSONP
+    callback: option<string>,
+    /// Selector specifying which fields to include in a partial response.
+    fields: option<string>,
+    /// API key. Your API key identifies your project and provides you with API access, quota, and reports. Required unless you provide an OAuth 2.0 token.
+    key: option<string>,
+    /// OAuth 2.0 token for the current user.
+    oauth-token: option<string>,
+    /// Returns response with indentations and line breaks.
+    pretty-print: option<bool>,
+    /// Available to use for quota purposes for server-side applications. Can be any arbitrary string assigned to a user, but should not exceed 40 characters.
+    quota-user: option<string>,
+    /// Upload protocol for media (e.g. "raw", "multipart").
+    upload-protocol: option<string>,
+    /// Legacy upload protocol for media (e.g. "media", "multipart").
+    upload-type: option<string>
+  }
+  abusiveexperiencereport-violating-sites-list: func(params: abusiveexperiencereport-violating-sites-list-params) -> result<response, string>;
 
 }
 
 
 interface sites {
+  enum abusiveexperiencereport-sites-get-xgafv-enum {
+    v1,
+    v2,
+  }
+
+  enum abusiveexperiencereport-sites-get-alt-enum {
+    json,
+    media,
+    proto,
+  }
+
+  enum site-summary-response-abusive-status-enum {
+    unknown,
+    passing,
+    failing,
+  }
+
+  enum site-summary-response-filter-status-enum {
+    unknown,
+    on,
+    off,
+    paused,
+    pending,
+  }
+
+  /// Response message for GetSiteSummary.
+  record site-summary-response {
+    /// The site's Abusive Experience Report status.
+    abusive-status: option<site-summary-response-abusive-status-enum>,
+    /// The time at which [enforcement](https://support.google.com/webtools/answer/7538608) against the site began or will begin. Not set when the filter_status is OFF.
+    enforcement-time: option<string>,
+    /// The site's [enforcement status](https://support.google.com/webtools/answer/7538608).
+    filter-status: option<site-summary-response-filter-status-enum>,
+    /// The time at which the site's status last changed.
+    last-change-time: option<string>,
+    /// A link to the full Abusive Experience Report for the site. Not set in ViolatingSitesResponse. Note that you must complete the [Search Console verification process](https://support.google.com/webmasters/answer/9008080) for the site before you can access the full report.
+    report-url: option<string>,
+    /// The name of the reviewed site, e.g. `google.com`.
+    reviewed-site: option<string>,
+    /// Whether the site is currently under review.
+    under-review: option<bool>
+  }
+
   record abusiveexperiencereport-sites-get-params {
+    /// V1 error format.
+    xgafv: option<abusiveexperiencereport-sites-get-xgafv-enum>,
+    /// OAuth access token.
+    access-token: option<string>,
+    /// Data format for response.
+    alt: option<abusiveexperiencereport-sites-get-alt-enum>,
+    /// JSONP
+    callback: option<string>,
+    /// Selector specifying which fields to include in a partial response.
+    fields: option<string>,
+    /// API key. Your API key identifies your project and provides you with API access, quota, and reports. Required unless you provide an OAuth 2.0 token.
+    key: option<string>,
+    /// OAuth 2.0 token for the current user.
+    oauth-token: option<string>,
+    /// Returns response with indentations and line breaks.
+    pretty-print: option<bool>,
+    /// Available to use for quota purposes for server-side applications. Can be any arbitrary string assigned to a user, but should not exceed 40 characters.
+    quota-user: option<string>,
+    /// Upload protocol for media (e.g. "raw", "multipart").
+    upload-protocol: option<string>,
+    /// Legacy upload protocol for media (e.g. "media", "multipart").
+    upload-type: option<string>,
     /// Required. The name of the site whose summary to get, e.g. `sites/http%3A%2F%2Fwww.google.com%2F`. Format: `sites/{site}`
     name: string
   }
-  abusiveexperiencereport-sites-get: func(params: abusiveexperiencereport-sites-get-params) -> result<string, string>;
+  abusiveexperiencereport-sites-get: func(params: abusiveexperiencereport-sites-get-params) -> result<site-summary-response, string>;
 
 }
 /// The component world: imports the secrets host capability

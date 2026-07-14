@@ -44,10 +44,15 @@ pub(crate) enum FieldLocation {
     Body,
 }
 
-/// A single operation parameter: the snake-case key it carries in the params JSON and where
-/// it belongs in the request.
+/// A single operation parameter. `snake` keys the field in the internal params JSON (and, for a
+/// path field, matches the `{snake}` placeholder in the path template); `wire` is the verbatim name
+/// the field takes on the HTTP wire (query key, header name, or body property). The two differ
+/// whenever the source name isn't already snake_case (e.g. `dryRun` → snake `dry_run`, wire
+/// `dryRun`), and let distinct inputs that share a snake key (`DateCreated`, `DateCreated<`) still
+/// travel under their true names.
 pub(crate) struct FieldSpec {
     pub(crate) snake: &'static str,
+    pub(crate) wire: &'static str,
     pub(crate) location: FieldLocation,
 }
 
@@ -71,6 +76,16 @@ pub(crate) struct AuthApply {
     pub(crate) kind: AuthKind,
 }
 
+/// The failure modes of [`dispatch`], kept structured so each generated operation can map them
+/// onto its own typed error: an `Http` failure carries the response status and body (routed to
+/// the matching error-variant case), while a `Transport` failure carries a message for the
+/// catch-all case (a secret lookup, connection, or decode failure that never produced an HTTP
+/// status).
+pub(crate) enum DispatchError {
+    Http { status: u16, body: String },
+    Transport(String),
+}
+
 /// A single API operation: HTTP method, path template (with `{snake}` placeholders), the
 /// parameter fields, and the security schemes to apply.
 pub(crate) struct OpSpec {
@@ -81,8 +96,9 @@ pub(crate) struct OpSpec {
 }
 
 /// Execute `op` with the supplied `params` (a JSON object keyed by snake-case field names)
-/// and return the response body as a string, or an error message.
-pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, String> {
+/// and return the raw 2xx response body, or a structured [`DispatchError`] the caller maps
+/// onto the operation's typed error.
+pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, DispatchError> {
     let obj = match &params {
         Value::Object(map) => Some(map),
         _ => None,
@@ -105,10 +121,10 @@ pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, String> {
                 let placeholder = format!("{{{}}}", field.snake);
                 path = path.replace(&placeholder, &percent_encode(&scalar(value)));
             }
-            FieldLocation::Query => query.push((field.snake.to_string(), scalar(value))),
-            FieldLocation::Header => headers.push((field.snake.to_string(), scalar(value))),
+            FieldLocation::Query => query.push((field.wire.to_string(), scalar(value))),
+            FieldLocation::Header => headers.push((field.wire.to_string(), scalar(value))),
             FieldLocation::Body => {
-                body.insert(field.snake.to_string(), value.clone());
+                body.insert(field.wire.to_string(), value.clone());
             }
         }
     }
@@ -116,7 +132,7 @@ pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, String> {
     // Apply each resolved security scheme, sourcing its value from wasmcloud:secrets.
     let mut cookies: Vec<String> = Vec::new();
     for apply in op.auth {
-        let secret = fetch_secret(apply.secret_key)?;
+        let secret = fetch_secret(apply.secret_key).map_err(DispatchError::Transport)?;
         match &apply.kind {
             AuthKind::Bearer => headers.push(("authorization".into(), format!("Bearer {secret}"))),
             AuthKind::Basic => {
@@ -177,17 +193,18 @@ fn fetch_secret(key: &str) -> Result<String, String> {
 }
 
 /// Build and send the outgoing request with `wstd`, returning the response body on a 2xx
-/// status. The generated guest exports are synchronous, so the async `wstd` client is driven
-/// to completion on a local reactor via `wstd::runtime::block_on`.
+/// status and a structured [`DispatchError`] otherwise. The generated guest exports are
+/// synchronous, so the async `wstd` client is driven to completion on a local reactor via
+/// `wstd::runtime::block_on`.
 fn perform(
     method: &str,
     path_with_query: &str,
     headers: &[(String, String)],
     body: &[u8],
-) -> Result<String, String> {
+) -> Result<String, DispatchError> {
     let url = join_url(crate::BASE_URL, path_with_query);
     let method = Method::from_bytes(method.as_bytes())
-        .map_err(|err| format!("invalid HTTP method `{method}`: {err}"))?;
+        .map_err(|err| DispatchError::Transport(format!("invalid HTTP method `{method}`: {err}")))?;
 
     let mut builder = Request::builder().method(method).uri(url);
     for (name, value) in headers {
@@ -199,27 +216,29 @@ fn perform(
         } else {
             Body::from(body.to_vec())
         })
-        .map_err(|err| format!("failed to build request: {err}"))?;
+        .map_err(|err| DispatchError::Transport(format!("failed to build request: {err}")))?;
 
     wstd::runtime::block_on(async move {
         let client = Client::new();
         let response = client
             .send(request)
             .await
-            .map_err(|err| format!("request failed: {err:#}"))?;
+            .map_err(|err| DispatchError::Transport(format!("request failed: {err:#}")))?;
 
         let status = response.status().as_u16();
         let mut response_body = response.into_body();
-        let bytes = response_body
-            .contents()
-            .await
-            .map_err(|err| format!("failed to read response body: {err:#}"))?;
+        let bytes = response_body.contents().await.map_err(|err| {
+            DispatchError::Transport(format!("failed to read response body: {err:#}"))
+        })?;
         let body_text = String::from_utf8_lossy(bytes).into_owned();
 
         if (200..300).contains(&status) {
             Ok(body_text)
         } else {
-            Err(format!("HTTP {status}: {body_text}"))
+            Err(DispatchError::Http {
+                status,
+                body: body_text,
+            })
         }
     })
 }
@@ -279,492 +298,11 @@ fn base64(input: &[u8]) -> String {
 }
 }
 
-use crate::runtime::{dispatch, AuthApply, AuthKind, FieldLocation, FieldSpec, OpSpec};
-use serde_json::{Map, Value};
-
-use crate::exports::autostamp::bulksms::blocked_numbers as iface_blocked_numbers;
-
-const OP_BLOCKED_NUMBERS_GET_BLOCKED_NUMBERS: OpSpec = OpSpec {
-    method: "GET",
-    path_template: "/blocked-numbers",
-    fields: &[
-        FieldSpec { snake: "min_id", location: FieldLocation::Query },
-        FieldSpec { snake: "limit", location: FieldLocation::Query },
-    ],
-    auth: &[
-        AuthApply { secret_key: "basicAuth", kind: AuthKind::Basic },
-    ],
-};
-
-const OP_BLOCKED_NUMBERS_POST_BLOCKED_NUMBERS: OpSpec = OpSpec {
-    method: "POST",
-    path_template: "/blocked-numbers",
-    fields: &[
-        FieldSpec { snake: "body", location: FieldLocation::Body },
-    ],
-    auth: &[
-        AuthApply { secret_key: "basicAuth", kind: AuthKind::Basic },
-    ],
-};
-
-fn iface_blocked_numbers__phone_number__to_json(p: &iface_blocked_numbers::PhoneNumber) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_blocked_numbers__get_blocked_numbers_params__to_json(p: &iface_blocked_numbers::GetBlockedNumbersParams) -> Value {
-    let mut m = Map::new();
-    m.insert("min_id".into(), match (&p.min_id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    m.insert("limit".into(), match (&p.limit) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_blocked_numbers__post_blocked_numbers_params__to_json(p: &iface_blocked_numbers::PostBlockedNumbersParams) -> Value {
-    let mut m = Map::new();
-    m.insert("body".into(), Value::Array((&p.body).iter().map(|v| iface_blocked_numbers__phone_number__to_json(v)).collect()));
-    Value::Object(m)
-}
-
-impl iface_blocked_numbers::Guest for crate::Component {
-    fn get_blocked_numbers(params: iface_blocked_numbers::GetBlockedNumbersParams) -> Result<String, String> {
-        let json = iface_blocked_numbers__get_blocked_numbers_params__to_json(&params);
-        dispatch(&OP_BLOCKED_NUMBERS_GET_BLOCKED_NUMBERS, json)
-    }
-    fn post_blocked_numbers(params: iface_blocked_numbers::PostBlockedNumbersParams) -> Result<String, String> {
-        let json = iface_blocked_numbers__post_blocked_numbers_params__to_json(&params);
-        dispatch(&OP_BLOCKED_NUMBERS_POST_BLOCKED_NUMBERS, json)
-    }
-}
-use crate::exports::autostamp::bulksms::credits as iface_credits;
-
-const OP_CREDITS_POST_CREDIT_TRANSFER: OpSpec = OpSpec {
-    method: "POST",
-    path_template: "/credit/transfer",
-    fields: &[
-        FieldSpec { snake: "comment_on_from", location: FieldLocation::Body },
-        FieldSpec { snake: "comment_on_to", location: FieldLocation::Body },
-        FieldSpec { snake: "credits", location: FieldLocation::Body },
-        FieldSpec { snake: "to_user_id", location: FieldLocation::Body },
-        FieldSpec { snake: "to_username", location: FieldLocation::Body },
-    ],
-    auth: &[
-        AuthApply { secret_key: "basicAuth", kind: AuthKind::Basic },
-    ],
-};
-
-fn iface_credits__post_credit_transfer_params__to_json(p: &iface_credits::PostCreditTransferParams) -> Value {
-    let mut m = Map::new();
-    m.insert("comment_on_from".into(), match (&p.comment_on_from) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("comment_on_to".into(), match (&p.comment_on_to) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("credits".into(), serde_json::Number::from_f64(*(&p.credits)).map(Value::Number).unwrap_or(Value::Null));
-    m.insert("to_user_id".into(), serde_json::Number::from_f64(*(&p.to_user_id)).map(Value::Number).unwrap_or(Value::Null));
-    m.insert("to_username".into(), Value::String((&p.to_username).clone()));
-    Value::Object(m)
-}
-
-impl iface_credits::Guest for crate::Component {
-    fn post_credit_transfer(params: iface_credits::PostCreditTransferParams) -> Result<String, String> {
-        let json = iface_credits__post_credit_transfer_params__to_json(&params);
-        dispatch(&OP_CREDITS_POST_CREDIT_TRANSFER, json)
-    }
-}
-use crate::exports::autostamp::bulksms::message as iface_message;
-
-const OP_MESSAGE_GET_MESSAGES: OpSpec = OpSpec {
-    method: "GET",
-    path_template: "/messages",
-    fields: &[
-        FieldSpec { snake: "limit", location: FieldLocation::Query },
-        FieldSpec { snake: "filter", location: FieldLocation::Query },
-        FieldSpec { snake: "sort_order", location: FieldLocation::Query },
-    ],
-    auth: &[
-        AuthApply { secret_key: "basicAuth", kind: AuthKind::Basic },
-    ],
-};
-
-const OP_MESSAGE_POST_MESSAGES: OpSpec = OpSpec {
-    method: "POST",
-    path_template: "/messages",
-    fields: &[
-        FieldSpec { snake: "deduplication_id", location: FieldLocation::Query },
-        FieldSpec { snake: "auto_unicode", location: FieldLocation::Query },
-        FieldSpec { snake: "schedule_date", location: FieldLocation::Query },
-        FieldSpec { snake: "schedule_description", location: FieldLocation::Query },
-        FieldSpec { snake: "body", location: FieldLocation::Body },
-    ],
-    auth: &[
-        AuthApply { secret_key: "basicAuth", kind: AuthKind::Basic },
-    ],
-};
-
-const OP_MESSAGE_GET_MESSAGES_SEND: OpSpec = OpSpec {
-    method: "GET",
-    path_template: "/messages/send",
-    fields: &[
-        FieldSpec { snake: "to", location: FieldLocation::Query },
-        FieldSpec { snake: "body", location: FieldLocation::Query },
-        FieldSpec { snake: "deduplication_id", location: FieldLocation::Query },
-    ],
-    auth: &[
-        AuthApply { secret_key: "basicAuth", kind: AuthKind::Basic },
-    ],
-};
-
-const OP_MESSAGE_GET_MESSAGES_ID: OpSpec = OpSpec {
-    method: "GET",
-    path_template: "/messages/{id}",
-    fields: &[
-        FieldSpec { snake: "id", location: FieldLocation::Path },
-    ],
-    auth: &[
-        AuthApply { secret_key: "basicAuth", kind: AuthKind::Basic },
-    ],
-};
-
-const OP_MESSAGE_GET_MESSAGES_ID_RELATED_RECEIVED_MESSAGES: OpSpec = OpSpec {
-    method: "GET",
-    path_template: "/messages/{id}/relatedReceivedMessages",
-    fields: &[
-        FieldSpec { snake: "id", location: FieldLocation::Path },
-    ],
-    auth: &[
-        AuthApply { secret_key: "basicAuth", kind: AuthKind::Basic },
-    ],
-};
-
-fn iface_message__get_messages_sort_order_enum__to_str(e: &iface_message::GetMessagesSortOrderEnum) -> &'static str {
-    match e {
-        iface_message::GetMessagesSortOrderEnum::Ascending => "ASCENDING",
-    }
-}
-
-fn iface_message__submission_entry_delivery_reports_enum__to_str(e: &iface_message::SubmissionEntryDeliveryReportsEnum) -> &'static str {
-    match e {
-        iface_message::SubmissionEntryDeliveryReportsEnum::All => "ALL",
-        iface_message::SubmissionEntryDeliveryReportsEnum::Errors => "ERRORS",
-        iface_message::SubmissionEntryDeliveryReportsEnum::None => "NONE",
-    }
-}
-
-fn iface_message__submission_entry_encoding_enum__to_str(e: &iface_message::SubmissionEntryEncodingEnum) -> &'static str {
-    match e {
-        iface_message::SubmissionEntryEncodingEnum::Text => "TEXT",
-        iface_message::SubmissionEntryEncodingEnum::Unicode => "UNICODE",
-        iface_message::SubmissionEntryEncodingEnum::Binary => "BINARY",
-    }
-}
-
-fn iface_message__submission_entry_from_op_type_op_enum__to_str(e: &iface_message::SubmissionEntryFromOpTypeOpEnum) -> &'static str {
-    match e {
-        iface_message::SubmissionEntryFromOpTypeOpEnum::International => "INTERNATIONAL",
-        iface_message::SubmissionEntryFromOpTypeOpEnum::Alphanumeric => "ALPHANUMERIC",
-        iface_message::SubmissionEntryFromOpTypeOpEnum::Shortcode => "SHORTCODE",
-        iface_message::SubmissionEntryFromOpTypeOpEnum::Repliable => "REPLIABLE",
-    }
-}
-
-fn iface_message__submission_entry_message_class_enum__to_str(e: &iface_message::SubmissionEntryMessageClassEnum) -> &'static str {
-    match e {
-        iface_message::SubmissionEntryMessageClassEnum::FlashSms => "FLASH_SMS",
-        iface_message::SubmissionEntryMessageClassEnum::MeSpecific => "ME_SPECIFIC",
-        iface_message::SubmissionEntryMessageClassEnum::SimSpecific => "SIM_SPECIFIC",
-        iface_message::SubmissionEntryMessageClassEnum::TeSpecific => "TE_SPECIFIC",
-    }
-}
-
-fn iface_message__submission_entry_protocol_id_enum__to_str(e: &iface_message::SubmissionEntryProtocolIdEnum) -> &'static str {
-    match e {
-        iface_message::SubmissionEntryProtocolIdEnum::Implicit => "IMPLICIT",
-        iface_message::SubmissionEntryProtocolIdEnum::ShortMessageTypeV0 => "SHORT_MESSAGE_TYPE_0",
-        iface_message::SubmissionEntryProtocolIdEnum::ReplaceMessageV1 => "REPLACE_MESSAGE_1",
-        iface_message::SubmissionEntryProtocolIdEnum::ReplaceMessageV2 => "REPLACE_MESSAGE_2",
-        iface_message::SubmissionEntryProtocolIdEnum::ReplaceMessageV3 => "REPLACE_MESSAGE_3",
-        iface_message::SubmissionEntryProtocolIdEnum::ReplaceMessageV4 => "REPLACE_MESSAGE_4",
-        iface_message::SubmissionEntryProtocolIdEnum::ReplaceMessageV5 => "REPLACE_MESSAGE_5",
-        iface_message::SubmissionEntryProtocolIdEnum::ReplaceMessageV6 => "REPLACE_MESSAGE_6",
-        iface_message::SubmissionEntryProtocolIdEnum::ReplaceMessageV7 => "REPLACE_MESSAGE_7",
-        iface_message::SubmissionEntryProtocolIdEnum::ReturnCall => "RETURN_CALL",
-        iface_message::SubmissionEntryProtocolIdEnum::MeDownload => "ME_DOWNLOAD",
-        iface_message::SubmissionEntryProtocolIdEnum::MeDepersonalize => "ME_DEPERSONALIZE",
-        iface_message::SubmissionEntryProtocolIdEnum::SimDownload => "SIM_DOWNLOAD",
-    }
-}
-
-fn iface_message__submission_entry_routing_group_enum__to_str(e: &iface_message::SubmissionEntryRoutingGroupEnum) -> &'static str {
-    match e {
-        iface_message::SubmissionEntryRoutingGroupEnum::Economy => "ECONOMY",
-        iface_message::SubmissionEntryRoutingGroupEnum::Standard => "STANDARD",
-        iface_message::SubmissionEntryRoutingGroupEnum::Premium => "PREMIUM",
-    }
-}
-
-fn iface_message__submission_entry_to_item_type_op_enum__to_str(e: &iface_message::SubmissionEntryToItemTypeOpEnum) -> &'static str {
-    match e {
-        iface_message::SubmissionEntryToItemTypeOpEnum::International => "INTERNATIONAL",
-        iface_message::SubmissionEntryToItemTypeOpEnum::Group => "GROUP",
-    }
-}
-
-fn iface_message__submission_entry__to_json(p: &iface_message::SubmissionEntry) -> Value {
-    let mut m = Map::new();
-    m.insert("body".into(), Value::String((&p.body).clone()));
-    m.insert("delivery_reports".into(), match (&p.delivery_reports) { Some(v) => Value::String(iface_message__submission_entry_delivery_reports_enum__to_str(v).into()), None => Value::Null });
-    m.insert("encoding".into(), match (&p.encoding) { Some(v) => Value::String(iface_message__submission_entry_encoding_enum__to_str(v).into()), None => Value::Null });
-    m.insert("from".into(), match (&p.from_op) { Some(v) => iface_message__submission_entry_from_op__to_json(v), None => Value::Null });
-    m.insert("long_message_max_parts".into(), match (&p.long_message_max_parts) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    m.insert("message_class".into(), match (&p.message_class) { Some(v) => Value::String(iface_message__submission_entry_message_class_enum__to_str(v).into()), None => Value::Null });
-    m.insert("protocol_id".into(), match (&p.protocol_id) { Some(v) => Value::String(iface_message__submission_entry_protocol_id_enum__to_str(v).into()), None => Value::Null });
-    m.insert("routing_group".into(), match (&p.routing_group) { Some(v) => Value::String(iface_message__submission_entry_routing_group_enum__to_str(v).into()), None => Value::Null });
-    m.insert("to".into(), Value::Array((&p.to).iter().map(|v| iface_message__submission_entry_to_item__to_json(v)).collect()));
-    m.insert("user_supplied_id".into(), match (&p.user_supplied_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_message__submission_entry_from_op__to_json(p: &iface_message::SubmissionEntryFromOp) -> Value {
-    let mut m = Map::new();
-    m.insert("address".into(), match (&p.address) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("type".into(), Value::String(iface_message__submission_entry_from_op_type_op_enum__to_str(&p.type_op).into()));
-    Value::Object(m)
-}
-
-fn iface_message__submission_entry_to_item__to_json(p: &iface_message::SubmissionEntryToItem) -> Value {
-    let mut m = Map::new();
-    m.insert("address".into(), match (&p.address) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("fields".into(), match (&p.fields) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
-    m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("type".into(), match (&p.type_op) { Some(v) => Value::String(iface_message__submission_entry_to_item_type_op_enum__to_str(v).into()), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_message__get_messages_params__to_json(p: &iface_message::GetMessagesParams) -> Value {
-    let mut m = Map::new();
-    m.insert("limit".into(), match (&p.limit) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
-    m.insert("filter".into(), match (&p.filter) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("sort_order".into(), match (&p.sort_order) { Some(v) => Value::String(iface_message__get_messages_sort_order_enum__to_str(v).into()), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_message__post_messages_params__to_json(p: &iface_message::PostMessagesParams) -> Value {
-    let mut m = Map::new();
-    m.insert("deduplication_id".into(), match (&p.deduplication_id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    m.insert("auto_unicode".into(), match (&p.auto_unicode) { Some(v) => Value::Bool(*(v)), None => Value::Null });
-    m.insert("schedule_date".into(), match (&p.schedule_date) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("schedule_description".into(), match (&p.schedule_description) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("body".into(), Value::Array((&p.body).iter().map(|v| iface_message__submission_entry__to_json(v)).collect()));
-    Value::Object(m)
-}
-
-fn iface_message__get_messages_send_params__to_json(p: &iface_message::GetMessagesSendParams) -> Value {
-    let mut m = Map::new();
-    m.insert("to".into(), Value::String((&p.to).clone()));
-    m.insert("body".into(), Value::String((&p.body).clone()));
-    m.insert("deduplication_id".into(), match (&p.deduplication_id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_message__get_messages_id_params__to_json(p: &iface_message::GetMessagesIdParams) -> Value {
-    let mut m = Map::new();
-    m.insert("id".into(), Value::String((&p.id).clone()));
-    Value::Object(m)
-}
-
-fn iface_message__get_messages_id_related_received_messages_params__to_json(p: &iface_message::GetMessagesIdRelatedReceivedMessagesParams) -> Value {
-    let mut m = Map::new();
-    m.insert("id".into(), Value::String((&p.id).clone()));
-    Value::Object(m)
-}
-
-impl iface_message::Guest for crate::Component {
-    fn get_messages(params: iface_message::GetMessagesParams) -> Result<String, String> {
-        let json = iface_message__get_messages_params__to_json(&params);
-        dispatch(&OP_MESSAGE_GET_MESSAGES, json)
-    }
-    fn post_messages(params: iface_message::PostMessagesParams) -> Result<String, String> {
-        let json = iface_message__post_messages_params__to_json(&params);
-        dispatch(&OP_MESSAGE_POST_MESSAGES, json)
-    }
-    fn get_messages_send(params: iface_message::GetMessagesSendParams) -> Result<String, String> {
-        let json = iface_message__get_messages_send_params__to_json(&params);
-        dispatch(&OP_MESSAGE_GET_MESSAGES_SEND, json)
-    }
-    fn get_messages_id(params: iface_message::GetMessagesIdParams) -> Result<String, String> {
-        let json = iface_message__get_messages_id_params__to_json(&params);
-        dispatch(&OP_MESSAGE_GET_MESSAGES_ID, json)
-    }
-    fn get_messages_id_related_received_messages(params: iface_message::GetMessagesIdRelatedReceivedMessagesParams) -> Result<String, String> {
-        let json = iface_message__get_messages_id_related_received_messages_params__to_json(&params);
-        dispatch(&OP_MESSAGE_GET_MESSAGES_ID_RELATED_RECEIVED_MESSAGES, json)
-    }
-}
-use crate::exports::autostamp::bulksms::profile as iface_profile;
-
-const OP_PROFILE_GET_PROFILE: OpSpec = OpSpec {
-    method: "GET",
-    path_template: "/profile",
-    fields: &[
-    ],
-    auth: &[
-        AuthApply { secret_key: "basicAuth", kind: AuthKind::Basic },
-    ],
-};
-
-impl iface_profile::Guest for crate::Component {
-    fn get_profile() -> Result<String, String> {
-        dispatch(&OP_PROFILE_GET_PROFILE, Value::Object(Map::new()))
-    }
-}
-use crate::exports::autostamp::bulksms::attachments as iface_attachments;
-
-const OP_ATTACHMENTS_POST_RMM_PRE_SIGN_ATTACHMENT: OpSpec = OpSpec {
-    method: "POST",
-    path_template: "/rmm/pre-sign-attachment",
-    fields: &[
-        FieldSpec { snake: "file_extension", location: FieldLocation::Body },
-        FieldSpec { snake: "media_type", location: FieldLocation::Body },
-    ],
-    auth: &[
-        AuthApply { secret_key: "basicAuth", kind: AuthKind::Basic },
-    ],
-};
-
-fn iface_attachments__post_rmm_pre_sign_attachment_params__to_json(p: &iface_attachments::PostRmmPreSignAttachmentParams) -> Value {
-    let mut m = Map::new();
-    m.insert("file_extension".into(), match (&p.file_extension) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("media_type".into(), match (&p.media_type) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    Value::Object(m)
-}
-
-impl iface_attachments::Guest for crate::Component {
-    fn post_rmm_pre_sign_attachment(params: iface_attachments::PostRmmPreSignAttachmentParams) -> Result<String, String> {
-        let json = iface_attachments__post_rmm_pre_sign_attachment_params__to_json(&params);
-        dispatch(&OP_ATTACHMENTS_POST_RMM_PRE_SIGN_ATTACHMENT, json)
-    }
-}
-use crate::exports::autostamp::bulksms::webhooks as iface_webhooks;
-
-const OP_WEBHOOKS_GET_WEBHOOKS: OpSpec = OpSpec {
-    method: "GET",
-    path_template: "/webhooks",
-    fields: &[
-    ],
-    auth: &[
-        AuthApply { secret_key: "basicAuth", kind: AuthKind::Basic },
-    ],
-};
-
-const OP_WEBHOOKS_POST_WEBHOOKS: OpSpec = OpSpec {
-    method: "POST",
-    path_template: "/webhooks",
-    fields: &[
-        FieldSpec { snake: "active", location: FieldLocation::Body },
-        FieldSpec { snake: "contact_email_address", location: FieldLocation::Body },
-        FieldSpec { snake: "invoke_option", location: FieldLocation::Body },
-        FieldSpec { snake: "name", location: FieldLocation::Body },
-        FieldSpec { snake: "on_web_app", location: FieldLocation::Body },
-        FieldSpec { snake: "trigger_scope", location: FieldLocation::Body },
-        FieldSpec { snake: "url", location: FieldLocation::Body },
-    ],
-    auth: &[
-        AuthApply { secret_key: "basicAuth", kind: AuthKind::Basic },
-    ],
-};
-
-const OP_WEBHOOKS_GET_WEBHOOKS_ID: OpSpec = OpSpec {
-    method: "GET",
-    path_template: "/webhooks/{id}",
-    fields: &[
-    ],
-    auth: &[
-        AuthApply { secret_key: "basicAuth", kind: AuthKind::Basic },
-    ],
-};
-
-const OP_WEBHOOKS_POST_WEBHOOKS_ID: OpSpec = OpSpec {
-    method: "POST",
-    path_template: "/webhooks/{id}",
-    fields: &[
-        FieldSpec { snake: "active", location: FieldLocation::Body },
-        FieldSpec { snake: "contact_email_address", location: FieldLocation::Body },
-        FieldSpec { snake: "invoke_option", location: FieldLocation::Body },
-        FieldSpec { snake: "name", location: FieldLocation::Body },
-        FieldSpec { snake: "on_web_app", location: FieldLocation::Body },
-        FieldSpec { snake: "trigger_scope", location: FieldLocation::Body },
-        FieldSpec { snake: "url", location: FieldLocation::Body },
-    ],
-    auth: &[
-        AuthApply { secret_key: "basicAuth", kind: AuthKind::Basic },
-    ],
-};
-
-const OP_WEBHOOKS_DELETE_WEBHOOKS_ID: OpSpec = OpSpec {
-    method: "DELETE",
-    path_template: "/webhooks/{id}",
-    fields: &[
-    ],
-    auth: &[
-        AuthApply { secret_key: "basicAuth", kind: AuthKind::Basic },
-    ],
-};
-
-fn iface_webhooks__webhook_entry_invoke_option_enum__to_str(e: &iface_webhooks::WebhookEntryInvokeOptionEnum) -> &'static str {
-    match e {
-        iface_webhooks::WebhookEntryInvokeOptionEnum::One => "ONE",
-        iface_webhooks::WebhookEntryInvokeOptionEnum::Many => "MANY",
-    }
-}
-
-fn iface_webhooks__webhook_entry_trigger_scope_enum__to_str(e: &iface_webhooks::WebhookEntryTriggerScopeEnum) -> &'static str {
-    match e {
-        iface_webhooks::WebhookEntryTriggerScopeEnum::Sent => "SENT",
-        iface_webhooks::WebhookEntryTriggerScopeEnum::Received => "RECEIVED",
-    }
-}
-
-fn iface_webhooks__post_webhooks_params__to_json(p: &iface_webhooks::PostWebhooksParams) -> Value {
-    let mut m = Map::new();
-    m.insert("active".into(), match (&p.active) { Some(v) => Value::Bool(*(v)), None => Value::Null });
-    m.insert("contact_email_address".into(), match (&p.contact_email_address) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("invoke_option".into(), match (&p.invoke_option) { Some(v) => Value::String(iface_webhooks__webhook_entry_invoke_option_enum__to_str(v).into()), None => Value::Null });
-    m.insert("name".into(), Value::String((&p.name).clone()));
-    m.insert("on_web_app".into(), match (&p.on_web_app) { Some(v) => Value::Bool(*(v)), None => Value::Null });
-    m.insert("trigger_scope".into(), Value::String(iface_webhooks__webhook_entry_trigger_scope_enum__to_str(&p.trigger_scope).into()));
-    m.insert("url".into(), Value::String((&p.url).clone()));
-    Value::Object(m)
-}
-
-fn iface_webhooks__post_webhooks_id_params__to_json(p: &iface_webhooks::PostWebhooksIdParams) -> Value {
-    let mut m = Map::new();
-    m.insert("active".into(), match (&p.active) { Some(v) => Value::Bool(*(v)), None => Value::Null });
-    m.insert("contact_email_address".into(), match (&p.contact_email_address) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("invoke_option".into(), match (&p.invoke_option) { Some(v) => Value::String(iface_webhooks__webhook_entry_invoke_option_enum__to_str(v).into()), None => Value::Null });
-    m.insert("name".into(), Value::String((&p.name).clone()));
-    m.insert("on_web_app".into(), match (&p.on_web_app) { Some(v) => Value::Bool(*(v)), None => Value::Null });
-    m.insert("trigger_scope".into(), Value::String(iface_webhooks__webhook_entry_trigger_scope_enum__to_str(&p.trigger_scope).into()));
-    m.insert("url".into(), Value::String((&p.url).clone()));
-    Value::Object(m)
-}
-
-impl iface_webhooks::Guest for crate::Component {
-    fn get_webhooks() -> Result<String, String> {
-        dispatch(&OP_WEBHOOKS_GET_WEBHOOKS, Value::Object(Map::new()))
-    }
-    fn post_webhooks(params: iface_webhooks::PostWebhooksParams) -> Result<String, String> {
-        let json = iface_webhooks__post_webhooks_params__to_json(&params);
-        dispatch(&OP_WEBHOOKS_POST_WEBHOOKS, json)
-    }
-    fn get_webhooks_id() -> Result<String, String> {
-        dispatch(&OP_WEBHOOKS_GET_WEBHOOKS_ID, Value::Object(Map::new()))
-    }
-    fn post_webhooks_id(params: iface_webhooks::PostWebhooksIdParams) -> Result<String, String> {
-        let json = iface_webhooks__post_webhooks_id_params__to_json(&params);
-        dispatch(&OP_WEBHOOKS_POST_WEBHOOKS_ID, json)
-    }
-    fn delete_webhooks_id() -> Result<String, String> {
-        dispatch(&OP_WEBHOOKS_DELETE_WEBHOOKS_ID, Value::Object(Map::new()))
-    }
-}
+mod iface_blocked_numbers;
+mod iface_credits;
+mod iface_message;
+mod iface_profile;
+mod iface_attachments;
+mod iface_webhooks;
 
 export!(Component);

@@ -44,10 +44,15 @@ pub(crate) enum FieldLocation {
     Body,
 }
 
-/// A single operation parameter: the snake-case key it carries in the params JSON and where
-/// it belongs in the request.
+/// A single operation parameter. `snake` keys the field in the internal params JSON (and, for a
+/// path field, matches the `{snake}` placeholder in the path template); `wire` is the verbatim name
+/// the field takes on the HTTP wire (query key, header name, or body property). The two differ
+/// whenever the source name isn't already snake_case (e.g. `dryRun` → snake `dry_run`, wire
+/// `dryRun`), and let distinct inputs that share a snake key (`DateCreated`, `DateCreated<`) still
+/// travel under their true names.
 pub(crate) struct FieldSpec {
     pub(crate) snake: &'static str,
+    pub(crate) wire: &'static str,
     pub(crate) location: FieldLocation,
 }
 
@@ -71,6 +76,16 @@ pub(crate) struct AuthApply {
     pub(crate) kind: AuthKind,
 }
 
+/// The failure modes of [`dispatch`], kept structured so each generated operation can map them
+/// onto its own typed error: an `Http` failure carries the response status and body (routed to
+/// the matching error-variant case), while a `Transport` failure carries a message for the
+/// catch-all case (a secret lookup, connection, or decode failure that never produced an HTTP
+/// status).
+pub(crate) enum DispatchError {
+    Http { status: u16, body: String },
+    Transport(String),
+}
+
 /// A single API operation: HTTP method, path template (with `{snake}` placeholders), the
 /// parameter fields, and the security schemes to apply.
 pub(crate) struct OpSpec {
@@ -81,8 +96,9 @@ pub(crate) struct OpSpec {
 }
 
 /// Execute `op` with the supplied `params` (a JSON object keyed by snake-case field names)
-/// and return the response body as a string, or an error message.
-pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, String> {
+/// and return the raw 2xx response body, or a structured [`DispatchError`] the caller maps
+/// onto the operation's typed error.
+pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, DispatchError> {
     let obj = match &params {
         Value::Object(map) => Some(map),
         _ => None,
@@ -105,10 +121,10 @@ pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, String> {
                 let placeholder = format!("{{{}}}", field.snake);
                 path = path.replace(&placeholder, &percent_encode(&scalar(value)));
             }
-            FieldLocation::Query => query.push((field.snake.to_string(), scalar(value))),
-            FieldLocation::Header => headers.push((field.snake.to_string(), scalar(value))),
+            FieldLocation::Query => query.push((field.wire.to_string(), scalar(value))),
+            FieldLocation::Header => headers.push((field.wire.to_string(), scalar(value))),
             FieldLocation::Body => {
-                body.insert(field.snake.to_string(), value.clone());
+                body.insert(field.wire.to_string(), value.clone());
             }
         }
     }
@@ -116,7 +132,7 @@ pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, String> {
     // Apply each resolved security scheme, sourcing its value from wasmcloud:secrets.
     let mut cookies: Vec<String> = Vec::new();
     for apply in op.auth {
-        let secret = fetch_secret(apply.secret_key)?;
+        let secret = fetch_secret(apply.secret_key).map_err(DispatchError::Transport)?;
         match &apply.kind {
             AuthKind::Bearer => headers.push(("authorization".into(), format!("Bearer {secret}"))),
             AuthKind::Basic => {
@@ -177,17 +193,18 @@ fn fetch_secret(key: &str) -> Result<String, String> {
 }
 
 /// Build and send the outgoing request with `wstd`, returning the response body on a 2xx
-/// status. The generated guest exports are synchronous, so the async `wstd` client is driven
-/// to completion on a local reactor via `wstd::runtime::block_on`.
+/// status and a structured [`DispatchError`] otherwise. The generated guest exports are
+/// synchronous, so the async `wstd` client is driven to completion on a local reactor via
+/// `wstd::runtime::block_on`.
 fn perform(
     method: &str,
     path_with_query: &str,
     headers: &[(String, String)],
     body: &[u8],
-) -> Result<String, String> {
+) -> Result<String, DispatchError> {
     let url = join_url(crate::BASE_URL, path_with_query);
     let method = Method::from_bytes(method.as_bytes())
-        .map_err(|err| format!("invalid HTTP method `{method}`: {err}"))?;
+        .map_err(|err| DispatchError::Transport(format!("invalid HTTP method `{method}`: {err}")))?;
 
     let mut builder = Request::builder().method(method).uri(url);
     for (name, value) in headers {
@@ -199,27 +216,29 @@ fn perform(
         } else {
             Body::from(body.to_vec())
         })
-        .map_err(|err| format!("failed to build request: {err}"))?;
+        .map_err(|err| DispatchError::Transport(format!("failed to build request: {err}")))?;
 
     wstd::runtime::block_on(async move {
         let client = Client::new();
         let response = client
             .send(request)
             .await
-            .map_err(|err| format!("request failed: {err:#}"))?;
+            .map_err(|err| DispatchError::Transport(format!("request failed: {err:#}")))?;
 
         let status = response.status().as_u16();
         let mut response_body = response.into_body();
-        let bytes = response_body
-            .contents()
-            .await
-            .map_err(|err| format!("failed to read response body: {err:#}"))?;
+        let bytes = response_body.contents().await.map_err(|err| {
+            DispatchError::Transport(format!("failed to read response body: {err:#}"))
+        })?;
         let body_text = String::from_utf8_lossy(bytes).into_owned();
 
         if (200..300).contains(&status) {
             Ok(body_text)
         } else {
-            Err(format!("HTTP {status}: {body_text}"))
+            Err(DispatchError::Http {
+                status,
+                body: body_text,
+            })
         }
     })
 }
@@ -279,486 +298,11 @@ fn base64(input: &[u8]) -> String {
 }
 }
 
-use crate::runtime::{dispatch, AuthApply, AuthKind, FieldLocation, FieldSpec, OpSpec};
-use serde_json::{Map, Value};
-
-use crate::exports::autostamp::musixmatch::album as iface_album;
-
-const OP_ALBUM_GET_ALBUM_GET: OpSpec = OpSpec {
-    method: "GET",
-    path_template: "/album.get",
-    fields: &[
-        FieldSpec { snake: "format", location: FieldLocation::Query },
-        FieldSpec { snake: "callback", location: FieldLocation::Query },
-        FieldSpec { snake: "album_id", location: FieldLocation::Query },
-    ],
-    auth: &[
-    ],
-};
-
-const OP_ALBUM_GET_ARTIST_ALBUMS_GET: OpSpec = OpSpec {
-    method: "GET",
-    path_template: "/artist.albums.get",
-    fields: &[
-        FieldSpec { snake: "format", location: FieldLocation::Query },
-        FieldSpec { snake: "callback", location: FieldLocation::Query },
-        FieldSpec { snake: "artist_id", location: FieldLocation::Query },
-        FieldSpec { snake: "s_release_date", location: FieldLocation::Query },
-        FieldSpec { snake: "g_album_name", location: FieldLocation::Query },
-        FieldSpec { snake: "page_size", location: FieldLocation::Query },
-        FieldSpec { snake: "page", location: FieldLocation::Query },
-    ],
-    auth: &[
-    ],
-};
-
-fn iface_album__get_album_get_params__to_json(p: &iface_album::GetAlbumGetParams) -> Value {
-    let mut m = Map::new();
-    m.insert("format".into(), match (&p.format) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("callback".into(), match (&p.callback) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("album_id".into(), Value::String((&p.album_id).clone()));
-    Value::Object(m)
-}
-
-fn iface_album__get_artist_albums_get_params__to_json(p: &iface_album::GetArtistAlbumsGetParams) -> Value {
-    let mut m = Map::new();
-    m.insert("format".into(), match (&p.format) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("callback".into(), match (&p.callback) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("artist_id".into(), Value::String((&p.artist_id).clone()));
-    m.insert("s_release_date".into(), match (&p.s_release_date) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("g_album_name".into(), match (&p.g_album_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("page_size".into(), match (&p.page_size) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
-    m.insert("page".into(), match (&p.page) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
-    Value::Object(m)
-}
-
-impl iface_album::Guest for crate::Component {
-    fn get_album_get(params: iface_album::GetAlbumGetParams) -> Result<String, String> {
-        let json = iface_album__get_album_get_params__to_json(&params);
-        dispatch(&OP_ALBUM_GET_ALBUM_GET, json)
-    }
-    fn get_artist_albums_get(params: iface_album::GetArtistAlbumsGetParams) -> Result<String, String> {
-        let json = iface_album__get_artist_albums_get_params__to_json(&params);
-        dispatch(&OP_ALBUM_GET_ARTIST_ALBUMS_GET, json)
-    }
-}
-use crate::exports::autostamp::musixmatch::track as iface_track;
-
-const OP_TRACK_GET_ALBUM_TRACKS_GET: OpSpec = OpSpec {
-    method: "GET",
-    path_template: "/album.tracks.get",
-    fields: &[
-        FieldSpec { snake: "format", location: FieldLocation::Query },
-        FieldSpec { snake: "callback", location: FieldLocation::Query },
-        FieldSpec { snake: "album_id", location: FieldLocation::Query },
-        FieldSpec { snake: "f_has_lyrics", location: FieldLocation::Query },
-        FieldSpec { snake: "page", location: FieldLocation::Query },
-        FieldSpec { snake: "page_size", location: FieldLocation::Query },
-    ],
-    auth: &[
-    ],
-};
-
-const OP_TRACK_GET_CHART_TRACKS_GET: OpSpec = OpSpec {
-    method: "GET",
-    path_template: "/chart.tracks.get",
-    fields: &[
-        FieldSpec { snake: "format", location: FieldLocation::Query },
-        FieldSpec { snake: "callback", location: FieldLocation::Query },
-        FieldSpec { snake: "page", location: FieldLocation::Query },
-        FieldSpec { snake: "page_size", location: FieldLocation::Query },
-        FieldSpec { snake: "country", location: FieldLocation::Query },
-        FieldSpec { snake: "f_has_lyrics", location: FieldLocation::Query },
-    ],
-    auth: &[
-    ],
-};
-
-const OP_TRACK_GET_MATCHER_TRACK_GET: OpSpec = OpSpec {
-    method: "GET",
-    path_template: "/matcher.track.get",
-    fields: &[
-        FieldSpec { snake: "format", location: FieldLocation::Query },
-        FieldSpec { snake: "callback", location: FieldLocation::Query },
-        FieldSpec { snake: "q_artist", location: FieldLocation::Query },
-        FieldSpec { snake: "q_track", location: FieldLocation::Query },
-        FieldSpec { snake: "f_has_lyrics", location: FieldLocation::Query },
-        FieldSpec { snake: "f_has_subtitle", location: FieldLocation::Query },
-    ],
-    auth: &[
-    ],
-};
-
-const OP_TRACK_GET_TRACK_GET: OpSpec = OpSpec {
-    method: "GET",
-    path_template: "/track.get",
-    fields: &[
-        FieldSpec { snake: "format", location: FieldLocation::Query },
-        FieldSpec { snake: "callback", location: FieldLocation::Query },
-        FieldSpec { snake: "track_id", location: FieldLocation::Query },
-    ],
-    auth: &[
-    ],
-};
-
-const OP_TRACK_GET_TRACK_SEARCH: OpSpec = OpSpec {
-    method: "GET",
-    path_template: "/track.search",
-    fields: &[
-        FieldSpec { snake: "format", location: FieldLocation::Query },
-        FieldSpec { snake: "callback", location: FieldLocation::Query },
-        FieldSpec { snake: "q_track", location: FieldLocation::Query },
-        FieldSpec { snake: "q_artist", location: FieldLocation::Query },
-        FieldSpec { snake: "q_lyrics", location: FieldLocation::Query },
-        FieldSpec { snake: "f_artist_id", location: FieldLocation::Query },
-        FieldSpec { snake: "f_music_genre_id", location: FieldLocation::Query },
-        FieldSpec { snake: "f_lyrics_language", location: FieldLocation::Query },
-        FieldSpec { snake: "f_has_lyrics", location: FieldLocation::Query },
-        FieldSpec { snake: "s_artist_rating", location: FieldLocation::Query },
-        FieldSpec { snake: "s_track_rating", location: FieldLocation::Query },
-        FieldSpec { snake: "quorum_factor", location: FieldLocation::Query },
-        FieldSpec { snake: "page_size", location: FieldLocation::Query },
-        FieldSpec { snake: "page", location: FieldLocation::Query },
-    ],
-    auth: &[
-    ],
-};
-
-fn iface_track__get_album_tracks_get_params__to_json(p: &iface_track::GetAlbumTracksGetParams) -> Value {
-    let mut m = Map::new();
-    m.insert("format".into(), match (&p.format) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("callback".into(), match (&p.callback) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("album_id".into(), Value::String((&p.album_id).clone()));
-    m.insert("f_has_lyrics".into(), match (&p.f_has_lyrics) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("page".into(), match (&p.page) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
-    m.insert("page_size".into(), match (&p.page_size) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_track__get_chart_tracks_get_params__to_json(p: &iface_track::GetChartTracksGetParams) -> Value {
-    let mut m = Map::new();
-    m.insert("format".into(), match (&p.format) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("callback".into(), match (&p.callback) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("page".into(), match (&p.page) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
-    m.insert("page_size".into(), match (&p.page_size) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
-    m.insert("country".into(), match (&p.country) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("f_has_lyrics".into(), match (&p.f_has_lyrics) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_track__get_matcher_track_get_params__to_json(p: &iface_track::GetMatcherTrackGetParams) -> Value {
-    let mut m = Map::new();
-    m.insert("format".into(), match (&p.format) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("callback".into(), match (&p.callback) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("q_artist".into(), match (&p.q_artist) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("q_track".into(), match (&p.q_track) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("f_has_lyrics".into(), match (&p.f_has_lyrics) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
-    m.insert("f_has_subtitle".into(), match (&p.f_has_subtitle) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_track__get_track_get_params__to_json(p: &iface_track::GetTrackGetParams) -> Value {
-    let mut m = Map::new();
-    m.insert("format".into(), match (&p.format) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("callback".into(), match (&p.callback) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("track_id".into(), Value::String((&p.track_id).clone()));
-    Value::Object(m)
-}
-
-fn iface_track__get_track_search_params__to_json(p: &iface_track::GetTrackSearchParams) -> Value {
-    let mut m = Map::new();
-    m.insert("format".into(), match (&p.format) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("callback".into(), match (&p.callback) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("q_track".into(), match (&p.q_track) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("q_artist".into(), match (&p.q_artist) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("q_lyrics".into(), match (&p.q_lyrics) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("f_artist_id".into(), match (&p.f_artist_id) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
-    m.insert("f_music_genre_id".into(), match (&p.f_music_genre_id) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
-    m.insert("f_lyrics_language".into(), match (&p.f_lyrics_language) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
-    m.insert("f_has_lyrics".into(), match (&p.f_has_lyrics) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
-    m.insert("s_artist_rating".into(), match (&p.s_artist_rating) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("s_track_rating".into(), match (&p.s_track_rating) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("quorum_factor".into(), match (&p.quorum_factor) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
-    m.insert("page_size".into(), match (&p.page_size) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
-    m.insert("page".into(), match (&p.page) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
-    Value::Object(m)
-}
-
-impl iface_track::Guest for crate::Component {
-    fn get_album_tracks_get(params: iface_track::GetAlbumTracksGetParams) -> Result<String, String> {
-        let json = iface_track__get_album_tracks_get_params__to_json(&params);
-        dispatch(&OP_TRACK_GET_ALBUM_TRACKS_GET, json)
-    }
-    fn get_chart_tracks_get(params: iface_track::GetChartTracksGetParams) -> Result<String, String> {
-        let json = iface_track__get_chart_tracks_get_params__to_json(&params);
-        dispatch(&OP_TRACK_GET_CHART_TRACKS_GET, json)
-    }
-    fn get_matcher_track_get(params: iface_track::GetMatcherTrackGetParams) -> Result<String, String> {
-        let json = iface_track__get_matcher_track_get_params__to_json(&params);
-        dispatch(&OP_TRACK_GET_MATCHER_TRACK_GET, json)
-    }
-    fn get_track_get(params: iface_track::GetTrackGetParams) -> Result<String, String> {
-        let json = iface_track__get_track_get_params__to_json(&params);
-        dispatch(&OP_TRACK_GET_TRACK_GET, json)
-    }
-    fn get_track_search(params: iface_track::GetTrackSearchParams) -> Result<String, String> {
-        let json = iface_track__get_track_search_params__to_json(&params);
-        dispatch(&OP_TRACK_GET_TRACK_SEARCH, json)
-    }
-}
-use crate::exports::autostamp::musixmatch::artist as iface_artist;
-
-const OP_ARTIST_GET_ARTIST_GET: OpSpec = OpSpec {
-    method: "GET",
-    path_template: "/artist.get",
-    fields: &[
-        FieldSpec { snake: "format", location: FieldLocation::Query },
-        FieldSpec { snake: "callback", location: FieldLocation::Query },
-        FieldSpec { snake: "artist_id", location: FieldLocation::Query },
-    ],
-    auth: &[
-    ],
-};
-
-const OP_ARTIST_GET_ARTIST_RELATED_GET: OpSpec = OpSpec {
-    method: "GET",
-    path_template: "/artist.related.get",
-    fields: &[
-        FieldSpec { snake: "format", location: FieldLocation::Query },
-        FieldSpec { snake: "callback", location: FieldLocation::Query },
-        FieldSpec { snake: "artist_id", location: FieldLocation::Query },
-        FieldSpec { snake: "page_size", location: FieldLocation::Query },
-        FieldSpec { snake: "page", location: FieldLocation::Query },
-    ],
-    auth: &[
-    ],
-};
-
-const OP_ARTIST_GET_ARTIST_SEARCH: OpSpec = OpSpec {
-    method: "GET",
-    path_template: "/artist.search",
-    fields: &[
-        FieldSpec { snake: "format", location: FieldLocation::Query },
-        FieldSpec { snake: "callback", location: FieldLocation::Query },
-        FieldSpec { snake: "q_artist", location: FieldLocation::Query },
-        FieldSpec { snake: "f_artist_id", location: FieldLocation::Query },
-        FieldSpec { snake: "page", location: FieldLocation::Query },
-        FieldSpec { snake: "page_size", location: FieldLocation::Query },
-    ],
-    auth: &[
-    ],
-};
-
-const OP_ARTIST_GET_CHART_ARTISTS_GET: OpSpec = OpSpec {
-    method: "GET",
-    path_template: "/chart.artists.get",
-    fields: &[
-        FieldSpec { snake: "format", location: FieldLocation::Query },
-        FieldSpec { snake: "callback", location: FieldLocation::Query },
-        FieldSpec { snake: "page", location: FieldLocation::Query },
-        FieldSpec { snake: "page_size", location: FieldLocation::Query },
-        FieldSpec { snake: "country", location: FieldLocation::Query },
-    ],
-    auth: &[
-    ],
-};
-
-fn iface_artist__get_artist_get_params__to_json(p: &iface_artist::GetArtistGetParams) -> Value {
-    let mut m = Map::new();
-    m.insert("format".into(), match (&p.format) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("callback".into(), match (&p.callback) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("artist_id".into(), Value::String((&p.artist_id).clone()));
-    Value::Object(m)
-}
-
-fn iface_artist__get_artist_related_get_params__to_json(p: &iface_artist::GetArtistRelatedGetParams) -> Value {
-    let mut m = Map::new();
-    m.insert("format".into(), match (&p.format) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("callback".into(), match (&p.callback) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("artist_id".into(), Value::String((&p.artist_id).clone()));
-    m.insert("page_size".into(), match (&p.page_size) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
-    m.insert("page".into(), match (&p.page) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_artist__get_artist_search_params__to_json(p: &iface_artist::GetArtistSearchParams) -> Value {
-    let mut m = Map::new();
-    m.insert("format".into(), match (&p.format) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("callback".into(), match (&p.callback) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("q_artist".into(), match (&p.q_artist) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("f_artist_id".into(), match (&p.f_artist_id) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
-    m.insert("page".into(), match (&p.page) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
-    m.insert("page_size".into(), match (&p.page_size) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_artist__get_chart_artists_get_params__to_json(p: &iface_artist::GetChartArtistsGetParams) -> Value {
-    let mut m = Map::new();
-    m.insert("format".into(), match (&p.format) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("callback".into(), match (&p.callback) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("page".into(), match (&p.page) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
-    m.insert("page_size".into(), match (&p.page_size) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
-    m.insert("country".into(), match (&p.country) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    Value::Object(m)
-}
-
-impl iface_artist::Guest for crate::Component {
-    fn get_artist_get(params: iface_artist::GetArtistGetParams) -> Result<String, String> {
-        let json = iface_artist__get_artist_get_params__to_json(&params);
-        dispatch(&OP_ARTIST_GET_ARTIST_GET, json)
-    }
-    fn get_artist_related_get(params: iface_artist::GetArtistRelatedGetParams) -> Result<String, String> {
-        let json = iface_artist__get_artist_related_get_params__to_json(&params);
-        dispatch(&OP_ARTIST_GET_ARTIST_RELATED_GET, json)
-    }
-    fn get_artist_search(params: iface_artist::GetArtistSearchParams) -> Result<String, String> {
-        let json = iface_artist__get_artist_search_params__to_json(&params);
-        dispatch(&OP_ARTIST_GET_ARTIST_SEARCH, json)
-    }
-    fn get_chart_artists_get(params: iface_artist::GetChartArtistsGetParams) -> Result<String, String> {
-        let json = iface_artist__get_chart_artists_get_params__to_json(&params);
-        dispatch(&OP_ARTIST_GET_CHART_ARTISTS_GET, json)
-    }
-}
-use crate::exports::autostamp::musixmatch::lyrics as iface_lyrics;
-
-const OP_LYRICS_GET_MATCHER_LYRICS_GET: OpSpec = OpSpec {
-    method: "GET",
-    path_template: "/matcher.lyrics.get",
-    fields: &[
-        FieldSpec { snake: "format", location: FieldLocation::Query },
-        FieldSpec { snake: "callback", location: FieldLocation::Query },
-        FieldSpec { snake: "q_track", location: FieldLocation::Query },
-        FieldSpec { snake: "q_artist", location: FieldLocation::Query },
-    ],
-    auth: &[
-    ],
-};
-
-const OP_LYRICS_GET_TRACK_LYRICS_GET: OpSpec = OpSpec {
-    method: "GET",
-    path_template: "/track.lyrics.get",
-    fields: &[
-        FieldSpec { snake: "format", location: FieldLocation::Query },
-        FieldSpec { snake: "callback", location: FieldLocation::Query },
-        FieldSpec { snake: "track_id", location: FieldLocation::Query },
-    ],
-    auth: &[
-    ],
-};
-
-fn iface_lyrics__get_matcher_lyrics_get_params__to_json(p: &iface_lyrics::GetMatcherLyricsGetParams) -> Value {
-    let mut m = Map::new();
-    m.insert("format".into(), match (&p.format) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("callback".into(), match (&p.callback) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("q_track".into(), match (&p.q_track) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("q_artist".into(), match (&p.q_artist) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_lyrics__get_track_lyrics_get_params__to_json(p: &iface_lyrics::GetTrackLyricsGetParams) -> Value {
-    let mut m = Map::new();
-    m.insert("format".into(), match (&p.format) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("callback".into(), match (&p.callback) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("track_id".into(), Value::String((&p.track_id).clone()));
-    Value::Object(m)
-}
-
-impl iface_lyrics::Guest for crate::Component {
-    fn get_matcher_lyrics_get(params: iface_lyrics::GetMatcherLyricsGetParams) -> Result<String, String> {
-        let json = iface_lyrics__get_matcher_lyrics_get_params__to_json(&params);
-        dispatch(&OP_LYRICS_GET_MATCHER_LYRICS_GET, json)
-    }
-    fn get_track_lyrics_get(params: iface_lyrics::GetTrackLyricsGetParams) -> Result<String, String> {
-        let json = iface_lyrics__get_track_lyrics_get_params__to_json(&params);
-        dispatch(&OP_LYRICS_GET_TRACK_LYRICS_GET, json)
-    }
-}
-use crate::exports::autostamp::musixmatch::subtitle as iface_subtitle;
-
-const OP_SUBTITLE_GET_MATCHER_SUBTITLE_GET: OpSpec = OpSpec {
-    method: "GET",
-    path_template: "/matcher.subtitle.get",
-    fields: &[
-        FieldSpec { snake: "format", location: FieldLocation::Query },
-        FieldSpec { snake: "callback", location: FieldLocation::Query },
-        FieldSpec { snake: "q_track", location: FieldLocation::Query },
-        FieldSpec { snake: "q_artist", location: FieldLocation::Query },
-        FieldSpec { snake: "f_subtitle_length", location: FieldLocation::Query },
-        FieldSpec { snake: "f_subtitle_length_max_deviation", location: FieldLocation::Query },
-    ],
-    auth: &[
-    ],
-};
-
-const OP_SUBTITLE_GET_TRACK_SUBTITLE_GET: OpSpec = OpSpec {
-    method: "GET",
-    path_template: "/track.subtitle.get",
-    fields: &[
-        FieldSpec { snake: "format", location: FieldLocation::Query },
-        FieldSpec { snake: "callback", location: FieldLocation::Query },
-        FieldSpec { snake: "track_id", location: FieldLocation::Query },
-    ],
-    auth: &[
-    ],
-};
-
-fn iface_subtitle__get_matcher_subtitle_get_params__to_json(p: &iface_subtitle::GetMatcherSubtitleGetParams) -> Value {
-    let mut m = Map::new();
-    m.insert("format".into(), match (&p.format) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("callback".into(), match (&p.callback) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("q_track".into(), match (&p.q_track) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("q_artist".into(), match (&p.q_artist) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("f_subtitle_length".into(), match (&p.f_subtitle_length) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
-    m.insert("f_subtitle_length_max_deviation".into(), match (&p.f_subtitle_length_max_deviation) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_subtitle__get_track_subtitle_get_params__to_json(p: &iface_subtitle::GetTrackSubtitleGetParams) -> Value {
-    let mut m = Map::new();
-    m.insert("format".into(), match (&p.format) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("callback".into(), match (&p.callback) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("track_id".into(), Value::String((&p.track_id).clone()));
-    Value::Object(m)
-}
-
-impl iface_subtitle::Guest for crate::Component {
-    fn get_matcher_subtitle_get(params: iface_subtitle::GetMatcherSubtitleGetParams) -> Result<String, String> {
-        let json = iface_subtitle__get_matcher_subtitle_get_params__to_json(&params);
-        dispatch(&OP_SUBTITLE_GET_MATCHER_SUBTITLE_GET, json)
-    }
-    fn get_track_subtitle_get(params: iface_subtitle::GetTrackSubtitleGetParams) -> Result<String, String> {
-        let json = iface_subtitle__get_track_subtitle_get_params__to_json(&params);
-        dispatch(&OP_SUBTITLE_GET_TRACK_SUBTITLE_GET, json)
-    }
-}
-use crate::exports::autostamp::musixmatch::snippet as iface_snippet;
-
-const OP_SNIPPET_GET_TRACK_SNIPPET_GET: OpSpec = OpSpec {
-    method: "GET",
-    path_template: "/track.snippet.get",
-    fields: &[
-        FieldSpec { snake: "format", location: FieldLocation::Query },
-        FieldSpec { snake: "callback", location: FieldLocation::Query },
-        FieldSpec { snake: "track_id", location: FieldLocation::Query },
-    ],
-    auth: &[
-    ],
-};
-
-fn iface_snippet__get_track_snippet_get_params__to_json(p: &iface_snippet::GetTrackSnippetGetParams) -> Value {
-    let mut m = Map::new();
-    m.insert("format".into(), match (&p.format) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("callback".into(), match (&p.callback) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("track_id".into(), Value::String((&p.track_id).clone()));
-    Value::Object(m)
-}
-
-impl iface_snippet::Guest for crate::Component {
-    fn get_track_snippet_get(params: iface_snippet::GetTrackSnippetGetParams) -> Result<String, String> {
-        let json = iface_snippet__get_track_snippet_get_params__to_json(&params);
-        dispatch(&OP_SNIPPET_GET_TRACK_SNIPPET_GET, json)
-    }
-}
+mod iface_album;
+mod iface_track;
+mod iface_artist;
+mod iface_lyrics;
+mod iface_subtitle;
+mod iface_snippet;
 
 export!(Component);

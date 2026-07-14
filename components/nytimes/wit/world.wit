@@ -6,9 +6,75 @@
 /// | Secret name | Applied to each request as |
 /// | --- | --- |
 /// | `apikey` | query `api-key` |
-package autostamp:nytimes@0.3.0;
+package autostamp:nytimes@0.5.0;
 
 interface archive {
+  record get-year-month-json-response {
+    response: option<get-year-month-json-response-response>
+  }
+
+  record get-year-month-json-response-response {
+    docs: option<list<doc>>,
+    meta: option<get-year-month-json-response-response-meta>
+  }
+
+  record doc {
+    id: option<string>,
+    abstract: option<string>,
+    blog: option<list<string>>,
+    byline: option<doc-byline>,
+    document-type: option<string>,
+    headline: option<doc-headline>,
+    keywords: option<doc-keywords>,
+    lead-paragraph: option<string>,
+    multimedia: option<list<doc-multimedia-item>>,
+    news-desk: option<string>,
+    print-page: option<string>,
+    pub-date: option<string>,
+    section-name: option<string>,
+    slideshow-credits: option<string>,
+    snippet: option<string>,
+    source: option<string>,
+    subsection-name: option<string>,
+    type-of-material: option<string>,
+    web-url: option<string>,
+    word-count: option<string>
+  }
+
+  record doc-byline {
+    organization: option<string>,
+    original: option<string>,
+    person: option<list<string>>
+  }
+
+  record doc-headline {
+    kicker: option<string>,
+    main: option<string>
+  }
+
+  record doc-keywords {
+    name: option<string>,
+    rank: option<string>,
+    value: option<string>
+  }
+
+  record doc-multimedia-item {
+    caption: option<string>,
+    copyright: option<string>,
+    format: option<string>,
+    height: option<s32>,
+    subtype: option<string>,
+    type-op: option<string>,
+    url: option<string>,
+    width: option<s32>
+  }
+
+  record get-year-month-json-response-response-meta {
+    hits: option<s32>,
+    offset: option<s32>,
+    time: option<s32>
+  }
+
   /// Archive API
   record get-year-month-json-params {
     /// The year (e.g. 2016).
@@ -16,7 +82,7 @@ interface archive {
     /// The month number (e.g. 1 for January).
     month: string
   }
-  get-year-month-json: func(params: get-year-month-json-params) -> result<string, string>;
+  get-year-month-json: func(params: get-year-month-json-params) -> result<get-year-month-json-response, string>;
 
 }
 

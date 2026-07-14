@@ -1,4 +1,4 @@
-package autostamp:meilisearch@0.3.0;
+package autostamp:meilisearch@0.5.0;
 
 interface dumps {
   /// Create a dump

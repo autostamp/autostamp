@@ -1,17 +1,41 @@
-package autostamp:openfigi@0.3.0;
+package autostamp:openfigi@0.5.0;
 
 interface mapping {
+  record bulk-mapping-job-result {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  record get-mapping-values-key-response {
+    values: option<list<string>>
+  }
+
+  variant post-mapping-error {
+    bad-request(string),
+    unauthorized(string),
+    not-acceptable(string),
+    payload-too-large(string),
+    internal-server-error(string),
+    other(string)
+  }
+
+  variant get-mapping-values-key-error {
+    bad-request(string),
+    internal-server-error(string),
+    other(string)
+  }
+
   record post-mapping-params {
     /// opaque schema; raw JSON
     value: string
   }
-  post-mapping: func(params: post-mapping-params) -> result<string, string>;
+  post-mapping: func(params: post-mapping-params) -> result<bulk-mapping-job-result, post-mapping-error>;
 
   record get-mapping-values-key-params {
     /// Key of MappingJob for which to get possible values.
     key: string
   }
-  get-mapping-values-key: func(params: get-mapping-values-key-params) -> result<string, string>;
+  get-mapping-values-key: func(params: get-mapping-values-key-params) -> result<get-mapping-values-key-response, get-mapping-values-key-error>;
 
 }
 

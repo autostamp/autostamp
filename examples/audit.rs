@@ -96,7 +96,15 @@ fn audit_one(spec_path: &Path, detail: bool) -> Row {
     };
 
     let (expected_inputs, spec_ops, cookie_params) = expected_from_spec(&spec);
-    let emitted = parse_emitted(&generated.rust);
+    // The generator now splits its Rust output across files (a `lib.rs` crate root plus one
+    // `iface_*.rs` per interface); the audit only cares about the emitted bodies, so join them.
+    let rust = generated
+        .rust
+        .iter()
+        .map(|f| f.contents.as_str())
+        .collect::<Vec<_>>()
+        .join("\n");
+    let emitted = parse_emitted(&rust);
 
     if detail && !emitted.broken.is_empty() {
         eprintln!("\nbroken paths in {name} (placeholder with no path field):");
@@ -110,7 +118,7 @@ fn audit_one(spec_path: &Path, detail: bool) -> Row {
 
     if detail && std::env::var("AUDIT_DUMP").is_ok() {
         dump_body_drop_causes(&spec);
-        dump_param_drop_detail(&spec, &generated.rust);
+        dump_param_drop_detail(&spec, &rust);
     }
 
     Row {

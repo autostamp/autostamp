@@ -6,9 +6,15 @@
 /// | Secret name | Applied to each request as |
 /// | --- | --- |
 /// | `api_key` | query `key` |
-package autostamp:graphhopper@0.3.0;
+package autostamp:graphhopper@0.5.0;
 
 interface cluster-api {
+  enum cluster-response-status-enum {
+    waiting-in-queue,
+    processing,
+    finished,
+  }
+
   record cluster-configuration {
     clustering: option<cluster-configuration-clustering>,
     /// Specifies the response format. You can either choose `geojson` or `json`.
@@ -51,31 +57,108 @@ interface cluster-api {
     street-hint: option<string>
   }
 
+  record cluster-response {
+    clusters: option<list<cluster>>,
+    copyrights: option<list<string>>,
+    processing-time: option<f64>,
+    /// Indicates the current status of the job
+    status: option<cluster-response-status-enum>,
+    waiting-time-in-queue: option<f64>
+  }
+
+  record cluster {
+    /// Array of customer ids assigned to this specific cluster
+    ids: option<list<string>>,
+    /// Cluster size
+    quantity: option<f64>
+  }
+
+  record job-id {
+    /// UUID. Unique id for your job/request with which you can fetch your solution
+    job-id: option<string>
+  }
+
+  variant solve-clustering-problem-error {
+    bad-request(string),
+    internal-server-error(string),
+    other(string)
+  }
+
+  variant async-clustering-problem-error {
+    bad-request(string),
+    internal-server-error(string),
+    other(string)
+  }
+
+  variant get-cluster-solution-error {
+    bad-request(string),
+    not-found(string),
+    internal-server-error(string),
+    other(string)
+  }
+
   /// POST Cluster Endpoint
   record solve-clustering-problem-params {
     configuration: option<cluster-configuration>,
     customers: option<list<cluster-customer>>
   }
-  solve-clustering-problem: func(params: solve-clustering-problem-params) -> result<string, string>;
+  solve-clustering-problem: func(params: solve-clustering-problem-params) -> result<cluster-response, solve-clustering-problem-error>;
 
   /// Batch Cluster Endpoint
   record async-clustering-problem-params {
     configuration: option<cluster-configuration>,
     customers: option<list<cluster-customer>>
   }
-  async-clustering-problem: func(params: async-clustering-problem-params) -> result<string, string>;
+  async-clustering-problem: func(params: async-clustering-problem-params) -> result<job-id, async-clustering-problem-error>;
 
   /// GET Batch Solution Endpoint
   record get-cluster-solution-params {
     /// Request solution with jobId
     job-id: string
   }
-  get-cluster-solution: func(params: get-cluster-solution-params) -> result<string, string>;
+  get-cluster-solution: func(params: get-cluster-solution-params) -> result<cluster-response, get-cluster-solution-error>;
 
 }
 
 
 interface geocoding-api {
+  record geocoding-response {
+    hits: option<list<geocoding-location>>,
+    /// in ms
+    took: option<f64>
+  }
+
+  record geocoding-location {
+    /// The city of the address
+    city: option<string>,
+    /// The country of the address
+    country: option<string>,
+    /// The housenumber of the address
+    housenumber: option<string>,
+    /// The name of the entity. Can be a boundary, POI, address, etc
+    name: option<string>,
+    /// The OSM ID of the entity
+    osm-id: option<string>,
+    /// The OSM key of the entity
+    osm-key: option<string>,
+    /// N = node, R = relation, W = way
+    osm-type: option<string>,
+    point: option<geocoding-point>,
+    /// The postcode of the address
+    postcode: option<string>,
+    /// The state of the address
+    state: option<string>,
+    /// The street of the address
+    street: option<string>
+  }
+
+  record geocoding-point {
+    /// Latitude
+    lat: option<f64>,
+    /// Longitude
+    lng: option<f64>
+  }
+
   /// Geocoding Endpoint
   record get-geocode-params {
     /// If you do forward geocoding, this is `required` and is a textual description of the address you are looking for.
@@ -94,7 +177,7 @@ interface geocoding-api {
     /// The intend is to provide alternatives to our default geocoder. Each provider has its own strenghts and might fit better for certain scenarios, so it's worth to compare the different providers.
     provider: option<string>
   }
-  get-geocode: func(params: get-geocode-params) -> result<string, string>;
+  get-geocode: func(params: get-geocode-params) -> result<geocoding-response, string>;
 
 }
 
@@ -107,6 +190,29 @@ interface isochrone-api {
   record vehicle-profile-id {
     /// opaque schema; raw JSON
     value: string
+  }
+
+  record isochrone-response {
+    copyrights: option<list<string>>,
+    /// The list of polygons in GeoJson format. It can be used e.g. in the Leaflet framework:
+    /// 
+    polygons: option<list<isochrone-response-polygon>>
+  }
+
+  /// A found path
+  record isochrone-response-polygon {
+    geometry: option<polygon>,
+    properties: option<isochrone-response-polygon-properties>,
+    type-op: option<string>
+  }
+
+  record polygon {
+    coordinates: option<list<list<list<f64>>>>,
+    type-op: option<string>
+  }
+
+  record isochrone-response-polygon-properties {
+    bucket: option<s32>
   }
 
   /// Isochrone Endpoint
@@ -127,11 +233,91 @@ interface isochrone-api {
     /// Use `"shortest"` to get an isodistance line instead of an isochrone.
     weighting: option<get-isochrone-weighting-enum>
   }
-  get-isochrone: func(params: get-isochrone-params) -> result<string, string>;
+  get-isochrone: func(params: get-isochrone-params) -> result<isochrone-response, string>;
 
 }
 
 interface map-matching-api {
+  record route-response {
+    info: option<response-info>,
+    paths: option<list<route-response-path>>
+  }
+
+  /// Additional information for your request
+  record response-info {
+    /// Attribution according to our documentation is necessary if no white-label option included.
+    copyrights: option<list<string>>,
+    took: option<f64>
+  }
+
+  record route-response-path {
+    /// The total ascent, in meters.
+    ascend: option<f64>,
+    /// The bounding box of the route geometry. Format: `[minLon, minLat, maxLon, maxLat]`.
+    bbox: option<list<f64>>,
+    /// The total descent, in meters.
+    descend: option<f64>,
+    /// Details, as requested with the `details` parameter. Consider the value `{"street_name": [[0,2,"Frankfurter Straße"],[2,6,"Zollweg"]]}`.
+    /// In this example, the route uses two streets: The first, Frankfurter Straße, is
+    details: option<route-response-path-details>,
+    /// The total distance, in meters. To get this information for one 'leg' please read [this blog post](https://www.graphhopper.com/blog/2019/11/28/routing-api-using-path-details/).
+    distance: option<f64>,
+    /// The instructions for this route. This feature is under active development, and our instructions can sometimes be misleading,
+    /// so be mindful when using them for navigation.
+    instructions: option<list<route-response-path-instructions-item>>,
+    points: option<route-response-path-points>,
+    /// Whether the `points` and `snapped_waypoints` fields are polyline-encoded strings rather than JSON arrays
+    /// of coordinates. See the field description for more information on the two formats.
+    points-encoded: option<bool>,
+    /// An array of indices (zero-based), specifiying the order in which the input points are visited.
+    /// Only present if the `optimize` parameter was used.
+    points-order: option<list<s32>>,
+    snapped-waypoints: option<route-response-path-snapped-waypoints>,
+    /// The total travel time, in milliseconds. To get this information for one 'leg' please read [this blog post](https://www.graphhopper.com/blog/2019/11/28/routing-api-using-path-details/).
+    time: option<s64>
+  }
+
+  /// Details, as requested with the `details` parameter. Consider the value `{"street_name": [[0,2,"Frankfurter Straße"],[2,6,"Zollweg"]]}`.
+  /// In this example, the route uses two streets: The first, Frankfurter Straße, is
+  /// used between `points[0]` and `points[2]`, and the second, Zollweg, between `points[2]` and `points[6]`.
+  /// See [here](https://discuss.graphhopper.com/t/2539) for discussion.
+  record route-response-path-details {
+    /// JSON-encoded free-form object payload
+    data: option<string>
+  }
+
+  record route-response-path-instructions-item {
+    /// The distance for this instruction, in meters.
+    distance: option<f64>,
+    /// Only available for roundabout instructions (sign is 6). The count of exits at which the route leaves the roundabout.
+    exit-number: option<s32>,
+    /// Two indices into `points`, referring to the beginning and the end of the segment of the route
+    /// this instruction refers to.
+    interval: option<list<s32>>,
+    /// A number which specifies the sign to show:
+    /// 
+    sign: option<s32>,
+    /// The name of the street to turn onto in order to follow the route.
+    street-name: option<string>,
+    /// A description what the user has to do in order to follow the route. The language depends on the locale parameter.
+    text: option<string>,
+    /// The duration for this instruction, in milliseconds.
+    time: option<s32>,
+    /// Only available for roundabout instructions (sign is 6). The radian of the route within the roundabout `0 < r < 2*PI` for clockwise and
+    /// `-2*PI < r < 0` for counterclockwise turns.
+    turn-angle: option<f64>
+  }
+
+  record route-response-path-points {
+    /// JSON-encoded free-form object payload
+    data: option<string>
+  }
+
+  record route-response-path-snapped-waypoints {
+    /// JSON-encoded free-form object payload
+    data: option<string>
+  }
+
   /// Map-match a GPX file
   record post-gpx-params {
     /// Specify the precision of a point, in meter
@@ -139,7 +325,7 @@ interface map-matching-api {
     /// Specify the vehicle profile like car
     vehicle: option<string>
   }
-  post-gpx: func(params: post-gpx-params) -> result<string, string>;
+  post-gpx: func(params: post-gpx-params) -> result<route-response, string>;
 
 }
 
@@ -153,6 +339,43 @@ interface matrix-api {
   record vehicle-profile-id {
     /// opaque schema; raw JSON
     value: string
+  }
+
+  record matrix-response {
+    /// The distance matrix for the specified points in the same order as the time matrix. The distances are in meters. If `fail_fast=false` the matrix will contain `null` for connections that could not be found.
+    distances: option<list<list<f64>>>,
+    /// Optional. Additional response data.
+    hints: option<list<matrix-response-hints-item>>,
+    info: option<response-info>,
+    /// The time matrix for the specified points in the order [[from1->to1, from1->to2, ...], [from2->to1, from2->to2, ...], ...]. The times are in seconds. If `fail_fast=false` the matrix will contain `null` for connections that could not be found.
+    times: option<list<list<f64>>>,
+    /// The weight matrix for the specified points in the same order as the time matrix. The weights for different vehicles can have a different unit but the weights array is perfectly suited as input for Vehicle Routing Problems as it is currently faster to calculate. If `fail_fast=false` the matrix will contain `null` for connections that could not be found.
+    weights: option<list<list<f64>>>
+  }
+
+  record matrix-response-hints-item {
+    /// Details of this hint
+    details: option<string>,
+    /// Optional. An array of from_point indices of points that could not be found. Will only be added if `fail_fast=false` and some `from_point`s were not found.`
+    invalid-from-points: option<list<f64>>,
+    /// Optional. An array of to_point indices of points that could not be found. Will only be added if `fail_fast=false` and some `to_point`s were not found.`
+    invalid-to-points: option<list<f64>>,
+    /// Short description of this hint
+    message: option<string>,
+    /// Optional. An array of two-element arrays representing the from/to_point indices of points for which no connection could be found. Will only be added if `fail_fast=false` and some connections were not found.
+    point-pairs: option<list<list<f64>>>
+  }
+
+  /// Additional information for your request
+  record response-info {
+    /// Attribution according to our documentation is necessary if no white-label option included.
+    copyrights: option<list<string>>,
+    took: option<f64>
+  }
+
+  record job-id {
+    /// UUID. Unique id for your job/request with which you can fetch your solution
+    job-id: option<string>
   }
 
   /// GET Matrix Endpoint
@@ -186,26 +409,26 @@ interface matrix-api {
     /// Specifies if turn restrictions should be considered. Enabling this option increases the matrix computation time. Only supported for motor vehicles and OpenStreetMap.
     turn-costs: option<bool>
   }
-  get-matrix: func(params: get-matrix-params) -> result<string, string>;
+  get-matrix: func(params: get-matrix-params) -> result<matrix-response, string>;
 
   /// POST Matrix Endpoint
   record post-matrix-params {
     body: option<string>
   }
-  post-matrix: func(params: post-matrix-params) -> result<string, string>;
+  post-matrix: func(params: post-matrix-params) -> result<matrix-response, string>;
 
   /// Batch Matrix Endpoint
   record calculate-matrix-params {
     body: option<string>
   }
-  calculate-matrix: func(params: calculate-matrix-params) -> result<string, string>;
+  calculate-matrix: func(params: calculate-matrix-params) -> result<job-id, string>;
 
   /// GET Batch Matrix Endpoint
   record get-matrix-solution-params {
     /// Request solution with jobId
     job-id: string
   }
-  get-matrix-solution: func(params: get-matrix-solution-params) -> result<string, string>;
+  get-matrix-solution: func(params: get-matrix-solution-params) -> result<matrix-response, string>;
 
 }
 
@@ -224,6 +447,125 @@ interface routing-api {
   record vehicle-profile-id {
     /// opaque schema; raw JSON
     value: string
+  }
+
+  record route-response {
+    info: option<response-info>,
+    paths: option<list<route-response-path>>
+  }
+
+  /// Additional information for your request
+  record response-info {
+    /// Attribution according to our documentation is necessary if no white-label option included.
+    copyrights: option<list<string>>,
+    took: option<f64>
+  }
+
+  record route-response-path {
+    /// The total ascent, in meters.
+    ascend: option<f64>,
+    /// The bounding box of the route geometry. Format: `[minLon, minLat, maxLon, maxLat]`.
+    bbox: option<list<f64>>,
+    /// The total descent, in meters.
+    descend: option<f64>,
+    /// Details, as requested with the `details` parameter. Consider the value `{"street_name": [[0,2,"Frankfurter Straße"],[2,6,"Zollweg"]]}`.
+    /// In this example, the route uses two streets: The first, Frankfurter Straße, is
+    details: option<route-response-path-details>,
+    /// The total distance, in meters. To get this information for one 'leg' please read [this blog post](https://www.graphhopper.com/blog/2019/11/28/routing-api-using-path-details/).
+    distance: option<f64>,
+    /// The instructions for this route. This feature is under active development, and our instructions can sometimes be misleading,
+    /// so be mindful when using them for navigation.
+    instructions: option<list<route-response-path-instructions-item>>,
+    points: option<route-response-path-points>,
+    /// Whether the `points` and `snapped_waypoints` fields are polyline-encoded strings rather than JSON arrays
+    /// of coordinates. See the field description for more information on the two formats.
+    points-encoded: option<bool>,
+    /// An array of indices (zero-based), specifiying the order in which the input points are visited.
+    /// Only present if the `optimize` parameter was used.
+    points-order: option<list<s32>>,
+    snapped-waypoints: option<route-response-path-snapped-waypoints>,
+    /// The total travel time, in milliseconds. To get this information for one 'leg' please read [this blog post](https://www.graphhopper.com/blog/2019/11/28/routing-api-using-path-details/).
+    time: option<s64>
+  }
+
+  /// Details, as requested with the `details` parameter. Consider the value `{"street_name": [[0,2,"Frankfurter Straße"],[2,6,"Zollweg"]]}`.
+  /// In this example, the route uses two streets: The first, Frankfurter Straße, is
+  /// used between `points[0]` and `points[2]`, and the second, Zollweg, between `points[2]` and `points[6]`.
+  /// See [here](https://discuss.graphhopper.com/t/2539) for discussion.
+  record route-response-path-details {
+    /// JSON-encoded free-form object payload
+    data: option<string>
+  }
+
+  record route-response-path-instructions-item {
+    /// The distance for this instruction, in meters.
+    distance: option<f64>,
+    /// Only available for roundabout instructions (sign is 6). The count of exits at which the route leaves the roundabout.
+    exit-number: option<s32>,
+    /// Two indices into `points`, referring to the beginning and the end of the segment of the route
+    /// this instruction refers to.
+    interval: option<list<s32>>,
+    /// A number which specifies the sign to show:
+    /// 
+    sign: option<s32>,
+    /// The name of the street to turn onto in order to follow the route.
+    street-name: option<string>,
+    /// A description what the user has to do in order to follow the route. The language depends on the locale parameter.
+    text: option<string>,
+    /// The duration for this instruction, in milliseconds.
+    time: option<s32>,
+    /// Only available for roundabout instructions (sign is 6). The radian of the route within the roundabout `0 < r < 2*PI` for clockwise and
+    /// `-2*PI < r < 0` for counterclockwise turns.
+    turn-angle: option<f64>
+  }
+
+  record route-response-path-points {
+    /// JSON-encoded free-form object payload
+    data: option<string>
+  }
+
+  record route-response-path-snapped-waypoints {
+    /// JSON-encoded free-form object payload
+    data: option<string>
+  }
+
+  record route-request-vehicle {
+    /// JSON-encoded free-form object payload
+    data: option<string>
+  }
+
+  /// Information about the server and the geographical area that it covers.
+  record info-response {
+    /// The bounding box of the geographical area covered by this GraphHopper instance. Format: `"minLon,minLat,maxLon,maxLat"
+    bbox: option<string>,
+    /// The supported features, such as elevation, per vehicle profile.
+    features: option<info-response-features>,
+    /// The version of the GraphHopper server that provided this response. This is not related to the API version.
+    version: option<string>
+  }
+
+  /// The supported features, such as elevation, per vehicle profile.
+  record info-response-features {
+    /// JSON-encoded free-form object payload
+    data: option<string>
+  }
+
+  variant get-route-error {
+    bad-request(string),
+    unauthorized(string),
+    too-many-requests(string),
+    internal-server-error(string),
+    not-implemented(string),
+    other(string)
+  }
+
+  variant post-route-error {
+    bad-request(string),
+    unauthorized(string),
+    too-many-requests(string),
+    internal-server-error(string),
+    not-implemented(string),
+    other(string)
   }
 
   /// GET Route Endpoint
@@ -292,7 +634,7 @@ interface routing-api {
     /// If `algorithm=alternative_route`, this parameter specifies how similar an alternative route can be to the optimal route. Increasing can lead to worse alternatives.
     alternative-route-max-share-factor: option<f64>
   }
-  get-route: func(params: get-route-params) -> result<string, string>;
+  get-route: func(params: get-route-params) -> result<route-response, get-route-error>;
 
   /// POST Route Endpoint
   record post-route-params {
@@ -353,14 +695,14 @@ interface routing-api {
     round-trip-seed: option<s64>,
     /// Optional parameter to avoid snapping to a certain road class or road environment. Current supported values `motorway`, `trunk`, `ferry`, `tunnel`, `bridge` and `ford`
     snap-preventions: option<list<string>>,
-    vehicle: option<string>,
+    vehicle: option<route-request-vehicle>,
     /// Determines the way the ''best'' route is calculated. Default is `fastest`. Other options are `shortest` (e.g. for `vehicle=foot` or `bike`) and `short_fastest` which finds a reasonable balance between `shortest` and `fastest`. Requires `ch.disable=true`.
     weighting: option<string>
   }
-  post-route: func(params: post-route-params) -> result<string, string>;
+  post-route: func(params: post-route-params) -> result<route-response, post-route-error>;
 
   /// Coverage information
-  get-route-info: func() -> result<string, string>;
+  get-route-info: func() -> result<info-response, string>;
 
 }
 
@@ -417,6 +759,23 @@ interface route-optimization-api {
     service,
     pickup,
     delivery,
+  }
+
+  enum activity-type-op-enum {
+    start,
+    end,
+    service,
+    pickup-shipment,
+    deliver-shipment,
+    pickup,
+    delivery,
+    break,
+  }
+
+  enum response-status-enum {
+    waiting-in-queue,
+    processing,
+    finished,
   }
 
   /// Use `objectives` instead.
@@ -579,13 +938,18 @@ interface route-optimization-api {
     cost-per-second: option<f64>,
     /// Specifies the network data provider. Either use [`openstreetmap`](#section/Map-Data-and-Routing-Profiles/OpenStreetMap) (default) or [`tomtom`](#section/Map-Data-and-Routing-Profiles/TomTom) (add-on required).
     network-data-provider: option<routing-network-data-provider-enum>,
-    profile: option<string>,
+    profile: option<vehicle-type-profile>,
     /// Specifies a service time factor for this vehicle type. If the vehicle/driver that uses this type is able to conduct the service as double as fast as it is determined in the corresponding service or shipment then set it to 0.5.
     service-time-factor: option<f64>,
     /// Specifies a speed factor for this vehicle type. If the vehicle that uses this type needs to be only half as fast as what is actually calculated with our routing engine then set the speed factor to 0.5.
     speed-factor: option<f64>,
     /// Specifies the id of the vehicle type. If a vehicle needs to be of this type, it should refer to this with its type_id attribute.
     type-id: string
+  }
+
+  record vehicle-type-profile {
+    /// JSON-encoded free-form object payload
+    data: option<string>
   }
 
   record vehicle {
@@ -618,6 +982,174 @@ interface route-optimization-api {
     vehicle-id: string
   }
 
+  record response {
+    copyrights: option<list<string>>,
+    /// Processing time in ms. If job is still waiting in queue, processing_time is 0
+    processing-time: option<s64>,
+    solution: option<solution>,
+    /// Indicates the current status of the job
+    status: option<response-status-enum>,
+    /// Waiting time in ms
+    waiting-time-in-queue: option<s64>
+  }
+
+  /// Only available if status field indicates `finished`.
+  record solution {
+    /// Overall completion time in seconds, i.e. the sum of each routes/drivers operation time.
+    completion-time: option<s64>,
+    costs: option<s32>,
+    /// Overall distance travelled in meter, i.e. the sum of each route's transport distance
+    distance: option<s32>,
+    /// Operation time of longest route in seconds.
+    max-operation-time: option<s64>,
+    /// Number of jobs that could not be assigned to final solution.
+    no-unassigned: option<s32>,
+    /// Number of employed vehicles.
+    no-vehicles: option<s32>,
+    /// Overall preparation time in seconds.
+    preparation-time: option<s64>,
+    /// An array of routes
+    routes: option<list<route>>,
+    /// Overall service time in seconds.
+    service-duration: option<s64>,
+    /// Use `transport_time` instead.
+    time: option<s64>,
+    /// Overall time travelled in seconds, i.e. the sum of each route's transport time.
+    transport-time: option<s64>,
+    unassigned: option<solution-unassigned>,
+    /// Overall waiting time in seconds.
+    waiting-time: option<s64>
+  }
+
+  record route {
+    /// Array of activities
+    activities: option<list<activity>>,
+    /// Completion time of route in seconds
+    completion-time: option<s64>,
+    /// Distance of route in meter
+    distance: option<s64>,
+    /// Array of route planning points
+    points: option<list<route-point>>,
+    /// Preparation time of route in seconds
+    preparation-time: option<s64>,
+    /// Service duration of route in seconds
+    service-duration: option<s64>,
+    /// Transport time of route in seconds
+    transport-time: option<s64>,
+    /// Id of vehicle that operates route
+    vehicle-id: option<string>,
+    /// Waiting time of route in seconds
+    waiting-time: option<s64>
+  }
+
+  record activity {
+    address: option<response-address>,
+    /// Arrival date time with offset like this 1970-01-01T01:00+01:00. If you do not use time-dependent optimization, this is `null`.
+    arr-date-time: option<string>,
+    /// Arrival time at this activity in seconds. If type is `start`, this is not available (since it makes no sense to have `arr_time` at start). However, `end_time` is available and actually means \"departure time\" at start location. It is important to note that `arr_time` does not necessarily mean \"start of underlying activity\", it solely means arrival time at activity location. If this activity has no time windows and if there are no further preparation times, `arr_time` is equal to activity start time.
+    arr-time: option<s64>,
+    /// cumulated distance from start to this activity in m
+    distance: option<s64>,
+    /// cumulated driving time from start to this driver activity in seconds
+    driving-time: option<s64>,
+    /// End date time with offset like this 1970-01-01T01:00+01:00. If you do not use time-dependent optimization, this is `null`.
+    end-date-time: option<string>,
+    /// End time of and thus departure time at this activity. If type is `end`, this is not available (since it makes no sense to have an `end_time` at end) `end_time` at each activity is equal to the departure time at the activity location.
+    end-time: option<s64>,
+    /// Id referring to the underlying service or shipment, i.e. the shipment or service this activity belongs to
+    id: option<string>,
+    /// Array with size/capacity dimensions after this activity
+    load-after: option<list<s32>>,
+    /// Array with size/capacity dimensions before this activity
+    load-before: option<list<s32>>,
+    /// Id that refers to address
+    location-id: option<string>,
+    /// preparation time at this activity in seconds
+    preparation-time: option<s64>,
+    /// type of activity
+    type-op: option<activity-type-op-enum>,
+    /// Waiting time at this activity in seconds. A waiting time can occur if the activity has at least one time window. If `arr_time` < `time_window.earliest` a waiting time of `time_window_earliest` - `arr_time` occurs.
+    waiting-time: option<s64>
+  }
+
+  /// Address of activity
+  record response-address {
+    /// Latitude of location.
+    lat: option<f64>,
+    /// Specifies the id of the location.
+    location-id: option<string>,
+    /// Longitude of location.
+    lon: option<f64>,
+    /// Name of location.
+    name: option<string>,
+    snapped-waypoint: option<snapped-waypoint>,
+    /// Optional parameter. Specifies a hint for each address to better snap the coordinates (lon,lat) to road network. E.g. if there is an address or house with two or more neighboring streets you can control for which street the closest location is looked up.
+    street-hint: option<string>
+  }
+
+  /// Access point to the (road)network. It is only available if `return_snapped_waypoints` is true (be default it is false).
+  record snapped-waypoint {
+    /// Latitude of location.
+    lat: option<f64>,
+    /// Longitude of location.
+    lon: option<f64>
+  }
+
+  record route-point {
+    coordinates: option<list<route-point-coordinates-item>>,
+    type-op: option<string>
+  }
+
+  record route-point-coordinates-item {
+    /// JSON-encoded free-form object payload
+    data: option<string>
+  }
+
+  record solution-unassigned {
+    /// An array of ids of unassigned breaks
+    breaks: option<list<string>>,
+    /// An array of details, i.e. reason for unassigned services or shipments
+    details: option<list<detail>>,
+    /// An array of ids of unassigned services
+    services: option<list<string>>,
+    /// An array of ids of unassigned shipments
+    shipments: option<list<string>>
+  }
+
+  record detail {
+    /// Reason code
+    /// 
+    code: option<s32>,
+    /// Id of unassigned service/shipment
+    id: option<string>,
+    /// Human readable reason as listed above
+    reason: option<string>
+  }
+
+  record job-id {
+    /// UUID. Unique id for your job/request with which you can fetch your solution
+    job-id: option<string>
+  }
+
+  variant solve-vrp-error {
+    bad-request(string),
+    internal-server-error(string),
+    other(string)
+  }
+
+  variant async-vrp-error {
+    bad-request(string),
+    internal-server-error(string),
+    other(string)
+  }
+
+  variant get-solution-error {
+    bad-request(string),
+    not-found(string),
+    internal-server-error(string),
+    other(string)
+  }
+
   /// POST route optimization problem
   record solve-vrp-params {
     algorithm: option<algorithm>,
@@ -637,7 +1169,7 @@ interface route-optimization-api {
     /// Specifies the available vehicles.
     vehicles: option<list<vehicle>>
   }
-  solve-vrp: func(params: solve-vrp-params) -> result<string, string>;
+  solve-vrp: func(params: solve-vrp-params) -> result<response, solve-vrp-error>;
 
   /// POST route optimization problem (batch mode)
   record async-vrp-params {
@@ -658,14 +1190,14 @@ interface route-optimization-api {
     /// Specifies the available vehicles.
     vehicles: option<list<vehicle>>
   }
-  async-vrp: func(params: async-vrp-params) -> result<string, string>;
+  async-vrp: func(params: async-vrp-params) -> result<job-id, async-vrp-error>;
 
   /// GET the solution (batch mode)
   record get-solution-params {
     /// Request solution with jobId
     job-id: string
   }
-  get-solution: func(params: get-solution-params) -> result<string, string>;
+  get-solution: func(params: get-solution-params) -> result<response, get-solution-error>;
 
 }
 /// The component world: imports the secrets host capability

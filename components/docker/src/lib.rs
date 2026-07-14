@@ -44,10 +44,15 @@ pub(crate) enum FieldLocation {
     Body,
 }
 
-/// A single operation parameter: the snake-case key it carries in the params JSON and where
-/// it belongs in the request.
+/// A single operation parameter. `snake` keys the field in the internal params JSON (and, for a
+/// path field, matches the `{snake}` placeholder in the path template); `wire` is the verbatim name
+/// the field takes on the HTTP wire (query key, header name, or body property). The two differ
+/// whenever the source name isn't already snake_case (e.g. `dryRun` → snake `dry_run`, wire
+/// `dryRun`), and let distinct inputs that share a snake key (`DateCreated`, `DateCreated<`) still
+/// travel under their true names.
 pub(crate) struct FieldSpec {
     pub(crate) snake: &'static str,
+    pub(crate) wire: &'static str,
     pub(crate) location: FieldLocation,
 }
 
@@ -71,6 +76,16 @@ pub(crate) struct AuthApply {
     pub(crate) kind: AuthKind,
 }
 
+/// The failure modes of [`dispatch`], kept structured so each generated operation can map them
+/// onto its own typed error: an `Http` failure carries the response status and body (routed to
+/// the matching error-variant case), while a `Transport` failure carries a message for the
+/// catch-all case (a secret lookup, connection, or decode failure that never produced an HTTP
+/// status).
+pub(crate) enum DispatchError {
+    Http { status: u16, body: String },
+    Transport(String),
+}
+
 /// A single API operation: HTTP method, path template (with `{snake}` placeholders), the
 /// parameter fields, and the security schemes to apply.
 pub(crate) struct OpSpec {
@@ -81,8 +96,9 @@ pub(crate) struct OpSpec {
 }
 
 /// Execute `op` with the supplied `params` (a JSON object keyed by snake-case field names)
-/// and return the response body as a string, or an error message.
-pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, String> {
+/// and return the raw 2xx response body, or a structured [`DispatchError`] the caller maps
+/// onto the operation's typed error.
+pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, DispatchError> {
     let obj = match &params {
         Value::Object(map) => Some(map),
         _ => None,
@@ -105,10 +121,10 @@ pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, String> {
                 let placeholder = format!("{{{}}}", field.snake);
                 path = path.replace(&placeholder, &percent_encode(&scalar(value)));
             }
-            FieldLocation::Query => query.push((field.snake.to_string(), scalar(value))),
-            FieldLocation::Header => headers.push((field.snake.to_string(), scalar(value))),
+            FieldLocation::Query => query.push((field.wire.to_string(), scalar(value))),
+            FieldLocation::Header => headers.push((field.wire.to_string(), scalar(value))),
             FieldLocation::Body => {
-                body.insert(field.snake.to_string(), value.clone());
+                body.insert(field.wire.to_string(), value.clone());
             }
         }
     }
@@ -116,7 +132,7 @@ pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, String> {
     // Apply each resolved security scheme, sourcing its value from wasmcloud:secrets.
     let mut cookies: Vec<String> = Vec::new();
     for apply in op.auth {
-        let secret = fetch_secret(apply.secret_key)?;
+        let secret = fetch_secret(apply.secret_key).map_err(DispatchError::Transport)?;
         match &apply.kind {
             AuthKind::Bearer => headers.push(("authorization".into(), format!("Bearer {secret}"))),
             AuthKind::Basic => {
@@ -177,17 +193,18 @@ fn fetch_secret(key: &str) -> Result<String, String> {
 }
 
 /// Build and send the outgoing request with `wstd`, returning the response body on a 2xx
-/// status. The generated guest exports are synchronous, so the async `wstd` client is driven
-/// to completion on a local reactor via `wstd::runtime::block_on`.
+/// status and a structured [`DispatchError`] otherwise. The generated guest exports are
+/// synchronous, so the async `wstd` client is driven to completion on a local reactor via
+/// `wstd::runtime::block_on`.
 fn perform(
     method: &str,
     path_with_query: &str,
     headers: &[(String, String)],
     body: &[u8],
-) -> Result<String, String> {
+) -> Result<String, DispatchError> {
     let url = join_url(crate::BASE_URL, path_with_query);
     let method = Method::from_bytes(method.as_bytes())
-        .map_err(|err| format!("invalid HTTP method `{method}`: {err}"))?;
+        .map_err(|err| DispatchError::Transport(format!("invalid HTTP method `{method}`: {err}")))?;
 
     let mut builder = Request::builder().method(method).uri(url);
     for (name, value) in headers {
@@ -199,27 +216,29 @@ fn perform(
         } else {
             Body::from(body.to_vec())
         })
-        .map_err(|err| format!("failed to build request: {err}"))?;
+        .map_err(|err| DispatchError::Transport(format!("failed to build request: {err}")))?;
 
     wstd::runtime::block_on(async move {
         let client = Client::new();
         let response = client
             .send(request)
             .await
-            .map_err(|err| format!("request failed: {err:#}"))?;
+            .map_err(|err| DispatchError::Transport(format!("request failed: {err:#}")))?;
 
         let status = response.status().as_u16();
         let mut response_body = response.into_body();
-        let bytes = response_body
-            .contents()
-            .await
-            .map_err(|err| format!("failed to read response body: {err:#}"))?;
+        let bytes = response_body.contents().await.map_err(|err| {
+            DispatchError::Transport(format!("failed to read response body: {err:#}"))
+        })?;
         let body_text = String::from_utf8_lossy(bytes).into_owned();
 
         if (200..300).contains(&status) {
             Ok(body_text)
         } else {
-            Err(format!("HTTP {status}: {body_text}"))
+            Err(DispatchError::Http {
+                status,
+                body: body_text,
+            })
         }
     })
 }
@@ -279,200 +298,8 @@ fn base64(input: &[u8]) -> String {
 }
 }
 
-use crate::runtime::{dispatch, AuthApply, AuthKind, FieldLocation, FieldSpec, OpSpec};
-use serde_json::{Map, Value};
-
-use crate::exports::autostamp::docker::discovery as iface_discovery;
-
-const OP_DISCOVERY_GET_NAMESPACES: OpSpec = OpSpec {
-    method: "GET",
-    path_template: "/",
-    fields: &[
-    ],
-    auth: &[
-        AuthApply { secret_key: "HubAuth", kind: AuthKind::Bearer },
-    ],
-};
-
-const OP_DISCOVERY_GET_NAMESPACE: OpSpec = OpSpec {
-    method: "GET",
-    path_template: "/namespaces/{namespace}",
-    fields: &[
-        FieldSpec { snake: "namespace", location: FieldLocation::Path },
-    ],
-    auth: &[
-        AuthApply { secret_key: "HubAuth", kind: AuthKind::Bearer },
-    ],
-};
-
-fn iface_discovery__get_namespace_params__to_json(p: &iface_discovery::GetNamespaceParams) -> Value {
-    let mut m = Map::new();
-    m.insert("namespace".into(), Value::String((&p.namespace).clone()));
-    Value::Object(m)
-}
-
-impl iface_discovery::Guest for crate::Component {
-    fn get_namespaces() -> Result<String, String> {
-        dispatch(&OP_DISCOVERY_GET_NAMESPACES, Value::Object(Map::new()))
-    }
-    fn get_namespace(params: iface_discovery::GetNamespaceParams) -> Result<String, String> {
-        let json = iface_discovery__get_namespace_params__to_json(&params);
-        dispatch(&OP_DISCOVERY_GET_NAMESPACE, json)
-    }
-}
-use crate::exports::autostamp::docker::namespaces as iface_namespaces;
-
-const OP_NAMESPACES_GET_NAMESPACE_YEARS: OpSpec = OpSpec {
-    method: "GET",
-    path_template: "/namespaces/{namespace}/pulls/exports/years",
-    fields: &[
-        FieldSpec { snake: "namespace", location: FieldLocation::Path },
-    ],
-    auth: &[
-        AuthApply { secret_key: "HubAuth", kind: AuthKind::Bearer },
-    ],
-};
-
-const OP_NAMESPACES_GET_NAMESPACE_TIMESPANS: OpSpec = OpSpec {
-    method: "GET",
-    path_template: "/namespaces/{namespace}/pulls/exports/years/{year}/{timespantype}",
-    fields: &[
-        FieldSpec { snake: "namespace", location: FieldLocation::Path },
-        FieldSpec { snake: "year", location: FieldLocation::Path },
-        FieldSpec { snake: "timespantype", location: FieldLocation::Path },
-    ],
-    auth: &[
-        AuthApply { secret_key: "HubAuth", kind: AuthKind::Bearer },
-    ],
-};
-
-const OP_NAMESPACES_GET_NAMESPACE_TIMESPAN_METADATA: OpSpec = OpSpec {
-    method: "GET",
-    path_template: "/namespaces/{namespace}/pulls/exports/years/{year}/{timespantype}/{timespan}",
-    fields: &[
-        FieldSpec { snake: "namespace", location: FieldLocation::Path },
-        FieldSpec { snake: "year", location: FieldLocation::Path },
-        FieldSpec { snake: "timespantype", location: FieldLocation::Path },
-        FieldSpec { snake: "timespan", location: FieldLocation::Path },
-    ],
-    auth: &[
-        AuthApply { secret_key: "HubAuth", kind: AuthKind::Bearer },
-    ],
-};
-
-const OP_NAMESPACES_GET_NAMESPACE_DATA_BY_TIMESPAN: OpSpec = OpSpec {
-    method: "GET",
-    path_template: "/namespaces/{namespace}/pulls/exports/years/{year}/{timespantype}/{timespan}/{dataview}",
-    fields: &[
-        FieldSpec { snake: "namespace", location: FieldLocation::Path },
-        FieldSpec { snake: "year", location: FieldLocation::Path },
-        FieldSpec { snake: "timespantype", location: FieldLocation::Path },
-        FieldSpec { snake: "timespan", location: FieldLocation::Path },
-        FieldSpec { snake: "dataview", location: FieldLocation::Path },
-    ],
-    auth: &[
-        AuthApply { secret_key: "HubAuth", kind: AuthKind::Bearer },
-    ],
-};
-
-fn iface_namespaces__get_namespace_years_params__to_json(p: &iface_namespaces::GetNamespaceYearsParams) -> Value {
-    let mut m = Map::new();
-    m.insert("namespace".into(), Value::String((&p.namespace).clone()));
-    Value::Object(m)
-}
-
-fn iface_namespaces__get_namespace_timespans_params__to_json(p: &iface_namespaces::GetNamespaceTimespansParams) -> Value {
-    let mut m = Map::new();
-    m.insert("namespace".into(), Value::String((&p.namespace).clone()));
-    m.insert("year".into(), Value::String((&p.year).clone()));
-    m.insert("timespantype".into(), Value::String((&p.timespantype).clone()));
-    Value::Object(m)
-}
-
-fn iface_namespaces__get_namespace_timespan_metadata_params__to_json(p: &iface_namespaces::GetNamespaceTimespanMetadataParams) -> Value {
-    let mut m = Map::new();
-    m.insert("namespace".into(), Value::String((&p.namespace).clone()));
-    m.insert("year".into(), Value::String((&p.year).clone()));
-    m.insert("timespantype".into(), Value::String((&p.timespantype).clone()));
-    m.insert("timespan".into(), Value::String((&p.timespan).clone()));
-    Value::Object(m)
-}
-
-fn iface_namespaces__get_namespace_data_by_timespan_params__to_json(p: &iface_namespaces::GetNamespaceDataByTimespanParams) -> Value {
-    let mut m = Map::new();
-    m.insert("namespace".into(), Value::String((&p.namespace).clone()));
-    m.insert("year".into(), Value::String((&p.year).clone()));
-    m.insert("timespantype".into(), Value::String((&p.timespantype).clone()));
-    m.insert("timespan".into(), Value::String((&p.timespan).clone()));
-    m.insert("dataview".into(), Value::String((&p.dataview).clone()));
-    Value::Object(m)
-}
-
-impl iface_namespaces::Guest for crate::Component {
-    fn get_namespace_years(params: iface_namespaces::GetNamespaceYearsParams) -> Result<String, String> {
-        let json = iface_namespaces__get_namespace_years_params__to_json(&params);
-        dispatch(&OP_NAMESPACES_GET_NAMESPACE_YEARS, json)
-    }
-    fn get_namespace_timespans(params: iface_namespaces::GetNamespaceTimespansParams) -> Result<String, String> {
-        let json = iface_namespaces__get_namespace_timespans_params__to_json(&params);
-        dispatch(&OP_NAMESPACES_GET_NAMESPACE_TIMESPANS, json)
-    }
-    fn get_namespace_timespan_metadata(params: iface_namespaces::GetNamespaceTimespanMetadataParams) -> Result<String, String> {
-        let json = iface_namespaces__get_namespace_timespan_metadata_params__to_json(&params);
-        dispatch(&OP_NAMESPACES_GET_NAMESPACE_TIMESPAN_METADATA, json)
-    }
-    fn get_namespace_data_by_timespan(params: iface_namespaces::GetNamespaceDataByTimespanParams) -> Result<String, String> {
-        let json = iface_namespaces__get_namespace_data_by_timespan_params__to_json(&params);
-        dispatch(&OP_NAMESPACES_GET_NAMESPACE_DATA_BY_TIMESPAN, json)
-    }
-}
-use crate::exports::autostamp::docker::authentication as iface_authentication;
-
-const OP_AUTHENTICATION_POST_USERS2_FA_LOGIN: OpSpec = OpSpec {
-    method: "POST",
-    path_template: "/v2/users/2fa-login",
-    fields: &[
-        FieldSpec { snake: "code", location: FieldLocation::Body },
-        FieldSpec { snake: "login_2fa_token", location: FieldLocation::Body },
-    ],
-    auth: &[
-    ],
-};
-
-const OP_AUTHENTICATION_POST_USERS_LOGIN: OpSpec = OpSpec {
-    method: "POST",
-    path_template: "/v2/users/login",
-    fields: &[
-        FieldSpec { snake: "password", location: FieldLocation::Body },
-        FieldSpec { snake: "username", location: FieldLocation::Body },
-    ],
-    auth: &[
-    ],
-};
-
-fn iface_authentication__post_users2_fa_login_params__to_json(p: &iface_authentication::PostUsers2FaLoginParams) -> Value {
-    let mut m = Map::new();
-    m.insert("code".into(), Value::String((&p.code).clone()));
-    m.insert("login_2fa_token".into(), Value::String((&p.login_v2fa_token).clone()));
-    Value::Object(m)
-}
-
-fn iface_authentication__post_users_login_params__to_json(p: &iface_authentication::PostUsersLoginParams) -> Value {
-    let mut m = Map::new();
-    m.insert("password".into(), Value::String((&p.password).clone()));
-    m.insert("username".into(), Value::String((&p.username).clone()));
-    Value::Object(m)
-}
-
-impl iface_authentication::Guest for crate::Component {
-    fn post_users2_fa_login(params: iface_authentication::PostUsers2FaLoginParams) -> Result<String, String> {
-        let json = iface_authentication__post_users2_fa_login_params__to_json(&params);
-        dispatch(&OP_AUTHENTICATION_POST_USERS2_FA_LOGIN, json)
-    }
-    fn post_users_login(params: iface_authentication::PostUsersLoginParams) -> Result<String, String> {
-        let json = iface_authentication__post_users_login_params__to_json(&params);
-        dispatch(&OP_AUTHENTICATION_POST_USERS_LOGIN, json)
-    }
-}
+mod iface_discovery;
+mod iface_namespaces;
+mod iface_authentication;
 
 export!(Component);

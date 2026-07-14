@@ -21,8 +21,8 @@ triggered.
 
 | Setting | Value |
 | --- | --- |
-| Package | `autostamp:twitter@0.3.0` |
-| Published version | `0.3.0+twitter-2.62` |
+| Package | `autostamp:twitter@0.5.0` |
+| Published version | `0.5.0+twitter-2.62` |
 | Tag filter | all tags |
 | Operations generated | 80 |
 | Infer API-key credentials | enabled — not triggered |

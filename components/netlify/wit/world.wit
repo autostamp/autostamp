@@ -1,4 +1,4 @@
-package autostamp:netlify@0.3.0;
+package autostamp:netlify@0.5.0;
 
 interface account-membership {
   enum account-setup-period-enum {
@@ -6,7 +6,36 @@ interface account-membership {
     yearly,
   }
 
-  list-accounts-for-user: func() -> result<string, string>;
+  record account-membership {
+    billing-details: option<string>,
+    billing-email: option<string>,
+    billing-name: option<string>,
+    billing-period: option<string>,
+    capabilities: option<account-membership-capabilities>,
+    created-at: option<string>,
+    id: option<string>,
+    name: option<string>,
+    owner-ids: option<list<string>>,
+    payment-method-id: option<string>,
+    roles-allowed: option<list<string>>,
+    slug: option<string>,
+    type-op: option<string>,
+    type-id: option<string>,
+    type-name: option<string>,
+    updated-at: option<string>
+  }
+
+  record account-membership-capabilities {
+    collaborators: option<account-usage-capability>,
+    sites: option<account-usage-capability>
+  }
+
+  record account-usage-capability {
+    included: option<s32>,
+    used: option<s32>
+  }
+
+  list-accounts-for-user: func() -> result<list<account-membership>, string>;
 
   record create-account-params {
     extra-seats-block: option<s32>,
@@ -15,11 +44,15 @@ interface account-membership {
     period: option<account-setup-period-enum>,
     type-id: string
   }
-  create-account: func(params: create-account-params) -> result<string, string>;
+  create-account: func(params: create-account-params) -> result<account-membership, string>;
 
-  get-account: func() -> result<string, string>;
+  record get-account-params {
+    account-id: string
+  }
+  get-account: func(params: get-account-params) -> result<list<account-membership>, string>;
 
   record update-account-params {
+    account-id: string,
     billing-details: option<string>,
     billing-email: option<string>,
     billing-name: option<string>,
@@ -28,26 +61,61 @@ interface account-membership {
     slug: option<string>,
     type-id: option<string>
   }
-  update-account: func(params: update-account-params) -> result<string, string>;
+  update-account: func(params: update-account-params) -> result<account-membership, string>;
 
-  cancel-account: func() -> result<string, string>;
+  record cancel-account-params {
+    account-id: string
+  }
+  cancel-account: func(params: cancel-account-params) -> result<string, string>;
 
 }
 
 
 interface account-type {
-  list-account-types-for-user: func() -> result<string, string>;
+  record account-type {
+    capabilities: option<account-type-capabilities>,
+    description: option<string>,
+    id: option<string>,
+    monthly-dollar-price: option<s32>,
+    monthly-seats-addon-dollar-price: option<s32>,
+    name: option<string>,
+    yearly-dollar-price: option<s32>,
+    yearly-seats-addon-dollar-price: option<s32>
+  }
+
+  record account-type-capabilities {
+    /// JSON-encoded free-form object payload
+    data: option<string>
+  }
+
+  list-account-types-for-user: func() -> result<list<account-type>, string>;
 
 }
 
 interface audit-log {
+  record audit-log {
+    account-id: option<string>,
+    id: option<string>,
+    payload: option<audit-log-payload>
+  }
+
+  record audit-log-payload {
+    action: option<string>,
+    actor-email: option<string>,
+    actor-id: option<string>,
+    actor-name: option<string>,
+    log-type: option<string>,
+    timestamp: option<string>
+  }
+
   record list-account-audit-events-params {
+    account-id: string,
     query: option<string>,
     log-type: option<string>,
     page: option<s32>,
     per-page: option<s32>
   }
-  list-account-audit-events: func(params: list-account-audit-events-params) -> result<string, string>;
+  list-account-audit-events: func(params: list-account-audit-events-params) -> result<list<audit-log>, string>;
 
 }
 
@@ -74,12 +142,28 @@ interface environment-variables {
     production,
   }
 
-  record create-env-vars-body-item {
-    /// The existing or new name of the key, if you wish to rename it (case-sensitive)
+  /// Environment variable model definition
+  record env-var {
+    /// The environment variable key, like ALGOLIA_ID (case-sensitive)
     key: option<string>,
-    /// The scopes that this environment variable is set to (Pro plans and above)
+    /// The scopes that this environment variable is set to
     scopes: option<list<get-env-vars-scope-enum>>,
+    /// The timestamp of when the value was last updated
+    updated-at: option<string>,
+    updated-by: option<env-var-user>,
+    /// An array of Value objects containing values and metadata
     values: option<list<env-var-value>>
+  }
+
+  record env-var-user {
+    /// A URL pointing to the user's avatar
+    avatar-url: option<string>,
+    /// The user's email address
+    email: option<string>,
+    /// The user's full name (first and last)
+    full-name: option<string>,
+    /// The user's unique identifier
+    id: option<string>
   }
 
   /// Environment variable value model definition
@@ -92,6 +176,14 @@ interface environment-variables {
     value: option<string>
   }
 
+  record create-env-vars-body-item {
+    /// The existing or new name of the key, if you wish to rename it (case-sensitive)
+    key: option<string>,
+    /// The scopes that this environment variable is set to (Pro plans and above)
+    scopes: option<list<get-env-vars-scope-enum>>,
+    values: option<list<env-var-value>>
+  }
+
   record get-env-vars-params {
     /// Scope response to account_id
     account-id: string,
@@ -102,7 +194,7 @@ interface environment-variables {
     /// If specified, only return environment variables set on this site
     site-id: option<string>
   }
-  get-env-vars: func(params: get-env-vars-params) -> result<string, string>;
+  get-env-vars: func(params: get-env-vars-params) -> result<list<env-var>, string>;
 
   record create-env-vars-params {
     /// Scope response to account_id
@@ -111,7 +203,7 @@ interface environment-variables {
     site-id: option<string>,
     body: option<list<create-env-vars-body-item>>
   }
-  create-env-vars: func(params: create-env-vars-params) -> result<string, string>;
+  create-env-vars: func(params: create-env-vars-params) -> result<list<env-var>, string>;
 
   record get-env-var-params {
     /// Scope response to account_id
@@ -121,7 +213,7 @@ interface environment-variables {
     /// If provided, return the environment variable for a specific site (no merging is performed)
     site-id: option<string>
   }
-  get-env-var: func(params: get-env-var-params) -> result<string, string>;
+  get-env-var: func(params: get-env-var-params) -> result<env-var, string>;
 
   record update-env-var-params {
     /// Scope response to account_id
@@ -130,11 +222,13 @@ interface environment-variables {
     key: string,
     /// If provided, update an environment variable set on this site
     site-id: option<string>,
+    /// The existing or new name of the key, if you wish to rename it (case-sensitive)
+    key-v2: option<string>,
     /// The scopes that this environment variable is set to (Pro plans and above)
     scopes: option<list<get-env-vars-scope-enum>>,
     values: option<list<env-var-value>>
   }
-  update-env-var: func(params: update-env-var-params) -> result<string, string>;
+  update-env-var: func(params: update-env-var-params) -> result<env-var, string>;
 
   record set-env-var-value-params {
     /// Scope response to account_id
@@ -148,7 +242,7 @@ interface environment-variables {
     /// The environment variable's unencrypted value
     value: option<string>
   }
-  set-env-var-value: func(params: set-env-var-value-params) -> result<string, string>;
+  set-env-var-value: func(params: set-env-var-value-params) -> result<env-var, string>;
 
   record delete-env-var-params {
     /// Scope response to account_id
@@ -175,56 +269,181 @@ interface environment-variables {
 }
 
 interface payment-method {
-  list-payment-methods-for-user: func() -> result<string, string>;
+  record payment-method {
+    created-at: option<string>,
+    data: option<payment-method-data>,
+    id: option<string>,
+    method-name: option<string>,
+    state: option<string>,
+    type-op: option<string>,
+    updated-at: option<string>
+  }
+
+  record payment-method-data {
+    card-type: option<string>,
+    email: option<string>,
+    last4: option<string>
+  }
+
+  list-payment-methods-for-user: func() -> result<list<payment-method>, string>;
 
 }
 
 interface build {
-  get-site-build: func() -> result<string, string>;
+  record build {
+    created-at: option<string>,
+    deploy-id: option<string>,
+    done: option<bool>,
+    error: option<string>,
+    id: option<string>,
+    sha: option<string>
+  }
 
-  notify-build-start: func() -> result<string, string>;
+  record status {
+    active: option<s32>,
+    build-count: option<s32>,
+    enqueued: option<s32>,
+    minutes: option<status-minutes>,
+    pending-concurrency: option<s32>
+  }
+
+  record status-minutes {
+    current: option<s32>,
+    current-average-sec: option<s32>,
+    included-minutes: option<string>,
+    included-minutes-with-packs: option<string>,
+    last-updated-at: option<string>,
+    period-end-date: option<string>,
+    period-start-date: option<string>,
+    previous: option<s32>
+  }
+
+  record get-site-build-params {
+    build-id: string
+  }
+  get-site-build: func(params: get-site-build-params) -> result<build, string>;
+
+  record notify-build-start-params {
+    build-id: string
+  }
+  notify-build-start: func(params: notify-build-start-params) -> result<string, string>;
 
   record list-site-builds-params {
+    site-id: string,
     page: option<s32>,
     per-page: option<s32>
   }
-  list-site-builds: func(params: list-site-builds-params) -> result<string, string>;
+  list-site-builds: func(params: list-site-builds-params) -> result<list<build>, string>;
 
   record create-site-build-params {
+    site-id: string,
     clear-cache: option<bool>,
     image: option<string>
   }
-  create-site-build: func(params: create-site-build-params) -> result<string, string>;
+  create-site-build: func(params: create-site-build-params) -> result<build, string>;
 
-  get-account-build-status: func() -> result<string, string>;
+  record get-account-build-status-params {
+    account-id: string
+  }
+  get-account-build-status: func(params: get-account-build-status-params) -> result<list<status>, string>;
 
 }
 
 interface build-log-msg {
-  update-site-build-log: func() -> result<string, string>;
+  record update-site-build-log-params {
+    build-id: string
+  }
+  update-site-build-log: func(params: update-site-build-log-params) -> result<string, string>;
 
 }
 
 interface deploy-key {
-  list-deploy-keys: func() -> result<string, string>;
+  record deploy-key {
+    created-at: option<string>,
+    id: option<string>,
+    public-key: option<string>
+  }
 
-  create-deploy-key: func() -> result<string, string>;
+  list-deploy-keys: func() -> result<list<deploy-key>, string>;
 
-  get-deploy-key: func() -> result<string, string>;
+  create-deploy-key: func() -> result<deploy-key, string>;
 
-  delete-deploy-key: func() -> result<string, string>;
+  record get-deploy-key-params {
+    key-id: string
+  }
+  get-deploy-key: func(params: get-deploy-key-params) -> result<deploy-key, string>;
+
+  record delete-deploy-key-params {
+    key-id: string
+  }
+  delete-deploy-key: func(params: delete-deploy-key-params) -> result<string, string>;
 
 }
 
 interface deploy {
-  record files-files {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  enum list-site-deploys-state-enum {
+    new,
+    pending-review,
+    accepted,
+    rejected,
+    enqueued,
+    building,
+    uploading,
+    uploaded,
+    preparing,
+    prepared,
+    processing,
+    ready,
+    error,
+    retrying,
+  }
+
+  record deploy {
+    admin-url: option<string>,
+    branch: option<string>,
+    build-id: option<string>,
+    commit-ref: option<string>,
+    commit-url: option<string>,
+    context: option<string>,
+    created-at: option<string>,
+    deploy-ssl-url: option<string>,
+    deploy-url: option<string>,
+    draft: option<bool>,
+    error-message: option<string>,
+    framework: option<string>,
+    function-schedules: option<list<function-schedule>>,
+    id: option<string>,
+    locked: option<bool>,
+    name: option<string>,
+    published-at: option<string>,
+    required: option<list<string>>,
+    required-functions: option<list<string>>,
+    review-id: option<f64>,
+    review-url: option<string>,
+    screenshot-url: option<string>,
+    site-capabilities: option<deploy-site-capabilities>,
+    site-id: option<string>,
+    skipped: option<bool>,
+    ssl-url: option<string>,
+    state: option<string>,
+    title: option<string>,
+    updated-at: option<string>,
+    url: option<string>,
+    user-id: option<string>
   }
 
   record function-schedule {
     cron: option<string>,
     name: option<string>
+  }
+
+  record deploy-site-capabilities {
+    large-media-enabled: option<bool>
+  }
+
+  record files-files {
+    /// JSON-encoded free-form object payload
+    data: option<string>
   }
 
   record files-functions {
@@ -240,7 +459,7 @@ interface deploy {
   record get-deploy-params {
     deploy-id: string
   }
-  get-deploy: func(params: get-deploy-params) -> result<string, string>;
+  get-deploy: func(params: get-deploy-params) -> result<deploy, string>;
 
   record delete-deploy-params {
     deploy-id: string
@@ -250,28 +469,40 @@ interface deploy {
   record cancel-site-deploy-params {
     deploy-id: string
   }
-  cancel-site-deploy: func(params: cancel-site-deploy-params) -> result<string, string>;
+  cancel-site-deploy: func(params: cancel-site-deploy-params) -> result<deploy, string>;
 
   record lock-deploy-params {
     deploy-id: string
   }
-  lock-deploy: func(params: lock-deploy-params) -> result<string, string>;
+  lock-deploy: func(params: lock-deploy-params) -> result<deploy, string>;
 
   record unlock-deploy-params {
     deploy-id: string
   }
-  unlock-deploy: func(params: unlock-deploy-params) -> result<string, string>;
+  unlock-deploy: func(params: unlock-deploy-params) -> result<deploy, string>;
 
   record list-site-deploys-params {
+    site-id: string,
+    deploy-previews: option<bool>,
+    production: option<bool>,
+    state: option<list-site-deploys-state-enum>,
+    branch: option<string>,
+    latest-published: option<bool>,
     page: option<s32>,
     per-page: option<s32>
   }
-  list-site-deploys: func(params: list-site-deploys-params) -> result<string, string>;
+  list-site-deploys: func(params: list-site-deploys-params) -> result<list<deploy>, string>;
 
   record create-site-deploy-params {
+    site-id: string,
+    deploy-previews: option<bool>,
+    production: option<bool>,
+    state: option<list-site-deploys-state-enum>,
+    branch: option<string>,
+    latest-published: option<bool>,
     title: option<string>,
     async-op: option<bool>,
-    branch: option<string>,
+    branch-v2: option<string>,
     draft: option<bool>,
     files: option<files-files>,
     framework: option<string>,
@@ -279,13 +510,13 @@ interface deploy {
     functions: option<files-functions>,
     functions-config: option<files-functions-config>
   }
-  create-site-deploy: func(params: create-site-deploy-params) -> result<string, string>;
+  create-site-deploy: func(params: create-site-deploy-params) -> result<deploy, string>;
 
   record get-site-deploy-params {
     site-id: string,
     deploy-id: string
   }
-  get-site-deploy: func(params: get-site-deploy-params) -> result<string, string>;
+  get-site-deploy: func(params: get-site-deploy-params) -> result<deploy, string>;
 
   record update-site-deploy-params {
     site-id: string,
@@ -299,7 +530,7 @@ interface deploy {
     functions: option<files-functions>,
     functions-config: option<files-functions-config>
   }
-  update-site-deploy: func(params: update-site-deploy-params) -> result<string, string>;
+  update-site-deploy: func(params: update-site-deploy-params) -> result<deploy, string>;
 
   record delete-site-deploy-params {
     deploy-id: string,
@@ -311,35 +542,52 @@ interface deploy {
     site-id: string,
     deploy-id: string
   }
-  restore-site-deploy: func(params: restore-site-deploy-params) -> result<string, string>;
+  restore-site-deploy: func(params: restore-site-deploy-params) -> result<deploy, string>;
 
-  rollback-site-deploy: func() -> result<string, string>;
+  record rollback-site-deploy-params {
+    site-id: string
+  }
+  rollback-site-deploy: func(params: rollback-site-deploy-params) -> result<string, string>;
 
 }
 
 interface file {
+  record file {
+    id: option<string>,
+    mime-type: option<string>,
+    path: option<string>,
+    sha: option<string>,
+    size: option<s64>
+  }
+
   record upload-deploy-file-params {
     deploy-id: string,
     path: string,
     size: option<s32>,
     body: string
   }
-  upload-deploy-file: func(params: upload-deploy-file-params) -> result<string, string>;
+  upload-deploy-file: func(params: upload-deploy-file-params) -> result<file, string>;
 
   record list-site-files-params {
     site-id: string
   }
-  list-site-files: func(params: list-site-files-params) -> result<string, string>;
+  list-site-files: func(params: list-site-files-params) -> result<list<file>, string>;
 
   record get-site-file-by-path-name-params {
     site-id: string,
     file-path: string
   }
-  get-site-file-by-path-name: func(params: get-site-file-by-path-name-params) -> result<string, string>;
+  get-site-file-by-path-name: func(params: get-site-file-by-path-name-params) -> result<file, string>;
 
 }
 
 interface function {
+  record function {
+    id: option<string>,
+    name: option<string>,
+    sha: option<string>
+  }
+
   record upload-deploy-function-params {
     deploy-id: string,
     name: string,
@@ -348,11 +596,27 @@ interface function {
     x-nf-retry-count: option<s32>,
     body: string
   }
-  upload-deploy-function: func(params: upload-deploy-function-params) -> result<string, string>;
+  upload-deploy-function: func(params: upload-deploy-function-params) -> result<function, string>;
 
 }
 
 interface x-internal {
+  record plugin-run {
+    package-op: option<string>,
+    reporting-event: option<string>,
+    state: option<string>,
+    summary: option<string>,
+    text: option<string>,
+    title: option<string>,
+    version: option<string>,
+    deploy-id: option<string>
+  }
+
+  record plugin {
+    package-op: option<string>,
+    pinned-version: option<string>
+  }
+
   record create-plugin-run-params {
     deploy-id: string,
     package-op: option<string>,
@@ -363,44 +627,97 @@ interface x-internal {
     title: option<string>,
     version: option<string>
   }
-  create-plugin-run: func(params: create-plugin-run-params) -> result<string, string>;
+  create-plugin-run: func(params: create-plugin-run-params) -> result<plugin-run, string>;
 
   record get-latest-plugin-runs-params {
     site-id: string,
     packages: list<string>,
     state: option<string>
   }
-  get-latest-plugin-runs: func(params: get-latest-plugin-runs-params) -> result<string, string>;
+  get-latest-plugin-runs: func(params: get-latest-plugin-runs-params) -> result<list<plugin-run>, string>;
 
   record update-plugin-params {
     site-id: string,
     package-op: string,
     pinned-version: option<string>
   }
-  update-plugin: func(params: update-plugin-params) -> result<string, string>;
+  update-plugin: func(params: update-plugin-params) -> result<plugin, string>;
 
 }
 
 interface dns-zone {
+  record dns-zones {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  record dns-zone {
+    account-id: option<string>,
+    account-name: option<string>,
+    account-slug: option<string>,
+    created-at: option<string>,
+    dedicated: option<bool>,
+    dns-servers: option<list<string>>,
+    domain: option<string>,
+    errors: option<list<string>>,
+    id: option<string>,
+    ipv6-enabled: option<bool>,
+    name: option<string>,
+    records: option<list<dns-record>>,
+    site-id: option<string>,
+    supported-record-types: option<list<string>>,
+    updated-at: option<string>,
+    user-id: option<string>
+  }
+
+  record dns-record {
+    dns-zone-id: option<string>,
+    flag: option<s32>,
+    hostname: option<string>,
+    id: option<string>,
+    managed: option<bool>,
+    priority: option<s64>,
+    site-id: option<string>,
+    tag: option<string>,
+    ttl: option<s64>,
+    type-op: option<string>,
+    value: option<string>
+  }
+
+  record dns-records {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
   record get-dns-zones-params {
     account-slug: option<string>
   }
-  get-dns-zones: func(params: get-dns-zones-params) -> result<string, string>;
+  get-dns-zones: func(params: get-dns-zones-params) -> result<dns-zones, string>;
 
   record create-dns-zone-params {
     account-slug: option<string>,
     name: option<string>,
     site-id: option<string>
   }
-  create-dns-zone: func(params: create-dns-zone-params) -> result<string, string>;
+  create-dns-zone: func(params: create-dns-zone-params) -> result<dns-zone, string>;
 
-  get-dns-zone: func() -> result<string, string>;
+  record get-dns-zone-params {
+    zone-id: string
+  }
+  get-dns-zone: func(params: get-dns-zone-params) -> result<dns-zone, string>;
 
-  delete-dns-zone: func() -> result<string, string>;
+  record delete-dns-zone-params {
+    zone-id: string
+  }
+  delete-dns-zone: func(params: delete-dns-zone-params) -> result<string, string>;
 
-  get-dns-records: func() -> result<string, string>;
+  record get-dns-records-params {
+    zone-id: string
+  }
+  get-dns-records: func(params: get-dns-records-params) -> result<dns-records, string>;
 
   record create-dns-record-params {
+    zone-id: string,
     flag: option<s64>,
     hostname: option<string>,
     port: option<s64>,
@@ -411,72 +728,95 @@ interface dns-zone {
     value: option<string>,
     weight: option<s64>
   }
-  create-dns-record: func(params: create-dns-record-params) -> result<string, string>;
+  create-dns-record: func(params: create-dns-record-params) -> result<dns-record, string>;
 
-  get-individual-dns-record: func() -> result<string, string>;
+  record get-individual-dns-record-params {
+    zone-id: string,
+    dns-record-id: string
+  }
+  get-individual-dns-record: func(params: get-individual-dns-record-params) -> result<dns-record, string>;
 
-  delete-dns-record: func() -> result<string, string>;
+  record delete-dns-record-params {
+    zone-id: string,
+    dns-record-id: string
+  }
+  delete-dns-record: func(params: delete-dns-record-params) -> result<string, string>;
 
-  transfer-dns-zone: func() -> result<string, string>;
+  record transfer-dns-zone-params {
+    zone-id: string,
+    /// the account of the dns zone
+    account-id: string,
+    /// the account you want to transfer the dns zone to
+    transfer-account-id: string,
+    /// the user you want to transfer the dns zone to
+    transfer-user-id: string
+  }
+  transfer-dns-zone: func(params: transfer-dns-zone-params) -> result<dns-zone, string>;
 
-  get-dns-for-site: func() -> result<string, string>;
+  record get-dns-for-site-params {
+    site-id: string
+  }
+  get-dns-for-site: func(params: get-dns-for-site-params) -> result<list<dns-zone>, string>;
 
-  configure-dns-for-site: func() -> result<string, string>;
+  record configure-dns-for-site-params {
+    site-id: string
+  }
+  configure-dns-for-site: func(params: configure-dns-for-site-params) -> result<list<dns-zone>, string>;
 
 }
 
 interface submission {
+  record submission {
+    body: option<string>,
+    company: option<string>,
+    created-at: option<string>,
+    data: option<submission-data>,
+    email: option<string>,
+    first-name: option<string>,
+    id: option<string>,
+    last-name: option<string>,
+    name: option<string>,
+    number: option<s32>,
+    site-url: option<string>,
+    summary: option<string>
+  }
+
+  record submission-data {
+    /// JSON-encoded free-form object payload
+    data: option<string>
+  }
+
   record list-form-submissions-params {
     form-id: string,
     page: option<s32>,
     per-page: option<s32>
   }
-  list-form-submissions: func(params: list-form-submissions-params) -> result<string, string>;
+  list-form-submissions: func(params: list-form-submissions-params) -> result<list<submission>, string>;
 
   record list-site-submissions-params {
     site-id: string,
     page: option<s32>,
     per-page: option<s32>
   }
-  list-site-submissions: func(params: list-site-submissions-params) -> result<string, string>;
+  list-site-submissions: func(params: list-site-submissions-params) -> result<list<submission>, string>;
 
   record list-form-submission-params {
+    submission-id: string,
     query: option<string>,
     page: option<s32>,
     per-page: option<s32>
   }
-  list-form-submission: func(params: list-form-submission-params) -> result<string, string>;
+  list-form-submission: func(params: list-form-submission-params) -> result<list<submission>, string>;
 
-  delete-submission: func() -> result<string, string>;
+  record delete-submission-params {
+    submission-id: string
+  }
+  delete-submission: func(params: delete-submission-params) -> result<string, string>;
 
 }
 
 interface hook {
-  record hook-data {
-    /// JSON-encoded free-form object payload
-    data: option<string>
-  }
-
-  record list-hooks-by-site-id-params {
-    site-id: string
-  }
-  list-hooks-by-site-id: func(params: list-hooks-by-site-id-params) -> result<string, string>;
-
-  record create-hook-by-site-id-params {
-    site-id: string,
-    created-at: option<string>,
-    data: option<hook-data>,
-    disabled: option<bool>,
-    event: option<string>,
-    id: option<string>,
-    type-op: option<string>,
-    updated-at: option<string>
-  }
-  create-hook-by-site-id: func(params: create-hook-by-site-id-params) -> result<string, string>;
-
-  get-hook: func() -> result<string, string>;
-
-  record update-hook-params {
+  record hook {
     created-at: option<string>,
     data: option<hook-data>,
     disabled: option<bool>,
@@ -486,46 +826,153 @@ interface hook {
     type-op: option<string>,
     updated-at: option<string>
   }
-  update-hook: func(params: update-hook-params) -> result<string, string>;
 
-  delete-hook: func() -> result<string, string>;
+  record hook-data {
+    /// JSON-encoded free-form object payload
+    data: option<string>
+  }
 
-  enable-hook: func() -> result<string, string>;
+  record list-hooks-by-site-id-params {
+    site-id: string
+  }
+  list-hooks-by-site-id: func(params: list-hooks-by-site-id-params) -> result<list<hook>, string>;
+
+  record create-hook-by-site-id-params {
+    site-id: string,
+    created-at: option<string>,
+    data: option<hook-data>,
+    disabled: option<bool>,
+    event: option<string>,
+    id: option<string>,
+    site-id-v2: option<string>,
+    type-op: option<string>,
+    updated-at: option<string>
+  }
+  create-hook-by-site-id: func(params: create-hook-by-site-id-params) -> result<hook, string>;
+
+  record get-hook-params {
+    hook-id: string
+  }
+  get-hook: func(params: get-hook-params) -> result<hook, string>;
+
+  record update-hook-params {
+    hook-id: string,
+    created-at: option<string>,
+    data: option<hook-data>,
+    disabled: option<bool>,
+    event: option<string>,
+    id: option<string>,
+    site-id: option<string>,
+    type-op: option<string>,
+    updated-at: option<string>
+  }
+  update-hook: func(params: update-hook-params) -> result<hook, string>;
+
+  record delete-hook-params {
+    hook-id: string
+  }
+  delete-hook: func(params: delete-hook-params) -> result<string, string>;
+
+  record enable-hook-params {
+    hook-id: string
+  }
+  enable-hook: func(params: enable-hook-params) -> result<hook, string>;
 
 }
 
 interface hook-type {
-  list-hook-types: func() -> result<string, string>;
+  record hook-type {
+    events: option<list<string>>,
+    fields: option<list<hook-type-fields-item>>,
+    name: option<string>
+  }
+
+  record hook-type-fields-item {
+    /// JSON-encoded free-form object payload
+    data: option<string>
+  }
+
+  list-hook-types: func() -> result<list<hook-type>, string>;
 
 }
 
 interface ticket {
+  record ticket {
+    authorized: option<bool>,
+    client-id: option<string>,
+    created-at: option<string>,
+    id: option<string>
+  }
+
   record create-ticket-params {
     client-id: string
   }
-  create-ticket: func(params: create-ticket-params) -> result<string, string>;
+  create-ticket: func(params: create-ticket-params) -> result<ticket, string>;
 
   record show-ticket-params {
     ticket-id: string
   }
-  show-ticket: func(params: show-ticket-params) -> result<string, string>;
+  show-ticket: func(params: show-ticket-params) -> result<ticket, string>;
 
 }
 
 interface access-token {
+  record access-token {
+    access-token: option<string>,
+    created-at: option<string>,
+    id: option<string>,
+    user-email: option<string>,
+    user-id: option<string>
+  }
+
   record exchange-ticket-params {
     ticket-id: string
   }
-  exchange-ticket: func(params: exchange-ticket-params) -> result<string, string>;
+  exchange-ticket: func(params: exchange-ticket-params) -> result<access-token, string>;
 
 }
 
 interface service {
-  get-services: func() -> result<string, string>;
+  record service {
+    created-at: option<string>,
+    description: option<string>,
+    environments: option<list<string>>,
+    events: option<list<service-events-item>>,
+    icon: option<string>,
+    id: option<string>,
+    long-description: option<string>,
+    manifest-url: option<string>,
+    name: option<string>,
+    service-path: option<string>,
+    slug: option<string>,
+    tags: option<list<string>>,
+    updated-at: option<string>
+  }
 
-  show-service: func() -> result<string, string>;
+  record service-events-item {
+    /// JSON-encoded free-form object payload
+    data: option<string>
+  }
 
-  show-service-manifest: func() -> result<string, string>;
+  record show-service-manifest-response {
+    /// JSON-encoded free-form object payload
+    data: option<string>
+  }
+
+  record get-services-params {
+    search: option<string>
+  }
+  get-services: func(params: get-services-params) -> result<list<service>, string>;
+
+  record show-service-params {
+    addon-name: string
+  }
+  show-service: func(params: show-service-params) -> result<service, string>;
+
+  record show-service-manifest-params {
+    addon-name: string
+  }
+  show-service-manifest: func(params: show-service-manifest-params) -> result<show-service-manifest-response, string>;
 
 }
 
@@ -536,32 +983,265 @@ interface site {
     guest,
   }
 
+  record site {
+    account-name: option<string>,
+    account-slug: option<string>,
+    admin-url: option<string>,
+    build-image: option<string>,
+    build-settings: option<repo-info>,
+    capabilities: option<site-capabilities>,
+    created-at: option<string>,
+    custom-domain: option<string>,
+    default-hooks-data: option<site-default-hooks-data>,
+    deploy-hook: option<string>,
+    deploy-url: option<string>,
+    domain-aliases: option<list<string>>,
+    force-ssl: option<bool>,
+    git-provider: option<string>,
+    id: option<string>,
+    id-domain: option<string>,
+    managed-dns: option<bool>,
+    name: option<string>,
+    notification-email: option<string>,
+    password: option<string>,
+    plan: option<string>,
+    prerender: option<string>,
+    processing-settings: option<site-processing-settings>,
+    published-deploy: option<deploy>,
+    screenshot-url: option<string>,
+    session-id: option<string>,
+    ssl: option<bool>,
+    ssl-url: option<string>,
+    state: option<string>,
+    updated-at: option<string>,
+    url: option<string>,
+    user-id: option<string>
+  }
+
+  record repo-info {
+    allowed-branches: option<list<string>>,
+    cmd: option<string>,
+    deploy-key-id: option<string>,
+    dir: option<string>,
+    env: option<repo-info-env>,
+    functions-dir: option<string>,
+    id: option<s32>,
+    installation-id: option<s32>,
+    private-logs: option<bool>,
+    provider: option<string>,
+    public-repo: option<bool>,
+    repo-branch: option<string>,
+    repo-path: option<string>,
+    repo-url: option<string>,
+    stop-builds: option<bool>
+  }
+
+  record repo-info-env {
+    /// JSON-encoded free-form object payload
+    data: option<string>
+  }
+
+  record site-capabilities {
+    /// JSON-encoded free-form object payload
+    data: option<string>
+  }
+
+  record site-default-hooks-data {
+    access-token: option<string>
+  }
+
+  record site-processing-settings {
+    css: option<minify-options>,
+    html: option<site-processing-settings-html>,
+    images: option<site-processing-settings-images>,
+    js: option<minify-options>,
+    skip: option<bool>
+  }
+
+  record minify-options {
+    bundle: option<bool>,
+    minify: option<bool>
+  }
+
+  record site-processing-settings-html {
+    pretty-urls: option<bool>
+  }
+
+  record site-processing-settings-images {
+    optimize: option<bool>
+  }
+
+  record deploy {
+    admin-url: option<string>,
+    branch: option<string>,
+    build-id: option<string>,
+    commit-ref: option<string>,
+    commit-url: option<string>,
+    context: option<string>,
+    created-at: option<string>,
+    deploy-ssl-url: option<string>,
+    deploy-url: option<string>,
+    draft: option<bool>,
+    error-message: option<string>,
+    framework: option<string>,
+    function-schedules: option<list<function-schedule>>,
+    id: option<string>,
+    locked: option<bool>,
+    name: option<string>,
+    published-at: option<string>,
+    required: option<list<string>>,
+    required-functions: option<list<string>>,
+    review-id: option<f64>,
+    review-url: option<string>,
+    screenshot-url: option<string>,
+    site-capabilities: option<deploy-site-capabilities>,
+    site-id: option<string>,
+    skipped: option<bool>,
+    ssl-url: option<string>,
+    state: option<string>,
+    title: option<string>,
+    updated-at: option<string>,
+    url: option<string>,
+    user-id: option<string>
+  }
+
+  record function-schedule {
+    cron: option<string>,
+    name: option<string>
+  }
+
+  record deploy-site-capabilities {
+    large-media-enabled: option<bool>
+  }
+
+  record setup-capabilities {
+    /// JSON-encoded free-form object payload
+    data: option<string>
+  }
+
+  record setup-default-hooks-data {
+    access-token: option<string>
+  }
+
+  record setup-processing-settings {
+    css: option<minify-options>,
+    html: option<setup-processing-settings-html>,
+    images: option<setup-processing-settings-images>,
+    js: option<minify-options>,
+    skip: option<bool>
+  }
+
+  record setup-processing-settings-html {
+    pretty-urls: option<bool>
+  }
+
+  record setup-processing-settings-images {
+    optimize: option<bool>
+  }
+
+  variant unlink-site-repo-error {
+    not-found(string),
+    other(string)
+  }
+
   record list-sites-params {
     name: option<string>,
     filter: option<list-sites-filter-enum>,
     page: option<s32>,
     per-page: option<s32>
   }
-  list-sites: func(params: list-sites-params) -> result<string, string>;
+  list-sites: func(params: list-sites-params) -> result<list<site>, string>;
 
   record create-site-params {
     configure-dns: option<bool>,
-    /// opaque schema; raw JSON
-    value: string
+    account-name: option<string>,
+    account-slug: option<string>,
+    admin-url: option<string>,
+    build-image: option<string>,
+    build-settings: option<repo-info>,
+    capabilities: option<setup-capabilities>,
+    created-at: option<string>,
+    custom-domain: option<string>,
+    default-hooks-data: option<setup-default-hooks-data>,
+    deploy-hook: option<string>,
+    deploy-url: option<string>,
+    domain-aliases: option<list<string>>,
+    force-ssl: option<bool>,
+    git-provider: option<string>,
+    id: option<string>,
+    id-domain: option<string>,
+    managed-dns: option<bool>,
+    name: option<string>,
+    notification-email: option<string>,
+    password: option<string>,
+    plan: option<string>,
+    prerender: option<string>,
+    processing-settings: option<setup-processing-settings>,
+    published-deploy: option<deploy>,
+    screenshot-url: option<string>,
+    session-id: option<string>,
+    ssl: option<bool>,
+    ssl-url: option<string>,
+    state: option<string>,
+    updated-at: option<string>,
+    url: option<string>,
+    user-id: option<string>,
+    repo: option<repo-info>
   }
-  create-site: func(params: create-site-params) -> result<string, string>;
+  create-site: func(params: create-site-params) -> result<site, string>;
 
-  get-site: func() -> result<string, string>;
+  record get-site-params {
+    site-id: string
+  }
+  get-site: func(params: get-site-params) -> result<site, string>;
 
   record update-site-params {
-    /// opaque schema; raw JSON
-    value: string
+    site-id: string,
+    account-name: option<string>,
+    account-slug: option<string>,
+    admin-url: option<string>,
+    build-image: option<string>,
+    build-settings: option<repo-info>,
+    capabilities: option<setup-capabilities>,
+    created-at: option<string>,
+    custom-domain: option<string>,
+    default-hooks-data: option<setup-default-hooks-data>,
+    deploy-hook: option<string>,
+    deploy-url: option<string>,
+    domain-aliases: option<list<string>>,
+    force-ssl: option<bool>,
+    git-provider: option<string>,
+    id: option<string>,
+    id-domain: option<string>,
+    managed-dns: option<bool>,
+    name: option<string>,
+    notification-email: option<string>,
+    password: option<string>,
+    plan: option<string>,
+    prerender: option<string>,
+    processing-settings: option<setup-processing-settings>,
+    published-deploy: option<deploy>,
+    screenshot-url: option<string>,
+    session-id: option<string>,
+    ssl: option<bool>,
+    ssl-url: option<string>,
+    state: option<string>,
+    updated-at: option<string>,
+    url: option<string>,
+    user-id: option<string>,
+    repo: option<repo-info>
   }
-  update-site: func(params: update-site-params) -> result<string, string>;
+  update-site: func(params: update-site-params) -> result<site, string>;
 
-  delete-site: func() -> result<string, string>;
+  record delete-site-params {
+    site-id: string
+  }
+  delete-site: func(params: delete-site-params) -> result<string, string>;
 
-  unlink-site-repo: func() -> result<string, string>;
+  record unlink-site-repo-params {
+    site-id: string
+  }
+  unlink-site-repo: func(params: unlink-site-repo-params) -> result<site, unlink-site-repo-error>;
 
   record list-sites-for-account-params {
     name: option<string>,
@@ -569,76 +1249,209 @@ interface site {
     page: option<s32>,
     per-page: option<s32>
   }
-  list-sites-for-account: func(params: list-sites-for-account-params) -> result<string, string>;
+  list-sites-for-account: func(params: list-sites-for-account-params) -> result<list<site>, string>;
 
   record create-site-in-team-params {
     configure-dns: option<bool>,
     account-slug: string,
-    /// opaque schema; raw JSON
-    value: string
+    account-name: option<string>,
+    account-slug-v2: option<string>,
+    admin-url: option<string>,
+    build-image: option<string>,
+    build-settings: option<repo-info>,
+    capabilities: option<setup-capabilities>,
+    created-at: option<string>,
+    custom-domain: option<string>,
+    default-hooks-data: option<setup-default-hooks-data>,
+    deploy-hook: option<string>,
+    deploy-url: option<string>,
+    domain-aliases: option<list<string>>,
+    force-ssl: option<bool>,
+    git-provider: option<string>,
+    id: option<string>,
+    id-domain: option<string>,
+    managed-dns: option<bool>,
+    name: option<string>,
+    notification-email: option<string>,
+    password: option<string>,
+    plan: option<string>,
+    prerender: option<string>,
+    processing-settings: option<setup-processing-settings>,
+    published-deploy: option<deploy>,
+    screenshot-url: option<string>,
+    session-id: option<string>,
+    ssl: option<bool>,
+    ssl-url: option<string>,
+    state: option<string>,
+    updated-at: option<string>,
+    url: option<string>,
+    user-id: option<string>,
+    repo: option<repo-info>
   }
-  create-site-in-team: func(params: create-site-in-team-params) -> result<string, string>;
+  create-site-in-team: func(params: create-site-in-team-params) -> result<site, string>;
 
 }
 
 interface asset {
-  list-site-assets: func() -> result<string, string>;
+  record asset {
+    content-type: option<string>,
+    created-at: option<string>,
+    creator-id: option<string>,
+    id: option<string>,
+    key: option<string>,
+    name: option<string>,
+    site-id: option<string>,
+    size: option<s64>,
+    state: option<string>,
+    updated-at: option<string>,
+    url: option<string>,
+    visibility: option<string>
+  }
+
+  record signature {
+    asset: option<asset>,
+    form: option<form>
+  }
+
+  record form {
+    fields: option<form-fields>,
+    url: option<string>
+  }
+
+  record form-fields {
+    /// JSON-encoded free-form object payload
+    data: option<string>
+  }
+
+  record list-site-assets-params {
+    site-id: string
+  }
+  list-site-assets: func(params: list-site-assets-params) -> result<list<asset>, string>;
 
   record create-site-asset-params {
+    site-id: string,
     name: string,
     size: s64,
     content-type: string,
     visibility: option<string>
   }
-  create-site-asset: func(params: create-site-asset-params) -> result<string, string>;
+  create-site-asset: func(params: create-site-asset-params) -> result<signature, string>;
 
-  get-site-asset-info: func() -> result<string, string>;
+  record get-site-asset-info-params {
+    site-id: string,
+    asset-id: string
+  }
+  get-site-asset-info: func(params: get-site-asset-info-params) -> result<asset, string>;
 
   record update-site-asset-params {
+    site-id: string,
+    asset-id: string,
     state: string
   }
-  update-site-asset: func(params: update-site-asset-params) -> result<string, string>;
+  update-site-asset: func(params: update-site-asset-params) -> result<asset, string>;
 
-  delete-site-asset: func() -> result<string, string>;
+  record delete-site-asset-params {
+    site-id: string,
+    asset-id: string
+  }
+  delete-site-asset: func(params: delete-site-asset-params) -> result<string, string>;
 
 }
 
 interface asset-public-signature {
-  get-site-asset-public-signature: func() -> result<string, string>;
+  record asset-public-signature {
+    url: option<string>
+  }
+
+  record get-site-asset-public-signature-params {
+    site-id: string,
+    asset-id: string
+  }
+  get-site-asset-public-signature: func(params: get-site-asset-public-signature-params) -> result<asset-public-signature, string>;
 
 }
 
 interface build-hook {
-  list-site-build-hooks: func() -> result<string, string>;
+  record build-hook {
+    branch: option<string>,
+    created-at: option<string>,
+    id: option<string>,
+    site-id: option<string>,
+    title: option<string>,
+    url: option<string>
+  }
+
+  record list-site-build-hooks-params {
+    site-id: string
+  }
+  list-site-build-hooks: func(params: list-site-build-hooks-params) -> result<list<build-hook>, string>;
 
   record create-site-build-hook-params {
+    site-id: string,
     branch: option<string>,
     title: option<string>
   }
-  create-site-build-hook: func(params: create-site-build-hook-params) -> result<string, string>;
+  create-site-build-hook: func(params: create-site-build-hook-params) -> result<build-hook, string>;
 
-  get-site-build-hook: func() -> result<string, string>;
+  record get-site-build-hook-params {
+    site-id: string,
+    id: string
+  }
+  get-site-build-hook: func(params: get-site-build-hook-params) -> result<build-hook, string>;
 
   record update-site-build-hook-params {
+    site-id: string,
+    id: string,
     branch: option<string>,
     title: option<string>
   }
   update-site-build-hook: func(params: update-site-build-hook-params) -> result<string, string>;
 
-  delete-site-build-hook: func() -> result<string, string>;
+  record delete-site-build-hook-params {
+    site-id: string,
+    id: string
+  }
+  delete-site-build-hook: func(params: delete-site-build-hook-params) -> result<string, string>;
 
 }
 
 interface deployed-branch {
-  list-site-deployed-branches: func() -> result<string, string>;
+  record deployed-branch {
+    deploy-id: option<string>,
+    id: option<string>,
+    name: option<string>,
+    slug: option<string>,
+    ssl-url: option<string>,
+    url: option<string>
+  }
+
+  record list-site-deployed-branches-params {
+    site-id: string
+  }
+  list-site-deployed-branches: func(params: list-site-deployed-branches-params) -> result<list<deployed-branch>, string>;
 
 }
 
 interface form {
+  record form {
+    created-at: option<string>,
+    fields: option<list<form-fields-item>>,
+    id: option<string>,
+    name: option<string>,
+    paths: option<list<string>>,
+    site-id: option<string>,
+    submission-count: option<s32>
+  }
+
+  record form-fields-item {
+    /// JSON-encoded free-form object payload
+    data: option<string>
+  }
+
   record list-site-forms-params {
     site-id: string
   }
-  list-site-forms: func(params: list-site-forms-params) -> result<string, string>;
+  list-site-forms: func(params: list-site-forms-params) -> result<list<form>, string>;
 
   record delete-site-form-params {
     site-id: string,
@@ -649,9 +1462,18 @@ interface form {
 }
 
 interface metadata {
-  get-site-metadata: func() -> result<string, string>;
+  record metadata {
+    /// JSON-encoded free-form object payload
+    data: option<string>
+  }
+
+  record get-site-metadata-params {
+    site-id: string
+  }
+  get-site-metadata: func(params: get-site-metadata-params) -> result<metadata, string>;
 
   record update-site-metadata-params {
+    site-id: string,
     /// JSON-encoded free-form object payload
     data: option<string>
   }
@@ -660,30 +1482,81 @@ interface metadata {
 }
 
 interface service-instance {
-  list-service-instances-for-site: func() -> result<string, string>;
+  record service-instance {
+    auth-url: option<string>,
+    config: option<service-instance-config>,
+    created-at: option<string>,
+    env: option<service-instance-env>,
+    external-attributes: option<service-instance-external-attributes>,
+    id: option<string>,
+    service-name: option<string>,
+    service-path: option<string>,
+    service-slug: option<string>,
+    snippets: option<list<service-instance-snippets-item>>,
+    updated-at: option<string>,
+    url: option<string>
+  }
 
-  record create-service-instance-params {
+  record service-instance-config {
     /// JSON-encoded free-form object payload
     data: option<string>
   }
-  create-service-instance: func(params: create-service-instance-params) -> result<string, string>;
 
-  show-service-instance: func() -> result<string, string>;
+  record service-instance-env {
+    /// JSON-encoded free-form object payload
+    data: option<string>
+  }
+
+  record service-instance-external-attributes {
+    /// JSON-encoded free-form object payload
+    data: option<string>
+  }
+
+  record service-instance-snippets-item {
+    /// JSON-encoded free-form object payload
+    data: option<string>
+  }
+
+  record list-service-instances-for-site-params {
+    site-id: string
+  }
+  list-service-instances-for-site: func(params: list-service-instances-for-site-params) -> result<list<service-instance>, string>;
+
+  record create-service-instance-params {
+    site-id: string,
+    addon: string,
+    /// JSON-encoded free-form object payload
+    data: option<string>
+  }
+  create-service-instance: func(params: create-service-instance-params) -> result<service-instance, string>;
+
+  record show-service-instance-params {
+    site-id: string,
+    addon: string,
+    instance-id: string
+  }
+  show-service-instance: func(params: show-service-instance-params) -> result<service-instance, string>;
 
   record update-service-instance-params {
+    site-id: string,
+    addon: string,
+    instance-id: string,
     /// JSON-encoded free-form object payload
     data: option<string>
   }
   update-service-instance: func(params: update-service-instance-params) -> result<string, string>;
 
-  delete-service-instance: func() -> result<string, string>;
+  record delete-service-instance-params {
+    site-id: string,
+    addon: string,
+    instance-id: string
+  }
+  delete-service-instance: func(params: delete-service-instance-params) -> result<string, string>;
 
 }
 
 interface snippet {
-  list-site-snippets: func() -> result<string, string>;
-
-  record create-site-snippet-params {
+  record snippet {
     general: option<string>,
     general-position: option<string>,
     goal: option<string>,
@@ -692,30 +1565,64 @@ interface snippet {
     site-id: option<string>,
     title: option<string>
   }
-  create-site-snippet: func(params: create-site-snippet-params) -> result<string, string>;
 
-  get-site-snippet: func() -> result<string, string>;
+  record list-site-snippets-params {
+    site-id: string
+  }
+  list-site-snippets: func(params: list-site-snippets-params) -> result<list<snippet>, string>;
 
-  record update-site-snippet-params {
+  record create-site-snippet-params {
+    site-id: string,
     general: option<string>,
     general-position: option<string>,
     goal: option<string>,
     goal-position: option<string>,
     id: option<s32>,
-    site-id: option<string>,
+    site-id-v2: option<string>,
+    title: option<string>
+  }
+  create-site-snippet: func(params: create-site-snippet-params) -> result<snippet, string>;
+
+  record get-site-snippet-params {
+    site-id: string,
+    snippet-id: string
+  }
+  get-site-snippet: func(params: get-site-snippet-params) -> result<snippet, string>;
+
+  record update-site-snippet-params {
+    site-id: string,
+    snippet-id: string,
+    general: option<string>,
+    general-position: option<string>,
+    goal: option<string>,
+    goal-position: option<string>,
+    id: option<s32>,
+    site-id-v2: option<string>,
     title: option<string>
   }
   update-site-snippet: func(params: update-site-snippet-params) -> result<string, string>;
 
-  delete-site-snippet: func() -> result<string, string>;
+  record delete-site-snippet-params {
+    site-id: string,
+    snippet-id: string
+  }
+  delete-site-snippet: func(params: delete-site-snippet-params) -> result<string, string>;
 
 }
 
 interface sni-certificate {
+  record sni-certificate {
+    created-at: option<string>,
+    domains: option<list<string>>,
+    expires-at: option<string>,
+    state: option<string>,
+    updated-at: option<string>
+  }
+
   record show-site-tls-certificate-params {
     site-id: string
   }
-  show-site-tls-certificate: func(params: show-site-tls-certificate-params) -> result<string, string>;
+  show-site-tls-certificate: func(params: show-site-tls-certificate-params) -> result<sni-certificate, string>;
 
   record provision-site-tls-certificate-params {
     site-id: string,
@@ -723,38 +1630,96 @@ interface sni-certificate {
     key: option<string>,
     ca-certificates: option<string>
   }
-  provision-site-tls-certificate: func(params: provision-site-tls-certificate-params) -> result<string, string>;
+  provision-site-tls-certificate: func(params: provision-site-tls-certificate-params) -> result<sni-certificate, string>;
 
 }
 
 interface split-test {
+  record split-tests {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
   record setup-branch-tests {
     /// JSON-encoded free-form object payload
     data: option<string>
   }
 
-  get-split-tests: func() -> result<string, string>;
+  record split-test {
+    active: option<bool>,
+    branches: option<list<split-test-branches-item>>,
+    created-at: option<string>,
+    id: option<string>,
+    name: option<string>,
+    path: option<string>,
+    site-id: option<string>,
+    unpublished-at: option<string>,
+    updated-at: option<string>
+  }
+
+  record split-test-branches-item {
+    /// JSON-encoded free-form object payload
+    data: option<string>
+  }
+
+  record get-split-tests-params {
+    site-id: string
+  }
+  get-split-tests: func(params: get-split-tests-params) -> result<split-tests, string>;
 
   record create-split-test-params {
+    site-id: string,
     branch-tests: option<setup-branch-tests>
   }
-  create-split-test: func(params: create-split-test-params) -> result<string, string>;
+  create-split-test: func(params: create-split-test-params) -> result<split-test, string>;
 
-  get-split-test: func() -> result<string, string>;
+  record get-split-test-params {
+    site-id: string,
+    split-test-id: string
+  }
+  get-split-test: func(params: get-split-test-params) -> result<split-test, string>;
 
   record update-split-test-params {
+    site-id: string,
+    split-test-id: string,
     branch-tests: option<setup-branch-tests>
   }
-  update-split-test: func(params: update-split-test-params) -> result<string, string>;
+  update-split-test: func(params: update-split-test-params) -> result<split-test, string>;
 
-  enable-split-test: func() -> result<string, string>;
+  record enable-split-test-params {
+    site-id: string,
+    split-test-id: string
+  }
+  enable-split-test: func(params: enable-split-test-params) -> result<string, string>;
 
-  disable-split-test: func() -> result<string, string>;
+  record disable-split-test-params {
+    site-id: string,
+    split-test-id: string
+  }
+  disable-split-test: func(params: disable-split-test-params) -> result<string, string>;
 
 }
 
 interface user {
-  get-current-user: func() -> result<string, string>;
+  record user {
+    affiliate-id: option<string>,
+    avatar-url: option<string>,
+    created-at: option<string>,
+    email: option<string>,
+    full-name: option<string>,
+    id: option<string>,
+    last-login: option<string>,
+    login-providers: option<list<string>>,
+    onboarding-progress: option<user-onboarding-progress>,
+    site-count: option<s64>,
+    uid: option<string>
+  }
+
+  record user-onboarding-progress {
+    slides: option<string>
+  }
+
+  get-current-user: func() -> result<list<user>, string>;
 
 }
 
@@ -771,24 +1736,46 @@ interface member {
     selected,
   }
 
-  list-members-for-account: func() -> result<string, string>;
+  record member {
+    avatar: option<string>,
+    email: option<string>,
+    full-name: option<string>,
+    id: option<string>,
+    role: option<string>
+  }
+
+  record list-members-for-account-params {
+    account-slug: string
+  }
+  list-members-for-account: func(params: list-members-for-account-params) -> result<list<member>, string>;
 
   record add-member-to-account-params {
+    account-slug: string,
     email: option<string>,
     role: option<account-add-member-setup-role-enum>
   }
-  add-member-to-account: func(params: add-member-to-account-params) -> result<string, string>;
+  add-member-to-account: func(params: add-member-to-account-params) -> result<list<member>, string>;
 
-  get-account-member: func() -> result<string, string>;
+  record get-account-member-params {
+    account-slug: string,
+    member-id: string
+  }
+  get-account-member: func(params: get-account-member-params) -> result<member, string>;
 
   record update-account-member-params {
+    account-slug: string,
+    member-id: string,
     role: option<account-add-member-setup-role-enum>,
     site-access: option<account-update-member-setup-site-access-enum>,
     site-ids: option<list<string>>
   }
-  update-account-member: func(params: update-account-member-params) -> result<string, string>;
+  update-account-member: func(params: update-account-member-params) -> result<member, string>;
 
-  remove-account-member: func() -> result<string, string>;
+  record remove-account-member-params {
+    account-slug: string,
+    member-id: string
+  }
+  remove-account-member: func(params: remove-account-member-params) -> result<string, string>;
 
 }
 /// The component world: imports the secrets host capability

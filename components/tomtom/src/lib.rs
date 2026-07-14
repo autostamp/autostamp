@@ -44,10 +44,15 @@ pub(crate) enum FieldLocation {
     Body,
 }
 
-/// A single operation parameter: the snake-case key it carries in the params JSON and where
-/// it belongs in the request.
+/// A single operation parameter. `snake` keys the field in the internal params JSON (and, for a
+/// path field, matches the `{snake}` placeholder in the path template); `wire` is the verbatim name
+/// the field takes on the HTTP wire (query key, header name, or body property). The two differ
+/// whenever the source name isn't already snake_case (e.g. `dryRun` → snake `dry_run`, wire
+/// `dryRun`), and let distinct inputs that share a snake key (`DateCreated`, `DateCreated<`) still
+/// travel under their true names.
 pub(crate) struct FieldSpec {
     pub(crate) snake: &'static str,
+    pub(crate) wire: &'static str,
     pub(crate) location: FieldLocation,
 }
 
@@ -71,6 +76,16 @@ pub(crate) struct AuthApply {
     pub(crate) kind: AuthKind,
 }
 
+/// The failure modes of [`dispatch`], kept structured so each generated operation can map them
+/// onto its own typed error: an `Http` failure carries the response status and body (routed to
+/// the matching error-variant case), while a `Transport` failure carries a message for the
+/// catch-all case (a secret lookup, connection, or decode failure that never produced an HTTP
+/// status).
+pub(crate) enum DispatchError {
+    Http { status: u16, body: String },
+    Transport(String),
+}
+
 /// A single API operation: HTTP method, path template (with `{snake}` placeholders), the
 /// parameter fields, and the security schemes to apply.
 pub(crate) struct OpSpec {
@@ -81,8 +96,9 @@ pub(crate) struct OpSpec {
 }
 
 /// Execute `op` with the supplied `params` (a JSON object keyed by snake-case field names)
-/// and return the response body as a string, or an error message.
-pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, String> {
+/// and return the raw 2xx response body, or a structured [`DispatchError`] the caller maps
+/// onto the operation's typed error.
+pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, DispatchError> {
     let obj = match &params {
         Value::Object(map) => Some(map),
         _ => None,
@@ -105,10 +121,10 @@ pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, String> {
                 let placeholder = format!("{{{}}}", field.snake);
                 path = path.replace(&placeholder, &percent_encode(&scalar(value)));
             }
-            FieldLocation::Query => query.push((field.snake.to_string(), scalar(value))),
-            FieldLocation::Header => headers.push((field.snake.to_string(), scalar(value))),
+            FieldLocation::Query => query.push((field.wire.to_string(), scalar(value))),
+            FieldLocation::Header => headers.push((field.wire.to_string(), scalar(value))),
             FieldLocation::Body => {
-                body.insert(field.snake.to_string(), value.clone());
+                body.insert(field.wire.to_string(), value.clone());
             }
         }
     }
@@ -116,7 +132,7 @@ pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, String> {
     // Apply each resolved security scheme, sourcing its value from wasmcloud:secrets.
     let mut cookies: Vec<String> = Vec::new();
     for apply in op.auth {
-        let secret = fetch_secret(apply.secret_key)?;
+        let secret = fetch_secret(apply.secret_key).map_err(DispatchError::Transport)?;
         match &apply.kind {
             AuthKind::Bearer => headers.push(("authorization".into(), format!("Bearer {secret}"))),
             AuthKind::Basic => {
@@ -177,17 +193,18 @@ fn fetch_secret(key: &str) -> Result<String, String> {
 }
 
 /// Build and send the outgoing request with `wstd`, returning the response body on a 2xx
-/// status. The generated guest exports are synchronous, so the async `wstd` client is driven
-/// to completion on a local reactor via `wstd::runtime::block_on`.
+/// status and a structured [`DispatchError`] otherwise. The generated guest exports are
+/// synchronous, so the async `wstd` client is driven to completion on a local reactor via
+/// `wstd::runtime::block_on`.
 fn perform(
     method: &str,
     path_with_query: &str,
     headers: &[(String, String)],
     body: &[u8],
-) -> Result<String, String> {
+) -> Result<String, DispatchError> {
     let url = join_url(crate::BASE_URL, path_with_query);
     let method = Method::from_bytes(method.as_bytes())
-        .map_err(|err| format!("invalid HTTP method `{method}`: {err}"))?;
+        .map_err(|err| DispatchError::Transport(format!("invalid HTTP method `{method}`: {err}")))?;
 
     let mut builder = Request::builder().method(method).uri(url);
     for (name, value) in headers {
@@ -199,27 +216,29 @@ fn perform(
         } else {
             Body::from(body.to_vec())
         })
-        .map_err(|err| format!("failed to build request: {err}"))?;
+        .map_err(|err| DispatchError::Transport(format!("failed to build request: {err}")))?;
 
     wstd::runtime::block_on(async move {
         let client = Client::new();
         let response = client
             .send(request)
             .await
-            .map_err(|err| format!("request failed: {err:#}"))?;
+            .map_err(|err| DispatchError::Transport(format!("request failed: {err:#}")))?;
 
         let status = response.status().as_u16();
         let mut response_body = response.into_body();
-        let bytes = response_body
-            .contents()
-            .await
-            .map_err(|err| format!("failed to read response body: {err:#}"))?;
+        let bytes = response_body.contents().await.map_err(|err| {
+            DispatchError::Transport(format!("failed to read response body: {err:#}"))
+        })?;
         let body_text = String::from_utf8_lossy(bytes).into_owned();
 
         if (200..300).contains(&status) {
             Ok(body_text)
         } else {
-            Err(format!("HTTP {status}: {body_text}"))
+            Err(DispatchError::Http {
+                status,
+                body: body_text,
+            })
         }
     })
 }
@@ -279,429 +298,9 @@ fn base64(input: &[u8]) -> String {
 }
 }
 
-use crate::runtime::{dispatch, AuthApply, AuthKind, FieldLocation, FieldSpec, OpSpec};
-use serde_json::{Map, Value};
-
-use crate::exports::autostamp::tomtom::copyrights as iface_copyrights;
-
-const OP_COPYRIGHTS_GET_MAP_VERSION_NUMBER_COPYRIGHTS_FORMAT: OpSpec = OpSpec {
-    method: "GET",
-    path_template: "/map/{version_number}/copyrights.{format}",
-    fields: &[
-        FieldSpec { snake: "version_number", location: FieldLocation::Path },
-        FieldSpec { snake: "format", location: FieldLocation::Path },
-        FieldSpec { snake: "callback", location: FieldLocation::Query },
-    ],
-    auth: &[
-        AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
-    ],
-};
-
-const OP_COPYRIGHTS_GET_MAP_VERSION_NUMBER_COPYRIGHTS_CAPTION_FORMAT: OpSpec = OpSpec {
-    method: "GET",
-    path_template: "/map/{version_number}/copyrights/caption.{format}",
-    fields: &[
-        FieldSpec { snake: "version_number", location: FieldLocation::Path },
-        FieldSpec { snake: "format", location: FieldLocation::Path },
-        FieldSpec { snake: "callback", location: FieldLocation::Query },
-    ],
-    auth: &[
-        AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
-    ],
-};
-
-const OP_COPYRIGHTS_GET_MAP_VERSION_NUMBER_COPYRIGHTS_MIN_LON_MIN_LAT_MAX_LON_MAX_LAT_FORMAT: OpSpec = OpSpec {
-    method: "GET",
-    path_template: "/map/{version_number}/copyrights/{min_lon}/{min_lat}/{max_lon}/{max_lat}.{format}",
-    fields: &[
-        FieldSpec { snake: "version_number", location: FieldLocation::Path },
-        FieldSpec { snake: "format", location: FieldLocation::Path },
-        FieldSpec { snake: "min_lon", location: FieldLocation::Path },
-        FieldSpec { snake: "min_lat", location: FieldLocation::Path },
-        FieldSpec { snake: "max_lon", location: FieldLocation::Path },
-        FieldSpec { snake: "max_lat", location: FieldLocation::Path },
-        FieldSpec { snake: "callback", location: FieldLocation::Query },
-    ],
-    auth: &[
-        AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
-    ],
-};
-
-const OP_COPYRIGHTS_GET_MAP_VERSION_NUMBER_COPYRIGHTS_ZOOM_X_Y_FORMAT: OpSpec = OpSpec {
-    method: "GET",
-    path_template: "/map/{version_number}/copyrights/{zoom}/{x}/{y}.{format}",
-    fields: &[
-        FieldSpec { snake: "version_number", location: FieldLocation::Path },
-        FieldSpec { snake: "format", location: FieldLocation::Path },
-        FieldSpec { snake: "zoom", location: FieldLocation::Path },
-        FieldSpec { snake: "x", location: FieldLocation::Path },
-        FieldSpec { snake: "y", location: FieldLocation::Path },
-        FieldSpec { snake: "callback", location: FieldLocation::Query },
-    ],
-    auth: &[
-        AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
-    ],
-};
-
-fn iface_copyrights__get_map_version_number_copyrights_format_params__to_json(p: &iface_copyrights::GetMapVersionNumberCopyrightsFormatParams) -> Value {
-    let mut m = Map::new();
-    m.insert("version_number".into(), Value::String((&p.version_number).clone()));
-    m.insert("format".into(), Value::String((&p.format).clone()));
-    m.insert("callback".into(), match (&p.callback) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_copyrights__get_map_version_number_copyrights_caption_format_params__to_json(p: &iface_copyrights::GetMapVersionNumberCopyrightsCaptionFormatParams) -> Value {
-    let mut m = Map::new();
-    m.insert("version_number".into(), Value::String((&p.version_number).clone()));
-    m.insert("format".into(), Value::String((&p.format).clone()));
-    m.insert("callback".into(), match (&p.callback) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_copyrights__get_map_version_number_copyrights_min_lon_min_lat_max_lon_max_lat_format_params__to_json(p: &iface_copyrights::GetMapVersionNumberCopyrightsMinLonMinLatMaxLonMaxLatFormatParams) -> Value {
-    let mut m = Map::new();
-    m.insert("version_number".into(), Value::String((&p.version_number).clone()));
-    m.insert("format".into(), Value::String((&p.format).clone()));
-    m.insert("min_lon".into(), Value::String((&p.min_lon).clone()));
-    m.insert("min_lat".into(), Value::String((&p.min_lat).clone()));
-    m.insert("max_lon".into(), Value::String((&p.max_lon).clone()));
-    m.insert("max_lat".into(), Value::String((&p.max_lat).clone()));
-    m.insert("callback".into(), match (&p.callback) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_copyrights__get_map_version_number_copyrights_zoom_x_y_format_params__to_json(p: &iface_copyrights::GetMapVersionNumberCopyrightsZoomXYFormatParams) -> Value {
-    let mut m = Map::new();
-    m.insert("version_number".into(), Value::String((&p.version_number).clone()));
-    m.insert("format".into(), Value::String((&p.format).clone()));
-    m.insert("zoom".into(), Value::String((&p.zoom).clone()));
-    m.insert("x".into(), Value::String((&p.x).clone()));
-    m.insert("y".into(), Value::String((&p.y).clone()));
-    m.insert("callback".into(), match (&p.callback) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    Value::Object(m)
-}
-
-impl iface_copyrights::Guest for crate::Component {
-    fn get_map_version_number_copyrights_format(params: iface_copyrights::GetMapVersionNumberCopyrightsFormatParams) -> Result<String, String> {
-        let json = iface_copyrights__get_map_version_number_copyrights_format_params__to_json(&params);
-        dispatch(&OP_COPYRIGHTS_GET_MAP_VERSION_NUMBER_COPYRIGHTS_FORMAT, json)
-    }
-    fn get_map_version_number_copyrights_caption_format(params: iface_copyrights::GetMapVersionNumberCopyrightsCaptionFormatParams) -> Result<String, String> {
-        let json = iface_copyrights__get_map_version_number_copyrights_caption_format_params__to_json(&params);
-        dispatch(&OP_COPYRIGHTS_GET_MAP_VERSION_NUMBER_COPYRIGHTS_CAPTION_FORMAT, json)
-    }
-    fn get_map_version_number_copyrights_min_lon_min_lat_max_lon_max_lat_format(params: iface_copyrights::GetMapVersionNumberCopyrightsMinLonMinLatMaxLonMaxLatFormatParams) -> Result<String, String> {
-        let json = iface_copyrights__get_map_version_number_copyrights_min_lon_min_lat_max_lon_max_lat_format_params__to_json(&params);
-        dispatch(&OP_COPYRIGHTS_GET_MAP_VERSION_NUMBER_COPYRIGHTS_MIN_LON_MIN_LAT_MAX_LON_MAX_LAT_FORMAT, json)
-    }
-    fn get_map_version_number_copyrights_zoom_x_y_format(params: iface_copyrights::GetMapVersionNumberCopyrightsZoomXYFormatParams) -> Result<String, String> {
-        let json = iface_copyrights__get_map_version_number_copyrights_zoom_x_y_format_params__to_json(&params);
-        dispatch(&OP_COPYRIGHTS_GET_MAP_VERSION_NUMBER_COPYRIGHTS_ZOOM_X_Y_FORMAT, json)
-    }
-}
-use crate::exports::autostamp::tomtom::raster as iface_raster;
-
-const OP_RASTER_GET_MAP_VERSION_NUMBER_STATICIMAGE: OpSpec = OpSpec {
-    method: "GET",
-    path_template: "/map/{version_number}/staticimage",
-    fields: &[
-        FieldSpec { snake: "version_number", location: FieldLocation::Path },
-        FieldSpec { snake: "layer", location: FieldLocation::Query },
-        FieldSpec { snake: "style", location: FieldLocation::Query },
-        FieldSpec { snake: "format", location: FieldLocation::Query },
-        FieldSpec { snake: "zoom", location: FieldLocation::Query },
-        FieldSpec { snake: "center", location: FieldLocation::Query },
-        FieldSpec { snake: "width", location: FieldLocation::Query },
-        FieldSpec { snake: "height", location: FieldLocation::Query },
-        FieldSpec { snake: "bbox", location: FieldLocation::Query },
-        FieldSpec { snake: "view", location: FieldLocation::Query },
-    ],
-    auth: &[
-        AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
-    ],
-};
-
-const OP_RASTER_GET_MAP_VERSION_NUMBER_TILE_LAYER_STYLE_ZOOM_X_Y_FORMAT: OpSpec = OpSpec {
-    method: "GET",
-    path_template: "/map/{version_number}/tile/{layer}/{style}/{zoom}/{x}/{y}.{format}",
-    fields: &[
-        FieldSpec { snake: "version_number", location: FieldLocation::Path },
-        FieldSpec { snake: "layer", location: FieldLocation::Path },
-        FieldSpec { snake: "style", location: FieldLocation::Path },
-        FieldSpec { snake: "zoom", location: FieldLocation::Path },
-        FieldSpec { snake: "x", location: FieldLocation::Path },
-        FieldSpec { snake: "y", location: FieldLocation::Path },
-        FieldSpec { snake: "format", location: FieldLocation::Path },
-        FieldSpec { snake: "tile_size", location: FieldLocation::Query },
-        FieldSpec { snake: "view", location: FieldLocation::Query },
-    ],
-    auth: &[
-        AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
-    ],
-};
-
-fn iface_raster__get_map_version_number_staticimage_layer_enum__to_str(e: &iface_raster::GetMapVersionNumberStaticimageLayerEnum) -> &'static str {
-    match e {
-        iface_raster::GetMapVersionNumberStaticimageLayerEnum::Basic => "basic",
-        iface_raster::GetMapVersionNumberStaticimageLayerEnum::Hybrid => "hybrid",
-        iface_raster::GetMapVersionNumberStaticimageLayerEnum::Labels => "labels",
-    }
-}
-
-fn iface_raster__get_map_version_number_staticimage_style_enum__to_str(e: &iface_raster::GetMapVersionNumberStaticimageStyleEnum) -> &'static str {
-    match e {
-        iface_raster::GetMapVersionNumberStaticimageStyleEnum::Main => "main",
-        iface_raster::GetMapVersionNumberStaticimageStyleEnum::Night => "night",
-    }
-}
-
-fn iface_raster__get_map_version_number_staticimage_format_enum__to_str(e: &iface_raster::GetMapVersionNumberStaticimageFormatEnum) -> &'static str {
-    match e {
-        iface_raster::GetMapVersionNumberStaticimageFormatEnum::Png => "png",
-        iface_raster::GetMapVersionNumberStaticimageFormatEnum::Jpg => "jpg",
-        iface_raster::GetMapVersionNumberStaticimageFormatEnum::Jpeg => "jpeg",
-    }
-}
-
-fn iface_raster__get_map_version_number_staticimage_view_enum__to_str(e: &iface_raster::GetMapVersionNumberStaticimageViewEnum) -> &'static str {
-    match e {
-        iface_raster::GetMapVersionNumberStaticimageViewEnum::Unified => "Unified",
-        iface_raster::GetMapVersionNumberStaticimageViewEnum::In => "IN",
-    }
-}
-
-fn iface_raster__get_map_version_number_staticimage_params__to_json(p: &iface_raster::GetMapVersionNumberStaticimageParams) -> Value {
-    let mut m = Map::new();
-    m.insert("version_number".into(), Value::String((&p.version_number).clone()));
-    m.insert("layer".into(), match (&p.layer) { Some(v) => Value::String(iface_raster__get_map_version_number_staticimage_layer_enum__to_str(v).into()), None => Value::Null });
-    m.insert("style".into(), match (&p.style) { Some(v) => Value::String(iface_raster__get_map_version_number_staticimage_style_enum__to_str(v).into()), None => Value::Null });
-    m.insert("format".into(), match (&p.format) { Some(v) => Value::String(iface_raster__get_map_version_number_staticimage_format_enum__to_str(v).into()), None => Value::Null });
-    m.insert("zoom".into(), match (&p.zoom) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    m.insert("center".into(), match (&p.center) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("width".into(), match (&p.width) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    m.insert("height".into(), match (&p.height) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    m.insert("bbox".into(), match (&p.bbox) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("view".into(), match (&p.view) { Some(v) => Value::String(iface_raster__get_map_version_number_staticimage_view_enum__to_str(v).into()), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_raster__get_map_version_number_tile_layer_style_zoom_x_y_format_params__to_json(p: &iface_raster::GetMapVersionNumberTileLayerStyleZoomXYFormatParams) -> Value {
-    let mut m = Map::new();
-    m.insert("version_number".into(), Value::String((&p.version_number).clone()));
-    m.insert("layer".into(), Value::String((&p.layer).clone()));
-    m.insert("style".into(), Value::String((&p.style).clone()));
-    m.insert("zoom".into(), Value::String((&p.zoom).clone()));
-    m.insert("x".into(), Value::String((&p.x).clone()));
-    m.insert("y".into(), Value::String((&p.y).clone()));
-    m.insert("format".into(), Value::String((&p.format).clone()));
-    m.insert("tile_size".into(), match (&p.tile_size) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    m.insert("view".into(), match (&p.view) { Some(v) => Value::String(iface_raster__get_map_version_number_staticimage_view_enum__to_str(v).into()), None => Value::Null });
-    Value::Object(m)
-}
-
-impl iface_raster::Guest for crate::Component {
-    fn get_map_version_number_staticimage(params: iface_raster::GetMapVersionNumberStaticimageParams) -> Result<String, String> {
-        let json = iface_raster__get_map_version_number_staticimage_params__to_json(&params);
-        dispatch(&OP_RASTER_GET_MAP_VERSION_NUMBER_STATICIMAGE, json)
-    }
-    fn get_map_version_number_tile_layer_style_zoom_x_y_format(params: iface_raster::GetMapVersionNumberTileLayerStyleZoomXYFormatParams) -> Result<String, String> {
-        let json = iface_raster__get_map_version_number_tile_layer_style_zoom_x_y_format_params__to_json(&params);
-        dispatch(&OP_RASTER_GET_MAP_VERSION_NUMBER_TILE_LAYER_STYLE_ZOOM_X_Y_FORMAT, json)
-    }
-}
-use crate::exports::autostamp::tomtom::vector as iface_vector;
-
-const OP_VECTOR_GET_MAP_VERSION_NUMBER_TILE_LAYER_STYLE_ZOOM_X_Y_PBF: OpSpec = OpSpec {
-    method: "GET",
-    path_template: "/map/{version_number}/tile/{layer}/{style}/{zoom}/{x}/{y}.pbf",
-    fields: &[
-        FieldSpec { snake: "version_number", location: FieldLocation::Path },
-        FieldSpec { snake: "layer", location: FieldLocation::Path },
-        FieldSpec { snake: "style", location: FieldLocation::Path },
-        FieldSpec { snake: "zoom", location: FieldLocation::Path },
-        FieldSpec { snake: "x", location: FieldLocation::Path },
-        FieldSpec { snake: "y", location: FieldLocation::Path },
-        FieldSpec { snake: "view", location: FieldLocation::Query },
-        FieldSpec { snake: "language", location: FieldLocation::Query },
-    ],
-    auth: &[
-        AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
-    ],
-};
-
-fn iface_vector__get_map_version_number_tile_layer_style_zoom_x_y_pbf_view_enum__to_str(e: &iface_vector::GetMapVersionNumberTileLayerStyleZoomXYPbfViewEnum) -> &'static str {
-    match e {
-        iface_vector::GetMapVersionNumberTileLayerStyleZoomXYPbfViewEnum::Unified => "Unified",
-        iface_vector::GetMapVersionNumberTileLayerStyleZoomXYPbfViewEnum::Il => "IL",
-        iface_vector::GetMapVersionNumberTileLayerStyleZoomXYPbfViewEnum::In => "IN",
-    }
-}
-
-fn iface_vector__get_map_version_number_tile_layer_style_zoom_x_y_pbf_params__to_json(p: &iface_vector::GetMapVersionNumberTileLayerStyleZoomXYPbfParams) -> Value {
-    let mut m = Map::new();
-    m.insert("version_number".into(), Value::String((&p.version_number).clone()));
-    m.insert("layer".into(), Value::String((&p.layer).clone()));
-    m.insert("style".into(), Value::String((&p.style).clone()));
-    m.insert("zoom".into(), Value::String((&p.zoom).clone()));
-    m.insert("x".into(), Value::String((&p.x).clone()));
-    m.insert("y".into(), Value::String((&p.y).clone()));
-    m.insert("view".into(), match (&p.view) { Some(v) => Value::String(iface_vector__get_map_version_number_tile_layer_style_zoom_x_y_pbf_view_enum__to_str(v).into()), None => Value::Null });
-    m.insert("language".into(), match (&p.language) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    Value::Object(m)
-}
-
-impl iface_vector::Guest for crate::Component {
-    fn get_map_version_number_tile_layer_style_zoom_x_y_pbf(params: iface_vector::GetMapVersionNumberTileLayerStyleZoomXYPbfParams) -> Result<String, String> {
-        let json = iface_vector__get_map_version_number_tile_layer_style_zoom_x_y_pbf_params__to_json(&params);
-        dispatch(&OP_VECTOR_GET_MAP_VERSION_NUMBER_TILE_LAYER_STYLE_ZOOM_X_Y_PBF, json)
-    }
-}
-use crate::exports::autostamp::tomtom::wms_wmts as iface_wms_wmts;
-
-const OP_WMS_WMTS_GET_MAP: OpSpec = OpSpec {
-    method: "GET",
-    path_template: "/map/{version_number}/wms/",
-    fields: &[
-        FieldSpec { snake: "version_number", location: FieldLocation::Path },
-        FieldSpec { snake: "request", location: FieldLocation::Query },
-        FieldSpec { snake: "srs", location: FieldLocation::Query },
-        FieldSpec { snake: "bbox", location: FieldLocation::Query },
-        FieldSpec { snake: "width", location: FieldLocation::Query },
-        FieldSpec { snake: "height", location: FieldLocation::Query },
-        FieldSpec { snake: "format", location: FieldLocation::Query },
-        FieldSpec { snake: "layers", location: FieldLocation::Query },
-        FieldSpec { snake: "styles", location: FieldLocation::Query },
-        FieldSpec { snake: "service", location: FieldLocation::Query },
-        FieldSpec { snake: "version", location: FieldLocation::Query },
-    ],
-    auth: &[
-        AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
-    ],
-};
-
-const OP_WMS_WMTS_GET_CAPABILITIES: OpSpec = OpSpec {
-    method: "GET",
-    path_template: "/map/{version_number}/wms//",
-    fields: &[
-        FieldSpec { snake: "version_number", location: FieldLocation::Path },
-        FieldSpec { snake: "service", location: FieldLocation::Query },
-        FieldSpec { snake: "request", location: FieldLocation::Query },
-        FieldSpec { snake: "version", location: FieldLocation::Query },
-    ],
-    auth: &[
-        AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
-    ],
-};
-
-const OP_WMS_WMTS_GET_MAP_VERSION_NUMBER_WMTS_KEY_WMTS_VERSION_WMTS_CAPABILITIES_XML: OpSpec = OpSpec {
-    method: "GET",
-    path_template: "/map/{version_number}/wmts/{key}/{wmts_version}/WMTSCapabilities.xml",
-    fields: &[
-        FieldSpec { snake: "version_number", location: FieldLocation::Path },
-        FieldSpec { snake: "key", location: FieldLocation::Path },
-        FieldSpec { snake: "wmts_version", location: FieldLocation::Path },
-    ],
-    auth: &[
-    ],
-};
-
-fn iface_wms_wmts__get_map_request_enum__to_str(e: &iface_wms_wmts::GetMapRequestEnum) -> &'static str {
-    match e {
-        iface_wms_wmts::GetMapRequestEnum::GetMap => "GetMap",
-    }
-}
-
-fn iface_wms_wmts__get_map_srs_enum__to_str(e: &iface_wms_wmts::GetMapSrsEnum) -> &'static str {
-    match e {
-        iface_wms_wmts::GetMapSrsEnum::EpsgV3857 => "EPSG:3857",
-        iface_wms_wmts::GetMapSrsEnum::EpsgV4326 => "EPSG:4326",
-    }
-}
-
-fn iface_wms_wmts__get_map_format_enum__to_str(e: &iface_wms_wmts::GetMapFormatEnum) -> &'static str {
-    match e {
-        iface_wms_wmts::GetMapFormatEnum::ImageJpeg => "image/jpeg",
-        iface_wms_wmts::GetMapFormatEnum::ImagePng => "image/png",
-    }
-}
-
-fn iface_wms_wmts__get_map_layers_enum__to_str(e: &iface_wms_wmts::GetMapLayersEnum) -> &'static str {
-    match e {
-        iface_wms_wmts::GetMapLayersEnum::Basic => "basic",
-    }
-}
-
-fn iface_wms_wmts__get_map_styles_enum__to_str(e: &iface_wms_wmts::GetMapStylesEnum) -> &'static str {
-    match e {
-        iface_wms_wmts::GetMapStylesEnum::Empty => "",
-    }
-}
-
-fn iface_wms_wmts__get_map_service_enum__to_str(e: &iface_wms_wmts::GetMapServiceEnum) -> &'static str {
-    match e {
-        iface_wms_wmts::GetMapServiceEnum::Wms => "WMS",
-    }
-}
-
-fn iface_wms_wmts__get_map_version_enum__to_str(e: &iface_wms_wmts::GetMapVersionEnum) -> &'static str {
-    match e {
-        iface_wms_wmts::GetMapVersionEnum::V1V1V1 => "1.1.1",
-    }
-}
-
-fn iface_wms_wmts__get_capabilities_request_enum__to_str(e: &iface_wms_wmts::GetCapabilitiesRequestEnum) -> &'static str {
-    match e {
-        iface_wms_wmts::GetCapabilitiesRequestEnum::GetCapabilities => "GetCapabilities",
-    }
-}
-
-fn iface_wms_wmts__get_map_params__to_json(p: &iface_wms_wmts::GetMapParams) -> Value {
-    let mut m = Map::new();
-    m.insert("version_number".into(), Value::String((&p.version_number).clone()));
-    m.insert("request".into(), Value::String(iface_wms_wmts__get_map_request_enum__to_str(&p.request).into()));
-    m.insert("srs".into(), Value::String(iface_wms_wmts__get_map_srs_enum__to_str(&p.srs).into()));
-    m.insert("bbox".into(), Value::String((&p.bbox).clone()));
-    m.insert("width".into(), Value::Number(serde_json::Number::from(*(&p.width))));
-    m.insert("height".into(), Value::Number(serde_json::Number::from(*(&p.height))));
-    m.insert("format".into(), Value::String(iface_wms_wmts__get_map_format_enum__to_str(&p.format).into()));
-    m.insert("layers".into(), Value::String(iface_wms_wmts__get_map_layers_enum__to_str(&p.layers).into()));
-    m.insert("styles".into(), match (&p.styles) { Some(v) => Value::String(iface_wms_wmts__get_map_styles_enum__to_str(v).into()), None => Value::Null });
-    m.insert("service".into(), match (&p.service) { Some(v) => Value::String(iface_wms_wmts__get_map_service_enum__to_str(v).into()), None => Value::Null });
-    m.insert("version".into(), Value::String(iface_wms_wmts__get_map_version_enum__to_str(&p.version).into()));
-    Value::Object(m)
-}
-
-fn iface_wms_wmts__get_capabilities_params__to_json(p: &iface_wms_wmts::GetCapabilitiesParams) -> Value {
-    let mut m = Map::new();
-    m.insert("version_number".into(), Value::String((&p.version_number).clone()));
-    m.insert("service".into(), Value::String(iface_wms_wmts__get_map_service_enum__to_str(&p.service).into()));
-    m.insert("request".into(), Value::String(iface_wms_wmts__get_capabilities_request_enum__to_str(&p.request).into()));
-    m.insert("version".into(), match (&p.version) { Some(v) => Value::String(iface_wms_wmts__get_map_version_enum__to_str(v).into()), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_wms_wmts__get_map_version_number_wmts_key_wmts_version_wmts_capabilities_xml_params__to_json(p: &iface_wms_wmts::GetMapVersionNumberWmtsKeyWmtsVersionWmtsCapabilitiesXmlParams) -> Value {
-    let mut m = Map::new();
-    m.insert("version_number".into(), Value::String((&p.version_number).clone()));
-    m.insert("key".into(), Value::String((&p.key).clone()));
-    m.insert("wmts_version".into(), Value::String((&p.wmts_version).clone()));
-    Value::Object(m)
-}
-
-impl iface_wms_wmts::Guest for crate::Component {
-    fn get_map(params: iface_wms_wmts::GetMapParams) -> Result<String, String> {
-        let json = iface_wms_wmts__get_map_params__to_json(&params);
-        dispatch(&OP_WMS_WMTS_GET_MAP, json)
-    }
-    fn get_capabilities(params: iface_wms_wmts::GetCapabilitiesParams) -> Result<String, String> {
-        let json = iface_wms_wmts__get_capabilities_params__to_json(&params);
-        dispatch(&OP_WMS_WMTS_GET_CAPABILITIES, json)
-    }
-    fn get_map_version_number_wmts_key_wmts_version_wmts_capabilities_xml(params: iface_wms_wmts::GetMapVersionNumberWmtsKeyWmtsVersionWmtsCapabilitiesXmlParams) -> Result<String, String> {
-        let json = iface_wms_wmts__get_map_version_number_wmts_key_wmts_version_wmts_capabilities_xml_params__to_json(&params);
-        dispatch(&OP_WMS_WMTS_GET_MAP_VERSION_NUMBER_WMTS_KEY_WMTS_VERSION_WMTS_CAPABILITIES_XML, json)
-    }
-}
+mod iface_copyrights;
+mod iface_raster;
+mod iface_vector;
+mod iface_wms_wmts;
 
 export!(Component);

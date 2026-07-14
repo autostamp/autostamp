@@ -44,10 +44,15 @@ pub(crate) enum FieldLocation {
     Body,
 }
 
-/// A single operation parameter: the snake-case key it carries in the params JSON and where
-/// it belongs in the request.
+/// A single operation parameter. `snake` keys the field in the internal params JSON (and, for a
+/// path field, matches the `{snake}` placeholder in the path template); `wire` is the verbatim name
+/// the field takes on the HTTP wire (query key, header name, or body property). The two differ
+/// whenever the source name isn't already snake_case (e.g. `dryRun` → snake `dry_run`, wire
+/// `dryRun`), and let distinct inputs that share a snake key (`DateCreated`, `DateCreated<`) still
+/// travel under their true names.
 pub(crate) struct FieldSpec {
     pub(crate) snake: &'static str,
+    pub(crate) wire: &'static str,
     pub(crate) location: FieldLocation,
 }
 
@@ -71,6 +76,16 @@ pub(crate) struct AuthApply {
     pub(crate) kind: AuthKind,
 }
 
+/// The failure modes of [`dispatch`], kept structured so each generated operation can map them
+/// onto its own typed error: an `Http` failure carries the response status and body (routed to
+/// the matching error-variant case), while a `Transport` failure carries a message for the
+/// catch-all case (a secret lookup, connection, or decode failure that never produced an HTTP
+/// status).
+pub(crate) enum DispatchError {
+    Http { status: u16, body: String },
+    Transport(String),
+}
+
 /// A single API operation: HTTP method, path template (with `{snake}` placeholders), the
 /// parameter fields, and the security schemes to apply.
 pub(crate) struct OpSpec {
@@ -81,8 +96,9 @@ pub(crate) struct OpSpec {
 }
 
 /// Execute `op` with the supplied `params` (a JSON object keyed by snake-case field names)
-/// and return the response body as a string, or an error message.
-pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, String> {
+/// and return the raw 2xx response body, or a structured [`DispatchError`] the caller maps
+/// onto the operation's typed error.
+pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, DispatchError> {
     let obj = match &params {
         Value::Object(map) => Some(map),
         _ => None,
@@ -105,10 +121,10 @@ pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, String> {
                 let placeholder = format!("{{{}}}", field.snake);
                 path = path.replace(&placeholder, &percent_encode(&scalar(value)));
             }
-            FieldLocation::Query => query.push((field.snake.to_string(), scalar(value))),
-            FieldLocation::Header => headers.push((field.snake.to_string(), scalar(value))),
+            FieldLocation::Query => query.push((field.wire.to_string(), scalar(value))),
+            FieldLocation::Header => headers.push((field.wire.to_string(), scalar(value))),
             FieldLocation::Body => {
-                body.insert(field.snake.to_string(), value.clone());
+                body.insert(field.wire.to_string(), value.clone());
             }
         }
     }
@@ -116,7 +132,7 @@ pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, String> {
     // Apply each resolved security scheme, sourcing its value from wasmcloud:secrets.
     let mut cookies: Vec<String> = Vec::new();
     for apply in op.auth {
-        let secret = fetch_secret(apply.secret_key)?;
+        let secret = fetch_secret(apply.secret_key).map_err(DispatchError::Transport)?;
         match &apply.kind {
             AuthKind::Bearer => headers.push(("authorization".into(), format!("Bearer {secret}"))),
             AuthKind::Basic => {
@@ -177,17 +193,18 @@ fn fetch_secret(key: &str) -> Result<String, String> {
 }
 
 /// Build and send the outgoing request with `wstd`, returning the response body on a 2xx
-/// status. The generated guest exports are synchronous, so the async `wstd` client is driven
-/// to completion on a local reactor via `wstd::runtime::block_on`.
+/// status and a structured [`DispatchError`] otherwise. The generated guest exports are
+/// synchronous, so the async `wstd` client is driven to completion on a local reactor via
+/// `wstd::runtime::block_on`.
 fn perform(
     method: &str,
     path_with_query: &str,
     headers: &[(String, String)],
     body: &[u8],
-) -> Result<String, String> {
+) -> Result<String, DispatchError> {
     let url = join_url(crate::BASE_URL, path_with_query);
     let method = Method::from_bytes(method.as_bytes())
-        .map_err(|err| format!("invalid HTTP method `{method}`: {err}"))?;
+        .map_err(|err| DispatchError::Transport(format!("invalid HTTP method `{method}`: {err}")))?;
 
     let mut builder = Request::builder().method(method).uri(url);
     for (name, value) in headers {
@@ -199,27 +216,29 @@ fn perform(
         } else {
             Body::from(body.to_vec())
         })
-        .map_err(|err| format!("failed to build request: {err}"))?;
+        .map_err(|err| DispatchError::Transport(format!("failed to build request: {err}")))?;
 
     wstd::runtime::block_on(async move {
         let client = Client::new();
         let response = client
             .send(request)
             .await
-            .map_err(|err| format!("request failed: {err:#}"))?;
+            .map_err(|err| DispatchError::Transport(format!("request failed: {err:#}")))?;
 
         let status = response.status().as_u16();
         let mut response_body = response.into_body();
-        let bytes = response_body
-            .contents()
-            .await
-            .map_err(|err| format!("failed to read response body: {err:#}"))?;
+        let bytes = response_body.contents().await.map_err(|err| {
+            DispatchError::Transport(format!("failed to read response body: {err:#}"))
+        })?;
         let body_text = String::from_utf8_lossy(bytes).into_owned();
 
         if (200..300).contains(&status) {
             Ok(body_text)
         } else {
-            Err(format!("HTTP {status}: {body_text}"))
+            Err(DispatchError::Http {
+                status,
+                body: body_text,
+            })
         }
     })
 }
@@ -279,144 +298,7 @@ fn base64(input: &[u8]) -> String {
 }
 }
 
-use crate::runtime::{dispatch, AuthApply, AuthKind, FieldLocation, FieldSpec, OpSpec};
-use serde_json::{Map, Value};
-
-use crate::exports::autostamp::azure::operations as iface_operations;
-
-const OP_OPERATIONS_LIST_OP: OpSpec = OpSpec {
-    method: "GET",
-    path_template: "/providers/Microsoft.Addons/operations",
-    fields: &[
-        FieldSpec { snake: "api_version", location: FieldLocation::Query },
-    ],
-    auth: &[
-    ],
-};
-
-fn iface_operations__list_op_params__to_json(p: &iface_operations::ListOpParams) -> Value {
-    let mut m = Map::new();
-    m.insert("api_version".into(), Value::String((&p.api_version).clone()));
-    Value::Object(m)
-}
-
-impl iface_operations::Guest for crate::Component {
-    fn list_op(params: iface_operations::ListOpParams) -> Result<String, String> {
-        let json = iface_operations__list_op_params__to_json(&params);
-        dispatch(&OP_OPERATIONS_LIST_OP, json)
-    }
-}
-use crate::exports::autostamp::azure::addon_status as iface_addon_status;
-
-const OP_ADDON_STATUS_SUPPORT_PLAN_TYPES_LIST_INFO: OpSpec = OpSpec {
-    method: "POST",
-    path_template: "/subscriptions/{subscription_id}/providers/Microsoft.Addons/supportProviders/canonical/listSupportPlanInfo",
-    fields: &[
-        FieldSpec { snake: "api_version", location: FieldLocation::Query },
-        FieldSpec { snake: "subscription_id", location: FieldLocation::Path },
-    ],
-    auth: &[
-    ],
-};
-
-fn iface_addon_status__support_plan_types_list_info_params__to_json(p: &iface_addon_status::SupportPlanTypesListInfoParams) -> Value {
-    let mut m = Map::new();
-    m.insert("api_version".into(), Value::String((&p.api_version).clone()));
-    m.insert("subscription_id".into(), Value::String((&p.subscription_id).clone()));
-    Value::Object(m)
-}
-
-impl iface_addon_status::Guest for crate::Component {
-    fn support_plan_types_list_info(params: iface_addon_status::SupportPlanTypesListInfoParams) -> Result<String, String> {
-        let json = iface_addon_status__support_plan_types_list_info_params__to_json(&params);
-        dispatch(&OP_ADDON_STATUS_SUPPORT_PLAN_TYPES_LIST_INFO, json)
-    }
-}
-use crate::exports::autostamp::azure::addon_details as iface_addon_details;
-
-const OP_ADDON_DETAILS_SUPPORT_PLAN_TYPES_GET: OpSpec = OpSpec {
-    method: "GET",
-    path_template: "/subscriptions/{subscription_id}/providers/Microsoft.Addons/supportProviders/{provider_name}/supportPlanTypes/{plan_type_name}",
-    fields: &[
-        FieldSpec { snake: "api_version", location: FieldLocation::Query },
-        FieldSpec { snake: "subscription_id", location: FieldLocation::Path },
-        FieldSpec { snake: "provider_name", location: FieldLocation::Path },
-        FieldSpec { snake: "plan_type_name", location: FieldLocation::Path },
-    ],
-    auth: &[
-    ],
-};
-
-const OP_ADDON_DETAILS_SUPPORT_PLAN_TYPES_CREATE_OR_UPDATE: OpSpec = OpSpec {
-    method: "PUT",
-    path_template: "/subscriptions/{subscription_id}/providers/Microsoft.Addons/supportProviders/{provider_name}/supportPlanTypes/{plan_type_name}",
-    fields: &[
-        FieldSpec { snake: "api_version", location: FieldLocation::Query },
-        FieldSpec { snake: "subscription_id", location: FieldLocation::Path },
-        FieldSpec { snake: "provider_name", location: FieldLocation::Path },
-        FieldSpec { snake: "plan_type_name", location: FieldLocation::Path },
-    ],
-    auth: &[
-    ],
-};
-
-fn iface_addon_details__support_plan_types_get_params__to_json(p: &iface_addon_details::SupportPlanTypesGetParams) -> Value {
-    let mut m = Map::new();
-    m.insert("api_version".into(), Value::String((&p.api_version).clone()));
-    m.insert("subscription_id".into(), Value::String((&p.subscription_id).clone()));
-    m.insert("provider_name".into(), Value::String((&p.provider_name).clone()));
-    m.insert("plan_type_name".into(), Value::String((&p.plan_type_name).clone()));
-    Value::Object(m)
-}
-
-fn iface_addon_details__support_plan_types_create_or_update_params__to_json(p: &iface_addon_details::SupportPlanTypesCreateOrUpdateParams) -> Value {
-    let mut m = Map::new();
-    m.insert("api_version".into(), Value::String((&p.api_version).clone()));
-    m.insert("subscription_id".into(), Value::String((&p.subscription_id).clone()));
-    m.insert("provider_name".into(), Value::String((&p.provider_name).clone()));
-    m.insert("plan_type_name".into(), Value::String((&p.plan_type_name).clone()));
-    Value::Object(m)
-}
-
-impl iface_addon_details::Guest for crate::Component {
-    fn support_plan_types_get(params: iface_addon_details::SupportPlanTypesGetParams) -> Result<String, String> {
-        let json = iface_addon_details__support_plan_types_get_params__to_json(&params);
-        dispatch(&OP_ADDON_DETAILS_SUPPORT_PLAN_TYPES_GET, json)
-    }
-    fn support_plan_types_create_or_update(params: iface_addon_details::SupportPlanTypesCreateOrUpdateParams) -> Result<String, String> {
-        let json = iface_addon_details__support_plan_types_create_or_update_params__to_json(&params);
-        dispatch(&OP_ADDON_DETAILS_SUPPORT_PLAN_TYPES_CREATE_OR_UPDATE, json)
-    }
-}
-use crate::exports::autostamp::azure::subscriptions as iface_subscriptions;
-
-const OP_SUBSCRIPTIONS_SUPPORT_PLAN_TYPES_DELETE: OpSpec = OpSpec {
-    method: "DELETE",
-    path_template: "/subscriptions/{subscription_id}/providers/Microsoft.Addons/supportProviders/{provider_name}/supportPlanTypes/{plan_type_name}",
-    fields: &[
-        FieldSpec { snake: "api_version", location: FieldLocation::Query },
-        FieldSpec { snake: "subscription_id", location: FieldLocation::Path },
-        FieldSpec { snake: "provider_name", location: FieldLocation::Path },
-        FieldSpec { snake: "plan_type_name", location: FieldLocation::Path },
-    ],
-    auth: &[
-    ],
-};
-
-fn iface_subscriptions__support_plan_types_delete_params__to_json(p: &iface_subscriptions::SupportPlanTypesDeleteParams) -> Value {
-    let mut m = Map::new();
-    m.insert("api_version".into(), Value::String((&p.api_version).clone()));
-    m.insert("subscription_id".into(), Value::String((&p.subscription_id).clone()));
-    m.insert("provider_name".into(), Value::String((&p.provider_name).clone()));
-    m.insert("plan_type_name".into(), Value::String((&p.plan_type_name).clone()));
-    Value::Object(m)
-}
-
-impl iface_subscriptions::Guest for crate::Component {
-    fn support_plan_types_delete(params: iface_subscriptions::SupportPlanTypesDeleteParams) -> Result<String, String> {
-        let json = iface_subscriptions__support_plan_types_delete_params__to_json(&params);
-        dispatch(&OP_SUBSCRIPTIONS_SUPPORT_PLAN_TYPES_DELETE, json)
-    }
-}
+mod iface_operations;
+mod iface_enterprise_knowledge_graph;
 
 export!(Component);

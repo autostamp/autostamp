@@ -44,10 +44,15 @@ pub(crate) enum FieldLocation {
     Body,
 }
 
-/// A single operation parameter: the snake-case key it carries in the params JSON and where
-/// it belongs in the request.
+/// A single operation parameter. `snake` keys the field in the internal params JSON (and, for a
+/// path field, matches the `{snake}` placeholder in the path template); `wire` is the verbatim name
+/// the field takes on the HTTP wire (query key, header name, or body property). The two differ
+/// whenever the source name isn't already snake_case (e.g. `dryRun` → snake `dry_run`, wire
+/// `dryRun`), and let distinct inputs that share a snake key (`DateCreated`, `DateCreated<`) still
+/// travel under their true names.
 pub(crate) struct FieldSpec {
     pub(crate) snake: &'static str,
+    pub(crate) wire: &'static str,
     pub(crate) location: FieldLocation,
 }
 
@@ -71,6 +76,16 @@ pub(crate) struct AuthApply {
     pub(crate) kind: AuthKind,
 }
 
+/// The failure modes of [`dispatch`], kept structured so each generated operation can map them
+/// onto its own typed error: an `Http` failure carries the response status and body (routed to
+/// the matching error-variant case), while a `Transport` failure carries a message for the
+/// catch-all case (a secret lookup, connection, or decode failure that never produced an HTTP
+/// status).
+pub(crate) enum DispatchError {
+    Http { status: u16, body: String },
+    Transport(String),
+}
+
 /// A single API operation: HTTP method, path template (with `{snake}` placeholders), the
 /// parameter fields, and the security schemes to apply.
 pub(crate) struct OpSpec {
@@ -81,8 +96,9 @@ pub(crate) struct OpSpec {
 }
 
 /// Execute `op` with the supplied `params` (a JSON object keyed by snake-case field names)
-/// and return the response body as a string, or an error message.
-pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, String> {
+/// and return the raw 2xx response body, or a structured [`DispatchError`] the caller maps
+/// onto the operation's typed error.
+pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, DispatchError> {
     let obj = match &params {
         Value::Object(map) => Some(map),
         _ => None,
@@ -105,10 +121,10 @@ pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, String> {
                 let placeholder = format!("{{{}}}", field.snake);
                 path = path.replace(&placeholder, &percent_encode(&scalar(value)));
             }
-            FieldLocation::Query => query.push((field.snake.to_string(), scalar(value))),
-            FieldLocation::Header => headers.push((field.snake.to_string(), scalar(value))),
+            FieldLocation::Query => query.push((field.wire.to_string(), scalar(value))),
+            FieldLocation::Header => headers.push((field.wire.to_string(), scalar(value))),
             FieldLocation::Body => {
-                body.insert(field.snake.to_string(), value.clone());
+                body.insert(field.wire.to_string(), value.clone());
             }
         }
     }
@@ -116,7 +132,7 @@ pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, String> {
     // Apply each resolved security scheme, sourcing its value from wasmcloud:secrets.
     let mut cookies: Vec<String> = Vec::new();
     for apply in op.auth {
-        let secret = fetch_secret(apply.secret_key)?;
+        let secret = fetch_secret(apply.secret_key).map_err(DispatchError::Transport)?;
         match &apply.kind {
             AuthKind::Bearer => headers.push(("authorization".into(), format!("Bearer {secret}"))),
             AuthKind::Basic => {
@@ -177,17 +193,18 @@ fn fetch_secret(key: &str) -> Result<String, String> {
 }
 
 /// Build and send the outgoing request with `wstd`, returning the response body on a 2xx
-/// status. The generated guest exports are synchronous, so the async `wstd` client is driven
-/// to completion on a local reactor via `wstd::runtime::block_on`.
+/// status and a structured [`DispatchError`] otherwise. The generated guest exports are
+/// synchronous, so the async `wstd` client is driven to completion on a local reactor via
+/// `wstd::runtime::block_on`.
 fn perform(
     method: &str,
     path_with_query: &str,
     headers: &[(String, String)],
     body: &[u8],
-) -> Result<String, String> {
+) -> Result<String, DispatchError> {
     let url = join_url(crate::BASE_URL, path_with_query);
     let method = Method::from_bytes(method.as_bytes())
-        .map_err(|err| format!("invalid HTTP method `{method}`: {err}"))?;
+        .map_err(|err| DispatchError::Transport(format!("invalid HTTP method `{method}`: {err}")))?;
 
     let mut builder = Request::builder().method(method).uri(url);
     for (name, value) in headers {
@@ -199,27 +216,29 @@ fn perform(
         } else {
             Body::from(body.to_vec())
         })
-        .map_err(|err| format!("failed to build request: {err}"))?;
+        .map_err(|err| DispatchError::Transport(format!("failed to build request: {err}")))?;
 
     wstd::runtime::block_on(async move {
         let client = Client::new();
         let response = client
             .send(request)
             .await
-            .map_err(|err| format!("request failed: {err:#}"))?;
+            .map_err(|err| DispatchError::Transport(format!("request failed: {err:#}")))?;
 
         let status = response.status().as_u16();
         let mut response_body = response.into_body();
-        let bytes = response_body
-            .contents()
-            .await
-            .map_err(|err| format!("failed to read response body: {err:#}"))?;
+        let bytes = response_body.contents().await.map_err(|err| {
+            DispatchError::Transport(format!("failed to read response body: {err:#}"))
+        })?;
         let body_text = String::from_utf8_lossy(bytes).into_owned();
 
         if (200..300).contains(&status) {
             Ok(body_text)
         } else {
-            Err(format!("HTTP {status}: {body_text}"))
+            Err(DispatchError::Http {
+                status,
+                body: body_text,
+            })
         }
     })
 }
@@ -279,684 +298,14 @@ fn base64(input: &[u8]) -> String {
 }
 }
 
-use crate::runtime::{dispatch, AuthApply, AuthKind, FieldLocation, FieldSpec, OpSpec};
-use serde_json::{Map, Value};
-
-use crate::exports::autostamp::rawg::creator_roles as iface_creator_roles;
-
-const OP_CREATOR_ROLES_LIST_OP: OpSpec = OpSpec {
-    method: "GET",
-    path_template: "/creator-roles",
-    fields: &[
-        FieldSpec { snake: "page", location: FieldLocation::Query },
-        FieldSpec { snake: "page_size", location: FieldLocation::Query },
-    ],
-    auth: &[
-    ],
-};
-
-fn iface_creator_roles__list_op_params__to_json(p: &iface_creator_roles::ListOpParams) -> Value {
-    let mut m = Map::new();
-    m.insert("page".into(), match (&p.page) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    m.insert("page_size".into(), match (&p.page_size) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    Value::Object(m)
-}
-
-impl iface_creator_roles::Guest for crate::Component {
-    fn list_op(params: iface_creator_roles::ListOpParams) -> Result<String, String> {
-        let json = iface_creator_roles__list_op_params__to_json(&params);
-        dispatch(&OP_CREATOR_ROLES_LIST_OP, json)
-    }
-}
-use crate::exports::autostamp::rawg::creators as iface_creators;
-
-const OP_CREATORS_LIST_OP: OpSpec = OpSpec {
-    method: "GET",
-    path_template: "/creators",
-    fields: &[
-        FieldSpec { snake: "page", location: FieldLocation::Query },
-        FieldSpec { snake: "page_size", location: FieldLocation::Query },
-    ],
-    auth: &[
-    ],
-};
-
-const OP_CREATORS_READ: OpSpec = OpSpec {
-    method: "GET",
-    path_template: "/creators/{id}",
-    fields: &[
-        FieldSpec { snake: "id", location: FieldLocation::Path },
-    ],
-    auth: &[
-    ],
-};
-
-fn iface_creators__list_op_params__to_json(p: &iface_creators::ListOpParams) -> Value {
-    let mut m = Map::new();
-    m.insert("page".into(), match (&p.page) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    m.insert("page_size".into(), match (&p.page_size) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_creators__read_params__to_json(p: &iface_creators::ReadParams) -> Value {
-    let mut m = Map::new();
-    m.insert("id".into(), Value::String((&p.id).clone()));
-    Value::Object(m)
-}
-
-impl iface_creators::Guest for crate::Component {
-    fn list_op(params: iface_creators::ListOpParams) -> Result<String, String> {
-        let json = iface_creators__list_op_params__to_json(&params);
-        dispatch(&OP_CREATORS_LIST_OP, json)
-    }
-    fn read(params: iface_creators::ReadParams) -> Result<String, String> {
-        let json = iface_creators__read_params__to_json(&params);
-        dispatch(&OP_CREATORS_READ, json)
-    }
-}
-use crate::exports::autostamp::rawg::developers as iface_developers;
-
-const OP_DEVELOPERS_LIST_OP: OpSpec = OpSpec {
-    method: "GET",
-    path_template: "/developers",
-    fields: &[
-        FieldSpec { snake: "page", location: FieldLocation::Query },
-        FieldSpec { snake: "page_size", location: FieldLocation::Query },
-    ],
-    auth: &[
-    ],
-};
-
-const OP_DEVELOPERS_READ: OpSpec = OpSpec {
-    method: "GET",
-    path_template: "/developers/{id}",
-    fields: &[
-    ],
-    auth: &[
-    ],
-};
-
-fn iface_developers__list_op_params__to_json(p: &iface_developers::ListOpParams) -> Value {
-    let mut m = Map::new();
-    m.insert("page".into(), match (&p.page) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    m.insert("page_size".into(), match (&p.page_size) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    Value::Object(m)
-}
-
-impl iface_developers::Guest for crate::Component {
-    fn list_op(params: iface_developers::ListOpParams) -> Result<String, String> {
-        let json = iface_developers__list_op_params__to_json(&params);
-        dispatch(&OP_DEVELOPERS_LIST_OP, json)
-    }
-    fn read() -> Result<String, String> {
-        dispatch(&OP_DEVELOPERS_READ, Value::Object(Map::new()))
-    }
-}
-use crate::exports::autostamp::rawg::games as iface_games;
-
-const OP_GAMES_LIST_OP: OpSpec = OpSpec {
-    method: "GET",
-    path_template: "/games",
-    fields: &[
-        FieldSpec { snake: "page", location: FieldLocation::Query },
-        FieldSpec { snake: "page_size", location: FieldLocation::Query },
-        FieldSpec { snake: "search", location: FieldLocation::Query },
-        FieldSpec { snake: "search_precise", location: FieldLocation::Query },
-        FieldSpec { snake: "search_exact", location: FieldLocation::Query },
-        FieldSpec { snake: "parent_platforms", location: FieldLocation::Query },
-        FieldSpec { snake: "platforms", location: FieldLocation::Query },
-        FieldSpec { snake: "stores", location: FieldLocation::Query },
-        FieldSpec { snake: "developers", location: FieldLocation::Query },
-        FieldSpec { snake: "publishers", location: FieldLocation::Query },
-        FieldSpec { snake: "genres", location: FieldLocation::Query },
-        FieldSpec { snake: "tags", location: FieldLocation::Query },
-        FieldSpec { snake: "creators", location: FieldLocation::Query },
-        FieldSpec { snake: "dates", location: FieldLocation::Query },
-        FieldSpec { snake: "updated", location: FieldLocation::Query },
-        FieldSpec { snake: "platforms_count", location: FieldLocation::Query },
-        FieldSpec { snake: "metacritic", location: FieldLocation::Query },
-        FieldSpec { snake: "exclude_collection", location: FieldLocation::Query },
-        FieldSpec { snake: "exclude_additions", location: FieldLocation::Query },
-        FieldSpec { snake: "exclude_parents", location: FieldLocation::Query },
-        FieldSpec { snake: "exclude_game_series", location: FieldLocation::Query },
-        FieldSpec { snake: "exclude_stores", location: FieldLocation::Query },
-        FieldSpec { snake: "ordering", location: FieldLocation::Query },
-    ],
-    auth: &[
-    ],
-};
-
-const OP_GAMES_ADDITIONS_LIST: OpSpec = OpSpec {
-    method: "GET",
-    path_template: "/games/{game_pk}/additions",
-    fields: &[
-        FieldSpec { snake: "page", location: FieldLocation::Query },
-        FieldSpec { snake: "page_size", location: FieldLocation::Query },
-    ],
-    auth: &[
-    ],
-};
-
-const OP_GAMES_DEVELOPMENT_TEAM_LIST: OpSpec = OpSpec {
-    method: "GET",
-    path_template: "/games/{game_pk}/development-team",
-    fields: &[
-        FieldSpec { snake: "ordering", location: FieldLocation::Query },
-        FieldSpec { snake: "page", location: FieldLocation::Query },
-        FieldSpec { snake: "page_size", location: FieldLocation::Query },
-    ],
-    auth: &[
-    ],
-};
-
-const OP_GAMES_GAME_SERIES_LIST: OpSpec = OpSpec {
-    method: "GET",
-    path_template: "/games/{game_pk}/game-series",
-    fields: &[
-        FieldSpec { snake: "page", location: FieldLocation::Query },
-        FieldSpec { snake: "page_size", location: FieldLocation::Query },
-    ],
-    auth: &[
-    ],
-};
-
-const OP_GAMES_PARENT_GAMES_LIST: OpSpec = OpSpec {
-    method: "GET",
-    path_template: "/games/{game_pk}/parent-games",
-    fields: &[
-        FieldSpec { snake: "page", location: FieldLocation::Query },
-        FieldSpec { snake: "page_size", location: FieldLocation::Query },
-    ],
-    auth: &[
-    ],
-};
-
-const OP_GAMES_SCREENSHOTS_LIST: OpSpec = OpSpec {
-    method: "GET",
-    path_template: "/games/{game_pk}/screenshots",
-    fields: &[
-        FieldSpec { snake: "ordering", location: FieldLocation::Query },
-        FieldSpec { snake: "page", location: FieldLocation::Query },
-        FieldSpec { snake: "page_size", location: FieldLocation::Query },
-    ],
-    auth: &[
-    ],
-};
-
-const OP_GAMES_STORES_LIST: OpSpec = OpSpec {
-    method: "GET",
-    path_template: "/games/{game_pk}/stores",
-    fields: &[
-        FieldSpec { snake: "ordering", location: FieldLocation::Query },
-        FieldSpec { snake: "page", location: FieldLocation::Query },
-        FieldSpec { snake: "page_size", location: FieldLocation::Query },
-    ],
-    auth: &[
-    ],
-};
-
-const OP_GAMES_READ: OpSpec = OpSpec {
-    method: "GET",
-    path_template: "/games/{id}",
-    fields: &[
-        FieldSpec { snake: "id", location: FieldLocation::Path },
-    ],
-    auth: &[
-    ],
-};
-
-const OP_GAMES_ACHIEVEMENTS_READ: OpSpec = OpSpec {
-    method: "GET",
-    path_template: "/games/{id}/achievements",
-    fields: &[
-        FieldSpec { snake: "id", location: FieldLocation::Path },
-    ],
-    auth: &[
-    ],
-};
-
-const OP_GAMES_MOVIES_READ: OpSpec = OpSpec {
-    method: "GET",
-    path_template: "/games/{id}/movies",
-    fields: &[
-        FieldSpec { snake: "id", location: FieldLocation::Path },
-    ],
-    auth: &[
-    ],
-};
-
-const OP_GAMES_REDDIT_READ: OpSpec = OpSpec {
-    method: "GET",
-    path_template: "/games/{id}/reddit",
-    fields: &[
-        FieldSpec { snake: "id", location: FieldLocation::Path },
-    ],
-    auth: &[
-    ],
-};
-
-const OP_GAMES_SUGGESTED_READ: OpSpec = OpSpec {
-    method: "GET",
-    path_template: "/games/{id}/suggested",
-    fields: &[
-        FieldSpec { snake: "id", location: FieldLocation::Path },
-    ],
-    auth: &[
-    ],
-};
-
-const OP_GAMES_TWITCH_READ: OpSpec = OpSpec {
-    method: "GET",
-    path_template: "/games/{id}/twitch",
-    fields: &[
-        FieldSpec { snake: "id", location: FieldLocation::Path },
-    ],
-    auth: &[
-    ],
-};
-
-const OP_GAMES_YOUTUBE_READ: OpSpec = OpSpec {
-    method: "GET",
-    path_template: "/games/{id}/youtube",
-    fields: &[
-        FieldSpec { snake: "id", location: FieldLocation::Path },
-    ],
-    auth: &[
-    ],
-};
-
-fn iface_games__list_op_params__to_json(p: &iface_games::ListOpParams) -> Value {
-    let mut m = Map::new();
-    m.insert("page".into(), match (&p.page) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    m.insert("page_size".into(), match (&p.page_size) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    m.insert("search".into(), match (&p.search) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("search_precise".into(), match (&p.search_precise) { Some(v) => Value::Bool(*(v)), None => Value::Null });
-    m.insert("search_exact".into(), match (&p.search_exact) { Some(v) => Value::Bool(*(v)), None => Value::Null });
-    m.insert("parent_platforms".into(), match (&p.parent_platforms) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("platforms".into(), match (&p.platforms) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("stores".into(), match (&p.stores) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("developers".into(), match (&p.developers) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("publishers".into(), match (&p.publishers) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("genres".into(), match (&p.genres) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("tags".into(), match (&p.tags) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("creators".into(), match (&p.creators) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("dates".into(), match (&p.dates) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("updated".into(), match (&p.updated) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("platforms_count".into(), match (&p.platforms_count) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    m.insert("metacritic".into(), match (&p.metacritic) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("exclude_collection".into(), match (&p.exclude_collection) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    m.insert("exclude_additions".into(), match (&p.exclude_additions) { Some(v) => Value::Bool(*(v)), None => Value::Null });
-    m.insert("exclude_parents".into(), match (&p.exclude_parents) { Some(v) => Value::Bool(*(v)), None => Value::Null });
-    m.insert("exclude_game_series".into(), match (&p.exclude_game_series) { Some(v) => Value::Bool(*(v)), None => Value::Null });
-    m.insert("exclude_stores".into(), match (&p.exclude_stores) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("ordering".into(), match (&p.ordering) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_games__additions_list_params__to_json(p: &iface_games::AdditionsListParams) -> Value {
-    let mut m = Map::new();
-    m.insert("page".into(), match (&p.page) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    m.insert("page_size".into(), match (&p.page_size) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_games__development_team_list_params__to_json(p: &iface_games::DevelopmentTeamListParams) -> Value {
-    let mut m = Map::new();
-    m.insert("ordering".into(), match (&p.ordering) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("page".into(), match (&p.page) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    m.insert("page_size".into(), match (&p.page_size) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_games__game_series_list_params__to_json(p: &iface_games::GameSeriesListParams) -> Value {
-    let mut m = Map::new();
-    m.insert("page".into(), match (&p.page) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    m.insert("page_size".into(), match (&p.page_size) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_games__parent_games_list_params__to_json(p: &iface_games::ParentGamesListParams) -> Value {
-    let mut m = Map::new();
-    m.insert("page".into(), match (&p.page) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    m.insert("page_size".into(), match (&p.page_size) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_games__screenshots_list_params__to_json(p: &iface_games::ScreenshotsListParams) -> Value {
-    let mut m = Map::new();
-    m.insert("ordering".into(), match (&p.ordering) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("page".into(), match (&p.page) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    m.insert("page_size".into(), match (&p.page_size) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_games__stores_list_params__to_json(p: &iface_games::StoresListParams) -> Value {
-    let mut m = Map::new();
-    m.insert("ordering".into(), match (&p.ordering) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("page".into(), match (&p.page) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    m.insert("page_size".into(), match (&p.page_size) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_games__read_params__to_json(p: &iface_games::ReadParams) -> Value {
-    let mut m = Map::new();
-    m.insert("id".into(), Value::String((&p.id).clone()));
-    Value::Object(m)
-}
-
-fn iface_games__achievements_read_params__to_json(p: &iface_games::AchievementsReadParams) -> Value {
-    let mut m = Map::new();
-    m.insert("id".into(), Value::String((&p.id).clone()));
-    Value::Object(m)
-}
-
-fn iface_games__movies_read_params__to_json(p: &iface_games::MoviesReadParams) -> Value {
-    let mut m = Map::new();
-    m.insert("id".into(), Value::String((&p.id).clone()));
-    Value::Object(m)
-}
-
-fn iface_games__reddit_read_params__to_json(p: &iface_games::RedditReadParams) -> Value {
-    let mut m = Map::new();
-    m.insert("id".into(), Value::String((&p.id).clone()));
-    Value::Object(m)
-}
-
-fn iface_games__suggested_read_params__to_json(p: &iface_games::SuggestedReadParams) -> Value {
-    let mut m = Map::new();
-    m.insert("id".into(), Value::String((&p.id).clone()));
-    Value::Object(m)
-}
-
-fn iface_games__twitch_read_params__to_json(p: &iface_games::TwitchReadParams) -> Value {
-    let mut m = Map::new();
-    m.insert("id".into(), Value::String((&p.id).clone()));
-    Value::Object(m)
-}
-
-fn iface_games__youtube_read_params__to_json(p: &iface_games::YoutubeReadParams) -> Value {
-    let mut m = Map::new();
-    m.insert("id".into(), Value::String((&p.id).clone()));
-    Value::Object(m)
-}
-
-impl iface_games::Guest for crate::Component {
-    fn list_op(params: iface_games::ListOpParams) -> Result<String, String> {
-        let json = iface_games__list_op_params__to_json(&params);
-        dispatch(&OP_GAMES_LIST_OP, json)
-    }
-    fn additions_list(params: iface_games::AdditionsListParams) -> Result<String, String> {
-        let json = iface_games__additions_list_params__to_json(&params);
-        dispatch(&OP_GAMES_ADDITIONS_LIST, json)
-    }
-    fn development_team_list(params: iface_games::DevelopmentTeamListParams) -> Result<String, String> {
-        let json = iface_games__development_team_list_params__to_json(&params);
-        dispatch(&OP_GAMES_DEVELOPMENT_TEAM_LIST, json)
-    }
-    fn game_series_list(params: iface_games::GameSeriesListParams) -> Result<String, String> {
-        let json = iface_games__game_series_list_params__to_json(&params);
-        dispatch(&OP_GAMES_GAME_SERIES_LIST, json)
-    }
-    fn parent_games_list(params: iface_games::ParentGamesListParams) -> Result<String, String> {
-        let json = iface_games__parent_games_list_params__to_json(&params);
-        dispatch(&OP_GAMES_PARENT_GAMES_LIST, json)
-    }
-    fn screenshots_list(params: iface_games::ScreenshotsListParams) -> Result<String, String> {
-        let json = iface_games__screenshots_list_params__to_json(&params);
-        dispatch(&OP_GAMES_SCREENSHOTS_LIST, json)
-    }
-    fn stores_list(params: iface_games::StoresListParams) -> Result<String, String> {
-        let json = iface_games__stores_list_params__to_json(&params);
-        dispatch(&OP_GAMES_STORES_LIST, json)
-    }
-    fn read(params: iface_games::ReadParams) -> Result<String, String> {
-        let json = iface_games__read_params__to_json(&params);
-        dispatch(&OP_GAMES_READ, json)
-    }
-    fn achievements_read(params: iface_games::AchievementsReadParams) -> Result<String, String> {
-        let json = iface_games__achievements_read_params__to_json(&params);
-        dispatch(&OP_GAMES_ACHIEVEMENTS_READ, json)
-    }
-    fn movies_read(params: iface_games::MoviesReadParams) -> Result<String, String> {
-        let json = iface_games__movies_read_params__to_json(&params);
-        dispatch(&OP_GAMES_MOVIES_READ, json)
-    }
-    fn reddit_read(params: iface_games::RedditReadParams) -> Result<String, String> {
-        let json = iface_games__reddit_read_params__to_json(&params);
-        dispatch(&OP_GAMES_REDDIT_READ, json)
-    }
-    fn suggested_read(params: iface_games::SuggestedReadParams) -> Result<String, String> {
-        let json = iface_games__suggested_read_params__to_json(&params);
-        dispatch(&OP_GAMES_SUGGESTED_READ, json)
-    }
-    fn twitch_read(params: iface_games::TwitchReadParams) -> Result<String, String> {
-        let json = iface_games__twitch_read_params__to_json(&params);
-        dispatch(&OP_GAMES_TWITCH_READ, json)
-    }
-    fn youtube_read(params: iface_games::YoutubeReadParams) -> Result<String, String> {
-        let json = iface_games__youtube_read_params__to_json(&params);
-        dispatch(&OP_GAMES_YOUTUBE_READ, json)
-    }
-}
-use crate::exports::autostamp::rawg::genres as iface_genres;
-
-const OP_GENRES_LIST_OP: OpSpec = OpSpec {
-    method: "GET",
-    path_template: "/genres",
-    fields: &[
-        FieldSpec { snake: "ordering", location: FieldLocation::Query },
-        FieldSpec { snake: "page", location: FieldLocation::Query },
-        FieldSpec { snake: "page_size", location: FieldLocation::Query },
-    ],
-    auth: &[
-    ],
-};
-
-const OP_GENRES_READ: OpSpec = OpSpec {
-    method: "GET",
-    path_template: "/genres/{id}",
-    fields: &[
-    ],
-    auth: &[
-    ],
-};
-
-fn iface_genres__list_op_params__to_json(p: &iface_genres::ListOpParams) -> Value {
-    let mut m = Map::new();
-    m.insert("ordering".into(), match (&p.ordering) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("page".into(), match (&p.page) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    m.insert("page_size".into(), match (&p.page_size) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    Value::Object(m)
-}
-
-impl iface_genres::Guest for crate::Component {
-    fn list_op(params: iface_genres::ListOpParams) -> Result<String, String> {
-        let json = iface_genres__list_op_params__to_json(&params);
-        dispatch(&OP_GENRES_LIST_OP, json)
-    }
-    fn read() -> Result<String, String> {
-        dispatch(&OP_GENRES_READ, Value::Object(Map::new()))
-    }
-}
-use crate::exports::autostamp::rawg::platforms as iface_platforms;
-
-const OP_PLATFORMS_LIST_OP: OpSpec = OpSpec {
-    method: "GET",
-    path_template: "/platforms",
-    fields: &[
-        FieldSpec { snake: "ordering", location: FieldLocation::Query },
-        FieldSpec { snake: "page", location: FieldLocation::Query },
-        FieldSpec { snake: "page_size", location: FieldLocation::Query },
-    ],
-    auth: &[
-    ],
-};
-
-const OP_PLATFORMS_LISTS_PARENTS_LIST: OpSpec = OpSpec {
-    method: "GET",
-    path_template: "/platforms/lists/parents",
-    fields: &[
-        FieldSpec { snake: "ordering", location: FieldLocation::Query },
-        FieldSpec { snake: "page", location: FieldLocation::Query },
-        FieldSpec { snake: "page_size", location: FieldLocation::Query },
-    ],
-    auth: &[
-    ],
-};
-
-const OP_PLATFORMS_READ: OpSpec = OpSpec {
-    method: "GET",
-    path_template: "/platforms/{id}",
-    fields: &[
-    ],
-    auth: &[
-    ],
-};
-
-fn iface_platforms__list_op_params__to_json(p: &iface_platforms::ListOpParams) -> Value {
-    let mut m = Map::new();
-    m.insert("ordering".into(), match (&p.ordering) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("page".into(), match (&p.page) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    m.insert("page_size".into(), match (&p.page_size) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_platforms__lists_parents_list_params__to_json(p: &iface_platforms::ListsParentsListParams) -> Value {
-    let mut m = Map::new();
-    m.insert("ordering".into(), match (&p.ordering) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("page".into(), match (&p.page) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    m.insert("page_size".into(), match (&p.page_size) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    Value::Object(m)
-}
-
-impl iface_platforms::Guest for crate::Component {
-    fn list_op(params: iface_platforms::ListOpParams) -> Result<String, String> {
-        let json = iface_platforms__list_op_params__to_json(&params);
-        dispatch(&OP_PLATFORMS_LIST_OP, json)
-    }
-    fn lists_parents_list(params: iface_platforms::ListsParentsListParams) -> Result<String, String> {
-        let json = iface_platforms__lists_parents_list_params__to_json(&params);
-        dispatch(&OP_PLATFORMS_LISTS_PARENTS_LIST, json)
-    }
-    fn read() -> Result<String, String> {
-        dispatch(&OP_PLATFORMS_READ, Value::Object(Map::new()))
-    }
-}
-use crate::exports::autostamp::rawg::publishers as iface_publishers;
-
-const OP_PUBLISHERS_LIST_OP: OpSpec = OpSpec {
-    method: "GET",
-    path_template: "/publishers",
-    fields: &[
-        FieldSpec { snake: "page", location: FieldLocation::Query },
-        FieldSpec { snake: "page_size", location: FieldLocation::Query },
-    ],
-    auth: &[
-    ],
-};
-
-const OP_PUBLISHERS_READ: OpSpec = OpSpec {
-    method: "GET",
-    path_template: "/publishers/{id}",
-    fields: &[
-    ],
-    auth: &[
-    ],
-};
-
-fn iface_publishers__list_op_params__to_json(p: &iface_publishers::ListOpParams) -> Value {
-    let mut m = Map::new();
-    m.insert("page".into(), match (&p.page) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    m.insert("page_size".into(), match (&p.page_size) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    Value::Object(m)
-}
-
-impl iface_publishers::Guest for crate::Component {
-    fn list_op(params: iface_publishers::ListOpParams) -> Result<String, String> {
-        let json = iface_publishers__list_op_params__to_json(&params);
-        dispatch(&OP_PUBLISHERS_LIST_OP, json)
-    }
-    fn read() -> Result<String, String> {
-        dispatch(&OP_PUBLISHERS_READ, Value::Object(Map::new()))
-    }
-}
-use crate::exports::autostamp::rawg::stores as iface_stores;
-
-const OP_STORES_LIST_OP: OpSpec = OpSpec {
-    method: "GET",
-    path_template: "/stores",
-    fields: &[
-        FieldSpec { snake: "ordering", location: FieldLocation::Query },
-        FieldSpec { snake: "page", location: FieldLocation::Query },
-        FieldSpec { snake: "page_size", location: FieldLocation::Query },
-    ],
-    auth: &[
-    ],
-};
-
-const OP_STORES_READ: OpSpec = OpSpec {
-    method: "GET",
-    path_template: "/stores/{id}",
-    fields: &[
-    ],
-    auth: &[
-    ],
-};
-
-fn iface_stores__list_op_params__to_json(p: &iface_stores::ListOpParams) -> Value {
-    let mut m = Map::new();
-    m.insert("ordering".into(), match (&p.ordering) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("page".into(), match (&p.page) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    m.insert("page_size".into(), match (&p.page_size) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    Value::Object(m)
-}
-
-impl iface_stores::Guest for crate::Component {
-    fn list_op(params: iface_stores::ListOpParams) -> Result<String, String> {
-        let json = iface_stores__list_op_params__to_json(&params);
-        dispatch(&OP_STORES_LIST_OP, json)
-    }
-    fn read() -> Result<String, String> {
-        dispatch(&OP_STORES_READ, Value::Object(Map::new()))
-    }
-}
-use crate::exports::autostamp::rawg::tags as iface_tags;
-
-const OP_TAGS_LIST_OP: OpSpec = OpSpec {
-    method: "GET",
-    path_template: "/tags",
-    fields: &[
-        FieldSpec { snake: "page", location: FieldLocation::Query },
-        FieldSpec { snake: "page_size", location: FieldLocation::Query },
-    ],
-    auth: &[
-    ],
-};
-
-const OP_TAGS_READ: OpSpec = OpSpec {
-    method: "GET",
-    path_template: "/tags/{id}",
-    fields: &[
-    ],
-    auth: &[
-    ],
-};
-
-fn iface_tags__list_op_params__to_json(p: &iface_tags::ListOpParams) -> Value {
-    let mut m = Map::new();
-    m.insert("page".into(), match (&p.page) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    m.insert("page_size".into(), match (&p.page_size) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    Value::Object(m)
-}
-
-impl iface_tags::Guest for crate::Component {
-    fn list_op(params: iface_tags::ListOpParams) -> Result<String, String> {
-        let json = iface_tags__list_op_params__to_json(&params);
-        dispatch(&OP_TAGS_LIST_OP, json)
-    }
-    fn read() -> Result<String, String> {
-        dispatch(&OP_TAGS_READ, Value::Object(Map::new()))
-    }
-}
+mod iface_creator_roles;
+mod iface_creators;
+mod iface_developers;
+mod iface_games;
+mod iface_genres;
+mod iface_platforms;
+mod iface_publishers;
+mod iface_stores;
+mod iface_tags;
 
 export!(Component);

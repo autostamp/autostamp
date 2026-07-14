@@ -44,10 +44,15 @@ pub(crate) enum FieldLocation {
     Body,
 }
 
-/// A single operation parameter: the snake-case key it carries in the params JSON and where
-/// it belongs in the request.
+/// A single operation parameter. `snake` keys the field in the internal params JSON (and, for a
+/// path field, matches the `{snake}` placeholder in the path template); `wire` is the verbatim name
+/// the field takes on the HTTP wire (query key, header name, or body property). The two differ
+/// whenever the source name isn't already snake_case (e.g. `dryRun` → snake `dry_run`, wire
+/// `dryRun`), and let distinct inputs that share a snake key (`DateCreated`, `DateCreated<`) still
+/// travel under their true names.
 pub(crate) struct FieldSpec {
     pub(crate) snake: &'static str,
+    pub(crate) wire: &'static str,
     pub(crate) location: FieldLocation,
 }
 
@@ -71,6 +76,16 @@ pub(crate) struct AuthApply {
     pub(crate) kind: AuthKind,
 }
 
+/// The failure modes of [`dispatch`], kept structured so each generated operation can map them
+/// onto its own typed error: an `Http` failure carries the response status and body (routed to
+/// the matching error-variant case), while a `Transport` failure carries a message for the
+/// catch-all case (a secret lookup, connection, or decode failure that never produced an HTTP
+/// status).
+pub(crate) enum DispatchError {
+    Http { status: u16, body: String },
+    Transport(String),
+}
+
 /// A single API operation: HTTP method, path template (with `{snake}` placeholders), the
 /// parameter fields, and the security schemes to apply.
 pub(crate) struct OpSpec {
@@ -81,8 +96,9 @@ pub(crate) struct OpSpec {
 }
 
 /// Execute `op` with the supplied `params` (a JSON object keyed by snake-case field names)
-/// and return the response body as a string, or an error message.
-pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, String> {
+/// and return the raw 2xx response body, or a structured [`DispatchError`] the caller maps
+/// onto the operation's typed error.
+pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, DispatchError> {
     let obj = match &params {
         Value::Object(map) => Some(map),
         _ => None,
@@ -105,10 +121,10 @@ pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, String> {
                 let placeholder = format!("{{{}}}", field.snake);
                 path = path.replace(&placeholder, &percent_encode(&scalar(value)));
             }
-            FieldLocation::Query => query.push((field.snake.to_string(), scalar(value))),
-            FieldLocation::Header => headers.push((field.snake.to_string(), scalar(value))),
+            FieldLocation::Query => query.push((field.wire.to_string(), scalar(value))),
+            FieldLocation::Header => headers.push((field.wire.to_string(), scalar(value))),
             FieldLocation::Body => {
-                body.insert(field.snake.to_string(), value.clone());
+                body.insert(field.wire.to_string(), value.clone());
             }
         }
     }
@@ -116,7 +132,7 @@ pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, String> {
     // Apply each resolved security scheme, sourcing its value from wasmcloud:secrets.
     let mut cookies: Vec<String> = Vec::new();
     for apply in op.auth {
-        let secret = fetch_secret(apply.secret_key)?;
+        let secret = fetch_secret(apply.secret_key).map_err(DispatchError::Transport)?;
         match &apply.kind {
             AuthKind::Bearer => headers.push(("authorization".into(), format!("Bearer {secret}"))),
             AuthKind::Basic => {
@@ -177,17 +193,18 @@ fn fetch_secret(key: &str) -> Result<String, String> {
 }
 
 /// Build and send the outgoing request with `wstd`, returning the response body on a 2xx
-/// status. The generated guest exports are synchronous, so the async `wstd` client is driven
-/// to completion on a local reactor via `wstd::runtime::block_on`.
+/// status and a structured [`DispatchError`] otherwise. The generated guest exports are
+/// synchronous, so the async `wstd` client is driven to completion on a local reactor via
+/// `wstd::runtime::block_on`.
 fn perform(
     method: &str,
     path_with_query: &str,
     headers: &[(String, String)],
     body: &[u8],
-) -> Result<String, String> {
+) -> Result<String, DispatchError> {
     let url = join_url(crate::BASE_URL, path_with_query);
     let method = Method::from_bytes(method.as_bytes())
-        .map_err(|err| format!("invalid HTTP method `{method}`: {err}"))?;
+        .map_err(|err| DispatchError::Transport(format!("invalid HTTP method `{method}`: {err}")))?;
 
     let mut builder = Request::builder().method(method).uri(url);
     for (name, value) in headers {
@@ -199,27 +216,29 @@ fn perform(
         } else {
             Body::from(body.to_vec())
         })
-        .map_err(|err| format!("failed to build request: {err}"))?;
+        .map_err(|err| DispatchError::Transport(format!("failed to build request: {err}")))?;
 
     wstd::runtime::block_on(async move {
         let client = Client::new();
         let response = client
             .send(request)
             .await
-            .map_err(|err| format!("request failed: {err:#}"))?;
+            .map_err(|err| DispatchError::Transport(format!("request failed: {err:#}")))?;
 
         let status = response.status().as_u16();
         let mut response_body = response.into_body();
-        let bytes = response_body
-            .contents()
-            .await
-            .map_err(|err| format!("failed to read response body: {err:#}"))?;
+        let bytes = response_body.contents().await.map_err(|err| {
+            DispatchError::Transport(format!("failed to read response body: {err:#}"))
+        })?;
         let body_text = String::from_utf8_lossy(bytes).into_owned();
 
         if (200..300).contains(&status) {
             Ok(body_text)
         } else {
-            Err(format!("HTTP {status}: {body_text}"))
+            Err(DispatchError::Http {
+                status,
+                body: body_text,
+            })
         }
     })
 }
@@ -279,782 +298,12 @@ fn base64(input: &[u8]) -> String {
 }
 }
 
-use crate::runtime::{dispatch, AuthApply, AuthKind, FieldLocation, FieldSpec, OpSpec};
-use serde_json::{Map, Value};
-
-use crate::exports::autostamp::nordigen::premium as iface_premium;
-
-const OP_PREMIUM_RETRIEVE_ACCOUNT_TRANSACTIONS_V2: OpSpec = OpSpec {
-    method: "GET",
-    path_template: "/api/v2/accounts/premium/{id}/transactions/",
-    fields: &[
-        FieldSpec { snake: "country", location: FieldLocation::Query },
-        FieldSpec { snake: "date_from", location: FieldLocation::Query },
-        FieldSpec { snake: "date_to", location: FieldLocation::Query },
-        FieldSpec { snake: "id", location: FieldLocation::Path },
-    ],
-    auth: &[
-        AuthApply { secret_key: "jwtAuth", kind: AuthKind::Bearer },
-    ],
-};
-
-fn iface_premium__retrieve_account_transactions_v2_params__to_json(p: &iface_premium::RetrieveAccountTransactionsV2Params) -> Value {
-    let mut m = Map::new();
-    m.insert("country".into(), match (&p.country) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("date_from".into(), match (&p.date_from) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("date_to".into(), match (&p.date_to) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("id".into(), Value::String((&p.id).clone()));
-    Value::Object(m)
-}
-
-impl iface_premium::Guest for crate::Component {
-    fn retrieve_account_transactions_v2(params: iface_premium::RetrieveAccountTransactionsV2Params) -> Result<String, String> {
-        let json = iface_premium__retrieve_account_transactions_v2_params__to_json(&params);
-        dispatch(&OP_PREMIUM_RETRIEVE_ACCOUNT_TRANSACTIONS_V2, json)
-    }
-}
-use crate::exports::autostamp::nordigen::accounts as iface_accounts;
-
-const OP_ACCOUNTS_RETRIEVE_ACCOUNT_METADATA: OpSpec = OpSpec {
-    method: "GET",
-    path_template: "/api/v2/accounts/{id}/",
-    fields: &[
-        FieldSpec { snake: "id", location: FieldLocation::Path },
-    ],
-    auth: &[
-        AuthApply { secret_key: "jwtAuth", kind: AuthKind::Bearer },
-    ],
-};
-
-const OP_ACCOUNTS_RETRIEVE_ACCOUNT_BALANCES_V2: OpSpec = OpSpec {
-    method: "GET",
-    path_template: "/api/v2/accounts/{id}/balances/",
-    fields: &[
-        FieldSpec { snake: "id", location: FieldLocation::Path },
-    ],
-    auth: &[
-        AuthApply { secret_key: "jwtAuth", kind: AuthKind::Bearer },
-    ],
-};
-
-const OP_ACCOUNTS_RETRIEVE_ACCOUNT_DETAILS_V2: OpSpec = OpSpec {
-    method: "GET",
-    path_template: "/api/v2/accounts/{id}/details/",
-    fields: &[
-        FieldSpec { snake: "id", location: FieldLocation::Path },
-    ],
-    auth: &[
-        AuthApply { secret_key: "jwtAuth", kind: AuthKind::Bearer },
-    ],
-};
-
-const OP_ACCOUNTS_RETRIEVE_ACCOUNT_TRANSACTIONS_V2_V2: OpSpec = OpSpec {
-    method: "GET",
-    path_template: "/api/v2/accounts/{id}/transactions/",
-    fields: &[
-        FieldSpec { snake: "date_from", location: FieldLocation::Query },
-        FieldSpec { snake: "date_to", location: FieldLocation::Query },
-        FieldSpec { snake: "id", location: FieldLocation::Path },
-    ],
-    auth: &[
-        AuthApply { secret_key: "jwtAuth", kind: AuthKind::Bearer },
-    ],
-};
-
-fn iface_accounts__retrieve_account_metadata_params__to_json(p: &iface_accounts::RetrieveAccountMetadataParams) -> Value {
-    let mut m = Map::new();
-    m.insert("id".into(), Value::String((&p.id).clone()));
-    Value::Object(m)
-}
-
-fn iface_accounts__retrieve_account_balances_v2_params__to_json(p: &iface_accounts::RetrieveAccountBalancesV2Params) -> Value {
-    let mut m = Map::new();
-    m.insert("id".into(), Value::String((&p.id).clone()));
-    Value::Object(m)
-}
-
-fn iface_accounts__retrieve_account_details_v2_params__to_json(p: &iface_accounts::RetrieveAccountDetailsV2Params) -> Value {
-    let mut m = Map::new();
-    m.insert("id".into(), Value::String((&p.id).clone()));
-    Value::Object(m)
-}
-
-fn iface_accounts__retrieve_account_transactions_v2_v2_params__to_json(p: &iface_accounts::RetrieveAccountTransactionsV2V2Params) -> Value {
-    let mut m = Map::new();
-    m.insert("date_from".into(), match (&p.date_from) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("date_to".into(), match (&p.date_to) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("id".into(), Value::String((&p.id).clone()));
-    Value::Object(m)
-}
-
-impl iface_accounts::Guest for crate::Component {
-    fn retrieve_account_metadata(params: iface_accounts::RetrieveAccountMetadataParams) -> Result<String, String> {
-        let json = iface_accounts__retrieve_account_metadata_params__to_json(&params);
-        dispatch(&OP_ACCOUNTS_RETRIEVE_ACCOUNT_METADATA, json)
-    }
-    fn retrieve_account_balances_v2(params: iface_accounts::RetrieveAccountBalancesV2Params) -> Result<String, String> {
-        let json = iface_accounts__retrieve_account_balances_v2_params__to_json(&params);
-        dispatch(&OP_ACCOUNTS_RETRIEVE_ACCOUNT_BALANCES_V2, json)
-    }
-    fn retrieve_account_details_v2(params: iface_accounts::RetrieveAccountDetailsV2Params) -> Result<String, String> {
-        let json = iface_accounts__retrieve_account_details_v2_params__to_json(&params);
-        dispatch(&OP_ACCOUNTS_RETRIEVE_ACCOUNT_DETAILS_V2, json)
-    }
-    fn retrieve_account_transactions_v2_v2(params: iface_accounts::RetrieveAccountTransactionsV2V2Params) -> Result<String, String> {
-        let json = iface_accounts__retrieve_account_transactions_v2_v2_params__to_json(&params);
-        dispatch(&OP_ACCOUNTS_RETRIEVE_ACCOUNT_TRANSACTIONS_V2_V2, json)
-    }
-}
-use crate::exports::autostamp::nordigen::agreements as iface_agreements;
-
-const OP_AGREEMENTS_RETRIEVE_ALL_EU_AS_FOR_AN_END_USER_V2: OpSpec = OpSpec {
-    method: "GET",
-    path_template: "/api/v2/agreements/enduser/",
-    fields: &[
-        FieldSpec { snake: "limit", location: FieldLocation::Query },
-        FieldSpec { snake: "offset", location: FieldLocation::Query },
-    ],
-    auth: &[
-        AuthApply { secret_key: "jwtAuth", kind: AuthKind::Bearer },
-    ],
-};
-
-const OP_AGREEMENTS_CREATE_EUA_V2: OpSpec = OpSpec {
-    method: "POST",
-    path_template: "/api/v2/agreements/enduser/",
-    fields: &[
-        FieldSpec { snake: "access_scope", location: FieldLocation::Body },
-        FieldSpec { snake: "access_valid_for_days", location: FieldLocation::Body },
-        FieldSpec { snake: "institution_id", location: FieldLocation::Body },
-        FieldSpec { snake: "max_historical_days", location: FieldLocation::Body },
-    ],
-    auth: &[
-        AuthApply { secret_key: "jwtAuth", kind: AuthKind::Bearer },
-    ],
-};
-
-const OP_AGREEMENTS_RETRIEVE_EUA_BY_ID_V2: OpSpec = OpSpec {
-    method: "GET",
-    path_template: "/api/v2/agreements/enduser/{id}/",
-    fields: &[
-        FieldSpec { snake: "id", location: FieldLocation::Path },
-    ],
-    auth: &[
-        AuthApply { secret_key: "jwtAuth", kind: AuthKind::Bearer },
-    ],
-};
-
-const OP_AGREEMENTS_DELETE_EUA_BY_ID_V2: OpSpec = OpSpec {
-    method: "DELETE",
-    path_template: "/api/v2/agreements/enduser/{id}/",
-    fields: &[
-        FieldSpec { snake: "id", location: FieldLocation::Path },
-    ],
-    auth: &[
-        AuthApply { secret_key: "jwtAuth", kind: AuthKind::Bearer },
-    ],
-};
-
-const OP_AGREEMENTS_ACCEPT_EUA: OpSpec = OpSpec {
-    method: "PUT",
-    path_template: "/api/v2/agreements/enduser/{id}/accept/",
-    fields: &[
-        FieldSpec { snake: "id", location: FieldLocation::Path },
-        FieldSpec { snake: "ip_address", location: FieldLocation::Body },
-        FieldSpec { snake: "user_agent", location: FieldLocation::Body },
-    ],
-    auth: &[
-        AuthApply { secret_key: "jwtAuth", kind: AuthKind::Bearer },
-    ],
-};
-
-fn iface_agreements__retrieve_all_eu_as_for_an_end_user_v2_params__to_json(p: &iface_agreements::RetrieveAllEuAsForAnEndUserV2Params) -> Value {
-    let mut m = Map::new();
-    m.insert("limit".into(), match (&p.limit) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    m.insert("offset".into(), match (&p.offset) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_agreements__create_eua_v2_params__to_json(p: &iface_agreements::CreateEuaV2Params) -> Value {
-    let mut m = Map::new();
-    m.insert("access_scope".into(), match (&p.access_scope) { Some(v) => Value::Array((v).iter().map(|v| Value::Array((v).iter().map(|v| Value::String((v).clone())).collect())).collect()), None => Value::Null });
-    m.insert("access_valid_for_days".into(), match (&p.access_valid_for_days) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    m.insert("institution_id".into(), Value::String((&p.institution_id).clone()));
-    m.insert("max_historical_days".into(), match (&p.max_historical_days) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_agreements__retrieve_eua_by_id_v2_params__to_json(p: &iface_agreements::RetrieveEuaByIdV2Params) -> Value {
-    let mut m = Map::new();
-    m.insert("id".into(), Value::String((&p.id).clone()));
-    Value::Object(m)
-}
-
-fn iface_agreements__delete_eua_by_id_v2_params__to_json(p: &iface_agreements::DeleteEuaByIdV2Params) -> Value {
-    let mut m = Map::new();
-    m.insert("id".into(), Value::String((&p.id).clone()));
-    Value::Object(m)
-}
-
-fn iface_agreements__accept_eua_params__to_json(p: &iface_agreements::AcceptEuaParams) -> Value {
-    let mut m = Map::new();
-    m.insert("id".into(), Value::String((&p.id).clone()));
-    m.insert("ip_address".into(), Value::String((&p.ip_address).clone()));
-    m.insert("user_agent".into(), Value::String((&p.user_agent).clone()));
-    Value::Object(m)
-}
-
-impl iface_agreements::Guest for crate::Component {
-    fn retrieve_all_eu_as_for_an_end_user_v2(params: iface_agreements::RetrieveAllEuAsForAnEndUserV2Params) -> Result<String, String> {
-        let json = iface_agreements__retrieve_all_eu_as_for_an_end_user_v2_params__to_json(&params);
-        dispatch(&OP_AGREEMENTS_RETRIEVE_ALL_EU_AS_FOR_AN_END_USER_V2, json)
-    }
-    fn create_eua_v2(params: iface_agreements::CreateEuaV2Params) -> Result<String, String> {
-        let json = iface_agreements__create_eua_v2_params__to_json(&params);
-        dispatch(&OP_AGREEMENTS_CREATE_EUA_V2, json)
-    }
-    fn retrieve_eua_by_id_v2(params: iface_agreements::RetrieveEuaByIdV2Params) -> Result<String, String> {
-        let json = iface_agreements__retrieve_eua_by_id_v2_params__to_json(&params);
-        dispatch(&OP_AGREEMENTS_RETRIEVE_EUA_BY_ID_V2, json)
-    }
-    fn delete_eua_by_id_v2(params: iface_agreements::DeleteEuaByIdV2Params) -> Result<String, String> {
-        let json = iface_agreements__delete_eua_by_id_v2_params__to_json(&params);
-        dispatch(&OP_AGREEMENTS_DELETE_EUA_BY_ID_V2, json)
-    }
-    fn accept_eua(params: iface_agreements::AcceptEuaParams) -> Result<String, String> {
-        let json = iface_agreements__accept_eua_params__to_json(&params);
-        dispatch(&OP_AGREEMENTS_ACCEPT_EUA, json)
-    }
-}
-use crate::exports::autostamp::nordigen::institutions as iface_institutions;
-
-const OP_INSTITUTIONS_RETRIEVE_ALL_SUPPORTED_INSTITUTIONS_IN_A_GIVEN_COUNTRY: OpSpec = OpSpec {
-    method: "GET",
-    path_template: "/api/v2/institutions/",
-    fields: &[
-        FieldSpec { snake: "country", location: FieldLocation::Query },
-        FieldSpec { snake: "payments_enabled", location: FieldLocation::Query },
-    ],
-    auth: &[
-        AuthApply { secret_key: "jwtAuth", kind: AuthKind::Bearer },
-    ],
-};
-
-const OP_INSTITUTIONS_RETRIEVE_INSTITUTION: OpSpec = OpSpec {
-    method: "GET",
-    path_template: "/api/v2/institutions/{id}/",
-    fields: &[
-        FieldSpec { snake: "id", location: FieldLocation::Path },
-    ],
-    auth: &[
-        AuthApply { secret_key: "jwtAuth", kind: AuthKind::Bearer },
-    ],
-};
-
-fn iface_institutions__retrieve_all_supported_institutions_in_a_given_country_params__to_json(p: &iface_institutions::RetrieveAllSupportedInstitutionsInAGivenCountryParams) -> Value {
-    let mut m = Map::new();
-    m.insert("country".into(), match (&p.country) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("payments_enabled".into(), match (&p.payments_enabled) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_institutions__retrieve_institution_params__to_json(p: &iface_institutions::RetrieveInstitutionParams) -> Value {
-    let mut m = Map::new();
-    m.insert("id".into(), Value::String((&p.id).clone()));
-    Value::Object(m)
-}
-
-impl iface_institutions::Guest for crate::Component {
-    fn retrieve_all_supported_institutions_in_a_given_country(params: iface_institutions::RetrieveAllSupportedInstitutionsInAGivenCountryParams) -> Result<String, String> {
-        let json = iface_institutions__retrieve_all_supported_institutions_in_a_given_country_params__to_json(&params);
-        dispatch(&OP_INSTITUTIONS_RETRIEVE_ALL_SUPPORTED_INSTITUTIONS_IN_A_GIVEN_COUNTRY, json)
-    }
-    fn retrieve_institution(params: iface_institutions::RetrieveInstitutionParams) -> Result<String, String> {
-        let json = iface_institutions__retrieve_institution_params__to_json(&params);
-        dispatch(&OP_INSTITUTIONS_RETRIEVE_INSTITUTION, json)
-    }
-}
-use crate::exports::autostamp::nordigen::payments as iface_payments;
-
-const OP_PAYMENTS_LIST_PAYMENTS: OpSpec = OpSpec {
-    method: "GET",
-    path_template: "/api/v2/payments/",
-    fields: &[
-        FieldSpec { snake: "limit", location: FieldLocation::Query },
-        FieldSpec { snake: "offset", location: FieldLocation::Query },
-    ],
-    auth: &[
-        AuthApply { secret_key: "jwtAuth", kind: AuthKind::Bearer },
-    ],
-};
-
-const OP_PAYMENTS_CREATE_PAYMENT: OpSpec = OpSpec {
-    method: "POST",
-    path_template: "/api/v2/payments/",
-    fields: &[
-        FieldSpec { snake: "creditor_account", location: FieldLocation::Body },
-        FieldSpec { snake: "creditor_object", location: FieldLocation::Body },
-        FieldSpec { snake: "custom_payment_id", location: FieldLocation::Body },
-        FieldSpec { snake: "debtor_account", location: FieldLocation::Body },
-        FieldSpec { snake: "description", location: FieldLocation::Body },
-        FieldSpec { snake: "institution_id", location: FieldLocation::Body },
-        FieldSpec { snake: "instructed_amount", location: FieldLocation::Body },
-        FieldSpec { snake: "payment_product", location: FieldLocation::Body },
-        FieldSpec { snake: "periodic_payment", location: FieldLocation::Body },
-        FieldSpec { snake: "redirect", location: FieldLocation::Body },
-        FieldSpec { snake: "requested_execution_date", location: FieldLocation::Body },
-        FieldSpec { snake: "submit_payment", location: FieldLocation::Body },
-    ],
-    auth: &[
-        AuthApply { secret_key: "jwtAuth", kind: AuthKind::Bearer },
-    ],
-};
-
-const OP_PAYMENTS_RETRIEVE_ALL_PAYMENT_CREDITOR_ACCOUNTS: OpSpec = OpSpec {
-    method: "GET",
-    path_template: "/api/v2/payments/account/",
-    fields: &[
-    ],
-    auth: &[
-        AuthApply { secret_key: "jwtAuth", kind: AuthKind::Bearer },
-    ],
-};
-
-const OP_PAYMENTS_CREDITORS_LIST: OpSpec = OpSpec {
-    method: "GET",
-    path_template: "/api/v2/payments/creditors/",
-    fields: &[
-        FieldSpec { snake: "account", location: FieldLocation::Query },
-        FieldSpec { snake: "address_country", location: FieldLocation::Query },
-        FieldSpec { snake: "agent", location: FieldLocation::Query },
-        FieldSpec { snake: "currency", location: FieldLocation::Query },
-        FieldSpec { snake: "limit", location: FieldLocation::Query },
-        FieldSpec { snake: "name", location: FieldLocation::Query },
-        FieldSpec { snake: "offset", location: FieldLocation::Query },
-        FieldSpec { snake: "type", location: FieldLocation::Query },
-    ],
-    auth: &[
-        AuthApply { secret_key: "jwtAuth", kind: AuthKind::Bearer },
-    ],
-};
-
-const OP_PAYMENTS_CREDITORS_CREATE: OpSpec = OpSpec {
-    method: "POST",
-    path_template: "/api/v2/payments/creditors/",
-    fields: &[
-        FieldSpec { snake: "account", location: FieldLocation::Body },
-        FieldSpec { snake: "address_country", location: FieldLocation::Body },
-        FieldSpec { snake: "address_street", location: FieldLocation::Body },
-        FieldSpec { snake: "agent", location: FieldLocation::Body },
-        FieldSpec { snake: "agent_name", location: FieldLocation::Body },
-        FieldSpec { snake: "currency", location: FieldLocation::Body },
-        FieldSpec { snake: "institution_id", location: FieldLocation::Body },
-        FieldSpec { snake: "name", location: FieldLocation::Body },
-        FieldSpec { snake: "post_code", location: FieldLocation::Body },
-        FieldSpec { snake: "type", location: FieldLocation::Body },
-    ],
-    auth: &[
-        AuthApply { secret_key: "jwtAuth", kind: AuthKind::Bearer },
-    ],
-};
-
-const OP_PAYMENTS_CREDITORS_RETRIEVE: OpSpec = OpSpec {
-    method: "GET",
-    path_template: "/api/v2/payments/creditors/{id}/",
-    fields: &[
-        FieldSpec { snake: "id", location: FieldLocation::Path },
-    ],
-    auth: &[
-        AuthApply { secret_key: "jwtAuth", kind: AuthKind::Bearer },
-    ],
-};
-
-const OP_PAYMENTS_CREDITORS_DESTROY: OpSpec = OpSpec {
-    method: "DELETE",
-    path_template: "/api/v2/payments/creditors/{id}/",
-    fields: &[
-        FieldSpec { snake: "id", location: FieldLocation::Path },
-    ],
-    auth: &[
-        AuthApply { secret_key: "jwtAuth", kind: AuthKind::Bearer },
-    ],
-};
-
-const OP_PAYMENTS_LIST_MINIMUM_REQUIRED_FIELDS_FOR_INSTITUTION: OpSpec = OpSpec {
-    method: "GET",
-    path_template: "/api/v2/payments/fields/{institution_id}/",
-    fields: &[
-        FieldSpec { snake: "institution_id", location: FieldLocation::Path },
-    ],
-    auth: &[
-        AuthApply { secret_key: "jwtAuth", kind: AuthKind::Bearer },
-    ],
-};
-
-const OP_PAYMENTS_RETRIEVE_PAYMENT: OpSpec = OpSpec {
-    method: "GET",
-    path_template: "/api/v2/payments/{id}/",
-    fields: &[
-        FieldSpec { snake: "id", location: FieldLocation::Path },
-    ],
-    auth: &[
-        AuthApply { secret_key: "jwtAuth", kind: AuthKind::Bearer },
-    ],
-};
-
-const OP_PAYMENTS_DELETE_PERIODIC_PAYMENT: OpSpec = OpSpec {
-    method: "DELETE",
-    path_template: "/api/v2/payments/{id}/",
-    fields: &[
-        FieldSpec { snake: "id", location: FieldLocation::Path },
-    ],
-    auth: &[
-        AuthApply { secret_key: "jwtAuth", kind: AuthKind::Bearer },
-    ],
-};
-
-const OP_PAYMENTS_SUBMIT_CREATE: OpSpec = OpSpec {
-    method: "POST",
-    path_template: "/api/v2/payments/{id}/submit/",
-    fields: &[
-        FieldSpec { snake: "id", location: FieldLocation::Path },
-        FieldSpec { snake: "creditor_account", location: FieldLocation::Body },
-        FieldSpec { snake: "creditor_object", location: FieldLocation::Body },
-        FieldSpec { snake: "custom_payment_id", location: FieldLocation::Body },
-        FieldSpec { snake: "debtor_account", location: FieldLocation::Body },
-        FieldSpec { snake: "description", location: FieldLocation::Body },
-        FieldSpec { snake: "institution_id", location: FieldLocation::Body },
-        FieldSpec { snake: "instructed_amount", location: FieldLocation::Body },
-        FieldSpec { snake: "payment_product", location: FieldLocation::Body },
-        FieldSpec { snake: "redirect", location: FieldLocation::Body },
-    ],
-    auth: &[
-        AuthApply { secret_key: "jwtAuth", kind: AuthKind::Bearer },
-    ],
-};
-
-fn iface_payments__periodic_payment_request__to_json(p: &iface_payments::PeriodicPaymentRequest) -> Value {
-    let mut m = Map::new();
-    m.insert("day_of_execution".into(), match (&p.day_of_execution) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("end_date".into(), match (&p.end_date) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("execution_rule".into(), match (&p.execution_rule) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("frequency".into(), match (&p.frequency) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("start_date".into(), Value::String((&p.start_date).clone()));
-    Value::Object(m)
-}
-
-fn iface_payments__address_country_enum__to_json(p: &iface_payments::AddressCountryEnum) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_payments__debtor_account_write_request__to_json(p: &iface_payments::DebtorAccountWriteRequest) -> Value {
-    let mut m = Map::new();
-    m.insert("account".into(), match (&p.account) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("address_country".into(), match (&p.address_country) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("address_street".into(), match (&p.address_street) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("currency".into(), match (&p.currency) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("name".into(), Value::String((&p.name).clone()));
-    m.insert("post_code".into(), match (&p.post_code) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("type".into(), match (&p.type_op) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("type_number".into(), match (&p.type_number) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_payments__list_payments_params__to_json(p: &iface_payments::ListPaymentsParams) -> Value {
-    let mut m = Map::new();
-    m.insert("limit".into(), match (&p.limit) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    m.insert("offset".into(), match (&p.offset) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_payments__create_payment_params__to_json(p: &iface_payments::CreatePaymentParams) -> Value {
-    let mut m = Map::new();
-    m.insert("creditor_account".into(), match (&p.creditor_account) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("creditor_object".into(), match (&p.creditor_object) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("custom_payment_id".into(), match (&p.custom_payment_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("debtor_account".into(), match (&p.debtor_account) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("description".into(), match (&p.description) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("institution_id".into(), match (&p.institution_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("instructed_amount".into(), Value::String((&p.instructed_amount).clone()));
-    m.insert("payment_product".into(), match (&p.payment_product) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("periodic_payment".into(), match (&p.periodic_payment) { Some(v) => iface_payments__periodic_payment_request__to_json(v), None => Value::Null });
-    m.insert("redirect".into(), Value::String((&p.redirect).clone()));
-    m.insert("requested_execution_date".into(), match (&p.requested_execution_date) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("submit_payment".into(), match (&p.submit_payment) { Some(v) => Value::Bool(*(v)), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_payments__creditors_list_params__to_json(p: &iface_payments::CreditorsListParams) -> Value {
-    let mut m = Map::new();
-    m.insert("account".into(), match (&p.account) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("address_country".into(), match (&p.address_country) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("agent".into(), match (&p.agent) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("currency".into(), match (&p.currency) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("limit".into(), match (&p.limit) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("offset".into(), match (&p.offset) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    m.insert("type".into(), match (&p.type_op) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_payments__creditors_create_params__to_json(p: &iface_payments::CreditorsCreateParams) -> Value {
-    let mut m = Map::new();
-    m.insert("account".into(), Value::String((&p.account).clone()));
-    m.insert("address_country".into(), match (&p.address_country) { Some(v) => iface_payments__address_country_enum__to_json(v), None => Value::Null });
-    m.insert("address_street".into(), match (&p.address_street) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("agent".into(), match (&p.agent) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("agent_name".into(), match (&p.agent_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("currency".into(), Value::String((&p.currency).clone()));
-    m.insert("institution_id".into(), match (&p.institution_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("name".into(), Value::String((&p.name).clone()));
-    m.insert("post_code".into(), match (&p.post_code) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("type".into(), match (&p.type_op) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_payments__creditors_retrieve_params__to_json(p: &iface_payments::CreditorsRetrieveParams) -> Value {
-    let mut m = Map::new();
-    m.insert("id".into(), Value::String((&p.id).clone()));
-    Value::Object(m)
-}
-
-fn iface_payments__creditors_destroy_params__to_json(p: &iface_payments::CreditorsDestroyParams) -> Value {
-    let mut m = Map::new();
-    m.insert("id".into(), Value::String((&p.id).clone()));
-    Value::Object(m)
-}
-
-fn iface_payments__list_minimum_required_fields_for_institution_params__to_json(p: &iface_payments::ListMinimumRequiredFieldsForInstitutionParams) -> Value {
-    let mut m = Map::new();
-    m.insert("institution_id".into(), Value::String((&p.institution_id).clone()));
-    Value::Object(m)
-}
-
-fn iface_payments__retrieve_payment_params__to_json(p: &iface_payments::RetrievePaymentParams) -> Value {
-    let mut m = Map::new();
-    m.insert("id".into(), Value::String((&p.id).clone()));
-    Value::Object(m)
-}
-
-fn iface_payments__delete_periodic_payment_params__to_json(p: &iface_payments::DeletePeriodicPaymentParams) -> Value {
-    let mut m = Map::new();
-    m.insert("id".into(), Value::String((&p.id).clone()));
-    Value::Object(m)
-}
-
-fn iface_payments__submit_create_params__to_json(p: &iface_payments::SubmitCreateParams) -> Value {
-    let mut m = Map::new();
-    m.insert("id".into(), Value::String((&p.id).clone()));
-    m.insert("creditor_account".into(), match (&p.creditor_account) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("creditor_object".into(), match (&p.creditor_object) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("custom_payment_id".into(), match (&p.custom_payment_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("debtor_account".into(), iface_payments__debtor_account_write_request__to_json(&p.debtor_account));
-    m.insert("description".into(), match (&p.description) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("institution_id".into(), match (&p.institution_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("instructed_amount".into(), Value::String((&p.instructed_amount).clone()));
-    m.insert("payment_product".into(), match (&p.payment_product) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("redirect".into(), Value::String((&p.redirect).clone()));
-    Value::Object(m)
-}
-
-impl iface_payments::Guest for crate::Component {
-    fn list_payments(params: iface_payments::ListPaymentsParams) -> Result<String, String> {
-        let json = iface_payments__list_payments_params__to_json(&params);
-        dispatch(&OP_PAYMENTS_LIST_PAYMENTS, json)
-    }
-    fn create_payment(params: iface_payments::CreatePaymentParams) -> Result<String, String> {
-        let json = iface_payments__create_payment_params__to_json(&params);
-        dispatch(&OP_PAYMENTS_CREATE_PAYMENT, json)
-    }
-    fn retrieve_all_payment_creditor_accounts() -> Result<String, String> {
-        dispatch(&OP_PAYMENTS_RETRIEVE_ALL_PAYMENT_CREDITOR_ACCOUNTS, Value::Object(Map::new()))
-    }
-    fn creditors_list(params: iface_payments::CreditorsListParams) -> Result<String, String> {
-        let json = iface_payments__creditors_list_params__to_json(&params);
-        dispatch(&OP_PAYMENTS_CREDITORS_LIST, json)
-    }
-    fn creditors_create(params: iface_payments::CreditorsCreateParams) -> Result<String, String> {
-        let json = iface_payments__creditors_create_params__to_json(&params);
-        dispatch(&OP_PAYMENTS_CREDITORS_CREATE, json)
-    }
-    fn creditors_retrieve(params: iface_payments::CreditorsRetrieveParams) -> Result<String, String> {
-        let json = iface_payments__creditors_retrieve_params__to_json(&params);
-        dispatch(&OP_PAYMENTS_CREDITORS_RETRIEVE, json)
-    }
-    fn creditors_destroy(params: iface_payments::CreditorsDestroyParams) -> Result<String, String> {
-        let json = iface_payments__creditors_destroy_params__to_json(&params);
-        dispatch(&OP_PAYMENTS_CREDITORS_DESTROY, json)
-    }
-    fn list_minimum_required_fields_for_institution(params: iface_payments::ListMinimumRequiredFieldsForInstitutionParams) -> Result<String, String> {
-        let json = iface_payments__list_minimum_required_fields_for_institution_params__to_json(&params);
-        dispatch(&OP_PAYMENTS_LIST_MINIMUM_REQUIRED_FIELDS_FOR_INSTITUTION, json)
-    }
-    fn retrieve_payment(params: iface_payments::RetrievePaymentParams) -> Result<String, String> {
-        let json = iface_payments__retrieve_payment_params__to_json(&params);
-        dispatch(&OP_PAYMENTS_RETRIEVE_PAYMENT, json)
-    }
-    fn delete_periodic_payment(params: iface_payments::DeletePeriodicPaymentParams) -> Result<String, String> {
-        let json = iface_payments__delete_periodic_payment_params__to_json(&params);
-        dispatch(&OP_PAYMENTS_DELETE_PERIODIC_PAYMENT, json)
-    }
-    fn submit_create(params: iface_payments::SubmitCreateParams) -> Result<String, String> {
-        let json = iface_payments__submit_create_params__to_json(&params);
-        dispatch(&OP_PAYMENTS_SUBMIT_CREATE, json)
-    }
-}
-use crate::exports::autostamp::nordigen::requisitions as iface_requisitions;
-
-const OP_REQUISITIONS_RETRIEVE_ALL_REQUISITIONS: OpSpec = OpSpec {
-    method: "GET",
-    path_template: "/api/v2/requisitions/",
-    fields: &[
-        FieldSpec { snake: "limit", location: FieldLocation::Query },
-        FieldSpec { snake: "offset", location: FieldLocation::Query },
-    ],
-    auth: &[
-        AuthApply { secret_key: "jwtAuth", kind: AuthKind::Bearer },
-    ],
-};
-
-const OP_REQUISITIONS_REQUISITION_CREATED: OpSpec = OpSpec {
-    method: "POST",
-    path_template: "/api/v2/requisitions/",
-    fields: &[
-        FieldSpec { snake: "account_selection", location: FieldLocation::Body },
-        FieldSpec { snake: "agreement", location: FieldLocation::Body },
-        FieldSpec { snake: "institution_id", location: FieldLocation::Body },
-        FieldSpec { snake: "redirect", location: FieldLocation::Body },
-        FieldSpec { snake: "redirect_immediate", location: FieldLocation::Body },
-        FieldSpec { snake: "reference", location: FieldLocation::Body },
-        FieldSpec { snake: "ssn", location: FieldLocation::Body },
-        FieldSpec { snake: "user_language", location: FieldLocation::Body },
-    ],
-    auth: &[
-        AuthApply { secret_key: "jwtAuth", kind: AuthKind::Bearer },
-    ],
-};
-
-const OP_REQUISITIONS_REQUISITION_BY_ID: OpSpec = OpSpec {
-    method: "GET",
-    path_template: "/api/v2/requisitions/{id}/",
-    fields: &[
-        FieldSpec { snake: "id", location: FieldLocation::Path },
-    ],
-    auth: &[
-        AuthApply { secret_key: "jwtAuth", kind: AuthKind::Bearer },
-    ],
-};
-
-const OP_REQUISITIONS_DELETE_REQUISITION_BY_ID_V2: OpSpec = OpSpec {
-    method: "DELETE",
-    path_template: "/api/v2/requisitions/{id}/",
-    fields: &[
-        FieldSpec { snake: "id", location: FieldLocation::Path },
-    ],
-    auth: &[
-        AuthApply { secret_key: "jwtAuth", kind: AuthKind::Bearer },
-    ],
-};
-
-fn iface_requisitions__retrieve_all_requisitions_params__to_json(p: &iface_requisitions::RetrieveAllRequisitionsParams) -> Value {
-    let mut m = Map::new();
-    m.insert("limit".into(), match (&p.limit) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    m.insert("offset".into(), match (&p.offset) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_requisitions__requisition_created_params__to_json(p: &iface_requisitions::RequisitionCreatedParams) -> Value {
-    let mut m = Map::new();
-    m.insert("account_selection".into(), match (&p.account_selection) { Some(v) => Value::Bool(*(v)), None => Value::Null });
-    m.insert("agreement".into(), match (&p.agreement) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("institution_id".into(), Value::String((&p.institution_id).clone()));
-    m.insert("redirect".into(), Value::String((&p.redirect).clone()));
-    m.insert("redirect_immediate".into(), match (&p.redirect_immediate) { Some(v) => Value::Bool(*(v)), None => Value::Null });
-    m.insert("reference".into(), match (&p.reference) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("ssn".into(), match (&p.ssn) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("user_language".into(), match (&p.user_language) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_requisitions__requisition_by_id_params__to_json(p: &iface_requisitions::RequisitionByIdParams) -> Value {
-    let mut m = Map::new();
-    m.insert("id".into(), Value::String((&p.id).clone()));
-    Value::Object(m)
-}
-
-fn iface_requisitions__delete_requisition_by_id_v2_params__to_json(p: &iface_requisitions::DeleteRequisitionByIdV2Params) -> Value {
-    let mut m = Map::new();
-    m.insert("id".into(), Value::String((&p.id).clone()));
-    Value::Object(m)
-}
-
-impl iface_requisitions::Guest for crate::Component {
-    fn retrieve_all_requisitions(params: iface_requisitions::RetrieveAllRequisitionsParams) -> Result<String, String> {
-        let json = iface_requisitions__retrieve_all_requisitions_params__to_json(&params);
-        dispatch(&OP_REQUISITIONS_RETRIEVE_ALL_REQUISITIONS, json)
-    }
-    fn requisition_created(params: iface_requisitions::RequisitionCreatedParams) -> Result<String, String> {
-        let json = iface_requisitions__requisition_created_params__to_json(&params);
-        dispatch(&OP_REQUISITIONS_REQUISITION_CREATED, json)
-    }
-    fn requisition_by_id(params: iface_requisitions::RequisitionByIdParams) -> Result<String, String> {
-        let json = iface_requisitions__requisition_by_id_params__to_json(&params);
-        dispatch(&OP_REQUISITIONS_REQUISITION_BY_ID, json)
-    }
-    fn delete_requisition_by_id_v2(params: iface_requisitions::DeleteRequisitionByIdV2Params) -> Result<String, String> {
-        let json = iface_requisitions__delete_requisition_by_id_v2_params__to_json(&params);
-        dispatch(&OP_REQUISITIONS_DELETE_REQUISITION_BY_ID_V2, json)
-    }
-}
-use crate::exports::autostamp::nordigen::token as iface_token;
-
-const OP_TOKEN_JWT_OBTAIN: OpSpec = OpSpec {
-    method: "POST",
-    path_template: "/api/v2/token/new/",
-    fields: &[
-        FieldSpec { snake: "secret_id", location: FieldLocation::Body },
-        FieldSpec { snake: "secret_key", location: FieldLocation::Body },
-    ],
-    auth: &[
-        AuthApply { secret_key: "jwtAuth", kind: AuthKind::Bearer },
-    ],
-};
-
-const OP_TOKEN_JWT_REFRESH: OpSpec = OpSpec {
-    method: "POST",
-    path_template: "/api/v2/token/refresh/",
-    fields: &[
-        FieldSpec { snake: "refresh", location: FieldLocation::Body },
-    ],
-    auth: &[
-        AuthApply { secret_key: "jwtAuth", kind: AuthKind::Bearer },
-    ],
-};
-
-fn iface_token__jwt_obtain_params__to_json(p: &iface_token::JwtObtainParams) -> Value {
-    let mut m = Map::new();
-    m.insert("secret_id".into(), Value::String((&p.secret_id).clone()));
-    m.insert("secret_key".into(), Value::String((&p.secret_key).clone()));
-    Value::Object(m)
-}
-
-fn iface_token__jwt_refresh_params__to_json(p: &iface_token::JwtRefreshParams) -> Value {
-    let mut m = Map::new();
-    m.insert("refresh".into(), Value::String((&p.refresh).clone()));
-    Value::Object(m)
-}
-
-impl iface_token::Guest for crate::Component {
-    fn jwt_obtain(params: iface_token::JwtObtainParams) -> Result<String, String> {
-        let json = iface_token__jwt_obtain_params__to_json(&params);
-        dispatch(&OP_TOKEN_JWT_OBTAIN, json)
-    }
-    fn jwt_refresh(params: iface_token::JwtRefreshParams) -> Result<String, String> {
-        let json = iface_token__jwt_refresh_params__to_json(&params);
-        dispatch(&OP_TOKEN_JWT_REFRESH, json)
-    }
-}
+mod iface_premium;
+mod iface_accounts;
+mod iface_agreements;
+mod iface_institutions;
+mod iface_payments;
+mod iface_requisitions;
+mod iface_token;
 
 export!(Component);

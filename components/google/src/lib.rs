@@ -44,10 +44,15 @@ pub(crate) enum FieldLocation {
     Body,
 }
 
-/// A single operation parameter: the snake-case key it carries in the params JSON and where
-/// it belongs in the request.
+/// A single operation parameter. `snake` keys the field in the internal params JSON (and, for a
+/// path field, matches the `{snake}` placeholder in the path template); `wire` is the verbatim name
+/// the field takes on the HTTP wire (query key, header name, or body property). The two differ
+/// whenever the source name isn't already snake_case (e.g. `dryRun` → snake `dry_run`, wire
+/// `dryRun`), and let distinct inputs that share a snake key (`DateCreated`, `DateCreated<`) still
+/// travel under their true names.
 pub(crate) struct FieldSpec {
     pub(crate) snake: &'static str,
+    pub(crate) wire: &'static str,
     pub(crate) location: FieldLocation,
 }
 
@@ -71,6 +76,16 @@ pub(crate) struct AuthApply {
     pub(crate) kind: AuthKind,
 }
 
+/// The failure modes of [`dispatch`], kept structured so each generated operation can map them
+/// onto its own typed error: an `Http` failure carries the response status and body (routed to
+/// the matching error-variant case), while a `Transport` failure carries a message for the
+/// catch-all case (a secret lookup, connection, or decode failure that never produced an HTTP
+/// status).
+pub(crate) enum DispatchError {
+    Http { status: u16, body: String },
+    Transport(String),
+}
+
 /// A single API operation: HTTP method, path template (with `{snake}` placeholders), the
 /// parameter fields, and the security schemes to apply.
 pub(crate) struct OpSpec {
@@ -81,8 +96,9 @@ pub(crate) struct OpSpec {
 }
 
 /// Execute `op` with the supplied `params` (a JSON object keyed by snake-case field names)
-/// and return the response body as a string, or an error message.
-pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, String> {
+/// and return the raw 2xx response body, or a structured [`DispatchError`] the caller maps
+/// onto the operation's typed error.
+pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, DispatchError> {
     let obj = match &params {
         Value::Object(map) => Some(map),
         _ => None,
@@ -105,10 +121,10 @@ pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, String> {
                 let placeholder = format!("{{{}}}", field.snake);
                 path = path.replace(&placeholder, &percent_encode(&scalar(value)));
             }
-            FieldLocation::Query => query.push((field.snake.to_string(), scalar(value))),
-            FieldLocation::Header => headers.push((field.snake.to_string(), scalar(value))),
+            FieldLocation::Query => query.push((field.wire.to_string(), scalar(value))),
+            FieldLocation::Header => headers.push((field.wire.to_string(), scalar(value))),
             FieldLocation::Body => {
-                body.insert(field.snake.to_string(), value.clone());
+                body.insert(field.wire.to_string(), value.clone());
             }
         }
     }
@@ -116,7 +132,7 @@ pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, String> {
     // Apply each resolved security scheme, sourcing its value from wasmcloud:secrets.
     let mut cookies: Vec<String> = Vec::new();
     for apply in op.auth {
-        let secret = fetch_secret(apply.secret_key)?;
+        let secret = fetch_secret(apply.secret_key).map_err(DispatchError::Transport)?;
         match &apply.kind {
             AuthKind::Bearer => headers.push(("authorization".into(), format!("Bearer {secret}"))),
             AuthKind::Basic => {
@@ -177,17 +193,18 @@ fn fetch_secret(key: &str) -> Result<String, String> {
 }
 
 /// Build and send the outgoing request with `wstd`, returning the response body on a 2xx
-/// status. The generated guest exports are synchronous, so the async `wstd` client is driven
-/// to completion on a local reactor via `wstd::runtime::block_on`.
+/// status and a structured [`DispatchError`] otherwise. The generated guest exports are
+/// synchronous, so the async `wstd` client is driven to completion on a local reactor via
+/// `wstd::runtime::block_on`.
 fn perform(
     method: &str,
     path_with_query: &str,
     headers: &[(String, String)],
     body: &[u8],
-) -> Result<String, String> {
+) -> Result<String, DispatchError> {
     let url = join_url(crate::BASE_URL, path_with_query);
     let method = Method::from_bytes(method.as_bytes())
-        .map_err(|err| format!("invalid HTTP method `{method}`: {err}"))?;
+        .map_err(|err| DispatchError::Transport(format!("invalid HTTP method `{method}`: {err}")))?;
 
     let mut builder = Request::builder().method(method).uri(url);
     for (name, value) in headers {
@@ -199,27 +216,29 @@ fn perform(
         } else {
             Body::from(body.to_vec())
         })
-        .map_err(|err| format!("failed to build request: {err}"))?;
+        .map_err(|err| DispatchError::Transport(format!("failed to build request: {err}")))?;
 
     wstd::runtime::block_on(async move {
         let client = Client::new();
         let response = client
             .send(request)
             .await
-            .map_err(|err| format!("request failed: {err:#}"))?;
+            .map_err(|err| DispatchError::Transport(format!("request failed: {err:#}")))?;
 
         let status = response.status().as_u16();
         let mut response_body = response.into_body();
-        let bytes = response_body
-            .contents()
-            .await
-            .map_err(|err| format!("failed to read response body: {err:#}"))?;
+        let bytes = response_body.contents().await.map_err(|err| {
+            DispatchError::Transport(format!("failed to read response body: {err:#}"))
+        })?;
         let body_text = String::from_utf8_lossy(bytes).into_owned();
 
         if (200..300).contains(&status) {
             Ok(body_text)
         } else {
-            Err(format!("HTTP {status}: {body_text}"))
+            Err(DispatchError::Http {
+                status,
+                body: body_text,
+            })
         }
     })
 }
@@ -279,682 +298,6 @@ fn base64(input: &[u8]) -> String {
 }
 }
 
-use crate::runtime::{dispatch, AuthApply, AuthKind, FieldLocation, FieldSpec, OpSpec};
-use serde_json::{Map, Value};
-
-use crate::exports::autostamp::google::accounts as iface_accounts;
-
-const OP_ACCOUNTS_TRAVELPARTNER_ACCOUNTS_HOTELS_SET_LIVE_ON_GOOGLE: OpSpec = OpSpec {
-    method: "POST",
-    path_template: "/v3/{account}/hotels:setLiveOnGoogle",
-    fields: &[
-        FieldSpec { snake: "account", location: FieldLocation::Path },
-        FieldSpec { snake: "live_on_google", location: FieldLocation::Body },
-        FieldSpec { snake: "partner_hotel_ids", location: FieldLocation::Body },
-    ],
-    auth: &[
-    ],
-};
-
-const OP_ACCOUNTS_TRAVELPARTNER_ACCOUNTS_RECONCILIATION_REPORTS_GET: OpSpec = OpSpec {
-    method: "GET",
-    path_template: "/v3/{name}",
-    fields: &[
-        FieldSpec { snake: "name", location: FieldLocation::Path },
-        FieldSpec { snake: "include_matched_prices", location: FieldLocation::Query },
-        FieldSpec { snake: "include_non_scoring", location: FieldLocation::Query },
-        FieldSpec { snake: "include_pixels", location: FieldLocation::Query },
-    ],
-    auth: &[
-    ],
-};
-
-const OP_ACCOUNTS_TRAVELPARTNER_ACCOUNTS_BRANDS_PATCH: OpSpec = OpSpec {
-    method: "PATCH",
-    path_template: "/v3/{name}",
-    fields: &[
-        FieldSpec { snake: "name", location: FieldLocation::Path },
-        FieldSpec { snake: "allow_missing", location: FieldLocation::Query },
-        FieldSpec { snake: "update_mask", location: FieldLocation::Query },
-        FieldSpec { snake: "active_display_names", location: FieldLocation::Body },
-        FieldSpec { snake: "active_icon", location: FieldLocation::Body },
-        FieldSpec { snake: "active_icon_uri", location: FieldLocation::Body },
-        FieldSpec { snake: "display_name_disapproval_reason", location: FieldLocation::Body },
-        FieldSpec { snake: "display_name_state", location: FieldLocation::Body },
-        FieldSpec { snake: "display_names", location: FieldLocation::Body },
-        FieldSpec { snake: "icon", location: FieldLocation::Body },
-        FieldSpec { snake: "icon_disapproval_reasons", location: FieldLocation::Body },
-        FieldSpec { snake: "icon_state", location: FieldLocation::Body },
-        FieldSpec { snake: "property_count", location: FieldLocation::Body },
-        FieldSpec { snake: "submitted_display_names", location: FieldLocation::Body },
-        FieldSpec { snake: "submitted_icon", location: FieldLocation::Body },
-    ],
-    auth: &[
-    ],
-};
-
-const OP_ACCOUNTS_TRAVELPARTNER_ACCOUNTS_ACCOUNT_LINKS_DELETE: OpSpec = OpSpec {
-    method: "DELETE",
-    path_template: "/v3/{name}",
-    fields: &[
-        FieldSpec { snake: "name", location: FieldLocation::Path },
-    ],
-    auth: &[
-    ],
-};
-
-const OP_ACCOUNTS_TRAVELPARTNER_ACCOUNTS_FREE_BOOKING_LINKS_REPORT_VIEWS_QUERY: OpSpec = OpSpec {
-    method: "GET",
-    path_template: "/v3/{name}/freeBookingLinksReportViews:query",
-    fields: &[
-        FieldSpec { snake: "name", location: FieldLocation::Path },
-        FieldSpec { snake: "aggregate_by", location: FieldLocation::Query },
-        FieldSpec { snake: "filter", location: FieldLocation::Query },
-        FieldSpec { snake: "page_size", location: FieldLocation::Query },
-        FieldSpec { snake: "page_token", location: FieldLocation::Query },
-    ],
-    auth: &[
-    ],
-};
-
-const OP_ACCOUNTS_TRAVELPARTNER_ACCOUNTS_PARTICIPATION_REPORT_VIEWS_QUERY: OpSpec = OpSpec {
-    method: "GET",
-    path_template: "/v3/{name}/participationReportViews:query",
-    fields: &[
-        FieldSpec { snake: "name", location: FieldLocation::Path },
-        FieldSpec { snake: "aggregate_by", location: FieldLocation::Query },
-        FieldSpec { snake: "filter", location: FieldLocation::Query },
-        FieldSpec { snake: "page_size", location: FieldLocation::Query },
-        FieldSpec { snake: "page_token", location: FieldLocation::Query },
-    ],
-    auth: &[
-    ],
-};
-
-const OP_ACCOUNTS_TRAVELPARTNER_ACCOUNTS_PROPERTY_PERFORMANCE_REPORT_VIEWS_QUERY: OpSpec = OpSpec {
-    method: "GET",
-    path_template: "/v3/{name}/propertyPerformanceReportViews:query",
-    fields: &[
-        FieldSpec { snake: "name", location: FieldLocation::Path },
-        FieldSpec { snake: "aggregate_by", location: FieldLocation::Query },
-        FieldSpec { snake: "filter", location: FieldLocation::Query },
-        FieldSpec { snake: "page_size", location: FieldLocation::Query },
-        FieldSpec { snake: "page_token", location: FieldLocation::Query },
-    ],
-    auth: &[
-    ],
-};
-
-const OP_ACCOUNTS_TRAVELPARTNER_ACCOUNTS_ACCOUNT_LINKS_LIST: OpSpec = OpSpec {
-    method: "GET",
-    path_template: "/v3/{parent}/accountLinks",
-    fields: &[
-        FieldSpec { snake: "parent", location: FieldLocation::Path },
-    ],
-    auth: &[
-    ],
-};
-
-const OP_ACCOUNTS_TRAVELPARTNER_ACCOUNTS_ACCOUNT_LINKS_CREATE: OpSpec = OpSpec {
-    method: "POST",
-    path_template: "/v3/{parent}/accountLinks",
-    fields: &[
-        FieldSpec { snake: "parent", location: FieldLocation::Path },
-        FieldSpec { snake: "account_link_target", location: FieldLocation::Body },
-        FieldSpec { snake: "google_ads_customer_name", location: FieldLocation::Body },
-        FieldSpec { snake: "name", location: FieldLocation::Body },
-        FieldSpec { snake: "status", location: FieldLocation::Body },
-    ],
-    auth: &[
-    ],
-};
-
-const OP_ACCOUNTS_TRAVELPARTNER_ACCOUNTS_BRANDS_LIST: OpSpec = OpSpec {
-    method: "GET",
-    path_template: "/v3/{parent}/brands",
-    fields: &[
-        FieldSpec { snake: "parent", location: FieldLocation::Path },
-    ],
-    auth: &[
-    ],
-};
-
-const OP_ACCOUNTS_TRAVELPARTNER_ACCOUNTS_BRANDS_CREATE: OpSpec = OpSpec {
-    method: "POST",
-    path_template: "/v3/{parent}/brands",
-    fields: &[
-        FieldSpec { snake: "parent", location: FieldLocation::Path },
-        FieldSpec { snake: "brand_id", location: FieldLocation::Query },
-        FieldSpec { snake: "active_display_names", location: FieldLocation::Body },
-        FieldSpec { snake: "active_icon", location: FieldLocation::Body },
-        FieldSpec { snake: "active_icon_uri", location: FieldLocation::Body },
-        FieldSpec { snake: "display_name_disapproval_reason", location: FieldLocation::Body },
-        FieldSpec { snake: "display_name_state", location: FieldLocation::Body },
-        FieldSpec { snake: "display_names", location: FieldLocation::Body },
-        FieldSpec { snake: "icon", location: FieldLocation::Body },
-        FieldSpec { snake: "icon_disapproval_reasons", location: FieldLocation::Body },
-        FieldSpec { snake: "icon_state", location: FieldLocation::Body },
-        FieldSpec { snake: "name", location: FieldLocation::Body },
-        FieldSpec { snake: "property_count", location: FieldLocation::Body },
-        FieldSpec { snake: "submitted_display_names", location: FieldLocation::Body },
-        FieldSpec { snake: "submitted_icon", location: FieldLocation::Body },
-    ],
-    auth: &[
-    ],
-};
-
-const OP_ACCOUNTS_TRAVELPARTNER_ACCOUNTS_HOTEL_VIEWS_LIST: OpSpec = OpSpec {
-    method: "GET",
-    path_template: "/v3/{parent}/hotelViews",
-    fields: &[
-        FieldSpec { snake: "parent", location: FieldLocation::Path },
-        FieldSpec { snake: "filter", location: FieldLocation::Query },
-        FieldSpec { snake: "page_size", location: FieldLocation::Query },
-        FieldSpec { snake: "page_token", location: FieldLocation::Query },
-    ],
-    auth: &[
-    ],
-};
-
-const OP_ACCOUNTS_TRAVELPARTNER_ACCOUNTS_HOTEL_VIEWS_SUMMARIZE: OpSpec = OpSpec {
-    method: "GET",
-    path_template: "/v3/{parent}/hotelViews:summarize",
-    fields: &[
-        FieldSpec { snake: "parent", location: FieldLocation::Path },
-    ],
-    auth: &[
-    ],
-};
-
-const OP_ACCOUNTS_TRAVELPARTNER_ACCOUNTS_ICONS_LIST: OpSpec = OpSpec {
-    method: "GET",
-    path_template: "/v3/{parent}/icons",
-    fields: &[
-        FieldSpec { snake: "parent", location: FieldLocation::Path },
-    ],
-    auth: &[
-    ],
-};
-
-const OP_ACCOUNTS_TRAVELPARTNER_ACCOUNTS_ICONS_CREATE: OpSpec = OpSpec {
-    method: "POST",
-    path_template: "/v3/{parent}/icons",
-    fields: &[
-        FieldSpec { snake: "parent", location: FieldLocation::Path },
-        FieldSpec { snake: "disapproval_reasons", location: FieldLocation::Body },
-        FieldSpec { snake: "icon_uri", location: FieldLocation::Body },
-        FieldSpec { snake: "image_data", location: FieldLocation::Body },
-        FieldSpec { snake: "name", location: FieldLocation::Body },
-        FieldSpec { snake: "reference", location: FieldLocation::Body },
-        FieldSpec { snake: "state", location: FieldLocation::Body },
-    ],
-    auth: &[
-    ],
-};
-
-const OP_ACCOUNTS_TRAVELPARTNER_ACCOUNTS_LISTINGS_VERIFY: OpSpec = OpSpec {
-    method: "POST",
-    path_template: "/v3/{parent}/listings:verify",
-    fields: &[
-        FieldSpec { snake: "parent", location: FieldLocation::Path },
-        FieldSpec { snake: "xml_listing", location: FieldLocation::Body },
-    ],
-    auth: &[
-    ],
-};
-
-const OP_ACCOUNTS_TRAVELPARTNER_ACCOUNTS_PRICE_ACCURACY_VIEWS_LIST: OpSpec = OpSpec {
-    method: "GET",
-    path_template: "/v3/{parent}/priceAccuracyViews",
-    fields: &[
-        FieldSpec { snake: "parent", location: FieldLocation::Path },
-    ],
-    auth: &[
-    ],
-};
-
-const OP_ACCOUNTS_TRAVELPARTNER_ACCOUNTS_PRICE_ACCURACY_VIEWS_SUMMARIZE: OpSpec = OpSpec {
-    method: "GET",
-    path_template: "/v3/{parent}/priceAccuracyViews:summarize",
-    fields: &[
-        FieldSpec { snake: "parent", location: FieldLocation::Path },
-    ],
-    auth: &[
-    ],
-};
-
-const OP_ACCOUNTS_TRAVELPARTNER_ACCOUNTS_PRICE_COVERAGE_VIEWS_LIST: OpSpec = OpSpec {
-    method: "GET",
-    path_template: "/v3/{parent}/priceCoverageViews",
-    fields: &[
-        FieldSpec { snake: "parent", location: FieldLocation::Path },
-    ],
-    auth: &[
-    ],
-};
-
-const OP_ACCOUNTS_TRAVELPARTNER_ACCOUNTS_PRICE_COVERAGE_VIEWS_GET_LATEST: OpSpec = OpSpec {
-    method: "GET",
-    path_template: "/v3/{parent}/priceCoverageViews:latest",
-    fields: &[
-        FieldSpec { snake: "parent", location: FieldLocation::Path },
-    ],
-    auth: &[
-    ],
-};
-
-const OP_ACCOUNTS_TRAVELPARTNER_ACCOUNTS_RECONCILIATION_REPORTS_LIST: OpSpec = OpSpec {
-    method: "GET",
-    path_template: "/v3/{parent}/reconciliationReports",
-    fields: &[
-        FieldSpec { snake: "parent", location: FieldLocation::Path },
-        FieldSpec { snake: "end_date", location: FieldLocation::Query },
-        FieldSpec { snake: "start_date", location: FieldLocation::Query },
-    ],
-    auth: &[
-    ],
-};
-
-const OP_ACCOUNTS_TRAVELPARTNER_ACCOUNTS_RECONCILIATION_REPORTS_CREATE: OpSpec = OpSpec {
-    method: "POST",
-    path_template: "/v3/{parent}/reconciliationReports",
-    fields: &[
-        FieldSpec { snake: "parent", location: FieldLocation::Path },
-        FieldSpec { snake: "contents", location: FieldLocation::Body },
-        FieldSpec { snake: "file_name", location: FieldLocation::Body },
-        FieldSpec { snake: "name", location: FieldLocation::Body },
-    ],
-    auth: &[
-    ],
-};
-
-const OP_ACCOUNTS_TRAVELPARTNER_ACCOUNTS_RECONCILIATION_REPORTS_VALIDATE: OpSpec = OpSpec {
-    method: "POST",
-    path_template: "/v3/{parent}/reconciliationReports:validate",
-    fields: &[
-        FieldSpec { snake: "parent", location: FieldLocation::Path },
-        FieldSpec { snake: "contents", location: FieldLocation::Body },
-        FieldSpec { snake: "file_name", location: FieldLocation::Body },
-        FieldSpec { snake: "name", location: FieldLocation::Body },
-    ],
-    auth: &[
-    ],
-};
-
-fn iface_accounts__display_name_disapproval_reason_disapproval_reason_enum__to_str(e: &iface_accounts::DisplayNameDisapprovalReasonDisapprovalReasonEnum) -> &'static str {
-    match e {
-        iface_accounts::DisplayNameDisapprovalReasonDisapprovalReasonEnum::DisapprovalReasonUnspecified => "DISAPPROVAL_REASON_UNSPECIFIED",
-        iface_accounts::DisplayNameDisapprovalReasonDisapprovalReasonEnum::Punctuation => "PUNCTUATION",
-        iface_accounts::DisplayNameDisapprovalReasonDisapprovalReasonEnum::MarketingLanguage => "MARKETING_LANGUAGE",
-        iface_accounts::DisplayNameDisapprovalReasonDisapprovalReasonEnum::LandingPageNotMatched => "LANDING_PAGE_NOT_MATCHED",
-    }
-}
-
-fn iface_accounts__brand_display_name_state_enum__to_str(e: &iface_accounts::BrandDisplayNameStateEnum) -> &'static str {
-    match e {
-        iface_accounts::BrandDisplayNameStateEnum::ReviewStateUnspecified => "REVIEW_STATE_UNSPECIFIED",
-        iface_accounts::BrandDisplayNameStateEnum::ReviewStateNew => "REVIEW_STATE_NEW",
-        iface_accounts::BrandDisplayNameStateEnum::Approved => "APPROVED",
-        iface_accounts::BrandDisplayNameStateEnum::Rejected => "REJECTED",
-    }
-}
-
-fn iface_accounts__brand_icon_disapproval_reasons_item_enum__to_str(e: &iface_accounts::BrandIconDisapprovalReasonsItemEnum) -> &'static str {
-    match e {
-        iface_accounts::BrandIconDisapprovalReasonsItemEnum::ImageDisapprovalReasonUnspecified => "IMAGE_DISAPPROVAL_REASON_UNSPECIFIED",
-        iface_accounts::BrandIconDisapprovalReasonsItemEnum::NotLikeSite => "NOT_LIKE_SITE",
-        iface_accounts::BrandIconDisapprovalReasonsItemEnum::Offensive => "OFFENSIVE",
-        iface_accounts::BrandIconDisapprovalReasonsItemEnum::LowQuality => "LOW_QUALITY",
-        iface_accounts::BrandIconDisapprovalReasonsItemEnum::Animated => "ANIMATED",
-        iface_accounts::BrandIconDisapprovalReasonsItemEnum::BadBackground => "BAD_BACKGROUND",
-        iface_accounts::BrandIconDisapprovalReasonsItemEnum::TextTooSmall => "TEXT_TOO_SMALL",
-    }
-}
-
-fn iface_accounts__account_link_status_enum__to_str(e: &iface_accounts::AccountLinkStatusEnum) -> &'static str {
-    match e {
-        iface_accounts::AccountLinkStatusEnum::AccountLinkStatusUnspecified => "ACCOUNT_LINK_STATUS_UNSPECIFIED",
-        iface_accounts::AccountLinkStatusEnum::AccountLinkStatusUnknown => "ACCOUNT_LINK_STATUS_UNKNOWN",
-        iface_accounts::AccountLinkStatusEnum::RequestedFromHotelCenter => "REQUESTED_FROM_HOTEL_CENTER",
-        iface_accounts::AccountLinkStatusEnum::RequestedFromGoogleAds => "REQUESTED_FROM_GOOGLE_ADS",
-        iface_accounts::AccountLinkStatusEnum::Approved => "APPROVED",
-    }
-}
-
-fn iface_accounts__icon_state_enum__to_str(e: &iface_accounts::IconStateEnum) -> &'static str {
-    match e {
-        iface_accounts::IconStateEnum::StateUnspecified => "STATE_UNSPECIFIED",
-        iface_accounts::IconStateEnum::New => "NEW",
-        iface_accounts::IconStateEnum::Approved => "APPROVED",
-        iface_accounts::IconStateEnum::Rejected => "REJECTED",
-    }
-}
-
-fn iface_accounts__localized_text__to_json(p: &iface_accounts::LocalizedText) -> Value {
-    let mut m = Map::new();
-    m.insert("language_code".into(), match (&p.language_code) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("text".into(), match (&p.text) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_accounts__display_name_disapproval_reason__to_json(p: &iface_accounts::DisplayNameDisapprovalReason) -> Value {
-    let mut m = Map::new();
-    m.insert("disapproval_reason".into(), match (&p.disapproval_reason) { Some(v) => Value::String(iface_accounts__display_name_disapproval_reason_disapproval_reason_enum__to_str(v).into()), None => Value::Null });
-    m.insert("language_code".into(), match (&p.language_code) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_accounts__account_link_target__to_json(p: &iface_accounts::AccountLinkTarget) -> Value {
-    let mut m = Map::new();
-    m.insert("all_hotels".into(), match (&p.all_hotels) { Some(v) => Value::Bool(*(v)), None => Value::Null });
-    m.insert("hotel_list".into(), match (&p.hotel_list) { Some(v) => iface_accounts__hotel_list__to_json(v), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_accounts__hotel_list__to_json(p: &iface_accounts::HotelList) -> Value {
-    let mut m = Map::new();
-    m.insert("partner_hotel_ids".into(), match (&p.partner_hotel_ids) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_accounts__travelpartner_accounts_hotels_set_live_on_google_params__to_json(p: &iface_accounts::TravelpartnerAccountsHotelsSetLiveOnGoogleParams) -> Value {
-    let mut m = Map::new();
-    m.insert("account".into(), Value::String((&p.account).clone()));
-    m.insert("live_on_google".into(), match (&p.live_on_google) { Some(v) => Value::Bool(*(v)), None => Value::Null });
-    m.insert("partner_hotel_ids".into(), match (&p.partner_hotel_ids) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_accounts__travelpartner_accounts_reconciliation_reports_get_params__to_json(p: &iface_accounts::TravelpartnerAccountsReconciliationReportsGetParams) -> Value {
-    let mut m = Map::new();
-    m.insert("name".into(), Value::String((&p.name).clone()));
-    m.insert("include_matched_prices".into(), match (&p.include_matched_prices) { Some(v) => Value::Bool(*(v)), None => Value::Null });
-    m.insert("include_non_scoring".into(), match (&p.include_non_scoring) { Some(v) => Value::Bool(*(v)), None => Value::Null });
-    m.insert("include_pixels".into(), match (&p.include_pixels) { Some(v) => Value::Bool(*(v)), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_accounts__travelpartner_accounts_brands_patch_params__to_json(p: &iface_accounts::TravelpartnerAccountsBrandsPatchParams) -> Value {
-    let mut m = Map::new();
-    m.insert("name".into(), Value::String((&p.name).clone()));
-    m.insert("allow_missing".into(), match (&p.allow_missing) { Some(v) => Value::Bool(*(v)), None => Value::Null });
-    m.insert("update_mask".into(), match (&p.update_mask) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("active_display_names".into(), match (&p.active_display_names) { Some(v) => Value::Array((v).iter().map(|v| iface_accounts__localized_text__to_json(v)).collect()), None => Value::Null });
-    m.insert("active_icon".into(), match (&p.active_icon) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("active_icon_uri".into(), match (&p.active_icon_uri) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("display_name_disapproval_reason".into(), match (&p.display_name_disapproval_reason) { Some(v) => Value::Array((v).iter().map(|v| iface_accounts__display_name_disapproval_reason__to_json(v)).collect()), None => Value::Null });
-    m.insert("display_name_state".into(), match (&p.display_name_state) { Some(v) => Value::String(iface_accounts__brand_display_name_state_enum__to_str(v).into()), None => Value::Null });
-    m.insert("display_names".into(), match (&p.display_names) { Some(v) => Value::Array((v).iter().map(|v| iface_accounts__localized_text__to_json(v)).collect()), None => Value::Null });
-    m.insert("icon".into(), match (&p.icon) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("icon_disapproval_reasons".into(), match (&p.icon_disapproval_reasons) { Some(v) => Value::Array((v).iter().map(|v| Value::String(iface_accounts__brand_icon_disapproval_reasons_item_enum__to_str(v).into())).collect()), None => Value::Null });
-    m.insert("icon_state".into(), match (&p.icon_state) { Some(v) => Value::String(iface_accounts__brand_display_name_state_enum__to_str(v).into()), None => Value::Null });
-    m.insert("property_count".into(), match (&p.property_count) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("submitted_display_names".into(), match (&p.submitted_display_names) { Some(v) => Value::Array((v).iter().map(|v| iface_accounts__localized_text__to_json(v)).collect()), None => Value::Null });
-    m.insert("submitted_icon".into(), match (&p.submitted_icon) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_accounts__travelpartner_accounts_account_links_delete_params__to_json(p: &iface_accounts::TravelpartnerAccountsAccountLinksDeleteParams) -> Value {
-    let mut m = Map::new();
-    m.insert("name".into(), Value::String((&p.name).clone()));
-    Value::Object(m)
-}
-
-fn iface_accounts__travelpartner_accounts_free_booking_links_report_views_query_params__to_json(p: &iface_accounts::TravelpartnerAccountsFreeBookingLinksReportViewsQueryParams) -> Value {
-    let mut m = Map::new();
-    m.insert("name".into(), Value::String((&p.name).clone()));
-    m.insert("aggregate_by".into(), match (&p.aggregate_by) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("filter".into(), match (&p.filter) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("page_size".into(), match (&p.page_size) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    m.insert("page_token".into(), match (&p.page_token) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_accounts__travelpartner_accounts_participation_report_views_query_params__to_json(p: &iface_accounts::TravelpartnerAccountsParticipationReportViewsQueryParams) -> Value {
-    let mut m = Map::new();
-    m.insert("name".into(), Value::String((&p.name).clone()));
-    m.insert("aggregate_by".into(), match (&p.aggregate_by) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("filter".into(), match (&p.filter) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("page_size".into(), match (&p.page_size) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    m.insert("page_token".into(), match (&p.page_token) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_accounts__travelpartner_accounts_property_performance_report_views_query_params__to_json(p: &iface_accounts::TravelpartnerAccountsPropertyPerformanceReportViewsQueryParams) -> Value {
-    let mut m = Map::new();
-    m.insert("name".into(), Value::String((&p.name).clone()));
-    m.insert("aggregate_by".into(), match (&p.aggregate_by) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("filter".into(), match (&p.filter) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("page_size".into(), match (&p.page_size) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    m.insert("page_token".into(), match (&p.page_token) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_accounts__travelpartner_accounts_account_links_list_params__to_json(p: &iface_accounts::TravelpartnerAccountsAccountLinksListParams) -> Value {
-    let mut m = Map::new();
-    m.insert("parent".into(), Value::String((&p.parent).clone()));
-    Value::Object(m)
-}
-
-fn iface_accounts__travelpartner_accounts_account_links_create_params__to_json(p: &iface_accounts::TravelpartnerAccountsAccountLinksCreateParams) -> Value {
-    let mut m = Map::new();
-    m.insert("parent".into(), Value::String((&p.parent).clone()));
-    m.insert("account_link_target".into(), match (&p.account_link_target) { Some(v) => iface_accounts__account_link_target__to_json(v), None => Value::Null });
-    m.insert("google_ads_customer_name".into(), match (&p.google_ads_customer_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("status".into(), match (&p.status) { Some(v) => Value::String(iface_accounts__account_link_status_enum__to_str(v).into()), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_accounts__travelpartner_accounts_brands_list_params__to_json(p: &iface_accounts::TravelpartnerAccountsBrandsListParams) -> Value {
-    let mut m = Map::new();
-    m.insert("parent".into(), Value::String((&p.parent).clone()));
-    Value::Object(m)
-}
-
-fn iface_accounts__travelpartner_accounts_brands_create_params__to_json(p: &iface_accounts::TravelpartnerAccountsBrandsCreateParams) -> Value {
-    let mut m = Map::new();
-    m.insert("parent".into(), Value::String((&p.parent).clone()));
-    m.insert("brand_id".into(), match (&p.brand_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("active_display_names".into(), match (&p.active_display_names) { Some(v) => Value::Array((v).iter().map(|v| iface_accounts__localized_text__to_json(v)).collect()), None => Value::Null });
-    m.insert("active_icon".into(), match (&p.active_icon) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("active_icon_uri".into(), match (&p.active_icon_uri) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("display_name_disapproval_reason".into(), match (&p.display_name_disapproval_reason) { Some(v) => Value::Array((v).iter().map(|v| iface_accounts__display_name_disapproval_reason__to_json(v)).collect()), None => Value::Null });
-    m.insert("display_name_state".into(), match (&p.display_name_state) { Some(v) => Value::String(iface_accounts__brand_display_name_state_enum__to_str(v).into()), None => Value::Null });
-    m.insert("display_names".into(), match (&p.display_names) { Some(v) => Value::Array((v).iter().map(|v| iface_accounts__localized_text__to_json(v)).collect()), None => Value::Null });
-    m.insert("icon".into(), match (&p.icon) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("icon_disapproval_reasons".into(), match (&p.icon_disapproval_reasons) { Some(v) => Value::Array((v).iter().map(|v| Value::String(iface_accounts__brand_icon_disapproval_reasons_item_enum__to_str(v).into())).collect()), None => Value::Null });
-    m.insert("icon_state".into(), match (&p.icon_state) { Some(v) => Value::String(iface_accounts__brand_display_name_state_enum__to_str(v).into()), None => Value::Null });
-    m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("property_count".into(), match (&p.property_count) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("submitted_display_names".into(), match (&p.submitted_display_names) { Some(v) => Value::Array((v).iter().map(|v| iface_accounts__localized_text__to_json(v)).collect()), None => Value::Null });
-    m.insert("submitted_icon".into(), match (&p.submitted_icon) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_accounts__travelpartner_accounts_hotel_views_list_params__to_json(p: &iface_accounts::TravelpartnerAccountsHotelViewsListParams) -> Value {
-    let mut m = Map::new();
-    m.insert("parent".into(), Value::String((&p.parent).clone()));
-    m.insert("filter".into(), match (&p.filter) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("page_size".into(), match (&p.page_size) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    m.insert("page_token".into(), match (&p.page_token) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_accounts__travelpartner_accounts_hotel_views_summarize_params__to_json(p: &iface_accounts::TravelpartnerAccountsHotelViewsSummarizeParams) -> Value {
-    let mut m = Map::new();
-    m.insert("parent".into(), Value::String((&p.parent).clone()));
-    Value::Object(m)
-}
-
-fn iface_accounts__travelpartner_accounts_icons_list_params__to_json(p: &iface_accounts::TravelpartnerAccountsIconsListParams) -> Value {
-    let mut m = Map::new();
-    m.insert("parent".into(), Value::String((&p.parent).clone()));
-    Value::Object(m)
-}
-
-fn iface_accounts__travelpartner_accounts_icons_create_params__to_json(p: &iface_accounts::TravelpartnerAccountsIconsCreateParams) -> Value {
-    let mut m = Map::new();
-    m.insert("parent".into(), Value::String((&p.parent).clone()));
-    m.insert("disapproval_reasons".into(), match (&p.disapproval_reasons) { Some(v) => Value::Array((v).iter().map(|v| Value::String(iface_accounts__brand_icon_disapproval_reasons_item_enum__to_str(v).into())).collect()), None => Value::Null });
-    m.insert("icon_uri".into(), match (&p.icon_uri) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("image_data".into(), match (&p.image_data) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("reference".into(), match (&p.reference) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("state".into(), match (&p.state) { Some(v) => Value::String(iface_accounts__icon_state_enum__to_str(v).into()), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_accounts__travelpartner_accounts_listings_verify_params__to_json(p: &iface_accounts::TravelpartnerAccountsListingsVerifyParams) -> Value {
-    let mut m = Map::new();
-    m.insert("parent".into(), Value::String((&p.parent).clone()));
-    m.insert("xml_listing".into(), match (&p.xml_listing) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_accounts__travelpartner_accounts_price_accuracy_views_list_params__to_json(p: &iface_accounts::TravelpartnerAccountsPriceAccuracyViewsListParams) -> Value {
-    let mut m = Map::new();
-    m.insert("parent".into(), Value::String((&p.parent).clone()));
-    Value::Object(m)
-}
-
-fn iface_accounts__travelpartner_accounts_price_accuracy_views_summarize_params__to_json(p: &iface_accounts::TravelpartnerAccountsPriceAccuracyViewsSummarizeParams) -> Value {
-    let mut m = Map::new();
-    m.insert("parent".into(), Value::String((&p.parent).clone()));
-    Value::Object(m)
-}
-
-fn iface_accounts__travelpartner_accounts_price_coverage_views_list_params__to_json(p: &iface_accounts::TravelpartnerAccountsPriceCoverageViewsListParams) -> Value {
-    let mut m = Map::new();
-    m.insert("parent".into(), Value::String((&p.parent).clone()));
-    Value::Object(m)
-}
-
-fn iface_accounts__travelpartner_accounts_price_coverage_views_get_latest_params__to_json(p: &iface_accounts::TravelpartnerAccountsPriceCoverageViewsGetLatestParams) -> Value {
-    let mut m = Map::new();
-    m.insert("parent".into(), Value::String((&p.parent).clone()));
-    Value::Object(m)
-}
-
-fn iface_accounts__travelpartner_accounts_reconciliation_reports_list_params__to_json(p: &iface_accounts::TravelpartnerAccountsReconciliationReportsListParams) -> Value {
-    let mut m = Map::new();
-    m.insert("parent".into(), Value::String((&p.parent).clone()));
-    m.insert("end_date".into(), match (&p.end_date) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("start_date".into(), match (&p.start_date) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_accounts__travelpartner_accounts_reconciliation_reports_create_params__to_json(p: &iface_accounts::TravelpartnerAccountsReconciliationReportsCreateParams) -> Value {
-    let mut m = Map::new();
-    m.insert("parent".into(), Value::String((&p.parent).clone()));
-    m.insert("contents".into(), match (&p.contents) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("file_name".into(), match (&p.file_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_accounts__travelpartner_accounts_reconciliation_reports_validate_params__to_json(p: &iface_accounts::TravelpartnerAccountsReconciliationReportsValidateParams) -> Value {
-    let mut m = Map::new();
-    m.insert("parent".into(), Value::String((&p.parent).clone()));
-    m.insert("contents".into(), match (&p.contents) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("file_name".into(), match (&p.file_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    Value::Object(m)
-}
-
-impl iface_accounts::Guest for crate::Component {
-    fn travelpartner_accounts_hotels_set_live_on_google(params: iface_accounts::TravelpartnerAccountsHotelsSetLiveOnGoogleParams) -> Result<String, String> {
-        let json = iface_accounts__travelpartner_accounts_hotels_set_live_on_google_params__to_json(&params);
-        dispatch(&OP_ACCOUNTS_TRAVELPARTNER_ACCOUNTS_HOTELS_SET_LIVE_ON_GOOGLE, json)
-    }
-    fn travelpartner_accounts_reconciliation_reports_get(params: iface_accounts::TravelpartnerAccountsReconciliationReportsGetParams) -> Result<String, String> {
-        let json = iface_accounts__travelpartner_accounts_reconciliation_reports_get_params__to_json(&params);
-        dispatch(&OP_ACCOUNTS_TRAVELPARTNER_ACCOUNTS_RECONCILIATION_REPORTS_GET, json)
-    }
-    fn travelpartner_accounts_brands_patch(params: iface_accounts::TravelpartnerAccountsBrandsPatchParams) -> Result<String, String> {
-        let json = iface_accounts__travelpartner_accounts_brands_patch_params__to_json(&params);
-        dispatch(&OP_ACCOUNTS_TRAVELPARTNER_ACCOUNTS_BRANDS_PATCH, json)
-    }
-    fn travelpartner_accounts_account_links_delete(params: iface_accounts::TravelpartnerAccountsAccountLinksDeleteParams) -> Result<String, String> {
-        let json = iface_accounts__travelpartner_accounts_account_links_delete_params__to_json(&params);
-        dispatch(&OP_ACCOUNTS_TRAVELPARTNER_ACCOUNTS_ACCOUNT_LINKS_DELETE, json)
-    }
-    fn travelpartner_accounts_free_booking_links_report_views_query(params: iface_accounts::TravelpartnerAccountsFreeBookingLinksReportViewsQueryParams) -> Result<String, String> {
-        let json = iface_accounts__travelpartner_accounts_free_booking_links_report_views_query_params__to_json(&params);
-        dispatch(&OP_ACCOUNTS_TRAVELPARTNER_ACCOUNTS_FREE_BOOKING_LINKS_REPORT_VIEWS_QUERY, json)
-    }
-    fn travelpartner_accounts_participation_report_views_query(params: iface_accounts::TravelpartnerAccountsParticipationReportViewsQueryParams) -> Result<String, String> {
-        let json = iface_accounts__travelpartner_accounts_participation_report_views_query_params__to_json(&params);
-        dispatch(&OP_ACCOUNTS_TRAVELPARTNER_ACCOUNTS_PARTICIPATION_REPORT_VIEWS_QUERY, json)
-    }
-    fn travelpartner_accounts_property_performance_report_views_query(params: iface_accounts::TravelpartnerAccountsPropertyPerformanceReportViewsQueryParams) -> Result<String, String> {
-        let json = iface_accounts__travelpartner_accounts_property_performance_report_views_query_params__to_json(&params);
-        dispatch(&OP_ACCOUNTS_TRAVELPARTNER_ACCOUNTS_PROPERTY_PERFORMANCE_REPORT_VIEWS_QUERY, json)
-    }
-    fn travelpartner_accounts_account_links_list(params: iface_accounts::TravelpartnerAccountsAccountLinksListParams) -> Result<String, String> {
-        let json = iface_accounts__travelpartner_accounts_account_links_list_params__to_json(&params);
-        dispatch(&OP_ACCOUNTS_TRAVELPARTNER_ACCOUNTS_ACCOUNT_LINKS_LIST, json)
-    }
-    fn travelpartner_accounts_account_links_create(params: iface_accounts::TravelpartnerAccountsAccountLinksCreateParams) -> Result<String, String> {
-        let json = iface_accounts__travelpartner_accounts_account_links_create_params__to_json(&params);
-        dispatch(&OP_ACCOUNTS_TRAVELPARTNER_ACCOUNTS_ACCOUNT_LINKS_CREATE, json)
-    }
-    fn travelpartner_accounts_brands_list(params: iface_accounts::TravelpartnerAccountsBrandsListParams) -> Result<String, String> {
-        let json = iface_accounts__travelpartner_accounts_brands_list_params__to_json(&params);
-        dispatch(&OP_ACCOUNTS_TRAVELPARTNER_ACCOUNTS_BRANDS_LIST, json)
-    }
-    fn travelpartner_accounts_brands_create(params: iface_accounts::TravelpartnerAccountsBrandsCreateParams) -> Result<String, String> {
-        let json = iface_accounts__travelpartner_accounts_brands_create_params__to_json(&params);
-        dispatch(&OP_ACCOUNTS_TRAVELPARTNER_ACCOUNTS_BRANDS_CREATE, json)
-    }
-    fn travelpartner_accounts_hotel_views_list(params: iface_accounts::TravelpartnerAccountsHotelViewsListParams) -> Result<String, String> {
-        let json = iface_accounts__travelpartner_accounts_hotel_views_list_params__to_json(&params);
-        dispatch(&OP_ACCOUNTS_TRAVELPARTNER_ACCOUNTS_HOTEL_VIEWS_LIST, json)
-    }
-    fn travelpartner_accounts_hotel_views_summarize(params: iface_accounts::TravelpartnerAccountsHotelViewsSummarizeParams) -> Result<String, String> {
-        let json = iface_accounts__travelpartner_accounts_hotel_views_summarize_params__to_json(&params);
-        dispatch(&OP_ACCOUNTS_TRAVELPARTNER_ACCOUNTS_HOTEL_VIEWS_SUMMARIZE, json)
-    }
-    fn travelpartner_accounts_icons_list(params: iface_accounts::TravelpartnerAccountsIconsListParams) -> Result<String, String> {
-        let json = iface_accounts__travelpartner_accounts_icons_list_params__to_json(&params);
-        dispatch(&OP_ACCOUNTS_TRAVELPARTNER_ACCOUNTS_ICONS_LIST, json)
-    }
-    fn travelpartner_accounts_icons_create(params: iface_accounts::TravelpartnerAccountsIconsCreateParams) -> Result<String, String> {
-        let json = iface_accounts__travelpartner_accounts_icons_create_params__to_json(&params);
-        dispatch(&OP_ACCOUNTS_TRAVELPARTNER_ACCOUNTS_ICONS_CREATE, json)
-    }
-    fn travelpartner_accounts_listings_verify(params: iface_accounts::TravelpartnerAccountsListingsVerifyParams) -> Result<String, String> {
-        let json = iface_accounts__travelpartner_accounts_listings_verify_params__to_json(&params);
-        dispatch(&OP_ACCOUNTS_TRAVELPARTNER_ACCOUNTS_LISTINGS_VERIFY, json)
-    }
-    fn travelpartner_accounts_price_accuracy_views_list(params: iface_accounts::TravelpartnerAccountsPriceAccuracyViewsListParams) -> Result<String, String> {
-        let json = iface_accounts__travelpartner_accounts_price_accuracy_views_list_params__to_json(&params);
-        dispatch(&OP_ACCOUNTS_TRAVELPARTNER_ACCOUNTS_PRICE_ACCURACY_VIEWS_LIST, json)
-    }
-    fn travelpartner_accounts_price_accuracy_views_summarize(params: iface_accounts::TravelpartnerAccountsPriceAccuracyViewsSummarizeParams) -> Result<String, String> {
-        let json = iface_accounts__travelpartner_accounts_price_accuracy_views_summarize_params__to_json(&params);
-        dispatch(&OP_ACCOUNTS_TRAVELPARTNER_ACCOUNTS_PRICE_ACCURACY_VIEWS_SUMMARIZE, json)
-    }
-    fn travelpartner_accounts_price_coverage_views_list(params: iface_accounts::TravelpartnerAccountsPriceCoverageViewsListParams) -> Result<String, String> {
-        let json = iface_accounts__travelpartner_accounts_price_coverage_views_list_params__to_json(&params);
-        dispatch(&OP_ACCOUNTS_TRAVELPARTNER_ACCOUNTS_PRICE_COVERAGE_VIEWS_LIST, json)
-    }
-    fn travelpartner_accounts_price_coverage_views_get_latest(params: iface_accounts::TravelpartnerAccountsPriceCoverageViewsGetLatestParams) -> Result<String, String> {
-        let json = iface_accounts__travelpartner_accounts_price_coverage_views_get_latest_params__to_json(&params);
-        dispatch(&OP_ACCOUNTS_TRAVELPARTNER_ACCOUNTS_PRICE_COVERAGE_VIEWS_GET_LATEST, json)
-    }
-    fn travelpartner_accounts_reconciliation_reports_list(params: iface_accounts::TravelpartnerAccountsReconciliationReportsListParams) -> Result<String, String> {
-        let json = iface_accounts__travelpartner_accounts_reconciliation_reports_list_params__to_json(&params);
-        dispatch(&OP_ACCOUNTS_TRAVELPARTNER_ACCOUNTS_RECONCILIATION_REPORTS_LIST, json)
-    }
-    fn travelpartner_accounts_reconciliation_reports_create(params: iface_accounts::TravelpartnerAccountsReconciliationReportsCreateParams) -> Result<String, String> {
-        let json = iface_accounts__travelpartner_accounts_reconciliation_reports_create_params__to_json(&params);
-        dispatch(&OP_ACCOUNTS_TRAVELPARTNER_ACCOUNTS_RECONCILIATION_REPORTS_CREATE, json)
-    }
-    fn travelpartner_accounts_reconciliation_reports_validate(params: iface_accounts::TravelpartnerAccountsReconciliationReportsValidateParams) -> Result<String, String> {
-        let json = iface_accounts__travelpartner_accounts_reconciliation_reports_validate_params__to_json(&params);
-        dispatch(&OP_ACCOUNTS_TRAVELPARTNER_ACCOUNTS_RECONCILIATION_REPORTS_VALIDATE, json)
-    }
-}
+mod iface_accounts;
 
 export!(Component);

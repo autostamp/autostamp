@@ -44,10 +44,15 @@ pub(crate) enum FieldLocation {
     Body,
 }
 
-/// A single operation parameter: the snake-case key it carries in the params JSON and where
-/// it belongs in the request.
+/// A single operation parameter. `snake` keys the field in the internal params JSON (and, for a
+/// path field, matches the `{snake}` placeholder in the path template); `wire` is the verbatim name
+/// the field takes on the HTTP wire (query key, header name, or body property). The two differ
+/// whenever the source name isn't already snake_case (e.g. `dryRun` → snake `dry_run`, wire
+/// `dryRun`), and let distinct inputs that share a snake key (`DateCreated`, `DateCreated<`) still
+/// travel under their true names.
 pub(crate) struct FieldSpec {
     pub(crate) snake: &'static str,
+    pub(crate) wire: &'static str,
     pub(crate) location: FieldLocation,
 }
 
@@ -71,6 +76,16 @@ pub(crate) struct AuthApply {
     pub(crate) kind: AuthKind,
 }
 
+/// The failure modes of [`dispatch`], kept structured so each generated operation can map them
+/// onto its own typed error: an `Http` failure carries the response status and body (routed to
+/// the matching error-variant case), while a `Transport` failure carries a message for the
+/// catch-all case (a secret lookup, connection, or decode failure that never produced an HTTP
+/// status).
+pub(crate) enum DispatchError {
+    Http { status: u16, body: String },
+    Transport(String),
+}
+
 /// A single API operation: HTTP method, path template (with `{snake}` placeholders), the
 /// parameter fields, and the security schemes to apply.
 pub(crate) struct OpSpec {
@@ -81,8 +96,9 @@ pub(crate) struct OpSpec {
 }
 
 /// Execute `op` with the supplied `params` (a JSON object keyed by snake-case field names)
-/// and return the response body as a string, or an error message.
-pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, String> {
+/// and return the raw 2xx response body, or a structured [`DispatchError`] the caller maps
+/// onto the operation's typed error.
+pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, DispatchError> {
     let obj = match &params {
         Value::Object(map) => Some(map),
         _ => None,
@@ -105,10 +121,10 @@ pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, String> {
                 let placeholder = format!("{{{}}}", field.snake);
                 path = path.replace(&placeholder, &percent_encode(&scalar(value)));
             }
-            FieldLocation::Query => query.push((field.snake.to_string(), scalar(value))),
-            FieldLocation::Header => headers.push((field.snake.to_string(), scalar(value))),
+            FieldLocation::Query => query.push((field.wire.to_string(), scalar(value))),
+            FieldLocation::Header => headers.push((field.wire.to_string(), scalar(value))),
             FieldLocation::Body => {
-                body.insert(field.snake.to_string(), value.clone());
+                body.insert(field.wire.to_string(), value.clone());
             }
         }
     }
@@ -116,7 +132,7 @@ pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, String> {
     // Apply each resolved security scheme, sourcing its value from wasmcloud:secrets.
     let mut cookies: Vec<String> = Vec::new();
     for apply in op.auth {
-        let secret = fetch_secret(apply.secret_key)?;
+        let secret = fetch_secret(apply.secret_key).map_err(DispatchError::Transport)?;
         match &apply.kind {
             AuthKind::Bearer => headers.push(("authorization".into(), format!("Bearer {secret}"))),
             AuthKind::Basic => {
@@ -177,17 +193,18 @@ fn fetch_secret(key: &str) -> Result<String, String> {
 }
 
 /// Build and send the outgoing request with `wstd`, returning the response body on a 2xx
-/// status. The generated guest exports are synchronous, so the async `wstd` client is driven
-/// to completion on a local reactor via `wstd::runtime::block_on`.
+/// status and a structured [`DispatchError`] otherwise. The generated guest exports are
+/// synchronous, so the async `wstd` client is driven to completion on a local reactor via
+/// `wstd::runtime::block_on`.
 fn perform(
     method: &str,
     path_with_query: &str,
     headers: &[(String, String)],
     body: &[u8],
-) -> Result<String, String> {
+) -> Result<String, DispatchError> {
     let url = join_url(crate::BASE_URL, path_with_query);
     let method = Method::from_bytes(method.as_bytes())
-        .map_err(|err| format!("invalid HTTP method `{method}`: {err}"))?;
+        .map_err(|err| DispatchError::Transport(format!("invalid HTTP method `{method}`: {err}")))?;
 
     let mut builder = Request::builder().method(method).uri(url);
     for (name, value) in headers {
@@ -199,27 +216,29 @@ fn perform(
         } else {
             Body::from(body.to_vec())
         })
-        .map_err(|err| format!("failed to build request: {err}"))?;
+        .map_err(|err| DispatchError::Transport(format!("failed to build request: {err}")))?;
 
     wstd::runtime::block_on(async move {
         let client = Client::new();
         let response = client
             .send(request)
             .await
-            .map_err(|err| format!("request failed: {err:#}"))?;
+            .map_err(|err| DispatchError::Transport(format!("request failed: {err:#}")))?;
 
         let status = response.status().as_u16();
         let mut response_body = response.into_body();
-        let bytes = response_body
-            .contents()
-            .await
-            .map_err(|err| format!("failed to read response body: {err:#}"))?;
+        let bytes = response_body.contents().await.map_err(|err| {
+            DispatchError::Transport(format!("failed to read response body: {err:#}"))
+        })?;
         let body_text = String::from_utf8_lossy(bytes).into_owned();
 
         if (200..300).contains(&status) {
             Ok(body_text)
         } else {
-            Err(format!("HTTP {status}: {body_text}"))
+            Err(DispatchError::Http {
+                status,
+                body: body_text,
+            })
         }
     })
 }
@@ -279,270 +298,6 @@ fn base64(input: &[u8]) -> String {
 }
 }
 
-use crate::runtime::{dispatch, AuthApply, AuthKind, FieldLocation, FieldSpec, OpSpec};
-use serde_json::{Map, Value};
-
-use crate::exports::autostamp::walmart::inventory as iface_inventory;
-
-const OP_INVENTORY_UPDATE_BULK_INVENTORY: OpSpec = OpSpec {
-    method: "POST",
-    path_template: "/v3/feeds",
-    fields: &[
-        FieldSpec { snake: "feed_type", location: FieldLocation::Query },
-        FieldSpec { snake: "ship_node", location: FieldLocation::Query },
-        FieldSpec { snake: "wm_sec_access_token", location: FieldLocation::Header },
-        FieldSpec { snake: "wm_consumer_channel_type", location: FieldLocation::Header },
-        FieldSpec { snake: "wm_qos_correlation_id", location: FieldLocation::Header },
-        FieldSpec { snake: "wm_svc_name", location: FieldLocation::Header },
-    ],
-    auth: &[
-    ],
-};
-
-const OP_INVENTORY_GET_WFS_INVENTORY: OpSpec = OpSpec {
-    method: "GET",
-    path_template: "/v3/fulfillment/inventory",
-    fields: &[
-        FieldSpec { snake: "sku", location: FieldLocation::Query },
-        FieldSpec { snake: "from_modified_date", location: FieldLocation::Query },
-        FieldSpec { snake: "to_modified_date", location: FieldLocation::Query },
-        FieldSpec { snake: "limit", location: FieldLocation::Query },
-        FieldSpec { snake: "offset", location: FieldLocation::Query },
-        FieldSpec { snake: "wm_sec_access_token", location: FieldLocation::Header },
-        FieldSpec { snake: "wm_consumer_channel_type", location: FieldLocation::Header },
-        FieldSpec { snake: "wm_qos_correlation_id", location: FieldLocation::Header },
-        FieldSpec { snake: "wm_svc_name", location: FieldLocation::Header },
-    ],
-    auth: &[
-    ],
-};
-
-const OP_INVENTORY_GET_MULTI_NODE_INVENTORY_FOR_ALL_SKU_AND_ALL_SHIP_NODES: OpSpec = OpSpec {
-    method: "GET",
-    path_template: "/v3/inventories",
-    fields: &[
-        FieldSpec { snake: "limit", location: FieldLocation::Query },
-        FieldSpec { snake: "next_cursor", location: FieldLocation::Query },
-        FieldSpec { snake: "wm_sec_access_token", location: FieldLocation::Header },
-        FieldSpec { snake: "wm_consumer_channel_type", location: FieldLocation::Header },
-        FieldSpec { snake: "wm_qos_correlation_id", location: FieldLocation::Header },
-        FieldSpec { snake: "wm_svc_name", location: FieldLocation::Header },
-    ],
-    auth: &[
-    ],
-};
-
-const OP_INVENTORY_GET_MULTI_NODE_INVENTORY_FOR_SKU_AND_ALL_SHIPNODES: OpSpec = OpSpec {
-    method: "GET",
-    path_template: "/v3/inventories/{sku}",
-    fields: &[
-        FieldSpec { snake: "sku", location: FieldLocation::Path },
-        FieldSpec { snake: "ship_node", location: FieldLocation::Query },
-        FieldSpec { snake: "wm_sec_access_token", location: FieldLocation::Header },
-        FieldSpec { snake: "wm_consumer_channel_type", location: FieldLocation::Header },
-        FieldSpec { snake: "wm_qos_correlation_id", location: FieldLocation::Header },
-        FieldSpec { snake: "wm_svc_name", location: FieldLocation::Header },
-    ],
-    auth: &[
-    ],
-};
-
-const OP_INVENTORY_UPDATE_MULTI_NODE_INVENTORY: OpSpec = OpSpec {
-    method: "PUT",
-    path_template: "/v3/inventories/{sku}",
-    fields: &[
-        FieldSpec { snake: "sku", location: FieldLocation::Path },
-        FieldSpec { snake: "wm_sec_access_token", location: FieldLocation::Header },
-        FieldSpec { snake: "wm_consumer_channel_type", location: FieldLocation::Header },
-        FieldSpec { snake: "wm_qos_correlation_id", location: FieldLocation::Header },
-        FieldSpec { snake: "wm_svc_name", location: FieldLocation::Header },
-        FieldSpec { snake: "inventories", location: FieldLocation::Body },
-    ],
-    auth: &[
-    ],
-};
-
-const OP_INVENTORY_GET_INVENTORY: OpSpec = OpSpec {
-    method: "GET",
-    path_template: "/v3/inventory",
-    fields: &[
-        FieldSpec { snake: "sku", location: FieldLocation::Query },
-        FieldSpec { snake: "ship_node", location: FieldLocation::Query },
-        FieldSpec { snake: "wm_sec_access_token", location: FieldLocation::Header },
-        FieldSpec { snake: "wm_consumer_channel_type", location: FieldLocation::Header },
-        FieldSpec { snake: "wm_qos_correlation_id", location: FieldLocation::Header },
-        FieldSpec { snake: "wm_svc_name", location: FieldLocation::Header },
-    ],
-    auth: &[
-    ],
-};
-
-const OP_INVENTORY_UPDATE_INVENTORY_FOR_AN_ITEM: OpSpec = OpSpec {
-    method: "PUT",
-    path_template: "/v3/inventory",
-    fields: &[
-        FieldSpec { snake: "sku", location: FieldLocation::Query },
-        FieldSpec { snake: "ship_node", location: FieldLocation::Query },
-        FieldSpec { snake: "wm_sec_access_token", location: FieldLocation::Header },
-        FieldSpec { snake: "wm_consumer_channel_type", location: FieldLocation::Header },
-        FieldSpec { snake: "wm_qos_correlation_id", location: FieldLocation::Header },
-        FieldSpec { snake: "wm_svc_name", location: FieldLocation::Header },
-        FieldSpec { snake: "quantity", location: FieldLocation::Body },
-    ],
-    auth: &[
-    ],
-};
-
-fn iface_inventory__update_bulk_inventory_feed_type_enum__to_str(e: &iface_inventory::UpdateBulkInventoryFeedTypeEnum) -> &'static str {
-    match e {
-        iface_inventory::UpdateBulkInventoryFeedTypeEnum::Inventory => "inventory",
-        iface_inventory::UpdateBulkInventoryFeedTypeEnum::MpInventory => "MP_INVENTORY",
-    }
-}
-
-fn iface_inventory__update_multi_node_inventory_body_inventories_nodes_item_input_qty_unit_enum__to_str(e: &iface_inventory::UpdateMultiNodeInventoryBodyInventoriesNodesItemInputQtyUnitEnum) -> &'static str {
-    match e {
-        iface_inventory::UpdateMultiNodeInventoryBodyInventoriesNodesItemInputQtyUnitEnum::Each => "EACH",
-    }
-}
-
-fn iface_inventory__update_multi_node_inventory_body_inventories__to_json(p: &iface_inventory::UpdateMultiNodeInventoryBodyInventories) -> Value {
-    let mut m = Map::new();
-    m.insert("nodes".into(), Value::Array((&p.nodes).iter().map(|v| iface_inventory__update_multi_node_inventory_body_inventories_nodes_item__to_json(v)).collect()));
-    Value::Object(m)
-}
-
-fn iface_inventory__update_multi_node_inventory_body_inventories_nodes_item__to_json(p: &iface_inventory::UpdateMultiNodeInventoryBodyInventoriesNodesItem) -> Value {
-    let mut m = Map::new();
-    m.insert("input_qty".into(), iface_inventory__update_multi_node_inventory_body_inventories_nodes_item_input_qty__to_json(&p.input_qty));
-    m.insert("ship_node".into(), Value::String((&p.ship_node).clone()));
-    Value::Object(m)
-}
-
-fn iface_inventory__update_multi_node_inventory_body_inventories_nodes_item_input_qty__to_json(p: &iface_inventory::UpdateMultiNodeInventoryBodyInventoriesNodesItemInputQty) -> Value {
-    let mut m = Map::new();
-    m.insert("amount".into(), serde_json::Number::from_f64(*(&p.amount)).map(Value::Number).unwrap_or(Value::Null));
-    m.insert("unit".into(), Value::String(iface_inventory__update_multi_node_inventory_body_inventories_nodes_item_input_qty_unit_enum__to_str(&p.unit).into()));
-    Value::Object(m)
-}
-
-fn iface_inventory__update_inventory_for_an_item_body_quantity__to_json(p: &iface_inventory::UpdateInventoryForAnItemBodyQuantity) -> Value {
-    let mut m = Map::new();
-    m.insert("amount".into(), serde_json::Number::from_f64(*(&p.amount)).map(Value::Number).unwrap_or(Value::Null));
-    m.insert("unit".into(), Value::String(iface_inventory__update_multi_node_inventory_body_inventories_nodes_item_input_qty_unit_enum__to_str(&p.unit).into()));
-    Value::Object(m)
-}
-
-fn iface_inventory__update_bulk_inventory_params__to_json(p: &iface_inventory::UpdateBulkInventoryParams) -> Value {
-    let mut m = Map::new();
-    m.insert("feed_type".into(), Value::String(iface_inventory__update_bulk_inventory_feed_type_enum__to_str(&p.feed_type).into()));
-    m.insert("ship_node".into(), match (&p.ship_node) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("wm_sec_access_token".into(), Value::String((&p.wm_sec_access_token).clone()));
-    m.insert("wm_consumer_channel_type".into(), match (&p.wm_consumer_channel_type) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("wm_qos_correlation_id".into(), Value::String((&p.wm_qos_correlation_id).clone()));
-    m.insert("wm_svc_name".into(), Value::String((&p.wm_svc_name).clone()));
-    Value::Object(m)
-}
-
-fn iface_inventory__get_wfs_inventory_params__to_json(p: &iface_inventory::GetWfsInventoryParams) -> Value {
-    let mut m = Map::new();
-    m.insert("sku".into(), match (&p.sku) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("from_modified_date".into(), match (&p.from_modified_date) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("to_modified_date".into(), match (&p.to_modified_date) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("limit".into(), match (&p.limit) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("offset".into(), match (&p.offset) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("wm_sec_access_token".into(), Value::String((&p.wm_sec_access_token).clone()));
-    m.insert("wm_consumer_channel_type".into(), match (&p.wm_consumer_channel_type) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("wm_qos_correlation_id".into(), Value::String((&p.wm_qos_correlation_id).clone()));
-    m.insert("wm_svc_name".into(), Value::String((&p.wm_svc_name).clone()));
-    Value::Object(m)
-}
-
-fn iface_inventory__get_multi_node_inventory_for_all_sku_and_all_ship_nodes_params__to_json(p: &iface_inventory::GetMultiNodeInventoryForAllSkuAndAllShipNodesParams) -> Value {
-    let mut m = Map::new();
-    m.insert("limit".into(), match (&p.limit) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("next_cursor".into(), match (&p.next_cursor) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("wm_sec_access_token".into(), Value::String((&p.wm_sec_access_token).clone()));
-    m.insert("wm_consumer_channel_type".into(), match (&p.wm_consumer_channel_type) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("wm_qos_correlation_id".into(), Value::String((&p.wm_qos_correlation_id).clone()));
-    m.insert("wm_svc_name".into(), Value::String((&p.wm_svc_name).clone()));
-    Value::Object(m)
-}
-
-fn iface_inventory__get_multi_node_inventory_for_sku_and_all_shipnodes_params__to_json(p: &iface_inventory::GetMultiNodeInventoryForSkuAndAllShipnodesParams) -> Value {
-    let mut m = Map::new();
-    m.insert("sku".into(), Value::String((&p.sku).clone()));
-    m.insert("ship_node".into(), match (&p.ship_node) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("wm_sec_access_token".into(), Value::String((&p.wm_sec_access_token).clone()));
-    m.insert("wm_consumer_channel_type".into(), match (&p.wm_consumer_channel_type) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("wm_qos_correlation_id".into(), Value::String((&p.wm_qos_correlation_id).clone()));
-    m.insert("wm_svc_name".into(), Value::String((&p.wm_svc_name).clone()));
-    Value::Object(m)
-}
-
-fn iface_inventory__update_multi_node_inventory_params__to_json(p: &iface_inventory::UpdateMultiNodeInventoryParams) -> Value {
-    let mut m = Map::new();
-    m.insert("sku".into(), Value::String((&p.sku).clone()));
-    m.insert("wm_sec_access_token".into(), Value::String((&p.wm_sec_access_token).clone()));
-    m.insert("wm_consumer_channel_type".into(), match (&p.wm_consumer_channel_type) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("wm_qos_correlation_id".into(), Value::String((&p.wm_qos_correlation_id).clone()));
-    m.insert("wm_svc_name".into(), Value::String((&p.wm_svc_name).clone()));
-    m.insert("inventories".into(), iface_inventory__update_multi_node_inventory_body_inventories__to_json(&p.inventories));
-    Value::Object(m)
-}
-
-fn iface_inventory__get_inventory_params__to_json(p: &iface_inventory::GetInventoryParams) -> Value {
-    let mut m = Map::new();
-    m.insert("sku".into(), Value::String((&p.sku).clone()));
-    m.insert("ship_node".into(), match (&p.ship_node) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("wm_sec_access_token".into(), Value::String((&p.wm_sec_access_token).clone()));
-    m.insert("wm_consumer_channel_type".into(), match (&p.wm_consumer_channel_type) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("wm_qos_correlation_id".into(), Value::String((&p.wm_qos_correlation_id).clone()));
-    m.insert("wm_svc_name".into(), Value::String((&p.wm_svc_name).clone()));
-    Value::Object(m)
-}
-
-fn iface_inventory__update_inventory_for_an_item_params__to_json(p: &iface_inventory::UpdateInventoryForAnItemParams) -> Value {
-    let mut m = Map::new();
-    m.insert("sku".into(), Value::String((&p.sku).clone()));
-    m.insert("ship_node".into(), match (&p.ship_node) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("wm_sec_access_token".into(), Value::String((&p.wm_sec_access_token).clone()));
-    m.insert("wm_consumer_channel_type".into(), match (&p.wm_consumer_channel_type) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("wm_qos_correlation_id".into(), Value::String((&p.wm_qos_correlation_id).clone()));
-    m.insert("wm_svc_name".into(), Value::String((&p.wm_svc_name).clone()));
-    m.insert("quantity".into(), iface_inventory__update_inventory_for_an_item_body_quantity__to_json(&p.quantity));
-    Value::Object(m)
-}
-
-impl iface_inventory::Guest for crate::Component {
-    fn update_bulk_inventory(params: iface_inventory::UpdateBulkInventoryParams) -> Result<String, String> {
-        let json = iface_inventory__update_bulk_inventory_params__to_json(&params);
-        dispatch(&OP_INVENTORY_UPDATE_BULK_INVENTORY, json)
-    }
-    fn get_wfs_inventory(params: iface_inventory::GetWfsInventoryParams) -> Result<String, String> {
-        let json = iface_inventory__get_wfs_inventory_params__to_json(&params);
-        dispatch(&OP_INVENTORY_GET_WFS_INVENTORY, json)
-    }
-    fn get_multi_node_inventory_for_all_sku_and_all_ship_nodes(params: iface_inventory::GetMultiNodeInventoryForAllSkuAndAllShipNodesParams) -> Result<String, String> {
-        let json = iface_inventory__get_multi_node_inventory_for_all_sku_and_all_ship_nodes_params__to_json(&params);
-        dispatch(&OP_INVENTORY_GET_MULTI_NODE_INVENTORY_FOR_ALL_SKU_AND_ALL_SHIP_NODES, json)
-    }
-    fn get_multi_node_inventory_for_sku_and_all_shipnodes(params: iface_inventory::GetMultiNodeInventoryForSkuAndAllShipnodesParams) -> Result<String, String> {
-        let json = iface_inventory__get_multi_node_inventory_for_sku_and_all_shipnodes_params__to_json(&params);
-        dispatch(&OP_INVENTORY_GET_MULTI_NODE_INVENTORY_FOR_SKU_AND_ALL_SHIPNODES, json)
-    }
-    fn update_multi_node_inventory(params: iface_inventory::UpdateMultiNodeInventoryParams) -> Result<String, String> {
-        let json = iface_inventory__update_multi_node_inventory_params__to_json(&params);
-        dispatch(&OP_INVENTORY_UPDATE_MULTI_NODE_INVENTORY, json)
-    }
-    fn get_inventory(params: iface_inventory::GetInventoryParams) -> Result<String, String> {
-        let json = iface_inventory__get_inventory_params__to_json(&params);
-        dispatch(&OP_INVENTORY_GET_INVENTORY, json)
-    }
-    fn update_inventory_for_an_item(params: iface_inventory::UpdateInventoryForAnItemParams) -> Result<String, String> {
-        let json = iface_inventory__update_inventory_for_an_item_params__to_json(&params);
-        dispatch(&OP_INVENTORY_UPDATE_INVENTORY_FOR_AN_ITEM, json)
-    }
-}
+mod iface_inventory;
 
 export!(Component);

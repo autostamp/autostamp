@@ -6,9 +6,14 @@
 /// | Secret name | Applied to each request as |
 /// | --- | --- |
 /// | `ApiKey` | header `Api-Key` |
-package autostamp:pinecone@0.3.0;
+package autostamp:pinecone@0.5.0;
 
 interface index-operations {
+  record collections-list {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
   /// The unique name of a collection.
   record collection-name {
     /// opaque schema; raw JSON
@@ -17,6 +22,23 @@ interface index-operations {
 
   /// The unique name of an index.
   record index-name {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  record collection {
+    name: collection-name,
+    size: s64,
+    status: collection-state
+  }
+
+  /// The current status of a collection.
+  record collection-state {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  record indexes-list {
     /// opaque schema; raw JSON
     value: string
   }
@@ -44,24 +66,103 @@ interface index-operations {
     value: string
   }
 
+  record index {
+    database: option<index-database>,
+    status: option<index-status>
+  }
+
+  record index-database {
+    dimension: option<vector-dimensionality>,
+    metric: option<index-metric>,
+    name: option<index-name>,
+    pod-type: option<pod-type>,
+    pods: option<s32>,
+    replicas: option<s32>,
+    shards: option<s32>
+  }
+
+  record index-status {
+    host: option<string>,
+    port: option<s32>,
+    ready: option<bool>,
+    state: option<index-state>
+  }
+
+  /// The current status of a index.
+  record index-state {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  variant create-collection-error {
+    bad-request(string),
+    conflict(string),
+    internal-server-error(string),
+    other(string)
+  }
+
+  variant describe-collection-error {
+    not-found(string),
+    internal-server-error(string),
+    other(string)
+  }
+
+  variant delete-collection-error {
+    not-found(string),
+    internal-server-error(string),
+    other(string)
+  }
+
+  variant create-index-error {
+    bad-request(string),
+    conflict(string),
+    internal-server-error(string),
+    other(string)
+  }
+
+  variant describe-index-error {
+    not-found(string),
+    internal-server-error(string),
+    other(string)
+  }
+
+  variant configure-index-error {
+    bad-request(string),
+    not-found(string),
+    internal-server-error(string),
+    other(string)
+  }
+
+  variant delete-index-error {
+    not-found(string),
+    internal-server-error(string),
+    other(string)
+  }
+
   /// List collections
-  list-collections: func() -> result<string, string>;
+  list-collections: func() -> result<collections-list, string>;
 
   /// Create collection
   record create-collection-params {
     name: collection-name,
     source: index-name
   }
-  create-collection: func(params: create-collection-params) -> result<string, string>;
+  create-collection: func(params: create-collection-params) -> result<string, create-collection-error>;
 
   /// Describe collection
-  describe-collection: func() -> result<string, string>;
+  record describe-collection-params {
+    collection-name: string
+  }
+  describe-collection: func(params: describe-collection-params) -> result<collection, describe-collection-error>;
 
   /// Delete Collection
-  delete-collection: func() -> result<string, string>;
+  record delete-collection-params {
+    collection-name: string
+  }
+  delete-collection: func(params: delete-collection-params) -> result<string, delete-collection-error>;
 
   /// List indexes
-  list-indexes: func() -> result<string, string>;
+  list-indexes: func() -> result<indexes-list, string>;
 
   /// Create index
   record create-index-params {
@@ -76,21 +177,28 @@ interface index-operations {
     replicas: option<s32>,
     source-collection: option<collection-name>
   }
-  create-index: func(params: create-index-params) -> result<string, string>;
+  create-index: func(params: create-index-params) -> result<string, create-index-error>;
 
   /// Describe index
-  describe-index: func() -> result<string, string>;
+  record describe-index-params {
+    index-name: string
+  }
+  describe-index: func(params: describe-index-params) -> result<index, describe-index-error>;
 
   /// Configure index
   record configure-index-params {
+    index-name: string,
     pod-type: option<pod-type>,
     /// The desired number of replicas for the index.
     replicas: option<s32>
   }
-  configure-index: func(params: configure-index-params) -> result<string, string>;
+  configure-index: func(params: configure-index-params) -> result<string, configure-index-error>;
 
   /// Delete Index
-  delete-index: func() -> result<string, string>;
+  record delete-index-params {
+    index-name: string
+  }
+  delete-index: func(params: delete-index-params) -> result<string, delete-index-error>;
 
 }
 
@@ -98,6 +206,25 @@ interface index-operations {
 interface vector-operations {
   /// If this parameter is present, the operation only affects vectors that satisfy the filter. See https://www.pinecone.io/docs/metadata-filtering/.
   record vector-filter {
+    /// JSON-encoded free-form object payload
+    data: option<string>
+  }
+
+  record describe-index-stats-response {
+    dimension: option<vector-dimensionality>,
+    /// The fullness of the index, regardless of whether a metadata filter expression was passed. The granularity of this metric is 10%.
+    index-fullness: option<f64>,
+    namespaces: option<describe-index-stats-response-namespaces>,
+    total-vector-count: option<s64>
+  }
+
+  /// The number of dimensions in the vector representation
+  record vector-dimensionality {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  record describe-index-stats-response-namespaces {
     /// JSON-encoded free-form object payload
     data: option<string>
   }
@@ -128,16 +255,53 @@ interface vector-operations {
     value: string
   }
 
+  record query-response {
+    matches: option<list<query-match>>,
+    namespace: option<namespace-name>
+  }
+
+  record query-match {
+    id: vector-id,
+    metadata: option<vector-metadata>,
+    score: option<f64>,
+    sparse-values: option<sparse-vector-data>,
+    values: option<vector-data>
+  }
+
   record vector-metadata {
     /// JSON-encoded free-form object payload
     data: option<string>
+  }
+
+  record delete-response {
+    /// JSON-encoded free-form object payload
+    data: option<string>
+  }
+
+  record fetch-response {
+    namespace: option<namespace-name>,
+    vectors: option<fetch-response-vectors>
+  }
+
+  record fetch-response-vectors {
+    /// JSON-encoded free-form object payload
+    data: option<string>
+  }
+
+  record update-response {
+    /// JSON-encoded free-form object payload
+    data: option<string>
+  }
+
+  record upsert-response {
+    upserted-count: option<s64>
   }
 
   /// Describe Index Stats
   record describe-index-stats-params {
     filter: option<vector-filter>
   }
-  describe-index-stats: func(params: describe-index-stats-params) -> result<string, string>;
+  describe-index-stats: func(params: describe-index-stats-params) -> result<describe-index-stats-response, string>;
 
   /// Query
   record query-params {
@@ -151,7 +315,7 @@ interface vector-operations {
     top-k: s64,
     vector: option<vector-data>
   }
-  query: func(params: query-params) -> result<string, string>;
+  query: func(params: query-params) -> result<query-response, string>;
 
   /// Delete
   record delete-params {
@@ -160,14 +324,14 @@ interface vector-operations {
     ids: option<string>,
     namespace: option<namespace-name>
   }
-  delete: func(params: delete-params) -> result<string, string>;
+  delete: func(params: delete-params) -> result<delete-response, string>;
 
   /// Fetch
   record fetch-params {
     ids: string,
     namespace: option<namespace-name>
   }
-  fetch: func(params: fetch-params) -> result<string, string>;
+  fetch: func(params: fetch-params) -> result<fetch-response, string>;
 
   /// Fetch
   record update-params {
@@ -178,14 +342,14 @@ interface vector-operations {
     sparse-values: option<sparse-vector-data>,
     values: option<vector-data>
   }
-  update: func(params: update-params) -> result<string, string>;
+  update: func(params: update-params) -> result<update-response, string>;
 
   /// Upsert
   record upsert-params {
     namespace: option<namespace-name>,
     vectors: string
   }
-  upsert: func(params: upsert-params) -> result<string, string>;
+  upsert: func(params: upsert-params) -> result<upsert-response, string>;
 
 }
 /// The component world: imports the secrets host capability

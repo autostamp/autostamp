@@ -6,7 +6,7 @@
 /// | Secret name | Applied to each request as |
 /// | --- | --- |
 /// | `oauth2` | `Authorization: Bearer <secret>` |
-package autostamp:trakt@0.3.0;
+package autostamp:trakt@0.5.0;
 
 interface calendars {
   /// Get DVD releases
@@ -175,6 +175,11 @@ interface checkin {
     twitter: option<bool>
   }
 
+  variant check-into-an-item-error {
+    conflict(string),
+    other(string)
+  }
+
   /// Check into an item
   record check-into-an-item-params {
     /// e.g. 2
@@ -187,7 +192,7 @@ interface checkin {
     movie: option<check-into-an-item-body-movie>,
     sharing: option<check-into-an-item-body-sharing>
   }
-  check-into-an-item: func(params: check-into-an-item-params) -> result<string, string>;
+  check-into-an-item: func(params: check-into-an-item-params) -> result<string, check-into-an-item-error>;
 
   /// Delete any active checkins
   record delete-any-active-checkins-params {
@@ -745,6 +750,11 @@ interface networks {
 }
 
 interface authentication-o-auth {
+  variant exchange-refresh-token-for-access-token-error {
+    unauthorized(string),
+    other(string)
+  }
+
   /// Authorize Application
   record authorize-application-params {
     /// Must be set to code.
@@ -775,7 +785,7 @@ interface authentication-o-auth {
     redirect-uri: option<string>,
     refresh-token: option<string>
   }
-  exchange-refresh-token-for-access-token: func(params: exchange-refresh-token-for-access-token-params) -> result<string, string>;
+  exchange-refresh-token-for-access-token: func(params: exchange-refresh-token-for-access-token-params) -> result<string, exchange-refresh-token-for-access-token-error>;
 
 }
 
@@ -965,6 +975,11 @@ interface scrobble {
     trakt: option<f64>
   }
 
+  variant stop-or-finish-watching-in-a-media-center-error {
+    conflict(string),
+    other(string)
+  }
+
   /// Pause watching in a media center
   record pause-watching-in-a-media-center-params {
     /// e.g. 2
@@ -1002,7 +1017,7 @@ interface scrobble {
     movie: option<stop-or-finish-watching-in-a-media-center-body-movie>,
     progress: option<f64>
   }
-  stop-or-finish-watching-in-a-media-center: func(params: stop-or-finish-watching-in-a-media-center-params) -> result<string, string>;
+  stop-or-finish-watching-in-a-media-center: func(params: stop-or-finish-watching-in-a-media-center-params) -> result<string, stop-or-finish-watching-in-a-media-center-error>;
 
 }
 
@@ -2185,6 +2200,11 @@ interface sync {
     number: f64
   }
 
+  variant add-items-to-watchlist-error {
+    status-v420(string),
+    other(string)
+  }
+
   /// Add items to collection
   record add-items-to-collection-params {
     /// e.g. 2
@@ -2402,7 +2422,7 @@ interface sync {
     seasons: option<list<add-items-to-watchlist-body-seasons-item>>,
     shows: option<list<add-items-to-watchlist-body-shows-item>>
   }
-  add-items-to-watchlist: func(params: add-items-to-watchlist-params) -> result<string, string>;
+  add-items-to-watchlist: func(params: add-items-to-watchlist-params) -> result<string, add-items-to-watchlist-error>;
 
   /// Remove items from watchlist
   record remove-items-from-watchlist-params {
@@ -2658,6 +2678,16 @@ interface users {
     number: f64
   }
 
+  variant create-personal-list-error {
+    status-v420(string),
+    other(string)
+  }
+
+  variant add-items-to-personal-list-error {
+    status-v420(string),
+    other(string)
+  }
+
   /// Get hidden items
   record get-hidden-items-params {
     section: string,
@@ -2905,7 +2935,7 @@ interface users {
     sort-by: option<string>,
     sort-how: option<string>
   }
-  create-personal-list: func(params: create-personal-list-params) -> result<string, string>;
+  create-personal-list: func(params: create-personal-list-params) -> result<string, create-personal-list-error>;
 
   /// Get all lists a user can collaborate on
   record get-all-lists-a-user-can-collaborate-on-params {
@@ -3005,7 +3035,7 @@ interface users {
     seasons: option<list<add-items-to-personal-list-body-seasons-item>>,
     shows: option<list<add-items-to-personal-list-body-shows-item>>
   }
-  add-items-to-personal-list: func(params: add-items-to-personal-list-params) -> result<string, string>;
+  add-items-to-personal-list: func(params: add-items-to-personal-list-params) -> result<string, add-items-to-personal-list-error>;
 
   /// Remove items from personal list
   record remove-items-from-personal-list-params {

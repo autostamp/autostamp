@@ -1,12 +1,70 @@
-package autostamp:deutschebahn@0.3.0;
+package autostamp:deutschebahn@0.5.0;
 
 interface reisezentren {
+  enum travel-center-type-op-enum {
+    reisezentrum,
+    mobility-center,
+  }
+
+  record travel-center-list {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  record travel-center {
+    /// Street address of travel center
+    address: option<string>,
+    /// City of travel center
+    city: option<string>,
+    /// Identifying number
+    id: option<s32>,
+    /// Latitude of travel center location
+    lat: option<f64>,
+    /// Longitude of travel center location
+    lon: option<f64>,
+    /// Name of travel center
+    name: option<string>,
+    /// Opening times of the travel center, ordered by week day
+    opening-times: option<travel-center-opening-times>,
+    /// Post code of travel center
+    post-code: option<string>,
+    /// Type of travel center
+    type-op: option<travel-center-type-op-enum>
+  }
+
+  /// Opening times of the travel center, ordered by week day
+  record travel-center-opening-times {
+    fri: option<opening-time>,
+    mon: option<opening-time>,
+    sat: option<opening-time>,
+    sun: option<opening-time>,
+    thu: option<opening-time>,
+    tue: option<opening-time>,
+    wed: option<opening-time>
+  }
+
+  record opening-time {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  variant get-reisezentren-error {
+    not-found(string),
+    range-not-satisfiable(string),
+    other(string)
+  }
+
+  variant get-reisezentren-id-error {
+    not-found(string),
+    other(string)
+  }
+
   /// Get all station infos
   record get-reisezentren-params {
     /// A station name or part of it
     name: option<string>
   }
-  get-reisezentren: func(params: get-reisezentren-params) -> result<string, string>;
+  get-reisezentren: func(params: get-reisezentren-params) -> result<travel-center-list, get-reisezentren-error>;
 
   /// Get information about a station near a location
   record get-reisezentren-loc-lat-lon-params {
@@ -15,7 +73,7 @@ interface reisezentren {
     /// Longitude
     lon: string
   }
-  get-reisezentren-loc-lat-lon: func(params: get-reisezentren-loc-lat-lon-params) -> result<string, string>;
+  get-reisezentren-loc-lat-lon: func(params: get-reisezentren-loc-lat-lon-params) -> result<travel-center, string>;
 
   /// Get stations in a given radius
   record get-reisezentren-loc-lat-lon-dist-params {
@@ -26,14 +84,14 @@ interface reisezentren {
     /// Radius
     dist: string
   }
-  get-reisezentren-loc-lat-lon-dist: func(params: get-reisezentren-loc-lat-lon-dist-params) -> result<string, string>;
+  get-reisezentren-loc-lat-lon-dist: func(params: get-reisezentren-loc-lat-lon-dist-params) -> result<travel-center, string>;
 
   /// Get information about a specific station
   record get-reisezentren-id-params {
     /// Station id
     id: string
   }
-  get-reisezentren-id: func(params: get-reisezentren-id-params) -> result<string, string>;
+  get-reisezentren-id: func(params: get-reisezentren-id-params) -> result<travel-center, get-reisezentren-id-error>;
 
 }
 

@@ -44,10 +44,15 @@ pub(crate) enum FieldLocation {
     Body,
 }
 
-/// A single operation parameter: the snake-case key it carries in the params JSON and where
-/// it belongs in the request.
+/// A single operation parameter. `snake` keys the field in the internal params JSON (and, for a
+/// path field, matches the `{snake}` placeholder in the path template); `wire` is the verbatim name
+/// the field takes on the HTTP wire (query key, header name, or body property). The two differ
+/// whenever the source name isn't already snake_case (e.g. `dryRun` → snake `dry_run`, wire
+/// `dryRun`), and let distinct inputs that share a snake key (`DateCreated`, `DateCreated<`) still
+/// travel under their true names.
 pub(crate) struct FieldSpec {
     pub(crate) snake: &'static str,
+    pub(crate) wire: &'static str,
     pub(crate) location: FieldLocation,
 }
 
@@ -71,6 +76,16 @@ pub(crate) struct AuthApply {
     pub(crate) kind: AuthKind,
 }
 
+/// The failure modes of [`dispatch`], kept structured so each generated operation can map them
+/// onto its own typed error: an `Http` failure carries the response status and body (routed to
+/// the matching error-variant case), while a `Transport` failure carries a message for the
+/// catch-all case (a secret lookup, connection, or decode failure that never produced an HTTP
+/// status).
+pub(crate) enum DispatchError {
+    Http { status: u16, body: String },
+    Transport(String),
+}
+
 /// A single API operation: HTTP method, path template (with `{snake}` placeholders), the
 /// parameter fields, and the security schemes to apply.
 pub(crate) struct OpSpec {
@@ -81,8 +96,9 @@ pub(crate) struct OpSpec {
 }
 
 /// Execute `op` with the supplied `params` (a JSON object keyed by snake-case field names)
-/// and return the response body as a string, or an error message.
-pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, String> {
+/// and return the raw 2xx response body, or a structured [`DispatchError`] the caller maps
+/// onto the operation's typed error.
+pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, DispatchError> {
     let obj = match &params {
         Value::Object(map) => Some(map),
         _ => None,
@@ -105,10 +121,10 @@ pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, String> {
                 let placeholder = format!("{{{}}}", field.snake);
                 path = path.replace(&placeholder, &percent_encode(&scalar(value)));
             }
-            FieldLocation::Query => query.push((field.snake.to_string(), scalar(value))),
-            FieldLocation::Header => headers.push((field.snake.to_string(), scalar(value))),
+            FieldLocation::Query => query.push((field.wire.to_string(), scalar(value))),
+            FieldLocation::Header => headers.push((field.wire.to_string(), scalar(value))),
             FieldLocation::Body => {
-                body.insert(field.snake.to_string(), value.clone());
+                body.insert(field.wire.to_string(), value.clone());
             }
         }
     }
@@ -116,7 +132,7 @@ pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, String> {
     // Apply each resolved security scheme, sourcing its value from wasmcloud:secrets.
     let mut cookies: Vec<String> = Vec::new();
     for apply in op.auth {
-        let secret = fetch_secret(apply.secret_key)?;
+        let secret = fetch_secret(apply.secret_key).map_err(DispatchError::Transport)?;
         match &apply.kind {
             AuthKind::Bearer => headers.push(("authorization".into(), format!("Bearer {secret}"))),
             AuthKind::Basic => {
@@ -177,17 +193,18 @@ fn fetch_secret(key: &str) -> Result<String, String> {
 }
 
 /// Build and send the outgoing request with `wstd`, returning the response body on a 2xx
-/// status. The generated guest exports are synchronous, so the async `wstd` client is driven
-/// to completion on a local reactor via `wstd::runtime::block_on`.
+/// status and a structured [`DispatchError`] otherwise. The generated guest exports are
+/// synchronous, so the async `wstd` client is driven to completion on a local reactor via
+/// `wstd::runtime::block_on`.
 fn perform(
     method: &str,
     path_with_query: &str,
     headers: &[(String, String)],
     body: &[u8],
-) -> Result<String, String> {
+) -> Result<String, DispatchError> {
     let url = join_url(crate::BASE_URL, path_with_query);
     let method = Method::from_bytes(method.as_bytes())
-        .map_err(|err| format!("invalid HTTP method `{method}`: {err}"))?;
+        .map_err(|err| DispatchError::Transport(format!("invalid HTTP method `{method}`: {err}")))?;
 
     let mut builder = Request::builder().method(method).uri(url);
     for (name, value) in headers {
@@ -199,27 +216,29 @@ fn perform(
         } else {
             Body::from(body.to_vec())
         })
-        .map_err(|err| format!("failed to build request: {err}"))?;
+        .map_err(|err| DispatchError::Transport(format!("failed to build request: {err}")))?;
 
     wstd::runtime::block_on(async move {
         let client = Client::new();
         let response = client
             .send(request)
             .await
-            .map_err(|err| format!("request failed: {err:#}"))?;
+            .map_err(|err| DispatchError::Transport(format!("request failed: {err:#}")))?;
 
         let status = response.status().as_u16();
         let mut response_body = response.into_body();
-        let bytes = response_body
-            .contents()
-            .await
-            .map_err(|err| format!("failed to read response body: {err:#}"))?;
+        let bytes = response_body.contents().await.map_err(|err| {
+            DispatchError::Transport(format!("failed to read response body: {err:#}"))
+        })?;
         let body_text = String::from_utf8_lossy(bytes).into_owned();
 
         if (200..300).contains(&status) {
             Ok(body_text)
         } else {
-            Err(format!("HTTP {status}: {body_text}"))
+            Err(DispatchError::Http {
+                status,
+                body: body_text,
+            })
         }
     })
 }
@@ -279,763 +298,6 @@ fn base64(input: &[u8]) -> String {
 }
 }
 
-use crate::runtime::{dispatch, AuthApply, AuthKind, FieldLocation, FieldSpec, OpSpec};
-use serde_json::{Map, Value};
-
-use crate::exports::autostamp::openai::open_ai as iface_open_ai;
-
-const OP_OPEN_AI_CREATE_ANSWER: OpSpec = OpSpec {
-    method: "POST",
-    path_template: "/answers",
-    fields: &[
-        FieldSpec { snake: "documents", location: FieldLocation::Body },
-        FieldSpec { snake: "examples", location: FieldLocation::Body },
-        FieldSpec { snake: "examples_context", location: FieldLocation::Body },
-        FieldSpec { snake: "expand", location: FieldLocation::Body },
-        FieldSpec { snake: "file", location: FieldLocation::Body },
-        FieldSpec { snake: "logit_bias", location: FieldLocation::Body },
-        FieldSpec { snake: "logprobs", location: FieldLocation::Body },
-        FieldSpec { snake: "max_rerank", location: FieldLocation::Body },
-        FieldSpec { snake: "max_tokens", location: FieldLocation::Body },
-        FieldSpec { snake: "model", location: FieldLocation::Body },
-        FieldSpec { snake: "n", location: FieldLocation::Body },
-        FieldSpec { snake: "question", location: FieldLocation::Body },
-        FieldSpec { snake: "return_metadata", location: FieldLocation::Body },
-        FieldSpec { snake: "return_prompt", location: FieldLocation::Body },
-        FieldSpec { snake: "search_model", location: FieldLocation::Body },
-        FieldSpec { snake: "stop", location: FieldLocation::Body },
-        FieldSpec { snake: "temperature", location: FieldLocation::Body },
-        FieldSpec { snake: "user", location: FieldLocation::Body },
-    ],
-    auth: &[
-    ],
-};
-
-const OP_OPEN_AI_CREATE_TRANSCRIPTION: OpSpec = OpSpec {
-    method: "POST",
-    path_template: "/audio/transcriptions",
-    fields: &[
-    ],
-    auth: &[
-    ],
-};
-
-const OP_OPEN_AI_CREATE_TRANSLATION: OpSpec = OpSpec {
-    method: "POST",
-    path_template: "/audio/translations",
-    fields: &[
-    ],
-    auth: &[
-    ],
-};
-
-const OP_OPEN_AI_CREATE_CHAT_COMPLETION: OpSpec = OpSpec {
-    method: "POST",
-    path_template: "/chat/completions",
-    fields: &[
-        FieldSpec { snake: "frequency_penalty", location: FieldLocation::Body },
-        FieldSpec { snake: "logit_bias", location: FieldLocation::Body },
-        FieldSpec { snake: "max_tokens", location: FieldLocation::Body },
-        FieldSpec { snake: "messages", location: FieldLocation::Body },
-        FieldSpec { snake: "model", location: FieldLocation::Body },
-        FieldSpec { snake: "n", location: FieldLocation::Body },
-        FieldSpec { snake: "presence_penalty", location: FieldLocation::Body },
-        FieldSpec { snake: "stop", location: FieldLocation::Body },
-        FieldSpec { snake: "stream", location: FieldLocation::Body },
-        FieldSpec { snake: "temperature", location: FieldLocation::Body },
-        FieldSpec { snake: "top_p", location: FieldLocation::Body },
-        FieldSpec { snake: "user", location: FieldLocation::Body },
-    ],
-    auth: &[
-    ],
-};
-
-const OP_OPEN_AI_CREATE_CLASSIFICATION: OpSpec = OpSpec {
-    method: "POST",
-    path_template: "/classifications",
-    fields: &[
-        FieldSpec { snake: "examples", location: FieldLocation::Body },
-        FieldSpec { snake: "expand", location: FieldLocation::Body },
-        FieldSpec { snake: "file", location: FieldLocation::Body },
-        FieldSpec { snake: "labels", location: FieldLocation::Body },
-        FieldSpec { snake: "logit_bias", location: FieldLocation::Body },
-        FieldSpec { snake: "logprobs", location: FieldLocation::Body },
-        FieldSpec { snake: "max_examples", location: FieldLocation::Body },
-        FieldSpec { snake: "model", location: FieldLocation::Body },
-        FieldSpec { snake: "query", location: FieldLocation::Body },
-        FieldSpec { snake: "return_metadata", location: FieldLocation::Body },
-        FieldSpec { snake: "return_prompt", location: FieldLocation::Body },
-        FieldSpec { snake: "search_model", location: FieldLocation::Body },
-        FieldSpec { snake: "temperature", location: FieldLocation::Body },
-        FieldSpec { snake: "user", location: FieldLocation::Body },
-    ],
-    auth: &[
-    ],
-};
-
-const OP_OPEN_AI_CREATE_COMPLETION: OpSpec = OpSpec {
-    method: "POST",
-    path_template: "/completions",
-    fields: &[
-        FieldSpec { snake: "best_of", location: FieldLocation::Body },
-        FieldSpec { snake: "echo", location: FieldLocation::Body },
-        FieldSpec { snake: "frequency_penalty", location: FieldLocation::Body },
-        FieldSpec { snake: "logit_bias", location: FieldLocation::Body },
-        FieldSpec { snake: "logprobs", location: FieldLocation::Body },
-        FieldSpec { snake: "max_tokens", location: FieldLocation::Body },
-        FieldSpec { snake: "model", location: FieldLocation::Body },
-        FieldSpec { snake: "n", location: FieldLocation::Body },
-        FieldSpec { snake: "presence_penalty", location: FieldLocation::Body },
-        FieldSpec { snake: "prompt", location: FieldLocation::Body },
-        FieldSpec { snake: "stop", location: FieldLocation::Body },
-        FieldSpec { snake: "stream", location: FieldLocation::Body },
-        FieldSpec { snake: "suffix", location: FieldLocation::Body },
-        FieldSpec { snake: "temperature", location: FieldLocation::Body },
-        FieldSpec { snake: "top_p", location: FieldLocation::Body },
-        FieldSpec { snake: "user", location: FieldLocation::Body },
-    ],
-    auth: &[
-    ],
-};
-
-const OP_OPEN_AI_CREATE_EDIT: OpSpec = OpSpec {
-    method: "POST",
-    path_template: "/edits",
-    fields: &[
-        FieldSpec { snake: "input", location: FieldLocation::Body },
-        FieldSpec { snake: "instruction", location: FieldLocation::Body },
-        FieldSpec { snake: "model", location: FieldLocation::Body },
-        FieldSpec { snake: "n", location: FieldLocation::Body },
-        FieldSpec { snake: "temperature", location: FieldLocation::Body },
-        FieldSpec { snake: "top_p", location: FieldLocation::Body },
-    ],
-    auth: &[
-    ],
-};
-
-const OP_OPEN_AI_CREATE_EMBEDDING: OpSpec = OpSpec {
-    method: "POST",
-    path_template: "/embeddings",
-    fields: &[
-        FieldSpec { snake: "input", location: FieldLocation::Body },
-        FieldSpec { snake: "model", location: FieldLocation::Body },
-        FieldSpec { snake: "user", location: FieldLocation::Body },
-    ],
-    auth: &[
-    ],
-};
-
-const OP_OPEN_AI_LIST_ENGINES: OpSpec = OpSpec {
-    method: "GET",
-    path_template: "/engines",
-    fields: &[
-    ],
-    auth: &[
-    ],
-};
-
-const OP_OPEN_AI_RETRIEVE_ENGINE: OpSpec = OpSpec {
-    method: "GET",
-    path_template: "/engines/{engine_id}",
-    fields: &[
-        FieldSpec { snake: "engine_id", location: FieldLocation::Path },
-    ],
-    auth: &[
-    ],
-};
-
-const OP_OPEN_AI_CREATE_SEARCH: OpSpec = OpSpec {
-    method: "POST",
-    path_template: "/engines/{engine_id}/search",
-    fields: &[
-        FieldSpec { snake: "engine_id", location: FieldLocation::Path },
-        FieldSpec { snake: "documents", location: FieldLocation::Body },
-        FieldSpec { snake: "file", location: FieldLocation::Body },
-        FieldSpec { snake: "max_rerank", location: FieldLocation::Body },
-        FieldSpec { snake: "query", location: FieldLocation::Body },
-        FieldSpec { snake: "return_metadata", location: FieldLocation::Body },
-        FieldSpec { snake: "user", location: FieldLocation::Body },
-    ],
-    auth: &[
-    ],
-};
-
-const OP_OPEN_AI_LIST_FILES: OpSpec = OpSpec {
-    method: "GET",
-    path_template: "/files",
-    fields: &[
-    ],
-    auth: &[
-    ],
-};
-
-const OP_OPEN_AI_CREATE_FILE: OpSpec = OpSpec {
-    method: "POST",
-    path_template: "/files",
-    fields: &[
-    ],
-    auth: &[
-    ],
-};
-
-const OP_OPEN_AI_RETRIEVE_FILE: OpSpec = OpSpec {
-    method: "GET",
-    path_template: "/files/{file_id}",
-    fields: &[
-        FieldSpec { snake: "file_id", location: FieldLocation::Path },
-    ],
-    auth: &[
-    ],
-};
-
-const OP_OPEN_AI_DELETE_FILE: OpSpec = OpSpec {
-    method: "DELETE",
-    path_template: "/files/{file_id}",
-    fields: &[
-        FieldSpec { snake: "file_id", location: FieldLocation::Path },
-    ],
-    auth: &[
-    ],
-};
-
-const OP_OPEN_AI_DOWNLOAD_FILE: OpSpec = OpSpec {
-    method: "GET",
-    path_template: "/files/{file_id}/content",
-    fields: &[
-        FieldSpec { snake: "file_id", location: FieldLocation::Path },
-    ],
-    auth: &[
-    ],
-};
-
-const OP_OPEN_AI_LIST_FINE_TUNES: OpSpec = OpSpec {
-    method: "GET",
-    path_template: "/fine-tunes",
-    fields: &[
-    ],
-    auth: &[
-    ],
-};
-
-const OP_OPEN_AI_CREATE_FINE_TUNE: OpSpec = OpSpec {
-    method: "POST",
-    path_template: "/fine-tunes",
-    fields: &[
-        FieldSpec { snake: "batch_size", location: FieldLocation::Body },
-        FieldSpec { snake: "classification_betas", location: FieldLocation::Body },
-        FieldSpec { snake: "classification_n_classes", location: FieldLocation::Body },
-        FieldSpec { snake: "classification_positive_class", location: FieldLocation::Body },
-        FieldSpec { snake: "compute_classification_metrics", location: FieldLocation::Body },
-        FieldSpec { snake: "learning_rate_multiplier", location: FieldLocation::Body },
-        FieldSpec { snake: "model", location: FieldLocation::Body },
-        FieldSpec { snake: "n_epochs", location: FieldLocation::Body },
-        FieldSpec { snake: "prompt_loss_weight", location: FieldLocation::Body },
-        FieldSpec { snake: "suffix", location: FieldLocation::Body },
-        FieldSpec { snake: "training_file", location: FieldLocation::Body },
-        FieldSpec { snake: "validation_file", location: FieldLocation::Body },
-    ],
-    auth: &[
-    ],
-};
-
-const OP_OPEN_AI_RETRIEVE_FINE_TUNE: OpSpec = OpSpec {
-    method: "GET",
-    path_template: "/fine-tunes/{fine_tune_id}",
-    fields: &[
-        FieldSpec { snake: "fine_tune_id", location: FieldLocation::Path },
-    ],
-    auth: &[
-    ],
-};
-
-const OP_OPEN_AI_CANCEL_FINE_TUNE: OpSpec = OpSpec {
-    method: "POST",
-    path_template: "/fine-tunes/{fine_tune_id}/cancel",
-    fields: &[
-        FieldSpec { snake: "fine_tune_id", location: FieldLocation::Path },
-    ],
-    auth: &[
-    ],
-};
-
-const OP_OPEN_AI_LIST_FINE_TUNE_EVENTS: OpSpec = OpSpec {
-    method: "GET",
-    path_template: "/fine-tunes/{fine_tune_id}/events",
-    fields: &[
-        FieldSpec { snake: "fine_tune_id", location: FieldLocation::Path },
-        FieldSpec { snake: "stream", location: FieldLocation::Query },
-    ],
-    auth: &[
-    ],
-};
-
-const OP_OPEN_AI_CREATE_IMAGE_EDIT: OpSpec = OpSpec {
-    method: "POST",
-    path_template: "/images/edits",
-    fields: &[
-    ],
-    auth: &[
-    ],
-};
-
-const OP_OPEN_AI_CREATE_IMAGE: OpSpec = OpSpec {
-    method: "POST",
-    path_template: "/images/generations",
-    fields: &[
-        FieldSpec { snake: "n", location: FieldLocation::Body },
-        FieldSpec { snake: "prompt", location: FieldLocation::Body },
-        FieldSpec { snake: "response_format", location: FieldLocation::Body },
-        FieldSpec { snake: "size", location: FieldLocation::Body },
-        FieldSpec { snake: "user", location: FieldLocation::Body },
-    ],
-    auth: &[
-    ],
-};
-
-const OP_OPEN_AI_CREATE_IMAGE_VARIATION: OpSpec = OpSpec {
-    method: "POST",
-    path_template: "/images/variations",
-    fields: &[
-    ],
-    auth: &[
-    ],
-};
-
-const OP_OPEN_AI_LIST_MODELS: OpSpec = OpSpec {
-    method: "GET",
-    path_template: "/models",
-    fields: &[
-    ],
-    auth: &[
-    ],
-};
-
-const OP_OPEN_AI_RETRIEVE_MODEL: OpSpec = OpSpec {
-    method: "GET",
-    path_template: "/models/{model}",
-    fields: &[
-        FieldSpec { snake: "model", location: FieldLocation::Path },
-    ],
-    auth: &[
-    ],
-};
-
-const OP_OPEN_AI_DELETE_MODEL: OpSpec = OpSpec {
-    method: "DELETE",
-    path_template: "/models/{model}",
-    fields: &[
-        FieldSpec { snake: "model", location: FieldLocation::Path },
-    ],
-    auth: &[
-    ],
-};
-
-const OP_OPEN_AI_CREATE_MODERATION: OpSpec = OpSpec {
-    method: "POST",
-    path_template: "/moderations",
-    fields: &[
-        FieldSpec { snake: "input", location: FieldLocation::Body },
-        FieldSpec { snake: "model", location: FieldLocation::Body },
-    ],
-    auth: &[
-    ],
-};
-
-fn iface_open_ai__chat_completion_request_message_role_enum__to_str(e: &iface_open_ai::ChatCompletionRequestMessageRoleEnum) -> &'static str {
-    match e {
-        iface_open_ai::ChatCompletionRequestMessageRoleEnum::System => "system",
-        iface_open_ai::ChatCompletionRequestMessageRoleEnum::User => "user",
-        iface_open_ai::ChatCompletionRequestMessageRoleEnum::Assistant => "assistant",
-    }
-}
-
-fn iface_open_ai__create_image_request_response_format_enum__to_str(e: &iface_open_ai::CreateImageRequestResponseFormatEnum) -> &'static str {
-    match e {
-        iface_open_ai::CreateImageRequestResponseFormatEnum::Url => "url",
-        iface_open_ai::CreateImageRequestResponseFormatEnum::B64Json => "b64_json",
-    }
-}
-
-fn iface_open_ai__create_image_request_size_enum__to_str(e: &iface_open_ai::CreateImageRequestSizeEnum) -> &'static str {
-    match e {
-        iface_open_ai::CreateImageRequestSizeEnum::V256x256 => "256x256",
-        iface_open_ai::CreateImageRequestSizeEnum::V512x512 => "512x512",
-        iface_open_ai::CreateImageRequestSizeEnum::V1024x1024 => "1024x1024",
-    }
-}
-
-fn iface_open_ai__create_completion_request_properties_logit_bias__to_json(p: &iface_open_ai::CreateCompletionRequestPropertiesLogitBias) -> Value {
-    let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_open_ai__create_search_request_properties_return_metadata__to_json(p: &iface_open_ai::CreateSearchRequestPropertiesReturnMetadata) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_open_ai__create_completion_request_properties_user__to_json(p: &iface_open_ai::CreateCompletionRequestPropertiesUser) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_open_ai__create_chat_completion_request_logit_bias__to_json(p: &iface_open_ai::CreateChatCompletionRequestLogitBias) -> Value {
-    let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_open_ai__chat_completion_request_message__to_json(p: &iface_open_ai::ChatCompletionRequestMessage) -> Value {
-    let mut m = Map::new();
-    m.insert("content".into(), Value::String((&p.content).clone()));
-    m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("role".into(), Value::String(iface_open_ai__chat_completion_request_message_role_enum__to_str(&p.role).into()));
-    Value::Object(m)
-}
-
-fn iface_open_ai__create_answer_request_properties_expand__to_json(p: &iface_open_ai::CreateAnswerRequestPropertiesExpand) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_open_ai__create_answer_request_properties_logprobs__to_json(p: &iface_open_ai::CreateAnswerRequestPropertiesLogprobs) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_open_ai__create_completion_request_properties_model__to_json(p: &iface_open_ai::CreateCompletionRequestPropertiesModel) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_open_ai__create_answer_request_properties_return_prompt__to_json(p: &iface_open_ai::CreateAnswerRequestPropertiesReturnPrompt) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_open_ai__create_answer_request_properties_search_model__to_json(p: &iface_open_ai::CreateAnswerRequestPropertiesSearchModel) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_open_ai__create_completion_request_logit_bias__to_json(p: &iface_open_ai::CreateCompletionRequestLogitBias) -> Value {
-    let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_open_ai__create_answer_params__to_json(p: &iface_open_ai::CreateAnswerParams) -> Value {
-    let mut m = Map::new();
-    m.insert("documents".into(), match (&p.documents) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
-    m.insert("examples".into(), Value::Array((&p.examples).iter().map(|v| Value::Array((v).iter().map(|v| Value::String((v).clone())).collect())).collect()));
-    m.insert("examples_context".into(), Value::String((&p.examples_context).clone()));
-    m.insert("expand".into(), match (&p.expand) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
-    m.insert("file".into(), match (&p.file) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("logit_bias".into(), match (&p.logit_bias) { Some(v) => iface_open_ai__create_completion_request_properties_logit_bias__to_json(v), None => Value::Null });
-    m.insert("logprobs".into(), match (&p.logprobs) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    m.insert("max_rerank".into(), match (&p.max_rerank) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    m.insert("max_tokens".into(), match (&p.max_tokens) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    m.insert("model".into(), Value::String((&p.model).clone()));
-    m.insert("n".into(), match (&p.n) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    m.insert("question".into(), Value::String((&p.question).clone()));
-    m.insert("return_metadata".into(), match (&p.return_metadata) { Some(v) => iface_open_ai__create_search_request_properties_return_metadata__to_json(v), None => Value::Null });
-    m.insert("return_prompt".into(), match (&p.return_prompt) { Some(v) => Value::Bool(*(v)), None => Value::Null });
-    m.insert("search_model".into(), match (&p.search_model) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("stop".into(), match (&p.stop) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("temperature".into(), match (&p.temperature) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
-    m.insert("user".into(), match (&p.user) { Some(v) => iface_open_ai__create_completion_request_properties_user__to_json(v), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_open_ai__create_chat_completion_params__to_json(p: &iface_open_ai::CreateChatCompletionParams) -> Value {
-    let mut m = Map::new();
-    m.insert("frequency_penalty".into(), match (&p.frequency_penalty) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
-    m.insert("logit_bias".into(), match (&p.logit_bias) { Some(v) => iface_open_ai__create_chat_completion_request_logit_bias__to_json(v), None => Value::Null });
-    m.insert("max_tokens".into(), match (&p.max_tokens) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    m.insert("messages".into(), Value::Array((&p.messages).iter().map(|v| iface_open_ai__chat_completion_request_message__to_json(v)).collect()));
-    m.insert("model".into(), Value::String((&p.model).clone()));
-    m.insert("n".into(), match (&p.n) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    m.insert("presence_penalty".into(), match (&p.presence_penalty) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
-    m.insert("stop".into(), match (&p.stop) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("stream".into(), match (&p.stream_op) { Some(v) => Value::Bool(*(v)), None => Value::Null });
-    m.insert("temperature".into(), match (&p.temperature) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
-    m.insert("top_p".into(), match (&p.top_p) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
-    m.insert("user".into(), match (&p.user) { Some(v) => iface_open_ai__create_completion_request_properties_user__to_json(v), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_open_ai__create_classification_params__to_json(p: &iface_open_ai::CreateClassificationParams) -> Value {
-    let mut m = Map::new();
-    m.insert("examples".into(), match (&p.examples) { Some(v) => Value::Array((v).iter().map(|v| Value::Array((v).iter().map(|v| Value::String((v).clone())).collect())).collect()), None => Value::Null });
-    m.insert("expand".into(), match (&p.expand) { Some(v) => iface_open_ai__create_answer_request_properties_expand__to_json(v), None => Value::Null });
-    m.insert("file".into(), match (&p.file) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("labels".into(), match (&p.labels) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
-    m.insert("logit_bias".into(), match (&p.logit_bias) { Some(v) => iface_open_ai__create_completion_request_properties_logit_bias__to_json(v), None => Value::Null });
-    m.insert("logprobs".into(), match (&p.logprobs) { Some(v) => iface_open_ai__create_answer_request_properties_logprobs__to_json(v), None => Value::Null });
-    m.insert("max_examples".into(), match (&p.max_examples) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    m.insert("model".into(), iface_open_ai__create_completion_request_properties_model__to_json(&p.model));
-    m.insert("query".into(), Value::String((&p.query).clone()));
-    m.insert("return_metadata".into(), match (&p.return_metadata) { Some(v) => iface_open_ai__create_search_request_properties_return_metadata__to_json(v), None => Value::Null });
-    m.insert("return_prompt".into(), match (&p.return_prompt) { Some(v) => iface_open_ai__create_answer_request_properties_return_prompt__to_json(v), None => Value::Null });
-    m.insert("search_model".into(), match (&p.search_model) { Some(v) => iface_open_ai__create_answer_request_properties_search_model__to_json(v), None => Value::Null });
-    m.insert("temperature".into(), match (&p.temperature) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
-    m.insert("user".into(), match (&p.user) { Some(v) => iface_open_ai__create_completion_request_properties_user__to_json(v), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_open_ai__create_completion_params__to_json(p: &iface_open_ai::CreateCompletionParams) -> Value {
-    let mut m = Map::new();
-    m.insert("best_of".into(), match (&p.best_of) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    m.insert("echo".into(), match (&p.echo) { Some(v) => Value::Bool(*(v)), None => Value::Null });
-    m.insert("frequency_penalty".into(), match (&p.frequency_penalty) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
-    m.insert("logit_bias".into(), match (&p.logit_bias) { Some(v) => iface_open_ai__create_completion_request_logit_bias__to_json(v), None => Value::Null });
-    m.insert("logprobs".into(), match (&p.logprobs) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    m.insert("max_tokens".into(), match (&p.max_tokens) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    m.insert("model".into(), Value::String((&p.model).clone()));
-    m.insert("n".into(), match (&p.n) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    m.insert("presence_penalty".into(), match (&p.presence_penalty) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
-    m.insert("prompt".into(), match (&p.prompt) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("stop".into(), match (&p.stop) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("stream".into(), match (&p.stream_op) { Some(v) => Value::Bool(*(v)), None => Value::Null });
-    m.insert("suffix".into(), match (&p.suffix) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("temperature".into(), match (&p.temperature) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
-    m.insert("top_p".into(), match (&p.top_p) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
-    m.insert("user".into(), match (&p.user) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_open_ai__create_edit_params__to_json(p: &iface_open_ai::CreateEditParams) -> Value {
-    let mut m = Map::new();
-    m.insert("input".into(), match (&p.input) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("instruction".into(), Value::String((&p.instruction).clone()));
-    m.insert("model".into(), Value::String((&p.model).clone()));
-    m.insert("n".into(), match (&p.n) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    m.insert("temperature".into(), match (&p.temperature) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
-    m.insert("top_p".into(), match (&p.top_p) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_open_ai__create_embedding_params__to_json(p: &iface_open_ai::CreateEmbeddingParams) -> Value {
-    let mut m = Map::new();
-    m.insert("input".into(), Value::String((&p.input).clone()));
-    m.insert("model".into(), iface_open_ai__create_completion_request_properties_model__to_json(&p.model));
-    m.insert("user".into(), match (&p.user) { Some(v) => iface_open_ai__create_completion_request_properties_user__to_json(v), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_open_ai__retrieve_engine_params__to_json(p: &iface_open_ai::RetrieveEngineParams) -> Value {
-    let mut m = Map::new();
-    m.insert("engine_id".into(), Value::String((&p.engine_id).clone()));
-    Value::Object(m)
-}
-
-fn iface_open_ai__create_search_params__to_json(p: &iface_open_ai::CreateSearchParams) -> Value {
-    let mut m = Map::new();
-    m.insert("engine_id".into(), Value::String((&p.engine_id).clone()));
-    m.insert("documents".into(), match (&p.documents) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
-    m.insert("file".into(), match (&p.file) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("max_rerank".into(), match (&p.max_rerank) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    m.insert("query".into(), Value::String((&p.query).clone()));
-    m.insert("return_metadata".into(), match (&p.return_metadata) { Some(v) => Value::Bool(*(v)), None => Value::Null });
-    m.insert("user".into(), match (&p.user) { Some(v) => iface_open_ai__create_completion_request_properties_user__to_json(v), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_open_ai__retrieve_file_params__to_json(p: &iface_open_ai::RetrieveFileParams) -> Value {
-    let mut m = Map::new();
-    m.insert("file_id".into(), Value::String((&p.file_id).clone()));
-    Value::Object(m)
-}
-
-fn iface_open_ai__delete_file_params__to_json(p: &iface_open_ai::DeleteFileParams) -> Value {
-    let mut m = Map::new();
-    m.insert("file_id".into(), Value::String((&p.file_id).clone()));
-    Value::Object(m)
-}
-
-fn iface_open_ai__download_file_params__to_json(p: &iface_open_ai::DownloadFileParams) -> Value {
-    let mut m = Map::new();
-    m.insert("file_id".into(), Value::String((&p.file_id).clone()));
-    Value::Object(m)
-}
-
-fn iface_open_ai__create_fine_tune_params__to_json(p: &iface_open_ai::CreateFineTuneParams) -> Value {
-    let mut m = Map::new();
-    m.insert("batch_size".into(), match (&p.batch_size) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    m.insert("classification_betas".into(), match (&p.classification_betas) { Some(v) => Value::Array((v).iter().map(|v| serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null)).collect()), None => Value::Null });
-    m.insert("classification_n_classes".into(), match (&p.classification_n_classes) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    m.insert("classification_positive_class".into(), match (&p.classification_positive_class) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("compute_classification_metrics".into(), match (&p.compute_classification_metrics) { Some(v) => Value::Bool(*(v)), None => Value::Null });
-    m.insert("learning_rate_multiplier".into(), match (&p.learning_rate_multiplier) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
-    m.insert("model".into(), match (&p.model) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("n_epochs".into(), match (&p.n_epochs) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    m.insert("prompt_loss_weight".into(), match (&p.prompt_loss_weight) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
-    m.insert("suffix".into(), match (&p.suffix) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("training_file".into(), Value::String((&p.training_file).clone()));
-    m.insert("validation_file".into(), match (&p.validation_file) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_open_ai__retrieve_fine_tune_params__to_json(p: &iface_open_ai::RetrieveFineTuneParams) -> Value {
-    let mut m = Map::new();
-    m.insert("fine_tune_id".into(), Value::String((&p.fine_tune_id).clone()));
-    Value::Object(m)
-}
-
-fn iface_open_ai__cancel_fine_tune_params__to_json(p: &iface_open_ai::CancelFineTuneParams) -> Value {
-    let mut m = Map::new();
-    m.insert("fine_tune_id".into(), Value::String((&p.fine_tune_id).clone()));
-    Value::Object(m)
-}
-
-fn iface_open_ai__list_fine_tune_events_params__to_json(p: &iface_open_ai::ListFineTuneEventsParams) -> Value {
-    let mut m = Map::new();
-    m.insert("fine_tune_id".into(), Value::String((&p.fine_tune_id).clone()));
-    m.insert("stream".into(), match (&p.stream_op) { Some(v) => Value::Bool(*(v)), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_open_ai__create_image_params__to_json(p: &iface_open_ai::CreateImageParams) -> Value {
-    let mut m = Map::new();
-    m.insert("n".into(), match (&p.n) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    m.insert("prompt".into(), Value::String((&p.prompt).clone()));
-    m.insert("response_format".into(), match (&p.response_format) { Some(v) => Value::String(iface_open_ai__create_image_request_response_format_enum__to_str(v).into()), None => Value::Null });
-    m.insert("size".into(), match (&p.size) { Some(v) => Value::String(iface_open_ai__create_image_request_size_enum__to_str(v).into()), None => Value::Null });
-    m.insert("user".into(), match (&p.user) { Some(v) => iface_open_ai__create_completion_request_properties_user__to_json(v), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_open_ai__retrieve_model_params__to_json(p: &iface_open_ai::RetrieveModelParams) -> Value {
-    let mut m = Map::new();
-    m.insert("model".into(), Value::String((&p.model).clone()));
-    Value::Object(m)
-}
-
-fn iface_open_ai__delete_model_params__to_json(p: &iface_open_ai::DeleteModelParams) -> Value {
-    let mut m = Map::new();
-    m.insert("model".into(), Value::String((&p.model).clone()));
-    Value::Object(m)
-}
-
-fn iface_open_ai__create_moderation_params__to_json(p: &iface_open_ai::CreateModerationParams) -> Value {
-    let mut m = Map::new();
-    m.insert("input".into(), Value::String((&p.input).clone()));
-    m.insert("model".into(), match (&p.model) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    Value::Object(m)
-}
-
-impl iface_open_ai::Guest for crate::Component {
-    fn create_answer(params: iface_open_ai::CreateAnswerParams) -> Result<String, String> {
-        let json = iface_open_ai__create_answer_params__to_json(&params);
-        dispatch(&OP_OPEN_AI_CREATE_ANSWER, json)
-    }
-    fn create_transcription() -> Result<String, String> {
-        dispatch(&OP_OPEN_AI_CREATE_TRANSCRIPTION, Value::Object(Map::new()))
-    }
-    fn create_translation() -> Result<String, String> {
-        dispatch(&OP_OPEN_AI_CREATE_TRANSLATION, Value::Object(Map::new()))
-    }
-    fn create_chat_completion(params: iface_open_ai::CreateChatCompletionParams) -> Result<String, String> {
-        let json = iface_open_ai__create_chat_completion_params__to_json(&params);
-        dispatch(&OP_OPEN_AI_CREATE_CHAT_COMPLETION, json)
-    }
-    fn create_classification(params: iface_open_ai::CreateClassificationParams) -> Result<String, String> {
-        let json = iface_open_ai__create_classification_params__to_json(&params);
-        dispatch(&OP_OPEN_AI_CREATE_CLASSIFICATION, json)
-    }
-    fn create_completion(params: iface_open_ai::CreateCompletionParams) -> Result<String, String> {
-        let json = iface_open_ai__create_completion_params__to_json(&params);
-        dispatch(&OP_OPEN_AI_CREATE_COMPLETION, json)
-    }
-    fn create_edit(params: iface_open_ai::CreateEditParams) -> Result<String, String> {
-        let json = iface_open_ai__create_edit_params__to_json(&params);
-        dispatch(&OP_OPEN_AI_CREATE_EDIT, json)
-    }
-    fn create_embedding(params: iface_open_ai::CreateEmbeddingParams) -> Result<String, String> {
-        let json = iface_open_ai__create_embedding_params__to_json(&params);
-        dispatch(&OP_OPEN_AI_CREATE_EMBEDDING, json)
-    }
-    fn list_engines() -> Result<String, String> {
-        dispatch(&OP_OPEN_AI_LIST_ENGINES, Value::Object(Map::new()))
-    }
-    fn retrieve_engine(params: iface_open_ai::RetrieveEngineParams) -> Result<String, String> {
-        let json = iface_open_ai__retrieve_engine_params__to_json(&params);
-        dispatch(&OP_OPEN_AI_RETRIEVE_ENGINE, json)
-    }
-    fn create_search(params: iface_open_ai::CreateSearchParams) -> Result<String, String> {
-        let json = iface_open_ai__create_search_params__to_json(&params);
-        dispatch(&OP_OPEN_AI_CREATE_SEARCH, json)
-    }
-    fn list_files() -> Result<String, String> {
-        dispatch(&OP_OPEN_AI_LIST_FILES, Value::Object(Map::new()))
-    }
-    fn create_file() -> Result<String, String> {
-        dispatch(&OP_OPEN_AI_CREATE_FILE, Value::Object(Map::new()))
-    }
-    fn retrieve_file(params: iface_open_ai::RetrieveFileParams) -> Result<String, String> {
-        let json = iface_open_ai__retrieve_file_params__to_json(&params);
-        dispatch(&OP_OPEN_AI_RETRIEVE_FILE, json)
-    }
-    fn delete_file(params: iface_open_ai::DeleteFileParams) -> Result<String, String> {
-        let json = iface_open_ai__delete_file_params__to_json(&params);
-        dispatch(&OP_OPEN_AI_DELETE_FILE, json)
-    }
-    fn download_file(params: iface_open_ai::DownloadFileParams) -> Result<String, String> {
-        let json = iface_open_ai__download_file_params__to_json(&params);
-        dispatch(&OP_OPEN_AI_DOWNLOAD_FILE, json)
-    }
-    fn list_fine_tunes() -> Result<String, String> {
-        dispatch(&OP_OPEN_AI_LIST_FINE_TUNES, Value::Object(Map::new()))
-    }
-    fn create_fine_tune(params: iface_open_ai::CreateFineTuneParams) -> Result<String, String> {
-        let json = iface_open_ai__create_fine_tune_params__to_json(&params);
-        dispatch(&OP_OPEN_AI_CREATE_FINE_TUNE, json)
-    }
-    fn retrieve_fine_tune(params: iface_open_ai::RetrieveFineTuneParams) -> Result<String, String> {
-        let json = iface_open_ai__retrieve_fine_tune_params__to_json(&params);
-        dispatch(&OP_OPEN_AI_RETRIEVE_FINE_TUNE, json)
-    }
-    fn cancel_fine_tune(params: iface_open_ai::CancelFineTuneParams) -> Result<String, String> {
-        let json = iface_open_ai__cancel_fine_tune_params__to_json(&params);
-        dispatch(&OP_OPEN_AI_CANCEL_FINE_TUNE, json)
-    }
-    fn list_fine_tune_events(params: iface_open_ai::ListFineTuneEventsParams) -> Result<String, String> {
-        let json = iface_open_ai__list_fine_tune_events_params__to_json(&params);
-        dispatch(&OP_OPEN_AI_LIST_FINE_TUNE_EVENTS, json)
-    }
-    fn create_image_edit() -> Result<String, String> {
-        dispatch(&OP_OPEN_AI_CREATE_IMAGE_EDIT, Value::Object(Map::new()))
-    }
-    fn create_image(params: iface_open_ai::CreateImageParams) -> Result<String, String> {
-        let json = iface_open_ai__create_image_params__to_json(&params);
-        dispatch(&OP_OPEN_AI_CREATE_IMAGE, json)
-    }
-    fn create_image_variation() -> Result<String, String> {
-        dispatch(&OP_OPEN_AI_CREATE_IMAGE_VARIATION, Value::Object(Map::new()))
-    }
-    fn list_models() -> Result<String, String> {
-        dispatch(&OP_OPEN_AI_LIST_MODELS, Value::Object(Map::new()))
-    }
-    fn retrieve_model(params: iface_open_ai::RetrieveModelParams) -> Result<String, String> {
-        let json = iface_open_ai__retrieve_model_params__to_json(&params);
-        dispatch(&OP_OPEN_AI_RETRIEVE_MODEL, json)
-    }
-    fn delete_model(params: iface_open_ai::DeleteModelParams) -> Result<String, String> {
-        let json = iface_open_ai__delete_model_params__to_json(&params);
-        dispatch(&OP_OPEN_AI_DELETE_MODEL, json)
-    }
-    fn create_moderation(params: iface_open_ai::CreateModerationParams) -> Result<String, String> {
-        let json = iface_open_ai__create_moderation_params__to_json(&params);
-        dispatch(&OP_OPEN_AI_CREATE_MODERATION, json)
-    }
-}
+mod iface_open_ai;
 
 export!(Component);

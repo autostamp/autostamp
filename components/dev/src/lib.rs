@@ -44,10 +44,15 @@ pub(crate) enum FieldLocation {
     Body,
 }
 
-/// A single operation parameter: the snake-case key it carries in the params JSON and where
-/// it belongs in the request.
+/// A single operation parameter. `snake` keys the field in the internal params JSON (and, for a
+/// path field, matches the `{snake}` placeholder in the path template); `wire` is the verbatim name
+/// the field takes on the HTTP wire (query key, header name, or body property). The two differ
+/// whenever the source name isn't already snake_case (e.g. `dryRun` → snake `dry_run`, wire
+/// `dryRun`), and let distinct inputs that share a snake key (`DateCreated`, `DateCreated<`) still
+/// travel under their true names.
 pub(crate) struct FieldSpec {
     pub(crate) snake: &'static str,
+    pub(crate) wire: &'static str,
     pub(crate) location: FieldLocation,
 }
 
@@ -71,6 +76,16 @@ pub(crate) struct AuthApply {
     pub(crate) kind: AuthKind,
 }
 
+/// The failure modes of [`dispatch`], kept structured so each generated operation can map them
+/// onto its own typed error: an `Http` failure carries the response status and body (routed to
+/// the matching error-variant case), while a `Transport` failure carries a message for the
+/// catch-all case (a secret lookup, connection, or decode failure that never produced an HTTP
+/// status).
+pub(crate) enum DispatchError {
+    Http { status: u16, body: String },
+    Transport(String),
+}
+
 /// A single API operation: HTTP method, path template (with `{snake}` placeholders), the
 /// parameter fields, and the security schemes to apply.
 pub(crate) struct OpSpec {
@@ -81,8 +96,9 @@ pub(crate) struct OpSpec {
 }
 
 /// Execute `op` with the supplied `params` (a JSON object keyed by snake-case field names)
-/// and return the response body as a string, or an error message.
-pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, String> {
+/// and return the raw 2xx response body, or a structured [`DispatchError`] the caller maps
+/// onto the operation's typed error.
+pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, DispatchError> {
     let obj = match &params {
         Value::Object(map) => Some(map),
         _ => None,
@@ -105,10 +121,10 @@ pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, String> {
                 let placeholder = format!("{{{}}}", field.snake);
                 path = path.replace(&placeholder, &percent_encode(&scalar(value)));
             }
-            FieldLocation::Query => query.push((field.snake.to_string(), scalar(value))),
-            FieldLocation::Header => headers.push((field.snake.to_string(), scalar(value))),
+            FieldLocation::Query => query.push((field.wire.to_string(), scalar(value))),
+            FieldLocation::Header => headers.push((field.wire.to_string(), scalar(value))),
             FieldLocation::Body => {
-                body.insert(field.snake.to_string(), value.clone());
+                body.insert(field.wire.to_string(), value.clone());
             }
         }
     }
@@ -116,7 +132,7 @@ pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, String> {
     // Apply each resolved security scheme, sourcing its value from wasmcloud:secrets.
     let mut cookies: Vec<String> = Vec::new();
     for apply in op.auth {
-        let secret = fetch_secret(apply.secret_key)?;
+        let secret = fetch_secret(apply.secret_key).map_err(DispatchError::Transport)?;
         match &apply.kind {
             AuthKind::Bearer => headers.push(("authorization".into(), format!("Bearer {secret}"))),
             AuthKind::Basic => {
@@ -177,17 +193,18 @@ fn fetch_secret(key: &str) -> Result<String, String> {
 }
 
 /// Build and send the outgoing request with `wstd`, returning the response body on a 2xx
-/// status. The generated guest exports are synchronous, so the async `wstd` client is driven
-/// to completion on a local reactor via `wstd::runtime::block_on`.
+/// status and a structured [`DispatchError`] otherwise. The generated guest exports are
+/// synchronous, so the async `wstd` client is driven to completion on a local reactor via
+/// `wstd::runtime::block_on`.
 fn perform(
     method: &str,
     path_with_query: &str,
     headers: &[(String, String)],
     body: &[u8],
-) -> Result<String, String> {
+) -> Result<String, DispatchError> {
     let url = join_url(crate::BASE_URL, path_with_query);
     let method = Method::from_bytes(method.as_bytes())
-        .map_err(|err| format!("invalid HTTP method `{method}`: {err}"))?;
+        .map_err(|err| DispatchError::Transport(format!("invalid HTTP method `{method}`: {err}")))?;
 
     let mut builder = Request::builder().method(method).uri(url);
     for (name, value) in headers {
@@ -199,27 +216,29 @@ fn perform(
         } else {
             Body::from(body.to_vec())
         })
-        .map_err(|err| format!("failed to build request: {err}"))?;
+        .map_err(|err| DispatchError::Transport(format!("failed to build request: {err}")))?;
 
     wstd::runtime::block_on(async move {
         let client = Client::new();
         let response = client
             .send(request)
             .await
-            .map_err(|err| format!("request failed: {err:#}"))?;
+            .map_err(|err| DispatchError::Transport(format!("request failed: {err:#}")))?;
 
         let status = response.status().as_u16();
         let mut response_body = response.into_body();
-        let bytes = response_body
-            .contents()
-            .await
-            .map_err(|err| format!("failed to read response body: {err:#}"))?;
+        let bytes = response_body.contents().await.map_err(|err| {
+            DispatchError::Transport(format!("failed to read response body: {err:#}"))
+        })?;
         let body_text = String::from_utf8_lossy(bytes).into_owned();
 
         if (200..300).contains(&status) {
             Ok(body_text)
         } else {
-            Err(format!("HTTP {status}: {body_text}"))
+            Err(DispatchError::Http {
+                status,
+                body: body_text,
+            })
         }
     })
 }
@@ -279,1009 +298,19 @@ fn base64(input: &[u8]) -> String {
 }
 }
 
-use crate::runtime::{dispatch, AuthApply, AuthKind, FieldLocation, FieldSpec, OpSpec};
-use serde_json::{Map, Value};
-
-use crate::exports::autostamp::dev::users as iface_users;
-
-const OP_USERS_POST_ADMIN_USERS_CREATE: OpSpec = OpSpec {
-    method: "POST",
-    path_template: "/api/admin/users",
-    fields: &[
-        FieldSpec { snake: "email", location: FieldLocation::Body },
-        FieldSpec { snake: "name", location: FieldLocation::Body },
-    ],
-    auth: &[
-        AuthApply { secret_key: "api-key", kind: AuthKind::ApiKeyHeader("api-key") },
-    ],
-};
-
-const OP_USERS_GET_USER_ME: OpSpec = OpSpec {
-    method: "GET",
-    path_template: "/api/users/me",
-    fields: &[
-    ],
-    auth: &[
-        AuthApply { secret_key: "api-key", kind: AuthKind::ApiKeyHeader("api-key") },
-    ],
-};
-
-const OP_USERS_GET_USER: OpSpec = OpSpec {
-    method: "GET",
-    path_template: "/api/users/{id}",
-    fields: &[
-        FieldSpec { snake: "id", location: FieldLocation::Path },
-    ],
-    auth: &[
-        AuthApply { secret_key: "api-key", kind: AuthKind::ApiKeyHeader("api-key") },
-    ],
-};
-
-const OP_USERS_SUSPEND_USER: OpSpec = OpSpec {
-    method: "PUT",
-    path_template: "/api/users/{id}/suspend",
-    fields: &[
-        FieldSpec { snake: "id", location: FieldLocation::Path },
-    ],
-    auth: &[
-        AuthApply { secret_key: "api-key", kind: AuthKind::ApiKeyHeader("api-key") },
-    ],
-};
-
-const OP_USERS_UNPUBLISH_USER: OpSpec = OpSpec {
-    method: "PUT",
-    path_template: "/api/users/{id}/unpublish",
-    fields: &[
-        FieldSpec { snake: "id", location: FieldLocation::Path },
-    ],
-    auth: &[
-        AuthApply { secret_key: "api-key", kind: AuthKind::ApiKeyHeader("api-key") },
-    ],
-};
-
-fn iface_users__post_admin_users_create_params__to_json(p: &iface_users::PostAdminUsersCreateParams) -> Value {
-    let mut m = Map::new();
-    m.insert("email".into(), match (&p.email) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_users__get_user_params__to_json(p: &iface_users::GetUserParams) -> Value {
-    let mut m = Map::new();
-    m.insert("id".into(), Value::String((&p.id).clone()));
-    Value::Object(m)
-}
-
-fn iface_users__suspend_user_params__to_json(p: &iface_users::SuspendUserParams) -> Value {
-    let mut m = Map::new();
-    m.insert("id".into(), Value::String((&p.id).clone()));
-    Value::Object(m)
-}
-
-fn iface_users__unpublish_user_params__to_json(p: &iface_users::UnpublishUserParams) -> Value {
-    let mut m = Map::new();
-    m.insert("id".into(), Value::String((&p.id).clone()));
-    Value::Object(m)
-}
-
-impl iface_users::Guest for crate::Component {
-    fn post_admin_users_create(params: iface_users::PostAdminUsersCreateParams) -> Result<String, String> {
-        let json = iface_users__post_admin_users_create_params__to_json(&params);
-        dispatch(&OP_USERS_POST_ADMIN_USERS_CREATE, json)
-    }
-    fn get_user_me() -> Result<String, String> {
-        dispatch(&OP_USERS_GET_USER_ME, Value::Object(Map::new()))
-    }
-    fn get_user(params: iface_users::GetUserParams) -> Result<String, String> {
-        let json = iface_users__get_user_params__to_json(&params);
-        dispatch(&OP_USERS_GET_USER, json)
-    }
-    fn suspend_user(params: iface_users::SuspendUserParams) -> Result<String, String> {
-        let json = iface_users__suspend_user_params__to_json(&params);
-        dispatch(&OP_USERS_SUSPEND_USER, json)
-    }
-    fn unpublish_user(params: iface_users::UnpublishUserParams) -> Result<String, String> {
-        let json = iface_users__unpublish_user_params__to_json(&params);
-        dispatch(&OP_USERS_UNPUBLISH_USER, json)
-    }
-}
-use crate::exports::autostamp::dev::articles as iface_articles;
-
-const OP_ARTICLES_GET_ARTICLES: OpSpec = OpSpec {
-    method: "GET",
-    path_template: "/api/articles",
-    fields: &[
-        FieldSpec { snake: "page", location: FieldLocation::Query },
-        FieldSpec { snake: "per_page", location: FieldLocation::Query },
-        FieldSpec { snake: "tag", location: FieldLocation::Query },
-        FieldSpec { snake: "tags", location: FieldLocation::Query },
-        FieldSpec { snake: "tags_exclude", location: FieldLocation::Query },
-        FieldSpec { snake: "username", location: FieldLocation::Query },
-        FieldSpec { snake: "state", location: FieldLocation::Query },
-        FieldSpec { snake: "top", location: FieldLocation::Query },
-        FieldSpec { snake: "collection_id", location: FieldLocation::Query },
-    ],
-    auth: &[
-    ],
-};
-
-const OP_ARTICLES_CREATE_ARTICLE: OpSpec = OpSpec {
-    method: "POST",
-    path_template: "/api/articles",
-    fields: &[
-        FieldSpec { snake: "article", location: FieldLocation::Body },
-    ],
-    auth: &[
-        AuthApply { secret_key: "api-key", kind: AuthKind::ApiKeyHeader("api-key") },
-    ],
-};
-
-const OP_ARTICLES_GET_LATEST_ARTICLES: OpSpec = OpSpec {
-    method: "GET",
-    path_template: "/api/articles/latest",
-    fields: &[
-        FieldSpec { snake: "page", location: FieldLocation::Query },
-        FieldSpec { snake: "per_page", location: FieldLocation::Query },
-    ],
-    auth: &[
-    ],
-};
-
-const OP_ARTICLES_GET_USER_ARTICLES: OpSpec = OpSpec {
-    method: "GET",
-    path_template: "/api/articles/me",
-    fields: &[
-        FieldSpec { snake: "page", location: FieldLocation::Query },
-        FieldSpec { snake: "per_page", location: FieldLocation::Query },
-    ],
-    auth: &[
-        AuthApply { secret_key: "api-key", kind: AuthKind::ApiKeyHeader("api-key") },
-    ],
-};
-
-const OP_ARTICLES_GET_USER_ALL_ARTICLES: OpSpec = OpSpec {
-    method: "GET",
-    path_template: "/api/articles/me/all",
-    fields: &[
-        FieldSpec { snake: "page", location: FieldLocation::Query },
-        FieldSpec { snake: "per_page", location: FieldLocation::Query },
-    ],
-    auth: &[
-        AuthApply { secret_key: "api-key", kind: AuthKind::ApiKeyHeader("api-key") },
-    ],
-};
-
-const OP_ARTICLES_GET_USER_PUBLISHED_ARTICLES: OpSpec = OpSpec {
-    method: "GET",
-    path_template: "/api/articles/me/published",
-    fields: &[
-        FieldSpec { snake: "page", location: FieldLocation::Query },
-        FieldSpec { snake: "per_page", location: FieldLocation::Query },
-    ],
-    auth: &[
-        AuthApply { secret_key: "api-key", kind: AuthKind::ApiKeyHeader("api-key") },
-    ],
-};
-
-const OP_ARTICLES_GET_USER_UNPUBLISHED_ARTICLES: OpSpec = OpSpec {
-    method: "GET",
-    path_template: "/api/articles/me/unpublished",
-    fields: &[
-        FieldSpec { snake: "page", location: FieldLocation::Query },
-        FieldSpec { snake: "per_page", location: FieldLocation::Query },
-    ],
-    auth: &[
-        AuthApply { secret_key: "api-key", kind: AuthKind::ApiKeyHeader("api-key") },
-    ],
-};
-
-const OP_ARTICLES_GET_ARTICLE_BY_ID: OpSpec = OpSpec {
-    method: "GET",
-    path_template: "/api/articles/{id}",
-    fields: &[
-        FieldSpec { snake: "id", location: FieldLocation::Path },
-    ],
-    auth: &[
-    ],
-};
-
-const OP_ARTICLES_UPDATE_ARTICLE: OpSpec = OpSpec {
-    method: "PUT",
-    path_template: "/api/articles/{id}",
-    fields: &[
-        FieldSpec { snake: "id", location: FieldLocation::Path },
-        FieldSpec { snake: "article", location: FieldLocation::Body },
-    ],
-    auth: &[
-        AuthApply { secret_key: "api-key", kind: AuthKind::ApiKeyHeader("api-key") },
-    ],
-};
-
-const OP_ARTICLES_UNPUBLISH_ARTICLE: OpSpec = OpSpec {
-    method: "PUT",
-    path_template: "/api/articles/{id}/unpublish",
-    fields: &[
-        FieldSpec { snake: "id", location: FieldLocation::Path },
-        FieldSpec { snake: "note", location: FieldLocation::Query },
-    ],
-    auth: &[
-        AuthApply { secret_key: "api-key", kind: AuthKind::ApiKeyHeader("api-key") },
-    ],
-};
-
-const OP_ARTICLES_GET_ARTICLE_BY_PATH: OpSpec = OpSpec {
-    method: "GET",
-    path_template: "/api/articles/{username}/{slug}",
-    fields: &[
-        FieldSpec { snake: "username", location: FieldLocation::Path },
-        FieldSpec { snake: "slug", location: FieldLocation::Path },
-    ],
-    auth: &[
-    ],
-};
-
-fn iface_articles__get_articles_state_enum__to_str(e: &iface_articles::GetArticlesStateEnum) -> &'static str {
-    match e {
-        iface_articles::GetArticlesStateEnum::Fresh => "fresh",
-        iface_articles::GetArticlesStateEnum::Rising => "rising",
-        iface_articles::GetArticlesStateEnum::All => "all",
-    }
-}
-
-fn iface_articles__article_article__to_json(p: &iface_articles::ArticleArticle) -> Value {
-    let mut m = Map::new();
-    m.insert("body_markdown".into(), match (&p.body_markdown) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("canonical_url".into(), match (&p.canonical_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("description".into(), match (&p.description) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("main_image".into(), match (&p.main_image) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("organization_id".into(), match (&p.organization_id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    m.insert("published".into(), match (&p.published) { Some(v) => Value::Bool(*(v)), None => Value::Null });
-    m.insert("series".into(), match (&p.series) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("tags".into(), match (&p.tags) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("title".into(), match (&p.title) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_articles__get_articles_params__to_json(p: &iface_articles::GetArticlesParams) -> Value {
-    let mut m = Map::new();
-    m.insert("page".into(), match (&p.page) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    m.insert("per_page".into(), match (&p.per_page) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    m.insert("tag".into(), match (&p.tag) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("tags".into(), match (&p.tags) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("tags_exclude".into(), match (&p.tags_exclude) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("username".into(), match (&p.username) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("state".into(), match (&p.state) { Some(v) => Value::String(iface_articles__get_articles_state_enum__to_str(v).into()), None => Value::Null });
-    m.insert("top".into(), match (&p.top) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    m.insert("collection_id".into(), match (&p.collection_id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_articles__create_article_params__to_json(p: &iface_articles::CreateArticleParams) -> Value {
-    let mut m = Map::new();
-    m.insert("article".into(), match (&p.article) { Some(v) => iface_articles__article_article__to_json(v), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_articles__get_latest_articles_params__to_json(p: &iface_articles::GetLatestArticlesParams) -> Value {
-    let mut m = Map::new();
-    m.insert("page".into(), match (&p.page) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    m.insert("per_page".into(), match (&p.per_page) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_articles__get_user_articles_params__to_json(p: &iface_articles::GetUserArticlesParams) -> Value {
-    let mut m = Map::new();
-    m.insert("page".into(), match (&p.page) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    m.insert("per_page".into(), match (&p.per_page) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_articles__get_user_all_articles_params__to_json(p: &iface_articles::GetUserAllArticlesParams) -> Value {
-    let mut m = Map::new();
-    m.insert("page".into(), match (&p.page) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    m.insert("per_page".into(), match (&p.per_page) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_articles__get_user_published_articles_params__to_json(p: &iface_articles::GetUserPublishedArticlesParams) -> Value {
-    let mut m = Map::new();
-    m.insert("page".into(), match (&p.page) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    m.insert("per_page".into(), match (&p.per_page) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_articles__get_user_unpublished_articles_params__to_json(p: &iface_articles::GetUserUnpublishedArticlesParams) -> Value {
-    let mut m = Map::new();
-    m.insert("page".into(), match (&p.page) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    m.insert("per_page".into(), match (&p.per_page) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_articles__get_article_by_id_params__to_json(p: &iface_articles::GetArticleByIdParams) -> Value {
-    let mut m = Map::new();
-    m.insert("id".into(), Value::String((&p.id).clone()));
-    Value::Object(m)
-}
-
-fn iface_articles__update_article_params__to_json(p: &iface_articles::UpdateArticleParams) -> Value {
-    let mut m = Map::new();
-    m.insert("id".into(), Value::String((&p.id).clone()));
-    m.insert("article".into(), match (&p.article) { Some(v) => iface_articles__article_article__to_json(v), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_articles__unpublish_article_params__to_json(p: &iface_articles::UnpublishArticleParams) -> Value {
-    let mut m = Map::new();
-    m.insert("id".into(), Value::String((&p.id).clone()));
-    m.insert("note".into(), match (&p.note) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_articles__get_article_by_path_params__to_json(p: &iface_articles::GetArticleByPathParams) -> Value {
-    let mut m = Map::new();
-    m.insert("username".into(), Value::String((&p.username).clone()));
-    m.insert("slug".into(), Value::String((&p.slug).clone()));
-    Value::Object(m)
-}
-
-impl iface_articles::Guest for crate::Component {
-    fn get_articles(params: iface_articles::GetArticlesParams) -> Result<String, String> {
-        let json = iface_articles__get_articles_params__to_json(&params);
-        dispatch(&OP_ARTICLES_GET_ARTICLES, json)
-    }
-    fn create_article(params: iface_articles::CreateArticleParams) -> Result<String, String> {
-        let json = iface_articles__create_article_params__to_json(&params);
-        dispatch(&OP_ARTICLES_CREATE_ARTICLE, json)
-    }
-    fn get_latest_articles(params: iface_articles::GetLatestArticlesParams) -> Result<String, String> {
-        let json = iface_articles__get_latest_articles_params__to_json(&params);
-        dispatch(&OP_ARTICLES_GET_LATEST_ARTICLES, json)
-    }
-    fn get_user_articles(params: iface_articles::GetUserArticlesParams) -> Result<String, String> {
-        let json = iface_articles__get_user_articles_params__to_json(&params);
-        dispatch(&OP_ARTICLES_GET_USER_ARTICLES, json)
-    }
-    fn get_user_all_articles(params: iface_articles::GetUserAllArticlesParams) -> Result<String, String> {
-        let json = iface_articles__get_user_all_articles_params__to_json(&params);
-        dispatch(&OP_ARTICLES_GET_USER_ALL_ARTICLES, json)
-    }
-    fn get_user_published_articles(params: iface_articles::GetUserPublishedArticlesParams) -> Result<String, String> {
-        let json = iface_articles__get_user_published_articles_params__to_json(&params);
-        dispatch(&OP_ARTICLES_GET_USER_PUBLISHED_ARTICLES, json)
-    }
-    fn get_user_unpublished_articles(params: iface_articles::GetUserUnpublishedArticlesParams) -> Result<String, String> {
-        let json = iface_articles__get_user_unpublished_articles_params__to_json(&params);
-        dispatch(&OP_ARTICLES_GET_USER_UNPUBLISHED_ARTICLES, json)
-    }
-    fn get_article_by_id(params: iface_articles::GetArticleByIdParams) -> Result<String, String> {
-        let json = iface_articles__get_article_by_id_params__to_json(&params);
-        dispatch(&OP_ARTICLES_GET_ARTICLE_BY_ID, json)
-    }
-    fn update_article(params: iface_articles::UpdateArticleParams) -> Result<String, String> {
-        let json = iface_articles__update_article_params__to_json(&params);
-        dispatch(&OP_ARTICLES_UPDATE_ARTICLE, json)
-    }
-    fn unpublish_article(params: iface_articles::UnpublishArticleParams) -> Result<String, String> {
-        let json = iface_articles__unpublish_article_params__to_json(&params);
-        dispatch(&OP_ARTICLES_UNPUBLISH_ARTICLE, json)
-    }
-    fn get_article_by_path(params: iface_articles::GetArticleByPathParams) -> Result<String, String> {
-        let json = iface_articles__get_article_by_path_params__to_json(&params);
-        dispatch(&OP_ARTICLES_GET_ARTICLE_BY_PATH, json)
-    }
-}
-use crate::exports::autostamp::dev::comments as iface_comments;
-
-const OP_COMMENTS_GET_COMMENTS_BY_ARTICLE_ID: OpSpec = OpSpec {
-    method: "GET",
-    path_template: "/api/comments",
-    fields: &[
-        FieldSpec { snake: "a_id", location: FieldLocation::Query },
-        FieldSpec { snake: "p_id", location: FieldLocation::Query },
-    ],
-    auth: &[
-    ],
-};
-
-const OP_COMMENTS_GET_COMMENT_BY_ID: OpSpec = OpSpec {
-    method: "GET",
-    path_template: "/api/comments/{id}",
-    fields: &[
-        FieldSpec { snake: "id", location: FieldLocation::Path },
-    ],
-    auth: &[
-    ],
-};
-
-fn iface_comments__get_comments_by_article_id_params__to_json(p: &iface_comments::GetCommentsByArticleIdParams) -> Value {
-    let mut m = Map::new();
-    m.insert("a_id".into(), match (&p.a_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("p_id".into(), match (&p.p_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_comments__get_comment_by_id_params__to_json(p: &iface_comments::GetCommentByIdParams) -> Value {
-    let mut m = Map::new();
-    m.insert("id".into(), Value::String((&p.id).clone()));
-    Value::Object(m)
-}
-
-impl iface_comments::Guest for crate::Component {
-    fn get_comments_by_article_id(params: iface_comments::GetCommentsByArticleIdParams) -> Result<String, String> {
-        let json = iface_comments__get_comments_by_article_id_params__to_json(&params);
-        dispatch(&OP_COMMENTS_GET_COMMENTS_BY_ARTICLE_ID, json)
-    }
-    fn get_comment_by_id(params: iface_comments::GetCommentByIdParams) -> Result<String, String> {
-        let json = iface_comments__get_comment_by_id_params__to_json(&params);
-        dispatch(&OP_COMMENTS_GET_COMMENT_BY_ID, json)
-    }
-}
-use crate::exports::autostamp::dev::display_ads as iface_display_ads;
-
-const OP_DISPLAY_ADS_GET_API_DISPLAY_ADS: OpSpec = OpSpec {
-    method: "GET",
-    path_template: "/api/display_ads",
-    fields: &[
-    ],
-    auth: &[
-        AuthApply { secret_key: "api-key", kind: AuthKind::ApiKeyHeader("api-key") },
-    ],
-};
-
-const OP_DISPLAY_ADS_POST_API_DISPLAY_ADS: OpSpec = OpSpec {
-    method: "POST",
-    path_template: "/api/display_ads",
-    fields: &[
-        FieldSpec { snake: "body", location: FieldLocation::Body },
-    ],
-    auth: &[
-        AuthApply { secret_key: "api-key", kind: AuthKind::ApiKeyHeader("api-key") },
-    ],
-};
-
-const OP_DISPLAY_ADS_GET_API_DISPLAY_ADS_ID: OpSpec = OpSpec {
-    method: "GET",
-    path_template: "/api/display_ads/{id}",
-    fields: &[
-        FieldSpec { snake: "id", location: FieldLocation::Path },
-    ],
-    auth: &[
-        AuthApply { secret_key: "api-key", kind: AuthKind::ApiKeyHeader("api-key") },
-    ],
-};
-
-const OP_DISPLAY_ADS_PUT_API_DISPLAY_ADS_ID: OpSpec = OpSpec {
-    method: "PUT",
-    path_template: "/api/display_ads/{id}",
-    fields: &[
-        FieldSpec { snake: "id", location: FieldLocation::Path },
-        FieldSpec { snake: "body", location: FieldLocation::Body },
-    ],
-    auth: &[
-        AuthApply { secret_key: "api-key", kind: AuthKind::ApiKeyHeader("api-key") },
-    ],
-};
-
-const OP_DISPLAY_ADS_PUT_API_DISPLAY_ADS_ID_UNPUBLISH: OpSpec = OpSpec {
-    method: "PUT",
-    path_template: "/api/display_ads/{id}/unpublish",
-    fields: &[
-        FieldSpec { snake: "id", location: FieldLocation::Path },
-    ],
-    auth: &[
-        AuthApply { secret_key: "api-key", kind: AuthKind::ApiKeyHeader("api-key") },
-    ],
-};
-
-fn iface_display_ads__post_api_display_ads_params__to_json(p: &iface_display_ads::PostApiDisplayAdsParams) -> Value {
-    let mut m = Map::new();
-    m.insert("body".into(), match (&p.body) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_display_ads__get_api_display_ads_id_params__to_json(p: &iface_display_ads::GetApiDisplayAdsIdParams) -> Value {
-    let mut m = Map::new();
-    m.insert("id".into(), Value::String((&p.id).clone()));
-    Value::Object(m)
-}
-
-fn iface_display_ads__put_api_display_ads_id_params__to_json(p: &iface_display_ads::PutApiDisplayAdsIdParams) -> Value {
-    let mut m = Map::new();
-    m.insert("id".into(), Value::String((&p.id).clone()));
-    m.insert("body".into(), match (&p.body) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_display_ads__put_api_display_ads_id_unpublish_params__to_json(p: &iface_display_ads::PutApiDisplayAdsIdUnpublishParams) -> Value {
-    let mut m = Map::new();
-    m.insert("id".into(), Value::String((&p.id).clone()));
-    Value::Object(m)
-}
-
-impl iface_display_ads::Guest for crate::Component {
-    fn get_api_display_ads() -> Result<String, String> {
-        dispatch(&OP_DISPLAY_ADS_GET_API_DISPLAY_ADS, Value::Object(Map::new()))
-    }
-    fn post_api_display_ads(params: iface_display_ads::PostApiDisplayAdsParams) -> Result<String, String> {
-        let json = iface_display_ads__post_api_display_ads_params__to_json(&params);
-        dispatch(&OP_DISPLAY_ADS_POST_API_DISPLAY_ADS, json)
-    }
-    fn get_api_display_ads_id(params: iface_display_ads::GetApiDisplayAdsIdParams) -> Result<String, String> {
-        let json = iface_display_ads__get_api_display_ads_id_params__to_json(&params);
-        dispatch(&OP_DISPLAY_ADS_GET_API_DISPLAY_ADS_ID, json)
-    }
-    fn put_api_display_ads_id(params: iface_display_ads::PutApiDisplayAdsIdParams) -> Result<String, String> {
-        let json = iface_display_ads__put_api_display_ads_id_params__to_json(&params);
-        dispatch(&OP_DISPLAY_ADS_PUT_API_DISPLAY_ADS_ID, json)
-    }
-    fn put_api_display_ads_id_unpublish(params: iface_display_ads::PutApiDisplayAdsIdUnpublishParams) -> Result<String, String> {
-        let json = iface_display_ads__put_api_display_ads_id_unpublish_params__to_json(&params);
-        dispatch(&OP_DISPLAY_ADS_PUT_API_DISPLAY_ADS_ID_UNPUBLISH, json)
-    }
-}
-use crate::exports::autostamp::dev::followers as iface_followers;
-
-const OP_FOLLOWERS_GET_FOLLOWERS: OpSpec = OpSpec {
-    method: "GET",
-    path_template: "/api/followers/users",
-    fields: &[
-        FieldSpec { snake: "page", location: FieldLocation::Query },
-        FieldSpec { snake: "per_page", location: FieldLocation::Query },
-        FieldSpec { snake: "sort", location: FieldLocation::Query },
-    ],
-    auth: &[
-        AuthApply { secret_key: "api-key", kind: AuthKind::ApiKeyHeader("api-key") },
-    ],
-};
-
-fn iface_followers__get_followers_params__to_json(p: &iface_followers::GetFollowersParams) -> Value {
-    let mut m = Map::new();
-    m.insert("page".into(), match (&p.page) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    m.insert("per_page".into(), match (&p.per_page) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    m.insert("sort".into(), match (&p.sort) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    Value::Object(m)
-}
-
-impl iface_followers::Guest for crate::Component {
-    fn get_followers(params: iface_followers::GetFollowersParams) -> Result<String, String> {
-        let json = iface_followers__get_followers_params__to_json(&params);
-        dispatch(&OP_FOLLOWERS_GET_FOLLOWERS, json)
-    }
-}
-use crate::exports::autostamp::dev::followed_tags as iface_followed_tags;
-
-const OP_FOLLOWED_TAGS_GET_FOLLOWED_TAGS: OpSpec = OpSpec {
-    method: "GET",
-    path_template: "/api/follows/tags",
-    fields: &[
-    ],
-    auth: &[
-        AuthApply { secret_key: "api-key", kind: AuthKind::ApiKeyHeader("api-key") },
-    ],
-};
-
-impl iface_followed_tags::Guest for crate::Component {
-    fn get_followed_tags() -> Result<String, String> {
-        dispatch(&OP_FOLLOWED_TAGS_GET_FOLLOWED_TAGS, Value::Object(Map::new()))
-    }
-}
-use crate::exports::autostamp::dev::organizations as iface_organizations;
-
-const OP_ORGANIZATIONS_GET_ORGANIZATION: OpSpec = OpSpec {
-    method: "GET",
-    path_template: "/api/organizations/{username}",
-    fields: &[
-        FieldSpec { snake: "username", location: FieldLocation::Path },
-    ],
-    auth: &[
-    ],
-};
-
-const OP_ORGANIZATIONS_GET_ORG_ARTICLES: OpSpec = OpSpec {
-    method: "GET",
-    path_template: "/api/organizations/{username}/articles",
-    fields: &[
-        FieldSpec { snake: "username", location: FieldLocation::Path },
-        FieldSpec { snake: "page", location: FieldLocation::Query },
-        FieldSpec { snake: "per_page", location: FieldLocation::Query },
-    ],
-    auth: &[
-    ],
-};
-
-const OP_ORGANIZATIONS_GET_ORG_USERS: OpSpec = OpSpec {
-    method: "GET",
-    path_template: "/api/organizations/{username}/users",
-    fields: &[
-        FieldSpec { snake: "username", location: FieldLocation::Path },
-        FieldSpec { snake: "page", location: FieldLocation::Query },
-        FieldSpec { snake: "per_page", location: FieldLocation::Query },
-    ],
-    auth: &[
-    ],
-};
-
-fn iface_organizations__get_organization_params__to_json(p: &iface_organizations::GetOrganizationParams) -> Value {
-    let mut m = Map::new();
-    m.insert("username".into(), Value::String((&p.username).clone()));
-    Value::Object(m)
-}
-
-fn iface_organizations__get_org_articles_params__to_json(p: &iface_organizations::GetOrgArticlesParams) -> Value {
-    let mut m = Map::new();
-    m.insert("username".into(), Value::String((&p.username).clone()));
-    m.insert("page".into(), match (&p.page) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    m.insert("per_page".into(), match (&p.per_page) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_organizations__get_org_users_params__to_json(p: &iface_organizations::GetOrgUsersParams) -> Value {
-    let mut m = Map::new();
-    m.insert("username".into(), Value::String((&p.username).clone()));
-    m.insert("page".into(), match (&p.page) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    m.insert("per_page".into(), match (&p.per_page) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    Value::Object(m)
-}
-
-impl iface_organizations::Guest for crate::Component {
-    fn get_organization(params: iface_organizations::GetOrganizationParams) -> Result<String, String> {
-        let json = iface_organizations__get_organization_params__to_json(&params);
-        dispatch(&OP_ORGANIZATIONS_GET_ORGANIZATION, json)
-    }
-    fn get_org_articles(params: iface_organizations::GetOrgArticlesParams) -> Result<String, String> {
-        let json = iface_organizations__get_org_articles_params__to_json(&params);
-        dispatch(&OP_ORGANIZATIONS_GET_ORG_ARTICLES, json)
-    }
-    fn get_org_users(params: iface_organizations::GetOrgUsersParams) -> Result<String, String> {
-        let json = iface_organizations__get_org_users_params__to_json(&params);
-        dispatch(&OP_ORGANIZATIONS_GET_ORG_USERS, json)
-    }
-}
-use crate::exports::autostamp::dev::pages as iface_pages;
-
-const OP_PAGES_GET_API_PAGES: OpSpec = OpSpec {
-    method: "GET",
-    path_template: "/api/pages",
-    fields: &[
-    ],
-    auth: &[
-    ],
-};
-
-const OP_PAGES_POST_API_PAGES: OpSpec = OpSpec {
-    method: "POST",
-    path_template: "/api/pages",
-    fields: &[
-        FieldSpec { snake: "body_json", location: FieldLocation::Body },
-        FieldSpec { snake: "body_markdown", location: FieldLocation::Body },
-        FieldSpec { snake: "description", location: FieldLocation::Body },
-        FieldSpec { snake: "is_top_level_path", location: FieldLocation::Body },
-        FieldSpec { snake: "slug", location: FieldLocation::Body },
-        FieldSpec { snake: "template", location: FieldLocation::Body },
-        FieldSpec { snake: "title", location: FieldLocation::Body },
-    ],
-    auth: &[
-        AuthApply { secret_key: "api-key", kind: AuthKind::ApiKeyHeader("api-key") },
-    ],
-};
-
-const OP_PAGES_GET_API_PAGES_ID: OpSpec = OpSpec {
-    method: "GET",
-    path_template: "/api/pages/{id}",
-    fields: &[
-        FieldSpec { snake: "id", location: FieldLocation::Path },
-    ],
-    auth: &[
-    ],
-};
-
-const OP_PAGES_PUT_API_PAGES_ID: OpSpec = OpSpec {
-    method: "PUT",
-    path_template: "/api/pages/{id}",
-    fields: &[
-        FieldSpec { snake: "id", location: FieldLocation::Path },
-        FieldSpec { snake: "body_json", location: FieldLocation::Body },
-        FieldSpec { snake: "body_markdown", location: FieldLocation::Body },
-        FieldSpec { snake: "description", location: FieldLocation::Body },
-        FieldSpec { snake: "is_top_level_path", location: FieldLocation::Body },
-        FieldSpec { snake: "slug", location: FieldLocation::Body },
-        FieldSpec { snake: "social_image", location: FieldLocation::Body },
-        FieldSpec { snake: "template", location: FieldLocation::Body },
-        FieldSpec { snake: "title", location: FieldLocation::Body },
-    ],
-    auth: &[
-        AuthApply { secret_key: "api-key", kind: AuthKind::ApiKeyHeader("api-key") },
-    ],
-};
-
-const OP_PAGES_DELETE_API_PAGES_ID: OpSpec = OpSpec {
-    method: "DELETE",
-    path_template: "/api/pages/{id}",
-    fields: &[
-        FieldSpec { snake: "id", location: FieldLocation::Path },
-    ],
-    auth: &[
-        AuthApply { secret_key: "api-key", kind: AuthKind::ApiKeyHeader("api-key") },
-    ],
-};
-
-fn iface_pages__post_api_pages_body_template_enum__to_str(e: &iface_pages::PostApiPagesBodyTemplateEnum) -> &'static str {
-    match e {
-        iface_pages::PostApiPagesBodyTemplateEnum::Contained => "contained",
-        iface_pages::PostApiPagesBodyTemplateEnum::FullWithinLayout => "full_within_layout",
-        iface_pages::PostApiPagesBodyTemplateEnum::NavBarIncluded => "nav_bar_included",
-        iface_pages::PostApiPagesBodyTemplateEnum::Json => "json",
-    }
-}
-
-fn iface_pages__page_social_image__to_json(p: &iface_pages::PageSocialImage) -> Value {
-    let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_pages__post_api_pages_params__to_json(p: &iface_pages::PostApiPagesParams) -> Value {
-    let mut m = Map::new();
-    m.insert("body_json".into(), match (&p.body_json) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("body_markdown".into(), match (&p.body_markdown) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("description".into(), match (&p.description) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("is_top_level_path".into(), match (&p.is_top_level_path) { Some(v) => Value::Bool(*(v)), None => Value::Null });
-    m.insert("slug".into(), match (&p.slug) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("template".into(), match (&p.template) { Some(v) => Value::String(iface_pages__post_api_pages_body_template_enum__to_str(v).into()), None => Value::Null });
-    m.insert("title".into(), match (&p.title) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_pages__get_api_pages_id_params__to_json(p: &iface_pages::GetApiPagesIdParams) -> Value {
-    let mut m = Map::new();
-    m.insert("id".into(), Value::String((&p.id).clone()));
-    Value::Object(m)
-}
-
-fn iface_pages__put_api_pages_id_params__to_json(p: &iface_pages::PutApiPagesIdParams) -> Value {
-    let mut m = Map::new();
-    m.insert("id".into(), Value::String((&p.id).clone()));
-    m.insert("body_json".into(), match (&p.body_json) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("body_markdown".into(), match (&p.body_markdown) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("description".into(), Value::String((&p.description).clone()));
-    m.insert("is_top_level_path".into(), match (&p.is_top_level_path) { Some(v) => Value::Bool(*(v)), None => Value::Null });
-    m.insert("slug".into(), Value::String((&p.slug).clone()));
-    m.insert("social_image".into(), match (&p.social_image) { Some(v) => iface_pages__page_social_image__to_json(v), None => Value::Null });
-    m.insert("template".into(), Value::String(iface_pages__post_api_pages_body_template_enum__to_str(&p.template).into()));
-    m.insert("title".into(), Value::String((&p.title).clone()));
-    Value::Object(m)
-}
-
-fn iface_pages__delete_api_pages_id_params__to_json(p: &iface_pages::DeleteApiPagesIdParams) -> Value {
-    let mut m = Map::new();
-    m.insert("id".into(), Value::String((&p.id).clone()));
-    Value::Object(m)
-}
-
-impl iface_pages::Guest for crate::Component {
-    fn get_api_pages() -> Result<String, String> {
-        dispatch(&OP_PAGES_GET_API_PAGES, Value::Object(Map::new()))
-    }
-    fn post_api_pages(params: iface_pages::PostApiPagesParams) -> Result<String, String> {
-        let json = iface_pages__post_api_pages_params__to_json(&params);
-        dispatch(&OP_PAGES_POST_API_PAGES, json)
-    }
-    fn get_api_pages_id(params: iface_pages::GetApiPagesIdParams) -> Result<String, String> {
-        let json = iface_pages__get_api_pages_id_params__to_json(&params);
-        dispatch(&OP_PAGES_GET_API_PAGES_ID, json)
-    }
-    fn put_api_pages_id(params: iface_pages::PutApiPagesIdParams) -> Result<String, String> {
-        let json = iface_pages__put_api_pages_id_params__to_json(&params);
-        dispatch(&OP_PAGES_PUT_API_PAGES_ID, json)
-    }
-    fn delete_api_pages_id(params: iface_pages::DeleteApiPagesIdParams) -> Result<String, String> {
-        let json = iface_pages__delete_api_pages_id_params__to_json(&params);
-        dispatch(&OP_PAGES_DELETE_API_PAGES_ID, json)
-    }
-}
-use crate::exports::autostamp::dev::podcast_episodes as iface_podcast_episodes;
-
-const OP_PODCAST_EPISODES_GET_PODCAST_EPISODES: OpSpec = OpSpec {
-    method: "GET",
-    path_template: "/api/podcast_episodes",
-    fields: &[
-        FieldSpec { snake: "page", location: FieldLocation::Query },
-        FieldSpec { snake: "per_page", location: FieldLocation::Query },
-        FieldSpec { snake: "username", location: FieldLocation::Query },
-    ],
-    auth: &[
-    ],
-};
-
-fn iface_podcast_episodes__get_podcast_episodes_params__to_json(p: &iface_podcast_episodes::GetPodcastEpisodesParams) -> Value {
-    let mut m = Map::new();
-    m.insert("page".into(), match (&p.page) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    m.insert("per_page".into(), match (&p.per_page) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    m.insert("username".into(), match (&p.username) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    Value::Object(m)
-}
-
-impl iface_podcast_episodes::Guest for crate::Component {
-    fn get_podcast_episodes(params: iface_podcast_episodes::GetPodcastEpisodesParams) -> Result<String, String> {
-        let json = iface_podcast_episodes__get_podcast_episodes_params__to_json(&params);
-        dispatch(&OP_PODCAST_EPISODES_GET_PODCAST_EPISODES, json)
-    }
-}
-use crate::exports::autostamp::dev::profile_images as iface_profile_images;
-
-const OP_PROFILE_IMAGES_GET_PROFILE_IMAGE: OpSpec = OpSpec {
-    method: "GET",
-    path_template: "/api/profile_images/{username}",
-    fields: &[
-        FieldSpec { snake: "username", location: FieldLocation::Path },
-    ],
-    auth: &[
-        AuthApply { secret_key: "api-key", kind: AuthKind::ApiKeyHeader("api-key") },
-    ],
-};
-
-fn iface_profile_images__get_profile_image_params__to_json(p: &iface_profile_images::GetProfileImageParams) -> Value {
-    let mut m = Map::new();
-    m.insert("username".into(), Value::String((&p.username).clone()));
-    Value::Object(m)
-}
-
-impl iface_profile_images::Guest for crate::Component {
-    fn get_profile_image(params: iface_profile_images::GetProfileImageParams) -> Result<String, String> {
-        let json = iface_profile_images__get_profile_image_params__to_json(&params);
-        dispatch(&OP_PROFILE_IMAGES_GET_PROFILE_IMAGE, json)
-    }
-}
-use crate::exports::autostamp::dev::reactions as iface_reactions;
-
-const OP_REACTIONS_POST_API_REACTIONS: OpSpec = OpSpec {
-    method: "POST",
-    path_template: "/api/reactions",
-    fields: &[
-        FieldSpec { snake: "category", location: FieldLocation::Query },
-        FieldSpec { snake: "reactable_id", location: FieldLocation::Query },
-        FieldSpec { snake: "reactable_type", location: FieldLocation::Query },
-    ],
-    auth: &[
-        AuthApply { secret_key: "api-key", kind: AuthKind::ApiKeyHeader("api-key") },
-    ],
-};
-
-const OP_REACTIONS_POST_API_REACTIONS_TOGGLE: OpSpec = OpSpec {
-    method: "POST",
-    path_template: "/api/reactions/toggle",
-    fields: &[
-        FieldSpec { snake: "category", location: FieldLocation::Query },
-        FieldSpec { snake: "reactable_id", location: FieldLocation::Query },
-        FieldSpec { snake: "reactable_type", location: FieldLocation::Query },
-    ],
-    auth: &[
-        AuthApply { secret_key: "api-key", kind: AuthKind::ApiKeyHeader("api-key") },
-    ],
-};
-
-fn iface_reactions__post_api_reactions_category_enum__to_str(e: &iface_reactions::PostApiReactionsCategoryEnum) -> &'static str {
-    match e {
-        iface_reactions::PostApiReactionsCategoryEnum::Like => "like",
-        iface_reactions::PostApiReactionsCategoryEnum::Unicorn => "unicorn",
-        iface_reactions::PostApiReactionsCategoryEnum::ExplodingHead => "exploding_head",
-        iface_reactions::PostApiReactionsCategoryEnum::RaisedHands => "raised_hands",
-        iface_reactions::PostApiReactionsCategoryEnum::Fire => "fire",
-    }
-}
-
-fn iface_reactions__post_api_reactions_reactable_type_enum__to_str(e: &iface_reactions::PostApiReactionsReactableTypeEnum) -> &'static str {
-    match e {
-        iface_reactions::PostApiReactionsReactableTypeEnum::Comment => "Comment",
-        iface_reactions::PostApiReactionsReactableTypeEnum::Article => "Article",
-        iface_reactions::PostApiReactionsReactableTypeEnum::User => "User",
-    }
-}
-
-fn iface_reactions__post_api_reactions_params__to_json(p: &iface_reactions::PostApiReactionsParams) -> Value {
-    let mut m = Map::new();
-    m.insert("category".into(), Value::String(iface_reactions__post_api_reactions_category_enum__to_str(&p.category).into()));
-    m.insert("reactable_id".into(), Value::Number(serde_json::Number::from(*(&p.reactable_id))));
-    m.insert("reactable_type".into(), Value::String(iface_reactions__post_api_reactions_reactable_type_enum__to_str(&p.reactable_type).into()));
-    Value::Object(m)
-}
-
-fn iface_reactions__post_api_reactions_toggle_params__to_json(p: &iface_reactions::PostApiReactionsToggleParams) -> Value {
-    let mut m = Map::new();
-    m.insert("category".into(), Value::String(iface_reactions__post_api_reactions_category_enum__to_str(&p.category).into()));
-    m.insert("reactable_id".into(), Value::Number(serde_json::Number::from(*(&p.reactable_id))));
-    m.insert("reactable_type".into(), Value::String(iface_reactions__post_api_reactions_reactable_type_enum__to_str(&p.reactable_type).into()));
-    Value::Object(m)
-}
-
-impl iface_reactions::Guest for crate::Component {
-    fn post_api_reactions(params: iface_reactions::PostApiReactionsParams) -> Result<String, String> {
-        let json = iface_reactions__post_api_reactions_params__to_json(&params);
-        dispatch(&OP_REACTIONS_POST_API_REACTIONS, json)
-    }
-    fn post_api_reactions_toggle(params: iface_reactions::PostApiReactionsToggleParams) -> Result<String, String> {
-        let json = iface_reactions__post_api_reactions_toggle_params__to_json(&params);
-        dispatch(&OP_REACTIONS_POST_API_REACTIONS_TOGGLE, json)
-    }
-}
-use crate::exports::autostamp::dev::readinglist as iface_readinglist;
-
-const OP_READINGLIST_GET_READINGLIST: OpSpec = OpSpec {
-    method: "GET",
-    path_template: "/api/readinglist",
-    fields: &[
-        FieldSpec { snake: "page", location: FieldLocation::Query },
-        FieldSpec { snake: "per_page", location: FieldLocation::Query },
-    ],
-    auth: &[
-        AuthApply { secret_key: "api-key", kind: AuthKind::ApiKeyHeader("api-key") },
-    ],
-};
-
-fn iface_readinglist__get_readinglist_params__to_json(p: &iface_readinglist::GetReadinglistParams) -> Value {
-    let mut m = Map::new();
-    m.insert("page".into(), match (&p.page) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    m.insert("per_page".into(), match (&p.per_page) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    Value::Object(m)
-}
-
-impl iface_readinglist::Guest for crate::Component {
-    fn get_readinglist(params: iface_readinglist::GetReadinglistParams) -> Result<String, String> {
-        let json = iface_readinglist__get_readinglist_params__to_json(&params);
-        dispatch(&OP_READINGLIST_GET_READINGLIST, json)
-    }
-}
-use crate::exports::autostamp::dev::tags as iface_tags;
-
-const OP_TAGS_GET_TAGS: OpSpec = OpSpec {
-    method: "GET",
-    path_template: "/api/tags",
-    fields: &[
-        FieldSpec { snake: "page", location: FieldLocation::Query },
-        FieldSpec { snake: "per_page", location: FieldLocation::Query },
-    ],
-    auth: &[
-    ],
-};
-
-fn iface_tags__get_tags_params__to_json(p: &iface_tags::GetTagsParams) -> Value {
-    let mut m = Map::new();
-    m.insert("page".into(), match (&p.page) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    m.insert("per_page".into(), match (&p.per_page) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    Value::Object(m)
-}
-
-impl iface_tags::Guest for crate::Component {
-    fn get_tags(params: iface_tags::GetTagsParams) -> Result<String, String> {
-        let json = iface_tags__get_tags_params__to_json(&params);
-        dispatch(&OP_TAGS_GET_TAGS, json)
-    }
-}
-use crate::exports::autostamp::dev::videos as iface_videos;
-
-const OP_VIDEOS_VIDEOS: OpSpec = OpSpec {
-    method: "GET",
-    path_template: "/api/videos",
-    fields: &[
-        FieldSpec { snake: "page", location: FieldLocation::Query },
-        FieldSpec { snake: "per_page", location: FieldLocation::Query },
-    ],
-    auth: &[
-    ],
-};
-
-fn iface_videos__videos_params__to_json(p: &iface_videos::VideosParams) -> Value {
-    let mut m = Map::new();
-    m.insert("page".into(), match (&p.page) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    m.insert("per_page".into(), match (&p.per_page) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    Value::Object(m)
-}
-
-impl iface_videos::Guest for crate::Component {
-    fn videos(params: iface_videos::VideosParams) -> Result<String, String> {
-        let json = iface_videos__videos_params__to_json(&params);
-        dispatch(&OP_VIDEOS_VIDEOS, json)
-    }
-}
+mod iface_users;
+mod iface_articles;
+mod iface_comments;
+mod iface_display_ads;
+mod iface_followers;
+mod iface_followed_tags;
+mod iface_organizations;
+mod iface_pages;
+mod iface_podcast_episodes;
+mod iface_profile_images;
+mod iface_reactions;
+mod iface_readinglist;
+mod iface_tags;
+mod iface_videos;
 
 export!(Component);

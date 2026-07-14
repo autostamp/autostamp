@@ -20,8 +20,8 @@ triggered.
 
 | Setting | Value |
 | --- | --- |
-| Package | `autostamp:asana@0.3.0` |
-| Published version | `0.3.0+asana-1.0` |
+| Package | `autostamp:asana@0.5.0` |
+| Published version | `0.5.0+asana-1.0` |
 | Tag filter | all tags |
 | Operations generated | 167 |
 | Infer API-key credentials | enabled — not triggered |

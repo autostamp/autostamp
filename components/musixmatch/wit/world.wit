@@ -1,6 +1,94 @@
-package autostamp:musixmatch@0.3.0;
+package autostamp:musixmatch@0.5.0;
 
 interface album {
+  record get-album-get-response {
+    message: option<get-album-get-response-message>
+  }
+
+  record get-album-get-response-message {
+    body: option<get-album-get-response-message-body>,
+    header: option<get-album-get-response-message-header>
+  }
+
+  record get-album-get-response-message-body {
+    album: option<album>
+  }
+
+  /// a album of songs in the Musixmatch database.
+  record album {
+    album-copyright: option<string>,
+    album-coverart-v100x100: option<string>,
+    album-coverart-v350x350: option<string>,
+    album-coverart-v500x500: option<string>,
+    album-coverart-v800x800: option<string>,
+    album-edit-url: option<string>,
+    album-id: option<f64>,
+    album-label: option<string>,
+    album-mbid: option<string>,
+    album-name: option<string>,
+    album-pline: option<string>,
+    album-rating: option<f64>,
+    album-release-date: option<string>,
+    album-release-type: option<string>,
+    album-track-count: option<f64>,
+    album-vanity-id: option<string>,
+    artist-id: option<f64>,
+    artist-name: option<string>,
+    primary-genres: option<album-primary-genres>,
+    restricted: option<f64>,
+    secondary-genres: option<album-secondary-genres>,
+    updated-time: option<string>
+  }
+
+  record album-primary-genres {
+    music-genre-list: option<list<album-primary-genres-music-genre-list-item>>
+  }
+
+  record album-primary-genres-music-genre-list-item {
+    music-genre: option<album-primary-genres-music-genre-list-item-music-genre>
+  }
+
+  record album-primary-genres-music-genre-list-item-music-genre {
+    music-genre-id: option<f64>,
+    music-genre-name: option<string>,
+    music-genre-name-extended: option<string>,
+    music-genre-parent-id: option<f64>,
+    music-genre-vanity: option<string>
+  }
+
+  record album-secondary-genres {
+    music-genre-list: option<list<string>>
+  }
+
+  record get-album-get-response-message-header {
+    execute-time: option<f64>,
+    status-code: option<f64>
+  }
+
+  record get-artist-albums-get-response {
+    message: option<get-artist-albums-get-response-message>
+  }
+
+  record get-artist-albums-get-response-message {
+    body: option<get-artist-albums-get-response-message-body>,
+    header: option<get-artist-albums-get-response-message-header>
+  }
+
+  record get-artist-albums-get-response-message-body {
+    /// A list of albums
+    album-list: option<list<get-artist-albums-get-response-message-body-album-list-item>>
+  }
+
+  record get-artist-albums-get-response-message-body-album-list-item {
+    album: option<album>
+  }
+
+  record get-artist-albums-get-response-message-header {
+    available: option<f64>,
+    execute-time: option<f64>,
+    status-code: option<f64>
+  }
+
   record get-album-get-params {
     /// output format: json, jsonp, xml.
     format: option<string>,
@@ -9,7 +97,7 @@ interface album {
     /// The musiXmatch album id
     album-id: string
   }
-  get-album-get: func(params: get-album-get-params) -> result<string, string>;
+  get-album-get: func(params: get-album-get-params) -> result<get-album-get-response, string>;
 
   record get-artist-albums-get-params {
     /// output format: json, jsonp, xml.
@@ -27,12 +115,187 @@ interface album {
     /// Define the page number for paginated results
     page: option<f64>
   }
-  get-artist-albums-get: func(params: get-artist-albums-get-params) -> result<string, string>;
+  get-artist-albums-get: func(params: get-artist-albums-get-params) -> result<get-artist-albums-get-response, string>;
 
 }
 
 
 interface track {
+  record get-album-tracks-get-response {
+    message: option<get-album-tracks-get-response-message>
+  }
+
+  record get-album-tracks-get-response-message {
+    body: option<get-album-tracks-get-response-message-body>,
+    header: option<get-album-tracks-get-response-message-header>
+  }
+
+  record get-album-tracks-get-response-message-body {
+    /// A list of tracks
+    track-list: option<list<track>>
+  }
+
+  /// a song in the Musixmatch database
+  record track {
+    album-coverart-v100x100: option<string>,
+    album-coverart-v350x350: option<string>,
+    album-coverart-v500x500: option<string>,
+    album-coverart-v800x800: option<string>,
+    album-id: option<f64>,
+    album-name: option<string>,
+    artist-id: option<f64>,
+    artist-mbid: option<string>,
+    artist-name: option<string>,
+    commontrack-id: option<f64>,
+    commontrack-vanity-id: option<string>,
+    explicit: option<f64>,
+    first-release-date: option<string>,
+    has-lyrics: option<f64>,
+    has-subtitles: option<f64>,
+    instrumental: option<f64>,
+    lyrics-id: option<f64>,
+    num-favourite: option<f64>,
+    primary-genres: option<track-primary-genres>,
+    restricted: option<f64>,
+    secondary-genres: option<track-secondary-genres>,
+    subtitle-id: option<f64>,
+    track-edit-url: option<string>,
+    track-id: option<f64>,
+    track-isrc: option<string>,
+    track-length: option<f64>,
+    track-mbid: option<string>,
+    track-name: option<string>,
+    track-name-translation-list: option<list<string>>,
+    track-rating: option<f64>,
+    track-share-url: option<string>,
+    track-soundcloud-id: option<f64>,
+    track-spotify-id: option<string>,
+    track-xboxmusic-id: option<string>,
+    updated-time: option<string>
+  }
+
+  record track-primary-genres {
+    music-genre-list: option<list<track-primary-genres-music-genre-list-item>>
+  }
+
+  record track-primary-genres-music-genre-list-item {
+    music-genre: option<track-primary-genres-music-genre-list-item-music-genre>
+  }
+
+  record track-primary-genres-music-genre-list-item-music-genre {
+    music-genre-id: option<f64>,
+    music-genre-name: option<string>,
+    music-genre-name-extended: option<string>,
+    music-genre-parent-id: option<f64>,
+    music-genre-vanity: option<string>
+  }
+
+  record track-secondary-genres {
+    music-genre-list: option<list<track-secondary-genres-music-genre-list-item>>
+  }
+
+  record track-secondary-genres-music-genre-list-item {
+    music-genre: option<track-secondary-genres-music-genre-list-item-music-genre>
+  }
+
+  record track-secondary-genres-music-genre-list-item-music-genre {
+    music-genre-id: option<f64>,
+    music-genre-name: option<string>,
+    music-genre-name-extended: option<string>,
+    music-genre-parent-id: option<f64>,
+    music-genre-vanity: option<string>
+  }
+
+  record get-album-tracks-get-response-message-header {
+    available: option<f64>,
+    execute-time: option<f64>,
+    status-code: option<f64>
+  }
+
+  record get-chart-tracks-get-response {
+    message: option<get-chart-tracks-get-response-message>
+  }
+
+  record get-chart-tracks-get-response-message {
+    body: option<get-chart-tracks-get-response-message-body>,
+    header: option<get-chart-tracks-get-response-message-header>
+  }
+
+  record get-chart-tracks-get-response-message-body {
+    /// A list of tracks
+    track-list: option<list<get-chart-tracks-get-response-message-body-track-list-item>>
+  }
+
+  record get-chart-tracks-get-response-message-body-track-list-item {
+    track: option<track>
+  }
+
+  record get-chart-tracks-get-response-message-header {
+    available: option<f64>,
+    execute-time: option<f64>,
+    status-code: option<f64>
+  }
+
+  record get-matcher-track-get-response {
+    message: option<get-matcher-track-get-response-message>
+  }
+
+  record get-matcher-track-get-response-message {
+    body: option<get-matcher-track-get-response-message-body>,
+    header: option<get-matcher-track-get-response-message-header>
+  }
+
+  record get-matcher-track-get-response-message-body {
+    track: option<track>
+  }
+
+  record get-matcher-track-get-response-message-header {
+    execute-time: option<f64>,
+    status-code: option<f64>
+  }
+
+  record get-track-get-response {
+    message: option<get-track-get-response-message>
+  }
+
+  record get-track-get-response-message {
+    body: option<get-track-get-response-message-body>,
+    header: option<get-track-get-response-message-header>
+  }
+
+  record get-track-get-response-message-body {
+    track: option<track>
+  }
+
+  record get-track-get-response-message-header {
+    execute-time: option<f64>,
+    status-code: option<f64>
+  }
+
+  record get-track-search-response {
+    message: option<get-track-search-response-message>
+  }
+
+  record get-track-search-response-message {
+    body: option<get-track-search-response-message-body>,
+    header: option<get-track-search-response-message-header>
+  }
+
+  record get-track-search-response-message-body {
+    /// A list of tracks
+    track-list: option<list<get-track-search-response-message-body-track-list-item>>
+  }
+
+  record get-track-search-response-message-body-track-list-item {
+    track: option<track>
+  }
+
+  record get-track-search-response-message-header {
+    available: option<f64>,
+    execute-time: option<f64>,
+    status-code: option<f64>
+  }
+
   record get-album-tracks-get-params {
     /// output format: json, jsonp, xml.
     format: option<string>,
@@ -47,7 +310,7 @@ interface track {
     /// Define the page size for paginated results.Range is 1 to 100.
     page-size: option<f64>
   }
-  get-album-tracks-get: func(params: get-album-tracks-get-params) -> result<string, string>;
+  get-album-tracks-get: func(params: get-album-tracks-get-params) -> result<get-album-tracks-get-response, string>;
 
   record get-chart-tracks-get-params {
     /// output format: json, jsonp, xml.
@@ -63,7 +326,7 @@ interface track {
     /// When set, filter only contents with lyrics
     f-has-lyrics: option<string>
   }
-  get-chart-tracks-get: func(params: get-chart-tracks-get-params) -> result<string, string>;
+  get-chart-tracks-get: func(params: get-chart-tracks-get-params) -> result<get-chart-tracks-get-response, string>;
 
   record get-matcher-track-get-params {
     /// output format: json, jsonp, xml.
@@ -79,7 +342,7 @@ interface track {
     /// When set, filter only contents with subtitles
     f-has-subtitle: option<f64>
   }
-  get-matcher-track-get: func(params: get-matcher-track-get-params) -> result<string, string>;
+  get-matcher-track-get: func(params: get-matcher-track-get-params) -> result<get-matcher-track-get-response, string>;
 
   record get-track-get-params {
     /// output format: json, jsonp, xml.
@@ -89,7 +352,7 @@ interface track {
     /// The musiXmatch track id
     track-id: string
   }
-  get-track-get: func(params: get-track-get-params) -> result<string, string>;
+  get-track-get: func(params: get-track-get-params) -> result<get-track-get-response, string>;
 
   record get-track-search-params {
     /// output format: json, jsonp, xml.
@@ -121,11 +384,160 @@ interface track {
     /// Define the page number for paginated results
     page: option<f64>
   }
-  get-track-search: func(params: get-track-search-params) -> result<string, string>;
+  get-track-search: func(params: get-track-search-params) -> result<get-track-search-response, string>;
 
 }
 
 interface artist {
+  record get-artist-get-response {
+    message: option<get-artist-get-response-message>
+  }
+
+  record get-artist-get-response-message {
+    body: option<get-artist-get-response-message-body>,
+    header: option<get-artist-get-response-message-header>
+  }
+
+  record get-artist-get-response-message-body {
+    artist: option<artist>
+  }
+
+  /// a artist in the Musixmatch database.
+  record artist {
+    artist-alias-list: option<list<artist-artist-alias-list-item>>,
+    artist-comment: option<string>,
+    artist-country: option<string>,
+    artist-credits: option<artist-artist-credits>,
+    artist-edit-url: option<string>,
+    artist-id: option<f64>,
+    artist-mbid: option<string>,
+    artist-name: option<string>,
+    artist-name-translation-list: option<list<artist-artist-name-translation-list-item>>,
+    artist-rating: option<f64>,
+    artist-share-url: option<string>,
+    artist-twitter-url: option<string>,
+    artist-vanity-id: option<string>,
+    managed: option<f64>,
+    primary-genres: option<artist-primary-genres>,
+    restricted: option<f64>,
+    secondary-genres: option<artist-secondary-genres>,
+    updated-time: option<string>
+  }
+
+  record artist-artist-alias-list-item {
+    artist-alias: option<string>
+  }
+
+  record artist-artist-credits {
+    artist-list: option<list<string>>
+  }
+
+  record artist-artist-name-translation-list-item {
+    artist-name-translation: option<artist-artist-name-translation-list-item-artist-name-translation>
+  }
+
+  record artist-artist-name-translation-list-item-artist-name-translation {
+    language: option<string>,
+    translation: option<string>
+  }
+
+  record artist-primary-genres {
+    music-genre-list: option<list<artist-primary-genres-music-genre-list-item>>
+  }
+
+  record artist-primary-genres-music-genre-list-item {
+    music-genre: option<artist-primary-genres-music-genre-list-item-music-genre>
+  }
+
+  record artist-primary-genres-music-genre-list-item-music-genre {
+    music-genre-id: option<f64>,
+    music-genre-name: option<string>,
+    music-genre-name-extended: option<string>,
+    music-genre-parent-id: option<f64>,
+    music-genre-vanity: option<string>
+  }
+
+  record artist-secondary-genres {
+    music-genre-list: option<list<string>>
+  }
+
+  record get-artist-get-response-message-header {
+    execute-time: option<f64>,
+    status-code: option<f64>
+  }
+
+  record get-artist-related-get-response {
+    message: option<get-artist-related-get-response-message>
+  }
+
+  record get-artist-related-get-response-message {
+    body: option<get-artist-related-get-response-message-body>,
+    header: option<get-artist-related-get-response-message-header>
+  }
+
+  record get-artist-related-get-response-message-body {
+    /// A list of artists
+    artist-list: option<list<get-artist-related-get-response-message-body-artist-list-item>>
+  }
+
+  record get-artist-related-get-response-message-body-artist-list-item {
+    artist: option<artist>
+  }
+
+  record get-artist-related-get-response-message-header {
+    available: option<f64>,
+    execute-time: option<f64>,
+    status-code: option<f64>
+  }
+
+  record get-artist-search-response {
+    message: option<get-artist-search-response-message>
+  }
+
+  record get-artist-search-response-message {
+    body: option<get-artist-search-response-message-body>,
+    header: option<get-artist-search-response-message-header>
+  }
+
+  record get-artist-search-response-message-body {
+    /// A list of artists
+    artist-list: option<list<get-artist-search-response-message-body-artist-list-item>>
+  }
+
+  record get-artist-search-response-message-body-artist-list-item {
+    artist: option<artist>
+  }
+
+  record get-artist-search-response-message-header {
+    available: option<f64>,
+    execute-time: option<f64>,
+    status-code: option<f64>
+  }
+
+  record get-chart-artists-get-response {
+    message: option<get-chart-artists-get-response-message>
+  }
+
+  record get-chart-artists-get-response-message {
+    body: option<get-chart-artists-get-response-message-body>,
+    header: option<get-chart-artists-get-response-message-header>
+  }
+
+  record get-chart-artists-get-response-message-body {
+    /// A list of artists
+    artist-list: option<list<get-chart-artists-get-response-message-body-artist-list-item>>
+  }
+
+  record get-chart-artists-get-response-message-body-artist-list-item {
+    artist: option<artist>
+  }
+
+  record get-chart-artists-get-response-message-header {
+    available: option<f64>,
+    execute-time: option<f64>,
+    status-code: option<f64>
+  }
+
   record get-artist-get-params {
     /// output format: json, jsonp, xml.
     format: option<string>,
@@ -134,7 +546,7 @@ interface artist {
     /// 	The musiXmatch artist id
     artist-id: string
   }
-  get-artist-get: func(params: get-artist-get-params) -> result<string, string>;
+  get-artist-get: func(params: get-artist-get-params) -> result<get-artist-get-response, string>;
 
   record get-artist-related-get-params {
     /// output format: json, jsonp, xml.
@@ -148,7 +560,7 @@ interface artist {
     /// Define the page number for paginated results
     page: option<f64>
   }
-  get-artist-related-get: func(params: get-artist-related-get-params) -> result<string, string>;
+  get-artist-related-get: func(params: get-artist-related-get-params) -> result<get-artist-related-get-response, string>;
 
   record get-artist-search-params {
     /// output format: json, jsonp, xml.
@@ -164,7 +576,7 @@ interface artist {
     /// Define the page size for paginated results.Range is 1 to 100.
     page-size: option<f64>
   }
-  get-artist-search: func(params: get-artist-search-params) -> result<string, string>;
+  get-artist-search: func(params: get-artist-search-params) -> result<get-artist-search-response, string>;
 
   record get-chart-artists-get-params {
     /// output format: json, jsonp, xml.
@@ -178,11 +590,69 @@ interface artist {
     /// A valid ISO 3166 country code
     country: option<string>
   }
-  get-chart-artists-get: func(params: get-chart-artists-get-params) -> result<string, string>;
+  get-chart-artists-get: func(params: get-chart-artists-get-params) -> result<get-chart-artists-get-response, string>;
 
 }
 
 interface lyrics {
+  record get-matcher-lyrics-get-response {
+    message: option<get-matcher-lyrics-get-response-message>
+  }
+
+  record get-matcher-lyrics-get-response-message {
+    body: option<get-matcher-lyrics-get-response-message-body>,
+    header: option<get-matcher-lyrics-get-response-message-header>
+  }
+
+  record get-matcher-lyrics-get-response-message-body {
+    lyrics: option<lyrics>
+  }
+
+  /// a Lyrics in the Musixmatch database.
+  record lyrics {
+    action-requested: option<string>,
+    can-edit: option<f64>,
+    explicit: option<f64>,
+    html-tracking-url: option<string>,
+    instrumental: option<f64>,
+    locked: option<f64>,
+    lyrics-body: option<string>,
+    lyrics-copyright: option<string>,
+    lyrics-id: option<f64>,
+    lyrics-language: option<string>,
+    lyrics-language-description: option<string>,
+    pixel-tracking-url: option<string>,
+    publisher-list: option<list<string>>,
+    restricted: option<f64>,
+    script-tracking-url: option<string>,
+    updated-time: option<string>,
+    verified: option<f64>,
+    writer-list: option<list<string>>
+  }
+
+  record get-matcher-lyrics-get-response-message-header {
+    execute-time: option<f64>,
+    status-code: option<f64>
+  }
+
+  record get-track-lyrics-get-response {
+    message: option<get-track-lyrics-get-response-message>
+  }
+
+  record get-track-lyrics-get-response-message {
+    body: option<get-track-lyrics-get-response-message-body>,
+    header: option<get-track-lyrics-get-response-message-header>
+  }
+
+  record get-track-lyrics-get-response-message-body {
+    lyrics: option<lyrics>
+  }
+
+  record get-track-lyrics-get-response-message-header {
+    execute-time: option<f64>,
+    status-code: option<f64>
+  }
+
   record get-matcher-lyrics-get-params {
     /// output format: json, jsonp, xml.
     format: option<string>,
@@ -193,7 +663,7 @@ interface lyrics {
     /// The song artist
     q-artist: option<string>
   }
-  get-matcher-lyrics-get: func(params: get-matcher-lyrics-get-params) -> result<string, string>;
+  get-matcher-lyrics-get: func(params: get-matcher-lyrics-get-params) -> result<get-matcher-lyrics-get-response, string>;
 
   record get-track-lyrics-get-params {
     /// output format: json, jsonp, xml.
@@ -203,11 +673,64 @@ interface lyrics {
     /// The musiXmatch track id
     track-id: string
   }
-  get-track-lyrics-get: func(params: get-track-lyrics-get-params) -> result<string, string>;
+  get-track-lyrics-get: func(params: get-track-lyrics-get-params) -> result<get-track-lyrics-get-response, string>;
 
 }
 
 interface subtitle {
+  record get-matcher-subtitle-get-response {
+    message: option<get-matcher-subtitle-get-response-message>
+  }
+
+  record get-matcher-subtitle-get-response-message {
+    body: option<get-matcher-subtitle-get-response-message-body>,
+    header: option<get-matcher-subtitle-get-response-message-header>
+  }
+
+  record get-matcher-subtitle-get-response-message-body {
+    subtitle: option<subtitle>
+  }
+
+  /// a synchronized lyrics subtitle in the Musixmatch database.
+  record subtitle {
+    html-tracking-url: option<string>,
+    lyrics-copyright: option<string>,
+    pixel-tracking-url: option<string>,
+    publisher-list: option<list<string>>,
+    restricted: option<f64>,
+    script-tracking-url: option<string>,
+    subtitle-body: option<string>,
+    subtitle-id: option<f64>,
+    subtitle-language: option<string>,
+    subtitle-language-description: option<string>,
+    subtitle-length: option<f64>,
+    updated-time: option<string>,
+    writer-list: option<list<string>>
+  }
+
+  record get-matcher-subtitle-get-response-message-header {
+    execute-time: option<f64>,
+    status-code: option<f64>
+  }
+
+  record get-track-subtitle-get-response {
+    message: option<get-track-subtitle-get-response-message>
+  }
+
+  record get-track-subtitle-get-response-message {
+    body: option<get-track-subtitle-get-response-message-body>,
+    header: option<get-track-subtitle-get-response-message-header>
+  }
+
+  record get-track-subtitle-get-response-message-body {
+    subtitle: option<subtitle>
+  }
+
+  record get-track-subtitle-get-response-message-header {
+    execute-time: option<f64>,
+    status-code: option<f64>
+  }
+
   record get-matcher-subtitle-get-params {
     /// output format: json, jsonp, xml.
     format: option<string>,
@@ -222,7 +745,7 @@ interface subtitle {
     /// Max deviation for a subtitle length in seconds
     f-subtitle-length-max-deviation: option<f64>
   }
-  get-matcher-subtitle-get: func(params: get-matcher-subtitle-get-params) -> result<string, string>;
+  get-matcher-subtitle-get: func(params: get-matcher-subtitle-get-params) -> result<get-matcher-subtitle-get-response, string>;
 
   record get-track-subtitle-get-params {
     /// output format: json, jsonp, xml.
@@ -232,11 +755,42 @@ interface subtitle {
     /// The musiXmatch track id
     track-id: string
   }
-  get-track-subtitle-get: func(params: get-track-subtitle-get-params) -> result<string, string>;
+  get-track-subtitle-get: func(params: get-track-subtitle-get-params) -> result<get-track-subtitle-get-response, string>;
 
 }
 
 interface snippet {
+  record get-track-snippet-get-response {
+    message: option<get-track-snippet-get-response-message>
+  }
+
+  record get-track-snippet-get-response-message {
+    body: option<get-track-snippet-get-response-message-body>,
+    header: option<get-track-snippet-get-response-message-header>
+  }
+
+  record get-track-snippet-get-response-message-body {
+    snippet: option<snippet>
+  }
+
+  /// Snippet of lyrics text in the Musixmatch database.
+  record snippet {
+    html-tracking-url: option<string>,
+    instrumental: option<f64>,
+    pixel-tracking-url: option<string>,
+    restricted: option<f64>,
+    script-tracking-url: option<string>,
+    snippet-body: option<string>,
+    snippet-id: option<f64>,
+    snippet-language: option<string>,
+    updated-time: option<string>
+  }
+
+  record get-track-snippet-get-response-message-header {
+    execute-time: option<f64>,
+    status-code: option<f64>
+  }
+
   record get-track-snippet-get-params {
     /// output format: json, jsonp, xml.
     format: option<string>,
@@ -245,7 +799,7 @@ interface snippet {
     /// The musiXmatch track id
     track-id: string
   }
-  get-track-snippet-get: func(params: get-track-snippet-get-params) -> result<string, string>;
+  get-track-snippet-get: func(params: get-track-snippet-get-params) -> result<get-track-snippet-get-response, string>;
 
 }
 /// The component world: imports the secrets host capability

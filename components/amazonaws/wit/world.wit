@@ -6,464 +6,1081 @@
 /// | Secret name | Applied to each request as |
 /// | --- | --- |
 /// | `hmac` | header `Authorization` |
-package autostamp:amazonaws@0.3.0;
+package autostamp:amazonaws@0.5.0;
 
-interface archive-rule {
-  record apply-archive-rule-params {
-    /// The Amazon resource name (ARN) of the analyzer.
-    analyzer-arn: string,
-    /// The name of the rule to apply.
-    rule-name: string,
-    /// A client token.
-    client-token: option<string>
-  }
-  apply-archive-rule: func(params: apply-archive-rule-params) -> result<string, string>;
-
-}
-
-
-interface policy {
-  enum validate-policy-body-locale-enum {
-    de,
-    en,
-    es,
-    fr,
-    it,
-    ja,
-    ko,
-    pt-br,
-    zh-cn,
-    zh-tw,
+interface aws-migration-hub {
+  enum associate-created-artifact-x-amz-target-enum {
+    aws-migration-hub-associate-created-artifact,
   }
 
-  enum validate-policy-body-policy-type-enum {
-    identity-policy,
-    resource-policy,
-    service-control-policy,
+  enum associate-discovered-resource-x-amz-target-enum {
+    aws-migration-hub-associate-discovered-resource,
   }
 
-  enum validate-policy-body-validate-policy-resource-type-enum {
-    aws-s3-bucket,
-    aws-s3-access-point,
-    aws-s3-multi-region-access-point,
-    aws-s3-object-lambda-access-point,
-    aws-iam-assume-role-policy-document,
+  enum create-progress-update-stream-x-amz-target-enum {
+    aws-migration-hub-create-progress-update-stream,
   }
 
-  /// Contains the ARN details about the IAM entity for which the policy is generated.
-  record start-policy-generation-body-policy-generation-details {
-    principal-arn: option<string>
+  enum delete-progress-update-stream-x-amz-target-enum {
+    aws-migration-hub-delete-progress-update-stream,
   }
 
-  /// Contains information about CloudTrail access.
-  record start-policy-generation-body-cloud-trail-details {
-    trails: option<string>,
-    access-role: option<string>,
-    start-time: option<string>,
-    end-time: option<string>
+  enum describe-application-state-x-amz-target-enum {
+    aws-migration-hub-describe-application-state,
   }
 
-  record get-generated-policy-params {
-    /// The <code>JobId</code> that is returned by the <code>StartPolicyGeneration</code> operation. The <code>JobId</code> can be used with <code>GetGeneratedPolicy</code> to retrieve the generated policies or used with <code>CancelPolicyGeneration</code> to cancel the policy generation request.
-    job-id: string,
-    /// <p>The level of detail that you want to generate. You can specify whether to generate policies with placeholders for resource ARNs for actions that support resource level granularity in policies.</p> <p>For example, in the resource section of a policy, you can receive a placeholder such as <code>"Resource":"arn:aws:s3:::${BucketName}"</code> instead of <code>"*"</code>.</p>
-    include-resource-placeholders: option<bool>,
-    /// <p>The level of detail that you want to generate. You can specify whether to generate service-level policies. </p> <p>IAM Access Analyzer uses <code>iam:servicelastaccessed</code> to identify services that have been used recently to create this service-level template.</p>
-    include-service-level-template: option<bool>
+  enum describe-migration-task-x-amz-target-enum {
+    aws-migration-hub-describe-migration-task,
   }
-  get-generated-policy: func(params: get-generated-policy-params) -> result<string, string>;
 
-  record cancel-policy-generation-params {
-    /// The <code>JobId</code> that is returned by the <code>StartPolicyGeneration</code> operation. The <code>JobId</code> can be used with <code>GetGeneratedPolicy</code> to retrieve the generated policies or used with <code>CancelPolicyGeneration</code> to cancel the policy generation request.
-    job-id: string
+  enum disassociate-created-artifact-x-amz-target-enum {
+    aws-migration-hub-disassociate-created-artifact,
   }
-  cancel-policy-generation: func(params: cancel-policy-generation-params) -> result<string, string>;
 
-  record list-policy-generations-params {
-    /// The ARN of the IAM entity (user or role) for which you are generating a policy. Use this with <code>ListGeneratedPolicies</code> to filter the results to only include results for a specific principal.
-    principal-arn: option<string>,
-    /// The maximum number of results to return in the response.
-    max-results: option<s32>,
-    /// A token used for pagination of results returned.
-    next-token: option<string>
+  enum disassociate-discovered-resource-x-amz-target-enum {
+    aws-migration-hub-disassociate-discovered-resource,
   }
-  list-policy-generations: func(params: list-policy-generations-params) -> result<string, string>;
 
-  record start-policy-generation-params {
-    /// Contains the ARN details about the IAM entity for which the policy is generated.
-    policy-generation-details: start-policy-generation-body-policy-generation-details,
-    /// Contains information about CloudTrail access.
-    cloud-trail-details: option<start-policy-generation-body-cloud-trail-details>,
-    /// <p>A unique, case-sensitive identifier that you provide to ensure the idempotency of the request. Idempotency ensures that an API request completes only once. With an idempotent request, if the original request completes successfully, the subsequent retries with the same client token return the result from the original successful request and they have no additional effect.</p> <p>If you do not specify a client token, one is automatically generated by the Amazon Web Services SDK.</p>
-    client-token: option<string>
+  enum import-migration-task-x-amz-target-enum {
+    aws-migration-hub-import-migration-task,
   }
-  start-policy-generation: func(params: start-policy-generation-params) -> result<string, string>;
 
-  record validate-policy-params {
-    /// The maximum number of results to return in the response.
-    max-results: option<s32>,
-    /// A token used for pagination of results returned.
-    next-token: option<string>,
-    /// The locale to use for localizing the findings.
-    locale: option<validate-policy-body-locale-enum>,
-    /// The JSON policy document to use as the content for the policy.
-    policy-document: string,
-    /// <p>The type of policy to validate. Identity policies grant permissions to IAM principals. Identity policies include managed and inline policies for IAM roles, users, and groups. They also include service-control policies (SCPs) that are attached to an Amazon Web Services organization, organizational unit (OU), or an account.</p> <p>Resource policies grant permissions on Amazon Web Services resources. Resource policies include trust policies for IAM roles and bucket policies for Amazon S3 buckets. You can provide a generic input such as identity policy or resource policy or a specific input such as managed policy or Amazon S3 bucket policy. </p>
-    policy-type: validate-policy-body-policy-type-enum,
-    /// <p>The type of resource to attach to your resource policy. Specify a value for the policy validation resource type only if the policy type is <code>RESOURCE_POLICY</code>. For example, to validate a resource policy to attach to an Amazon S3 bucket, you can choose <code>AWS::S3::Bucket</code> for the policy validation resource type.</p> <p>For resource types not supported as valid values, IAM Access Analyzer runs policy checks that apply to all resource policies. For example, to validate a resource policy to attach to a KMS key, do not specify a value for the policy validation resource type and IAM Access Analyzer will run policy checks that apply to all resource policies.</p>
-    validate-policy-resource-type: option<validate-policy-body-validate-policy-resource-type-enum>
+  enum list-application-states-x-amz-target-enum {
+    aws-migration-hub-list-application-states,
   }
-  validate-policy: func(params: validate-policy-params) -> result<string, string>;
 
-}
+  enum list-created-artifacts-x-amz-target-enum {
+    aws-migration-hub-list-created-artifacts,
+  }
 
-interface access-preview {
-  /// Access control configuration for your resource that is used to generate the access preview. The access preview includes findings for external access allowed to the resource with the proposed access control configuration. The configuration must contain exactly one element.
-  record create-access-preview-body-configurations {
+  enum list-discovered-resources-x-amz-target-enum {
+    aws-migration-hub-list-discovered-resources,
+  }
+
+  enum list-migration-tasks-x-amz-target-enum {
+    aws-migration-hub-list-migration-tasks,
+  }
+
+  enum list-progress-update-streams-x-amz-target-enum {
+    aws-migration-hub-list-progress-update-streams,
+  }
+
+  enum notify-application-state-x-amz-target-enum {
+    aws-migration-hub-notify-application-state,
+  }
+
+  enum notify-migration-task-state-x-amz-target-enum {
+    aws-migration-hub-notify-migration-task-state,
+  }
+
+  enum put-resource-attributes-x-amz-target-enum {
+    aws-migration-hub-put-resource-attributes,
+  }
+
+  record associate-created-artifact-request-progress-update-stream {
     /// JSON-encoded free-form object payload
     data: option<string>
   }
 
-  /// Criteria to filter the returned findings.
-  record list-access-preview-findings-body-filter {
+  record associate-created-artifact-request-migration-task-name {
     /// JSON-encoded free-form object payload
     data: option<string>
   }
 
-  record create-access-preview-params {
-    /// The <a href="https://docs.aws.amazon.com/IAM/latest/UserGuide/access-analyzer-getting-started.html#permission-resources">ARN of the account analyzer</a> used to generate the access preview. You can only create an access preview for analyzers with an <code>Account</code> type and <code>Active</code> status.
-    analyzer-arn: string,
-    /// Access control configuration for your resource that is used to generate the access preview. The access preview includes findings for external access allowed to the resource with the proposed access control configuration. The configuration must contain exactly one element.
-    configurations: create-access-preview-body-configurations,
-    /// A client token.
-    client-token: option<string>
+  record associate-created-artifact-request-created-artifact {
+    name: associate-created-artifact-request-created-artifact-name,
+    description: option<associate-created-artifact-request-created-artifact-description>
   }
-  create-access-preview: func(params: create-access-preview-params) -> result<string, string>;
 
-  record get-access-preview-params {
-    /// The unique ID for the access preview.
-    access-preview-id: string,
-    /// The <a href="https://docs.aws.amazon.com/IAM/latest/UserGuide/access-analyzer-getting-started.html#permission-resources">ARN of the analyzer</a> used to generate the access preview.
-    analyzer-arn: string
+  record associate-created-artifact-request-created-artifact-name {
+    /// JSON-encoded free-form object payload
+    data: option<string>
   }
-  get-access-preview: func(params: get-access-preview-params) -> result<string, string>;
 
-  record list-access-preview-findings-params {
-    /// The unique ID for the access preview.
-    access-preview-id: string,
+  record associate-created-artifact-request-created-artifact-description {
+    /// JSON-encoded free-form object payload
+    data: option<string>
+  }
+
+  record associate-created-artifact-request-dry-run {
+    /// JSON-encoded free-form object payload
+    data: option<string>
+  }
+
+  record associate-created-artifact-result {
+    /// JSON-encoded free-form object payload
+    data: option<string>
+  }
+
+  record associate-discovered-resource-request-progress-update-stream {
+    /// JSON-encoded free-form object payload
+    data: option<string>
+  }
+
+  record associate-discovered-resource-request-migration-task-name {
+    /// JSON-encoded free-form object payload
+    data: option<string>
+  }
+
+  record associate-discovered-resource-request-discovered-resource {
+    configuration-id: associate-discovered-resource-request-discovered-resource-configuration-id,
+    description: option<associate-discovered-resource-request-discovered-resource-description>
+  }
+
+  record associate-discovered-resource-request-discovered-resource-configuration-id {
+    /// JSON-encoded free-form object payload
+    data: option<string>
+  }
+
+  record associate-discovered-resource-request-discovered-resource-description {
+    /// JSON-encoded free-form object payload
+    data: option<string>
+  }
+
+  record associate-discovered-resource-request-dry-run {
+    /// JSON-encoded free-form object payload
+    data: option<string>
+  }
+
+  record associate-discovered-resource-result {
+    /// JSON-encoded free-form object payload
+    data: option<string>
+  }
+
+  record create-progress-update-stream-request-progress-update-stream-name {
+    /// JSON-encoded free-form object payload
+    data: option<string>
+  }
+
+  record create-progress-update-stream-request-dry-run {
+    /// JSON-encoded free-form object payload
+    data: option<string>
+  }
+
+  record create-progress-update-stream-result {
+    /// JSON-encoded free-form object payload
+    data: option<string>
+  }
+
+  record delete-progress-update-stream-request-progress-update-stream-name {
+    /// JSON-encoded free-form object payload
+    data: option<string>
+  }
+
+  record delete-progress-update-stream-request-dry-run {
+    /// JSON-encoded free-form object payload
+    data: option<string>
+  }
+
+  record delete-progress-update-stream-result {
+    /// JSON-encoded free-form object payload
+    data: option<string>
+  }
+
+  record describe-application-state-request-application-id {
+    /// JSON-encoded free-form object payload
+    data: option<string>
+  }
+
+  record describe-application-state-result {
+    application-status: option<describe-application-state-result-application-status>,
+    last-updated-time: option<describe-application-state-result-last-updated-time>
+  }
+
+  record describe-application-state-result-application-status {
+    /// JSON-encoded free-form object payload
+    data: option<string>
+  }
+
+  record describe-application-state-result-last-updated-time {
+    /// JSON-encoded free-form object payload
+    data: option<string>
+  }
+
+  record describe-migration-task-request-progress-update-stream {
+    /// JSON-encoded free-form object payload
+    data: option<string>
+  }
+
+  record describe-migration-task-request-migration-task-name {
+    /// JSON-encoded free-form object payload
+    data: option<string>
+  }
+
+  record describe-migration-task-result {
+    migration-task: option<describe-migration-task-result-migration-task>
+  }
+
+  record describe-migration-task-result-migration-task {
+    progress-update-stream: option<describe-migration-task-result-migration-task-progress-update-stream>,
+    migration-task-name: option<describe-migration-task-result-migration-task-migration-task-name>,
+    task: option<describe-migration-task-result-migration-task-task>,
+    update-date-time: option<describe-migration-task-result-migration-task-update-date-time>,
+    resource-attribute-list: option<describe-migration-task-result-migration-task-resource-attribute-list>
+  }
+
+  record describe-migration-task-result-migration-task-progress-update-stream {
+    /// JSON-encoded free-form object payload
+    data: option<string>
+  }
+
+  record describe-migration-task-result-migration-task-migration-task-name {
+    /// JSON-encoded free-form object payload
+    data: option<string>
+  }
+
+  record describe-migration-task-result-migration-task-task {
+    status: describe-migration-task-result-migration-task-task-status,
+    status-detail: option<describe-migration-task-result-migration-task-task-status-detail>,
+    progress-percent: option<describe-migration-task-result-migration-task-task-progress-percent>
+  }
+
+  record describe-migration-task-result-migration-task-task-status {
+    /// JSON-encoded free-form object payload
+    data: option<string>
+  }
+
+  record describe-migration-task-result-migration-task-task-status-detail {
+    /// JSON-encoded free-form object payload
+    data: option<string>
+  }
+
+  record describe-migration-task-result-migration-task-task-progress-percent {
+    /// JSON-encoded free-form object payload
+    data: option<string>
+  }
+
+  record describe-migration-task-result-migration-task-update-date-time {
+    /// JSON-encoded free-form object payload
+    data: option<string>
+  }
+
+  record describe-migration-task-result-migration-task-resource-attribute-list {
+    /// JSON-encoded free-form object payload
+    data: option<string>
+  }
+
+  record disassociate-created-artifact-request-progress-update-stream {
+    /// JSON-encoded free-form object payload
+    data: option<string>
+  }
+
+  record disassociate-created-artifact-request-migration-task-name {
+    /// JSON-encoded free-form object payload
+    data: option<string>
+  }
+
+  record disassociate-created-artifact-request-created-artifact-name {
+    /// JSON-encoded free-form object payload
+    data: option<string>
+  }
+
+  record disassociate-created-artifact-request-dry-run {
+    /// JSON-encoded free-form object payload
+    data: option<string>
+  }
+
+  record disassociate-created-artifact-result {
+    /// JSON-encoded free-form object payload
+    data: option<string>
+  }
+
+  record disassociate-discovered-resource-request-progress-update-stream {
+    /// JSON-encoded free-form object payload
+    data: option<string>
+  }
+
+  record disassociate-discovered-resource-request-migration-task-name {
+    /// JSON-encoded free-form object payload
+    data: option<string>
+  }
+
+  record disassociate-discovered-resource-request-configuration-id {
+    /// JSON-encoded free-form object payload
+    data: option<string>
+  }
+
+  record disassociate-discovered-resource-request-dry-run {
+    /// JSON-encoded free-form object payload
+    data: option<string>
+  }
+
+  record disassociate-discovered-resource-result {
+    /// JSON-encoded free-form object payload
+    data: option<string>
+  }
+
+  record import-migration-task-request-progress-update-stream {
+    /// JSON-encoded free-form object payload
+    data: option<string>
+  }
+
+  record import-migration-task-request-migration-task-name {
+    /// JSON-encoded free-form object payload
+    data: option<string>
+  }
+
+  record import-migration-task-request-dry-run {
+    /// JSON-encoded free-form object payload
+    data: option<string>
+  }
+
+  record import-migration-task-result {
+    /// JSON-encoded free-form object payload
+    data: option<string>
+  }
+
+  record list-application-states-request-application-ids {
+    /// JSON-encoded free-form object payload
+    data: option<string>
+  }
+
+  record list-application-states-request-next-token {
+    /// JSON-encoded free-form object payload
+    data: option<string>
+  }
+
+  record list-application-states-request-max-results {
+    /// JSON-encoded free-form object payload
+    data: option<string>
+  }
+
+  record list-application-states-result {
+    application-state-list: option<list-application-states-result-application-state-list>,
+    next-token: option<list-application-states-result-next-token>
+  }
+
+  record list-application-states-result-application-state-list {
+    /// JSON-encoded free-form object payload
+    data: option<string>
+  }
+
+  record list-application-states-result-next-token {
+    /// JSON-encoded free-form object payload
+    data: option<string>
+  }
+
+  record list-created-artifacts-request-progress-update-stream {
+    /// JSON-encoded free-form object payload
+    data: option<string>
+  }
+
+  record list-created-artifacts-request-migration-task-name {
+    /// JSON-encoded free-form object payload
+    data: option<string>
+  }
+
+  record list-created-artifacts-request-next-token {
+    /// JSON-encoded free-form object payload
+    data: option<string>
+  }
+
+  record list-created-artifacts-request-max-results {
+    /// JSON-encoded free-form object payload
+    data: option<string>
+  }
+
+  record list-created-artifacts-result {
+    next-token: option<list-created-artifacts-result-next-token>,
+    created-artifact-list: option<list-created-artifacts-result-created-artifact-list>
+  }
+
+  record list-created-artifacts-result-next-token {
+    /// JSON-encoded free-form object payload
+    data: option<string>
+  }
+
+  record list-created-artifacts-result-created-artifact-list {
+    /// JSON-encoded free-form object payload
+    data: option<string>
+  }
+
+  record list-discovered-resources-request-progress-update-stream {
+    /// JSON-encoded free-form object payload
+    data: option<string>
+  }
+
+  record list-discovered-resources-request-migration-task-name {
+    /// JSON-encoded free-form object payload
+    data: option<string>
+  }
+
+  record list-discovered-resources-request-next-token {
+    /// JSON-encoded free-form object payload
+    data: option<string>
+  }
+
+  record list-discovered-resources-request-max-results {
+    /// JSON-encoded free-form object payload
+    data: option<string>
+  }
+
+  record list-discovered-resources-result {
+    next-token: option<list-discovered-resources-result-next-token>,
+    discovered-resource-list: option<list-discovered-resources-result-discovered-resource-list>
+  }
+
+  record list-discovered-resources-result-next-token {
+    /// JSON-encoded free-form object payload
+    data: option<string>
+  }
+
+  record list-discovered-resources-result-discovered-resource-list {
+    /// JSON-encoded free-form object payload
+    data: option<string>
+  }
+
+  record list-migration-tasks-request-next-token {
+    /// JSON-encoded free-form object payload
+    data: option<string>
+  }
+
+  record list-migration-tasks-request-max-results {
+    /// JSON-encoded free-form object payload
+    data: option<string>
+  }
+
+  record list-migration-tasks-request-resource-name {
+    /// JSON-encoded free-form object payload
+    data: option<string>
+  }
+
+  record list-migration-tasks-result {
+    next-token: option<list-migration-tasks-result-next-token>,
+    migration-task-summary-list: option<list-migration-tasks-result-migration-task-summary-list>
+  }
+
+  record list-migration-tasks-result-next-token {
+    /// JSON-encoded free-form object payload
+    data: option<string>
+  }
+
+  record list-migration-tasks-result-migration-task-summary-list {
+    /// JSON-encoded free-form object payload
+    data: option<string>
+  }
+
+  record list-progress-update-streams-request-next-token {
+    /// JSON-encoded free-form object payload
+    data: option<string>
+  }
+
+  record list-progress-update-streams-request-max-results {
+    /// JSON-encoded free-form object payload
+    data: option<string>
+  }
+
+  record list-progress-update-streams-result {
+    progress-update-stream-summary-list: option<list-progress-update-streams-result-progress-update-stream-summary-list>,
+    next-token: option<list-progress-update-streams-result-next-token>
+  }
+
+  record list-progress-update-streams-result-progress-update-stream-summary-list {
+    /// JSON-encoded free-form object payload
+    data: option<string>
+  }
+
+  record list-progress-update-streams-result-next-token {
+    /// JSON-encoded free-form object payload
+    data: option<string>
+  }
+
+  record notify-application-state-request-application-id {
+    /// JSON-encoded free-form object payload
+    data: option<string>
+  }
+
+  record notify-application-state-request-status {
+    /// JSON-encoded free-form object payload
+    data: option<string>
+  }
+
+  record notify-application-state-request-update-date-time {
+    /// JSON-encoded free-form object payload
+    data: option<string>
+  }
+
+  record notify-application-state-request-dry-run {
+    /// JSON-encoded free-form object payload
+    data: option<string>
+  }
+
+  record notify-application-state-result {
+    /// JSON-encoded free-form object payload
+    data: option<string>
+  }
+
+  record notify-migration-task-state-request-progress-update-stream {
+    /// JSON-encoded free-form object payload
+    data: option<string>
+  }
+
+  record notify-migration-task-state-request-migration-task-name {
+    /// JSON-encoded free-form object payload
+    data: option<string>
+  }
+
+  record notify-migration-task-state-request-task {
+    status: notify-migration-task-state-request-task-status,
+    status-detail: option<notify-migration-task-state-request-task-status-detail>,
+    progress-percent: option<notify-migration-task-state-request-task-progress-percent>
+  }
+
+  record notify-migration-task-state-request-task-status {
+    /// JSON-encoded free-form object payload
+    data: option<string>
+  }
+
+  record notify-migration-task-state-request-task-status-detail {
+    /// JSON-encoded free-form object payload
+    data: option<string>
+  }
+
+  record notify-migration-task-state-request-task-progress-percent {
+    /// JSON-encoded free-form object payload
+    data: option<string>
+  }
+
+  record notify-migration-task-state-request-update-date-time {
+    /// JSON-encoded free-form object payload
+    data: option<string>
+  }
+
+  record notify-migration-task-state-request-next-update-seconds {
+    /// JSON-encoded free-form object payload
+    data: option<string>
+  }
+
+  record notify-migration-task-state-request-dry-run {
+    /// JSON-encoded free-form object payload
+    data: option<string>
+  }
+
+  record notify-migration-task-state-result {
+    /// JSON-encoded free-form object payload
+    data: option<string>
+  }
+
+  record put-resource-attributes-request-progress-update-stream {
+    /// JSON-encoded free-form object payload
+    data: option<string>
+  }
+
+  record put-resource-attributes-request-migration-task-name {
+    /// JSON-encoded free-form object payload
+    data: option<string>
+  }
+
+  record put-resource-attributes-request-resource-attribute-list {
+    /// JSON-encoded free-form object payload
+    data: option<string>
+  }
+
+  record put-resource-attributes-request-dry-run {
+    /// JSON-encoded free-form object payload
+    data: option<string>
+  }
+
+  record put-resource-attributes-result {
+    /// JSON-encoded free-form object payload
+    data: option<string>
+  }
+
+  variant associate-created-artifact-error {
+    status-v480(string),
+    status-v481(string),
+    status-v482(string),
+    status-v483(string),
+    status-v484(string),
+    status-v485(string),
+    status-v486(string),
+    status-v487(string),
+    status-v488(string),
+    other(string)
+  }
+
+  variant associate-discovered-resource-error {
+    status-v480(string),
+    status-v481(string),
+    status-v482(string),
+    status-v483(string),
+    status-v484(string),
+    status-v485(string),
+    status-v486(string),
+    status-v487(string),
+    status-v488(string),
+    status-v489(string),
+    other(string)
+  }
+
+  variant create-progress-update-stream-error {
+    status-v480(string),
+    status-v481(string),
+    status-v482(string),
+    status-v483(string),
+    status-v484(string),
+    status-v485(string),
+    status-v486(string),
+    status-v487(string),
+    other(string)
+  }
+
+  variant delete-progress-update-stream-error {
+    status-v480(string),
+    status-v481(string),
+    status-v482(string),
+    status-v483(string),
+    status-v484(string),
+    status-v485(string),
+    status-v486(string),
+    status-v487(string),
+    status-v488(string),
+    other(string)
+  }
+
+  variant describe-application-state-error {
+    status-v480(string),
+    status-v481(string),
+    status-v482(string),
+    status-v483(string),
+    status-v484(string),
+    status-v485(string),
+    status-v486(string),
+    status-v487(string),
+    other(string)
+  }
+
+  variant describe-migration-task-error {
+    status-v480(string),
+    status-v481(string),
+    status-v482(string),
+    status-v483(string),
+    status-v484(string),
+    status-v485(string),
+    status-v486(string),
+    other(string)
+  }
+
+  variant disassociate-created-artifact-error {
+    status-v480(string),
+    status-v481(string),
+    status-v482(string),
+    status-v483(string),
+    status-v484(string),
+    status-v485(string),
+    status-v486(string),
+    status-v487(string),
+    status-v488(string),
+    other(string)
+  }
+
+  variant disassociate-discovered-resource-error {
+    status-v480(string),
+    status-v481(string),
+    status-v482(string),
+    status-v483(string),
+    status-v484(string),
+    status-v485(string),
+    status-v486(string),
+    status-v487(string),
+    status-v488(string),
+    other(string)
+  }
+
+  variant import-migration-task-error {
+    status-v480(string),
+    status-v481(string),
+    status-v482(string),
+    status-v483(string),
+    status-v484(string),
+    status-v485(string),
+    status-v486(string),
+    status-v487(string),
+    status-v488(string),
+    other(string)
+  }
+
+  variant list-application-states-error {
+    status-v480(string),
+    status-v481(string),
+    status-v482(string),
+    status-v483(string),
+    status-v484(string),
+    status-v485(string),
+    other(string)
+  }
+
+  variant list-created-artifacts-error {
+    status-v480(string),
+    status-v481(string),
+    status-v482(string),
+    status-v483(string),
+    status-v484(string),
+    status-v485(string),
+    status-v486(string),
+    other(string)
+  }
+
+  variant list-discovered-resources-error {
+    status-v480(string),
+    status-v481(string),
+    status-v482(string),
+    status-v483(string),
+    status-v484(string),
+    status-v485(string),
+    status-v486(string),
+    other(string)
+  }
+
+  variant list-migration-tasks-error {
+    status-v480(string),
+    status-v481(string),
+    status-v482(string),
+    status-v483(string),
+    status-v484(string),
+    status-v485(string),
+    status-v486(string),
+    status-v487(string),
+    other(string)
+  }
+
+  variant list-progress-update-streams-error {
+    status-v480(string),
+    status-v481(string),
+    status-v482(string),
+    status-v483(string),
+    status-v484(string),
+    status-v485(string),
+    other(string)
+  }
+
+  variant notify-application-state-error {
+    status-v480(string),
+    status-v481(string),
+    status-v482(string),
+    status-v483(string),
+    status-v484(string),
+    status-v485(string),
+    status-v486(string),
+    status-v487(string),
+    status-v488(string),
+    status-v489(string),
+    other(string)
+  }
+
+  variant notify-migration-task-state-error {
+    status-v480(string),
+    status-v481(string),
+    status-v482(string),
+    status-v483(string),
+    status-v484(string),
+    status-v485(string),
+    status-v486(string),
+    status-v487(string),
+    status-v488(string),
+    other(string)
+  }
+
+  variant put-resource-attributes-error {
+    status-v480(string),
+    status-v481(string),
+    status-v482(string),
+    status-v483(string),
+    status-v484(string),
+    status-v485(string),
+    status-v486(string),
+    status-v487(string),
+    status-v488(string),
+    other(string)
+  }
+
+  record associate-created-artifact-params {
+    x-amz-content-sha256: option<string>,
+    x-amz-date: option<string>,
+    x-amz-algorithm: option<string>,
+    x-amz-credential: option<string>,
+    x-amz-security-token: option<string>,
+    x-amz-signature: option<string>,
+    x-amz-signed-headers: option<string>,
+    x-amz-target: associate-created-artifact-x-amz-target-enum,
+    progress-update-stream: associate-created-artifact-request-progress-update-stream,
+    migration-task-name: associate-created-artifact-request-migration-task-name,
+    created-artifact: associate-created-artifact-request-created-artifact,
+    dry-run: option<associate-created-artifact-request-dry-run>
+  }
+  associate-created-artifact: func(params: associate-created-artifact-params) -> result<associate-created-artifact-result, associate-created-artifact-error>;
+
+  record associate-discovered-resource-params {
+    x-amz-content-sha256: option<string>,
+    x-amz-date: option<string>,
+    x-amz-algorithm: option<string>,
+    x-amz-credential: option<string>,
+    x-amz-security-token: option<string>,
+    x-amz-signature: option<string>,
+    x-amz-signed-headers: option<string>,
+    x-amz-target: associate-discovered-resource-x-amz-target-enum,
+    progress-update-stream: associate-discovered-resource-request-progress-update-stream,
+    migration-task-name: associate-discovered-resource-request-migration-task-name,
+    discovered-resource: associate-discovered-resource-request-discovered-resource,
+    dry-run: option<associate-discovered-resource-request-dry-run>
+  }
+  associate-discovered-resource: func(params: associate-discovered-resource-params) -> result<associate-discovered-resource-result, associate-discovered-resource-error>;
+
+  record create-progress-update-stream-params {
+    x-amz-content-sha256: option<string>,
+    x-amz-date: option<string>,
+    x-amz-algorithm: option<string>,
+    x-amz-credential: option<string>,
+    x-amz-security-token: option<string>,
+    x-amz-signature: option<string>,
+    x-amz-signed-headers: option<string>,
+    x-amz-target: create-progress-update-stream-x-amz-target-enum,
+    progress-update-stream-name: create-progress-update-stream-request-progress-update-stream-name,
+    dry-run: option<create-progress-update-stream-request-dry-run>
+  }
+  create-progress-update-stream: func(params: create-progress-update-stream-params) -> result<create-progress-update-stream-result, create-progress-update-stream-error>;
+
+  record delete-progress-update-stream-params {
+    x-amz-content-sha256: option<string>,
+    x-amz-date: option<string>,
+    x-amz-algorithm: option<string>,
+    x-amz-credential: option<string>,
+    x-amz-security-token: option<string>,
+    x-amz-signature: option<string>,
+    x-amz-signed-headers: option<string>,
+    x-amz-target: delete-progress-update-stream-x-amz-target-enum,
+    progress-update-stream-name: delete-progress-update-stream-request-progress-update-stream-name,
+    dry-run: option<delete-progress-update-stream-request-dry-run>
+  }
+  delete-progress-update-stream: func(params: delete-progress-update-stream-params) -> result<delete-progress-update-stream-result, delete-progress-update-stream-error>;
+
+  record describe-application-state-params {
+    x-amz-content-sha256: option<string>,
+    x-amz-date: option<string>,
+    x-amz-algorithm: option<string>,
+    x-amz-credential: option<string>,
+    x-amz-security-token: option<string>,
+    x-amz-signature: option<string>,
+    x-amz-signed-headers: option<string>,
+    x-amz-target: describe-application-state-x-amz-target-enum,
+    application-id: describe-application-state-request-application-id
+  }
+  describe-application-state: func(params: describe-application-state-params) -> result<describe-application-state-result, describe-application-state-error>;
+
+  record describe-migration-task-params {
+    x-amz-content-sha256: option<string>,
+    x-amz-date: option<string>,
+    x-amz-algorithm: option<string>,
+    x-amz-credential: option<string>,
+    x-amz-security-token: option<string>,
+    x-amz-signature: option<string>,
+    x-amz-signed-headers: option<string>,
+    x-amz-target: describe-migration-task-x-amz-target-enum,
+    progress-update-stream: describe-migration-task-request-progress-update-stream,
+    migration-task-name: describe-migration-task-request-migration-task-name
+  }
+  describe-migration-task: func(params: describe-migration-task-params) -> result<describe-migration-task-result, describe-migration-task-error>;
+
+  record disassociate-created-artifact-params {
+    x-amz-content-sha256: option<string>,
+    x-amz-date: option<string>,
+    x-amz-algorithm: option<string>,
+    x-amz-credential: option<string>,
+    x-amz-security-token: option<string>,
+    x-amz-signature: option<string>,
+    x-amz-signed-headers: option<string>,
+    x-amz-target: disassociate-created-artifact-x-amz-target-enum,
+    progress-update-stream: disassociate-created-artifact-request-progress-update-stream,
+    migration-task-name: disassociate-created-artifact-request-migration-task-name,
+    created-artifact-name: disassociate-created-artifact-request-created-artifact-name,
+    dry-run: option<disassociate-created-artifact-request-dry-run>
+  }
+  disassociate-created-artifact: func(params: disassociate-created-artifact-params) -> result<disassociate-created-artifact-result, disassociate-created-artifact-error>;
+
+  record disassociate-discovered-resource-params {
+    x-amz-content-sha256: option<string>,
+    x-amz-date: option<string>,
+    x-amz-algorithm: option<string>,
+    x-amz-credential: option<string>,
+    x-amz-security-token: option<string>,
+    x-amz-signature: option<string>,
+    x-amz-signed-headers: option<string>,
+    x-amz-target: disassociate-discovered-resource-x-amz-target-enum,
+    progress-update-stream: disassociate-discovered-resource-request-progress-update-stream,
+    migration-task-name: disassociate-discovered-resource-request-migration-task-name,
+    configuration-id: disassociate-discovered-resource-request-configuration-id,
+    dry-run: option<disassociate-discovered-resource-request-dry-run>
+  }
+  disassociate-discovered-resource: func(params: disassociate-discovered-resource-params) -> result<disassociate-discovered-resource-result, disassociate-discovered-resource-error>;
+
+  record import-migration-task-params {
+    x-amz-content-sha256: option<string>,
+    x-amz-date: option<string>,
+    x-amz-algorithm: option<string>,
+    x-amz-credential: option<string>,
+    x-amz-security-token: option<string>,
+    x-amz-signature: option<string>,
+    x-amz-signed-headers: option<string>,
+    x-amz-target: import-migration-task-x-amz-target-enum,
+    progress-update-stream: import-migration-task-request-progress-update-stream,
+    migration-task-name: import-migration-task-request-migration-task-name,
+    dry-run: option<import-migration-task-request-dry-run>
+  }
+  import-migration-task: func(params: import-migration-task-params) -> result<import-migration-task-result, import-migration-task-error>;
+
+  record list-application-states-params {
+    x-amz-content-sha256: option<string>,
+    x-amz-date: option<string>,
+    x-amz-algorithm: option<string>,
+    x-amz-credential: option<string>,
+    x-amz-security-token: option<string>,
+    x-amz-signature: option<string>,
+    x-amz-signed-headers: option<string>,
     /// Pagination limit
     max-results: option<string>,
     /// Pagination token
     next-token: option<string>,
-    /// The <a href="https://docs.aws.amazon.com/IAM/latest/UserGuide/access-analyzer-getting-started.html#permission-resources">ARN of the analyzer</a> used to generate the access.
-    analyzer-arn: string,
-    /// Criteria to filter the returned findings.
-    filter: option<list-access-preview-findings-body-filter>
+    x-amz-target: list-application-states-x-amz-target-enum,
+    application-ids: option<list-application-states-request-application-ids>,
+    next-token-v2: option<list-application-states-request-next-token>,
+    max-results-v2: option<list-application-states-request-max-results>
   }
-  list-access-preview-findings: func(params: list-access-preview-findings-params) -> result<string, string>;
+  list-application-states: func(params: list-application-states-params) -> result<list-application-states-result, list-application-states-error>;
 
-}
-
-interface analyzer {
-  enum list-analyzers-type-op-enum {
-    account,
-    organization,
-  }
-
-  /// An criterion statement in an archive rule. Each archive rule may have multiple criteria.
-  record inline-archive-rule {
-    rule-name: string,
-    filter: string
-  }
-
-  /// The tags to apply to the analyzer.
-  record create-analyzer-body-tags {
-    /// JSON-encoded free-form object payload
-    data: option<string>
-  }
-
-  /// The criteria for the rule.
-  record create-archive-rule-body-filter {
-    /// JSON-encoded free-form object payload
-    data: option<string>
-  }
-
-  /// A filter to match for the rules to update. Only rules that match the filter are updated.
-  record update-archive-rule-body-filter {
-    /// JSON-encoded free-form object payload
-    data: option<string>
-  }
-
-  record list-analyzers-params {
-    /// A token used for pagination of results returned.
-    next-token: option<string>,
-    /// The maximum number of results to return in the response.
-    max-results: option<s32>,
-    /// The type of analyzer.
-    type-op: option<list-analyzers-type-op-enum>
-  }
-  list-analyzers: func(params: list-analyzers-params) -> result<string, string>;
-
-  record create-analyzer-params {
-    /// The name of the analyzer to create.
-    analyzer-name: string,
-    /// The type of analyzer to create. Only ACCOUNT and ORGANIZATION analyzers are supported. You can create only one analyzer per account per Region. You can create up to 5 analyzers per organization per Region.
-    type-op: list-analyzers-type-op-enum,
-    /// Specifies the archive rules to add for the analyzer. Archive rules automatically archive findings that meet the criteria you define for the rule.
-    archive-rules: option<list<inline-archive-rule>>,
-    /// The tags to apply to the analyzer.
-    tags: option<create-analyzer-body-tags>,
-    /// A client token.
-    client-token: option<string>
-  }
-  create-analyzer: func(params: create-analyzer-params) -> result<string, string>;
-
-  record list-archive-rules-params {
-    /// The name of the analyzer to retrieve rules from.
-    analyzer-name: string,
-    /// A token used for pagination of results returned.
-    next-token: option<string>,
-    /// The maximum number of results to return in the request.
-    max-results: option<s32>
-  }
-  list-archive-rules: func(params: list-archive-rules-params) -> result<string, string>;
-
-  record create-archive-rule-params {
-    /// The name of the created analyzer.
-    analyzer-name: string,
-    /// The name of the rule to create.
-    rule-name: string,
-    /// The criteria for the rule.
-    filter: create-archive-rule-body-filter,
-    /// A client token.
-    client-token: option<string>
-  }
-  create-archive-rule: func(params: create-archive-rule-params) -> result<string, string>;
-
-  record get-analyzer-params {
-    /// The name of the analyzer retrieved.
-    analyzer-name: string
-  }
-  get-analyzer: func(params: get-analyzer-params) -> result<string, string>;
-
-  record delete-analyzer-params {
-    /// The name of the analyzer to delete.
-    analyzer-name: string,
-    /// A client token.
-    client-token: option<string>
-  }
-  delete-analyzer: func(params: delete-analyzer-params) -> result<string, string>;
-
-  record get-archive-rule-params {
-    /// The name of the analyzer to retrieve rules from.
-    analyzer-name: string,
-    /// The name of the rule to retrieve.
-    rule-name: string
-  }
-  get-archive-rule: func(params: get-archive-rule-params) -> result<string, string>;
-
-  record update-archive-rule-params {
-    /// The name of the analyzer to update the archive rules for.
-    analyzer-name: string,
-    /// The name of the rule to update.
-    rule-name: string,
-    /// A filter to match for the rules to update. Only rules that match the filter are updated.
-    filter: update-archive-rule-body-filter,
-    /// A client token.
-    client-token: option<string>
-  }
-  update-archive-rule: func(params: update-archive-rule-params) -> result<string, string>;
-
-  record delete-archive-rule-params {
-    /// The name of the analyzer that associated with the archive rule to delete.
-    analyzer-name: string,
-    /// The name of the rule to delete.
-    rule-name: string,
-    /// A client token.
-    client-token: option<string>
-  }
-  delete-archive-rule: func(params: delete-archive-rule-params) -> result<string, string>;
-
-}
-
-interface analyzed-resource-analyzer-arn-resource-arn {
-  record get-analyzed-resource-params {
-    /// The <a href="https://docs.aws.amazon.com/IAM/latest/UserGuide/access-analyzer-getting-started.html#permission-resources">ARN of the analyzer</a> to retrieve information from.
-    analyzer-arn: string,
-    /// The ARN of the resource to retrieve information about.
-    resource-arn: string
-  }
-  get-analyzed-resource: func(params: get-analyzed-resource-params) -> result<string, string>;
-
-}
-
-interface finding {
-  enum update-findings-body-status-enum {
-    active,
-    archived,
-  }
-
-  /// A filter to match for the findings to return.
-  record list-findings-body-filter {
-    /// JSON-encoded free-form object payload
-    data: option<string>
-  }
-
-  /// The criteria used to sort.
-  record list-findings-body-sort {
-    attribute-name: option<string>,
-    order-by: option<string>
-  }
-
-  record id {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
-  record get-finding-params {
-    /// The <a href="https://docs.aws.amazon.com/IAM/latest/UserGuide/access-analyzer-getting-started.html#permission-resources">ARN of the analyzer</a> that generated the finding.
-    analyzer-arn: string,
-    /// The ID of the finding to retrieve.
-    id: string
-  }
-  get-finding: func(params: get-finding-params) -> result<string, string>;
-
-  record list-findings-params {
+  record list-created-artifacts-params {
+    x-amz-content-sha256: option<string>,
+    x-amz-date: option<string>,
+    x-amz-algorithm: option<string>,
+    x-amz-credential: option<string>,
+    x-amz-security-token: option<string>,
+    x-amz-signature: option<string>,
+    x-amz-signed-headers: option<string>,
     /// Pagination limit
     max-results: option<string>,
     /// Pagination token
     next-token: option<string>,
-    /// The <a href="https://docs.aws.amazon.com/IAM/latest/UserGuide/access-analyzer-getting-started.html#permission-resources">ARN of the analyzer</a> to retrieve findings from.
-    analyzer-arn: string,
-    /// A filter to match for the findings to return.
-    filter: option<list-findings-body-filter>,
-    /// The criteria used to sort.
-    sort: option<list-findings-body-sort>
+    x-amz-target: list-created-artifacts-x-amz-target-enum,
+    progress-update-stream: list-created-artifacts-request-progress-update-stream,
+    migration-task-name: list-created-artifacts-request-migration-task-name,
+    next-token-v2: option<list-created-artifacts-request-next-token>,
+    max-results-v2: option<list-created-artifacts-request-max-results>
   }
-  list-findings: func(params: list-findings-params) -> result<string, string>;
+  list-created-artifacts: func(params: list-created-artifacts-params) -> result<list-created-artifacts-result, list-created-artifacts-error>;
 
-  record update-findings-params {
-    /// The <a href="https://docs.aws.amazon.com/IAM/latest/UserGuide/access-analyzer-getting-started.html#permission-resources">ARN of the analyzer</a> that generated the findings to update.
-    analyzer-arn: string,
-    /// The state represents the action to take to update the finding Status. Use <code>ARCHIVE</code> to change an Active finding to an Archived finding. Use <code>ACTIVE</code> to change an Archived finding to an Active finding.
-    status: update-findings-body-status-enum,
-    /// The IDs of the findings to update.
-    ids: option<list<id>>,
-    /// The ARN of the resource identified in the finding.
-    resource-arn: option<string>,
-    /// A client token.
-    client-token: option<string>
-  }
-  update-findings: func(params: update-findings-params) -> result<string, string>;
-
-}
-
-interface access-preview-analyzer-arn {
-  record list-access-previews-params {
-    /// The <a href="https://docs.aws.amazon.com/IAM/latest/UserGuide/access-analyzer-getting-started.html#permission-resources">ARN of the analyzer</a> used to generate the access preview.
-    analyzer-arn: string,
-    /// A token used for pagination of results returned.
-    next-token: option<string>,
-    /// The maximum number of results to return in the response.
-    max-results: option<s32>
-  }
-  list-access-previews: func(params: list-access-previews-params) -> result<string, string>;
-
-}
-
-interface analyzed-resource {
-  enum list-analyzed-resources-body-resource-type-enum {
-    aws-s3-bucket,
-    aws-iam-role,
-    aws-sqs-queue,
-    aws-lambda-function,
-    aws-lambda-layer-version,
-    aws-kms-key,
-    aws-secrets-manager-secret,
-    aws-efs-file-system,
-    aws-ec2-snapshot,
-    aws-ecr-repository,
-    aws-rds-db-snapshot,
-    aws-rds-db-cluster-snapshot,
-    aws-sns-topic,
-  }
-
-  record list-analyzed-resources-params {
+  record list-discovered-resources-params {
+    x-amz-content-sha256: option<string>,
+    x-amz-date: option<string>,
+    x-amz-algorithm: option<string>,
+    x-amz-credential: option<string>,
+    x-amz-security-token: option<string>,
+    x-amz-signature: option<string>,
+    x-amz-signed-headers: option<string>,
     /// Pagination limit
     max-results: option<string>,
     /// Pagination token
     next-token: option<string>,
-    /// The <a href="https://docs.aws.amazon.com/IAM/latest/UserGuide/access-analyzer-getting-started.html#permission-resources">ARN of the analyzer</a> to retrieve a list of analyzed resources from.
-    analyzer-arn: string,
-    /// The type of resource.
-    resource-type: option<list-analyzed-resources-body-resource-type-enum>
+    x-amz-target: list-discovered-resources-x-amz-target-enum,
+    progress-update-stream: list-discovered-resources-request-progress-update-stream,
+    migration-task-name: list-discovered-resources-request-migration-task-name,
+    next-token-v2: option<list-discovered-resources-request-next-token>,
+    max-results-v2: option<list-discovered-resources-request-max-results>
   }
-  list-analyzed-resources: func(params: list-analyzed-resources-params) -> result<string, string>;
+  list-discovered-resources: func(params: list-discovered-resources-params) -> result<list-discovered-resources-result, list-discovered-resources-error>;
+
+  record list-migration-tasks-params {
+    x-amz-content-sha256: option<string>,
+    x-amz-date: option<string>,
+    x-amz-algorithm: option<string>,
+    x-amz-credential: option<string>,
+    x-amz-security-token: option<string>,
+    x-amz-signature: option<string>,
+    x-amz-signed-headers: option<string>,
+    /// Pagination limit
+    max-results: option<string>,
+    /// Pagination token
+    next-token: option<string>,
+    x-amz-target: list-migration-tasks-x-amz-target-enum,
+    next-token-v2: option<list-migration-tasks-request-next-token>,
+    max-results-v2: option<list-migration-tasks-request-max-results>,
+    resource-name: option<list-migration-tasks-request-resource-name>
+  }
+  list-migration-tasks: func(params: list-migration-tasks-params) -> result<list-migration-tasks-result, list-migration-tasks-error>;
+
+  record list-progress-update-streams-params {
+    x-amz-content-sha256: option<string>,
+    x-amz-date: option<string>,
+    x-amz-algorithm: option<string>,
+    x-amz-credential: option<string>,
+    x-amz-security-token: option<string>,
+    x-amz-signature: option<string>,
+    x-amz-signed-headers: option<string>,
+    /// Pagination limit
+    max-results: option<string>,
+    /// Pagination token
+    next-token: option<string>,
+    x-amz-target: list-progress-update-streams-x-amz-target-enum,
+    next-token-v2: option<list-progress-update-streams-request-next-token>,
+    max-results-v2: option<list-progress-update-streams-request-max-results>
+  }
+  list-progress-update-streams: func(params: list-progress-update-streams-params) -> result<list-progress-update-streams-result, list-progress-update-streams-error>;
+
+  record notify-application-state-params {
+    x-amz-content-sha256: option<string>,
+    x-amz-date: option<string>,
+    x-amz-algorithm: option<string>,
+    x-amz-credential: option<string>,
+    x-amz-security-token: option<string>,
+    x-amz-signature: option<string>,
+    x-amz-signed-headers: option<string>,
+    x-amz-target: notify-application-state-x-amz-target-enum,
+    application-id: notify-application-state-request-application-id,
+    status: notify-application-state-request-status,
+    update-date-time: option<notify-application-state-request-update-date-time>,
+    dry-run: option<notify-application-state-request-dry-run>
+  }
+  notify-application-state: func(params: notify-application-state-params) -> result<notify-application-state-result, notify-application-state-error>;
+
+  record notify-migration-task-state-params {
+    x-amz-content-sha256: option<string>,
+    x-amz-date: option<string>,
+    x-amz-algorithm: option<string>,
+    x-amz-credential: option<string>,
+    x-amz-security-token: option<string>,
+    x-amz-signature: option<string>,
+    x-amz-signed-headers: option<string>,
+    x-amz-target: notify-migration-task-state-x-amz-target-enum,
+    progress-update-stream: notify-migration-task-state-request-progress-update-stream,
+    migration-task-name: notify-migration-task-state-request-migration-task-name,
+    task: notify-migration-task-state-request-task,
+    update-date-time: notify-migration-task-state-request-update-date-time,
+    next-update-seconds: notify-migration-task-state-request-next-update-seconds,
+    dry-run: option<notify-migration-task-state-request-dry-run>
+  }
+  notify-migration-task-state: func(params: notify-migration-task-state-params) -> result<notify-migration-task-state-result, notify-migration-task-state-error>;
+
+  record put-resource-attributes-params {
+    x-amz-content-sha256: option<string>,
+    x-amz-date: option<string>,
+    x-amz-algorithm: option<string>,
+    x-amz-credential: option<string>,
+    x-amz-security-token: option<string>,
+    x-amz-signature: option<string>,
+    x-amz-signed-headers: option<string>,
+    x-amz-target: put-resource-attributes-x-amz-target-enum,
+    progress-update-stream: put-resource-attributes-request-progress-update-stream,
+    migration-task-name: put-resource-attributes-request-migration-task-name,
+    resource-attribute-list: put-resource-attributes-request-resource-attribute-list,
+    dry-run: option<put-resource-attributes-request-dry-run>
+  }
+  put-resource-attributes: func(params: put-resource-attributes-params) -> result<put-resource-attributes-result, put-resource-attributes-error>;
 
 }
 
-interface tags {
-  /// The tags to add to the resource.
-  record tag-resource-body-tags {
-    /// JSON-encoded free-form object payload
-    data: option<string>
-  }
-
-  record string-op {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
-  record list-tags-for-resource-params {
-    /// The ARN of the resource to retrieve tags from.
-    resource-arn: string
-  }
-  list-tags-for-resource: func(params: list-tags-for-resource-params) -> result<string, string>;
-
-  record tag-resource-params {
-    /// The ARN of the resource to add the tag to.
-    resource-arn: string,
-    /// The tags to add to the resource.
-    tags: tag-resource-body-tags
-  }
-  tag-resource: func(params: tag-resource-params) -> result<string, string>;
-
-  record untag-resource-params {
-    /// The ARN of the resource to remove the tag from.
-    resource-arn: string,
-    /// The key for the tag to add.
-    tag-keys: list<string-op>
-  }
-  untag-resource: func(params: untag-resource-params) -> result<string, string>;
-
-}
-
-interface resource-op {
-  record start-resource-scan-params {
-    /// The <a href="https://docs.aws.amazon.com/IAM/latest/UserGuide/access-analyzer-getting-started.html#permission-resources">ARN of the analyzer</a> to use to scan the policies applied to the specified resource.
-    analyzer-arn: string,
-    /// The ARN of the resource to scan.
-    resource-arn: string,
-    /// The Amazon Web Services account ID that owns the resource. For most Amazon Web Services resources, the owning account is the account in which the resource was created.
-    resource-owner-account: option<string>
-  }
-  start-resource-scan: func(params: start-resource-scan-params) -> result<string, string>;
-
-}
 /// The component world: imports the secrets host capability
 /// the runtime uses and exports the generated interfaces. The HTTP host
 /// capability is imported by the `wstd` crate's bindings at build time.
 world client {
   import wasmcloud:secrets/store@1.0.0;
   import wasmcloud:secrets/reveal@1.0.0;
-  export archive-rule;
-  export policy;
-  export access-preview;
-  export analyzer;
-  export analyzed-resource-analyzer-arn-resource-arn;
-  export finding;
-  export access-preview-analyzer-arn;
-  export analyzed-resource;
-  export tags;
-  export resource-op;
+  export aws-migration-hub;
 }

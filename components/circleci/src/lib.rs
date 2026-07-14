@@ -44,10 +44,15 @@ pub(crate) enum FieldLocation {
     Body,
 }
 
-/// A single operation parameter: the snake-case key it carries in the params JSON and where
-/// it belongs in the request.
+/// A single operation parameter. `snake` keys the field in the internal params JSON (and, for a
+/// path field, matches the `{snake}` placeholder in the path template); `wire` is the verbatim name
+/// the field takes on the HTTP wire (query key, header name, or body property). The two differ
+/// whenever the source name isn't already snake_case (e.g. `dryRun` → snake `dry_run`, wire
+/// `dryRun`), and let distinct inputs that share a snake key (`DateCreated`, `DateCreated<`) still
+/// travel under their true names.
 pub(crate) struct FieldSpec {
     pub(crate) snake: &'static str,
+    pub(crate) wire: &'static str,
     pub(crate) location: FieldLocation,
 }
 
@@ -71,6 +76,16 @@ pub(crate) struct AuthApply {
     pub(crate) kind: AuthKind,
 }
 
+/// The failure modes of [`dispatch`], kept structured so each generated operation can map them
+/// onto its own typed error: an `Http` failure carries the response status and body (routed to
+/// the matching error-variant case), while a `Transport` failure carries a message for the
+/// catch-all case (a secret lookup, connection, or decode failure that never produced an HTTP
+/// status).
+pub(crate) enum DispatchError {
+    Http { status: u16, body: String },
+    Transport(String),
+}
+
 /// A single API operation: HTTP method, path template (with `{snake}` placeholders), the
 /// parameter fields, and the security schemes to apply.
 pub(crate) struct OpSpec {
@@ -81,8 +96,9 @@ pub(crate) struct OpSpec {
 }
 
 /// Execute `op` with the supplied `params` (a JSON object keyed by snake-case field names)
-/// and return the response body as a string, or an error message.
-pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, String> {
+/// and return the raw 2xx response body, or a structured [`DispatchError`] the caller maps
+/// onto the operation's typed error.
+pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, DispatchError> {
     let obj = match &params {
         Value::Object(map) => Some(map),
         _ => None,
@@ -105,10 +121,10 @@ pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, String> {
                 let placeholder = format!("{{{}}}", field.snake);
                 path = path.replace(&placeholder, &percent_encode(&scalar(value)));
             }
-            FieldLocation::Query => query.push((field.snake.to_string(), scalar(value))),
-            FieldLocation::Header => headers.push((field.snake.to_string(), scalar(value))),
+            FieldLocation::Query => query.push((field.wire.to_string(), scalar(value))),
+            FieldLocation::Header => headers.push((field.wire.to_string(), scalar(value))),
             FieldLocation::Body => {
-                body.insert(field.snake.to_string(), value.clone());
+                body.insert(field.wire.to_string(), value.clone());
             }
         }
     }
@@ -116,7 +132,7 @@ pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, String> {
     // Apply each resolved security scheme, sourcing its value from wasmcloud:secrets.
     let mut cookies: Vec<String> = Vec::new();
     for apply in op.auth {
-        let secret = fetch_secret(apply.secret_key)?;
+        let secret = fetch_secret(apply.secret_key).map_err(DispatchError::Transport)?;
         match &apply.kind {
             AuthKind::Bearer => headers.push(("authorization".into(), format!("Bearer {secret}"))),
             AuthKind::Basic => {
@@ -177,17 +193,18 @@ fn fetch_secret(key: &str) -> Result<String, String> {
 }
 
 /// Build and send the outgoing request with `wstd`, returning the response body on a 2xx
-/// status. The generated guest exports are synchronous, so the async `wstd` client is driven
-/// to completion on a local reactor via `wstd::runtime::block_on`.
+/// status and a structured [`DispatchError`] otherwise. The generated guest exports are
+/// synchronous, so the async `wstd` client is driven to completion on a local reactor via
+/// `wstd::runtime::block_on`.
 fn perform(
     method: &str,
     path_with_query: &str,
     headers: &[(String, String)],
     body: &[u8],
-) -> Result<String, String> {
+) -> Result<String, DispatchError> {
     let url = join_url(crate::BASE_URL, path_with_query);
     let method = Method::from_bytes(method.as_bytes())
-        .map_err(|err| format!("invalid HTTP method `{method}`: {err}"))?;
+        .map_err(|err| DispatchError::Transport(format!("invalid HTTP method `{method}`: {err}")))?;
 
     let mut builder = Request::builder().method(method).uri(url);
     for (name, value) in headers {
@@ -199,27 +216,29 @@ fn perform(
         } else {
             Body::from(body.to_vec())
         })
-        .map_err(|err| format!("failed to build request: {err}"))?;
+        .map_err(|err| DispatchError::Transport(format!("failed to build request: {err}")))?;
 
     wstd::runtime::block_on(async move {
         let client = Client::new();
         let response = client
             .send(request)
             .await
-            .map_err(|err| format!("request failed: {err:#}"))?;
+            .map_err(|err| DispatchError::Transport(format!("request failed: {err:#}")))?;
 
         let status = response.status().as_u16();
         let mut response_body = response.into_body();
-        let bytes = response_body
-            .contents()
-            .await
-            .map_err(|err| format!("failed to read response body: {err:#}"))?;
+        let bytes = response_body.contents().await.map_err(|err| {
+            DispatchError::Transport(format!("failed to read response body: {err:#}"))
+        })?;
         let body_text = String::from_utf8_lossy(bytes).into_owned();
 
         if (200..300).contains(&status) {
             Ok(body_text)
         } else {
-            Err(format!("HTTP {status}: {body_text}"))
+            Err(DispatchError::Http {
+                status,
+                body: body_text,
+            })
         }
     })
 }
@@ -279,420 +298,10 @@ fn base64(input: &[u8]) -> String {
 }
 }
 
-use crate::runtime::{dispatch, AuthApply, AuthKind, FieldLocation, FieldSpec, OpSpec};
-use serde_json::{Map, Value};
-
-use crate::exports::autostamp::circleci::me as iface_me;
-
-const OP_ME_GET_ME: OpSpec = OpSpec {
-    method: "GET",
-    path_template: "/me",
-    fields: &[
-    ],
-    auth: &[
-        AuthApply { secret_key: "apikey", kind: AuthKind::ApiKeyQuery("circle-token") },
-    ],
-};
-
-impl iface_me::Guest for crate::Component {
-    fn get_me() -> Result<String, String> {
-        dispatch(&OP_ME_GET_ME, Value::Object(Map::new()))
-    }
-}
-use crate::exports::autostamp::circleci::project as iface_project;
-
-const OP_PROJECT_GET_PROJECT_USERNAME_PROJECT: OpSpec = OpSpec {
-    method: "GET",
-    path_template: "/project/{username}/{project}",
-    fields: &[
-        FieldSpec { snake: "limit", location: FieldLocation::Query },
-        FieldSpec { snake: "offset", location: FieldLocation::Query },
-        FieldSpec { snake: "filter", location: FieldLocation::Query },
-    ],
-    auth: &[
-        AuthApply { secret_key: "apikey", kind: AuthKind::ApiKeyQuery("circle-token") },
-    ],
-};
-
-const OP_PROJECT_POST_PROJECT_USERNAME_PROJECT: OpSpec = OpSpec {
-    method: "POST",
-    path_template: "/project/{username}/{project}",
-    fields: &[
-        FieldSpec { snake: "build_parameters", location: FieldLocation::Body },
-        FieldSpec { snake: "parallel", location: FieldLocation::Body },
-        FieldSpec { snake: "revision", location: FieldLocation::Body },
-        FieldSpec { snake: "tag", location: FieldLocation::Body },
-    ],
-    auth: &[
-        AuthApply { secret_key: "apikey", kind: AuthKind::ApiKeyQuery("circle-token") },
-    ],
-};
-
-const OP_PROJECT_DELETE_PROJECT_USERNAME_PROJECT_BUILD_CACHE: OpSpec = OpSpec {
-    method: "DELETE",
-    path_template: "/project/{username}/{project}/build-cache",
-    fields: &[
-    ],
-    auth: &[
-        AuthApply { secret_key: "apikey", kind: AuthKind::ApiKeyQuery("circle-token") },
-    ],
-};
-
-const OP_PROJECT_GET_PROJECT_USERNAME_PROJECT_CHECKOUT_KEY: OpSpec = OpSpec {
-    method: "GET",
-    path_template: "/project/{username}/{project}/checkout-key",
-    fields: &[
-    ],
-    auth: &[
-        AuthApply { secret_key: "apikey", kind: AuthKind::ApiKeyQuery("circle-token") },
-    ],
-};
-
-const OP_PROJECT_POST_PROJECT_USERNAME_PROJECT_CHECKOUT_KEY: OpSpec = OpSpec {
-    method: "POST",
-    path_template: "/project/{username}/{project}/checkout-key",
-    fields: &[
-    ],
-    auth: &[
-        AuthApply { secret_key: "apikey", kind: AuthKind::ApiKeyQuery("circle-token") },
-    ],
-};
-
-const OP_PROJECT_GET_PROJECT_USERNAME_PROJECT_CHECKOUT_KEY_FINGERPRINT: OpSpec = OpSpec {
-    method: "GET",
-    path_template: "/project/{username}/{project}/checkout-key/{fingerprint}",
-    fields: &[
-    ],
-    auth: &[
-        AuthApply { secret_key: "apikey", kind: AuthKind::ApiKeyQuery("circle-token") },
-    ],
-};
-
-const OP_PROJECT_DELETE_PROJECT_USERNAME_PROJECT_CHECKOUT_KEY_FINGERPRINT: OpSpec = OpSpec {
-    method: "DELETE",
-    path_template: "/project/{username}/{project}/checkout-key/{fingerprint}",
-    fields: &[
-    ],
-    auth: &[
-        AuthApply { secret_key: "apikey", kind: AuthKind::ApiKeyQuery("circle-token") },
-    ],
-};
-
-const OP_PROJECT_GET_PROJECT_USERNAME_PROJECT_ENVVAR: OpSpec = OpSpec {
-    method: "GET",
-    path_template: "/project/{username}/{project}/envvar",
-    fields: &[
-    ],
-    auth: &[
-        AuthApply { secret_key: "apikey", kind: AuthKind::ApiKeyQuery("circle-token") },
-    ],
-};
-
-const OP_PROJECT_POST_PROJECT_USERNAME_PROJECT_ENVVAR: OpSpec = OpSpec {
-    method: "POST",
-    path_template: "/project/{username}/{project}/envvar",
-    fields: &[
-    ],
-    auth: &[
-        AuthApply { secret_key: "apikey", kind: AuthKind::ApiKeyQuery("circle-token") },
-    ],
-};
-
-const OP_PROJECT_GET_PROJECT_USERNAME_PROJECT_ENVVAR_NAME: OpSpec = OpSpec {
-    method: "GET",
-    path_template: "/project/{username}/{project}/envvar/{name}",
-    fields: &[
-    ],
-    auth: &[
-        AuthApply { secret_key: "apikey", kind: AuthKind::ApiKeyQuery("circle-token") },
-    ],
-};
-
-const OP_PROJECT_DELETE_PROJECT_USERNAME_PROJECT_ENVVAR_NAME: OpSpec = OpSpec {
-    method: "DELETE",
-    path_template: "/project/{username}/{project}/envvar/{name}",
-    fields: &[
-    ],
-    auth: &[
-        AuthApply { secret_key: "apikey", kind: AuthKind::ApiKeyQuery("circle-token") },
-    ],
-};
-
-const OP_PROJECT_POST_PROJECT_USERNAME_PROJECT_SSH_KEY: OpSpec = OpSpec {
-    method: "POST",
-    path_template: "/project/{username}/{project}/ssh-key",
-    fields: &[
-        FieldSpec { snake: "content_type", location: FieldLocation::Header },
-        FieldSpec { snake: "hostname", location: FieldLocation::Body },
-        FieldSpec { snake: "private_key", location: FieldLocation::Body },
-    ],
-    auth: &[
-        AuthApply { secret_key: "apikey", kind: AuthKind::ApiKeyQuery("circle-token") },
-    ],
-};
-
-const OP_PROJECT_POST_PROJECT_USERNAME_PROJECT_TREE_BRANCH: OpSpec = OpSpec {
-    method: "POST",
-    path_template: "/project/{username}/{project}/tree/{branch}",
-    fields: &[
-        FieldSpec { snake: "build_parameters", location: FieldLocation::Body },
-        FieldSpec { snake: "parallel", location: FieldLocation::Body },
-        FieldSpec { snake: "revision", location: FieldLocation::Body },
-    ],
-    auth: &[
-        AuthApply { secret_key: "apikey", kind: AuthKind::ApiKeyQuery("circle-token") },
-    ],
-};
-
-const OP_PROJECT_GET_PROJECT_USERNAME_PROJECT_BUILD_NUM: OpSpec = OpSpec {
-    method: "GET",
-    path_template: "/project/{username}/{project}/{build_num}",
-    fields: &[
-    ],
-    auth: &[
-        AuthApply { secret_key: "apikey", kind: AuthKind::ApiKeyQuery("circle-token") },
-    ],
-};
-
-const OP_PROJECT_GET_PROJECT_USERNAME_PROJECT_BUILD_NUM_ARTIFACTS: OpSpec = OpSpec {
-    method: "GET",
-    path_template: "/project/{username}/{project}/{build_num}/artifacts",
-    fields: &[
-    ],
-    auth: &[
-        AuthApply { secret_key: "apikey", kind: AuthKind::ApiKeyQuery("circle-token") },
-    ],
-};
-
-const OP_PROJECT_POST_PROJECT_USERNAME_PROJECT_BUILD_NUM_CANCEL: OpSpec = OpSpec {
-    method: "POST",
-    path_template: "/project/{username}/{project}/{build_num}/cancel",
-    fields: &[
-    ],
-    auth: &[
-        AuthApply { secret_key: "apikey", kind: AuthKind::ApiKeyQuery("circle-token") },
-    ],
-};
-
-const OP_PROJECT_POST_PROJECT_USERNAME_PROJECT_BUILD_NUM_RETRY: OpSpec = OpSpec {
-    method: "POST",
-    path_template: "/project/{username}/{project}/{build_num}/retry",
-    fields: &[
-    ],
-    auth: &[
-        AuthApply { secret_key: "apikey", kind: AuthKind::ApiKeyQuery("circle-token") },
-    ],
-};
-
-const OP_PROJECT_GET_PROJECT_USERNAME_PROJECT_BUILD_NUM_TESTS: OpSpec = OpSpec {
-    method: "GET",
-    path_template: "/project/{username}/{project}/{build_num}/tests",
-    fields: &[
-    ],
-    auth: &[
-        AuthApply { secret_key: "apikey", kind: AuthKind::ApiKeyQuery("circle-token") },
-    ],
-};
-
-fn iface_project__get_project_username_project_filter_enum__to_str(e: &iface_project::GetProjectUsernameProjectFilterEnum) -> &'static str {
-    match e {
-        iface_project::GetProjectUsernameProjectFilterEnum::Completed => "completed",
-        iface_project::GetProjectUsernameProjectFilterEnum::Successful => "successful",
-        iface_project::GetProjectUsernameProjectFilterEnum::Failed => "failed",
-        iface_project::GetProjectUsernameProjectFilterEnum::Running => "running",
-    }
-}
-
-fn iface_project__post_project_username_project_checkout_key_body_enum__to_str(e: &iface_project::PostProjectUsernameProjectCheckoutKeyBodyEnum) -> &'static str {
-    match e {
-        iface_project::PostProjectUsernameProjectCheckoutKeyBodyEnum::DeployKey => "deploy-key",
-        iface_project::PostProjectUsernameProjectCheckoutKeyBodyEnum::GithubUserKey => "github-user-key",
-    }
-}
-
-fn iface_project__post_project_username_project_ssh_key_content_type_enum__to_str(e: &iface_project::PostProjectUsernameProjectSshKeyContentTypeEnum) -> &'static str {
-    match e {
-        iface_project::PostProjectUsernameProjectSshKeyContentTypeEnum::ApplicationJson => "application/json",
-    }
-}
-
-fn iface_project__build_parameters__to_json(p: &iface_project::BuildParameters) -> Value {
-    let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_project__parallel__to_json(p: &iface_project::Parallel) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_project__revision__to_json(p: &iface_project::Revision) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_project__tag__to_json(p: &iface_project::Tag) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_project__get_project_username_project_params__to_json(p: &iface_project::GetProjectUsernameProjectParams) -> Value {
-    let mut m = Map::new();
-    m.insert("limit".into(), match (&p.limit) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    m.insert("offset".into(), match (&p.offset) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    m.insert("filter".into(), match (&p.filter) { Some(v) => Value::String(iface_project__get_project_username_project_filter_enum__to_str(v).into()), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_project__post_project_username_project_params__to_json(p: &iface_project::PostProjectUsernameProjectParams) -> Value {
-    let mut m = Map::new();
-    m.insert("build_parameters".into(), match (&p.build_parameters) { Some(v) => iface_project__build_parameters__to_json(v), None => Value::Null });
-    m.insert("parallel".into(), match (&p.parallel) { Some(v) => iface_project__parallel__to_json(v), None => Value::Null });
-    m.insert("revision".into(), match (&p.revision) { Some(v) => iface_project__revision__to_json(v), None => Value::Null });
-    m.insert("tag".into(), match (&p.tag) { Some(v) => iface_project__tag__to_json(v), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_project__post_project_username_project_ssh_key_params__to_json(p: &iface_project::PostProjectUsernameProjectSshKeyParams) -> Value {
-    let mut m = Map::new();
-    m.insert("content_type".into(), Value::String(iface_project__post_project_username_project_ssh_key_content_type_enum__to_str(&p.content_type).into()));
-    m.insert("hostname".into(), match (&p.hostname) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("private_key".into(), match (&p.private_key) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_project__post_project_username_project_tree_branch_params__to_json(p: &iface_project::PostProjectUsernameProjectTreeBranchParams) -> Value {
-    let mut m = Map::new();
-    m.insert("build_parameters".into(), match (&p.build_parameters) { Some(v) => iface_project__build_parameters__to_json(v), None => Value::Null });
-    m.insert("parallel".into(), match (&p.parallel) { Some(v) => iface_project__parallel__to_json(v), None => Value::Null });
-    m.insert("revision".into(), match (&p.revision) { Some(v) => iface_project__revision__to_json(v), None => Value::Null });
-    Value::Object(m)
-}
-
-impl iface_project::Guest for crate::Component {
-    fn get_project_username_project(params: iface_project::GetProjectUsernameProjectParams) -> Result<String, String> {
-        let json = iface_project__get_project_username_project_params__to_json(&params);
-        dispatch(&OP_PROJECT_GET_PROJECT_USERNAME_PROJECT, json)
-    }
-    fn post_project_username_project(params: iface_project::PostProjectUsernameProjectParams) -> Result<String, String> {
-        let json = iface_project__post_project_username_project_params__to_json(&params);
-        dispatch(&OP_PROJECT_POST_PROJECT_USERNAME_PROJECT, json)
-    }
-    fn delete_project_username_project_build_cache() -> Result<String, String> {
-        dispatch(&OP_PROJECT_DELETE_PROJECT_USERNAME_PROJECT_BUILD_CACHE, Value::Object(Map::new()))
-    }
-    fn get_project_username_project_checkout_key() -> Result<String, String> {
-        dispatch(&OP_PROJECT_GET_PROJECT_USERNAME_PROJECT_CHECKOUT_KEY, Value::Object(Map::new()))
-    }
-    fn post_project_username_project_checkout_key() -> Result<String, String> {
-        dispatch(&OP_PROJECT_POST_PROJECT_USERNAME_PROJECT_CHECKOUT_KEY, Value::Object(Map::new()))
-    }
-    fn get_project_username_project_checkout_key_fingerprint() -> Result<String, String> {
-        dispatch(&OP_PROJECT_GET_PROJECT_USERNAME_PROJECT_CHECKOUT_KEY_FINGERPRINT, Value::Object(Map::new()))
-    }
-    fn delete_project_username_project_checkout_key_fingerprint() -> Result<String, String> {
-        dispatch(&OP_PROJECT_DELETE_PROJECT_USERNAME_PROJECT_CHECKOUT_KEY_FINGERPRINT, Value::Object(Map::new()))
-    }
-    fn get_project_username_project_envvar() -> Result<String, String> {
-        dispatch(&OP_PROJECT_GET_PROJECT_USERNAME_PROJECT_ENVVAR, Value::Object(Map::new()))
-    }
-    fn post_project_username_project_envvar() -> Result<String, String> {
-        dispatch(&OP_PROJECT_POST_PROJECT_USERNAME_PROJECT_ENVVAR, Value::Object(Map::new()))
-    }
-    fn get_project_username_project_envvar_name() -> Result<String, String> {
-        dispatch(&OP_PROJECT_GET_PROJECT_USERNAME_PROJECT_ENVVAR_NAME, Value::Object(Map::new()))
-    }
-    fn delete_project_username_project_envvar_name() -> Result<String, String> {
-        dispatch(&OP_PROJECT_DELETE_PROJECT_USERNAME_PROJECT_ENVVAR_NAME, Value::Object(Map::new()))
-    }
-    fn post_project_username_project_ssh_key(params: iface_project::PostProjectUsernameProjectSshKeyParams) -> Result<String, String> {
-        let json = iface_project__post_project_username_project_ssh_key_params__to_json(&params);
-        dispatch(&OP_PROJECT_POST_PROJECT_USERNAME_PROJECT_SSH_KEY, json)
-    }
-    fn post_project_username_project_tree_branch(params: iface_project::PostProjectUsernameProjectTreeBranchParams) -> Result<String, String> {
-        let json = iface_project__post_project_username_project_tree_branch_params__to_json(&params);
-        dispatch(&OP_PROJECT_POST_PROJECT_USERNAME_PROJECT_TREE_BRANCH, json)
-    }
-    fn get_project_username_project_build_num() -> Result<String, String> {
-        dispatch(&OP_PROJECT_GET_PROJECT_USERNAME_PROJECT_BUILD_NUM, Value::Object(Map::new()))
-    }
-    fn get_project_username_project_build_num_artifacts() -> Result<String, String> {
-        dispatch(&OP_PROJECT_GET_PROJECT_USERNAME_PROJECT_BUILD_NUM_ARTIFACTS, Value::Object(Map::new()))
-    }
-    fn post_project_username_project_build_num_cancel() -> Result<String, String> {
-        dispatch(&OP_PROJECT_POST_PROJECT_USERNAME_PROJECT_BUILD_NUM_CANCEL, Value::Object(Map::new()))
-    }
-    fn post_project_username_project_build_num_retry() -> Result<String, String> {
-        dispatch(&OP_PROJECT_POST_PROJECT_USERNAME_PROJECT_BUILD_NUM_RETRY, Value::Object(Map::new()))
-    }
-    fn get_project_username_project_build_num_tests() -> Result<String, String> {
-        dispatch(&OP_PROJECT_GET_PROJECT_USERNAME_PROJECT_BUILD_NUM_TESTS, Value::Object(Map::new()))
-    }
-}
-use crate::exports::autostamp::circleci::projects as iface_projects;
-
-const OP_PROJECTS_GET_PROJECTS: OpSpec = OpSpec {
-    method: "GET",
-    path_template: "/projects",
-    fields: &[
-    ],
-    auth: &[
-        AuthApply { secret_key: "apikey", kind: AuthKind::ApiKeyQuery("circle-token") },
-    ],
-};
-
-impl iface_projects::Guest for crate::Component {
-    fn get_projects() -> Result<String, String> {
-        dispatch(&OP_PROJECTS_GET_PROJECTS, Value::Object(Map::new()))
-    }
-}
-use crate::exports::autostamp::circleci::recent_builds as iface_recent_builds;
-
-const OP_RECENT_BUILDS_GET_RECENT_BUILDS: OpSpec = OpSpec {
-    method: "GET",
-    path_template: "/recent-builds",
-    fields: &[
-        FieldSpec { snake: "limit", location: FieldLocation::Query },
-        FieldSpec { snake: "offset", location: FieldLocation::Query },
-    ],
-    auth: &[
-        AuthApply { secret_key: "apikey", kind: AuthKind::ApiKeyQuery("circle-token") },
-    ],
-};
-
-fn iface_recent_builds__get_recent_builds_params__to_json(p: &iface_recent_builds::GetRecentBuildsParams) -> Value {
-    let mut m = Map::new();
-    m.insert("limit".into(), match (&p.limit) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    m.insert("offset".into(), match (&p.offset) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    Value::Object(m)
-}
-
-impl iface_recent_builds::Guest for crate::Component {
-    fn get_recent_builds(params: iface_recent_builds::GetRecentBuildsParams) -> Result<String, String> {
-        let json = iface_recent_builds__get_recent_builds_params__to_json(&params);
-        dispatch(&OP_RECENT_BUILDS_GET_RECENT_BUILDS, json)
-    }
-}
-use crate::exports::autostamp::circleci::user as iface_user;
-
-const OP_USER_POST_USER_HEROKU_KEY: OpSpec = OpSpec {
-    method: "POST",
-    path_template: "/user/heroku-key",
-    fields: &[
-    ],
-    auth: &[
-        AuthApply { secret_key: "apikey", kind: AuthKind::ApiKeyQuery("circle-token") },
-    ],
-};
-
-impl iface_user::Guest for crate::Component {
-    fn post_user_heroku_key() -> Result<String, String> {
-        dispatch(&OP_USER_POST_USER_HEROKU_KEY, Value::Object(Map::new()))
-    }
-}
+mod iface_me;
+mod iface_project;
+mod iface_projects;
+mod iface_recent_builds;
+mod iface_user;
 
 export!(Component);

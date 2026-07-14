@@ -6,9 +6,47 @@
 /// | Secret name | Applied to each request as |
 /// | --- | --- |
 /// | `api_key` | query `key` |
-package autostamp:tomtom@0.3.0;
+package autostamp:tomtom@0.5.0;
 
 interface copyrights {
+  variant get-map-version-number-copyrights-format-error {
+    not-modified(string),
+    bad-request(string),
+    forbidden(string),
+    gone(string),
+    internal-server-error(string),
+    other(string)
+  }
+
+  variant get-map-version-number-copyrights-caption-format-error {
+    not-modified(string),
+    bad-request(string),
+    forbidden(string),
+    gone(string),
+    internal-server-error(string),
+    other(string)
+  }
+
+  variant get-map-version-number-copyrights-min-lon-min-lat-max-lon-max-lat-format-error {
+    not-modified(string),
+    bad-request(string),
+    unauthorized(string),
+    forbidden(string),
+    gone(string),
+    internal-server-error(string),
+    other(string)
+  }
+
+  variant get-map-version-number-copyrights-zoom-x-y-format-error {
+    not-modified(string),
+    bad-request(string),
+    unauthorized(string),
+    forbidden(string),
+    gone(string),
+    internal-server-error(string),
+    other(string)
+  }
+
   /// Copyrights whole world
   record get-map-version-number-copyrights-format-params {
     /// Version of the service to call. The current version is 1
@@ -18,7 +56,7 @@ interface copyrights {
     /// Specifies the jsonp callback method. Only used when format is jsonp
     callback: option<string>
   }
-  get-map-version-number-copyrights-format: func(params: get-map-version-number-copyrights-format-params) -> result<string, string>;
+  get-map-version-number-copyrights-format: func(params: get-map-version-number-copyrights-format-params) -> result<string, get-map-version-number-copyrights-format-error>;
 
   /// Captions
   record get-map-version-number-copyrights-caption-format-params {
@@ -29,7 +67,7 @@ interface copyrights {
     /// Specifies the jsonp callback method. Only used when format is jsonp
     callback: option<string>
   }
-  get-map-version-number-copyrights-caption-format: func(params: get-map-version-number-copyrights-caption-format-params) -> result<string, string>;
+  get-map-version-number-copyrights-caption-format: func(params: get-map-version-number-copyrights-caption-format-params) -> result<string, get-map-version-number-copyrights-caption-format-error>;
 
   /// Copyrights bounding box
   record get-map-version-number-copyrights-min-lon-min-lat-max-lon-max-lat-format-params {
@@ -48,7 +86,7 @@ interface copyrights {
     /// Specifies the jsonp callback method. Only used when format is jsonp.
     callback: option<string>
   }
-  get-map-version-number-copyrights-min-lon-min-lat-max-lon-max-lat-format: func(params: get-map-version-number-copyrights-min-lon-min-lat-max-lon-max-lat-format-params) -> result<string, string>;
+  get-map-version-number-copyrights-min-lon-min-lat-max-lon-max-lat-format: func(params: get-map-version-number-copyrights-min-lon-min-lat-max-lon-max-lat-format-params) -> result<string, get-map-version-number-copyrights-min-lon-min-lat-max-lon-max-lat-format-error>;
 
   /// Copyrights tile
   record get-map-version-number-copyrights-zoom-x-y-format-params {
@@ -68,7 +106,7 @@ interface copyrights {
     /// Specifies the jsonp callback method. Only used when format is jsonp.
     callback: option<string>
   }
-  get-map-version-number-copyrights-zoom-x-y-format: func(params: get-map-version-number-copyrights-zoom-x-y-format-params) -> result<string, string>;
+  get-map-version-number-copyrights-zoom-x-y-format: func(params: get-map-version-number-copyrights-zoom-x-y-format-params) -> result<string, get-map-version-number-copyrights-zoom-x-y-format-error>;
 
 }
 
@@ -94,6 +132,23 @@ interface raster {
   enum get-map-version-number-staticimage-view-enum {
     unified,
     in,
+  }
+
+  variant get-map-version-number-staticimage-error {
+    bad-request(string),
+    forbidden(string),
+    internal-server-error(string),
+    service-unavailable(string),
+    other(string)
+  }
+
+  variant get-map-version-number-tile-layer-style-zoom-x-y-format-error {
+    found(string),
+    bad-request(string),
+    forbidden(string),
+    gone(string),
+    internal-server-error(string),
+    other(string)
   }
 
   /// Static Image
@@ -122,7 +177,7 @@ interface raster {
     /// Geopolitical view. Determines rendering of disputed areas. See the <a href="/maps-api/maps-api-documentation-raster/raster-tile">documentation</a> for an explanation of how this works in live services.
     view: option<get-map-version-number-staticimage-view-enum>
   }
-  get-map-version-number-staticimage: func(params: get-map-version-number-staticimage-params) -> result<string, string>;
+  get-map-version-number-staticimage: func(params: get-map-version-number-staticimage-params) -> result<string, get-map-version-number-staticimage-error>;
 
   /// Tile
   record get-map-version-number-tile-layer-style-zoom-x-y-format-params {
@@ -145,7 +200,7 @@ interface raster {
     /// Geopolitical view. Determines rendering of disputed areas. See the <a href="/maps-sdk-web/functional-examples#geopolitical-views">documentation</a> for an explanation of how this works in live services.
     view: option<get-map-version-number-staticimage-view-enum>
   }
-  get-map-version-number-tile-layer-style-zoom-x-y-format: func(params: get-map-version-number-tile-layer-style-zoom-x-y-format-params) -> result<string, string>;
+  get-map-version-number-tile-layer-style-zoom-x-y-format: func(params: get-map-version-number-tile-layer-style-zoom-x-y-format-params) -> result<string, get-map-version-number-tile-layer-style-zoom-x-y-format-error>;
 
 }
 
@@ -154,6 +209,14 @@ interface vector {
     unified,
     il,
     in,
+  }
+
+  variant get-map-version-number-tile-layer-style-zoom-x-y-pbf-error {
+    bad-request(string),
+    forbidden(string),
+    internal-server-error(string),
+    service-unavailable(string),
+    other(string)
   }
 
   /// Tile
@@ -175,7 +238,7 @@ interface vector {
     /// Language to be used for labels in the response. The default is NGT: Neutral Ground Truth, which uses each place's local official language and script (where available). See the <a href="/maps-api/maps-api-documentation-vector/tile">documentation</a> for a full list of options.
     language: option<string>
   }
-  get-map-version-number-tile-layer-style-zoom-x-y-pbf: func(params: get-map-version-number-tile-layer-style-zoom-x-y-pbf-params) -> result<string, string>;
+  get-map-version-number-tile-layer-style-zoom-x-y-pbf: func(params: get-map-version-number-tile-layer-style-zoom-x-y-pbf-params) -> result<string, get-map-version-number-tile-layer-style-zoom-x-y-pbf-error>;
 
 }
 
@@ -214,6 +277,25 @@ interface wms-wmts {
     get-capabilities,
   }
 
+  variant get-map-error {
+    unauthorized(string),
+    internal-server-error(string),
+    other(string)
+  }
+
+  variant get-capabilities-error {
+    unauthorized(string),
+    internal-server-error(string),
+    other(string)
+  }
+
+  variant get-map-version-number-wmts-key-wmts-version-wmts-capabilities-xml-error {
+    bad-request(string),
+    unauthorized(string),
+    internal-server-error(string),
+    other(string)
+  }
+
   /// GetMap
   record get-map-params {
     /// Version of the service to call. The current version is 1
@@ -242,7 +324,7 @@ interface wms-wmts {
     /// WMS service version
     version: get-map-version-enum
   }
-  get-map: func(params: get-map-params) -> result<string, string>;
+  get-map: func(params: get-map-params) -> result<string, get-map-error>;
 
   /// GetCapabilities
   record get-capabilities-params {
@@ -252,7 +334,7 @@ interface wms-wmts {
     /// WMS service version
     version: option<get-map-version-enum>
   }
-  get-capabilities: func(params: get-capabilities-params) -> result<string, string>;
+  get-capabilities: func(params: get-capabilities-params) -> result<string, get-capabilities-error>;
 
   /// WMTS
   record get-map-version-number-wmts-key-wmts-version-wmts-capabilities-xml-params {
@@ -262,7 +344,7 @@ interface wms-wmts {
     key: string,
     wmts-version: string
   }
-  get-map-version-number-wmts-key-wmts-version-wmts-capabilities-xml: func(params: get-map-version-number-wmts-key-wmts-version-wmts-capabilities-xml-params) -> result<string, string>;
+  get-map-version-number-wmts-key-wmts-version-wmts-capabilities-xml: func(params: get-map-version-number-wmts-key-wmts-version-wmts-capabilities-xml-params) -> result<string, get-map-version-number-wmts-key-wmts-version-wmts-capabilities-xml-error>;
 
 }
 /// The component world: imports the secrets host capability

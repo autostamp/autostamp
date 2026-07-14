@@ -20,9 +20,9 @@ triggered.
 
 | Setting | Value |
 | --- | --- |
-| Package | `autostamp:amazonaws@0.3.0` |
-| Published version | `0.3.0+amazonaws-2019-11-01` |
+| Package | `autostamp:amazonaws@0.5.0` |
+| Published version | `0.5.0+amazonaws-2017-05-31` |
 | Tag filter | all tags |
-| Operations generated | 28 |
+| Operations generated | 17 |
 | Infer API-key credentials | enabled — not triggered |
 | Prune duplicate credential fields | enabled — not triggered |

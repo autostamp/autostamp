@@ -44,10 +44,15 @@ pub(crate) enum FieldLocation {
     Body,
 }
 
-/// A single operation parameter: the snake-case key it carries in the params JSON and where
-/// it belongs in the request.
+/// A single operation parameter. `snake` keys the field in the internal params JSON (and, for a
+/// path field, matches the `{snake}` placeholder in the path template); `wire` is the verbatim name
+/// the field takes on the HTTP wire (query key, header name, or body property). The two differ
+/// whenever the source name isn't already snake_case (e.g. `dryRun` → snake `dry_run`, wire
+/// `dryRun`), and let distinct inputs that share a snake key (`DateCreated`, `DateCreated<`) still
+/// travel under their true names.
 pub(crate) struct FieldSpec {
     pub(crate) snake: &'static str,
+    pub(crate) wire: &'static str,
     pub(crate) location: FieldLocation,
 }
 
@@ -71,6 +76,16 @@ pub(crate) struct AuthApply {
     pub(crate) kind: AuthKind,
 }
 
+/// The failure modes of [`dispatch`], kept structured so each generated operation can map them
+/// onto its own typed error: an `Http` failure carries the response status and body (routed to
+/// the matching error-variant case), while a `Transport` failure carries a message for the
+/// catch-all case (a secret lookup, connection, or decode failure that never produced an HTTP
+/// status).
+pub(crate) enum DispatchError {
+    Http { status: u16, body: String },
+    Transport(String),
+}
+
 /// A single API operation: HTTP method, path template (with `{snake}` placeholders), the
 /// parameter fields, and the security schemes to apply.
 pub(crate) struct OpSpec {
@@ -81,8 +96,9 @@ pub(crate) struct OpSpec {
 }
 
 /// Execute `op` with the supplied `params` (a JSON object keyed by snake-case field names)
-/// and return the response body as a string, or an error message.
-pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, String> {
+/// and return the raw 2xx response body, or a structured [`DispatchError`] the caller maps
+/// onto the operation's typed error.
+pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, DispatchError> {
     let obj = match &params {
         Value::Object(map) => Some(map),
         _ => None,
@@ -105,10 +121,10 @@ pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, String> {
                 let placeholder = format!("{{{}}}", field.snake);
                 path = path.replace(&placeholder, &percent_encode(&scalar(value)));
             }
-            FieldLocation::Query => query.push((field.snake.to_string(), scalar(value))),
-            FieldLocation::Header => headers.push((field.snake.to_string(), scalar(value))),
+            FieldLocation::Query => query.push((field.wire.to_string(), scalar(value))),
+            FieldLocation::Header => headers.push((field.wire.to_string(), scalar(value))),
             FieldLocation::Body => {
-                body.insert(field.snake.to_string(), value.clone());
+                body.insert(field.wire.to_string(), value.clone());
             }
         }
     }
@@ -116,7 +132,7 @@ pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, String> {
     // Apply each resolved security scheme, sourcing its value from wasmcloud:secrets.
     let mut cookies: Vec<String> = Vec::new();
     for apply in op.auth {
-        let secret = fetch_secret(apply.secret_key)?;
+        let secret = fetch_secret(apply.secret_key).map_err(DispatchError::Transport)?;
         match &apply.kind {
             AuthKind::Bearer => headers.push(("authorization".into(), format!("Bearer {secret}"))),
             AuthKind::Basic => {
@@ -177,17 +193,18 @@ fn fetch_secret(key: &str) -> Result<String, String> {
 }
 
 /// Build and send the outgoing request with `wstd`, returning the response body on a 2xx
-/// status. The generated guest exports are synchronous, so the async `wstd` client is driven
-/// to completion on a local reactor via `wstd::runtime::block_on`.
+/// status and a structured [`DispatchError`] otherwise. The generated guest exports are
+/// synchronous, so the async `wstd` client is driven to completion on a local reactor via
+/// `wstd::runtime::block_on`.
 fn perform(
     method: &str,
     path_with_query: &str,
     headers: &[(String, String)],
     body: &[u8],
-) -> Result<String, String> {
+) -> Result<String, DispatchError> {
     let url = join_url(crate::BASE_URL, path_with_query);
     let method = Method::from_bytes(method.as_bytes())
-        .map_err(|err| format!("invalid HTTP method `{method}`: {err}"))?;
+        .map_err(|err| DispatchError::Transport(format!("invalid HTTP method `{method}`: {err}")))?;
 
     let mut builder = Request::builder().method(method).uri(url);
     for (name, value) in headers {
@@ -199,27 +216,29 @@ fn perform(
         } else {
             Body::from(body.to_vec())
         })
-        .map_err(|err| format!("failed to build request: {err}"))?;
+        .map_err(|err| DispatchError::Transport(format!("failed to build request: {err}")))?;
 
     wstd::runtime::block_on(async move {
         let client = Client::new();
         let response = client
             .send(request)
             .await
-            .map_err(|err| format!("request failed: {err:#}"))?;
+            .map_err(|err| DispatchError::Transport(format!("request failed: {err:#}")))?;
 
         let status = response.status().as_u16();
         let mut response_body = response.into_body();
-        let bytes = response_body
-            .contents()
-            .await
-            .map_err(|err| format!("failed to read response body: {err:#}"))?;
+        let bytes = response_body.contents().await.map_err(|err| {
+            DispatchError::Transport(format!("failed to read response body: {err:#}"))
+        })?;
         let body_text = String::from_utf8_lossy(bytes).into_owned();
 
         if (200..300).contains(&status) {
             Ok(body_text)
         } else {
-            Err(format!("HTTP {status}: {body_text}"))
+            Err(DispatchError::Http {
+                status,
+                body: body_text,
+            })
         }
     })
 }
@@ -279,660 +298,13 @@ fn base64(input: &[u8]) -> String {
 }
 }
 
-use crate::runtime::{dispatch, AuthApply, AuthKind, FieldLocation, FieldSpec, OpSpec};
-use serde_json::{Map, Value};
-
-use crate::exports::autostamp::thetvdb::episodes as iface_episodes;
-
-const OP_EPISODES_GET_EPISODES_ID: OpSpec = OpSpec {
-    method: "GET",
-    path_template: "/episodes/{id}",
-    fields: &[
-        FieldSpec { snake: "id", location: FieldLocation::Path },
-        FieldSpec { snake: "accept_language", location: FieldLocation::Header },
-    ],
-    auth: &[
-    ],
-};
-
-fn iface_episodes__get_episodes_id_params__to_json(p: &iface_episodes::GetEpisodesIdParams) -> Value {
-    let mut m = Map::new();
-    m.insert("id".into(), Value::String((&p.id).clone()));
-    m.insert("accept_language".into(), match (&p.accept_language) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    Value::Object(m)
-}
-
-impl iface_episodes::Guest for crate::Component {
-    fn get_episodes_id(params: iface_episodes::GetEpisodesIdParams) -> Result<String, String> {
-        let json = iface_episodes__get_episodes_id_params__to_json(&params);
-        dispatch(&OP_EPISODES_GET_EPISODES_ID, json)
-    }
-}
-use crate::exports::autostamp::thetvdb::languages as iface_languages;
-
-const OP_LANGUAGES_GET_LANGUAGES: OpSpec = OpSpec {
-    method: "GET",
-    path_template: "/languages",
-    fields: &[
-    ],
-    auth: &[
-    ],
-};
-
-const OP_LANGUAGES_GET_LANGUAGES_ID: OpSpec = OpSpec {
-    method: "GET",
-    path_template: "/languages/{id}",
-    fields: &[
-        FieldSpec { snake: "id", location: FieldLocation::Path },
-    ],
-    auth: &[
-    ],
-};
-
-fn iface_languages__get_languages_id_params__to_json(p: &iface_languages::GetLanguagesIdParams) -> Value {
-    let mut m = Map::new();
-    m.insert("id".into(), Value::String((&p.id).clone()));
-    Value::Object(m)
-}
-
-impl iface_languages::Guest for crate::Component {
-    fn get_languages() -> Result<String, String> {
-        dispatch(&OP_LANGUAGES_GET_LANGUAGES, Value::Object(Map::new()))
-    }
-    fn get_languages_id(params: iface_languages::GetLanguagesIdParams) -> Result<String, String> {
-        let json = iface_languages__get_languages_id_params__to_json(&params);
-        dispatch(&OP_LANGUAGES_GET_LANGUAGES_ID, json)
-    }
-}
-use crate::exports::autostamp::thetvdb::authentication as iface_authentication;
-
-const OP_AUTHENTICATION_POST_LOGIN: OpSpec = OpSpec {
-    method: "POST",
-    path_template: "/login",
-    fields: &[
-        FieldSpec { snake: "apikey", location: FieldLocation::Body },
-        FieldSpec { snake: "userkey", location: FieldLocation::Body },
-        FieldSpec { snake: "username", location: FieldLocation::Body },
-    ],
-    auth: &[
-    ],
-};
-
-const OP_AUTHENTICATION_GET_REFRESH_TOKEN: OpSpec = OpSpec {
-    method: "GET",
-    path_template: "/refresh_token",
-    fields: &[
-    ],
-    auth: &[
-    ],
-};
-
-fn iface_authentication__post_login_params__to_json(p: &iface_authentication::PostLoginParams) -> Value {
-    let mut m = Map::new();
-    m.insert("apikey".into(), match (&p.apikey) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("userkey".into(), match (&p.userkey) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("username".into(), match (&p.username) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    Value::Object(m)
-}
-
-impl iface_authentication::Guest for crate::Component {
-    fn post_login(params: iface_authentication::PostLoginParams) -> Result<String, String> {
-        let json = iface_authentication__post_login_params__to_json(&params);
-        dispatch(&OP_AUTHENTICATION_POST_LOGIN, json)
-    }
-    fn get_refresh_token() -> Result<String, String> {
-        dispatch(&OP_AUTHENTICATION_GET_REFRESH_TOKEN, Value::Object(Map::new()))
-    }
-}
-use crate::exports::autostamp::thetvdb::movies as iface_movies;
-
-const OP_MOVIES_GET_MOVIES_ID: OpSpec = OpSpec {
-    method: "GET",
-    path_template: "/movies/{id}",
-    fields: &[
-        FieldSpec { snake: "id", location: FieldLocation::Path },
-        FieldSpec { snake: "accept_language", location: FieldLocation::Header },
-    ],
-    auth: &[
-    ],
-};
-
-const OP_MOVIES_GET_MOVIEUPDATES: OpSpec = OpSpec {
-    method: "GET",
-    path_template: "/movieupdates",
-    fields: &[
-        FieldSpec { snake: "since", location: FieldLocation::Query },
-    ],
-    auth: &[
-    ],
-};
-
-fn iface_movies__get_movies_id_params__to_json(p: &iface_movies::GetMoviesIdParams) -> Value {
-    let mut m = Map::new();
-    m.insert("id".into(), Value::String((&p.id).clone()));
-    m.insert("accept_language".into(), match (&p.accept_language) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_movies__get_movieupdates_params__to_json(p: &iface_movies::GetMovieupdatesParams) -> Value {
-    let mut m = Map::new();
-    m.insert("since".into(), Value::String((&p.since).clone()));
-    Value::Object(m)
-}
-
-impl iface_movies::Guest for crate::Component {
-    fn get_movies_id(params: iface_movies::GetMoviesIdParams) -> Result<String, String> {
-        let json = iface_movies__get_movies_id_params__to_json(&params);
-        dispatch(&OP_MOVIES_GET_MOVIES_ID, json)
-    }
-    fn get_movieupdates(params: iface_movies::GetMovieupdatesParams) -> Result<String, String> {
-        let json = iface_movies__get_movieupdates_params__to_json(&params);
-        dispatch(&OP_MOVIES_GET_MOVIEUPDATES, json)
-    }
-}
-use crate::exports::autostamp::thetvdb::search as iface_search;
-
-const OP_SEARCH_GET_SEARCH_SERIES: OpSpec = OpSpec {
-    method: "GET",
-    path_template: "/search/series",
-    fields: &[
-        FieldSpec { snake: "name", location: FieldLocation::Query },
-        FieldSpec { snake: "imdb_id", location: FieldLocation::Query },
-        FieldSpec { snake: "zap2it_id", location: FieldLocation::Query },
-        FieldSpec { snake: "slug", location: FieldLocation::Query },
-        FieldSpec { snake: "accept_language", location: FieldLocation::Header },
-    ],
-    auth: &[
-    ],
-};
-
-const OP_SEARCH_GET_SEARCH_SERIES_PARAMS_V2: OpSpec = OpSpec {
-    method: "GET",
-    path_template: "/search/series/params",
-    fields: &[
-    ],
-    auth: &[
-    ],
-};
-
-fn iface_search__get_search_series_params__to_json(p: &iface_search::GetSearchSeriesParams) -> Value {
-    let mut m = Map::new();
-    m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("imdb_id".into(), match (&p.imdb_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("zap2it_id".into(), match (&p.zap2it_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("slug".into(), match (&p.slug) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("accept_language".into(), match (&p.accept_language) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    Value::Object(m)
-}
-
-impl iface_search::Guest for crate::Component {
-    fn get_search_series(params: iface_search::GetSearchSeriesParams) -> Result<String, String> {
-        let json = iface_search__get_search_series_params__to_json(&params);
-        dispatch(&OP_SEARCH_GET_SEARCH_SERIES, json)
-    }
-    fn get_search_series_params_v2() -> Result<String, String> {
-        dispatch(&OP_SEARCH_GET_SEARCH_SERIES_PARAMS_V2, Value::Object(Map::new()))
-    }
-}
-use crate::exports::autostamp::thetvdb::series as iface_series;
-
-const OP_SERIES_GET_SERIES_ID: OpSpec = OpSpec {
-    method: "GET",
-    path_template: "/series/{id}",
-    fields: &[
-        FieldSpec { snake: "id", location: FieldLocation::Path },
-        FieldSpec { snake: "accept_language", location: FieldLocation::Header },
-    ],
-    auth: &[
-    ],
-};
-
-const OP_SERIES_GET_SERIES_ID_ACTORS: OpSpec = OpSpec {
-    method: "GET",
-    path_template: "/series/{id}/actors",
-    fields: &[
-        FieldSpec { snake: "id", location: FieldLocation::Path },
-    ],
-    auth: &[
-    ],
-};
-
-const OP_SERIES_GET_SERIES_ID_EPISODES: OpSpec = OpSpec {
-    method: "GET",
-    path_template: "/series/{id}/episodes",
-    fields: &[
-        FieldSpec { snake: "id", location: FieldLocation::Path },
-        FieldSpec { snake: "page", location: FieldLocation::Query },
-    ],
-    auth: &[
-    ],
-};
-
-const OP_SERIES_GET_SERIES_ID_EPISODES_QUERY: OpSpec = OpSpec {
-    method: "GET",
-    path_template: "/series/{id}/episodes/query",
-    fields: &[
-        FieldSpec { snake: "id", location: FieldLocation::Path },
-        FieldSpec { snake: "absolute_number", location: FieldLocation::Query },
-        FieldSpec { snake: "aired_season", location: FieldLocation::Query },
-        FieldSpec { snake: "aired_episode", location: FieldLocation::Query },
-        FieldSpec { snake: "dvd_season", location: FieldLocation::Query },
-        FieldSpec { snake: "dvd_episode", location: FieldLocation::Query },
-        FieldSpec { snake: "imdb_id", location: FieldLocation::Query },
-        FieldSpec { snake: "page", location: FieldLocation::Query },
-        FieldSpec { snake: "accept_language", location: FieldLocation::Header },
-    ],
-    auth: &[
-    ],
-};
-
-const OP_SERIES_GET_SERIES_ID_EPISODES_QUERY_PARAMS_V2: OpSpec = OpSpec {
-    method: "GET",
-    path_template: "/series/{id}/episodes/query/params",
-    fields: &[
-        FieldSpec { snake: "id", location: FieldLocation::Path },
-    ],
-    auth: &[
-    ],
-};
-
-const OP_SERIES_GET_SERIES_ID_EPISODES_SUMMARY: OpSpec = OpSpec {
-    method: "GET",
-    path_template: "/series/{id}/episodes/summary",
-    fields: &[
-        FieldSpec { snake: "id", location: FieldLocation::Path },
-    ],
-    auth: &[
-    ],
-};
-
-const OP_SERIES_GET_SERIES_ID_FILTER: OpSpec = OpSpec {
-    method: "GET",
-    path_template: "/series/{id}/filter",
-    fields: &[
-        FieldSpec { snake: "id", location: FieldLocation::Path },
-        FieldSpec { snake: "keys", location: FieldLocation::Query },
-        FieldSpec { snake: "accept_language", location: FieldLocation::Header },
-    ],
-    auth: &[
-    ],
-};
-
-const OP_SERIES_GET_SERIES_ID_FILTER_PARAMS_V2: OpSpec = OpSpec {
-    method: "GET",
-    path_template: "/series/{id}/filter/params",
-    fields: &[
-        FieldSpec { snake: "id", location: FieldLocation::Path },
-        FieldSpec { snake: "accept_language", location: FieldLocation::Header },
-    ],
-    auth: &[
-    ],
-};
-
-const OP_SERIES_GET_SERIES_ID_IMAGES: OpSpec = OpSpec {
-    method: "GET",
-    path_template: "/series/{id}/images",
-    fields: &[
-        FieldSpec { snake: "id", location: FieldLocation::Path },
-        FieldSpec { snake: "accept_language", location: FieldLocation::Header },
-    ],
-    auth: &[
-    ],
-};
-
-const OP_SERIES_GET_SERIES_ID_IMAGES_QUERY: OpSpec = OpSpec {
-    method: "GET",
-    path_template: "/series/{id}/images/query",
-    fields: &[
-        FieldSpec { snake: "id", location: FieldLocation::Path },
-        FieldSpec { snake: "key_type", location: FieldLocation::Query },
-        FieldSpec { snake: "resolution", location: FieldLocation::Query },
-        FieldSpec { snake: "sub_key", location: FieldLocation::Query },
-        FieldSpec { snake: "accept_language", location: FieldLocation::Header },
-    ],
-    auth: &[
-    ],
-};
-
-const OP_SERIES_GET_SERIES_ID_IMAGES_QUERY_PARAMS_V2: OpSpec = OpSpec {
-    method: "GET",
-    path_template: "/series/{id}/images/query/params",
-    fields: &[
-        FieldSpec { snake: "id", location: FieldLocation::Path },
-        FieldSpec { snake: "accept_language", location: FieldLocation::Header },
-    ],
-    auth: &[
-    ],
-};
-
-fn iface_series__get_series_id_params__to_json(p: &iface_series::GetSeriesIdParams) -> Value {
-    let mut m = Map::new();
-    m.insert("id".into(), Value::String((&p.id).clone()));
-    m.insert("accept_language".into(), match (&p.accept_language) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_series__get_series_id_actors_params__to_json(p: &iface_series::GetSeriesIdActorsParams) -> Value {
-    let mut m = Map::new();
-    m.insert("id".into(), Value::String((&p.id).clone()));
-    Value::Object(m)
-}
-
-fn iface_series__get_series_id_episodes_params__to_json(p: &iface_series::GetSeriesIdEpisodesParams) -> Value {
-    let mut m = Map::new();
-    m.insert("id".into(), Value::String((&p.id).clone()));
-    m.insert("page".into(), match (&p.page) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_series__get_series_id_episodes_query_params__to_json(p: &iface_series::GetSeriesIdEpisodesQueryParams) -> Value {
-    let mut m = Map::new();
-    m.insert("id".into(), Value::String((&p.id).clone()));
-    m.insert("absolute_number".into(), match (&p.absolute_number) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("aired_season".into(), match (&p.aired_season) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("aired_episode".into(), match (&p.aired_episode) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("dvd_season".into(), match (&p.dvd_season) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("dvd_episode".into(), match (&p.dvd_episode) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("imdb_id".into(), match (&p.imdb_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("page".into(), match (&p.page) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("accept_language".into(), match (&p.accept_language) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_series__get_series_id_episodes_query_params_v2_params__to_json(p: &iface_series::GetSeriesIdEpisodesQueryParamsV2Params) -> Value {
-    let mut m = Map::new();
-    m.insert("id".into(), Value::String((&p.id).clone()));
-    Value::Object(m)
-}
-
-fn iface_series__get_series_id_episodes_summary_params__to_json(p: &iface_series::GetSeriesIdEpisodesSummaryParams) -> Value {
-    let mut m = Map::new();
-    m.insert("id".into(), Value::String((&p.id).clone()));
-    Value::Object(m)
-}
-
-fn iface_series__get_series_id_filter_params__to_json(p: &iface_series::GetSeriesIdFilterParams) -> Value {
-    let mut m = Map::new();
-    m.insert("id".into(), Value::String((&p.id).clone()));
-    m.insert("keys".into(), Value::String((&p.keys).clone()));
-    m.insert("accept_language".into(), match (&p.accept_language) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_series__get_series_id_filter_params_v2_params__to_json(p: &iface_series::GetSeriesIdFilterParamsV2Params) -> Value {
-    let mut m = Map::new();
-    m.insert("id".into(), Value::String((&p.id).clone()));
-    m.insert("accept_language".into(), match (&p.accept_language) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_series__get_series_id_images_params__to_json(p: &iface_series::GetSeriesIdImagesParams) -> Value {
-    let mut m = Map::new();
-    m.insert("id".into(), Value::String((&p.id).clone()));
-    m.insert("accept_language".into(), match (&p.accept_language) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_series__get_series_id_images_query_params__to_json(p: &iface_series::GetSeriesIdImagesQueryParams) -> Value {
-    let mut m = Map::new();
-    m.insert("id".into(), Value::String((&p.id).clone()));
-    m.insert("key_type".into(), match (&p.key_type) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("resolution".into(), match (&p.resolution) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("sub_key".into(), match (&p.sub_key) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("accept_language".into(), match (&p.accept_language) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_series__get_series_id_images_query_params_v2_params__to_json(p: &iface_series::GetSeriesIdImagesQueryParamsV2Params) -> Value {
-    let mut m = Map::new();
-    m.insert("id".into(), Value::String((&p.id).clone()));
-    m.insert("accept_language".into(), match (&p.accept_language) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    Value::Object(m)
-}
-
-impl iface_series::Guest for crate::Component {
-    fn get_series_id(params: iface_series::GetSeriesIdParams) -> Result<String, String> {
-        let json = iface_series__get_series_id_params__to_json(&params);
-        dispatch(&OP_SERIES_GET_SERIES_ID, json)
-    }
-    fn get_series_id_actors(params: iface_series::GetSeriesIdActorsParams) -> Result<String, String> {
-        let json = iface_series__get_series_id_actors_params__to_json(&params);
-        dispatch(&OP_SERIES_GET_SERIES_ID_ACTORS, json)
-    }
-    fn get_series_id_episodes(params: iface_series::GetSeriesIdEpisodesParams) -> Result<String, String> {
-        let json = iface_series__get_series_id_episodes_params__to_json(&params);
-        dispatch(&OP_SERIES_GET_SERIES_ID_EPISODES, json)
-    }
-    fn get_series_id_episodes_query(params: iface_series::GetSeriesIdEpisodesQueryParams) -> Result<String, String> {
-        let json = iface_series__get_series_id_episodes_query_params__to_json(&params);
-        dispatch(&OP_SERIES_GET_SERIES_ID_EPISODES_QUERY, json)
-    }
-    fn get_series_id_episodes_query_params_v2(params: iface_series::GetSeriesIdEpisodesQueryParamsV2Params) -> Result<String, String> {
-        let json = iface_series__get_series_id_episodes_query_params_v2_params__to_json(&params);
-        dispatch(&OP_SERIES_GET_SERIES_ID_EPISODES_QUERY_PARAMS_V2, json)
-    }
-    fn get_series_id_episodes_summary(params: iface_series::GetSeriesIdEpisodesSummaryParams) -> Result<String, String> {
-        let json = iface_series__get_series_id_episodes_summary_params__to_json(&params);
-        dispatch(&OP_SERIES_GET_SERIES_ID_EPISODES_SUMMARY, json)
-    }
-    fn get_series_id_filter(params: iface_series::GetSeriesIdFilterParams) -> Result<String, String> {
-        let json = iface_series__get_series_id_filter_params__to_json(&params);
-        dispatch(&OP_SERIES_GET_SERIES_ID_FILTER, json)
-    }
-    fn get_series_id_filter_params_v2(params: iface_series::GetSeriesIdFilterParamsV2Params) -> Result<String, String> {
-        let json = iface_series__get_series_id_filter_params_v2_params__to_json(&params);
-        dispatch(&OP_SERIES_GET_SERIES_ID_FILTER_PARAMS_V2, json)
-    }
-    fn get_series_id_images(params: iface_series::GetSeriesIdImagesParams) -> Result<String, String> {
-        let json = iface_series__get_series_id_images_params__to_json(&params);
-        dispatch(&OP_SERIES_GET_SERIES_ID_IMAGES, json)
-    }
-    fn get_series_id_images_query(params: iface_series::GetSeriesIdImagesQueryParams) -> Result<String, String> {
-        let json = iface_series__get_series_id_images_query_params__to_json(&params);
-        dispatch(&OP_SERIES_GET_SERIES_ID_IMAGES_QUERY, json)
-    }
-    fn get_series_id_images_query_params_v2(params: iface_series::GetSeriesIdImagesQueryParamsV2Params) -> Result<String, String> {
-        let json = iface_series__get_series_id_images_query_params_v2_params__to_json(&params);
-        dispatch(&OP_SERIES_GET_SERIES_ID_IMAGES_QUERY_PARAMS_V2, json)
-    }
-}
-use crate::exports::autostamp::thetvdb::updates as iface_updates;
-
-const OP_UPDATES_GET_UPDATED_QUERY: OpSpec = OpSpec {
-    method: "GET",
-    path_template: "/updated/query",
-    fields: &[
-        FieldSpec { snake: "from_time", location: FieldLocation::Query },
-        FieldSpec { snake: "to_time", location: FieldLocation::Query },
-        FieldSpec { snake: "accept_language", location: FieldLocation::Header },
-    ],
-    auth: &[
-    ],
-};
-
-const OP_UPDATES_GET_UPDATED_QUERY_PARAMS_V2: OpSpec = OpSpec {
-    method: "GET",
-    path_template: "/updated/query/params",
-    fields: &[
-    ],
-    auth: &[
-    ],
-};
-
-fn iface_updates__get_updated_query_params__to_json(p: &iface_updates::GetUpdatedQueryParams) -> Value {
-    let mut m = Map::new();
-    m.insert("from_time".into(), Value::String((&p.from_time).clone()));
-    m.insert("to_time".into(), match (&p.to_time) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("accept_language".into(), match (&p.accept_language) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    Value::Object(m)
-}
-
-impl iface_updates::Guest for crate::Component {
-    fn get_updated_query(params: iface_updates::GetUpdatedQueryParams) -> Result<String, String> {
-        let json = iface_updates__get_updated_query_params__to_json(&params);
-        dispatch(&OP_UPDATES_GET_UPDATED_QUERY, json)
-    }
-    fn get_updated_query_params_v2() -> Result<String, String> {
-        dispatch(&OP_UPDATES_GET_UPDATED_QUERY_PARAMS_V2, Value::Object(Map::new()))
-    }
-}
-use crate::exports::autostamp::thetvdb::users as iface_users;
-
-const OP_USERS_GET_USER: OpSpec = OpSpec {
-    method: "GET",
-    path_template: "/user",
-    fields: &[
-    ],
-    auth: &[
-    ],
-};
-
-const OP_USERS_GET_USER_FAVORITES: OpSpec = OpSpec {
-    method: "GET",
-    path_template: "/user/favorites",
-    fields: &[
-    ],
-    auth: &[
-    ],
-};
-
-const OP_USERS_PUT_USER_FAVORITES_ID: OpSpec = OpSpec {
-    method: "PUT",
-    path_template: "/user/favorites/{id}",
-    fields: &[
-        FieldSpec { snake: "id", location: FieldLocation::Path },
-    ],
-    auth: &[
-    ],
-};
-
-const OP_USERS_DELETE_USER_FAVORITES_ID: OpSpec = OpSpec {
-    method: "DELETE",
-    path_template: "/user/favorites/{id}",
-    fields: &[
-        FieldSpec { snake: "id", location: FieldLocation::Path },
-    ],
-    auth: &[
-    ],
-};
-
-const OP_USERS_GET_USER_RATINGS: OpSpec = OpSpec {
-    method: "GET",
-    path_template: "/user/ratings",
-    fields: &[
-    ],
-    auth: &[
-    ],
-};
-
-const OP_USERS_GET_USER_RATINGS_QUERY: OpSpec = OpSpec {
-    method: "GET",
-    path_template: "/user/ratings/query",
-    fields: &[
-        FieldSpec { snake: "item_type", location: FieldLocation::Query },
-    ],
-    auth: &[
-    ],
-};
-
-const OP_USERS_GET_USER_RATINGS_QUERY_PARAMS_V2: OpSpec = OpSpec {
-    method: "GET",
-    path_template: "/user/ratings/query/params",
-    fields: &[
-    ],
-    auth: &[
-    ],
-};
-
-const OP_USERS_DELETE_USER_RATINGS_ITEM_TYPE_ITEM_ID: OpSpec = OpSpec {
-    method: "DELETE",
-    path_template: "/user/ratings/{item_type}/{item_id}",
-    fields: &[
-        FieldSpec { snake: "item_type", location: FieldLocation::Path },
-        FieldSpec { snake: "item_id", location: FieldLocation::Path },
-    ],
-    auth: &[
-    ],
-};
-
-const OP_USERS_PUT_USER_RATINGS_ITEM_TYPE_ITEM_ID_ITEM_RATING: OpSpec = OpSpec {
-    method: "PUT",
-    path_template: "/user/ratings/{item_type}/{item_id}/{item_rating}",
-    fields: &[
-        FieldSpec { snake: "item_type", location: FieldLocation::Path },
-        FieldSpec { snake: "item_id", location: FieldLocation::Path },
-        FieldSpec { snake: "item_rating", location: FieldLocation::Path },
-    ],
-    auth: &[
-    ],
-};
-
-fn iface_users__put_user_favorites_id_params__to_json(p: &iface_users::PutUserFavoritesIdParams) -> Value {
-    let mut m = Map::new();
-    m.insert("id".into(), Value::String((&p.id).clone()));
-    Value::Object(m)
-}
-
-fn iface_users__delete_user_favorites_id_params__to_json(p: &iface_users::DeleteUserFavoritesIdParams) -> Value {
-    let mut m = Map::new();
-    m.insert("id".into(), Value::String((&p.id).clone()));
-    Value::Object(m)
-}
-
-fn iface_users__get_user_ratings_query_params__to_json(p: &iface_users::GetUserRatingsQueryParams) -> Value {
-    let mut m = Map::new();
-    m.insert("item_type".into(), match (&p.item_type) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_users__delete_user_ratings_item_type_item_id_params__to_json(p: &iface_users::DeleteUserRatingsItemTypeItemIdParams) -> Value {
-    let mut m = Map::new();
-    m.insert("item_type".into(), Value::String((&p.item_type).clone()));
-    m.insert("item_id".into(), Value::String((&p.item_id).clone()));
-    Value::Object(m)
-}
-
-fn iface_users__put_user_ratings_item_type_item_id_item_rating_params__to_json(p: &iface_users::PutUserRatingsItemTypeItemIdItemRatingParams) -> Value {
-    let mut m = Map::new();
-    m.insert("item_type".into(), Value::String((&p.item_type).clone()));
-    m.insert("item_id".into(), Value::String((&p.item_id).clone()));
-    m.insert("item_rating".into(), Value::String((&p.item_rating).clone()));
-    Value::Object(m)
-}
-
-impl iface_users::Guest for crate::Component {
-    fn get_user() -> Result<String, String> {
-        dispatch(&OP_USERS_GET_USER, Value::Object(Map::new()))
-    }
-    fn get_user_favorites() -> Result<String, String> {
-        dispatch(&OP_USERS_GET_USER_FAVORITES, Value::Object(Map::new()))
-    }
-    fn put_user_favorites_id(params: iface_users::PutUserFavoritesIdParams) -> Result<String, String> {
-        let json = iface_users__put_user_favorites_id_params__to_json(&params);
-        dispatch(&OP_USERS_PUT_USER_FAVORITES_ID, json)
-    }
-    fn delete_user_favorites_id(params: iface_users::DeleteUserFavoritesIdParams) -> Result<String, String> {
-        let json = iface_users__delete_user_favorites_id_params__to_json(&params);
-        dispatch(&OP_USERS_DELETE_USER_FAVORITES_ID, json)
-    }
-    fn get_user_ratings() -> Result<String, String> {
-        dispatch(&OP_USERS_GET_USER_RATINGS, Value::Object(Map::new()))
-    }
-    fn get_user_ratings_query(params: iface_users::GetUserRatingsQueryParams) -> Result<String, String> {
-        let json = iface_users__get_user_ratings_query_params__to_json(&params);
-        dispatch(&OP_USERS_GET_USER_RATINGS_QUERY, json)
-    }
-    fn get_user_ratings_query_params_v2() -> Result<String, String> {
-        dispatch(&OP_USERS_GET_USER_RATINGS_QUERY_PARAMS_V2, Value::Object(Map::new()))
-    }
-    fn delete_user_ratings_item_type_item_id(params: iface_users::DeleteUserRatingsItemTypeItemIdParams) -> Result<String, String> {
-        let json = iface_users__delete_user_ratings_item_type_item_id_params__to_json(&params);
-        dispatch(&OP_USERS_DELETE_USER_RATINGS_ITEM_TYPE_ITEM_ID, json)
-    }
-    fn put_user_ratings_item_type_item_id_item_rating(params: iface_users::PutUserRatingsItemTypeItemIdItemRatingParams) -> Result<String, String> {
-        let json = iface_users__put_user_ratings_item_type_item_id_item_rating_params__to_json(&params);
-        dispatch(&OP_USERS_PUT_USER_RATINGS_ITEM_TYPE_ITEM_ID_ITEM_RATING, json)
-    }
-}
+mod iface_episodes;
+mod iface_languages;
+mod iface_authentication;
+mod iface_movies;
+mod iface_search;
+mod iface_series;
+mod iface_updates;
+mod iface_users;
 
 export!(Component);

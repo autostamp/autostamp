@@ -11,8 +11,8 @@ triggered.
 
 | Setting | Value |
 | --- | --- |
-| Package | `autostamp:ticketmaster@0.3.0` |
-| Published version | `0.3.0+ticketmaster-v2` |
+| Package | `autostamp:ticketmaster@0.5.0` |
+| Published version | `0.5.0+ticketmaster-v2` |
 | Tag filter | all tags |
 | Operations generated | 13 |
 | Infer API-key credentials | enabled — not triggered |

@@ -1,6 +1,146 @@
-package autostamp:instagram@0.3.0;
+package autostamp:instagram@0.5.0;
 
 interface geographies {
+  enum media-entry-type-op-enum {
+    image,
+    video,
+  }
+
+  record media-list-response {
+    /// List of media entries
+    data: option<list<media-entry>>,
+    meta: option<meta-data>,
+    pagination: option<id-pagination-info>
+  }
+
+  record media-entry {
+    /// ??? Unknown ???
+    attribution: option<string>,
+    caption: option<caption-data>,
+    comments: option<comments-collection>,
+    /// Media creation UNIX timestamp
+    created-time: option<string>,
+    /// Filter of this media entry
+    filter: option<string>,
+    /// ID of a media entry
+    id: option<string>,
+    images: option<images-data>,
+    likes: option<likes-collection>,
+    /// Fixed URL of this media entry
+    link: option<string>,
+    location: option<location-info>,
+    /// List of tags assigned to this media
+    tags: option<list<string>>,
+    /// Type of this media entry
+    type-op: option<media-entry-type-op-enum>,
+    user: option<user-short-info>,
+    /// Indicates whether authenticated user has liked this media or not
+    user-has-liked: option<bool>,
+    /// Users located on this media entry
+    users-in-photo: option<list<user-in-photo>>,
+    videos: option<videos-data>
+  }
+
+  record caption-data {
+    /// Caption creation UNIX timestamp
+    created-time: option<string>,
+    from-op: option<user-short-info>,
+    /// ID of this caption
+    id: option<string>,
+    /// Caption text
+    text: option<string>
+  }
+
+  record user-short-info {
+    /// User full name
+    full-name: option<string>,
+    /// User ID
+    id: option<string>,
+    /// URL to user profile picture
+    profile-picture: option<string>,
+    /// User name, nickname
+    username: option<string>
+  }
+
+  record comments-collection {
+    /// Nember of comments available, data does not necessary contain all comments
+    count: option<s32>,
+    /// Collection of comment entries; **warning:** deprecated for Apps [created on or after Nov 17, 2015](http://instagram.com/developer/changelog/)
+    data: option<list<comment-entry>>
+  }
+
+  record comment-entry {
+    /// Comment creation UNIX timestamp
+    created-time: option<string>,
+    from-op: option<user-short-info>,
+    /// ID of this comment
+    id: option<string>,
+    /// Text of the comment
+    text: option<string>
+  }
+
+  record images-data {
+    low-resolution: option<image-info>,
+    standard-resolution: option<image-info>,
+    thumbnail: option<image-info>
+  }
+
+  record image-info {
+    /// Image/video height in pixels
+    height: option<s32>,
+    /// URL of the image/video resource
+    url: option<string>,
+    /// Image/video width in pixels
+    width: option<s32>
+  }
+
+  record likes-collection {
+    /// Nember of likes available, data does not necessary contain all comments
+    count: option<s32>,
+    /// Collection of users who liked; **warning:** deprecated for Apps [created on or after Nov 17, 2015](http://instagram.com/developer/changelog/)
+    data: option<list<user-short-info>>
+  }
+
+  record location-info {
+    /// ID of this location (in some responses it has a type of 'integer')
+    id: option<string>,
+    /// Location latitude
+    latitude: option<f64>,
+    /// Location longitude
+    longitude: option<f64>,
+    /// Location name
+    name: option<string>
+  }
+
+  record user-in-photo {
+    position: option<position>,
+    user: option<user-short-info>
+  }
+
+  record position {
+    /// X position (horizontal)
+    x: option<f64>,
+    /// Y position (vertical)
+    y: option<f64>
+  }
+
+  record videos-data {
+    low-resolution: option<image-info>,
+    standard-resolution: option<image-info>
+  }
+
+  record meta-data {
+    /// HTTP result code
+    code: option<s32>
+  }
+
+  record id-pagination-info {
+    /// The max ID of the next page
+    next-max-id: option<string>,
+    /// URL to retrieve next page of entries
+    next-url: option<string>
+  }
+
   /// Get recent media from a custom geo-id.
   record get-geographies-geo-id-media-recent-params {
     /// The geography ID.
@@ -10,12 +150,163 @@ interface geographies {
     /// Return media before this `min_id`.
     min-id: option<string>
   }
-  get-geographies-geo-id-media-recent: func(params: get-geographies-geo-id-media-recent-params) -> result<string, string>;
+  get-geographies-geo-id-media-recent: func(params: get-geographies-geo-id-media-recent-params) -> result<media-list-response, string>;
 
 }
 
 
 interface locations {
+  enum media-entry-type-op-enum {
+    image,
+    video,
+  }
+
+  record location-search-response {
+    /// List of found locations
+    data: option<list<location-info>>,
+    meta: option<meta-data>
+  }
+
+  record location-info {
+    /// ID of this location (in some responses it has a type of 'integer')
+    id: option<string>,
+    /// Location latitude
+    latitude: option<f64>,
+    /// Location longitude
+    longitude: option<f64>,
+    /// Location name
+    name: option<string>
+  }
+
+  record meta-data {
+    /// HTTP result code
+    code: option<s32>
+  }
+
+  record location-info-response {
+    data: option<location-info>,
+    meta: option<meta-data>
+  }
+
+  record media-list-response {
+    /// List of media entries
+    data: option<list<media-entry>>,
+    meta: option<meta-data>,
+    pagination: option<id-pagination-info>
+  }
+
+  record media-entry {
+    /// ??? Unknown ???
+    attribution: option<string>,
+    caption: option<caption-data>,
+    comments: option<comments-collection>,
+    /// Media creation UNIX timestamp
+    created-time: option<string>,
+    /// Filter of this media entry
+    filter: option<string>,
+    /// ID of a media entry
+    id: option<string>,
+    images: option<images-data>,
+    likes: option<likes-collection>,
+    /// Fixed URL of this media entry
+    link: option<string>,
+    location: option<location-info>,
+    /// List of tags assigned to this media
+    tags: option<list<string>>,
+    /// Type of this media entry
+    type-op: option<media-entry-type-op-enum>,
+    user: option<user-short-info>,
+    /// Indicates whether authenticated user has liked this media or not
+    user-has-liked: option<bool>,
+    /// Users located on this media entry
+    users-in-photo: option<list<user-in-photo>>,
+    videos: option<videos-data>
+  }
+
+  record caption-data {
+    /// Caption creation UNIX timestamp
+    created-time: option<string>,
+    from-op: option<user-short-info>,
+    /// ID of this caption
+    id: option<string>,
+    /// Caption text
+    text: option<string>
+  }
+
+  record user-short-info {
+    /// User full name
+    full-name: option<string>,
+    /// User ID
+    id: option<string>,
+    /// URL to user profile picture
+    profile-picture: option<string>,
+    /// User name, nickname
+    username: option<string>
+  }
+
+  record comments-collection {
+    /// Nember of comments available, data does not necessary contain all comments
+    count: option<s32>,
+    /// Collection of comment entries; **warning:** deprecated for Apps [created on or after Nov 17, 2015](http://instagram.com/developer/changelog/)
+    data: option<list<comment-entry>>
+  }
+
+  record comment-entry {
+    /// Comment creation UNIX timestamp
+    created-time: option<string>,
+    from-op: option<user-short-info>,
+    /// ID of this comment
+    id: option<string>,
+    /// Text of the comment
+    text: option<string>
+  }
+
+  record images-data {
+    low-resolution: option<image-info>,
+    standard-resolution: option<image-info>,
+    thumbnail: option<image-info>
+  }
+
+  record image-info {
+    /// Image/video height in pixels
+    height: option<s32>,
+    /// URL of the image/video resource
+    url: option<string>,
+    /// Image/video width in pixels
+    width: option<s32>
+  }
+
+  record likes-collection {
+    /// Nember of likes available, data does not necessary contain all comments
+    count: option<s32>,
+    /// Collection of users who liked; **warning:** deprecated for Apps [created on or after Nov 17, 2015](http://instagram.com/developer/changelog/)
+    data: option<list<user-short-info>>
+  }
+
+  record user-in-photo {
+    position: option<position>,
+    user: option<user-short-info>
+  }
+
+  record position {
+    /// X position (horizontal)
+    x: option<f64>,
+    /// Y position (vertical)
+    y: option<f64>
+  }
+
+  record videos-data {
+    low-resolution: option<image-info>,
+    standard-resolution: option<image-info>
+  }
+
+  record id-pagination-info {
+    /// The max ID of the next page
+    next-max-id: option<string>,
+    /// URL to retrieve next page of entries
+    next-url: option<string>
+  }
+
   /// Search for a location by geographic coordinate.
   record get-locations-search-params {
     /// Default is 1000m (distance=1000), max distance is 5000.
@@ -33,14 +324,14 @@ interface locations {
     /// `lat` and `lng`.
     foursquare-v2-id: option<string>
   }
-  get-locations-search: func(params: get-locations-search-params) -> result<string, string>;
+  get-locations-search: func(params: get-locations-search-params) -> result<location-search-response, string>;
 
   /// Get information about a location.
   record get-locations-location-id-params {
     /// The location ID.
     location-id: string
   }
-  get-locations-location-id: func(params: get-locations-location-id-params) -> result<string, string>;
+  get-locations-location-id: func(params: get-locations-location-id-params) -> result<location-info-response, string>;
 
   /// Get a list of recent media objects from a given location.
   record get-locations-location-id-media-recent-params {
@@ -55,13 +346,150 @@ interface locations {
     /// Return media after this `max_id`.
     max-id: option<string>
   }
-  get-locations-location-id-media-recent: func(params: get-locations-location-id-media-recent-params) -> result<string, string>;
+  get-locations-location-id-media-recent: func(params: get-locations-location-id-media-recent-params) -> result<media-list-response, string>;
 
 }
 
 interface media {
+  enum entry-type-op-enum {
+    image,
+    video,
+  }
+
+  record search-response {
+    /// Found media entries; some end-points do not return likes informtaion
+    data: option<list<entry>>,
+    meta: option<meta-data>
+  }
+
+  record entry {
+    /// ??? Unknown ???
+    attribution: option<string>,
+    caption: option<caption-data>,
+    comments: option<comments-collection>,
+    /// Media creation UNIX timestamp
+    created-time: option<string>,
+    /// Filter of this media entry
+    filter: option<string>,
+    /// ID of a media entry
+    id: option<string>,
+    images: option<images-data>,
+    likes: option<likes-collection>,
+    /// Fixed URL of this media entry
+    link: option<string>,
+    location: option<location-info>,
+    /// List of tags assigned to this media
+    tags: option<list<string>>,
+    /// Type of this media entry
+    type-op: option<entry-type-op-enum>,
+    user: option<user-short-info>,
+    /// Indicates whether authenticated user has liked this media or not
+    user-has-liked: option<bool>,
+    /// Users located on this media entry
+    users-in-photo: option<list<user-in-photo>>,
+    videos: option<videos-data>
+  }
+
+  record caption-data {
+    /// Caption creation UNIX timestamp
+    created-time: option<string>,
+    from-op: option<user-short-info>,
+    /// ID of this caption
+    id: option<string>,
+    /// Caption text
+    text: option<string>
+  }
+
+  record user-short-info {
+    /// User full name
+    full-name: option<string>,
+    /// User ID
+    id: option<string>,
+    /// URL to user profile picture
+    profile-picture: option<string>,
+    /// User name, nickname
+    username: option<string>
+  }
+
+  record comments-collection {
+    /// Nember of comments available, data does not necessary contain all comments
+    count: option<s32>,
+    /// Collection of comment entries; **warning:** deprecated for Apps [created on or after Nov 17, 2015](http://instagram.com/developer/changelog/)
+    data: option<list<comment-entry>>
+  }
+
+  record comment-entry {
+    /// Comment creation UNIX timestamp
+    created-time: option<string>,
+    from-op: option<user-short-info>,
+    /// ID of this comment
+    id: option<string>,
+    /// Text of the comment
+    text: option<string>
+  }
+
+  record images-data {
+    low-resolution: option<image-info>,
+    standard-resolution: option<image-info>,
+    thumbnail: option<image-info>
+  }
+
+  record image-info {
+    /// Image/video height in pixels
+    height: option<s32>,
+    /// URL of the image/video resource
+    url: option<string>,
+    /// Image/video width in pixels
+    width: option<s32>
+  }
+
+  record likes-collection {
+    /// Nember of likes available, data does not necessary contain all comments
+    count: option<s32>,
+    /// Collection of users who liked; **warning:** deprecated for Apps [created on or after Nov 17, 2015](http://instagram.com/developer/changelog/)
+    data: option<list<user-short-info>>
+  }
+
+  record location-info {
+    /// ID of this location (in some responses it has a type of 'integer')
+    id: option<string>,
+    /// Location latitude
+    latitude: option<f64>,
+    /// Location longitude
+    longitude: option<f64>,
+    /// Location name
+    name: option<string>
+  }
+
+  record user-in-photo {
+    position: option<position>,
+    user: option<user-short-info>
+  }
+
+  record position {
+    /// X position (horizontal)
+    x: option<f64>,
+    /// Y position (vertical)
+    y: option<f64>
+  }
+
+  record videos-data {
+    low-resolution: option<image-info>,
+    standard-resolution: option<image-info>
+  }
+
+  record meta-data {
+    /// HTTP result code
+    code: option<s32>
+  }
+
+  record entry-response {
+    data: option<entry>,
+    meta: option<meta-data>
+  }
+
   /// Get a list of currently popular media.
-  get-media-popular: func() -> result<string, string>;
+  get-media-popular: func() -> result<search-response, string>;
 
   /// Search for media in a given area.
   record get-media-search-params {
@@ -76,31 +504,69 @@ interface media {
     /// Default is 1km (distance=1000), max distance is 5km.
     distance: option<s32>
   }
-  get-media-search: func(params: get-media-search-params) -> result<string, string>;
+  get-media-search: func(params: get-media-search-params) -> result<search-response, string>;
 
   /// Get information about a media object.
   record get-media-shortcode-shortcode-params {
     /// The short code of the media resource.
     shortcode: string
   }
-  get-media-shortcode-shortcode: func(params: get-media-shortcode-shortcode-params) -> result<string, string>;
+  get-media-shortcode-shortcode: func(params: get-media-shortcode-shortcode-params) -> result<entry-response, string>;
 
   /// Get information about a media object.
   record get-media-media-id-params {
     /// The ID of the media resource.
     media-id: string
   }
-  get-media-media-id: func(params: get-media-media-id-params) -> result<string, string>;
+  get-media-media-id: func(params: get-media-media-id-params) -> result<entry-response, string>;
 
 }
 
 interface comments {
+  record response {
+    /// Collection of comments
+    data: option<list<comment-entry>>,
+    meta: option<meta-data>
+  }
+
+  record comment-entry {
+    /// Comment creation UNIX timestamp
+    created-time: option<string>,
+    from-op: option<user-short-info>,
+    /// ID of this comment
+    id: option<string>,
+    /// Text of the comment
+    text: option<string>
+  }
+
+  record user-short-info {
+    /// User full name
+    full-name: option<string>,
+    /// User ID
+    id: option<string>,
+    /// URL to user profile picture
+    profile-picture: option<string>,
+    /// User name, nickname
+    username: option<string>
+  }
+
+  record meta-data {
+    /// HTTP result code
+    code: option<s32>
+  }
+
+  record status-response {
+    /// No data - 'null'
+    data: option<string>,
+    meta: option<meta-data>
+  }
+
   /// Get a list of recent comments on a media object.
   record get-media-media-id-comments-params {
     /// The ID of the media resource.
     media-id: string
   }
-  get-media-media-id-comments: func(params: get-media-media-id-comments-params) -> result<string, string>;
+  get-media-media-id-comments: func(params: get-media-media-id-comments-params) -> result<response, string>;
 
   /// Create a comment on a media object.
   record post-media-media-id-comments-params {
@@ -109,7 +575,7 @@ interface comments {
     /// Text to post as a comment on the media object as specified in `media-id`.
     text: string
   }
-  post-media-media-id-comments: func(params: post-media-media-id-comments-params) -> result<string, string>;
+  post-media-media-id-comments: func(params: post-media-media-id-comments-params) -> result<status-response, string>;
 
   /// Remove a comment.
   record delete-media-media-id-comments-comment-id-params {
@@ -118,48 +584,242 @@ interface comments {
     /// The ID of the comment entry.
     comment-id: string
   }
-  delete-media-media-id-comments-comment-id: func(params: delete-media-media-id-comments-comment-id-params) -> result<string, string>;
+  delete-media-media-id-comments-comment-id: func(params: delete-media-media-id-comments-comment-id-params) -> result<status-response, string>;
 
 }
 
 interface likes {
+  record users-info-response {
+    /// User short information entries
+    data: option<list<user-short-info>>,
+    meta: option<meta-data>
+  }
+
+  record user-short-info {
+    /// User full name
+    full-name: option<string>,
+    /// User ID
+    id: option<string>,
+    /// URL to user profile picture
+    profile-picture: option<string>,
+    /// User name, nickname
+    username: option<string>
+  }
+
+  record meta-data {
+    /// HTTP result code
+    code: option<s32>
+  }
+
+  record status-response {
+    /// No data - 'null'
+    data: option<string>,
+    meta: option<meta-data>
+  }
+
   /// Get a list of users who have liked this media.
   record get-media-media-id-likes-params {
     /// The ID of the media resource.
     media-id: string
   }
-  get-media-media-id-likes: func(params: get-media-media-id-likes-params) -> result<string, string>;
+  get-media-media-id-likes: func(params: get-media-media-id-likes-params) -> result<users-info-response, string>;
 
   /// Set a like on this media by the current user.
   record post-media-media-id-likes-params {
     /// The ID of the media resource.
     media-id: string
   }
-  post-media-media-id-likes: func(params: post-media-media-id-likes-params) -> result<string, string>;
+  post-media-media-id-likes: func(params: post-media-media-id-likes-params) -> result<status-response, string>;
 
   /// Remove a like on this media by the current user.
   record delete-media-media-id-likes-params {
     /// The ID of the media resource.
     media-id: string
   }
-  delete-media-media-id-likes: func(params: delete-media-media-id-likes-params) -> result<string, string>;
+  delete-media-media-id-likes: func(params: delete-media-media-id-likes-params) -> result<status-response, string>;
 
 }
 
 interface tags {
+  enum media-entry-type-op-enum {
+    image,
+    video,
+  }
+
+  record tag-search-response {
+    /// List of found tags with brief statistics
+    data: option<list<tag-info>>,
+    meta: option<meta-data>
+  }
+
+  record tag-info {
+    /// Overall number of media entries taged with this name
+    media-count: option<s64>,
+    /// Tag name
+    name: option<string>
+  }
+
+  record meta-data {
+    /// HTTP result code
+    code: option<s32>
+  }
+
+  record tag-info-response {
+    data: option<tag-info>,
+    meta: option<meta-data>
+  }
+
+  record tag-media-list-response {
+    /// List of media entries with this tag
+    data: option<list<media-entry>>,
+    meta: option<meta-data>,
+    pagination: option<tag-pagination-info>
+  }
+
+  record media-entry {
+    /// ??? Unknown ???
+    attribution: option<string>,
+    caption: option<caption-data>,
+    comments: option<comments-collection>,
+    /// Media creation UNIX timestamp
+    created-time: option<string>,
+    /// Filter of this media entry
+    filter: option<string>,
+    /// ID of a media entry
+    id: option<string>,
+    images: option<images-data>,
+    likes: option<likes-collection>,
+    /// Fixed URL of this media entry
+    link: option<string>,
+    location: option<location-info>,
+    /// List of tags assigned to this media
+    tags: option<list<string>>,
+    /// Type of this media entry
+    type-op: option<media-entry-type-op-enum>,
+    user: option<user-short-info>,
+    /// Indicates whether authenticated user has liked this media or not
+    user-has-liked: option<bool>,
+    /// Users located on this media entry
+    users-in-photo: option<list<user-in-photo>>,
+    videos: option<videos-data>
+  }
+
+  record caption-data {
+    /// Caption creation UNIX timestamp
+    created-time: option<string>,
+    from-op: option<user-short-info>,
+    /// ID of this caption
+    id: option<string>,
+    /// Caption text
+    text: option<string>
+  }
+
+  record user-short-info {
+    /// User full name
+    full-name: option<string>,
+    /// User ID
+    id: option<string>,
+    /// URL to user profile picture
+    profile-picture: option<string>,
+    /// User name, nickname
+    username: option<string>
+  }
+
+  record comments-collection {
+    /// Nember of comments available, data does not necessary contain all comments
+    count: option<s32>,
+    /// Collection of comment entries; **warning:** deprecated for Apps [created on or after Nov 17, 2015](http://instagram.com/developer/changelog/)
+    data: option<list<comment-entry>>
+  }
+
+  record comment-entry {
+    /// Comment creation UNIX timestamp
+    created-time: option<string>,
+    from-op: option<user-short-info>,
+    /// ID of this comment
+    id: option<string>,
+    /// Text of the comment
+    text: option<string>
+  }
+
+  record images-data {
+    low-resolution: option<image-info>,
+    standard-resolution: option<image-info>,
+    thumbnail: option<image-info>
+  }
+
+  record image-info {
+    /// Image/video height in pixels
+    height: option<s32>,
+    /// URL of the image/video resource
+    url: option<string>,
+    /// Image/video width in pixels
+    width: option<s32>
+  }
+
+  record likes-collection {
+    /// Nember of likes available, data does not necessary contain all comments
+    count: option<s32>,
+    /// Collection of users who liked; **warning:** deprecated for Apps [created on or after Nov 17, 2015](http://instagram.com/developer/changelog/)
+    data: option<list<user-short-info>>
+  }
+
+  record location-info {
+    /// ID of this location (in some responses it has a type of 'integer')
+    id: option<string>,
+    /// Location latitude
+    latitude: option<f64>,
+    /// Location longitude
+    longitude: option<f64>,
+    /// Location name
+    name: option<string>
+  }
+
+  record user-in-photo {
+    position: option<position>,
+    user: option<user-short-info>
+  }
+
+  record position {
+    /// X position (horizontal)
+    x: option<f64>,
+    /// Y position (vertical)
+    y: option<f64>
+  }
+
+  record videos-data {
+    low-resolution: option<image-info>,
+    standard-resolution: option<image-info>
+  }
+
+  record tag-pagination-info {
+    /// The deprication warning, if information is available
+    deprecation-warning: option<string>,
+    /// The min ID of a tag for the next page
+    min-tag-id: option<string>,
+    /// Depricated. Use min_tag_id instead
+    next-max-id: option<string>,
+    /// The max ID of a tag for the next page
+    next-max-tag-id: option<string>,
+    /// Depricated. Use max_tag_id instead
+    next-min-id: option<string>,
+    /// URL to retrieve next page of entries
+    next-url: option<string>
+  }
+
   /// Search for tags by name.
   record get-tags-search-params {
     /// A valid tag name without a leading \#. (eg. snowy, nofilter)
     q: string
   }
-  get-tags-search: func(params: get-tags-search-params) -> result<string, string>;
+  get-tags-search: func(params: get-tags-search-params) -> result<tag-search-response, string>;
 
   /// Get information about a tag object.
   record get-tags-tag-name-params {
     /// The tag name.
     tag-name: string
   }
-  get-tags-tag-name: func(params: get-tags-tag-name-params) -> result<string, string>;
+  get-tags-tag-name: func(params: get-tags-tag-name-params) -> result<tag-info-response, string>;
 
   /// Get a list of recently tagged media.
   record get-tags-tag-name-media-recent-params {
@@ -172,11 +832,192 @@ interface tags {
     /// Return media after this `max_tag_id`.
     max-tag-id: option<string>
   }
-  get-tags-tag-name-media-recent: func(params: get-tags-tag-name-media-recent-params) -> result<string, string>;
+  get-tags-tag-name-media-recent: func(params: get-tags-tag-name-media-recent-params) -> result<tag-media-list-response, string>;
 
 }
 
 interface users {
+  enum media-entry-type-op-enum {
+    image,
+    video,
+  }
+
+  record info-response {
+    /// User short information entries
+    data: option<list<user-short-info>>,
+    meta: option<meta-data>
+  }
+
+  record user-short-info {
+    /// User full name
+    full-name: option<string>,
+    /// User ID
+    id: option<string>,
+    /// URL to user profile picture
+    profile-picture: option<string>,
+    /// User name, nickname
+    username: option<string>
+  }
+
+  record meta-data {
+    /// HTTP result code
+    code: option<s32>
+  }
+
+  record media-list-response {
+    /// List of media entries
+    data: option<list<media-entry>>,
+    meta: option<meta-data>,
+    pagination: option<id-pagination-info>
+  }
+
+  record media-entry {
+    /// ??? Unknown ???
+    attribution: option<string>,
+    caption: option<caption-data>,
+    comments: option<comments-collection>,
+    /// Media creation UNIX timestamp
+    created-time: option<string>,
+    /// Filter of this media entry
+    filter: option<string>,
+    /// ID of a media entry
+    id: option<string>,
+    images: option<images-data>,
+    likes: option<likes-collection>,
+    /// Fixed URL of this media entry
+    link: option<string>,
+    location: option<location-info>,
+    /// List of tags assigned to this media
+    tags: option<list<string>>,
+    /// Type of this media entry
+    type-op: option<media-entry-type-op-enum>,
+    user: option<user-short-info>,
+    /// Indicates whether authenticated user has liked this media or not
+    user-has-liked: option<bool>,
+    /// Users located on this media entry
+    users-in-photo: option<list<user-in-photo>>,
+    videos: option<videos-data>
+  }
+
+  record caption-data {
+    /// Caption creation UNIX timestamp
+    created-time: option<string>,
+    from-op: option<user-short-info>,
+    /// ID of this caption
+    id: option<string>,
+    /// Caption text
+    text: option<string>
+  }
+
+  record comments-collection {
+    /// Nember of comments available, data does not necessary contain all comments
+    count: option<s32>,
+    /// Collection of comment entries; **warning:** deprecated for Apps [created on or after Nov 17, 2015](http://instagram.com/developer/changelog/)
+    data: option<list<comment-entry>>
+  }
+
+  record comment-entry {
+    /// Comment creation UNIX timestamp
+    created-time: option<string>,
+    from-op: option<user-short-info>,
+    /// ID of this comment
+    id: option<string>,
+    /// Text of the comment
+    text: option<string>
+  }
+
+  record images-data {
+    low-resolution: option<image-info>,
+    standard-resolution: option<image-info>,
+    thumbnail: option<image-info>
+  }
+
+  record image-info {
+    /// Image/video height in pixels
+    height: option<s32>,
+    /// URL of the image/video resource
+    url: option<string>,
+    /// Image/video width in pixels
+    width: option<s32>
+  }
+
+  record likes-collection {
+    /// Nember of likes available, data does not necessary contain all comments
+    count: option<s32>,
+    /// Collection of users who liked; **warning:** deprecated for Apps [created on or after Nov 17, 2015](http://instagram.com/developer/changelog/)
+    data: option<list<user-short-info>>
+  }
+
+  record location-info {
+    /// ID of this location (in some responses it has a type of 'integer')
+    id: option<string>,
+    /// Location latitude
+    latitude: option<f64>,
+    /// Location longitude
+    longitude: option<f64>,
+    /// Location name
+    name: option<string>
+  }
+
+  record user-in-photo {
+    position: option<position>,
+    user: option<user-short-info>
+  }
+
+  record position {
+    /// X position (horizontal)
+    x: option<f64>,
+    /// Y position (vertical)
+    y: option<f64>
+  }
+
+  record videos-data {
+    low-resolution: option<image-info>,
+    standard-resolution: option<image-info>
+  }
+
+  record id-pagination-info {
+    /// The max ID of the next page
+    next-max-id: option<string>,
+    /// URL to retrieve next page of entries
+    next-url: option<string>
+  }
+
+  record user-response {
+    data: option<user-info>,
+    meta: option<meta-data>
+  }
+
+  record user-info {
+    /// User biography
+    bio: option<string>,
+    counts: option<user-counts>,
+    /// User full name
+    full-name: option<string>,
+    /// User ID
+    id: option<string>,
+    /// URL to user profile picture
+    profile-picture: option<string>,
+    /// User name, nickname
+    username: option<string>,
+    /// URL to user web-site
+    website: option<string>
+  }
+
+  record user-counts {
+    /// Number of followers of this user
+    followed-by: option<s32>,
+    /// Number of users followed by this user
+    follows: option<s32>,
+    /// Number of user media
+    media: option<s32>
+  }
+
+  variant get-users-user-id-error {
+    not-found(string),
+    other(string)
+  }
+
   /// Search for a user by name.
   record get-users-search-params {
     /// A query string.
@@ -184,7 +1025,7 @@ interface users {
     /// Number of users to return.
     count: option<s32>
   }
-  get-users-search: func(params: get-users-search-params) -> result<string, string>;
+  get-users-search: func(params: get-users-search-params) -> result<info-response, string>;
 
   /// See the authenticated user's feed.
   record get-users-self-feed-params {
@@ -195,7 +1036,7 @@ interface users {
     /// Return media earlier than this `max_id`.
     max-id: option<string>
   }
-  get-users-self-feed: func(params: get-users-self-feed-params) -> result<string, string>;
+  get-users-self-feed: func(params: get-users-self-feed-params) -> result<media-list-response, string>;
 
   /// See the list of media liked by the authenticated user.
   record get-users-self-media-liked-params {
@@ -204,14 +1045,14 @@ interface users {
     /// Return media liked before this id.
     max-like-id: option<string>
   }
-  get-users-self-media-liked: func(params: get-users-self-media-liked-params) -> result<string, string>;
+  get-users-self-media-liked: func(params: get-users-self-media-liked-params) -> result<media-list-response, string>;
 
   /// Get basic information about a user.
   record get-users-user-id-params {
     /// The ID of a user to get information about, or **self** to retrieve information about authenticated user.
     user-id: string
   }
-  get-users-user-id: func(params: get-users-user-id-params) -> result<string, string>;
+  get-users-user-id: func(params: get-users-user-id-params) -> result<user-response, get-users-user-id-error>;
 
   /// Get the most recent media published by a user.
   record get-users-user-id-media-recent-params {
@@ -228,11 +1069,23 @@ interface users {
     /// Return media earlier than this `max_id`.
     max-id: option<string>
   }
-  get-users-user-id-media-recent: func(params: get-users-user-id-media-recent-params) -> result<string, string>;
+  get-users-user-id-media-recent: func(params: get-users-user-id-media-recent-params) -> result<media-list-response, string>;
 
 }
 
 interface relationships {
+  enum relationship-info-incoming-status-enum {
+    none,
+    followed-by,
+    requested-by,
+  }
+
+  enum relationship-info-outgoing-status-enum {
+    none,
+    follows,
+    requested,
+  }
+
   enum post-users-user-id-relationship-action-enum {
     follow,
     unfollow,
@@ -242,29 +1095,89 @@ interface relationships {
     ignore,
   }
 
+  record users-info-response {
+    /// User short information entries
+    data: option<list<user-short-info>>,
+    meta: option<meta-data>
+  }
+
+  record user-short-info {
+    /// User full name
+    full-name: option<string>,
+    /// User ID
+    id: option<string>,
+    /// URL to user profile picture
+    profile-picture: option<string>,
+    /// User name, nickname
+    username: option<string>
+  }
+
+  record meta-data {
+    /// HTTP result code
+    code: option<s32>
+  }
+
+  record users-paging-response {
+    /// List of user short information entries
+    data: option<list<user-short-info>>,
+    meta: option<meta-data>,
+    pagination: option<cursor-pagination-info>
+  }
+
+  record cursor-pagination-info {
+    /// The cursor ID of the next page
+    next-cursor: option<string>,
+    /// URL to retrieve next page of entries
+    next-url: option<string>
+  }
+
+  record relationship-response {
+    data: option<relationship-info>,
+    meta: option<meta-data>
+  }
+
+  record relationship-info {
+    /// Status of incoming relationship
+    incoming-status: option<relationship-info-incoming-status-enum>,
+    /// Status of outgoing relationship
+    outgoing-status: option<relationship-info-outgoing-status-enum>,
+    /// Indicates whether target user is private or not
+    target-user-is-private: option<bool>
+  }
+
+  record relationship-post-response {
+    data: option<relationship-status>,
+    meta: option<meta-data>
+  }
+
+  record relationship-status {
+    /// Status of outgoing relationship
+    outgoing-status: option<relationship-info-outgoing-status-enum>
+  }
+
   /// List the users who have requested this user's permission to follow.
-  get-users-self-requested-by: func() -> result<string, string>;
+  get-users-self-requested-by: func() -> result<users-info-response, string>;
 
   /// Get the list of users this user is followed by.
   record get-users-user-id-followed-by-params {
     /// The ID of a user, or **self** to retrieve information about authenticated user.
     user-id: string
   }
-  get-users-user-id-followed-by: func(params: get-users-user-id-followed-by-params) -> result<string, string>;
+  get-users-user-id-followed-by: func(params: get-users-user-id-followed-by-params) -> result<users-paging-response, string>;
 
   /// Get the list of users this user follows.
   record get-users-user-id-follows-params {
     /// The ID of a user, or **self** to retrieve information about authenticated user.
     user-id: string
   }
-  get-users-user-id-follows: func(params: get-users-user-id-follows-params) -> result<string, string>;
+  get-users-user-id-follows: func(params: get-users-user-id-follows-params) -> result<users-paging-response, string>;
 
   /// Get information about a relationship to another user.
   record get-users-user-id-relationship-params {
     /// The ID of a user to get information about.
     user-id: string
   }
-  get-users-user-id-relationship: func(params: get-users-user-id-relationship-params) -> result<string, string>;
+  get-users-user-id-relationship: func(params: get-users-user-id-relationship-params) -> result<relationship-response, string>;
 
   /// Modify the relationship between the current user and the target user.
   record post-users-user-id-relationship-params {
@@ -273,7 +1186,7 @@ interface relationships {
     /// Type of action to apply for relationship with the user.
     action: post-users-user-id-relationship-action-enum
   }
-  post-users-user-id-relationship: func(params: post-users-user-id-relationship-params) -> result<string, string>;
+  post-users-user-id-relationship: func(params: post-users-user-id-relationship-params) -> result<relationship-post-response, string>;
 
 }
 /// The component world: imports the secrets host capability

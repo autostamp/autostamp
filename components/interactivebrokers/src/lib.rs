@@ -44,10 +44,15 @@ pub(crate) enum FieldLocation {
     Body,
 }
 
-/// A single operation parameter: the snake-case key it carries in the params JSON and where
-/// it belongs in the request.
+/// A single operation parameter. `snake` keys the field in the internal params JSON (and, for a
+/// path field, matches the `{snake}` placeholder in the path template); `wire` is the verbatim name
+/// the field takes on the HTTP wire (query key, header name, or body property). The two differ
+/// whenever the source name isn't already snake_case (e.g. `dryRun` → snake `dry_run`, wire
+/// `dryRun`), and let distinct inputs that share a snake key (`DateCreated`, `DateCreated<`) still
+/// travel under their true names.
 pub(crate) struct FieldSpec {
     pub(crate) snake: &'static str,
+    pub(crate) wire: &'static str,
     pub(crate) location: FieldLocation,
 }
 
@@ -71,6 +76,16 @@ pub(crate) struct AuthApply {
     pub(crate) kind: AuthKind,
 }
 
+/// The failure modes of [`dispatch`], kept structured so each generated operation can map them
+/// onto its own typed error: an `Http` failure carries the response status and body (routed to
+/// the matching error-variant case), while a `Transport` failure carries a message for the
+/// catch-all case (a secret lookup, connection, or decode failure that never produced an HTTP
+/// status).
+pub(crate) enum DispatchError {
+    Http { status: u16, body: String },
+    Transport(String),
+}
+
 /// A single API operation: HTTP method, path template (with `{snake}` placeholders), the
 /// parameter fields, and the security schemes to apply.
 pub(crate) struct OpSpec {
@@ -81,8 +96,9 @@ pub(crate) struct OpSpec {
 }
 
 /// Execute `op` with the supplied `params` (a JSON object keyed by snake-case field names)
-/// and return the response body as a string, or an error message.
-pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, String> {
+/// and return the raw 2xx response body, or a structured [`DispatchError`] the caller maps
+/// onto the operation's typed error.
+pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, DispatchError> {
     let obj = match &params {
         Value::Object(map) => Some(map),
         _ => None,
@@ -105,10 +121,10 @@ pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, String> {
                 let placeholder = format!("{{{}}}", field.snake);
                 path = path.replace(&placeholder, &percent_encode(&scalar(value)));
             }
-            FieldLocation::Query => query.push((field.snake.to_string(), scalar(value))),
-            FieldLocation::Header => headers.push((field.snake.to_string(), scalar(value))),
+            FieldLocation::Query => query.push((field.wire.to_string(), scalar(value))),
+            FieldLocation::Header => headers.push((field.wire.to_string(), scalar(value))),
             FieldLocation::Body => {
-                body.insert(field.snake.to_string(), value.clone());
+                body.insert(field.wire.to_string(), value.clone());
             }
         }
     }
@@ -116,7 +132,7 @@ pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, String> {
     // Apply each resolved security scheme, sourcing its value from wasmcloud:secrets.
     let mut cookies: Vec<String> = Vec::new();
     for apply in op.auth {
-        let secret = fetch_secret(apply.secret_key)?;
+        let secret = fetch_secret(apply.secret_key).map_err(DispatchError::Transport)?;
         match &apply.kind {
             AuthKind::Bearer => headers.push(("authorization".into(), format!("Bearer {secret}"))),
             AuthKind::Basic => {
@@ -177,17 +193,18 @@ fn fetch_secret(key: &str) -> Result<String, String> {
 }
 
 /// Build and send the outgoing request with `wstd`, returning the response body on a 2xx
-/// status. The generated guest exports are synchronous, so the async `wstd` client is driven
-/// to completion on a local reactor via `wstd::runtime::block_on`.
+/// status and a structured [`DispatchError`] otherwise. The generated guest exports are
+/// synchronous, so the async `wstd` client is driven to completion on a local reactor via
+/// `wstd::runtime::block_on`.
 fn perform(
     method: &str,
     path_with_query: &str,
     headers: &[(String, String)],
     body: &[u8],
-) -> Result<String, String> {
+) -> Result<String, DispatchError> {
     let url = join_url(crate::BASE_URL, path_with_query);
     let method = Method::from_bytes(method.as_bytes())
-        .map_err(|err| format!("invalid HTTP method `{method}`: {err}"))?;
+        .map_err(|err| DispatchError::Transport(format!("invalid HTTP method `{method}`: {err}")))?;
 
     let mut builder = Request::builder().method(method).uri(url);
     for (name, value) in headers {
@@ -199,27 +216,29 @@ fn perform(
         } else {
             Body::from(body.to_vec())
         })
-        .map_err(|err| format!("failed to build request: {err}"))?;
+        .map_err(|err| DispatchError::Transport(format!("failed to build request: {err}")))?;
 
     wstd::runtime::block_on(async move {
         let client = Client::new();
         let response = client
             .send(request)
             .await
-            .map_err(|err| format!("request failed: {err:#}"))?;
+            .map_err(|err| DispatchError::Transport(format!("request failed: {err:#}")))?;
 
         let status = response.status().as_u16();
         let mut response_body = response.into_body();
-        let bytes = response_body
-            .contents()
-            .await
-            .map_err(|err| format!("failed to read response body: {err:#}"))?;
+        let bytes = response_body.contents().await.map_err(|err| {
+            DispatchError::Transport(format!("failed to read response body: {err:#}"))
+        })?;
         let body_text = String::from_utf8_lossy(bytes).into_owned();
 
         if (200..300).contains(&status) {
             Ok(body_text)
         } else {
-            Err(format!("HTTP {status}: {body_text}"))
+            Err(DispatchError::Http {
+                status,
+                body: body_text,
+            })
         }
     })
 }
@@ -279,500 +298,12 @@ fn base64(input: &[u8]) -> String {
 }
 }
 
-use crate::runtime::{dispatch, AuthApply, AuthKind, FieldLocation, FieldSpec, OpSpec};
-use serde_json::{Map, Value};
-
-use crate::exports::autostamp::interactivebrokers::account_portfolio as iface_account_portfolio;
-
-const OP_ACCOUNT_PORTFOLIO_GET_ACCOUNTS: OpSpec = OpSpec {
-    method: "GET",
-    path_template: "/accounts",
-    fields: &[
-        FieldSpec { snake: "account", location: FieldLocation::Query },
-    ],
-    auth: &[
-        AuthApply { secret_key: "cookieAuth", kind: AuthKind::ApiKeyHeader("portal") },
-    ],
-};
-
-const OP_ACCOUNT_PORTFOLIO_GET_ACCOUNTS_ACCOUNT_POSITIONS: OpSpec = OpSpec {
-    method: "GET",
-    path_template: "/accounts/{account}/positions",
-    fields: &[
-        FieldSpec { snake: "account", location: FieldLocation::Path },
-    ],
-    auth: &[
-        AuthApply { secret_key: "cookieAuth", kind: AuthKind::ApiKeyHeader("portal") },
-    ],
-};
-
-const OP_ACCOUNT_PORTFOLIO_GET_ACCOUNTS_ACCOUNT_SUMMARY: OpSpec = OpSpec {
-    method: "GET",
-    path_template: "/accounts/{account}/summary",
-    fields: &[
-        FieldSpec { snake: "account", location: FieldLocation::Path },
-    ],
-    auth: &[
-        AuthApply { secret_key: "cookieAuth", kind: AuthKind::ApiKeyHeader("portal") },
-    ],
-};
-
-fn iface_account_portfolio__get_accounts_params__to_json(p: &iface_account_portfolio::GetAccountsParams) -> Value {
-    let mut m = Map::new();
-    m.insert("account".into(), Value::String((&p.account).clone()));
-    Value::Object(m)
-}
-
-fn iface_account_portfolio__get_accounts_account_positions_params__to_json(p: &iface_account_portfolio::GetAccountsAccountPositionsParams) -> Value {
-    let mut m = Map::new();
-    m.insert("account".into(), Value::String((&p.account).clone()));
-    Value::Object(m)
-}
-
-fn iface_account_portfolio__get_accounts_account_summary_params__to_json(p: &iface_account_portfolio::GetAccountsAccountSummaryParams) -> Value {
-    let mut m = Map::new();
-    m.insert("account".into(), Value::String((&p.account).clone()));
-    Value::Object(m)
-}
-
-impl iface_account_portfolio::Guest for crate::Component {
-    fn get_accounts(params: iface_account_portfolio::GetAccountsParams) -> Result<String, String> {
-        let json = iface_account_portfolio__get_accounts_params__to_json(&params);
-        dispatch(&OP_ACCOUNT_PORTFOLIO_GET_ACCOUNTS, json)
-    }
-    fn get_accounts_account_positions(params: iface_account_portfolio::GetAccountsAccountPositionsParams) -> Result<String, String> {
-        let json = iface_account_portfolio__get_accounts_account_positions_params__to_json(&params);
-        dispatch(&OP_ACCOUNT_PORTFOLIO_GET_ACCOUNTS_ACCOUNT_POSITIONS, json)
-    }
-    fn get_accounts_account_summary(params: iface_account_portfolio::GetAccountsAccountSummaryParams) -> Result<String, String> {
-        let json = iface_account_portfolio__get_accounts_account_summary_params__to_json(&params);
-        dispatch(&OP_ACCOUNT_PORTFOLIO_GET_ACCOUNTS_ACCOUNT_SUMMARY, json)
-    }
-}
-use crate::exports::autostamp::interactivebrokers::order_margin_requirements as iface_order_margin_requirements;
-
-const OP_ORDER_MARGIN_REQUIREMENTS_POST_ACCOUNTS_ACCOUNT_ORDER_IMPACT: OpSpec = OpSpec {
-    method: "POST",
-    path_template: "/accounts/{account}/order_impact",
-    fields: &[
-        FieldSpec { snake: "aux_price", location: FieldLocation::Body },
-        FieldSpec { snake: "contract_id", location: FieldLocation::Body },
-        FieldSpec { snake: "currency", location: FieldLocation::Body },
-        FieldSpec { snake: "customer_order_id", location: FieldLocation::Body },
-        FieldSpec { snake: "instrument_type", location: FieldLocation::Body },
-        FieldSpec { snake: "listing_exchange", location: FieldLocation::Body },
-        FieldSpec { snake: "order_type", location: FieldLocation::Body },
-        FieldSpec { snake: "price", location: FieldLocation::Body },
-        FieldSpec { snake: "quantity", location: FieldLocation::Body },
-        FieldSpec { snake: "side", location: FieldLocation::Body },
-        FieldSpec { snake: "ticker", location: FieldLocation::Body },
-        FieldSpec { snake: "time_in_force", location: FieldLocation::Body },
-    ],
-    auth: &[
-        AuthApply { secret_key: "cookieAuth", kind: AuthKind::ApiKeyHeader("portal") },
-    ],
-};
-
-fn iface_order_margin_requirements__order_type__to_json(p: &iface_order_margin_requirements::OrderType) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_order_margin_requirements__time_in_force__to_json(p: &iface_order_margin_requirements::TimeInForce) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_order_margin_requirements__post_accounts_account_order_impact_params__to_json(p: &iface_order_margin_requirements::PostAccountsAccountOrderImpactParams) -> Value {
-    let mut m = Map::new();
-    m.insert("aux_price".into(), match (&p.aux_price) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
-    m.insert("contract_id".into(), match (&p.contract_id) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
-    m.insert("currency".into(), match (&p.currency) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("customer_order_id".into(), match (&p.customer_order_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("instrument_type".into(), match (&p.instrument_type) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("listing_exchange".into(), match (&p.listing_exchange) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("order_type".into(), match (&p.order_type) { Some(v) => iface_order_margin_requirements__order_type__to_json(v), None => Value::Null });
-    m.insert("price".into(), match (&p.price) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
-    m.insert("quantity".into(), match (&p.quantity) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
-    m.insert("side".into(), match (&p.side) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
-    m.insert("ticker".into(), match (&p.ticker) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("time_in_force".into(), match (&p.time_in_force) { Some(v) => iface_order_margin_requirements__time_in_force__to_json(v), None => Value::Null });
-    Value::Object(m)
-}
-
-impl iface_order_margin_requirements::Guest for crate::Component {
-    fn post_accounts_account_order_impact(params: iface_order_margin_requirements::PostAccountsAccountOrderImpactParams) -> Result<String, String> {
-        let json = iface_order_margin_requirements__post_accounts_account_order_impact_params__to_json(&params);
-        dispatch(&OP_ORDER_MARGIN_REQUIREMENTS_POST_ACCOUNTS_ACCOUNT_ORDER_IMPACT, json)
-    }
-}
-use crate::exports::autostamp::interactivebrokers::orders as iface_orders;
-
-const OP_ORDERS_GET_ACCOUNTS_ACCOUNT_ORDERS: OpSpec = OpSpec {
-    method: "GET",
-    path_template: "/accounts/{account}/orders",
-    fields: &[
-    ],
-    auth: &[
-        AuthApply { secret_key: "cookieAuth", kind: AuthKind::ApiKeyHeader("portal") },
-    ],
-};
-
-const OP_ORDERS_POST_ACCOUNTS_ACCOUNT_ORDERS: OpSpec = OpSpec {
-    method: "POST",
-    path_template: "/accounts/{account}/orders",
-    fields: &[
-        FieldSpec { snake: "aux_price", location: FieldLocation::Body },
-        FieldSpec { snake: "contract_id", location: FieldLocation::Body },
-        FieldSpec { snake: "currency", location: FieldLocation::Body },
-        FieldSpec { snake: "customer_order_id", location: FieldLocation::Body },
-        FieldSpec { snake: "german_hft_algo", location: FieldLocation::Body },
-        FieldSpec { snake: "instrument_type", location: FieldLocation::Body },
-        FieldSpec { snake: "listing_exchange", location: FieldLocation::Body },
-        FieldSpec { snake: "mifid2_algo", location: FieldLocation::Body },
-        FieldSpec { snake: "mifid2_decision_maker", location: FieldLocation::Body },
-        FieldSpec { snake: "mifid2_execution_algo", location: FieldLocation::Body },
-        FieldSpec { snake: "mifid2_execution_trader", location: FieldLocation::Body },
-        FieldSpec { snake: "order_type", location: FieldLocation::Body },
-        FieldSpec { snake: "order_restrictions", location: FieldLocation::Body },
-        FieldSpec { snake: "outside_rth", location: FieldLocation::Body },
-        FieldSpec { snake: "price", location: FieldLocation::Body },
-        FieldSpec { snake: "quantity", location: FieldLocation::Body },
-        FieldSpec { snake: "side", location: FieldLocation::Body },
-        FieldSpec { snake: "ticker", location: FieldLocation::Body },
-        FieldSpec { snake: "time_in_force", location: FieldLocation::Body },
-    ],
-    auth: &[
-        AuthApply { secret_key: "cookieAuth", kind: AuthKind::ApiKeyHeader("portal") },
-    ],
-};
-
-const OP_ORDERS_GET_ACCOUNTS_ACCOUNT_ORDERS_CUSTOMER_ORDER_ID: OpSpec = OpSpec {
-    method: "GET",
-    path_template: "/accounts/{account}/orders/{customer_order_id}",
-    fields: &[
-    ],
-    auth: &[
-        AuthApply { secret_key: "cookieAuth", kind: AuthKind::ApiKeyHeader("portal") },
-    ],
-};
-
-const OP_ORDERS_PUT_ACCOUNTS_ACCOUNT_ORDERS_CUSTOMER_ORDER_ID: OpSpec = OpSpec {
-    method: "PUT",
-    path_template: "/accounts/{account}/orders/{customer_order_id}",
-    fields: &[
-        FieldSpec { snake: "aux_price", location: FieldLocation::Body },
-        FieldSpec { snake: "customer_order_id", location: FieldLocation::Body },
-        FieldSpec { snake: "german_hft_algo", location: FieldLocation::Body },
-        FieldSpec { snake: "mifid2_algo", location: FieldLocation::Body },
-        FieldSpec { snake: "mifid2_decision_maker", location: FieldLocation::Body },
-        FieldSpec { snake: "mifid2_execution_algo", location: FieldLocation::Body },
-        FieldSpec { snake: "mifid2_execution_trader", location: FieldLocation::Body },
-        FieldSpec { snake: "order_type", location: FieldLocation::Body },
-        FieldSpec { snake: "orig_customer_order_id", location: FieldLocation::Body },
-        FieldSpec { snake: "outside_rth", location: FieldLocation::Body },
-        FieldSpec { snake: "price", location: FieldLocation::Body },
-        FieldSpec { snake: "quantity", location: FieldLocation::Body },
-        FieldSpec { snake: "side", location: FieldLocation::Body },
-        FieldSpec { snake: "time_in_force", location: FieldLocation::Body },
-    ],
-    auth: &[
-        AuthApply { secret_key: "cookieAuth", kind: AuthKind::ApiKeyHeader("portal") },
-    ],
-};
-
-const OP_ORDERS_DELETE_ACCOUNTS_ACCOUNT_ORDERS_CUSTOMER_ORDER_ID: OpSpec = OpSpec {
-    method: "DELETE",
-    path_template: "/accounts/{account}/orders/{customer_order_id}",
-    fields: &[
-    ],
-    auth: &[
-        AuthApply { secret_key: "cookieAuth", kind: AuthKind::ApiKeyHeader("portal") },
-    ],
-};
-
-fn iface_orders__order_type__to_json(p: &iface_orders::OrderType) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_orders__time_in_force__to_json(p: &iface_orders::TimeInForce) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_orders__post_accounts_account_orders_params__to_json(p: &iface_orders::PostAccountsAccountOrdersParams) -> Value {
-    let mut m = Map::new();
-    m.insert("aux_price".into(), match (&p.aux_price) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
-    m.insert("contract_id".into(), match (&p.contract_id) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
-    m.insert("currency".into(), match (&p.currency) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("customer_order_id".into(), match (&p.customer_order_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("german_hft_algo".into(), match (&p.german_hft_algo) { Some(v) => Value::Bool(*(v)), None => Value::Null });
-    m.insert("instrument_type".into(), match (&p.instrument_type) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("listing_exchange".into(), match (&p.listing_exchange) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("mifid2_algo".into(), match (&p.mifid2_algo) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("mifid2_decision_maker".into(), match (&p.mifid2_decision_maker) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("mifid2_execution_algo".into(), match (&p.mifid2_execution_algo) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("mifid2_execution_trader".into(), match (&p.mifid2_execution_trader) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("order_type".into(), match (&p.order_type) { Some(v) => iface_orders__order_type__to_json(v), None => Value::Null });
-    m.insert("order_restrictions".into(), match (&p.order_restrictions) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
-    m.insert("outside_rth".into(), match (&p.outside_rth) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
-    m.insert("price".into(), match (&p.price) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
-    m.insert("quantity".into(), match (&p.quantity) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
-    m.insert("side".into(), match (&p.side) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
-    m.insert("ticker".into(), match (&p.ticker) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("time_in_force".into(), match (&p.time_in_force) { Some(v) => iface_orders__time_in_force__to_json(v), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_orders__put_accounts_account_orders_customer_order_id_params__to_json(p: &iface_orders::PutAccountsAccountOrdersCustomerOrderIdParams) -> Value {
-    let mut m = Map::new();
-    m.insert("aux_price".into(), match (&p.aux_price) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
-    m.insert("customer_order_id".into(), match (&p.customer_order_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("german_hft_algo".into(), match (&p.german_hft_algo) { Some(v) => Value::Bool(*(v)), None => Value::Null });
-    m.insert("mifid2_algo".into(), match (&p.mifid2_algo) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("mifid2_decision_maker".into(), match (&p.mifid2_decision_maker) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("mifid2_execution_algo".into(), match (&p.mifid2_execution_algo) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("mifid2_execution_trader".into(), match (&p.mifid2_execution_trader) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("order_type".into(), match (&p.order_type) { Some(v) => iface_orders__order_type__to_json(v), None => Value::Null });
-    m.insert("orig_customer_order_id".into(), match (&p.orig_customer_order_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("outside_rth".into(), match (&p.outside_rth) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
-    m.insert("price".into(), match (&p.price) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
-    m.insert("quantity".into(), match (&p.quantity) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
-    m.insert("side".into(), match (&p.side) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
-    m.insert("time_in_force".into(), match (&p.time_in_force) { Some(v) => iface_orders__time_in_force__to_json(v), None => Value::Null });
-    Value::Object(m)
-}
-
-impl iface_orders::Guest for crate::Component {
-    fn get_accounts_account_orders() -> Result<String, String> {
-        dispatch(&OP_ORDERS_GET_ACCOUNTS_ACCOUNT_ORDERS, Value::Object(Map::new()))
-    }
-    fn post_accounts_account_orders(params: iface_orders::PostAccountsAccountOrdersParams) -> Result<String, String> {
-        let json = iface_orders__post_accounts_account_orders_params__to_json(&params);
-        dispatch(&OP_ORDERS_POST_ACCOUNTS_ACCOUNT_ORDERS, json)
-    }
-    fn get_accounts_account_orders_customer_order_id() -> Result<String, String> {
-        dispatch(&OP_ORDERS_GET_ACCOUNTS_ACCOUNT_ORDERS_CUSTOMER_ORDER_ID, Value::Object(Map::new()))
-    }
-    fn put_accounts_account_orders_customer_order_id(params: iface_orders::PutAccountsAccountOrdersCustomerOrderIdParams) -> Result<String, String> {
-        let json = iface_orders__put_accounts_account_orders_customer_order_id_params__to_json(&params);
-        dispatch(&OP_ORDERS_PUT_ACCOUNTS_ACCOUNT_ORDERS_CUSTOMER_ORDER_ID, json)
-    }
-    fn delete_accounts_account_orders_customer_order_id() -> Result<String, String> {
-        dispatch(&OP_ORDERS_DELETE_ACCOUNTS_ACCOUNT_ORDERS_CUSTOMER_ORDER_ID, Value::Object(Map::new()))
-    }
-}
-use crate::exports::autostamp::interactivebrokers::trades as iface_trades;
-
-const OP_TRADES_GET_ACCOUNTS_ACCOUNT_TRADES: OpSpec = OpSpec {
-    method: "GET",
-    path_template: "/accounts/{account}/trades",
-    fields: &[
-        FieldSpec { snake: "body", location: FieldLocation::Body },
-    ],
-    auth: &[
-        AuthApply { secret_key: "cookieAuth", kind: AuthKind::ApiKeyHeader("portal") },
-    ],
-};
-
-fn iface_trades__get_accounts_account_trades_params__to_json(p: &iface_trades::GetAccountsAccountTradesParams) -> Value {
-    let mut m = Map::new();
-    m.insert("body".into(), match (&p.body) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    Value::Object(m)
-}
-
-impl iface_trades::Guest for crate::Component {
-    fn get_accounts_account_trades(params: iface_trades::GetAccountsAccountTradesParams) -> Result<String, String> {
-        let json = iface_trades__get_accounts_account_trades_params__to_json(&params);
-        dispatch(&OP_TRADES_GET_ACCOUNTS_ACCOUNT_TRADES, json)
-    }
-}
-use crate::exports::autostamp::interactivebrokers::market_data as iface_market_data;
-
-const OP_MARKET_DATA_GET_MARKETDATA_EXCHANGE_COMPONENTS: OpSpec = OpSpec {
-    method: "GET",
-    path_template: "/marketdata/exchange_components",
-    fields: &[
-    ],
-    auth: &[
-        AuthApply { secret_key: "cookieAuth", kind: AuthKind::ApiKeyHeader("portal") },
-    ],
-};
-
-const OP_MARKET_DATA_GET_MARKETDATA_SNAPSHOT: OpSpec = OpSpec {
-    method: "GET",
-    path_template: "/marketdata/snapshot",
-    fields: &[
-        FieldSpec { snake: "body", location: FieldLocation::Body },
-    ],
-    auth: &[
-        AuthApply { secret_key: "cookieAuth", kind: AuthKind::ApiKeyHeader("portal") },
-    ],
-};
-
-fn iface_market_data__get_marketdata_snapshot_body_item__to_json(p: &iface_market_data::GetMarketdataSnapshotBodyItem) -> Value {
-    let mut m = Map::new();
-    m.insert("conid".into(), match (&p.conid) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
-    m.insert("currency".into(), match (&p.currency) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("exchange".into(), match (&p.exchange) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("symbol".into(), match (&p.symbol) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("type".into(), match (&p.type_op) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_market_data__get_marketdata_snapshot_params__to_json(p: &iface_market_data::GetMarketdataSnapshotParams) -> Value {
-    let mut m = Map::new();
-    m.insert("body".into(), Value::Array((&p.body).iter().map(|v| iface_market_data__get_marketdata_snapshot_body_item__to_json(v)).collect()));
-    Value::Object(m)
-}
-
-impl iface_market_data::Guest for crate::Component {
-    fn get_marketdata_exchange_components() -> Result<String, String> {
-        dispatch(&OP_MARKET_DATA_GET_MARKETDATA_EXCHANGE_COMPONENTS, Value::Object(Map::new()))
-    }
-    fn get_marketdata_snapshot(params: iface_market_data::GetMarketdataSnapshotParams) -> Result<String, String> {
-        let json = iface_market_data__get_marketdata_snapshot_params__to_json(&params);
-        dispatch(&OP_MARKET_DATA_GET_MARKETDATA_SNAPSHOT, json)
-    }
-}
-use crate::exports::autostamp::interactivebrokers::o_auth as iface_o_auth;
-
-const OP_O_AUTH_POST_OAUTH_ACCESS_TOKEN: OpSpec = OpSpec {
-    method: "POST",
-    path_template: "/oauth/access_token",
-    fields: &[
-        FieldSpec { snake: "oauth_consumer_key", location: FieldLocation::Body },
-        FieldSpec { snake: "oauth_nonce", location: FieldLocation::Body },
-        FieldSpec { snake: "oauth_signature", location: FieldLocation::Body },
-        FieldSpec { snake: "oauth_signature_method", location: FieldLocation::Body },
-        FieldSpec { snake: "oauth_timestamp", location: FieldLocation::Body },
-        FieldSpec { snake: "oauth_token", location: FieldLocation::Body },
-        FieldSpec { snake: "oauth_verifier", location: FieldLocation::Body },
-    ],
-    auth: &[
-        AuthApply { secret_key: "cookieAuth", kind: AuthKind::ApiKeyHeader("portal") },
-    ],
-};
-
-const OP_O_AUTH_POST_OAUTH_LIVE_SESSION_TOKEN: OpSpec = OpSpec {
-    method: "POST",
-    path_template: "/oauth/live_session_token",
-    fields: &[
-        FieldSpec { snake: "diffie_hellman_challenge", location: FieldLocation::Body },
-        FieldSpec { snake: "oauth_consumer_key", location: FieldLocation::Body },
-        FieldSpec { snake: "oauth_nonce", location: FieldLocation::Body },
-        FieldSpec { snake: "oauth_signature", location: FieldLocation::Body },
-        FieldSpec { snake: "oauth_signature_method", location: FieldLocation::Body },
-        FieldSpec { snake: "oauth_timestamp", location: FieldLocation::Body },
-        FieldSpec { snake: "oauth_token", location: FieldLocation::Body },
-    ],
-    auth: &[
-        AuthApply { secret_key: "cookieAuth", kind: AuthKind::ApiKeyHeader("portal") },
-    ],
-};
-
-const OP_O_AUTH_POST_OAUTH_REQUEST_TOKEN: OpSpec = OpSpec {
-    method: "POST",
-    path_template: "/oauth/request_token",
-    fields: &[
-        FieldSpec { snake: "oauth_callback", location: FieldLocation::Body },
-        FieldSpec { snake: "oauth_consumer_key", location: FieldLocation::Body },
-        FieldSpec { snake: "oauth_nonce", location: FieldLocation::Body },
-        FieldSpec { snake: "oauth_signature", location: FieldLocation::Body },
-        FieldSpec { snake: "oauth_signature_method", location: FieldLocation::Body },
-        FieldSpec { snake: "oauth_timestamp", location: FieldLocation::Body },
-    ],
-    auth: &[
-        AuthApply { secret_key: "cookieAuth", kind: AuthKind::ApiKeyHeader("portal") },
-    ],
-};
-
-fn iface_o_auth__post_oauth_access_token_params__to_json(p: &iface_o_auth::PostOauthAccessTokenParams) -> Value {
-    let mut m = Map::new();
-    m.insert("oauth_consumer_key".into(), match (&p.oauth_consumer_key) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("oauth_nonce".into(), match (&p.oauth_nonce) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("oauth_signature".into(), match (&p.oauth_signature) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("oauth_signature_method".into(), match (&p.oauth_signature_method) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("oauth_timestamp".into(), match (&p.oauth_timestamp) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("oauth_token".into(), match (&p.oauth_token) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("oauth_verifier".into(), match (&p.oauth_verifier) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_o_auth__post_oauth_live_session_token_params__to_json(p: &iface_o_auth::PostOauthLiveSessionTokenParams) -> Value {
-    let mut m = Map::new();
-    m.insert("diffie_hellman_challenge".into(), match (&p.diffie_hellman_challenge) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("oauth_consumer_key".into(), match (&p.oauth_consumer_key) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("oauth_nonce".into(), match (&p.oauth_nonce) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("oauth_signature".into(), match (&p.oauth_signature) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("oauth_signature_method".into(), match (&p.oauth_signature_method) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("oauth_timestamp".into(), match (&p.oauth_timestamp) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("oauth_token".into(), match (&p.oauth_token) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_o_auth__post_oauth_request_token_params__to_json(p: &iface_o_auth::PostOauthRequestTokenParams) -> Value {
-    let mut m = Map::new();
-    m.insert("oauth_callback".into(), match (&p.oauth_callback) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("oauth_consumer_key".into(), match (&p.oauth_consumer_key) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("oauth_nonce".into(), match (&p.oauth_nonce) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("oauth_signature".into(), match (&p.oauth_signature) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("oauth_signature_method".into(), match (&p.oauth_signature_method) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("oauth_timestamp".into(), match (&p.oauth_timestamp) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    Value::Object(m)
-}
-
-impl iface_o_auth::Guest for crate::Component {
-    fn post_oauth_access_token(params: iface_o_auth::PostOauthAccessTokenParams) -> Result<String, String> {
-        let json = iface_o_auth__post_oauth_access_token_params__to_json(&params);
-        dispatch(&OP_O_AUTH_POST_OAUTH_ACCESS_TOKEN, json)
-    }
-    fn post_oauth_live_session_token(params: iface_o_auth::PostOauthLiveSessionTokenParams) -> Result<String, String> {
-        let json = iface_o_auth__post_oauth_live_session_token_params__to_json(&params);
-        dispatch(&OP_O_AUTH_POST_OAUTH_LIVE_SESSION_TOKEN, json)
-    }
-    fn post_oauth_request_token(params: iface_o_auth::PostOauthRequestTokenParams) -> Result<String, String> {
-        let json = iface_o_auth__post_oauth_request_token_params__to_json(&params);
-        dispatch(&OP_O_AUTH_POST_OAUTH_REQUEST_TOKEN, json)
-    }
-}
-use crate::exports::autostamp::interactivebrokers::financial_instrument_definitions as iface_financial_instrument_definitions;
-
-const OP_FINANCIAL_INSTRUMENT_DEFINITIONS_GET_SECDEF: OpSpec = OpSpec {
-    method: "GET",
-    path_template: "/secdef",
-    fields: &[
-        FieldSpec { snake: "conid", location: FieldLocation::Body },
-        FieldSpec { snake: "currency", location: FieldLocation::Body },
-        FieldSpec { snake: "exchange", location: FieldLocation::Body },
-        FieldSpec { snake: "symbol", location: FieldLocation::Body },
-        FieldSpec { snake: "type", location: FieldLocation::Body },
-    ],
-    auth: &[
-        AuthApply { secret_key: "cookieAuth", kind: AuthKind::ApiKeyHeader("portal") },
-    ],
-};
-
-fn iface_financial_instrument_definitions__get_secdef_params__to_json(p: &iface_financial_instrument_definitions::GetSecdefParams) -> Value {
-    let mut m = Map::new();
-    m.insert("conid".into(), match (&p.conid) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
-    m.insert("currency".into(), match (&p.currency) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("exchange".into(), match (&p.exchange) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("symbol".into(), match (&p.symbol) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("type".into(), match (&p.type_op) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    Value::Object(m)
-}
-
-impl iface_financial_instrument_definitions::Guest for crate::Component {
-    fn get_secdef(params: iface_financial_instrument_definitions::GetSecdefParams) -> Result<String, String> {
-        let json = iface_financial_instrument_definitions__get_secdef_params__to_json(&params);
-        dispatch(&OP_FINANCIAL_INSTRUMENT_DEFINITIONS_GET_SECDEF, json)
-    }
-}
+mod iface_account_portfolio;
+mod iface_order_margin_requirements;
+mod iface_orders;
+mod iface_trades;
+mod iface_market_data;
+mod iface_o_auth;
+mod iface_financial_instrument_definitions;
 
 export!(Component);

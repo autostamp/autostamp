@@ -6,13 +6,309 @@
 /// | Secret name | Applied to each request as |
 /// | --- | --- |
 /// | `apiKeyScheme` | header `x-api-key` |
-package autostamp:spoonacular@0.3.0;
+package autostamp:spoonacular@0.5.0;
 
 interface misc {
   enum detect-food-in-text-content-type-enum {
     application-x-www-form-urlencoded,
     application-json,
     multipart-form-data,
+  }
+
+  record talk-to-chatbot-response {
+    answer-text: string,
+    media: list<string>
+  }
+
+  record get-conversation-suggests-response {
+    suggests: get-conversation-suggests-response-suggests,
+    words: list<string>
+  }
+
+  record get-conversation-suggests-response-suggests {
+    x: list<get-conversation-suggests-response-suggests-x-item>
+  }
+
+  record get-conversation-suggests-response-suggests-x-item {
+    name: string
+  }
+
+  record search-custom-foods-response {
+    custom-foods: list<search-custom-foods-response-custom-foods-item>,
+    number: s32,
+    offset: s32,
+    type-op: string
+  }
+
+  record search-custom-foods-response-custom-foods-item {
+    id: s32,
+    image-url: string,
+    price: f64,
+    servings: f64,
+    title: string
+  }
+
+  record detect-food-in-text-response {
+    annotations: list<detect-food-in-text-response-annotations-item>
+  }
+
+  record detect-food-in-text-response-annotations-item {
+    annotation: string,
+    image: string,
+    tag: string
+  }
+
+  record image-analysis-by-url-response {
+    category: image-analysis-by-url-response-category,
+    nutrition: image-analysis-by-url-response-nutrition,
+    recipes: list<image-analysis-by-url-response-recipes-item>
+  }
+
+  record image-analysis-by-url-response-category {
+    name: string,
+    probability: f64
+  }
+
+  record image-analysis-by-url-response-nutrition {
+    calories: image-analysis-by-url-response-nutrition-calories,
+    carbs: image-analysis-by-url-response-nutrition-carbs,
+    fat: image-analysis-by-url-response-nutrition-fat,
+    protein: image-analysis-by-url-response-nutrition-protein,
+    recipes-used: s32
+  }
+
+  record image-analysis-by-url-response-nutrition-calories {
+    confidence-range95-percent: image-analysis-by-url-response-nutrition-calories-confidence-range95-percent,
+    standard-deviation: f64,
+    unit: string,
+    value: f64
+  }
+
+  record image-analysis-by-url-response-nutrition-calories-confidence-range95-percent {
+    max: f64,
+    min: f64
+  }
+
+  record image-analysis-by-url-response-nutrition-carbs {
+    confidence-range95-percent: image-analysis-by-url-response-nutrition-carbs-confidence-range95-percent,
+    standard-deviation: f64,
+    unit: string,
+    value: f64
+  }
+
+  record image-analysis-by-url-response-nutrition-carbs-confidence-range95-percent {
+    max: f64,
+    min: f64
+  }
+
+  record image-analysis-by-url-response-nutrition-fat {
+    confidence-range95-percent: image-analysis-by-url-response-nutrition-fat-confidence-range95-percent,
+    standard-deviation: f64,
+    unit: string,
+    value: f64
+  }
+
+  record image-analysis-by-url-response-nutrition-fat-confidence-range95-percent {
+    max: f64,
+    min: f64
+  }
+
+  record image-analysis-by-url-response-nutrition-protein {
+    confidence-range95-percent: image-analysis-by-url-response-nutrition-protein-confidence-range95-percent,
+    standard-deviation: f64,
+    unit: string,
+    value: f64
+  }
+
+  record image-analysis-by-url-response-nutrition-protein-confidence-range95-percent {
+    max: f64,
+    min: f64
+  }
+
+  record image-analysis-by-url-response-recipes-item {
+    id: s32,
+    image-type: string,
+    title: string,
+    url: string
+  }
+
+  record image-classification-by-url-response {
+    category: string,
+    probability: f64
+  }
+
+  record get-a-random-food-joke-response {
+    text: string
+  }
+
+  record search-all-food-response {
+    limit: s32,
+    offset: s32,
+    query: string,
+    search-results: list<search-all-food-response-search-results-item>,
+    total-results: s32
+  }
+
+  record search-all-food-response-search-results-item {
+    name: string,
+    results: option<list<search-all-food-response-search-results-item-results-item>>,
+    total-results: s32
+  }
+
+  record search-all-food-response-search-results-item-results-item {
+    content: string,
+    id: string,
+    image: string,
+    link: string,
+    name: string,
+    relevance: f64,
+    type-op: string
+  }
+
+  record search-site-content-response {
+    articles: list<search-site-content-response-articles-item>,
+    grocery-products: list<search-site-content-response-grocery-products-item>,
+    menu-items: list<search-site-content-response-menu-items-item>,
+    recipes: list<search-site-content-response-recipes-item>
+  }
+
+  record search-site-content-response-articles-item {
+    data-points: option<list<string>>,
+    image: string,
+    link: string,
+    name: string
+  }
+
+  record search-site-content-response-grocery-products-item {
+    data-points: option<list<search-site-content-response-grocery-products-item-data-points-item>>,
+    image: string,
+    link: string,
+    name: string
+  }
+
+  record search-site-content-response-grocery-products-item-data-points-item {
+    key: string,
+    value: string
+  }
+
+  record search-site-content-response-menu-items-item {
+    data-points: option<list<search-site-content-response-menu-items-item-data-points-item>>,
+    image: string,
+    link: string,
+    name: string
+  }
+
+  record search-site-content-response-menu-items-item-data-points-item {
+    key: string,
+    value: string
+  }
+
+  record search-site-content-response-recipes-item {
+    data-points: option<list<search-site-content-response-recipes-item-data-points-item>>,
+    image: string,
+    link: string,
+    name: string
+  }
+
+  record search-site-content-response-recipes-item-data-points-item {
+    key: string,
+    value: string
+  }
+
+  record get-random-food-trivia-response {
+    text: string
+  }
+
+  record search-food-videos-response {
+    total-results: s32,
+    videos: list<search-food-videos-response-videos-item>
+  }
+
+  record search-food-videos-response-videos-item {
+    length: s32,
+    rating: f64,
+    short-title: string,
+    thumbnail: string,
+    title: string,
+    views: s32,
+    you-tube-id: string
+  }
+
+  variant talk-to-chatbot-error {
+    unauthorized(string),
+    forbidden(string),
+    not-found(string),
+    other(string)
+  }
+
+  variant get-conversation-suggests-error {
+    unauthorized(string),
+    forbidden(string),
+    not-found(string),
+    other(string)
+  }
+
+  variant search-custom-foods-error {
+    unauthorized(string),
+    forbidden(string),
+    not-found(string),
+    other(string)
+  }
+
+  variant detect-food-in-text-error {
+    unauthorized(string),
+    forbidden(string),
+    not-found(string),
+    other(string)
+  }
+
+  variant image-analysis-by-url-error {
+    unauthorized(string),
+    forbidden(string),
+    not-found(string),
+    other(string)
+  }
+
+  variant image-classification-by-url-error {
+    unauthorized(string),
+    forbidden(string),
+    not-found(string),
+    other(string)
+  }
+
+  variant get-a-random-food-joke-error {
+    unauthorized(string),
+    forbidden(string),
+    not-found(string),
+    other(string)
+  }
+
+  variant search-all-food-error {
+    unauthorized(string),
+    forbidden(string),
+    not-found(string),
+    other(string)
+  }
+
+  variant search-site-content-error {
+    unauthorized(string),
+    forbidden(string),
+    not-found(string),
+    other(string)
+  }
+
+  variant get-random-food-trivia-error {
+    unauthorized(string),
+    forbidden(string),
+    not-found(string),
+    other(string)
+  }
+
+  variant search-food-videos-error {
+    unauthorized(string),
+    forbidden(string),
+    not-found(string),
+    other(string)
   }
 
   /// Talk to Chatbot
@@ -22,7 +318,7 @@ interface misc {
     /// An arbitrary globally unique id for your conversation. The conversation can contain states so you should pass your context id if you want the bot to be able to remember the conversation.
     context-id: option<string>
   }
-  talk-to-chatbot: func(params: talk-to-chatbot-params) -> result<string, string>;
+  talk-to-chatbot: func(params: talk-to-chatbot-params) -> result<talk-to-chatbot-response, talk-to-chatbot-error>;
 
   /// Conversation Suggests
   record get-conversation-suggests-params {
@@ -31,7 +327,7 @@ interface misc {
     /// The number of suggestions to return (between 1 and 25).
     number: option<f64>
   }
-  get-conversation-suggests: func(params: get-conversation-suggests-params) -> result<string, string>;
+  get-conversation-suggests: func(params: get-conversation-suggests-params) -> result<get-conversation-suggests-response, get-conversation-suggests-error>;
 
   /// Search Custom Foods
   record search-custom-foods-params {
@@ -46,31 +342,32 @@ interface misc {
     /// The maximum number of items to return (between 1 and 100). Defaults to 10.
     number: option<s32>
   }
-  search-custom-foods: func(params: search-custom-foods-params) -> result<string, string>;
+  search-custom-foods: func(params: search-custom-foods-params) -> result<search-custom-foods-response, search-custom-foods-error>;
 
   /// Detect Food in Text
   record detect-food-in-text-params {
     /// The content type.
-    content-type: option<detect-food-in-text-content-type-enum>
+    content-type: option<detect-food-in-text-content-type-enum>,
+    body: string
   }
-  detect-food-in-text: func(params: detect-food-in-text-params) -> result<string, string>;
+  detect-food-in-text: func(params: detect-food-in-text-params) -> result<detect-food-in-text-response, detect-food-in-text-error>;
 
   /// Image Analysis by URL
   record image-analysis-by-url-params {
     /// The URL of the image to be analyzed.
     image-url: string
   }
-  image-analysis-by-url: func(params: image-analysis-by-url-params) -> result<string, string>;
+  image-analysis-by-url: func(params: image-analysis-by-url-params) -> result<image-analysis-by-url-response, image-analysis-by-url-error>;
 
   /// Image Classification by URL
   record image-classification-by-url-params {
     /// The URL of the image to be classified.
     image-url: string
   }
-  image-classification-by-url: func(params: image-classification-by-url-params) -> result<string, string>;
+  image-classification-by-url: func(params: image-classification-by-url-params) -> result<image-classification-by-url-response, image-classification-by-url-error>;
 
   /// Random Food Joke
-  get-a-random-food-joke: func() -> result<string, string>;
+  get-a-random-food-joke: func() -> result<get-a-random-food-joke-response, get-a-random-food-joke-error>;
 
   /// Search All Food
   record search-all-food-params {
@@ -81,17 +378,17 @@ interface misc {
     /// The maximum number of items to return (between 1 and 100). Defaults to 10.
     number: option<s32>
   }
-  search-all-food: func(params: search-all-food-params) -> result<string, string>;
+  search-all-food: func(params: search-all-food-params) -> result<search-all-food-response, search-all-food-error>;
 
   /// Search Site Content
   record search-site-content-params {
     /// The query to search for. You can also use partial queries such as "spagh" to already find spaghetti recipes, articles, grocery products, and other content.
     query: string
   }
-  search-site-content: func(params: search-site-content-params) -> result<string, string>;
+  search-site-content: func(params: search-site-content-params) -> result<search-site-content-response, search-site-content-error>;
 
   /// Random Food Trivia
-  get-random-food-trivia: func() -> result<string, string>;
+  get-random-food-trivia: func() -> result<get-random-food-trivia-response, get-random-food-trivia-error>;
 
   /// Search Food Videos
   record search-food-videos-params {
@@ -116,7 +413,7 @@ interface misc {
     /// The maximum number of items to return (between 1 and 100). Defaults to 10.
     number: option<s32>
   }
-  search-food-videos: func(params: search-food-videos-params) -> result<string, string>;
+  search-food-videos: func(params: search-food-videos-params) -> result<search-food-videos-response, search-food-videos-error>;
 
 }
 
@@ -144,6 +441,188 @@ interface ingredients {
     metric,
   }
 
+  record autocomplete-ingredient-search-response-item {
+    aisle: option<string>,
+    id: option<s32>,
+    image: string,
+    name: string,
+    possible-units: option<list<string>>
+  }
+
+  record map-ingredients-to-grocery-products-response-item {
+    ingredient-image: string,
+    meta: list<string>,
+    original: string,
+    original-name: string,
+    products: list<map-ingredients-to-grocery-products-response-item-products-item>
+  }
+
+  record map-ingredients-to-grocery-products-response-item-products-item {
+    id: s32,
+    title: string,
+    upc: string
+  }
+
+  record ingredient-search-response {
+    number: s32,
+    offset: s32,
+    results: list<ingredient-search-response-results-item>,
+    total-results: s32
+  }
+
+  record ingredient-search-response-results-item {
+    id: s32,
+    image: string,
+    name: string
+  }
+
+  record get-ingredient-substitutes-response {
+    ingredient: string,
+    message: string,
+    substitutes: list<string>
+  }
+
+  record compute-ingredient-amount-response {
+    amount: f64,
+    unit: string
+  }
+
+  record get-ingredient-information-response {
+    aisle: string,
+    amount: f64,
+    category-path: list<string>,
+    consistency: string,
+    estimated-cost: get-ingredient-information-response-estimated-cost,
+    id: s32,
+    image: string,
+    meta: list<get-ingredient-information-response-meta-item>,
+    name: string,
+    name-clean: string,
+    nutrition: get-ingredient-information-response-nutrition,
+    original: string,
+    original-name: string,
+    possible-units: list<string>,
+    shopping-list-units: list<string>,
+    unit: string,
+    unit-long: string,
+    unit-short: string
+  }
+
+  record get-ingredient-information-response-estimated-cost {
+    unit: string,
+    value: f64
+  }
+
+  record get-ingredient-information-response-meta-item {
+    /// JSON-encoded free-form object payload
+    data: option<string>
+  }
+
+  record get-ingredient-information-response-nutrition {
+    caloric-breakdown: get-ingredient-information-response-nutrition-caloric-breakdown,
+    nutrients: list<get-ingredient-information-response-nutrition-nutrients-item>,
+    properties: list<get-ingredient-information-response-nutrition-properties-item>,
+    weight-per-serving: get-ingredient-information-response-nutrition-weight-per-serving
+  }
+
+  record get-ingredient-information-response-nutrition-caloric-breakdown {
+    percent-carbs: f64,
+    percent-fat: f64,
+    percent-protein: f64
+  }
+
+  record get-ingredient-information-response-nutrition-nutrients-item {
+    amount: f64,
+    name: string,
+    percent-of-daily-needs: f64,
+    unit: string
+  }
+
+  record get-ingredient-information-response-nutrition-properties-item {
+    amount: f64,
+    name: string,
+    unit: string
+  }
+
+  record get-ingredient-information-response-nutrition-weight-per-serving {
+    amount: f64,
+    unit: string
+  }
+
+  record get-ingredient-substitutes-by-id-response {
+    ingredient: string,
+    message: string,
+    substitutes: list<string>
+  }
+
+  record by-id-image-response {
+    /// JSON-encoded free-form object payload
+    data: option<string>
+  }
+
+  variant autocomplete-ingredient-search-error {
+    unauthorized(string),
+    forbidden(string),
+    not-found(string),
+    other(string)
+  }
+
+  variant map-ingredients-to-grocery-products-error {
+    unauthorized(string),
+    forbidden(string),
+    not-found(string),
+    other(string)
+  }
+
+  variant ingredient-search-error {
+    unauthorized(string),
+    forbidden(string),
+    not-found(string),
+    other(string)
+  }
+
+  variant get-ingredient-substitutes-error {
+    unauthorized(string),
+    forbidden(string),
+    not-found(string),
+    other(string)
+  }
+
+  variant compute-ingredient-amount-error {
+    unauthorized(string),
+    forbidden(string),
+    not-found(string),
+    other(string)
+  }
+
+  variant get-ingredient-information-error {
+    unauthorized(string),
+    forbidden(string),
+    not-found(string),
+    other(string)
+  }
+
+  variant get-ingredient-substitutes-by-id-error {
+    unauthorized(string),
+    forbidden(string),
+    not-found(string),
+    other(string)
+  }
+
+  variant visualize-ingredients-error {
+    unauthorized(string),
+    forbidden(string),
+    not-found(string),
+    other(string)
+  }
+
+  variant by-id-image-error {
+    unauthorized(string),
+    forbidden(string),
+    not-found(string),
+    other(string)
+  }
+
   /// Autocomplete Ingredient Search
   record autocomplete-ingredient-search-params {
     /// The (natural language) search query.
@@ -157,14 +636,14 @@ interface ingredients {
     /// The language of the input. Either 'en' or 'de'.
     language: option<autocomplete-ingredient-search-language-enum>
   }
-  autocomplete-ingredient-search: func(params: autocomplete-ingredient-search-params) -> result<string, string>;
+  autocomplete-ingredient-search: func(params: autocomplete-ingredient-search-params) -> result<list<autocomplete-ingredient-search-response-item>, autocomplete-ingredient-search-error>;
 
   /// Map Ingredients to Grocery Products
   record map-ingredients-to-grocery-products-params {
     ingredients: list<string>,
     servings: f64
   }
-  map-ingredients-to-grocery-products: func(params: map-ingredients-to-grocery-products-params) -> result<string, string>;
+  map-ingredients-to-grocery-products: func(params: map-ingredients-to-grocery-products-params) -> result<list<map-ingredients-to-grocery-products-response-item>, map-ingredients-to-grocery-products-error>;
 
   /// Ingredient Search
   record ingredient-search-params {
@@ -199,14 +678,14 @@ interface ingredients {
     /// The language of the input. Either 'en' or 'de'.
     language: option<autocomplete-ingredient-search-language-enum>
   }
-  ingredient-search: func(params: ingredient-search-params) -> result<string, string>;
+  ingredient-search: func(params: ingredient-search-params) -> result<ingredient-search-response, ingredient-search-error>;
 
   /// Get Ingredient Substitutes
   record get-ingredient-substitutes-params {
     /// The name of the ingredient you want to replace.
     ingredient-name: string
   }
-  get-ingredient-substitutes: func(params: get-ingredient-substitutes-params) -> result<string, string>;
+  get-ingredient-substitutes: func(params: get-ingredient-substitutes-params) -> result<get-ingredient-substitutes-response, get-ingredient-substitutes-error>;
 
   /// Compute Ingredient Amount
   record compute-ingredient-amount-params {
@@ -219,7 +698,7 @@ interface ingredients {
     /// The target unit.
     unit: option<string>
   }
-  compute-ingredient-amount: func(params: compute-ingredient-amount-params) -> result<string, string>;
+  compute-ingredient-amount: func(params: compute-ingredient-amount-params) -> result<compute-ingredient-amount-response, compute-ingredient-amount-error>;
 
   /// Get Ingredient Information
   record get-ingredient-information-params {
@@ -230,14 +709,14 @@ interface ingredients {
     /// The unit for the given amount.
     unit: option<string>
   }
-  get-ingredient-information: func(params: get-ingredient-information-params) -> result<string, string>;
+  get-ingredient-information: func(params: get-ingredient-information-params) -> result<get-ingredient-information-response, get-ingredient-information-error>;
 
   /// Get Ingredient Substitutes by ID
   record get-ingredient-substitutes-by-id-params {
     /// The id of the ingredient you want substitutes for.
     id: string
   }
-  get-ingredient-substitutes-by-id: func(params: get-ingredient-substitutes-by-id-params) -> result<string, string>;
+  get-ingredient-substitutes-by-id: func(params: get-ingredient-substitutes-by-id-params) -> result<get-ingredient-substitutes-by-id-response, get-ingredient-substitutes-by-id-error>;
 
   /// Ingredients Widget
   record visualize-ingredients-params {
@@ -246,9 +725,10 @@ interface ingredients {
     /// The language of the input. Either 'en' or 'de'.
     language: option<autocomplete-ingredient-search-language-enum>,
     /// Accept header.
-    accept: option<visualize-ingredients-accept-enum>
+    accept: option<visualize-ingredients-accept-enum>,
+    body: string
   }
-  visualize-ingredients: func(params: visualize-ingredients-params) -> result<string, string>;
+  visualize-ingredients: func(params: visualize-ingredients-params) -> result<string, visualize-ingredients-error>;
 
   /// Ingredients by ID Image
   record by-id-image-params {
@@ -257,7 +737,7 @@ interface ingredients {
     /// Whether the the measures should be 'us' or 'metric'.
     measure: option<by-id-image-measure-enum>
   }
-  by-id-image: func(params: by-id-image-params) -> result<string, string>;
+  by-id-image: func(params: by-id-image-params) -> result<by-id-image-response, by-id-image-error>;
 
 }
 
@@ -284,13 +764,1163 @@ interface recipes {
     metric,
   }
 
+  record compute-glycemic-load-response {
+    ingredients: list<compute-glycemic-load-response-ingredients-item>,
+    total-glycemic-load: f64
+  }
+
+  record compute-glycemic-load-response-ingredients-item {
+    glycemic-index: f64,
+    glycemic-load: f64,
+    id: s32,
+    original: string
+  }
+
+  record analyze-recipe-response {
+    /// JSON-encoded free-form object payload
+    data: option<string>
+  }
+
+  record analyze-recipe-instructions-response {
+    equipment: list<analyze-recipe-instructions-response-equipment-item>,
+    ingredients: list<analyze-recipe-instructions-response-ingredients-item>,
+    parsed-instructions: list<analyze-recipe-instructions-response-parsed-instructions-item>
+  }
+
+  record analyze-recipe-instructions-response-equipment-item {
+    id: f64,
+    name: string
+  }
+
+  record analyze-recipe-instructions-response-ingredients-item {
+    id: f64,
+    name: string
+  }
+
+  record analyze-recipe-instructions-response-parsed-instructions-item {
+    name: string,
+    steps: option<list<analyze-recipe-instructions-response-parsed-instructions-item-steps-item>>
+  }
+
+  record analyze-recipe-instructions-response-parsed-instructions-item-steps-item {
+    equipment: option<list<analyze-recipe-instructions-response-parsed-instructions-item-steps-item-equipment-item>>,
+    ingredients: option<list<analyze-recipe-instructions-response-parsed-instructions-item-steps-item-ingredients-item>>,
+    number: f64,
+    step: string
+  }
+
+  record analyze-recipe-instructions-response-parsed-instructions-item-steps-item-equipment-item {
+    id: f64,
+    image: string,
+    localized-name: string,
+    name: string
+  }
+
+  record analyze-recipe-instructions-response-parsed-instructions-item-steps-item-ingredients-item {
+    id: f64,
+    image: string,
+    localized-name: string,
+    name: string
+  }
+
+  record autocomplete-recipe-search-response-item {
+    id: s32,
+    image-type: string,
+    title: string
+  }
+
+  record search-recipes-response {
+    number: s32,
+    offset: s32,
+    results: list<search-recipes-response-results-item>,
+    total-results: s32
+  }
+
+  record search-recipes-response-results-item {
+    calories: f64,
+    carbs: string,
+    fat: string,
+    id: s32,
+    image: string,
+    image-type: string,
+    protein: string,
+    title: string
+  }
+
+  record convert-amounts-response {
+    answer: string,
+    source-amount: f64,
+    source-unit: string,
+    target-amount: f64,
+    target-unit: string
+  }
+
+  record classify-cuisine-response {
+    confidence: f64,
+    cuisine: string,
+    cuisines: list<string>
+  }
+
+  record extract-recipe-from-website-response {
+    aggregate-likes: s32,
+    analyzed-instructions: list<extract-recipe-from-website-response-analyzed-instructions-item>,
+    cheap: bool,
+    credits-text: string,
+    cuisines: list<string>,
+    dairy-free: bool,
+    diets: list<string>,
+    dish-types: list<string>,
+    extended-ingredients: list<extract-recipe-from-website-response-extended-ingredients-item>,
+    gaps: string,
+    gluten-free: bool,
+    health-score: f64,
+    id: s32,
+    image: string,
+    image-type: string,
+    instructions: string,
+    ketogenic: bool,
+    license: string,
+    low-fodmap: bool,
+    occasions: list<string>,
+    price-per-serving: f64,
+    ready-in-minutes: s32,
+    servings: f64,
+    source-name: string,
+    source-url: string,
+    spoonacular-score: f64,
+    spoonacular-source-url: string,
+    summary: string,
+    sustainable: bool,
+    title: string,
+    vegan: bool,
+    vegetarian: bool,
+    very-healthy: bool,
+    very-popular: bool,
+    weight-watcher-smart-points: f64,
+    whole30: bool,
+    wine-pairing: extract-recipe-from-website-response-wine-pairing
+  }
+
+  record extract-recipe-from-website-response-analyzed-instructions-item {
+    /// JSON-encoded free-form object payload
+    data: option<string>
+  }
+
+  record extract-recipe-from-website-response-extended-ingredients-item {
+    aisle: string,
+    amount: f64,
+    consitency: string,
+    id: s32,
+    image: string,
+    measures: option<extract-recipe-from-website-response-extended-ingredients-item-measures>,
+    meta: option<list<string>>,
+    name: string,
+    original: string,
+    original-name: string,
+    unit: string
+  }
+
+  record extract-recipe-from-website-response-extended-ingredients-item-measures {
+    metric: extract-recipe-from-website-response-extended-ingredients-item-measures-metric,
+    us: extract-recipe-from-website-response-extended-ingredients-item-measures-us
+  }
+
+  record extract-recipe-from-website-response-extended-ingredients-item-measures-metric {
+    amount: f64,
+    unit-long: string,
+    unit-short: string
+  }
+
+  record extract-recipe-from-website-response-extended-ingredients-item-measures-us {
+    amount: f64,
+    unit-long: string,
+    unit-short: string
+  }
+
+  record extract-recipe-from-website-response-wine-pairing {
+    paired-wines: list<string>,
+    pairing-text: string,
+    product-matches: list<extract-recipe-from-website-response-wine-pairing-product-matches-item>
+  }
+
+  record extract-recipe-from-website-response-wine-pairing-product-matches-item {
+    average-rating: f64,
+    description: string,
+    id: s32,
+    image-url: string,
+    link: string,
+    price: string,
+    rating-count: s32,
+    score: f64,
+    title: string
+  }
+
+  record search-recipes-by-ingredients-response-item {
+    id: s32,
+    image: string,
+    image-type: string,
+    likes: s32,
+    missed-ingredient-count: s32,
+    missed-ingredients: list<search-recipes-by-ingredients-response-item-missed-ingredients-item>,
+    title: string,
+    unused-ingredients: list<search-recipes-by-ingredients-response-item-unused-ingredients-item>,
+    used-ingredient-count: f64,
+    used-ingredients: list<search-recipes-by-ingredients-response-item-used-ingredients-item>
+  }
+
+  record search-recipes-by-ingredients-response-item-missed-ingredients-item {
+    aisle: string,
+    amount: f64,
+    id: s32,
+    image: string,
+    meta: option<list<string>>,
+    name: string,
+    original: string,
+    original-name: string,
+    unit: string,
+    unit-long: string,
+    unit-short: string
+  }
+
+  record search-recipes-by-ingredients-response-item-unused-ingredients-item {
+    /// JSON-encoded free-form object payload
+    data: option<string>
+  }
+
+  record search-recipes-by-ingredients-response-item-used-ingredients-item {
+    aisle: string,
+    amount: f64,
+    id: s32,
+    image: string,
+    meta: option<list<string>>,
+    name: string,
+    original: string,
+    original-name: string,
+    unit: string,
+    unit-long: string,
+    unit-short: string
+  }
+
+  record search-recipes-by-nutrients-response-item {
+    calories: f64,
+    carbs: string,
+    fat: string,
+    id: s32,
+    image: string,
+    image-type: string,
+    protein: string,
+    title: string
+  }
+
+  record guess-nutrition-by-dish-name-response {
+    calories: guess-nutrition-by-dish-name-response-calories,
+    carbs: guess-nutrition-by-dish-name-response-carbs,
+    fat: guess-nutrition-by-dish-name-response-fat,
+    protein: guess-nutrition-by-dish-name-response-protein,
+    recipes-used: s32
+  }
+
+  record guess-nutrition-by-dish-name-response-calories {
+    confidence-range95-percent: guess-nutrition-by-dish-name-response-calories-confidence-range95-percent,
+    standard-deviation: f64,
+    unit: string,
+    value: f64
+  }
+
+  record guess-nutrition-by-dish-name-response-calories-confidence-range95-percent {
+    max: f64,
+    min: f64
+  }
+
+  record guess-nutrition-by-dish-name-response-carbs {
+    confidence-range95-percent: guess-nutrition-by-dish-name-response-carbs-confidence-range95-percent,
+    standard-deviation: f64,
+    unit: string,
+    value: f64
+  }
+
+  record guess-nutrition-by-dish-name-response-carbs-confidence-range95-percent {
+    max: f64,
+    min: f64
+  }
+
+  record guess-nutrition-by-dish-name-response-fat {
+    confidence-range95-percent: guess-nutrition-by-dish-name-response-fat-confidence-range95-percent,
+    standard-deviation: f64,
+    unit: string,
+    value: f64
+  }
+
+  record guess-nutrition-by-dish-name-response-fat-confidence-range95-percent {
+    max: f64,
+    min: f64
+  }
+
+  record guess-nutrition-by-dish-name-response-protein {
+    confidence-range95-percent: guess-nutrition-by-dish-name-response-protein-confidence-range95-percent,
+    standard-deviation: f64,
+    unit: string,
+    value: f64
+  }
+
+  record guess-nutrition-by-dish-name-response-protein-confidence-range95-percent {
+    max: f64,
+    min: f64
+  }
+
+  record get-recipe-information-bulk-response-item {
+    aggregate-likes: s32,
+    analyzed-instructions: list<string>,
+    cheap: bool,
+    credits-text: string,
+    cuisines: list<string>,
+    dairy-free: bool,
+    diets: list<string>,
+    dish-types: list<string>,
+    extended-ingredients: list<get-recipe-information-bulk-response-item-extended-ingredients-item>,
+    gaps: string,
+    gluten-free: bool,
+    health-score: f64,
+    id: s32,
+    image: string,
+    image-type: string,
+    instructions: string,
+    ketogenic: bool,
+    license: string,
+    low-fodmap: bool,
+    occasions: list<string>,
+    price-per-serving: f64,
+    ready-in-minutes: s32,
+    servings: f64,
+    source-name: string,
+    source-url: string,
+    spoonacular-score: f64,
+    spoonacular-source-url: string,
+    summary: string,
+    sustainable: bool,
+    title: string,
+    vegan: bool,
+    vegetarian: bool,
+    very-healthy: bool,
+    very-popular: bool,
+    weight-watcher-smart-points: f64,
+    whole30: bool,
+    wine-pairing: get-recipe-information-bulk-response-item-wine-pairing
+  }
+
+  record get-recipe-information-bulk-response-item-extended-ingredients-item {
+    aisle: string,
+    amount: f64,
+    consitency: string,
+    id: s32,
+    image: string,
+    measures: option<get-recipe-information-bulk-response-item-extended-ingredients-item-measures>,
+    meta: option<list<string>>,
+    name: string,
+    original: string,
+    original-name: string,
+    unit: string
+  }
+
+  record get-recipe-information-bulk-response-item-extended-ingredients-item-measures {
+    metric: get-recipe-information-bulk-response-item-extended-ingredients-item-measures-metric,
+    us: get-recipe-information-bulk-response-item-extended-ingredients-item-measures-us
+  }
+
+  record get-recipe-information-bulk-response-item-extended-ingredients-item-measures-metric {
+    amount: f64,
+    unit-long: string,
+    unit-short: string
+  }
+
+  record get-recipe-information-bulk-response-item-extended-ingredients-item-measures-us {
+    amount: f64,
+    unit-long: string,
+    unit-short: string
+  }
+
+  record get-recipe-information-bulk-response-item-wine-pairing {
+    paired-wines: list<string>,
+    pairing-text: string,
+    product-matches: list<get-recipe-information-bulk-response-item-wine-pairing-product-matches-item>
+  }
+
+  record get-recipe-information-bulk-response-item-wine-pairing-product-matches-item {
+    average-rating: f64,
+    description: string,
+    id: s32,
+    image-url: string,
+    link: string,
+    price: string,
+    rating-count: s32,
+    score: f64,
+    title: string
+  }
+
+  record parse-ingredients-response-item {
+    aisle: string,
+    amount: f64,
+    consistency: string,
+    estimated-cost: parse-ingredients-response-item-estimated-cost,
+    id: s32,
+    image: string,
+    meta: list<string>,
+    name: string,
+    name-clean: string,
+    nutrition: parse-ingredients-response-item-nutrition,
+    original: string,
+    original-name: string,
+    possible-units: list<string>,
+    unit: string,
+    unit-long: string,
+    unit-short: string
+  }
+
+  record parse-ingredients-response-item-estimated-cost {
+    unit: string,
+    value: f64
+  }
+
+  record parse-ingredients-response-item-nutrition {
+    caloric-breakdown: parse-ingredients-response-item-nutrition-caloric-breakdown,
+    flavonoids: list<parse-ingredients-response-item-nutrition-flavonoids-item>,
+    nutrients: list<parse-ingredients-response-item-nutrition-nutrients-item>,
+    properties: list<parse-ingredients-response-item-nutrition-properties-item>,
+    weight-per-serving: parse-ingredients-response-item-nutrition-weight-per-serving
+  }
+
+  record parse-ingredients-response-item-nutrition-caloric-breakdown {
+    percent-carbs: f64,
+    percent-fat: f64,
+    percent-protein: f64
+  }
+
+  record parse-ingredients-response-item-nutrition-flavonoids-item {
+    amount: f64,
+    name: string,
+    unit: string
+  }
+
+  record parse-ingredients-response-item-nutrition-nutrients-item {
+    amount: f64,
+    name: string,
+    percent-of-daily-needs: f64,
+    unit: string
+  }
+
+  record parse-ingredients-response-item-nutrition-properties-item {
+    amount: f64,
+    name: string,
+    unit: string
+  }
+
+  record parse-ingredients-response-item-nutrition-weight-per-serving {
+    amount: f64,
+    unit: string
+  }
+
+  record analyze-a-recipe-search-query-response {
+    cuisines: list<string>,
+    dishes: list<analyze-a-recipe-search-query-response-dishes-item>,
+    ingredients: list<analyze-a-recipe-search-query-response-ingredients-item>,
+    modifiers: list<string>
+  }
+
+  record analyze-a-recipe-search-query-response-dishes-item {
+    image: string,
+    name: string
+  }
+
+  record analyze-a-recipe-search-query-response-ingredients-item {
+    image: string,
+    include-op: bool,
+    name: string
+  }
+
+  record quick-answer-response {
+    answer: string,
+    image: string
+  }
+
+  record get-random-recipes-response {
+    recipes: list<get-random-recipes-response-recipes-item>
+  }
+
+  record get-random-recipes-response-recipes-item {
+    aggregate-likes: f64,
+    analyzed-instructions: option<list<get-random-recipes-response-recipes-item-analyzed-instructions-item>>,
+    cheap: bool,
+    credits-text: string,
+    cuisines: option<list<string>>,
+    dairy-free: bool,
+    diets: option<list<string>>,
+    dish-types: option<list<string>>,
+    extended-ingredients: option<list<get-random-recipes-response-recipes-item-extended-ingredients-item>>,
+    gaps: string,
+    gluten-free: bool,
+    health-score: f64,
+    id: s32,
+    image: string,
+    image-type: string,
+    instructions: string,
+    ketogenic: bool,
+    license: string,
+    low-fodmap: bool,
+    occasions: option<list<string>>,
+    price-per-serving: f64,
+    ready-in-minutes: s32,
+    servings: f64,
+    source-name: string,
+    source-url: string,
+    spoonacular-score: f64,
+    spoonacular-source-url: string,
+    summary: string,
+    sustainable: bool,
+    title: string,
+    vegan: bool,
+    vegetarian: bool,
+    very-healthy: bool,
+    very-popular: bool,
+    weight-watcher-smart-points: f64,
+    whole30: bool,
+    wine-pairing: option<get-random-recipes-response-recipes-item-wine-pairing>
+  }
+
+  record get-random-recipes-response-recipes-item-analyzed-instructions-item {
+    /// JSON-encoded free-form object payload
+    data: option<string>
+  }
+
+  record get-random-recipes-response-recipes-item-extended-ingredients-item {
+    aisle: string,
+    amount: f64,
+    consitency: string,
+    id: s32,
+    image: string,
+    measures: option<get-random-recipes-response-recipes-item-extended-ingredients-item-measures>,
+    meta: option<list<string>>,
+    name: string,
+    original: string,
+    original-name: string,
+    unit: string
+  }
+
+  record get-random-recipes-response-recipes-item-extended-ingredients-item-measures {
+    metric: get-random-recipes-response-recipes-item-extended-ingredients-item-measures-metric,
+    us: get-random-recipes-response-recipes-item-extended-ingredients-item-measures-us
+  }
+
+  record get-random-recipes-response-recipes-item-extended-ingredients-item-measures-metric {
+    amount: f64,
+    unit-long: string,
+    unit-short: string
+  }
+
+  record get-random-recipes-response-recipes-item-extended-ingredients-item-measures-us {
+    amount: f64,
+    unit-long: string,
+    unit-short: string
+  }
+
+  record get-random-recipes-response-recipes-item-wine-pairing {
+    paired-wines: list<string>,
+    pairing-text: string,
+    product-matches: list<get-random-recipes-response-recipes-item-wine-pairing-product-matches-item>
+  }
+
+  record get-random-recipes-response-recipes-item-wine-pairing-product-matches-item {
+    average-rating: f64,
+    description: string,
+    id: s32,
+    image-url: string,
+    link: string,
+    price: string,
+    rating-count: s32,
+    score: f64,
+    title: string
+  }
+
+  record create-recipe-card-response {
+    url: string
+  }
+
+  record get-analyzed-recipe-instructions-response {
+    equipment: list<get-analyzed-recipe-instructions-response-equipment-item>,
+    ingredients: list<get-analyzed-recipe-instructions-response-ingredients-item>,
+    parsed-instructions: list<get-analyzed-recipe-instructions-response-parsed-instructions-item>
+  }
+
+  record get-analyzed-recipe-instructions-response-equipment-item {
+    id: s32,
+    name: string
+  }
+
+  record get-analyzed-recipe-instructions-response-ingredients-item {
+    id: s32,
+    name: string
+  }
+
+  record get-analyzed-recipe-instructions-response-parsed-instructions-item {
+    name: string,
+    steps: option<list<get-analyzed-recipe-instructions-response-parsed-instructions-item-steps-item>>
+  }
+
+  record get-analyzed-recipe-instructions-response-parsed-instructions-item-steps-item {
+    equipment: option<list<get-analyzed-recipe-instructions-response-parsed-instructions-item-steps-item-equipment-item>>,
+    ingredients: option<list<get-analyzed-recipe-instructions-response-parsed-instructions-item-steps-item-ingredients-item>>,
+    number: f64,
+    step: string
+  }
+
+  record get-analyzed-recipe-instructions-response-parsed-instructions-item-steps-item-equipment-item {
+    id: s32,
+    image: string,
+    localized-name: string,
+    name: string
+  }
+
+  record get-analyzed-recipe-instructions-response-parsed-instructions-item-steps-item-ingredients-item {
+    id: s32,
+    image: string,
+    localized-name: string,
+    name: string
+  }
+
+  record create-recipe-card-get-response {
+    /// JSON-encoded free-form object payload
+    data: option<string>
+  }
+
+  record get-recipe-equipment-by-id-response {
+    equipment: list<get-recipe-equipment-by-id-response-equipment-item>
+  }
+
+  record get-recipe-equipment-by-id-response-equipment-item {
+    image: string,
+    name: string
+  }
+
+  record equipment-by-id-image-response {
+    /// JSON-encoded free-form object payload
+    data: option<string>
+  }
+
+  record get-recipe-information-response {
+    aggregate-likes: s32,
+    analyzed-instructions: list<get-recipe-information-response-analyzed-instructions-item>,
+    cheap: bool,
+    credits-text: string,
+    cuisines: list<string>,
+    dairy-free: bool,
+    diets: list<string>,
+    dish-types: list<string>,
+    extended-ingredients: list<get-recipe-information-response-extended-ingredients-item>,
+    gaps: string,
+    gluten-free: bool,
+    health-score: f64,
+    id: s32,
+    image: string,
+    image-type: string,
+    instructions: string,
+    ketogenic: bool,
+    license: string,
+    low-fodmap: bool,
+    occasions: list<string>,
+    price-per-serving: f64,
+    ready-in-minutes: s32,
+    servings: f64,
+    source-name: string,
+    source-url: string,
+    spoonacular-score: f64,
+    spoonacular-source-url: string,
+    summary: string,
+    sustainable: bool,
+    title: string,
+    vegan: bool,
+    vegetarian: bool,
+    very-healthy: bool,
+    very-popular: bool,
+    weight-watcher-smart-points: f64,
+    whole30: bool,
+    wine-pairing: get-recipe-information-response-wine-pairing
+  }
+
+  record get-recipe-information-response-analyzed-instructions-item {
+    /// JSON-encoded free-form object payload
+    data: option<string>
+  }
+
+  record get-recipe-information-response-extended-ingredients-item {
+    aisle: string,
+    amount: f64,
+    consitency: string,
+    id: s32,
+    image: string,
+    measures: option<get-recipe-information-response-extended-ingredients-item-measures>,
+    meta: option<list<string>>,
+    name: string,
+    original: string,
+    original-name: string,
+    unit: string
+  }
+
+  record get-recipe-information-response-extended-ingredients-item-measures {
+    metric: get-recipe-information-response-extended-ingredients-item-measures-metric,
+    us: get-recipe-information-response-extended-ingredients-item-measures-us
+  }
+
+  record get-recipe-information-response-extended-ingredients-item-measures-metric {
+    amount: f64,
+    unit-long: string,
+    unit-short: string
+  }
+
+  record get-recipe-information-response-extended-ingredients-item-measures-us {
+    amount: f64,
+    unit-long: string,
+    unit-short: string
+  }
+
+  record get-recipe-information-response-wine-pairing {
+    paired-wines: list<string>,
+    pairing-text: string,
+    product-matches: list<get-recipe-information-response-wine-pairing-product-matches-item>
+  }
+
+  record get-recipe-information-response-wine-pairing-product-matches-item {
+    average-rating: f64,
+    description: string,
+    id: s32,
+    image-url: string,
+    link: string,
+    price: string,
+    rating-count: s32,
+    score: f64,
+    title: string
+  }
+
+  record get-recipe-ingredients-by-id-response {
+    ingredients: list<get-recipe-ingredients-by-id-response-ingredients-item>
+  }
+
+  record get-recipe-ingredients-by-id-response-ingredients-item {
+    amount: option<get-recipe-ingredients-by-id-response-ingredients-item-amount>,
+    image: string,
+    name: string
+  }
+
+  record get-recipe-ingredients-by-id-response-ingredients-item-amount {
+    metric: get-recipe-ingredients-by-id-response-ingredients-item-amount-metric,
+    us: get-recipe-ingredients-by-id-response-ingredients-item-amount-us
+  }
+
+  record get-recipe-ingredients-by-id-response-ingredients-item-amount-metric {
+    unit: string,
+    value: f64
+  }
+
+  record get-recipe-ingredients-by-id-response-ingredients-item-amount-us {
+    unit: string,
+    value: f64
+  }
+
+  record recipe-nutrition-label-image-response {
+    /// JSON-encoded free-form object payload
+    data: option<string>
+  }
+
+  record get-recipe-nutrition-widget-by-id-response {
+    bad: list<get-recipe-nutrition-widget-by-id-response-bad-item>,
+    calories: string,
+    carbs: string,
+    fat: string,
+    good: list<get-recipe-nutrition-widget-by-id-response-good-item>,
+    protein: string
+  }
+
+  record get-recipe-nutrition-widget-by-id-response-bad-item {
+    amount: string,
+    indented: bool,
+    name: string,
+    percent-of-daily-needs: f64
+  }
+
+  record get-recipe-nutrition-widget-by-id-response-good-item {
+    amount: string,
+    indented: bool,
+    name: string,
+    percent-of-daily-needs: f64
+  }
+
+  record recipe-nutrition-by-id-image-response {
+    /// JSON-encoded free-form object payload
+    data: option<string>
+  }
+
+  record get-recipe-price-breakdown-by-id-response {
+    ingredients: list<get-recipe-price-breakdown-by-id-response-ingredients-item>,
+    total-cost: f64,
+    total-cost-per-serving: f64
+  }
+
+  record get-recipe-price-breakdown-by-id-response-ingredients-item {
+    amount: option<get-recipe-price-breakdown-by-id-response-ingredients-item-amount>,
+    image: string,
+    name: string,
+    price: f64
+  }
+
+  record get-recipe-price-breakdown-by-id-response-ingredients-item-amount {
+    metric: get-recipe-price-breakdown-by-id-response-ingredients-item-amount-metric,
+    us: get-recipe-price-breakdown-by-id-response-ingredients-item-amount-us
+  }
+
+  record get-recipe-price-breakdown-by-id-response-ingredients-item-amount-metric {
+    unit: string,
+    value: f64
+  }
+
+  record get-recipe-price-breakdown-by-id-response-ingredients-item-amount-us {
+    unit: string,
+    value: f64
+  }
+
+  record price-breakdown-by-id-image-response {
+    /// JSON-encoded free-form object payload
+    data: option<string>
+  }
+
+  record get-similar-recipes-response-item {
+    id: s32,
+    image-type: string,
+    ready-in-minutes: s32,
+    servings: f64,
+    source-url: string,
+    title: string
+  }
+
+  record summarize-recipe-response {
+    id: s32,
+    summary: string,
+    title: string
+  }
+
+  record get-recipe-taste-by-id-response {
+    bitterness: f64,
+    fattiness: f64,
+    saltiness: f64,
+    savoriness: f64,
+    sourness: f64,
+    spiciness: f64,
+    sweetness: f64
+  }
+
+  record recipe-taste-by-id-image-response {
+    /// JSON-encoded free-form object payload
+    data: option<string>
+  }
+
+  variant compute-glycemic-load-error {
+    unauthorized(string),
+    forbidden(string),
+    not-found(string),
+    other(string)
+  }
+
+  variant analyze-recipe-error {
+    unauthorized(string),
+    forbidden(string),
+    not-found(string),
+    other(string)
+  }
+
+  variant analyze-recipe-instructions-error {
+    unauthorized(string),
+    forbidden(string),
+    not-found(string),
+    other(string)
+  }
+
+  variant autocomplete-recipe-search-error {
+    unauthorized(string),
+    forbidden(string),
+    not-found(string),
+    other(string)
+  }
+
+  variant search-recipes-error {
+    unauthorized(string),
+    forbidden(string),
+    not-found(string),
+    other(string)
+  }
+
+  variant convert-amounts-error {
+    unauthorized(string),
+    forbidden(string),
+    not-found(string),
+    other(string)
+  }
+
+  variant classify-cuisine-error {
+    unauthorized(string),
+    forbidden(string),
+    not-found(string),
+    other(string)
+  }
+
+  variant extract-recipe-from-website-error {
+    unauthorized(string),
+    forbidden(string),
+    not-found(string),
+    other(string)
+  }
+
+  variant search-recipes-by-ingredients-error {
+    unauthorized(string),
+    forbidden(string),
+    not-found(string),
+    other(string)
+  }
+
+  variant search-recipes-by-nutrients-error {
+    unauthorized(string),
+    forbidden(string),
+    not-found(string),
+    other(string)
+  }
+
+  variant guess-nutrition-by-dish-name-error {
+    unauthorized(string),
+    forbidden(string),
+    not-found(string),
+    other(string)
+  }
+
+  variant get-recipe-information-bulk-error {
+    unauthorized(string),
+    forbidden(string),
+    not-found(string),
+    other(string)
+  }
+
+  variant parse-ingredients-error {
+    unauthorized(string),
+    forbidden(string),
+    not-found(string),
+    other(string)
+  }
+
+  variant analyze-a-recipe-search-query-error {
+    unauthorized(string),
+    forbidden(string),
+    not-found(string),
+    other(string)
+  }
+
+  variant quick-answer-error {
+    unauthorized(string),
+    forbidden(string),
+    not-found(string),
+    other(string)
+  }
+
+  variant get-random-recipes-error {
+    unauthorized(string),
+    forbidden(string),
+    not-found(string),
+    other(string)
+  }
+
+  variant visualize-equipment-error {
+    unauthorized(string),
+    forbidden(string),
+    not-found(string),
+    other(string)
+  }
+
+  variant visualize-recipe-nutrition-error {
+    unauthorized(string),
+    forbidden(string),
+    not-found(string),
+    other(string)
+  }
+
+  variant visualize-price-breakdown-error {
+    unauthorized(string),
+    forbidden(string),
+    not-found(string),
+    other(string)
+  }
+
+  variant create-recipe-card-error {
+    unauthorized(string),
+    forbidden(string),
+    not-found(string),
+    other(string)
+  }
+
+  variant visualize-recipe-taste-error {
+    unauthorized(string),
+    forbidden(string),
+    not-found(string),
+    other(string)
+  }
+
+  variant get-analyzed-recipe-instructions-error {
+    unauthorized(string),
+    forbidden(string),
+    not-found(string),
+    other(string)
+  }
+
+  variant create-recipe-card-get-error {
+    unauthorized(string),
+    forbidden(string),
+    not-found(string),
+    other(string)
+  }
+
+  variant visualize-recipe-equipment-by-id-error {
+    unauthorized(string),
+    forbidden(string),
+    not-found(string),
+    other(string)
+  }
+
+  variant get-recipe-equipment-by-id-error {
+    unauthorized(string),
+    forbidden(string),
+    not-found(string),
+    other(string)
+  }
+
+  variant equipment-by-id-image-error {
+    unauthorized(string),
+    forbidden(string),
+    not-found(string),
+    other(string)
+  }
+
+  variant get-recipe-information-error {
+    unauthorized(string),
+    forbidden(string),
+    not-found(string),
+    other(string)
+  }
+
+  variant visualize-recipe-ingredients-by-id-error {
+    unauthorized(string),
+    forbidden(string),
+    not-found(string),
+    other(string)
+  }
+
+  variant get-recipe-ingredients-by-id-error {
+    unauthorized(string),
+    forbidden(string),
+    not-found(string),
+    other(string)
+  }
+
+  variant recipe-nutrition-label-widget-error {
+    unauthorized(string),
+    forbidden(string),
+    not-found(string),
+    other(string)
+  }
+
+  variant recipe-nutrition-label-image-error {
+    unauthorized(string),
+    forbidden(string),
+    not-found(string),
+    other(string)
+  }
+
+  variant visualize-recipe-nutrition-by-id-error {
+    unauthorized(string),
+    forbidden(string),
+    not-found(string),
+    other(string)
+  }
+
+  variant get-recipe-nutrition-widget-by-id-error {
+    unauthorized(string),
+    forbidden(string),
+    not-found(string),
+    other(string)
+  }
+
+  variant recipe-nutrition-by-id-image-error {
+    unauthorized(string),
+    forbidden(string),
+    not-found(string),
+    other(string)
+  }
+
+  variant visualize-recipe-price-breakdown-by-id-error {
+    unauthorized(string),
+    forbidden(string),
+    not-found(string),
+    other(string)
+  }
+
+  variant get-recipe-price-breakdown-by-id-error {
+    unauthorized(string),
+    forbidden(string),
+    not-found(string),
+    other(string)
+  }
+
+  variant price-breakdown-by-id-image-error {
+    unauthorized(string),
+    forbidden(string),
+    not-found(string),
+    other(string)
+  }
+
+  variant get-similar-recipes-error {
+    unauthorized(string),
+    forbidden(string),
+    not-found(string),
+    other(string)
+  }
+
+  variant summarize-recipe-error {
+    unauthorized(string),
+    forbidden(string),
+    not-found(string),
+    other(string)
+  }
+
+  variant visualize-recipe-taste-by-id-error {
+    unauthorized(string),
+    forbidden(string),
+    not-found(string),
+    other(string)
+  }
+
+  variant get-recipe-taste-by-id-error {
+    unauthorized(string),
+    forbidden(string),
+    not-found(string),
+    other(string)
+  }
+
+  variant recipe-taste-by-id-image-error {
+    unauthorized(string),
+    forbidden(string),
+    not-found(string),
+    other(string)
+  }
+
   /// Compute Glycemic Load
   record compute-glycemic-load-params {
     /// The language of the input. Either 'en' or 'de'.
     language: option<compute-glycemic-load-language-enum>,
     ingredients: list<string>
   }
-  compute-glycemic-load: func(params: compute-glycemic-load-params) -> result<string, string>;
+  compute-glycemic-load: func(params: compute-glycemic-load-params) -> result<compute-glycemic-load-response, compute-glycemic-load-error>;
 
   /// Analyze Recipe
   record analyze-recipe-params {
@@ -305,14 +1935,15 @@ interface recipes {
     servings: option<s32>,
     title: option<string>
   }
-  analyze-recipe: func(params: analyze-recipe-params) -> result<string, string>;
+  analyze-recipe: func(params: analyze-recipe-params) -> result<analyze-recipe-response, analyze-recipe-error>;
 
   /// Analyze Recipe Instructions
   record analyze-recipe-instructions-params {
     /// The content type.
-    content-type: option<analyze-recipe-instructions-content-type-enum>
+    content-type: option<analyze-recipe-instructions-content-type-enum>,
+    body: string
   }
-  analyze-recipe-instructions: func(params: analyze-recipe-instructions-params) -> result<string, string>;
+  analyze-recipe-instructions: func(params: analyze-recipe-instructions-params) -> result<analyze-recipe-instructions-response, analyze-recipe-instructions-error>;
 
   /// Autocomplete Recipe Search
   record autocomplete-recipe-search-params {
@@ -321,7 +1952,7 @@ interface recipes {
     /// The maximum number of items to return (between 1 and 100). Defaults to 10.
     number: option<s32>
   }
-  autocomplete-recipe-search: func(params: autocomplete-recipe-search-params) -> result<string, string>;
+  autocomplete-recipe-search: func(params: autocomplete-recipe-search-params) -> result<list<autocomplete-recipe-search-response-item>, autocomplete-recipe-search-error>;
 
   /// Search Recipes
   record search-recipes-params {
@@ -518,7 +2149,7 @@ interface recipes {
     /// Whether the recipes should have an open license that allows display with proper attribution.
     limit-license: option<bool>
   }
-  search-recipes: func(params: search-recipes-params) -> result<string, string>;
+  search-recipes: func(params: search-recipes-params) -> result<search-recipes-response, search-recipes-error>;
 
   /// Convert Amounts
   record convert-amounts-params {
@@ -531,14 +2162,15 @@ interface recipes {
     /// The unit to which you want to convert, e.g. the grams in "2.5 cups of flour to grams". You can also use "piece", e.g. "3.4 oz tomatoes to piece"
     target-unit: string
   }
-  convert-amounts: func(params: convert-amounts-params) -> result<string, string>;
+  convert-amounts: func(params: convert-amounts-params) -> result<convert-amounts-response, convert-amounts-error>;
 
   /// Classify Cuisine
   record classify-cuisine-params {
     /// The content type.
-    content-type: option<analyze-recipe-instructions-content-type-enum>
+    content-type: option<analyze-recipe-instructions-content-type-enum>,
+    body: string
   }
-  classify-cuisine: func(params: classify-cuisine-params) -> result<string, string>;
+  classify-cuisine: func(params: classify-cuisine-params) -> result<classify-cuisine-response, classify-cuisine-error>;
 
   /// Extract Recipe from Website
   record extract-recipe-from-website-params {
@@ -553,7 +2185,7 @@ interface recipes {
     /// Whether taste data should be added to correctly parsed ingredients.
     include-taste: option<bool>
   }
-  extract-recipe-from-website: func(params: extract-recipe-from-website-params) -> result<string, string>;
+  extract-recipe-from-website: func(params: extract-recipe-from-website-params) -> result<extract-recipe-from-website-response, extract-recipe-from-website-error>;
 
   /// Search Recipes by Ingredients
   record search-recipes-by-ingredients-params {
@@ -568,7 +2200,7 @@ interface recipes {
     /// Whether to ignore typical pantry items, such as water, salt, flour, etc.
     ignore-pantry: option<bool>
   }
-  search-recipes-by-ingredients: func(params: search-recipes-by-ingredients-params) -> result<string, string>;
+  search-recipes-by-ingredients: func(params: search-recipes-by-ingredients-params) -> result<list<search-recipes-by-ingredients-response-item>, search-recipes-by-ingredients-error>;
 
   /// Search Recipes by Nutrients
   record search-recipes-by-nutrients-params {
@@ -725,14 +2357,14 @@ interface recipes {
     /// Whether the recipes should have an open license that allows display with proper attribution.
     limit-license: option<bool>
   }
-  search-recipes-by-nutrients: func(params: search-recipes-by-nutrients-params) -> result<string, string>;
+  search-recipes-by-nutrients: func(params: search-recipes-by-nutrients-params) -> result<list<search-recipes-by-nutrients-response-item>, search-recipes-by-nutrients-error>;
 
   /// Guess Nutrition by Dish Name
   record guess-nutrition-by-dish-name-params {
     /// The title of the dish.
     title: string
   }
-  guess-nutrition-by-dish-name: func(params: guess-nutrition-by-dish-name-params) -> result<string, string>;
+  guess-nutrition-by-dish-name: func(params: guess-nutrition-by-dish-name-params) -> result<guess-nutrition-by-dish-name-response, guess-nutrition-by-dish-name-error>;
 
   /// Get Recipe Information Bulk
   record get-recipe-information-bulk-params {
@@ -741,30 +2373,31 @@ interface recipes {
     /// Include nutrition data in the recipe information. Nutrition data is per serving. If you want the nutrition data for the entire recipe, just multiply by the number of servings.
     include-nutrition: option<bool>
   }
-  get-recipe-information-bulk: func(params: get-recipe-information-bulk-params) -> result<string, string>;
+  get-recipe-information-bulk: func(params: get-recipe-information-bulk-params) -> result<list<get-recipe-information-bulk-response-item>, get-recipe-information-bulk-error>;
 
   /// Parse Ingredients
   record parse-ingredients-params {
     /// The content type.
     content-type: option<analyze-recipe-instructions-content-type-enum>,
     /// The language of the input. Either 'en' or 'de'.
-    language: option<compute-glycemic-load-language-enum>
+    language: option<compute-glycemic-load-language-enum>,
+    body: string
   }
-  parse-ingredients: func(params: parse-ingredients-params) -> result<string, string>;
+  parse-ingredients: func(params: parse-ingredients-params) -> result<list<parse-ingredients-response-item>, parse-ingredients-error>;
 
   /// Analyze a Recipe Search Query
   record analyze-a-recipe-search-query-params {
     /// The recipe search query.
     q: string
   }
-  analyze-a-recipe-search-query: func(params: analyze-a-recipe-search-query-params) -> result<string, string>;
+  analyze-a-recipe-search-query: func(params: analyze-a-recipe-search-query-params) -> result<analyze-a-recipe-search-query-response, analyze-a-recipe-search-query-error>;
 
   /// Quick Answer
   record quick-answer-params {
     /// The nutrition related question.
     q: string
   }
-  quick-answer: func(params: quick-answer-params) -> result<string, string>;
+  quick-answer: func(params: quick-answer-params) -> result<quick-answer-response, quick-answer-error>;
 
   /// Get Random Recipes
   record get-random-recipes-params {
@@ -775,16 +2408,17 @@ interface recipes {
     /// The maximum number of items to return (between 1 and 100). Defaults to 10.
     number: option<s32>
   }
-  get-random-recipes: func(params: get-random-recipes-params) -> result<string, string>;
+  get-random-recipes: func(params: get-random-recipes-params) -> result<get-random-recipes-response, get-random-recipes-error>;
 
   /// Equipment Widget
   record visualize-equipment-params {
     /// The content type.
     content-type: option<analyze-recipe-instructions-content-type-enum>,
     /// Accept header.
-    accept: option<visualize-equipment-accept-enum>
+    accept: option<visualize-equipment-accept-enum>,
+    body: string
   }
-  visualize-equipment: func(params: visualize-equipment-params) -> result<string, string>;
+  visualize-equipment: func(params: visualize-equipment-params) -> result<string, visualize-equipment-error>;
 
   /// Recipe Nutrition Widget
   record visualize-recipe-nutrition-params {
@@ -793,9 +2427,10 @@ interface recipes {
     /// Accept header.
     accept: option<visualize-equipment-accept-enum>,
     /// The language of the input. Either 'en' or 'de'.
-    language: option<compute-glycemic-load-language-enum>
+    language: option<compute-glycemic-load-language-enum>,
+    body: string
   }
-  visualize-recipe-nutrition: func(params: visualize-recipe-nutrition-params) -> result<string, string>;
+  visualize-recipe-nutrition: func(params: visualize-recipe-nutrition-params) -> result<string, visualize-recipe-nutrition-error>;
 
   /// Price Breakdown Widget
   record visualize-price-breakdown-params {
@@ -804,16 +2439,18 @@ interface recipes {
     /// Accept header.
     accept: option<visualize-equipment-accept-enum>,
     /// The language of the input. Either 'en' or 'de'.
-    language: option<compute-glycemic-load-language-enum>
+    language: option<compute-glycemic-load-language-enum>,
+    body: string
   }
-  visualize-price-breakdown: func(params: visualize-price-breakdown-params) -> result<string, string>;
+  visualize-price-breakdown: func(params: visualize-price-breakdown-params) -> result<string, visualize-price-breakdown-error>;
 
   /// Create Recipe Card
   record create-recipe-card-params {
     /// The content type.
-    content-type: option<analyze-recipe-instructions-content-type-enum>
+    content-type: option<analyze-recipe-instructions-content-type-enum>,
+    body: string
   }
-  create-recipe-card: func(params: create-recipe-card-params) -> result<string, string>;
+  create-recipe-card: func(params: create-recipe-card-params) -> result<create-recipe-card-response, create-recipe-card-error>;
 
   /// Recipe Taste Widget
   record visualize-recipe-taste-params {
@@ -826,9 +2463,10 @@ interface recipes {
     /// Whether to normalize to the strongest taste.
     normalize: option<bool>,
     /// Red, green, blue values for the chart color.
-    rgb: option<string>
+    rgb: option<string>,
+    body: string
   }
-  visualize-recipe-taste: func(params: visualize-recipe-taste-params) -> result<string, string>;
+  visualize-recipe-taste: func(params: visualize-recipe-taste-params) -> result<string, visualize-recipe-taste-error>;
 
   /// Get Analyzed Recipe Instructions
   record get-analyzed-recipe-instructions-params {
@@ -837,7 +2475,7 @@ interface recipes {
     /// Whether to break down the recipe steps even more.
     step-breakdown: option<bool>
   }
-  get-analyzed-recipe-instructions: func(params: get-analyzed-recipe-instructions-params) -> result<string, string>;
+  get-analyzed-recipe-instructions: func(params: get-analyzed-recipe-instructions-params) -> result<get-analyzed-recipe-instructions-response, get-analyzed-recipe-instructions-error>;
 
   /// Create Recipe Card
   record create-recipe-card-get-params {
@@ -852,7 +2490,7 @@ interface recipes {
     /// The font color for the recipe card as a hex-string.
     font-color: option<string>
   }
-  create-recipe-card-get: func(params: create-recipe-card-get-params) -> result<string, string>;
+  create-recipe-card-get: func(params: create-recipe-card-get-params) -> result<create-recipe-card-get-response, create-recipe-card-get-error>;
 
   /// Equipment by ID Widget
   record visualize-recipe-equipment-by-id-params {
@@ -861,21 +2499,21 @@ interface recipes {
     /// Whether the default CSS should be added to the response.
     default-css: option<bool>
   }
-  visualize-recipe-equipment-by-id: func(params: visualize-recipe-equipment-by-id-params) -> result<string, string>;
+  visualize-recipe-equipment-by-id: func(params: visualize-recipe-equipment-by-id-params) -> result<string, visualize-recipe-equipment-by-id-error>;
 
   /// Equipment by ID
   record get-recipe-equipment-by-id-params {
     /// The recipe id.
     id: string
   }
-  get-recipe-equipment-by-id: func(params: get-recipe-equipment-by-id-params) -> result<string, string>;
+  get-recipe-equipment-by-id: func(params: get-recipe-equipment-by-id-params) -> result<get-recipe-equipment-by-id-response, get-recipe-equipment-by-id-error>;
 
   /// Equipment by ID Image
   record equipment-by-id-image-params {
     /// The recipe id.
     id: string
   }
-  equipment-by-id-image: func(params: equipment-by-id-image-params) -> result<string, string>;
+  equipment-by-id-image: func(params: equipment-by-id-image-params) -> result<equipment-by-id-image-response, equipment-by-id-image-error>;
 
   /// Get Recipe Information
   record get-recipe-information-params {
@@ -884,7 +2522,7 @@ interface recipes {
     /// Include nutrition data in the recipe information. Nutrition data is per serving. If you want the nutrition data for the entire recipe, just multiply by the number of servings.
     include-nutrition: option<bool>
   }
-  get-recipe-information: func(params: get-recipe-information-params) -> result<string, string>;
+  get-recipe-information: func(params: get-recipe-information-params) -> result<get-recipe-information-response, get-recipe-information-error>;
 
   /// Ingredients by ID Widget
   record visualize-recipe-ingredients-by-id-params {
@@ -895,14 +2533,14 @@ interface recipes {
     /// Whether the the measures should be 'us' or 'metric'.
     measure: option<visualize-recipe-ingredients-by-id-measure-enum>
   }
-  visualize-recipe-ingredients-by-id: func(params: visualize-recipe-ingredients-by-id-params) -> result<string, string>;
+  visualize-recipe-ingredients-by-id: func(params: visualize-recipe-ingredients-by-id-params) -> result<string, visualize-recipe-ingredients-by-id-error>;
 
   /// Ingredients by ID
   record get-recipe-ingredients-by-id-params {
     /// The recipe id.
     id: string
   }
-  get-recipe-ingredients-by-id: func(params: get-recipe-ingredients-by-id-params) -> result<string, string>;
+  get-recipe-ingredients-by-id: func(params: get-recipe-ingredients-by-id-params) -> result<get-recipe-ingredients-by-id-response, get-recipe-ingredients-by-id-error>;
 
   /// Recipe Nutrition Label Widget
   record recipe-nutrition-label-widget-params {
@@ -917,7 +2555,7 @@ interface recipes {
     /// Whether to show a list of ingredients.
     show-ingredients: option<bool>
   }
-  recipe-nutrition-label-widget: func(params: recipe-nutrition-label-widget-params) -> result<string, string>;
+  recipe-nutrition-label-widget: func(params: recipe-nutrition-label-widget-params) -> result<string, recipe-nutrition-label-widget-error>;
 
   /// Recipe Nutrition Label Image
   record recipe-nutrition-label-image-params {
@@ -930,7 +2568,7 @@ interface recipes {
     /// Whether to show a list of ingredients.
     show-ingredients: option<bool>
   }
-  recipe-nutrition-label-image: func(params: recipe-nutrition-label-image-params) -> result<string, string>;
+  recipe-nutrition-label-image: func(params: recipe-nutrition-label-image-params) -> result<recipe-nutrition-label-image-response, recipe-nutrition-label-image-error>;
 
   /// Recipe Nutrition by ID Widget
   record visualize-recipe-nutrition-by-id-params {
@@ -941,21 +2579,21 @@ interface recipes {
     /// Accept header.
     accept: option<visualize-equipment-accept-enum>
   }
-  visualize-recipe-nutrition-by-id: func(params: visualize-recipe-nutrition-by-id-params) -> result<string, string>;
+  visualize-recipe-nutrition-by-id: func(params: visualize-recipe-nutrition-by-id-params) -> result<string, visualize-recipe-nutrition-by-id-error>;
 
   /// Nutrition by ID
   record get-recipe-nutrition-widget-by-id-params {
     /// The recipe id.
     id: string
   }
-  get-recipe-nutrition-widget-by-id: func(params: get-recipe-nutrition-widget-by-id-params) -> result<string, string>;
+  get-recipe-nutrition-widget-by-id: func(params: get-recipe-nutrition-widget-by-id-params) -> result<get-recipe-nutrition-widget-by-id-response, get-recipe-nutrition-widget-by-id-error>;
 
   /// Recipe Nutrition by ID Image
   record recipe-nutrition-by-id-image-params {
     /// The recipe id.
     id: string
   }
-  recipe-nutrition-by-id-image: func(params: recipe-nutrition-by-id-image-params) -> result<string, string>;
+  recipe-nutrition-by-id-image: func(params: recipe-nutrition-by-id-image-params) -> result<recipe-nutrition-by-id-image-response, recipe-nutrition-by-id-image-error>;
 
   /// Price Breakdown by ID Widget
   record visualize-recipe-price-breakdown-by-id-params {
@@ -964,21 +2602,21 @@ interface recipes {
     /// Whether the default CSS should be added to the response.
     default-css: option<bool>
   }
-  visualize-recipe-price-breakdown-by-id: func(params: visualize-recipe-price-breakdown-by-id-params) -> result<string, string>;
+  visualize-recipe-price-breakdown-by-id: func(params: visualize-recipe-price-breakdown-by-id-params) -> result<string, visualize-recipe-price-breakdown-by-id-error>;
 
   /// Price Breakdown by ID
   record get-recipe-price-breakdown-by-id-params {
     /// The recipe id.
     id: string
   }
-  get-recipe-price-breakdown-by-id: func(params: get-recipe-price-breakdown-by-id-params) -> result<string, string>;
+  get-recipe-price-breakdown-by-id: func(params: get-recipe-price-breakdown-by-id-params) -> result<get-recipe-price-breakdown-by-id-response, get-recipe-price-breakdown-by-id-error>;
 
   /// Price Breakdown by ID Image
   record price-breakdown-by-id-image-params {
     /// The recipe id.
     id: string
   }
-  price-breakdown-by-id-image: func(params: price-breakdown-by-id-image-params) -> result<string, string>;
+  price-breakdown-by-id-image: func(params: price-breakdown-by-id-image-params) -> result<price-breakdown-by-id-image-response, price-breakdown-by-id-image-error>;
 
   /// Get Similar Recipes
   record get-similar-recipes-params {
@@ -989,14 +2627,14 @@ interface recipes {
     /// Whether the recipes should have an open license that allows display with proper attribution.
     limit-license: option<bool>
   }
-  get-similar-recipes: func(params: get-similar-recipes-params) -> result<string, string>;
+  get-similar-recipes: func(params: get-similar-recipes-params) -> result<list<get-similar-recipes-response-item>, get-similar-recipes-error>;
 
   /// Summarize Recipe
   record summarize-recipe-params {
     /// The recipe id.
     id: string
   }
-  summarize-recipe: func(params: summarize-recipe-params) -> result<string, string>;
+  summarize-recipe: func(params: summarize-recipe-params) -> result<summarize-recipe-response, summarize-recipe-error>;
 
   /// Recipe Taste by ID Widget
   record visualize-recipe-taste-by-id-params {
@@ -1007,7 +2645,7 @@ interface recipes {
     /// Red, green, blue values for the chart color.
     rgb: option<string>
   }
-  visualize-recipe-taste-by-id: func(params: visualize-recipe-taste-by-id-params) -> result<string, string>;
+  visualize-recipe-taste-by-id: func(params: visualize-recipe-taste-by-id-params) -> result<string, visualize-recipe-taste-by-id-error>;
 
   /// Taste by ID
   record get-recipe-taste-by-id-params {
@@ -1016,7 +2654,7 @@ interface recipes {
     /// Normalize to the strongest taste.
     normalize: option<bool>
   }
-  get-recipe-taste-by-id: func(params: get-recipe-taste-by-id-params) -> result<string, string>;
+  get-recipe-taste-by-id: func(params: get-recipe-taste-by-id-params) -> result<get-recipe-taste-by-id-response, get-recipe-taste-by-id-error>;
 
   /// Recipe Taste by ID Image
   record recipe-taste-by-id-image-params {
@@ -1027,7 +2665,7 @@ interface recipes {
     /// Red, green, blue values for the chart color.
     rgb: option<string>
   }
-  recipe-taste-by-id-image: func(params: recipe-taste-by-id-image-params) -> result<string, string>;
+  recipe-taste-by-id-image: func(params: recipe-taste-by-id-image-params) -> result<recipe-taste-by-id-image-response, recipe-taste-by-id-image-error>;
 
 }
 
@@ -1036,6 +2674,136 @@ interface menu-items {
     application-json,
     text-html,
     media,
+  }
+
+  record search-menu-items-response {
+    menu-items: list<search-menu-items-response-menu-items-item>,
+    number: s32,
+    offset: s32,
+    total-menu-items: s32,
+    type-op: string
+  }
+
+  record search-menu-items-response-menu-items-item {
+    id: s32,
+    image: string,
+    image-type: string,
+    restaurant-chain: string,
+    servings: option<search-menu-items-response-menu-items-item-servings>,
+    title: string
+  }
+
+  record search-menu-items-response-menu-items-item-servings {
+    number: f64,
+    size: f64,
+    unit: string
+  }
+
+  record autocomplete-menu-item-search-response {
+    results: list<autocomplete-menu-item-search-response-results-item>
+  }
+
+  record autocomplete-menu-item-search-response-results-item {
+    id: s32,
+    title: string
+  }
+
+  record get-menu-item-information-response {
+    badges: list<string>,
+    breadcrumbs: list<string>,
+    generated-text: option<string>,
+    id: s32,
+    image-type: string,
+    likes: f64,
+    nutrition: get-menu-item-information-response-nutrition,
+    price: option<f64>,
+    restaurant-chain: string,
+    servings: get-menu-item-information-response-servings,
+    spoonacular-score: option<f64>,
+    title: string
+  }
+
+  record get-menu-item-information-response-nutrition {
+    caloric-breakdown: get-menu-item-information-response-nutrition-caloric-breakdown,
+    nutrients: list<get-menu-item-information-response-nutrition-nutrients-item>
+  }
+
+  record get-menu-item-information-response-nutrition-caloric-breakdown {
+    percent-carbs: f64,
+    percent-fat: f64,
+    percent-protein: f64
+  }
+
+  record get-menu-item-information-response-nutrition-nutrients-item {
+    amount: f64,
+    name: string,
+    percent-of-daily-needs: f64,
+    unit: string
+  }
+
+  record get-menu-item-information-response-servings {
+    number: f64,
+    size: f64,
+    unit: string
+  }
+
+  record menu-item-nutrition-label-image-response {
+    /// JSON-encoded free-form object payload
+    data: option<string>
+  }
+
+  record menu-item-nutrition-by-id-image-response {
+    /// JSON-encoded free-form object payload
+    data: option<string>
+  }
+
+  variant search-menu-items-error {
+    unauthorized(string),
+    forbidden(string),
+    not-found(string),
+    other(string)
+  }
+
+  variant autocomplete-menu-item-search-error {
+    unauthorized(string),
+    forbidden(string),
+    not-found(string),
+    other(string)
+  }
+
+  variant get-menu-item-information-error {
+    unauthorized(string),
+    forbidden(string),
+    not-found(string),
+    other(string)
+  }
+
+  variant menu-item-nutrition-label-widget-error {
+    unauthorized(string),
+    forbidden(string),
+    not-found(string),
+    other(string)
+  }
+
+  variant menu-item-nutrition-label-image-error {
+    unauthorized(string),
+    forbidden(string),
+    not-found(string),
+    other(string)
+  }
+
+  variant visualize-menu-item-nutrition-by-id-error {
+    unauthorized(string),
+    forbidden(string),
+    not-found(string),
+    other(string)
+  }
+
+  variant menu-item-nutrition-by-id-image-error {
+    unauthorized(string),
+    forbidden(string),
+    not-found(string),
+    other(string)
   }
 
   /// Search Menu Items
@@ -1065,7 +2833,7 @@ interface menu-items {
     /// The maximum number of items to return (between 1 and 100). Defaults to 10.
     number: option<s32>
   }
-  search-menu-items: func(params: search-menu-items-params) -> result<string, string>;
+  search-menu-items: func(params: search-menu-items-params) -> result<search-menu-items-response, search-menu-items-error>;
 
   /// Autocomplete Menu Item Search
   record autocomplete-menu-item-search-params {
@@ -1074,14 +2842,14 @@ interface menu-items {
     /// The number of results to return (between 1 and 25).
     number: option<f64>
   }
-  autocomplete-menu-item-search: func(params: autocomplete-menu-item-search-params) -> result<string, string>;
+  autocomplete-menu-item-search: func(params: autocomplete-menu-item-search-params) -> result<autocomplete-menu-item-search-response, autocomplete-menu-item-search-error>;
 
   /// Get Menu Item Information
   record get-menu-item-information-params {
     /// The menu item id.
     id: string
   }
-  get-menu-item-information: func(params: get-menu-item-information-params) -> result<string, string>;
+  get-menu-item-information: func(params: get-menu-item-information-params) -> result<get-menu-item-information-response, get-menu-item-information-error>;
 
   /// Menu Item Nutrition Label Widget
   record menu-item-nutrition-label-widget-params {
@@ -1096,7 +2864,7 @@ interface menu-items {
     /// Whether to show a list of ingredients.
     show-ingredients: option<bool>
   }
-  menu-item-nutrition-label-widget: func(params: menu-item-nutrition-label-widget-params) -> result<string, string>;
+  menu-item-nutrition-label-widget: func(params: menu-item-nutrition-label-widget-params) -> result<string, menu-item-nutrition-label-widget-error>;
 
   /// Menu Item Nutrition Label Image
   record menu-item-nutrition-label-image-params {
@@ -1109,7 +2877,7 @@ interface menu-items {
     /// Whether to show a list of ingredients.
     show-ingredients: option<bool>
   }
-  menu-item-nutrition-label-image: func(params: menu-item-nutrition-label-image-params) -> result<string, string>;
+  menu-item-nutrition-label-image: func(params: menu-item-nutrition-label-image-params) -> result<menu-item-nutrition-label-image-response, menu-item-nutrition-label-image-error>;
 
   /// Menu Item Nutrition by ID Widget
   record visualize-menu-item-nutrition-by-id-params {
@@ -1120,14 +2888,14 @@ interface menu-items {
     /// Accept header.
     accept: option<visualize-menu-item-nutrition-by-id-accept-enum>
   }
-  visualize-menu-item-nutrition-by-id: func(params: visualize-menu-item-nutrition-by-id-params) -> result<string, string>;
+  visualize-menu-item-nutrition-by-id: func(params: visualize-menu-item-nutrition-by-id-params) -> result<string, visualize-menu-item-nutrition-by-id-error>;
 
   /// Menu Item Nutrition by ID Image
   record menu-item-nutrition-by-id-image-params {
     /// The menu item id.
     id: string
   }
-  menu-item-nutrition-by-id-image: func(params: menu-item-nutrition-by-id-image-params) -> result<string, string>;
+  menu-item-nutrition-by-id-image: func(params: menu-item-nutrition-by-id-image-params) -> result<menu-item-nutrition-by-id-image-response, menu-item-nutrition-by-id-image-error>;
 
 }
 
@@ -1143,10 +2911,280 @@ interface products {
     media,
   }
 
+  record classify-grocery-product-response {
+    breadcrumbs: list<string>,
+    category: string,
+    clean-title: string,
+    image: string,
+    usda-code: s32
+  }
+
   record classify-grocery-product-bulk-body-item {
     plu-code: string,
     title: string,
     upc: string
+  }
+
+  record classify-grocery-product-bulk-response-item {
+    breadcrumbs: list<string>,
+    category: string,
+    clean-title: string,
+    image: string,
+    usda-code: s32
+  }
+
+  record search-grocery-products-response {
+    number: s32,
+    offset: s32,
+    products: list<search-grocery-products-response-products-item>,
+    total-products: s32,
+    type-op: string
+  }
+
+  record search-grocery-products-response-products-item {
+    id: s32,
+    image-type: string,
+    title: string
+  }
+
+  record autocomplete-product-search-response {
+    results: list<autocomplete-product-search-response-results-item>
+  }
+
+  record autocomplete-product-search-response-results-item {
+    id: s32,
+    title: string
+  }
+
+  record search-grocery-products-by-upc-response {
+    badges: list<string>,
+    breadcrumbs: list<string>,
+    generated-text: string,
+    id: s32,
+    image-type: string,
+    important-badges: list<string>,
+    ingredient-count: option<s32>,
+    ingredient-list: string,
+    ingredients: list<search-grocery-products-by-upc-response-ingredients-item>,
+    likes: f64,
+    nutrition: search-grocery-products-by-upc-response-nutrition,
+    price: f64,
+    servings: search-grocery-products-by-upc-response-servings,
+    spoonacular-score: f64,
+    title: string
+  }
+
+  record search-grocery-products-by-upc-response-ingredients-item {
+    description: option<string>,
+    name: string,
+    safety-level: option<string>
+  }
+
+  record search-grocery-products-by-upc-response-nutrition {
+    caloric-breakdown: search-grocery-products-by-upc-response-nutrition-caloric-breakdown,
+    nutrients: list<search-grocery-products-by-upc-response-nutrition-nutrients-item>
+  }
+
+  record search-grocery-products-by-upc-response-nutrition-caloric-breakdown {
+    percent-carbs: f64,
+    percent-fat: f64,
+    percent-protein: f64
+  }
+
+  record search-grocery-products-by-upc-response-nutrition-nutrients-item {
+    amount: f64,
+    name: string,
+    percent-of-daily-needs: f64,
+    unit: string
+  }
+
+  record search-grocery-products-by-upc-response-servings {
+    number: f64,
+    size: f64,
+    unit: string
+  }
+
+  record get-comparable-products-response {
+    comparable-products: get-comparable-products-response-comparable-products
+  }
+
+  record get-comparable-products-response-comparable-products {
+    calories: list<get-comparable-products-response-comparable-products-calories-item>,
+    likes: list<get-comparable-products-response-comparable-products-likes-item>,
+    price: list<get-comparable-products-response-comparable-products-price-item>,
+    protein: list<get-comparable-products-response-comparable-products-protein-item>,
+    spoonacular-score: list<get-comparable-products-response-comparable-products-spoonacular-score-item>,
+    sugar: list<get-comparable-products-response-comparable-products-sugar-item>
+  }
+
+  record get-comparable-products-response-comparable-products-calories-item {
+    /// JSON-encoded free-form object payload
+    data: option<string>
+  }
+
+  record get-comparable-products-response-comparable-products-likes-item {
+    /// JSON-encoded free-form object payload
+    data: option<string>
+  }
+
+  record get-comparable-products-response-comparable-products-price-item {
+    /// JSON-encoded free-form object payload
+    data: option<string>
+  }
+
+  record get-comparable-products-response-comparable-products-protein-item {
+    difference: f64,
+    id: s32,
+    image: string,
+    title: string
+  }
+
+  record get-comparable-products-response-comparable-products-spoonacular-score-item {
+    difference: f64,
+    id: s32,
+    image: string,
+    title: string
+  }
+
+  record get-comparable-products-response-comparable-products-sugar-item {
+    /// JSON-encoded free-form object payload
+    data: option<string>
+  }
+
+  record get-product-information-response {
+    aisle: string,
+    badges: list<string>,
+    breadcrumbs: list<string>,
+    generated-text: option<string>,
+    id: s32,
+    image-type: string,
+    important-badges: list<string>,
+    ingredient-count: s32,
+    ingredient-list: string,
+    ingredients: list<get-product-information-response-ingredients-item>,
+    likes: f64,
+    nutrition: get-product-information-response-nutrition,
+    price: f64,
+    servings: get-product-information-response-servings,
+    spoonacular-score: f64,
+    title: string
+  }
+
+  record get-product-information-response-ingredients-item {
+    description: option<string>,
+    name: string,
+    safety-level: option<string>
+  }
+
+  record get-product-information-response-nutrition {
+    caloric-breakdown: get-product-information-response-nutrition-caloric-breakdown,
+    nutrients: list<get-product-information-response-nutrition-nutrients-item>
+  }
+
+  record get-product-information-response-nutrition-caloric-breakdown {
+    percent-carbs: f64,
+    percent-fat: f64,
+    percent-protein: f64
+  }
+
+  record get-product-information-response-nutrition-nutrients-item {
+    amount: f64,
+    name: string,
+    percent-of-daily-needs: f64,
+    unit: string
+  }
+
+  record get-product-information-response-servings {
+    number: f64,
+    size: f64,
+    unit: string
+  }
+
+  record product-nutrition-label-image-response {
+    /// JSON-encoded free-form object payload
+    data: option<string>
+  }
+
+  record product-nutrition-by-id-image-response {
+    /// JSON-encoded free-form object payload
+    data: option<string>
+  }
+
+  variant classify-grocery-product-error {
+    unauthorized(string),
+    forbidden(string),
+    not-found(string),
+    other(string)
+  }
+
+  variant classify-grocery-product-bulk-error {
+    unauthorized(string),
+    forbidden(string),
+    not-found(string),
+    other(string)
+  }
+
+  variant search-grocery-products-error {
+    unauthorized(string),
+    forbidden(string),
+    not-found(string),
+    other(string)
+  }
+
+  variant autocomplete-product-search-error {
+    unauthorized(string),
+    forbidden(string),
+    not-found(string),
+    other(string)
+  }
+
+  variant search-grocery-products-by-upc-error {
+    unauthorized(string),
+    forbidden(string),
+    not-found(string),
+    other(string)
+  }
+
+  variant get-comparable-products-error {
+    unauthorized(string),
+    forbidden(string),
+    not-found(string),
+    other(string)
+  }
+
+  variant get-product-information-error {
+    unauthorized(string),
+    forbidden(string),
+    not-found(string),
+    other(string)
+  }
+
+  variant product-nutrition-label-widget-error {
+    unauthorized(string),
+    forbidden(string),
+    not-found(string),
+    other(string)
+  }
+
+  variant product-nutrition-label-image-error {
+    unauthorized(string),
+    forbidden(string),
+    not-found(string),
+    other(string)
+  }
+
+  variant visualize-product-nutrition-by-id-error {
+    unauthorized(string),
+    forbidden(string),
+    not-found(string),
+    other(string)
+  }
+
+  variant product-nutrition-by-id-image-error {
+    unauthorized(string),
+    forbidden(string),
+    not-found(string),
+    other(string)
   }
 
   /// Classify Grocery Product
@@ -1157,7 +3195,7 @@ interface products {
     title: string,
     upc: string
   }
-  classify-grocery-product: func(params: classify-grocery-product-params) -> result<string, string>;
+  classify-grocery-product: func(params: classify-grocery-product-params) -> result<classify-grocery-product-response, classify-grocery-product-error>;
 
   /// Classify Grocery Product Bulk
   record classify-grocery-product-bulk-params {
@@ -1165,7 +3203,7 @@ interface products {
     locale: option<string>,
     body: list<classify-grocery-product-bulk-body-item>
   }
-  classify-grocery-product-bulk: func(params: classify-grocery-product-bulk-params) -> result<string, string>;
+  classify-grocery-product-bulk: func(params: classify-grocery-product-bulk-params) -> result<list<classify-grocery-product-bulk-response-item>, classify-grocery-product-bulk-error>;
 
   /// Search Grocery Products
   record search-grocery-products-params {
@@ -1194,7 +3232,7 @@ interface products {
     /// The maximum number of items to return (between 1 and 100). Defaults to 10.
     number: option<s32>
   }
-  search-grocery-products: func(params: search-grocery-products-params) -> result<string, string>;
+  search-grocery-products: func(params: search-grocery-products-params) -> result<search-grocery-products-response, search-grocery-products-error>;
 
   /// Autocomplete Product Search
   record autocomplete-product-search-params {
@@ -1203,28 +3241,28 @@ interface products {
     /// The number of results to return (between 1 and 25).
     number: option<s32>
   }
-  autocomplete-product-search: func(params: autocomplete-product-search-params) -> result<string, string>;
+  autocomplete-product-search: func(params: autocomplete-product-search-params) -> result<autocomplete-product-search-response, autocomplete-product-search-error>;
 
   /// Search Grocery Products by UPC
   record search-grocery-products-by-upc-params {
     /// The product's UPC.
     upc: string
   }
-  search-grocery-products-by-upc: func(params: search-grocery-products-by-upc-params) -> result<string, string>;
+  search-grocery-products-by-upc: func(params: search-grocery-products-by-upc-params) -> result<search-grocery-products-by-upc-response, search-grocery-products-by-upc-error>;
 
   /// Get Comparable Products
   record get-comparable-products-params {
     /// The UPC of the product for which you want to find comparable products.
     upc: string
   }
-  get-comparable-products: func(params: get-comparable-products-params) -> result<string, string>;
+  get-comparable-products: func(params: get-comparable-products-params) -> result<get-comparable-products-response, get-comparable-products-error>;
 
   /// Get Product Information
   record get-product-information-params {
     /// The id of the packaged food.
     id: string
   }
-  get-product-information: func(params: get-product-information-params) -> result<string, string>;
+  get-product-information: func(params: get-product-information-params) -> result<get-product-information-response, get-product-information-error>;
 
   /// Product Nutrition Label Widget
   record product-nutrition-label-widget-params {
@@ -1239,7 +3277,7 @@ interface products {
     /// Whether to show a list of ingredients.
     show-ingredients: option<bool>
   }
-  product-nutrition-label-widget: func(params: product-nutrition-label-widget-params) -> result<string, string>;
+  product-nutrition-label-widget: func(params: product-nutrition-label-widget-params) -> result<string, product-nutrition-label-widget-error>;
 
   /// Product Nutrition Label Image
   record product-nutrition-label-image-params {
@@ -1252,7 +3290,7 @@ interface products {
     /// Whether to show a list of ingredients.
     show-ingredients: option<bool>
   }
-  product-nutrition-label-image: func(params: product-nutrition-label-image-params) -> result<string, string>;
+  product-nutrition-label-image: func(params: product-nutrition-label-image-params) -> result<product-nutrition-label-image-response, product-nutrition-label-image-error>;
 
   /// Product Nutrition by ID Widget
   record visualize-product-nutrition-by-id-params {
@@ -1263,18 +3301,117 @@ interface products {
     /// Accept header.
     accept: option<visualize-product-nutrition-by-id-accept-enum>
   }
-  visualize-product-nutrition-by-id: func(params: visualize-product-nutrition-by-id-params) -> result<string, string>;
+  visualize-product-nutrition-by-id: func(params: visualize-product-nutrition-by-id-params) -> result<string, visualize-product-nutrition-by-id-error>;
 
   /// Product Nutrition by ID Image
   record product-nutrition-by-id-image-params {
     /// The id of the product.
     id: string
   }
-  product-nutrition-by-id-image: func(params: product-nutrition-by-id-image-params) -> result<string, string>;
+  product-nutrition-by-id-image: func(params: product-nutrition-by-id-image-params) -> result<product-nutrition-by-id-image-response, product-nutrition-by-id-image-error>;
 
 }
 
 interface food {
+  record search-restaurants-response {
+    restaurants: option<list<search-restaurants-response-restaurants-item>>
+  }
+
+  record search-restaurants-response-restaurants-item {
+    id: option<string>,
+    address: option<search-restaurants-response-restaurants-item-address>,
+    aggregated-rating-count: option<s32>,
+    cuisines: option<list<string>>,
+    delivery-enabled: option<bool>,
+    description: option<string>,
+    dollar-signs: option<s32>,
+    food-photos: option<list<string>>,
+    is-open: option<bool>,
+    local-hours: option<search-restaurants-response-restaurants-item-local-hours>,
+    logo-photos: option<list<string>>,
+    miles: option<f64>,
+    name: option<string>,
+    offers-first-party-delivery: option<bool>,
+    offers-third-party-delivery: option<bool>,
+    phone-number: option<s32>,
+    pickup-enabled: option<bool>,
+    store-photos: option<list<search-restaurants-response-restaurants-item-store-photos-item>>,
+    type-op: option<string>,
+    weighted-rating-value: option<f64>
+  }
+
+  record search-restaurants-response-restaurants-item-address {
+    city: option<string>,
+    country: option<string>,
+    lat: option<f64>,
+    latitude: option<f64>,
+    lon: option<f64>,
+    longitude: option<f64>,
+    state: option<string>,
+    street-addr: option<string>,
+    street-addr-v2: option<string>,
+    zipcode: option<string>
+  }
+
+  record search-restaurants-response-restaurants-item-local-hours {
+    delivery: option<search-restaurants-response-restaurants-item-local-hours-delivery>,
+    dine-in: option<search-restaurants-response-restaurants-item-local-hours-dine-in>,
+    operational: option<search-restaurants-response-restaurants-item-local-hours-operational>,
+    pickup: option<search-restaurants-response-restaurants-item-local-hours-pickup>
+  }
+
+  record search-restaurants-response-restaurants-item-local-hours-delivery {
+    friday: option<string>,
+    monday: option<string>,
+    saturday: option<string>,
+    sunday: option<string>,
+    thursday: option<string>,
+    tuesday: option<string>,
+    wednesday: option<string>
+  }
+
+  record search-restaurants-response-restaurants-item-local-hours-dine-in {
+    friday: option<string>,
+    monday: option<string>,
+    saturday: option<string>,
+    sunday: option<string>,
+    thursday: option<string>,
+    tuesday: option<string>,
+    wednesday: option<string>
+  }
+
+  record search-restaurants-response-restaurants-item-local-hours-operational {
+    friday: option<string>,
+    monday: option<string>,
+    saturday: option<string>,
+    sunday: option<string>,
+    thursday: option<string>,
+    tuesday: option<string>,
+    wednesday: option<string>
+  }
+
+  record search-restaurants-response-restaurants-item-local-hours-pickup {
+    friday: option<string>,
+    monday: option<string>,
+    saturday: option<string>,
+    sunday: option<string>,
+    thursday: option<string>,
+    tuesday: option<string>,
+    wednesday: option<string>
+  }
+
+  record search-restaurants-response-restaurants-item-store-photos-item {
+    /// JSON-encoded free-form object payload
+    data: option<string>
+  }
+
+  variant search-restaurants-error {
+    unauthorized(string),
+    forbidden(string),
+    not-found(string),
+    other(string)
+  }
+
   /// Search Restaurants
   record search-restaurants-params {
     /// The search query.
@@ -1298,24 +3435,96 @@ interface food {
     /// The page number of results.
     page: option<f64>
   }
-  search-restaurants: func(params: search-restaurants-params) -> result<string, string>;
+  search-restaurants: func(params: search-restaurants-params) -> result<search-restaurants-response, search-restaurants-error>;
 
 }
 
 interface wine {
+  record get-wine-description-response {
+    wine-description: string
+  }
+
+  record get-dish-pairing-for-wine-response {
+    pairings: list<string>,
+    text: string
+  }
+
+  record get-wine-pairing-response {
+    paired-wines: list<string>,
+    pairing-text: string,
+    product-matches: list<get-wine-pairing-response-product-matches-item>
+  }
+
+  record get-wine-pairing-response-product-matches-item {
+    average-rating: f64,
+    description: option<string>,
+    id: s32,
+    image-url: string,
+    link: string,
+    price: string,
+    rating-count: s32,
+    score: f64,
+    title: string
+  }
+
+  record get-wine-recommendation-response {
+    recommended-wines: list<get-wine-recommendation-response-recommended-wines-item>,
+    total-found: s32
+  }
+
+  record get-wine-recommendation-response-recommended-wines-item {
+    average-rating: f64,
+    description: string,
+    id: s32,
+    image-url: string,
+    link: string,
+    price: string,
+    rating-count: s32,
+    score: f64,
+    title: string
+  }
+
+  variant get-wine-description-error {
+    unauthorized(string),
+    forbidden(string),
+    not-found(string),
+    other(string)
+  }
+
+  variant get-dish-pairing-for-wine-error {
+    unauthorized(string),
+    forbidden(string),
+    not-found(string),
+    other(string)
+  }
+
+  variant get-wine-pairing-error {
+    unauthorized(string),
+    forbidden(string),
+    not-found(string),
+    other(string)
+  }
+
+  variant get-wine-recommendation-error {
+    unauthorized(string),
+    forbidden(string),
+    not-found(string),
+    other(string)
+  }
+
   /// Wine Description
   record get-wine-description-params {
     /// The name of the wine that should be paired, e.g. "merlot", "riesling", or "malbec".
     wine: string
   }
-  get-wine-description: func(params: get-wine-description-params) -> result<string, string>;
+  get-wine-description: func(params: get-wine-description-params) -> result<get-wine-description-response, get-wine-description-error>;
 
   /// Dish Pairing for Wine
   record get-dish-pairing-for-wine-params {
     /// The type of wine that should be paired, e.g. "merlot", "riesling", or "malbec".
     wine: string
   }
-  get-dish-pairing-for-wine: func(params: get-dish-pairing-for-wine-params) -> result<string, string>;
+  get-dish-pairing-for-wine: func(params: get-dish-pairing-for-wine-params) -> result<get-dish-pairing-for-wine-response, get-dish-pairing-for-wine-error>;
 
   /// Wine Pairing
   record get-wine-pairing-params {
@@ -1324,7 +3533,7 @@ interface wine {
     /// The maximum price for the specific wine recommendation in USD.
     max-price: option<f64>
   }
-  get-wine-pairing: func(params: get-wine-pairing-params) -> result<string, string>;
+  get-wine-pairing: func(params: get-wine-pairing-params) -> result<get-wine-pairing-response, get-wine-pairing-error>;
 
   /// Wine Recommendation
   record get-wine-recommendation-params {
@@ -1337,17 +3546,471 @@ interface wine {
     /// The number of wine recommendations expected (between 1 and 100).
     number: option<f64>
   }
-  get-wine-recommendation: func(params: get-wine-recommendation-params) -> result<string, string>;
+  get-wine-recommendation: func(params: get-wine-recommendation-params) -> result<get-wine-recommendation-response, get-wine-recommendation-error>;
 
 }
 
 interface meal-planning {
+  record generate-meal-plan-response {
+    meals: list<generate-meal-plan-response-meals-item>,
+    nutrients: generate-meal-plan-response-nutrients
+  }
+
+  record generate-meal-plan-response-meals-item {
+    id: s32,
+    image-type: string,
+    ready-in-minutes: s32,
+    servings: f64,
+    source-url: string,
+    title: string
+  }
+
+  record generate-meal-plan-response-nutrients {
+    calories: f64,
+    carbohydrates: f64,
+    fat: f64,
+    protein: f64
+  }
+
+  record clear-meal-plan-day-response {
+    /// JSON-encoded free-form object payload
+    data: option<string>
+  }
+
   record add-to-meal-plan-body-value {
     ingredients: list<add-to-meal-plan-body-value-ingredients-item>
   }
 
   record add-to-meal-plan-body-value-ingredients-item {
     name: string
+  }
+
+  record add-to-meal-plan-response {
+    /// JSON-encoded free-form object payload
+    data: option<string>
+  }
+
+  record delete-from-meal-plan-response {
+    /// JSON-encoded free-form object payload
+    data: option<string>
+  }
+
+  record get-shopping-list-response {
+    aisles: list<get-shopping-list-response-aisles-item>,
+    cost: f64,
+    end-date: f64,
+    start-date: f64
+  }
+
+  record get-shopping-list-response-aisles-item {
+    aisle: string,
+    items: option<list<get-shopping-list-response-aisles-item-items-item>>
+  }
+
+  record get-shopping-list-response-aisles-item-items-item {
+    aisle: string,
+    cost: f64,
+    id: s32,
+    ingredient-id: s32,
+    measures: option<get-shopping-list-response-aisles-item-items-item-measures>,
+    name: string,
+    pantry-item: bool
+  }
+
+  record get-shopping-list-response-aisles-item-items-item-measures {
+    metric: get-shopping-list-response-aisles-item-items-item-measures-metric,
+    original: get-shopping-list-response-aisles-item-items-item-measures-original,
+    us: get-shopping-list-response-aisles-item-items-item-measures-us
+  }
+
+  record get-shopping-list-response-aisles-item-items-item-measures-metric {
+    amount: f64,
+    unit: string
+  }
+
+  record get-shopping-list-response-aisles-item-items-item-measures-original {
+    amount: f64,
+    unit: string
+  }
+
+  record get-shopping-list-response-aisles-item-items-item-measures-us {
+    amount: f64,
+    unit: string
+  }
+
+  record add-to-shopping-list-response {
+    aisles: list<add-to-shopping-list-response-aisles-item>,
+    cost: f64,
+    end-date: f64,
+    start-date: f64
+  }
+
+  record add-to-shopping-list-response-aisles-item {
+    aisle: string,
+    items: option<list<add-to-shopping-list-response-aisles-item-items-item>>
+  }
+
+  record add-to-shopping-list-response-aisles-item-items-item {
+    aisle: string,
+    cost: f64,
+    id: s32,
+    ingredient-id: s32,
+    measures: option<add-to-shopping-list-response-aisles-item-items-item-measures>,
+    name: string,
+    pantry-item: bool
+  }
+
+  record add-to-shopping-list-response-aisles-item-items-item-measures {
+    metric: add-to-shopping-list-response-aisles-item-items-item-measures-metric,
+    original: add-to-shopping-list-response-aisles-item-items-item-measures-original,
+    us: add-to-shopping-list-response-aisles-item-items-item-measures-us
+  }
+
+  record add-to-shopping-list-response-aisles-item-items-item-measures-metric {
+    amount: f64,
+    unit: string
+  }
+
+  record add-to-shopping-list-response-aisles-item-items-item-measures-original {
+    amount: f64,
+    unit: string
+  }
+
+  record add-to-shopping-list-response-aisles-item-items-item-measures-us {
+    amount: f64,
+    unit: string
+  }
+
+  record delete-from-shopping-list-response {
+    /// JSON-encoded free-form object payload
+    data: option<string>
+  }
+
+  record generate-shopping-list-response {
+    aisles: list<generate-shopping-list-response-aisles-item>,
+    cost: f64,
+    end-date: f64,
+    start-date: f64
+  }
+
+  record generate-shopping-list-response-aisles-item {
+    aisle: string,
+    items: option<list<generate-shopping-list-response-aisles-item-items-item>>
+  }
+
+  record generate-shopping-list-response-aisles-item-items-item {
+    aisle: string,
+    cost: f64,
+    id: s32,
+    ingredient-id: s32,
+    measures: option<generate-shopping-list-response-aisles-item-items-item-measures>,
+    name: string,
+    pantry-item: bool
+  }
+
+  record generate-shopping-list-response-aisles-item-items-item-measures {
+    metric: generate-shopping-list-response-aisles-item-items-item-measures-metric,
+    original: generate-shopping-list-response-aisles-item-items-item-measures-original,
+    us: generate-shopping-list-response-aisles-item-items-item-measures-us
+  }
+
+  record generate-shopping-list-response-aisles-item-items-item-measures-metric {
+    amount: f64,
+    unit: string
+  }
+
+  record generate-shopping-list-response-aisles-item-items-item-measures-original {
+    amount: f64,
+    unit: string
+  }
+
+  record generate-shopping-list-response-aisles-item-items-item-measures-us {
+    amount: f64,
+    unit: string
+  }
+
+  record get-meal-plan-templates-response {
+    templates: list<get-meal-plan-templates-response-templates-item>
+  }
+
+  record get-meal-plan-templates-response-templates-item {
+    id: s32,
+    name: string
+  }
+
+  record add-meal-plan-template-response {
+    items: list<add-meal-plan-template-response-items-item>,
+    name: string,
+    publish-as-public: bool
+  }
+
+  record add-meal-plan-template-response-items-item {
+    day: s32,
+    position: s32,
+    slot: s32,
+    type-op: string,
+    value: option<add-meal-plan-template-response-items-item-value>
+  }
+
+  record add-meal-plan-template-response-items-item-value {
+    id: option<s32>,
+    image-type: option<string>,
+    servings: option<f64>,
+    title: option<string>
+  }
+
+  record get-meal-plan-template-response {
+    days: list<get-meal-plan-template-response-days-item>,
+    id: s32,
+    name: string
+  }
+
+  record get-meal-plan-template-response-days-item {
+    day: string,
+    items: option<list<get-meal-plan-template-response-days-item-items-item>>,
+    nutrition-summary: option<get-meal-plan-template-response-days-item-nutrition-summary>,
+    nutrition-summary-breakfast: option<get-meal-plan-template-response-days-item-nutrition-summary-breakfast>,
+    nutrition-summary-dinner: option<get-meal-plan-template-response-days-item-nutrition-summary-dinner>,
+    nutrition-summary-lunch: option<get-meal-plan-template-response-days-item-nutrition-summary-lunch>
+  }
+
+  record get-meal-plan-template-response-days-item-items-item {
+    id: s32,
+    position: s32,
+    slot: s32,
+    type-op: string,
+    value: option<get-meal-plan-template-response-days-item-items-item-value>
+  }
+
+  record get-meal-plan-template-response-days-item-items-item-value {
+    id: f64,
+    image-type: string,
+    title: string
+  }
+
+  record get-meal-plan-template-response-days-item-nutrition-summary {
+    nutrients: list<get-meal-plan-template-response-days-item-nutrition-summary-nutrients-item>
+  }
+
+  record get-meal-plan-template-response-days-item-nutrition-summary-nutrients-item {
+    amount: f64,
+    name: string,
+    percent-daily-needs: f64,
+    unit: string
+  }
+
+  record get-meal-plan-template-response-days-item-nutrition-summary-breakfast {
+    nutrients: list<get-meal-plan-template-response-days-item-nutrition-summary-breakfast-nutrients-item>
+  }
+
+  record get-meal-plan-template-response-days-item-nutrition-summary-breakfast-nutrients-item {
+    amount: f64,
+    name: string,
+    percent-daily-needs: f64,
+    unit: string
+  }
+
+  record get-meal-plan-template-response-days-item-nutrition-summary-dinner {
+    nutrients: list<get-meal-plan-template-response-days-item-nutrition-summary-dinner-nutrients-item>
+  }
+
+  record get-meal-plan-template-response-days-item-nutrition-summary-dinner-nutrients-item {
+    amount: f64,
+    name: string,
+    percent-daily-needs: f64,
+    unit: string
+  }
+
+  record get-meal-plan-template-response-days-item-nutrition-summary-lunch {
+    nutrients: list<get-meal-plan-template-response-days-item-nutrition-summary-lunch-nutrients-item>
+  }
+
+  record get-meal-plan-template-response-days-item-nutrition-summary-lunch-nutrients-item {
+    amount: f64,
+    name: string,
+    percent-daily-needs: f64,
+    unit: string
+  }
+
+  record delete-meal-plan-template-response {
+    /// JSON-encoded free-form object payload
+    data: option<string>
+  }
+
+  record get-meal-plan-week-response {
+    days: list<get-meal-plan-week-response-days-item>
+  }
+
+  record get-meal-plan-week-response-days-item {
+    date: f64,
+    day: string,
+    items: option<list<get-meal-plan-week-response-days-item-items-item>>,
+    nutrition-summary: option<get-meal-plan-week-response-days-item-nutrition-summary>,
+    nutrition-summary-breakfast: option<get-meal-plan-week-response-days-item-nutrition-summary-breakfast>,
+    nutrition-summary-dinner: option<get-meal-plan-week-response-days-item-nutrition-summary-dinner>,
+    nutrition-summary-lunch: option<get-meal-plan-week-response-days-item-nutrition-summary-lunch>
+  }
+
+  record get-meal-plan-week-response-days-item-items-item {
+    id: s32,
+    position: s32,
+    slot: s32,
+    type-op: string,
+    value: option<get-meal-plan-week-response-days-item-items-item-value>
+  }
+
+  record get-meal-plan-week-response-days-item-items-item-value {
+    id: f64,
+    image-type: string,
+    servings: f64,
+    title: string
+  }
+
+  record get-meal-plan-week-response-days-item-nutrition-summary {
+    nutrients: list<get-meal-plan-week-response-days-item-nutrition-summary-nutrients-item>
+  }
+
+  record get-meal-plan-week-response-days-item-nutrition-summary-nutrients-item {
+    amount: f64,
+    name: string,
+    percent-daily-needs: f64,
+    unit: string
+  }
+
+  record get-meal-plan-week-response-days-item-nutrition-summary-breakfast {
+    nutrients: list<get-meal-plan-week-response-days-item-nutrition-summary-breakfast-nutrients-item>
+  }
+
+  record get-meal-plan-week-response-days-item-nutrition-summary-breakfast-nutrients-item {
+    amount: f64,
+    name: string,
+    percent-daily-needs: f64,
+    unit: string
+  }
+
+  record get-meal-plan-week-response-days-item-nutrition-summary-dinner {
+    nutrients: list<get-meal-plan-week-response-days-item-nutrition-summary-dinner-nutrients-item>
+  }
+
+  record get-meal-plan-week-response-days-item-nutrition-summary-dinner-nutrients-item {
+    amount: f64,
+    name: string,
+    percent-daily-needs: f64,
+    unit: string
+  }
+
+  record get-meal-plan-week-response-days-item-nutrition-summary-lunch {
+    nutrients: list<get-meal-plan-week-response-days-item-nutrition-summary-lunch-nutrients-item>
+  }
+
+  record get-meal-plan-week-response-days-item-nutrition-summary-lunch-nutrients-item {
+    amount: f64,
+    name: string,
+    percent-daily-needs: f64,
+    unit: string
+  }
+
+  record connect-user-response {
+    hash: string,
+    username: string
+  }
+
+  variant generate-meal-plan-error {
+    unauthorized(string),
+    forbidden(string),
+    not-found(string),
+    other(string)
+  }
+
+  variant clear-meal-plan-day-error {
+    unauthorized(string),
+    forbidden(string),
+    not-found(string),
+    other(string)
+  }
+
+  variant add-to-meal-plan-error {
+    unauthorized(string),
+    forbidden(string),
+    not-found(string),
+    other(string)
+  }
+
+  variant delete-from-meal-plan-error {
+    unauthorized(string),
+    forbidden(string),
+    not-found(string),
+    other(string)
+  }
+
+  variant get-shopping-list-error {
+    unauthorized(string),
+    forbidden(string),
+    not-found(string),
+    other(string)
+  }
+
+  variant add-to-shopping-list-error {
+    unauthorized(string),
+    forbidden(string),
+    not-found(string),
+    other(string)
+  }
+
+  variant delete-from-shopping-list-error {
+    unauthorized(string),
+    forbidden(string),
+    not-found(string),
+    other(string)
+  }
+
+  variant generate-shopping-list-error {
+    unauthorized(string),
+    forbidden(string),
+    not-found(string),
+    other(string)
+  }
+
+  variant get-meal-plan-templates-error {
+    unauthorized(string),
+    forbidden(string),
+    not-found(string),
+    other(string)
+  }
+
+  variant add-meal-plan-template-error {
+    unauthorized(string),
+    forbidden(string),
+    not-found(string),
+    other(string)
+  }
+
+  variant get-meal-plan-template-error {
+    unauthorized(string),
+    forbidden(string),
+    not-found(string),
+    other(string)
+  }
+
+  variant delete-meal-plan-template-error {
+    unauthorized(string),
+    forbidden(string),
+    not-found(string),
+    other(string)
+  }
+
+  variant get-meal-plan-week-error {
+    unauthorized(string),
+    forbidden(string),
+    not-found(string),
+    other(string)
+  }
+
+  variant connect-user-error {
+    unauthorized(string),
+    forbidden(string),
+    not-found(string),
+    other(string)
   }
 
   /// Generate Meal Plan
@@ -1361,7 +4024,7 @@ interface meal-planning {
     /// A comma-separated list of allergens or ingredients that must be excluded.
     exclude: option<string>
   }
-  generate-meal-plan: func(params: generate-meal-plan-params) -> result<string, string>;
+  generate-meal-plan: func(params: generate-meal-plan-params) -> result<generate-meal-plan-response, generate-meal-plan-error>;
 
   /// Clear Meal Plan Day
   record clear-meal-plan-day-params {
@@ -1370,9 +4033,15 @@ interface meal-planning {
     /// The date in the format yyyy-mm-dd.
     date: string,
     /// The private hash for the username.
-    hash: string
+    hash: string,
+    /// The date in the format yyyy-mm-dd.
+    date-v2: string,
+    /// The private hash for the username.
+    hash-v2: string,
+    /// The username.
+    username-v2: string
   }
-  clear-meal-plan-day: func(params: clear-meal-plan-day-params) -> result<string, string>;
+  clear-meal-plan-day: func(params: clear-meal-plan-day-params) -> result<clear-meal-plan-day-response, clear-meal-plan-day-error>;
 
   /// Add to Meal Plan
   record add-to-meal-plan-params {
@@ -1386,7 +4055,7 @@ interface meal-planning {
     type-op: string,
     value: add-to-meal-plan-body-value
   }
-  add-to-meal-plan: func(params: add-to-meal-plan-params) -> result<string, string>;
+  add-to-meal-plan: func(params: add-to-meal-plan-params) -> result<add-to-meal-plan-response, add-to-meal-plan-error>;
 
   /// Delete from Meal Plan
   record delete-from-meal-plan-params {
@@ -1395,9 +4064,15 @@ interface meal-planning {
     /// The shopping list item id.
     id: string,
     /// The private hash for the username.
-    hash: string
+    hash: string,
+    /// The private hash for the username.
+    hash-v2: string,
+    /// The shopping list item id.
+    id-v2: f64,
+    /// The username.
+    username-v2: string
   }
-  delete-from-meal-plan: func(params: delete-from-meal-plan-params) -> result<string, string>;
+  delete-from-meal-plan: func(params: delete-from-meal-plan-params) -> result<delete-from-meal-plan-response, delete-from-meal-plan-error>;
 
   /// Get Shopping List
   record get-shopping-list-params {
@@ -1406,7 +4081,7 @@ interface meal-planning {
     /// The private hash for the username.
     hash: string
   }
-  get-shopping-list: func(params: get-shopping-list-params) -> result<string, string>;
+  get-shopping-list: func(params: get-shopping-list-params) -> result<get-shopping-list-response, get-shopping-list-error>;
 
   /// Add to Shopping List
   record add-to-shopping-list-params {
@@ -1418,7 +4093,7 @@ interface meal-planning {
     item: string,
     parse: bool
   }
-  add-to-shopping-list: func(params: add-to-shopping-list-params) -> result<string, string>;
+  add-to-shopping-list: func(params: add-to-shopping-list-params) -> result<add-to-shopping-list-response, add-to-shopping-list-error>;
 
   /// Delete from Shopping List
   record delete-from-shopping-list-params {
@@ -1427,9 +4102,15 @@ interface meal-planning {
     /// The shopping list item id.
     id: string,
     /// The private hash for the username.
-    hash: string
+    hash: string,
+    /// The private hash for the username.
+    hash-v2: string,
+    /// The shopping list item id.
+    id-v2: f64,
+    /// The username.
+    username-v2: string
   }
-  delete-from-shopping-list: func(params: delete-from-shopping-list-params) -> result<string, string>;
+  delete-from-shopping-list: func(params: delete-from-shopping-list-params) -> result<delete-from-shopping-list-response, delete-from-shopping-list-error>;
 
   /// Generate Shopping List
   record generate-shopping-list-params {
@@ -1440,9 +4121,17 @@ interface meal-planning {
     /// The end date in the format yyyy-mm-dd.
     end-date: string,
     /// The private hash for the username.
-    hash: string
+    hash: string,
+    /// The end date in the format yyyy-mm-dd.
+    end-date-v2: string,
+    /// The private hash for the username.
+    hash-v2: string,
+    /// The start date in the format yyyy-mm-dd.
+    start-date-v2: string,
+    /// The username.
+    username-v2: string
   }
-  generate-shopping-list: func(params: generate-shopping-list-params) -> result<string, string>;
+  generate-shopping-list: func(params: generate-shopping-list-params) -> result<generate-shopping-list-response, generate-shopping-list-error>;
 
   /// Get Meal Plan Templates
   record get-meal-plan-templates-params {
@@ -1451,16 +4140,20 @@ interface meal-planning {
     /// The private hash for the username.
     hash: string
   }
-  get-meal-plan-templates: func(params: get-meal-plan-templates-params) -> result<string, string>;
+  get-meal-plan-templates: func(params: get-meal-plan-templates-params) -> result<get-meal-plan-templates-response, get-meal-plan-templates-error>;
 
   /// Add Meal Plan Template
   record add-meal-plan-template-params {
     /// The username.
     username: string,
     /// The private hash for the username.
-    hash: string
+    hash: string,
+    /// The private hash for the username.
+    hash-v2: string,
+    /// The username.
+    username-v2: string
   }
-  add-meal-plan-template: func(params: add-meal-plan-template-params) -> result<string, string>;
+  add-meal-plan-template: func(params: add-meal-plan-template-params) -> result<add-meal-plan-template-response, add-meal-plan-template-error>;
 
   /// Get Meal Plan Template
   record get-meal-plan-template-params {
@@ -1471,7 +4164,7 @@ interface meal-planning {
     /// The private hash for the username.
     hash: string
   }
-  get-meal-plan-template: func(params: get-meal-plan-template-params) -> result<string, string>;
+  get-meal-plan-template: func(params: get-meal-plan-template-params) -> result<get-meal-plan-template-response, get-meal-plan-template-error>;
 
   /// Delete Meal Plan Template
   record delete-meal-plan-template-params {
@@ -1480,9 +4173,15 @@ interface meal-planning {
     /// The shopping list item id.
     id: string,
     /// The private hash for the username.
-    hash: string
+    hash: string,
+    /// The private hash for the username.
+    hash-v2: string,
+    /// The shopping list item id.
+    id-v2: f64,
+    /// The username.
+    username-v2: string
   }
-  delete-meal-plan-template: func(params: delete-meal-plan-template-params) -> result<string, string>;
+  delete-meal-plan-template: func(params: delete-meal-plan-template-params) -> result<delete-meal-plan-template-response, delete-meal-plan-template-error>;
 
   /// Get Meal Plan Week
   record get-meal-plan-week-params {
@@ -1493,7 +4192,7 @@ interface meal-planning {
     /// The private hash for the username.
     hash: string
   }
-  get-meal-plan-week: func(params: get-meal-plan-week-params) -> result<string, string>;
+  get-meal-plan-week: func(params: get-meal-plan-week-params) -> result<get-meal-plan-week-response, get-meal-plan-week-error>;
 
   /// Connect User
   record connect-user-params {
@@ -1502,7 +4201,7 @@ interface meal-planning {
     last-name: string,
     username: string
   }
-  connect-user: func(params: connect-user-params) -> result<string, string>;
+  connect-user: func(params: connect-user-params) -> result<connect-user-response, connect-user-error>;
 
 }
 /// The component world: imports the secrets host capability

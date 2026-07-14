@@ -1,38 +1,156 @@
-package autostamp:launchdarkly@0.3.0;
+package autostamp:launchdarkly@0.5.0;
 
 interface root {
-  get-root: func() -> result<string, string>;
+  record links {
+    next: option<link>,
+    self: option<link>
+  }
+
+  record link {
+    href: option<string>,
+    type-op: option<string>
+  }
+
+  variant get-root-error {
+    unauthorized(string),
+    other(string)
+  }
+
+  get-root: func() -> result<links, get-root-error>;
 
 }
 
 
 interface relay-proxy-configurations {
+  record relay-proxy-configs {
+    items: option<list<relay-proxy-config>>
+  }
+
+  record relay-proxy-config {
+    creator: member,
+    id: id,
+    /// A unix epoch time in milliseconds specifying the creation time of this relay proxy configuration
+    creation-date: s64,
+    /// The last 4 digits of the unique secret key for this relay proxy configuration
+    display-key: string,
+    /// Full secret key. Only included if creating or resetting the relay proxy configuration
+    full-key: option<string>,
+    /// A unix epoch time in milliseconds specifying the last time this relay proxy configuration was modified
+    last-modified: s64,
+    /// A human-friendly name for the relay proxy configuration
+    name: string,
+    policy: list<policy>
+  }
+
+  record member {
+    id: option<id>,
+    /// A unix epoch time in milliseconds specifying the last time this member was active in LaunchDarkly.
+    last-seen: option<s64>,
+    last-seen-metadata: option<member-last-seen-metadata>,
+    links: option<links>,
+    pending-invite: option<bool>,
+    verified: option<bool>,
+    custom-roles: option<list<id>>,
+    email: option<string>,
+    first-name: option<string>,
+    is-beta: option<bool>,
+    last-name: option<string>,
+    role: option<role>
+  }
+
+  /// The unique resource id.
+  record id {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  record member-last-seen-metadata {
+    /// If the last time this member accessed LaunchDarkly was using the REST API, this value will be set to the ID of the personal access token used.
+    token-id: option<string>
+  }
+
+  record links {
+    next: option<link>,
+    self: option<link>
+  }
+
+  record link {
+    href: option<string>,
+    type-op: option<string>
+  }
+
+  record role {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  record policy {
+    actions: option<list<string>>,
+    /// Effect of the policy - allow or deny.
+    effect: option<string>,
+    /// Targeted actions will be those actions NOT in this list. The "actions" field must be empty to use this field.
+    not-actions: option<list<string>>,
+    /// Targeted resource will be those resources NOT in this list. The "resources`" field must be empty to use this field.
+    not-resources: option<list<string>>,
+    resources: option<list<string>>
+  }
+
+  variant post-relay-auto-config-error {
+    bad-request(string),
+    forbidden(string),
+    other(string)
+  }
+
+  variant get-relay-proxy-config-error {
+    not-found(string),
+    other(string)
+  }
+
+  variant patch-relay-proxy-config-error {
+    bad-request(string),
+    not-found(string),
+    conflict(string),
+    other(string)
+  }
+
+  variant delete-relay-proxy-config-error {
+    bad-request(string),
+    not-found(string),
+    other(string)
+  }
+
+  variant reset-relay-proxy-config-error {
+    bad-request(string),
+    not-found(string),
+    other(string)
+  }
+
   /// Returns a list of relay proxy configurations in the account.
-  get-relay-proxy-configs: func() -> result<string, string>;
+  get-relay-proxy-configs: func() -> result<relay-proxy-configs, string>;
 
   /// Create a new relay proxy config.
-  post-relay-auto-config: func() -> result<string, string>;
+  post-relay-auto-config: func() -> result<relay-proxy-config, post-relay-auto-config-error>;
 
   /// Get a single relay proxy configuration by ID.
   record get-relay-proxy-config-params {
     /// The relay proxy configuration ID
     id: string
   }
-  get-relay-proxy-config: func(params: get-relay-proxy-config-params) -> result<string, string>;
+  get-relay-proxy-config: func(params: get-relay-proxy-config-params) -> result<relay-proxy-config, get-relay-proxy-config-error>;
 
   /// Modify a relay proxy configuration by ID.
   record patch-relay-proxy-config-params {
     /// The relay proxy configuration ID
     id: string
   }
-  patch-relay-proxy-config: func(params: patch-relay-proxy-config-params) -> result<string, string>;
+  patch-relay-proxy-config: func(params: patch-relay-proxy-config-params) -> result<relay-proxy-config, patch-relay-proxy-config-error>;
 
   /// Delete a relay proxy configuration by ID.
   record delete-relay-proxy-config-params {
     /// The relay proxy configuration ID
     id: string
   }
-  delete-relay-proxy-config: func(params: delete-relay-proxy-config-params) -> result<string, string>;
+  delete-relay-proxy-config: func(params: delete-relay-proxy-config-params) -> result<string, delete-relay-proxy-config-error>;
 
   /// Reset a relay proxy configuration's secret key with an optional expiry time for the old key.
   record reset-relay-proxy-config-params {
@@ -41,11 +159,91 @@ interface relay-proxy-configurations {
     /// An expiration time for the old relay proxy configuration key, expressed as a Unix epoch time in milliseconds. By default, the relay proxy configuration will expire immediately
     expiry: option<s64>
   }
-  reset-relay-proxy-config: func(params: reset-relay-proxy-config-params) -> result<string, string>;
+  reset-relay-proxy-config: func(params: reset-relay-proxy-config-params) -> result<relay-proxy-config, reset-relay-proxy-config-error>;
 
 }
 
 interface audit-log {
+  record entries {
+    links: option<links>,
+    items: option<list<entry>>
+  }
+
+  record links {
+    next: option<link>,
+    self: option<link>
+  }
+
+  record link {
+    href: option<string>,
+    type-op: option<string>
+  }
+
+  record entry {
+    id: option<id>,
+    links: option<links>,
+    comment: option<string>,
+    date: option<s64>,
+    description: option<string>,
+    kind: option<string>,
+    member: option<member>,
+    name: option<string>,
+    short-description: option<string>,
+    target: option<entry-target>,
+    title: option<string>,
+    title-verb: option<string>
+  }
+
+  /// The unique resource id.
+  record id {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  record member {
+    id: option<id>,
+    /// A unix epoch time in milliseconds specifying the last time this member was active in LaunchDarkly.
+    last-seen: option<s64>,
+    last-seen-metadata: option<member-last-seen-metadata>,
+    links: option<links>,
+    pending-invite: option<bool>,
+    verified: option<bool>,
+    custom-roles: option<list<id>>,
+    email: option<string>,
+    first-name: option<string>,
+    is-beta: option<bool>,
+    last-name: option<string>,
+    role: option<role>
+  }
+
+  record member-last-seen-metadata {
+    /// If the last time this member accessed LaunchDarkly was using the REST API, this value will be set to the ID of the personal access token used.
+    token-id: option<string>
+  }
+
+  record role {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  record entry-target {
+    links: option<links>,
+    name: option<string>,
+    resources: option<list<string>>
+  }
+
+  variant get-audit-log-entries-error {
+    bad-request(string),
+    unauthorized(string),
+    other(string)
+  }
+
+  variant get-audit-log-entry-error {
+    unauthorized(string),
+    not-found(string),
+    other(string)
+  }
+
   /// Get a list of all audit log entries. The query parameters allow you to restrict the returned results by date ranges, resource specifiers, or a full-text search query.
   record get-audit-log-entries-params {
     /// A timestamp filter, expressed as a Unix epoch time in milliseconds. All entries returned will have before this timestamp.
@@ -59,20 +257,95 @@ interface audit-log {
     /// A resource specifier, allowing you to filter audit log listings by resource.
     spec: option<string>
   }
-  get-audit-log-entries: func(params: get-audit-log-entries-params) -> result<string, string>;
+  get-audit-log-entries: func(params: get-audit-log-entries-params) -> result<entries, get-audit-log-entries-error>;
 
   /// Use this endpoint to fetch a single audit log entry by its resouce ID.
   record get-audit-log-entry-params {
     /// The resource ID.
     resource-id: string
   }
-  get-audit-log-entry: func(params: get-audit-log-entry-params) -> result<string, string>;
+  get-audit-log-entry: func(params: get-audit-log-entry-params) -> result<entry, get-audit-log-entry-error>;
 
 }
 
 interface data-export-destinations {
+  enum destination-kind-enum {
+    google-pubsub,
+    kinesis,
+    mparticle,
+    segment,
+  }
+
+  record destinations {
+    links: option<links>,
+    items: option<list<destination>>
+  }
+
+  record links {
+    next: option<link>,
+    self: option<link>
+  }
+
+  record link {
+    href: option<string>,
+    type-op: option<string>
+  }
+
+  record destination {
+    /// Unique destination ID.
+    id: option<string>,
+    links: option<links>,
+    /// destination-specific configuration.
+    config: option<destination-config>,
+    /// Destination type ("google-pubsub", "kinesis", "mparticle", or "segment")
+    kind: option<destination-kind-enum>,
+    /// The destination name
+    name: option<string>,
+    /// Whether the data export destination is on or not.
+    on: option<bool>,
+    version: option<s32>
+  }
+
+  /// destination-specific configuration.
+  record destination-config {
+    /// JSON-encoded free-form object payload
+    data: option<string>
+  }
+
+  variant get-destinations-error {
+    unauthorized(string),
+    other(string)
+  }
+
+  variant post-destination-error {
+    bad-request(string),
+    unauthorized(string),
+    conflict(string),
+    other(string)
+  }
+
+  variant get-destination-error {
+    unauthorized(string),
+    not-found(string),
+    other(string)
+  }
+
+  variant patch-destination-error {
+    bad-request(string),
+    unauthorized(string),
+    not-found(string),
+    conflict(string),
+    other(string)
+  }
+
+  variant delete-destination-error {
+    unauthorized(string),
+    not-found(string),
+    other(string)
+  }
+
   /// Returns a list of all data export destinations.
-  get-destinations: func() -> result<string, string>;
+  get-destinations: func() -> result<destinations, get-destinations-error>;
 
   /// Create a new data export destination
   record post-destination-params {
@@ -81,7 +354,7 @@ interface data-export-destinations {
     /// The environment key, used to tie together flag configuration and users under one environment so they can be managed together.
     environment-key: string
   }
-  post-destination: func(params: post-destination-params) -> result<string, string>;
+  post-destination: func(params: post-destination-params) -> result<destination, post-destination-error>;
 
   /// Get a single data export destination by ID
   record get-destination-params {
@@ -92,7 +365,7 @@ interface data-export-destinations {
     /// The data export destination ID.
     destination-id: string
   }
-  get-destination: func(params: get-destination-params) -> result<string, string>;
+  get-destination: func(params: get-destination-params) -> result<destination, get-destination-error>;
 
   /// Perform a partial update to a data export destination.
   record patch-destination-params {
@@ -103,7 +376,7 @@ interface data-export-destinations {
     /// The data export destination ID.
     destination-id: string
   }
-  patch-destination: func(params: patch-destination-params) -> result<string, string>;
+  patch-destination: func(params: patch-destination-params) -> result<destination, patch-destination-error>;
 
   /// Get a single data export destination by ID
   record delete-destination-params {
@@ -114,11 +387,498 @@ interface data-export-destinations {
     /// The data export destination ID.
     destination-id: string
   }
-  delete-destination: func(params: delete-destination-params) -> result<string, string>;
+  delete-destination: func(params: delete-destination-params) -> result<string, delete-destination-error>;
 
 }
 
 interface feature-flags {
+  enum feature-flag-status-name-enum {
+    new,
+    active,
+    inactive,
+    launched,
+  }
+
+  enum approval-request-status-enum {
+    pending,
+    completed,
+    scheduled,
+    failed,
+  }
+
+  record feature-flag-status-across-environments {
+    links: option<feature-flag-status-links>,
+    environments: option<feature-flag-status-across-environments-environments>,
+    key: option<string>
+  }
+
+  record feature-flag-status-links {
+    parent: option<link>,
+    self: option<link>
+  }
+
+  record link {
+    href: option<string>,
+    type-op: option<string>
+  }
+
+  record feature-flag-status-across-environments-environments {
+    /// JSON-encoded free-form object payload
+    data: option<string>
+  }
+
+  record feature-flag-statuses {
+    links: option<feature-flag-status-links>,
+    items: option<list<feature-flag-status>>
+  }
+
+  record feature-flag-status {
+    links: option<feature-flag-status-links>,
+    default: option<feature-flag-status-default>,
+    last-requested: option<string>,
+    /// | Name     | Description |
+    /// | --------:| ----------- |
+    name: option<feature-flag-status-name-enum>
+  }
+
+  record feature-flag-status-default {
+    /// JSON-encoded free-form object payload
+    data: option<string>
+  }
+
+  record feature-flags {
+    links: option<links>,
+    items: option<list<feature-flag>>,
+    total-count: option<f64>
+  }
+
+  record links {
+    next: option<link>,
+    self: option<link>
+  }
+
+  record feature-flag {
+    links: option<links>,
+    maintainer: option<member>,
+    version: option<s32>,
+    /// Whether or not this flag is archived.
+    archived: option<bool>,
+    /// A unix epoch time in milliseconds specifying the archived time of this flag.
+    archived-date: option<s64>,
+    client-side-availability: option<client-side-availability>,
+    /// A unix epoch time in milliseconds specifying the creation time of this flag.
+    creation-date: option<s64>,
+    /// A mapping of keys to CustomProperty entries.
+    custom-properties: option<feature-flag-custom-properties>,
+    defaults: option<defaults>,
+    /// Description of the feature flag.
+    description: option<string>,
+    environments: option<feature-flag-environments>,
+    /// An array goals from all environments associated with this feature flag
+    goal-ids: option<list<string>>,
+    include-in-snippet: option<bool>,
+    key: option<string>,
+    /// Whether the feature flag is a boolean flag or multivariate.
+    kind: option<string>,
+    /// The ID of the member that should maintain this flag.
+    maintainer-id: option<string>,
+    /// Name of the feature flag.
+    name: option<string>,
+    /// An array of tags for this feature flag.
+    tags: option<list<string>>,
+    /// Whether or not this flag is temporary.
+    temporary: option<bool>,
+    /// The variations for this feature flag.
+    variations: option<list<variation>>
+  }
+
+  record member {
+    id: option<id>,
+    /// A unix epoch time in milliseconds specifying the last time this member was active in LaunchDarkly.
+    last-seen: option<s64>,
+    last-seen-metadata: option<member-last-seen-metadata>,
+    links: option<links>,
+    pending-invite: option<bool>,
+    verified: option<bool>,
+    custom-roles: option<list<id>>,
+    email: option<string>,
+    first-name: option<string>,
+    is-beta: option<bool>,
+    last-name: option<string>,
+    role: option<role>
+  }
+
+  /// The unique resource id.
+  record id {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  record member-last-seen-metadata {
+    /// If the last time this member accessed LaunchDarkly was using the REST API, this value will be set to the ID of the personal access token used.
+    token-id: option<string>
+  }
+
+  record role {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  record client-side-availability {
+    /// When set to true, this flag will be available to SDKs using the client-side id.
+    using-environment-id: option<bool>,
+    /// When set to true, this flag will be available to SDKS using a mobile key.
+    using-mobile-key: option<bool>
+  }
+
+  /// A mapping of keys to CustomProperty entries.
+  record feature-flag-custom-properties {
+    /// JSON-encoded free-form object payload
+    data: option<string>
+  }
+
+  /// Default values to be used when a new environment is created.
+  record defaults {
+    /// The index of the variation to be served when a flag is off.
+    off-variation: s32,
+    /// The index of the variation to be served when a flag's targeting is on (default variation).
+    on-variation: s32
+  }
+
+  record feature-flag-environments {
+    /// JSON-encoded free-form object payload
+    data: option<string>
+  }
+
+  record variation {
+    id: option<string>,
+    description: option<string>,
+    name: option<string>,
+    value: variation-value
+  }
+
+  record variation-value {
+    /// JSON-encoded free-form object payload
+    data: option<string>
+  }
+
+  record dependent-flags-by-environment {
+    links: option<dependent-flags-links>,
+    site: option<site>,
+    items: option<list<dependent-flag>>
+  }
+
+  record dependent-flags-links {
+    parent: option<link>,
+    self: option<link>
+  }
+
+  record site {
+    href: option<string>,
+    type-op: option<string>
+  }
+
+  record dependent-flag {
+    links: option<dependent-flag-links>,
+    site: option<site>,
+    key: option<string>,
+    name: option<string>
+  }
+
+  record dependent-flag-links {
+    self: option<link>
+  }
+
+  record multi-environment-dependent-flags {
+    links: option<dependent-flags-links>,
+    site: option<site>,
+    items: option<list<multi-environment-dependent-flag>>
+  }
+
+  record multi-environment-dependent-flag {
+    links: option<dependent-flags-links>,
+    site: option<site>,
+    environments: option<list<dependent-flag-environment>>,
+    key: option<string>,
+    name: option<string>
+  }
+
+  record dependent-flag-environment {
+    links: option<dependent-flag-environment-links>,
+    site: option<site>,
+    key: option<string>,
+    name: option<string>
+  }
+
+  record dependent-flag-environment-links {
+    flag-link: option<link>,
+    self: option<link>
+  }
+
+  record user-targeting-expiration-for-flags {
+    links: option<links>,
+    items: option<list<user-targeting-expiration-for-flag>>
+  }
+
+  record user-targeting-expiration-for-flag {
+    id: option<string>,
+    links: option<links>,
+    resource-id: option<user-targeting-expiration-resource-id-for-flag>,
+    version: option<s32>,
+    /// Unix epoch time in milliseconds specifying the expiration date
+    expiration-date: option<s64>,
+    /// Unique identifier for the user
+    user-key: option<string>,
+    /// the ID of the variation that the user is targeted on a flag
+    variation-id: option<string>
+  }
+
+  record user-targeting-expiration-resource-id-for-flag {
+    environment-key: option<string>,
+    flag-key: option<string>,
+    key: option<string>,
+    kind: option<string>,
+    project-key: option<string>
+  }
+
+  record approval-requests {
+    links: option<links>,
+    items: option<list<approval-request>>
+  }
+
+  record approval-request {
+    id: option<id>,
+    version: option<s32>,
+    all-reviews: option<list<approval-request-review>>,
+    /// The id of the member that applied the approval request
+    applied-by-member-id: option<string>,
+    /// A unix epoch time in milliseconds specifying the date the approval request was applied
+    applied-date: option<s32>,
+    /// A unix epoch time in milliseconds specifying the date the approval request was requested
+    creation-date: option<s32>,
+    /// Timestamp for when instructions will be executed
+    execution-date: option<s64>,
+    instructions: option<semantic-patch-instruction>,
+    notify-member-ids: option<list<string>>,
+    /// ID of scheduled change to edit or delete
+    operating-on-id: option<string>,
+    /// The id of the member that requested the change
+    requestor-id: option<string>,
+    review-status: option<approval-request-review-status>,
+    /// | Name      | Description |
+    /// | ---------:| ----------- |
+    status: option<approval-request-status-enum>
+  }
+
+  record approval-request-review {
+    id: option<id>,
+    /// A unix epoch time in milliseconds specifying the date the approval request was reviewed
+    creation-date: option<s32>,
+    kind: option<approval-request-review-status>,
+    member-id: option<id>
+  }
+
+  /// | Name     | Description |
+  /// | --------:| ----------- |
+  /// | pending  | the approval request has not been reviewed yet |
+  /// | approved | the approval request has been approved and can now be applied |
+  /// | declined | the approval request has been declined and cannot be applied |
+  record approval-request-review-status {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  record semantic-patch-instruction {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  record feature-flag-scheduled-changes {
+    links: option<links>,
+    items: option<list<feature-flag-scheduled-change>>
+  }
+
+  record feature-flag-scheduled-change {
+    id: option<string>,
+    version: option<s32>,
+    /// A unix epoch time in milliseconds specifying the date the scheduled changes will be applied
+    execution-date: option<s32>,
+    instructions: option<semantic-patch-instruction>
+  }
+
+  record feature-flag-scheduled-changes-conflicts {
+    instructions: option<list<feature-flag-scheduled-changes-conflicts-instructions-item>>
+  }
+
+  record feature-flag-scheduled-changes-conflicts-instructions-item {
+    conflicts: option<list<scheduled-changes-feature-flag-conflict>>,
+    /// The name of the modification you would like to perform on a resource.
+    kind: option<string>
+  }
+
+  record scheduled-changes-feature-flag-conflict {
+    /// Feature flag scheduled change id this change will conflict with
+    id: option<string>,
+    /// Feature flag scheduled change conflict reason
+    reason: option<string>
+  }
+
+  variant get-feature-flag-status-across-environments-error {
+    unauthorized(string),
+    forbidden(string),
+    other(string)
+  }
+
+  variant get-feature-flag-statuses-error {
+    unauthorized(string),
+    other(string)
+  }
+
+  variant get-feature-flag-status-error {
+    unauthorized(string),
+    other(string)
+  }
+
+  variant get-feature-flags-error {
+    unauthorized(string),
+    other(string)
+  }
+
+  variant post-feature-flag-error {
+    bad-request(string),
+    unauthorized(string),
+    conflict(string),
+    other(string)
+  }
+
+  variant get-flags-project-key-environment-key-feature-flag-key-dependent-flags-error {
+    unauthorized(string),
+    forbidden(string),
+    not-found(string),
+    other(string)
+  }
+
+  variant get-feature-flag-error {
+    unauthorized(string),
+    not-found(string),
+    other(string)
+  }
+
+  variant patch-feature-flag-error {
+    bad-request(string),
+    unauthorized(string),
+    not-found(string),
+    conflict(string),
+    other(string)
+  }
+
+  variant delete-feature-flag-error {
+    unauthorized(string),
+    not-found(string),
+    other(string)
+  }
+
+  variant copy-feature-flag-error {
+    bad-request(string),
+    unauthorized(string),
+    conflict(string),
+    other(string)
+  }
+
+  variant get-flags-project-key-feature-flag-key-dependent-flags-error {
+    unauthorized(string),
+    forbidden(string),
+    not-found(string),
+    other(string)
+  }
+
+  variant get-expiring-user-targets-error {
+    unauthorized(string),
+    other(string)
+  }
+
+  variant patch-expiring-user-targets-error {
+    bad-request(string),
+    unauthorized(string),
+    not-found(string),
+    conflict(string),
+    other(string)
+  }
+
+  variant get-approval-requests-error {
+    unauthorized(string),
+    not-found(string),
+    other(string)
+  }
+
+  variant get-approval-request-error {
+    unauthorized(string),
+    not-found(string),
+    other(string)
+  }
+
+  variant post-approval-request-error {
+    unauthorized(string),
+    not-found(string),
+    other(string)
+  }
+
+  variant delete-approval-request-error {
+    unauthorized(string),
+    not-found(string),
+    other(string)
+  }
+
+  variant post-apply-approval-request-error {
+    unauthorized(string),
+    not-found(string),
+    other(string)
+  }
+
+  variant post-review-approval-request-error {
+    unauthorized(string),
+    not-found(string),
+    other(string)
+  }
+
+  variant get-flag-config-scheduled-changes-error {
+    unauthorized(string),
+    not-found(string),
+    other(string)
+  }
+
+  variant post-flag-config-scheduled-changes-error {
+    bad-request(string),
+    unauthorized(string),
+    conflict(string),
+    other(string)
+  }
+
+  variant get-flag-config-scheduled-changes-conflicts-error {
+    unauthorized(string),
+    not-found(string),
+    other(string)
+  }
+
+  variant get-flag-config-scheduled-change-error {
+    unauthorized(string),
+    not-found(string),
+    other(string)
+  }
+
+  variant patch-flag-config-scheduled-change-error {
+    bad-request(string),
+    unauthorized(string),
+    conflict(string),
+    other(string)
+  }
+
+  variant delete-flag-config-scheduled-changes-error {
+    unauthorized(string),
+    not-found(string),
+    other(string)
+  }
+
   /// Get the status for a particular feature flag across environments
   record get-feature-flag-status-across-environments-params {
     /// The project key, used to tie the flags together under one project so they can be managed together.
@@ -126,7 +886,7 @@ interface feature-flags {
     /// The feature flag's key. The key identifies the flag in your code.
     feature-flag-key: string
   }
-  get-feature-flag-status-across-environments: func(params: get-feature-flag-status-across-environments-params) -> result<string, string>;
+  get-feature-flag-status-across-environments: func(params: get-feature-flag-status-across-environments-params) -> result<feature-flag-status-across-environments, get-feature-flag-status-across-environments-error>;
 
   /// Get a list of statuses for all feature flags. The status includes the last time the feature flag was requested, as well as the state of the flag.
   record get-feature-flag-statuses-params {
@@ -135,7 +895,7 @@ interface feature-flags {
     /// The environment key, used to tie together flag configuration and users under one environment so they can be managed together.
     environment-key: string
   }
-  get-feature-flag-statuses: func(params: get-feature-flag-statuses-params) -> result<string, string>;
+  get-feature-flag-statuses: func(params: get-feature-flag-statuses-params) -> result<feature-flag-statuses, get-feature-flag-statuses-error>;
 
   /// Get the status for a particular feature flag.
   record get-feature-flag-status-params {
@@ -146,7 +906,7 @@ interface feature-flags {
     /// The feature flag's key. The key identifies the flag in your code.
     feature-flag-key: string
   }
-  get-feature-flag-status: func(params: get-feature-flag-status-params) -> result<string, string>;
+  get-feature-flag-status: func(params: get-feature-flag-status-params) -> result<feature-flag-status, get-feature-flag-status-error>;
 
   /// Get a list of all features in the given project.
   record get-feature-flags-params {
@@ -169,7 +929,7 @@ interface feature-flags {
     /// Filter by tag. A tag can be used to group flags across projects.
     tag: option<string>
   }
-  get-feature-flags: func(params: get-feature-flags-params) -> result<string, string>;
+  get-feature-flags: func(params: get-feature-flags-params) -> result<feature-flags, get-feature-flags-error>;
 
   /// Creates a new feature flag.
   record post-feature-flag-params {
@@ -178,7 +938,7 @@ interface feature-flags {
     /// The key of the feature flag to be cloned. The key identifies the flag in your code.  For example, setting clone=flagKey will copy the full targeting configuration for all environments (including on/off state) from the original flag to the new flag.
     clone: option<string>
   }
-  post-feature-flag: func(params: post-feature-flag-params) -> result<string, string>;
+  post-feature-flag: func(params: post-feature-flag-params) -> result<feature-flag, post-feature-flag-error>;
 
   /// Get dependent flags for the flag in the environment specified in path parameters
   record get-flags-project-key-environment-key-feature-flag-key-dependent-flags-params {
@@ -189,7 +949,7 @@ interface feature-flags {
     /// The feature flag's key. The key identifies the flag in your code.
     feature-flag-key: string
   }
-  get-flags-project-key-environment-key-feature-flag-key-dependent-flags: func(params: get-flags-project-key-environment-key-feature-flag-key-dependent-flags-params) -> result<string, string>;
+  get-flags-project-key-environment-key-feature-flag-key-dependent-flags: func(params: get-flags-project-key-environment-key-feature-flag-key-dependent-flags-params) -> result<dependent-flags-by-environment, get-flags-project-key-environment-key-feature-flag-key-dependent-flags-error>;
 
   /// Get a single feature flag by key.
   record get-feature-flag-params {
@@ -200,7 +960,7 @@ interface feature-flags {
     /// By default, each feature will include configurations for each environment. You can filter environments with the env query parameter. For example, setting env=["production"] will restrict the returned configurations to just your production environment.
     env: option<list<string>>
   }
-  get-feature-flag: func(params: get-feature-flag-params) -> result<string, string>;
+  get-feature-flag: func(params: get-feature-flag-params) -> result<feature-flag, get-feature-flag-error>;
 
   /// Perform a partial update to a feature.
   record patch-feature-flag-params {
@@ -209,7 +969,7 @@ interface feature-flags {
     /// The feature flag's key. The key identifies the flag in your code.
     feature-flag-key: string
   }
-  patch-feature-flag: func(params: patch-feature-flag-params) -> result<string, string>;
+  patch-feature-flag: func(params: patch-feature-flag-params) -> result<feature-flag, patch-feature-flag-error>;
 
   /// Delete a feature flag in all environments. Be careful-- only delete feature flags that are no longer being used by your application.
   record delete-feature-flag-params {
@@ -218,7 +978,7 @@ interface feature-flags {
     /// The feature flag's key. The key identifies the flag in your code.
     feature-flag-key: string
   }
-  delete-feature-flag: func(params: delete-feature-flag-params) -> result<string, string>;
+  delete-feature-flag: func(params: delete-feature-flag-params) -> result<string, delete-feature-flag-error>;
 
   /// Copies the feature flag configuration from one environment to the same feature flag in another environment.
   record copy-feature-flag-params {
@@ -227,7 +987,7 @@ interface feature-flags {
     /// The feature flag's key. The key identifies the flag in your code.
     feature-flag-key: string
   }
-  copy-feature-flag: func(params: copy-feature-flag-params) -> result<string, string>;
+  copy-feature-flag: func(params: copy-feature-flag-params) -> result<feature-flag, copy-feature-flag-error>;
 
   /// Get dependent flags across all environments for the flag specified in the path parameters
   record get-flags-project-key-feature-flag-key-dependent-flags-params {
@@ -236,7 +996,7 @@ interface feature-flags {
     /// The feature flag's key. The key identifies the flag in your code.
     feature-flag-key: string
   }
-  get-flags-project-key-feature-flag-key-dependent-flags: func(params: get-flags-project-key-feature-flag-key-dependent-flags-params) -> result<string, string>;
+  get-flags-project-key-feature-flag-key-dependent-flags: func(params: get-flags-project-key-feature-flag-key-dependent-flags-params) -> result<multi-environment-dependent-flags, get-flags-project-key-feature-flag-key-dependent-flags-error>;
 
   /// Get expiring user targets for feature flag
   record get-expiring-user-targets-params {
@@ -247,7 +1007,7 @@ interface feature-flags {
     /// The feature flag's key. The key identifies the flag in your code.
     feature-flag-key: string
   }
-  get-expiring-user-targets: func(params: get-expiring-user-targets-params) -> result<string, string>;
+  get-expiring-user-targets: func(params: get-expiring-user-targets-params) -> result<user-targeting-expiration-for-flags, get-expiring-user-targets-error>;
 
   /// Update, add, or delete expiring user targets on feature flag
   record patch-expiring-user-targets-params {
@@ -258,7 +1018,7 @@ interface feature-flags {
     /// The feature flag's key. The key identifies the flag in your code.
     feature-flag-key: string
   }
-  patch-expiring-user-targets: func(params: patch-expiring-user-targets-params) -> result<string, string>;
+  patch-expiring-user-targets: func(params: patch-expiring-user-targets-params) -> result<user-targeting-expiration-for-flags, patch-expiring-user-targets-error>;
 
   /// Get all approval requests for a feature flag config
   record get-approval-requests-params {
@@ -269,7 +1029,7 @@ interface feature-flags {
     /// The environment key, used to tie together flag configuration and users under one environment so they can be managed together.
     environment-key: string
   }
-  get-approval-requests: func(params: get-approval-requests-params) -> result<string, string>;
+  get-approval-requests: func(params: get-approval-requests-params) -> result<approval-requests, get-approval-requests-error>;
 
   /// Get a single approval request for a feature flag config
   record get-approval-request-params {
@@ -282,7 +1042,7 @@ interface feature-flags {
     /// The approval request ID
     approval-request-id: string
   }
-  get-approval-request: func(params: get-approval-request-params) -> result<string, string>;
+  get-approval-request: func(params: get-approval-request-params) -> result<approval-requests, get-approval-request-error>;
 
   /// Create an approval request for a feature flag config
   record post-approval-request-params {
@@ -295,7 +1055,7 @@ interface feature-flags {
     /// The approval request ID
     approval-request-id: string
   }
-  post-approval-request: func(params: post-approval-request-params) -> result<string, string>;
+  post-approval-request: func(params: post-approval-request-params) -> result<approval-request, post-approval-request-error>;
 
   /// Delete an approval request for a feature flag config
   record delete-approval-request-params {
@@ -308,7 +1068,7 @@ interface feature-flags {
     /// The approval request ID
     approval-request-id: string
   }
-  delete-approval-request: func(params: delete-approval-request-params) -> result<string, string>;
+  delete-approval-request: func(params: delete-approval-request-params) -> result<string, delete-approval-request-error>;
 
   /// Apply approval request for a feature flag config
   record post-apply-approval-request-params {
@@ -321,7 +1081,7 @@ interface feature-flags {
     /// The approval request ID
     approval-request-id: string
   }
-  post-apply-approval-request: func(params: post-apply-approval-request-params) -> result<string, string>;
+  post-apply-approval-request: func(params: post-apply-approval-request-params) -> result<approval-requests, post-apply-approval-request-error>;
 
   /// Review approval request for a feature flag config
   record post-review-approval-request-params {
@@ -334,7 +1094,7 @@ interface feature-flags {
     /// The approval request ID
     approval-request-id: string
   }
-  post-review-approval-request: func(params: post-review-approval-request-params) -> result<string, string>;
+  post-review-approval-request: func(params: post-review-approval-request-params) -> result<approval-requests, post-review-approval-request-error>;
 
   /// Get all scheduled workflows for a feature flag by key.
   record get-flag-config-scheduled-changes-params {
@@ -345,7 +1105,7 @@ interface feature-flags {
     /// The environment key, used to tie together flag configuration and users under one environment so they can be managed together.
     environment-key: string
   }
-  get-flag-config-scheduled-changes: func(params: get-flag-config-scheduled-changes-params) -> result<string, string>;
+  get-flag-config-scheduled-changes: func(params: get-flag-config-scheduled-changes-params) -> result<feature-flag-scheduled-changes, get-flag-config-scheduled-changes-error>;
 
   /// Creates a new scheduled change for a feature flag.
   record post-flag-config-scheduled-changes-params {
@@ -356,7 +1116,7 @@ interface feature-flags {
     /// The environment key, used to tie together flag configuration and users under one environment so they can be managed together.
     environment-key: string
   }
-  post-flag-config-scheduled-changes: func(params: post-flag-config-scheduled-changes-params) -> result<string, string>;
+  post-flag-config-scheduled-changes: func(params: post-flag-config-scheduled-changes-params) -> result<feature-flag-scheduled-change, post-flag-config-scheduled-changes-error>;
 
   /// Lists conflicts between the given instructions and any existing scheduled changes for the feature flag. The actual HTTP verb should be REPORT, not POST.
   record get-flag-config-scheduled-changes-conflicts-params {
@@ -367,7 +1127,7 @@ interface feature-flags {
     /// The environment key, used to tie together flag configuration and users under one environment so they can be managed together.
     environment-key: string
   }
-  get-flag-config-scheduled-changes-conflicts: func(params: get-flag-config-scheduled-changes-conflicts-params) -> result<string, string>;
+  get-flag-config-scheduled-changes-conflicts: func(params: get-flag-config-scheduled-changes-conflicts-params) -> result<feature-flag-scheduled-changes-conflicts, get-flag-config-scheduled-changes-conflicts-error>;
 
   /// Get a scheduled change on a feature flag by id.
   record get-flag-config-scheduled-change-params {
@@ -380,7 +1140,7 @@ interface feature-flags {
     /// The id of the scheduled change
     scheduled-change-id: string
   }
-  get-flag-config-scheduled-change: func(params: get-flag-config-scheduled-change-params) -> result<string, string>;
+  get-flag-config-scheduled-change: func(params: get-flag-config-scheduled-change-params) -> result<feature-flag-scheduled-change, get-flag-config-scheduled-change-error>;
 
   /// Updates an existing scheduled-change on a feature flag in an environment.
   record patch-flag-config-scheduled-change-params {
@@ -393,7 +1153,7 @@ interface feature-flags {
     /// The id of the scheduled change
     scheduled-change-id: string
   }
-  patch-flag-config-scheduled-change: func(params: patch-flag-config-scheduled-change-params) -> result<string, string>;
+  patch-flag-config-scheduled-change: func(params: patch-flag-config-scheduled-change-params) -> result<feature-flag-scheduled-change, patch-flag-config-scheduled-change-error>;
 
   /// Delete a scheduled change on a feature flag in an environment.
   record delete-flag-config-scheduled-changes-params {
@@ -406,27 +1166,146 @@ interface feature-flags {
     /// The id of the scheduled change
     scheduled-change-id: string
   }
-  delete-flag-config-scheduled-changes: func(params: delete-flag-config-scheduled-changes-params) -> result<string, string>;
+  delete-flag-config-scheduled-changes: func(params: delete-flag-config-scheduled-changes-params) -> result<string, delete-flag-config-scheduled-changes-error>;
 
 }
 
 interface integrations {
+  enum statement-effect-enum {
+    allow,
+    deny,
+  }
+
+  record integrations {
+    /// A mapping of integration types to their respective API endpoints.
+    links: option<integrations-links>,
+    items: option<list<integration-subscription>>
+  }
+
+  /// A mapping of integration types to their respective API endpoints.
+  record integrations-links {
+    /// JSON-encoded free-form object payload
+    data: option<string>
+  }
+
+  record integration-subscription {
+    id: option<id>,
+    links: option<hierarchical-links>,
+    status: option<integration-subscription-status>,
+    /// A key-value mapping of configuration fields.
+    config: option<integration-subscription-config>,
+    /// The type of integration associated with this configuration.
+    kind: option<string>,
+    /// The user-defined name associated with this configuration.
+    name: option<string>,
+    /// Whether or not the integration is currently active.
+    on: option<bool>,
+    statements: option<list<statement>>,
+    /// An array of tags for this integration configuration.
+    tags: option<list<string>>
+  }
+
+  /// The unique resource id.
+  record id {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  record hierarchical-links {
+    parent: option<link>,
+    self: option<link>
+  }
+
+  record link {
+    href: option<string>,
+    type-op: option<string>
+  }
+
+  record integration-subscription-status {
+    error-count: option<s32>,
+    /// A unix epoch time in milliseconds specifying the last time this integration was successfully used.
+    last-success: option<s64>,
+    success-count: option<s32>
+  }
+
+  /// A key-value mapping of configuration fields.
+  record integration-subscription-config {
+    /// JSON-encoded free-form object payload
+    data: option<string>
+  }
+
+  record statement {
+    actions: option<list<string>>,
+    effect: option<statement-effect-enum>,
+    /// Targeted actions will be those actions NOT in this list. The "actions" field must be empty to use this field.
+    not-actions: option<list<string>>,
+    /// Targeted resource will be those resources NOT in this list. The "resources`" field must be empty to use this field.
+    not-resources: option<list<string>>,
+    resources: option<list<string>>
+  }
+
+  record integration {
+    links: option<integration-links>,
+    items: option<list<integration-subscription>>
+  }
+
+  record integration-links {
+    self: option<link>
+  }
+
+  variant get-integrations-error {
+    forbidden(string),
+    other(string)
+  }
+
+  variant get-integration-subscriptions-error {
+    forbidden(string),
+    not-found(string),
+    other(string)
+  }
+
+  variant post-integration-subscription-error {
+    bad-request(string),
+    unauthorized(string),
+    conflict(string),
+    other(string)
+  }
+
+  variant get-integration-subscription-error {
+    forbidden(string),
+    not-found(string),
+    other(string)
+  }
+
+  variant patch-integration-subscription-error {
+    bad-request(string),
+    unauthorized(string),
+    not-found(string),
+    other(string)
+  }
+
+  variant delete-integration-subscription-error {
+    unauthorized(string),
+    not-found(string),
+    other(string)
+  }
+
   /// Get a list of all configured audit log event integrations associated with this account.
-  get-integrations: func() -> result<string, string>;
+  get-integrations: func() -> result<integrations, get-integrations-error>;
 
   /// Get a list of all configured integrations of a given kind.
   record get-integration-subscriptions-params {
     /// The key used to specify the integration kind.
     integration-key: string
   }
-  get-integration-subscriptions: func(params: get-integration-subscriptions-params) -> result<string, string>;
+  get-integration-subscriptions: func(params: get-integration-subscriptions-params) -> result<integration, get-integration-subscriptions-error>;
 
   /// Create a new integration subscription of a given kind.
   record post-integration-subscription-params {
     /// The key used to specify the integration kind.
     integration-key: string
   }
-  post-integration-subscription: func(params: post-integration-subscription-params) -> result<string, string>;
+  post-integration-subscription: func(params: post-integration-subscription-params) -> result<integration-subscription, post-integration-subscription-error>;
 
   /// Get a single integration subscription by ID.
   record get-integration-subscription-params {
@@ -435,7 +1314,7 @@ interface integrations {
     /// The integration ID.
     integration-id: string
   }
-  get-integration-subscription: func(params: get-integration-subscription-params) -> result<string, string>;
+  get-integration-subscription: func(params: get-integration-subscription-params) -> result<integration-subscription, get-integration-subscription-error>;
 
   /// Modify an integration subscription by ID.
   record patch-integration-subscription-params {
@@ -444,7 +1323,7 @@ interface integrations {
     /// The integration ID.
     integration-id: string
   }
-  patch-integration-subscription: func(params: patch-integration-subscription-params) -> result<string, string>;
+  patch-integration-subscription: func(params: patch-integration-subscription-params) -> result<integration-subscription, patch-integration-subscription-error>;
 
   /// Delete an integration subscription by ID.
   record delete-integration-subscription-params {
@@ -453,11 +1332,97 @@ interface integrations {
     /// The integration ID.
     integration-id: string
   }
-  delete-integration-subscription: func(params: delete-integration-subscription-params) -> result<string, string>;
+  delete-integration-subscription: func(params: delete-integration-subscription-params) -> result<string, delete-integration-subscription-error>;
 
 }
 
 interface team-members {
+  record members {
+    links: option<links>,
+    items: option<list<member>>,
+    total-count: option<f64>
+  }
+
+  record links {
+    next: option<link>,
+    self: option<link>
+  }
+
+  record link {
+    href: option<string>,
+    type-op: option<string>
+  }
+
+  record member {
+    id: option<id>,
+    /// A unix epoch time in milliseconds specifying the last time this member was active in LaunchDarkly.
+    last-seen: option<s64>,
+    last-seen-metadata: option<member-last-seen-metadata>,
+    links: option<links>,
+    pending-invite: option<bool>,
+    verified: option<bool>,
+    custom-roles: option<list<id>>,
+    email: option<string>,
+    first-name: option<string>,
+    is-beta: option<bool>,
+    last-name: option<string>,
+    role: option<role>
+  }
+
+  /// The unique resource id.
+  record id {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  record member-last-seen-metadata {
+    /// If the last time this member accessed LaunchDarkly was using the REST API, this value will be set to the ID of the personal access token used.
+    token-id: option<string>
+  }
+
+  record role {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  variant get-members-error {
+    unauthorized(string),
+    other(string)
+  }
+
+  variant post-members-error {
+    bad-request(string),
+    unauthorized(string),
+    conflict(string),
+    other(string)
+  }
+
+  variant get-me-error {
+    bad-request(string),
+    unauthorized(string),
+    other(string)
+  }
+
+  variant get-member-error {
+    bad-request(string),
+    unauthorized(string),
+    other(string)
+  }
+
+  variant patch-member-error {
+    bad-request(string),
+    unauthorized(string),
+    not-found(string),
+    conflict(string),
+    other(string)
+  }
+
+  variant delete-member-error {
+    unauthorized(string),
+    not-found(string),
+    other(string)
+  }
+
   /// Returns a list of all members in the account.
   record get-members-params {
     /// The number of objects to return. Defaults to -1, which returns everything.
@@ -469,74 +1434,301 @@ interface team-members {
     /// A comma-separated list of fields to sort by. A field prefixed by a - will be sorted in descending order.
     sort: option<string>
   }
-  get-members: func(params: get-members-params) -> result<string, string>;
+  get-members: func(params: get-members-params) -> result<members, get-members-error>;
 
   /// Invite new members.
-  post-members: func() -> result<string, string>;
+  post-members: func() -> result<members, post-members-error>;
 
   /// Get the current team member associated with the token
-  get-me: func() -> result<string, string>;
+  get-me: func() -> result<member, get-me-error>;
 
   /// Get a single team member by ID.
   record get-member-params {
     /// The member ID.
     member-id: string
   }
-  get-member: func(params: get-member-params) -> result<string, string>;
+  get-member: func(params: get-member-params) -> result<member, get-member-error>;
 
   /// Modify a team member by ID.
   record patch-member-params {
     /// The member ID.
     member-id: string
   }
-  patch-member: func(params: patch-member-params) -> result<string, string>;
+  patch-member: func(params: patch-member-params) -> result<member, patch-member-error>;
 
   /// Delete a team member by ID.
   record delete-member-params {
     /// The member ID.
     member-id: string
   }
-  delete-member: func(params: delete-member-params) -> result<string, string>;
+  delete-member: func(params: delete-member-params) -> result<string, delete-member-error>;
 
 }
 
 interface projects {
+  enum environment-approval-settings-service-kind-enum {
+    launchdarkly,
+    service-now,
+  }
+
+  record projects {
+    links: option<links>,
+    items: option<list<project>>
+  }
+
+  record links {
+    next: option<link>,
+    self: option<link>
+  }
+
+  record link {
+    href: option<string>,
+    type-op: option<string>
+  }
+
+  record project {
+    id: option<id>,
+    links: option<links>,
+    default-client-side-availability: option<client-side-availability>,
+    environments: option<list<environment>>,
+    include-in-snippet-by-default: option<bool>,
+    key: option<string>,
+    name: option<string>,
+    /// An array of tags for this project.
+    tags: option<list<string>>
+  }
+
+  /// The unique resource id.
+  record id {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  record client-side-availability {
+    /// When set to true, this flag will be available to SDKs using the client-side id.
+    using-environment-id: option<bool>,
+    /// When set to true, this flag will be available to SDKS using a mobile key.
+    using-mobile-key: option<bool>
+  }
+
+  record environment {
+    id: option<id>,
+    links: option<links>,
+    /// The SDK key for backend LaunchDarkly SDKs.
+    api-key: option<string>,
+    /// Approval settings for an environment. Only appears if the approvals feature is enabled.
+    approval-settings: option<environment-approval-settings>,
+    /// The swatch color for the environment.
+    color: option<string>,
+    /// Determines if this environment requires confirmation for flag and segment changes.
+    confirm-changes: option<bool>,
+    /// Set to true to send detailed event information for new flags.
+    default-track-events: option<bool>,
+    /// The default TTL.
+    default-ttl: option<f64>,
+    /// The key for the environment.
+    key: option<string>,
+    /// The SDK key for mobile LaunchDarkly SDKs.
+    mobile-key: option<string>,
+    /// The name of the environment.
+    name: option<string>,
+    /// Determines if this environment requires comments for flag and segment changes.
+    require-comments: option<bool>,
+    /// Determines if this environment is in safe mode.
+    secure-mode: option<bool>,
+    /// An array of tags for this environment.
+    tags: option<list<string>>
+  }
+
+  /// Approval settings for an environment. Only appears if the approvals feature is enabled.
+  record environment-approval-settings {
+    /// Whether changes can be applied as long as minNumApprovals is met, regardless of if any reviewers have declined a request.
+    can-apply-declined-changes: option<bool>,
+    /// Whether requesters can approve or decline their own request. They may always comment.
+    can-review-own-request: option<bool>,
+    /// The number of approvals required before an approval request can be applied.
+    min-num-approvals: option<s64>,
+    /// Whether any changes to flags in this environment will require approval. You may only set required or requiredApprovalTags, not both.
+    required: option<bool>,
+    /// An array of tags used to specify which flags with those tags require approval. You may only set requiredApprovalTags or required, not both.
+    required-approval-tags: option<list<string>>,
+    /// The approvals system used.
+    service-kind: option<environment-approval-settings-service-kind-enum>
+  }
+
+  variant get-projects-error {
+    unauthorized(string),
+    other(string)
+  }
+
+  variant post-project-error {
+    bad-request(string),
+    unauthorized(string),
+    conflict(string),
+    other(string)
+  }
+
+  variant get-project-error {
+    unauthorized(string),
+    not-found(string),
+    other(string)
+  }
+
+  variant patch-project-error {
+    bad-request(string),
+    unauthorized(string),
+    not-found(string),
+    conflict(string),
+    other(string)
+  }
+
+  variant delete-project-error {
+    unauthorized(string),
+    not-found(string),
+    other(string)
+  }
+
   /// Returns a list of all projects in the account.
-  get-projects: func() -> result<string, string>;
+  get-projects: func() -> result<projects, get-projects-error>;
 
   /// Create a new project with the given key and name.
-  post-project: func() -> result<string, string>;
+  post-project: func() -> result<project, post-project-error>;
 
   /// Fetch a single project by key.
   record get-project-params {
     /// The project key, used to tie the flags together under one project so they can be managed together.
     project-key: string
   }
-  get-project: func(params: get-project-params) -> result<string, string>;
+  get-project: func(params: get-project-params) -> result<project, get-project-error>;
 
   /// Modify a project by ID.
   record patch-project-params {
     /// The project key, used to tie the flags together under one project so they can be managed together.
     project-key: string
   }
-  patch-project: func(params: patch-project-params) -> result<string, string>;
+  patch-project: func(params: patch-project-params) -> result<project, patch-project-error>;
 
   /// Delete a project by key. Caution-- deleting a project will delete all associated environments and feature flags. You cannot delete the last project in an account.
   record delete-project-params {
     /// The project key, used to tie the flags together under one project so they can be managed together.
     project-key: string
   }
-  delete-project: func(params: delete-project-params) -> result<string, string>;
+  delete-project: func(params: delete-project-params) -> result<string, delete-project-error>;
 
 }
 
 interface environments {
+  enum environment-approval-settings-service-kind-enum {
+    launchdarkly,
+    service-now,
+  }
+
+  record environment {
+    id: option<id>,
+    links: option<links>,
+    /// The SDK key for backend LaunchDarkly SDKs.
+    api-key: option<string>,
+    /// Approval settings for an environment. Only appears if the approvals feature is enabled.
+    approval-settings: option<environment-approval-settings>,
+    /// The swatch color for the environment.
+    color: option<string>,
+    /// Determines if this environment requires confirmation for flag and segment changes.
+    confirm-changes: option<bool>,
+    /// Set to true to send detailed event information for new flags.
+    default-track-events: option<bool>,
+    /// The default TTL.
+    default-ttl: option<f64>,
+    /// The key for the environment.
+    key: option<string>,
+    /// The SDK key for mobile LaunchDarkly SDKs.
+    mobile-key: option<string>,
+    /// The name of the environment.
+    name: option<string>,
+    /// Determines if this environment requires comments for flag and segment changes.
+    require-comments: option<bool>,
+    /// Determines if this environment is in safe mode.
+    secure-mode: option<bool>,
+    /// An array of tags for this environment.
+    tags: option<list<string>>
+  }
+
+  /// The unique resource id.
+  record id {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  record links {
+    next: option<link>,
+    self: option<link>
+  }
+
+  record link {
+    href: option<string>,
+    type-op: option<string>
+  }
+
+  /// Approval settings for an environment. Only appears if the approvals feature is enabled.
+  record environment-approval-settings {
+    /// Whether changes can be applied as long as minNumApprovals is met, regardless of if any reviewers have declined a request.
+    can-apply-declined-changes: option<bool>,
+    /// Whether requesters can approve or decline their own request. They may always comment.
+    can-review-own-request: option<bool>,
+    /// The number of approvals required before an approval request can be applied.
+    min-num-approvals: option<s64>,
+    /// Whether any changes to flags in this environment will require approval. You may only set required or requiredApprovalTags, not both.
+    required: option<bool>,
+    /// An array of tags used to specify which flags with those tags require approval. You may only set requiredApprovalTags or required, not both.
+    required-approval-tags: option<list<string>>,
+    /// The approvals system used.
+    service-kind: option<environment-approval-settings-service-kind-enum>
+  }
+
+  variant post-environment-error {
+    bad-request(string),
+    unauthorized(string),
+    conflict(string),
+    other(string)
+  }
+
+  variant get-environment-error {
+    unauthorized(string),
+    not-found(string),
+    other(string)
+  }
+
+  variant patch-environment-error {
+    bad-request(string),
+    unauthorized(string),
+    not-found(string),
+    conflict(string),
+    other(string)
+  }
+
+  variant delete-environment-error {
+    unauthorized(string),
+    not-found(string),
+    other(string)
+  }
+
+  variant reset-environment-sdk-key-error {
+    not-found(string),
+    conflict(string),
+    other(string)
+  }
+
+  variant reset-environment-mobile-key-error {
+    not-found(string),
+    conflict(string),
+    other(string)
+  }
+
   /// Create a new environment in a specified project with a given name, key, and swatch color.
   record post-environment-params {
     /// The project key, used to tie the flags together under one project so they can be managed together.
     project-key: string
   }
-  post-environment: func(params: post-environment-params) -> result<string, string>;
+  post-environment: func(params: post-environment-params) -> result<environment, post-environment-error>;
 
   /// Get an environment given a project and key.
   record get-environment-params {
@@ -545,7 +1737,7 @@ interface environments {
     /// The environment key, used to tie together flag configuration and users under one environment so they can be managed together.
     environment-key: string
   }
-  get-environment: func(params: get-environment-params) -> result<string, string>;
+  get-environment: func(params: get-environment-params) -> result<environment, get-environment-error>;
 
   /// Modify an environment by ID. If you try to patch the environment by setting both required and requiredApprovalTags, it will result in an error. Users can specify either required approvals for all flags in an environment or those with specific tags, but not both. Only customers on an Enterprise plan can require approval for flag updates with either mechanism.
   record patch-environment-params {
@@ -554,7 +1746,7 @@ interface environments {
     /// The environment key, used to tie together flag configuration and users under one environment so they can be managed together.
     environment-key: string
   }
-  patch-environment: func(params: patch-environment-params) -> result<string, string>;
+  patch-environment: func(params: patch-environment-params) -> result<environment, patch-environment-error>;
 
   /// Delete an environment in a specific project.
   record delete-environment-params {
@@ -563,7 +1755,7 @@ interface environments {
     /// The environment key, used to tie together flag configuration and users under one environment so they can be managed together.
     environment-key: string
   }
-  delete-environment: func(params: delete-environment-params) -> result<string, string>;
+  delete-environment: func(params: delete-environment-params) -> result<string, delete-environment-error>;
 
   /// Reset an environment's SDK key with an optional expiry time for the old key.
   record reset-environment-sdk-key-params {
@@ -574,7 +1766,7 @@ interface environments {
     /// An expiration time for the old environment SDK key, expressed as a Unix epoch time in milliseconds. By default, the key will expire immediately.
     expiry: option<s64>
   }
-  reset-environment-sdk-key: func(params: reset-environment-sdk-key-params) -> result<string, string>;
+  reset-environment-sdk-key: func(params: reset-environment-sdk-key-params) -> result<environment, reset-environment-sdk-key-error>;
 
   /// Reset an environment's mobile key. The optional expiry for the old key is deprecated for this endpoint, so the old key will always expire immediately.
   record reset-environment-mobile-key-params {
@@ -585,41 +1777,260 @@ interface environments {
     /// The expiry parameter is deprecated for this endpoint, so the old mobile key will always expire immediately. This parameter will be removed in an upcoming major API client version.
     expiry: option<s64>
   }
-  reset-environment-mobile-key: func(params: reset-environment-mobile-key-params) -> result<string, string>;
+  reset-environment-mobile-key: func(params: reset-environment-mobile-key-params) -> result<environment, reset-environment-mobile-key-error>;
 
 }
 
 interface custom-roles {
+  record custom-roles {
+    links: option<links>,
+    items: option<list<custom-role>>
+  }
+
+  record links {
+    next: option<link>,
+    self: option<link>
+  }
+
+  record link {
+    href: option<string>,
+    type-op: option<string>
+  }
+
+  record custom-role {
+    id: option<id>,
+    links: option<links>,
+    /// Description of the custom role.
+    description: option<string>,
+    /// The 20-hexdigit id or the key for a custom role.
+    key: option<string>,
+    /// Name of the custom role.
+    name: option<string>,
+    policy: option<list<policy>>
+  }
+
+  /// The unique resource id.
+  record id {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  record policy {
+    actions: option<list<string>>,
+    /// Effect of the policy - allow or deny.
+    effect: option<string>,
+    /// Targeted actions will be those actions NOT in this list. The "actions" field must be empty to use this field.
+    not-actions: option<list<string>>,
+    /// Targeted resource will be those resources NOT in this list. The "resources`" field must be empty to use this field.
+    not-resources: option<list<string>>,
+    resources: option<list<string>>
+  }
+
+  variant get-custom-roles-error {
+    unauthorized(string),
+    other(string)
+  }
+
+  variant post-custom-role-error {
+    bad-request(string),
+    unauthorized(string),
+    conflict(string),
+    other(string)
+  }
+
+  variant get-custom-role-error {
+    bad-request(string),
+    unauthorized(string),
+    other(string)
+  }
+
+  variant patch-custom-role-error {
+    bad-request(string),
+    unauthorized(string),
+    not-found(string),
+    conflict(string),
+    other(string)
+  }
+
+  variant delete-custom-role-error {
+    unauthorized(string),
+    not-found(string),
+    other(string)
+  }
+
   /// Return a complete list of custom roles.
-  get-custom-roles: func() -> result<string, string>;
+  get-custom-roles: func() -> result<custom-roles, get-custom-roles-error>;
 
   /// Create a new custom role.
-  post-custom-role: func() -> result<string, string>;
+  post-custom-role: func() -> result<custom-role, post-custom-role-error>;
 
   /// Get one custom role by key.
   record get-custom-role-params {
     /// The custom role key.
     custom-role-key: string
   }
-  get-custom-role: func(params: get-custom-role-params) -> result<string, string>;
+  get-custom-role: func(params: get-custom-role-params) -> result<custom-role, get-custom-role-error>;
 
   /// Modify a custom role by key.
   record patch-custom-role-params {
     /// The custom role key.
     custom-role-key: string
   }
-  patch-custom-role: func(params: patch-custom-role-params) -> result<string, string>;
+  patch-custom-role: func(params: patch-custom-role-params) -> result<custom-role, patch-custom-role-error>;
 
   /// Delete a custom role by key.
   record delete-custom-role-params {
     /// The custom role key.
     custom-role-key: string
   }
-  delete-custom-role: func(params: delete-custom-role-params) -> result<string, string>;
+  delete-custom-role: func(params: delete-custom-role-params) -> result<string, delete-custom-role-error>;
 
 }
 
 interface user-segments {
+  record user-segments {
+    links: option<links>,
+    items: option<list<user-segment>>
+  }
+
+  record links {
+    next: option<link>,
+    self: option<link>
+  }
+
+  record link {
+    href: option<string>,
+    type-op: option<string>
+  }
+
+  record user-segment {
+    flags-op: option<list<flag-list-item>>,
+    links: option<links>,
+    /// A unix epoch time in milliseconds specifying the creation time of this flag.
+    creation-date: s64,
+    /// Description of the user segment.
+    description: option<string>,
+    /// An array of user keys that should not be included in this segment, unless they are also listed in "included".
+    excluded: option<list<string>>,
+    /// An array of user keys that are included in this segment.
+    included: option<list<string>>,
+    /// Unique identifier for the user segment.
+    key: string,
+    /// Name of the user segment.
+    name: string,
+    /// An array of rules that can cause a user to be included in this segment.
+    rules: option<list<user-segment-rule>>,
+    /// An array of tags for this user segment.
+    tags: option<list<string>>,
+    /// Controls whether this is considered a "big segment" which can support an unlimited numbers of users. Include/exclude lists sent with this payload are not used in big segments. Contact your account manager for early access to this feature.
+    unbounded: option<bool>,
+    version: option<s32>
+  }
+
+  record flag-list-item {
+    links: option<links>,
+    site: option<site>,
+    key: option<string>,
+    name: option<string>
+  }
+
+  record site {
+    href: option<string>,
+    type-op: option<string>
+  }
+
+  record user-segment-rule {
+    bucket-by: option<string>,
+    clauses: option<list<clause>>,
+    weight: option<s32>
+  }
+
+  record clause {
+    id: option<string>,
+    attribute: option<string>,
+    negate: option<bool>,
+    op: option<string>,
+    values: option<list<clause-values-item>>
+  }
+
+  record clause-values-item {
+    /// JSON-encoded free-form object payload
+    data: option<string>
+  }
+
+  record user-targeting-expiration-for-segment {
+    id: option<string>,
+    links: option<links>,
+    resource-id: option<user-targeting-expiration-resource-id-for-flag>,
+    version: option<s32>,
+    /// Unix epoch time in milliseconds specifying the expiration date
+    expiration-date: option<s64>,
+    /// either the included or excluded variation that the user is targeted on a segment
+    target-type: option<string>,
+    /// Unique identifier for the user
+    user-key: option<string>
+  }
+
+  record user-targeting-expiration-resource-id-for-flag {
+    environment-key: option<string>,
+    flag-key: option<string>,
+    key: option<string>,
+    kind: option<string>,
+    project-key: option<string>
+  }
+
+  variant get-user-segments-error {
+    unauthorized(string),
+    other(string)
+  }
+
+  variant post-user-segment-error {
+    bad-request(string),
+    unauthorized(string),
+    conflict(string),
+    other(string)
+  }
+
+  variant get-user-segment-error {
+    unauthorized(string),
+    not-found(string),
+    other(string)
+  }
+
+  variant patch-user-segment-error {
+    bad-request(string),
+    unauthorized(string),
+    not-found(string),
+    conflict(string),
+    other(string)
+  }
+
+  variant delete-user-segment-error {
+    unauthorized(string),
+    not-found(string),
+    other(string)
+  }
+
+  variant update-big-segment-targets-error {
+    bad-request(string),
+    unauthorized(string),
+    other(string)
+  }
+
+  variant get-expiring-user-targets-on-segment-error {
+    unauthorized(string),
+    not-found(string),
+    other(string)
+  }
+
+  variant patch-expiring-user-targets-on-segment-error {
+    bad-request(string),
+    unauthorized(string),
+    not-found(string),
+    conflict(string),
+    other(string)
+  }
+
   /// Get a list of all user segments in the given project.
   record get-user-segments-params {
     /// The project key, used to tie the flags together under one project so they can be managed together.
@@ -629,7 +2040,7 @@ interface user-segments {
     /// Filter by tag. A tag can be used to group flags across projects.
     tag: option<string>
   }
-  get-user-segments: func(params: get-user-segments-params) -> result<string, string>;
+  get-user-segments: func(params: get-user-segments-params) -> result<user-segments, get-user-segments-error>;
 
   /// Creates a new user segment.
   record post-user-segment-params {
@@ -638,7 +2049,7 @@ interface user-segments {
     /// The environment key, used to tie together flag configuration and users under one environment so they can be managed together.
     environment-key: string
   }
-  post-user-segment: func(params: post-user-segment-params) -> result<string, string>;
+  post-user-segment: func(params: post-user-segment-params) -> result<user-segment, post-user-segment-error>;
 
   /// Get a single user segment by key.
   record get-user-segment-params {
@@ -649,7 +2060,7 @@ interface user-segments {
     /// The user segment's key. The key identifies the user segment in your code.
     user-segment-key: string
   }
-  get-user-segment: func(params: get-user-segment-params) -> result<string, string>;
+  get-user-segment: func(params: get-user-segment-params) -> result<user-segment, get-user-segment-error>;
 
   /// Perform a partial update to a user segment.
   record patch-user-segment-params {
@@ -660,7 +2071,7 @@ interface user-segments {
     /// The user segment's key. The key identifies the user segment in your code.
     user-segment-key: string
   }
-  patch-user-segment: func(params: patch-user-segment-params) -> result<string, string>;
+  patch-user-segment: func(params: patch-user-segment-params) -> result<user-segment, patch-user-segment-error>;
 
   /// Delete a user segment.
   record delete-user-segment-params {
@@ -671,7 +2082,7 @@ interface user-segments {
     /// The user segment's key. The key identifies the user segment in your code.
     user-segment-key: string
   }
-  delete-user-segment: func(params: delete-user-segment-params) -> result<string, string>;
+  delete-user-segment: func(params: delete-user-segment-params) -> result<string, delete-user-segment-error>;
 
   /// Update targets included or excluded in a big segment
   record update-big-segment-targets-params {
@@ -682,7 +2093,7 @@ interface user-segments {
     /// The user segment's key. The key identifies the user segment in your code.
     user-segment-key: string
   }
-  update-big-segment-targets: func(params: update-big-segment-targets-params) -> result<string, string>;
+  update-big-segment-targets: func(params: update-big-segment-targets-params) -> result<string, update-big-segment-targets-error>;
 
   /// Get expiring user targets for user segment
   record get-expiring-user-targets-on-segment-params {
@@ -693,7 +2104,7 @@ interface user-segments {
     /// The user segment's key. The key identifies the user segment in your code.
     user-segment-key: string
   }
-  get-expiring-user-targets-on-segment: func(params: get-expiring-user-targets-on-segment-params) -> result<string, string>;
+  get-expiring-user-targets-on-segment: func(params: get-expiring-user-targets-on-segment-params) -> result<user-targeting-expiration-for-segment, get-expiring-user-targets-on-segment-error>;
 
   /// Update, add, or delete expiring user targets on user segment
   record patch-expiring-user-targets-on-segment-params {
@@ -704,41 +2115,168 @@ interface user-segments {
     /// The user segment's key. The key identifies the user segment in your code.
     user-segment-key: string
   }
-  patch-expiring-user-targets-on-segment: func(params: patch-expiring-user-targets-on-segment-params) -> result<string, string>;
+  patch-expiring-user-targets-on-segment: func(params: patch-expiring-user-targets-on-segment-params) -> result<user-targeting-expiration-for-segment, patch-expiring-user-targets-on-segment-error>;
 
 }
 
 interface access-tokens {
+  enum statement-effect-enum {
+    allow,
+    deny,
+  }
+
+  record tokens {
+    links: option<links>,
+    items: option<list<token>>
+  }
+
+  record links {
+    next: option<link>,
+    self: option<link>
+  }
+
+  record link {
+    href: option<string>,
+    type-op: option<string>
+  }
+
+  record token {
+    id: option<id>,
+    links: option<links>,
+    member: option<member>,
+    /// A unix epoch time in milliseconds specifying the creation time of this access token.
+    creation-date: option<s64>,
+    /// A list of custom role IDs to use as access limits for the access token
+    custom-role-ids: option<list<string>>,
+    /// The default API version for this token
+    default-api-version: option<s32>,
+    inline-role: option<list<statement>>,
+    /// A unix epoch time in milliseconds specifying the last time this access token was modified.
+    last-modified: option<s64>,
+    /// A unix epoch time in milliseconds specifying the last time this access token was used to authorize access to the LaunchDarkly REST API.
+    last-used: option<s64>,
+    member-id: option<id>,
+    /// A human-friendly name for the access token
+    name: option<string>,
+    owner-id: option<id>,
+    /// The name of a built-in role for the token
+    role: option<string>,
+    /// Whether the token will be a service token https://docs.launchdarkly.com/home/account-security/api-access-tokens#service-tokens
+    service-token: option<bool>,
+    /// The last 4 digits of the unique secret key for this access token. If creating or resetting the token, this will be the full token secret.
+    token: option<string>
+  }
+
+  /// The unique resource id.
+  record id {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  record member {
+    id: option<id>,
+    /// A unix epoch time in milliseconds specifying the last time this member was active in LaunchDarkly.
+    last-seen: option<s64>,
+    last-seen-metadata: option<member-last-seen-metadata>,
+    links: option<links>,
+    pending-invite: option<bool>,
+    verified: option<bool>,
+    custom-roles: option<list<id>>,
+    email: option<string>,
+    first-name: option<string>,
+    is-beta: option<bool>,
+    last-name: option<string>,
+    role: option<role>
+  }
+
+  record member-last-seen-metadata {
+    /// If the last time this member accessed LaunchDarkly was using the REST API, this value will be set to the ID of the personal access token used.
+    token-id: option<string>
+  }
+
+  record role {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  record statement {
+    actions: option<list<string>>,
+    effect: option<statement-effect-enum>,
+    /// Targeted actions will be those actions NOT in this list. The "actions" field must be empty to use this field.
+    not-actions: option<list<string>>,
+    /// Targeted resource will be those resources NOT in this list. The "resources`" field must be empty to use this field.
+    not-resources: option<list<string>>,
+    resources: option<list<string>>
+  }
+
+  variant get-tokens-error {
+    unauthorized(string),
+    other(string)
+  }
+
+  variant post-token-error {
+    bad-request(string),
+    unauthorized(string),
+    conflict(string),
+    other(string)
+  }
+
+  variant get-token-error {
+    bad-request(string),
+    unauthorized(string),
+    other(string)
+  }
+
+  variant patch-token-error {
+    bad-request(string),
+    unauthorized(string),
+    not-found(string),
+    conflict(string),
+    other(string)
+  }
+
+  variant delete-token-error {
+    unauthorized(string),
+    not-found(string),
+    other(string)
+  }
+
+  variant reset-token-error {
+    bad-request(string),
+    unauthorized(string),
+    other(string)
+  }
+
   /// Returns a list of tokens in the account.
   record get-tokens-params {
     /// If set to true, and the authentication access token has the "Admin" role, personal access tokens for all members will be retrieved.
     show-all: option<bool>
   }
-  get-tokens: func(params: get-tokens-params) -> result<string, string>;
+  get-tokens: func(params: get-tokens-params) -> result<tokens, get-tokens-error>;
 
   /// Create a new token.
-  post-token: func() -> result<string, string>;
+  post-token: func() -> result<token, post-token-error>;
 
   /// Get a single access token by ID.
   record get-token-params {
     /// The access token ID.
     token-id: string
   }
-  get-token: func(params: get-token-params) -> result<string, string>;
+  get-token: func(params: get-token-params) -> result<token, get-token-error>;
 
   /// Modify an access token by ID.
   record patch-token-params {
     /// The access token ID.
     token-id: string
   }
-  patch-token: func(params: patch-token-params) -> result<string, string>;
+  patch-token: func(params: patch-token-params) -> result<token, patch-token-error>;
 
   /// Delete an access token by ID.
   record delete-token-params {
     /// The access token ID.
     token-id: string
   }
-  delete-token: func(params: delete-token-params) -> result<string, string>;
+  delete-token: func(params: delete-token-params) -> result<string, delete-token-error>;
 
   /// Reset an access token's secret key with an optional expiry time for the old key.
   record reset-token-params {
@@ -747,13 +2285,167 @@ interface access-tokens {
     /// An expiration time for the old token key, expressed as a Unix epoch time in milliseconds. By default, the token will expire immediately.
     expiry: option<s64>
   }
-  reset-token: func(params: reset-token-params) -> result<string, string>;
+  reset-token: func(params: reset-token-params) -> result<token, reset-token-error>;
 
 }
 
 interface customer-metrics {
+  record usage {
+    links: option<usage-links>,
+    series: option<list<stream-usage-series>>
+  }
+
+  record usage-links {
+    parent: option<link>,
+    self: option<link>,
+    /// The following links that are in the response.
+    subseries: option<list<link>>
+  }
+
+  record link {
+    href: option<string>,
+    type-op: option<string>
+  }
+
+  record stream-usage-series {
+    /// A key corresponding to a time series data point.
+    v0: option<s64>,
+    /// A unix epoch time in milliseconds specifying the creation time of this flag.
+    time: option<s64>
+  }
+
+  record stream-sdk-version {
+    links: option<stream-by-sdk-links>,
+    sdk-versions: option<list<stream-sdk-version-data>>
+  }
+
+  record stream-by-sdk-links {
+    parent: option<link>,
+    self: option<link>
+  }
+
+  record stream-sdk-version-data {
+    /// The language of the sdk
+    sdk: option<string>,
+    /// The version of the sdk
+    version: option<string>
+  }
+
+  record events {
+    links: option<usage-links>
+  }
+
+  record mau {
+    links: option<usage-links>,
+    metadata: option<list<stream-by-sdk-links-metadata>>,
+    series: option<list<stream-usage-series>>
+  }
+
+  record stream-by-sdk-links-metadata {
+    sdk: option<string>,
+    source: option<string>,
+    version: option<string>
+  }
+
+  record ma-uby-category {
+    links: option<stream-by-sdk-links>,
+    metadata: option<list<mau-metadata>>,
+    series: option<list<stream-usage-series>>
+  }
+
+  record mau-metadata {
+    /// JSON-encoded free-form object payload
+    data: option<string>
+  }
+
+  record streams {
+    links: option<stream-usage-links>
+  }
+
+  record stream-usage-links {
+    parent: option<link>,
+    self: option<link>,
+    /// The following links that are in the response.
+    subseries: option<list<link>>
+  }
+
+  record stream-op {
+    links: option<stream-usage-links>,
+    metadata: option<list<stream-usage-metadata>>,
+    series: option<list<stream-usage-series>>
+  }
+
+  record stream-usage-metadata {
+    /// The language of the sdk
+    sdk: option<string>,
+    source: option<string>,
+    /// The version of the SDK
+    version: option<string>
+  }
+
+  record stream-by-sdk {
+    links: option<stream-by-sdk-links>,
+    metadata: option<list<stream-by-sdk-links-metadata>>,
+    series: option<list<stream-usage-series>>
+  }
+
+  variant get-usage-error {
+    forbidden(string),
+    other(string)
+  }
+
+  variant get-evaluations-error {
+    forbidden(string),
+    not-found(string),
+    other(string)
+  }
+
+  variant get-events-error {
+    forbidden(string),
+    other(string)
+  }
+
+  variant get-event-error {
+    forbidden(string),
+    not-found(string),
+    other(string)
+  }
+
+  variant get-mau-error {
+    forbidden(string),
+    other(string)
+  }
+
+  variant get-mau-by-category-error {
+    forbidden(string),
+    other(string)
+  }
+
+  variant get-streams-error {
+    forbidden(string),
+    other(string)
+  }
+
+  variant get-stream-error {
+    forbidden(string),
+    not-found(string),
+    other(string)
+  }
+
+  variant get-stream-by-sdk-error {
+    forbidden(string),
+    not-found(string),
+    other(string)
+  }
+
+  variant get-stream-sdk-version-error {
+    forbidden(string),
+    not-found(string),
+    other(string)
+  }
+
   /// Returns of the usage endpoints available.
-  get-usage: func() -> result<string, string>;
+  get-usage: func() -> result<usage, get-usage-error>;
 
   /// Get events usage by event id and the feature flag key.
   record get-evaluations-params {
@@ -762,51 +2454,122 @@ interface customer-metrics {
     /// The key of the flag we want metrics for.
     flag-key: string
   }
-  get-evaluations: func(params: get-evaluations-params) -> result<string, string>;
+  get-evaluations: func(params: get-evaluations-params) -> result<stream-sdk-version, get-evaluations-error>;
 
   /// Get events usage endpoints.
-  get-events: func() -> result<string, string>;
+  get-events: func() -> result<events, get-events-error>;
 
   /// Get events usage by event type.
   record get-event-params {
     /// The type of event we would like to track.
     type-op: string
   }
-  get-event: func(params: get-event-params) -> result<string, string>;
+  get-event: func(params: get-event-params) -> result<stream-sdk-version, get-event-error>;
 
   /// Get monthly active user data.
-  get-mau: func() -> result<string, string>;
+  get-mau: func() -> result<mau, get-mau-error>;
 
   /// Get monthly active user data by category.
-  get-mau-by-category: func() -> result<string, string>;
+  get-mau-by-category: func() -> result<ma-uby-category, get-mau-by-category-error>;
 
   /// Returns a list of all streams.
-  get-streams: func() -> result<string, string>;
+  get-streams: func() -> result<streams, get-streams-error>;
 
   /// Get a stream endpoint and return timeseries data.
   record get-stream-params {
     /// The source of where the stream comes from.
     source: string
   }
-  get-stream: func(params: get-stream-params) -> result<string, string>;
+  get-stream: func(params: get-stream-params) -> result<stream-op, get-stream-error>;
 
   /// Get a stream timeseries data by source show sdk version metadata.
   record get-stream-by-sdk-params {
     /// The source of where the stream comes from.
     source: string
   }
-  get-stream-by-sdk: func(params: get-stream-by-sdk-params) -> result<string, string>;
+  get-stream-by-sdk: func(params: get-stream-by-sdk-params) -> result<stream-by-sdk, get-stream-by-sdk-error>;
 
   /// Get a stream timeseries data by source and show all sdk version associated.
   record get-stream-sdk-version-params {
     /// The source of where the stream comes from.
     source: string
   }
-  get-stream-sdk-version: func(params: get-stream-sdk-version-params) -> result<string, string>;
+  get-stream-sdk-version: func(params: get-stream-sdk-version-params) -> result<stream-sdk-version, get-stream-sdk-version-error>;
 
 }
 
 interface users {
+  record users {
+    links: option<links>,
+    items: option<list<user-record>>,
+    total-count: option<f64>
+  }
+
+  record links {
+    next: option<link>,
+    self: option<link>
+  }
+
+  record link {
+    href: option<string>,
+    type-op: option<string>
+  }
+
+  record user-record {
+    avatar: option<string>,
+    environment-id: option<string>,
+    last-ping: option<string>,
+    owner-id: option<id>,
+    user: option<user>
+  }
+
+  /// The unique resource id.
+  record id {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  record user {
+    anonymous: option<bool>,
+    avatar: option<string>,
+    country: option<string>,
+    custom: option<user-custom>,
+    email: option<string>,
+    first-name: option<string>,
+    ip: option<string>,
+    key: option<string>,
+    last-name: option<string>,
+    name: option<string>,
+    secondary: option<string>
+  }
+
+  record user-custom {
+    /// JSON-encoded free-form object payload
+    data: option<string>
+  }
+
+  variant get-search-users-error {
+    unauthorized(string),
+    other(string)
+  }
+
+  variant get-users-error {
+    unauthorized(string),
+    other(string)
+  }
+
+  variant get-user-error {
+    unauthorized(string),
+    not-found(string),
+    other(string)
+  }
+
+  variant delete-user-error {
+    unauthorized(string),
+    not-found(string),
+    other(string)
+  }
+
   /// Search users in LaunchDarkly based on their last active date, or a search query. It should not be used to enumerate all users in LaunchDarkly-- use the List users API resource.
   record get-search-users-params {
     /// The project key, used to tie the flags together under one project so they can be managed together.
@@ -822,7 +2585,7 @@ interface users {
     /// A timestamp filter, expressed as a Unix epoch time in milliseconds. All entries returned will have occurred after this timestamp.
     after: option<s64>
   }
-  get-search-users: func(params: get-search-users-params) -> result<string, string>;
+  get-search-users: func(params: get-search-users-params) -> result<users, get-search-users-error>;
 
   /// List all users in the environment. Includes the total count of users. In each page, there will be up to 'limit' users returned (default 20). This is useful for exporting all users in the system for further analysis. Paginated collections will include a next link containing a URL with the next set of elements in the collection.
   record get-users-params {
@@ -837,7 +2600,7 @@ interface users {
     /// This parameter is required when following "next" links.
     scroll-id: option<string>
   }
-  get-users: func(params: get-users-params) -> result<string, string>;
+  get-users: func(params: get-users-params) -> result<users, get-users-error>;
 
   /// Get a user by key.
   record get-user-params {
@@ -848,7 +2611,7 @@ interface users {
     /// The user's key.
     user-key: string
   }
-  get-user: func(params: get-user-params) -> result<string, string>;
+  get-user: func(params: get-user-params) -> result<user-record, get-user-error>;
 
   /// Delete a user by ID.
   record delete-user-params {
@@ -859,11 +2622,97 @@ interface users {
     /// The user's key.
     user-key: string
   }
-  delete-user: func(params: delete-user-params) -> result<string, string>;
+  delete-user: func(params: delete-user-params) -> result<string, delete-user-error>;
 
 }
 
 interface user-settings {
+  record user-flag-settings {
+    links: option<links>,
+    items: option<user-flag-settings-items>
+  }
+
+  record links {
+    next: option<link>,
+    self: option<link>
+  }
+
+  record link {
+    href: option<string>,
+    type-op: option<string>
+  }
+
+  record user-flag-settings-items {
+    /// JSON-encoded free-form object payload
+    data: option<string>
+  }
+
+  record user-flag-setting {
+    links: option<links>,
+    /// The most important attribute in the response. The _value is the current setting for the user. For a boolean feature toggle, this will be true, false, or null if there is no defined fallthrough value.
+    value: option<bool>,
+    /// The setting attribute indicates whether you've explicitly targeted this user to receive a particular variation. For example, if you have explicitly turned off a feature toggle for a user, setting will be false. A setting of null means that you haven't assigned that user to a specific variation.
+    setting: option<bool>
+  }
+
+  record user-targeting-expiration-on-flags-for-user {
+    links: option<links>,
+    items: option<list<user-targeting-expiration-for-flag>>
+  }
+
+  record user-targeting-expiration-for-flag {
+    id: option<string>,
+    links: option<links>,
+    resource-id: option<user-targeting-expiration-resource-id-for-flag>,
+    version: option<s32>,
+    /// Unix epoch time in milliseconds specifying the expiration date
+    expiration-date: option<s64>,
+    /// Unique identifier for the user
+    user-key: option<string>,
+    /// the ID of the variation that the user is targeted on a flag
+    variation-id: option<string>
+  }
+
+  record user-targeting-expiration-resource-id-for-flag {
+    environment-key: option<string>,
+    flag-key: option<string>,
+    key: option<string>,
+    kind: option<string>,
+    project-key: option<string>
+  }
+
+  variant get-user-flag-settings-error {
+    unauthorized(string),
+    not-found(string),
+    other(string)
+  }
+
+  variant get-user-flag-setting-error {
+    unauthorized(string),
+    not-found(string),
+    other(string)
+  }
+
+  variant put-flag-setting-error {
+    bad-request(string),
+    unauthorized(string),
+    not-found(string),
+    other(string)
+  }
+
+  variant get-expiring-user-targets-for-user-error {
+    unauthorized(string),
+    other(string)
+  }
+
+  variant patch-expiring-user-targets-for-flags-error {
+    bad-request(string),
+    unauthorized(string),
+    not-found(string),
+    conflict(string),
+    other(string)
+  }
+
   /// Fetch a single flag setting for a user by key.
   record get-user-flag-settings-params {
     /// The project key, used to tie the flags together under one project so they can be managed together.
@@ -873,7 +2722,7 @@ interface user-settings {
     /// The user's key.
     user-key: string
   }
-  get-user-flag-settings: func(params: get-user-flag-settings-params) -> result<string, string>;
+  get-user-flag-settings: func(params: get-user-flag-settings-params) -> result<user-flag-settings, get-user-flag-settings-error>;
 
   /// Fetch a single flag setting for a user by key.
   record get-user-flag-setting-params {
@@ -886,7 +2735,7 @@ interface user-settings {
     /// The feature flag's key. The key identifies the flag in your code.
     feature-flag-key: string
   }
-  get-user-flag-setting: func(params: get-user-flag-setting-params) -> result<string, string>;
+  get-user-flag-setting: func(params: get-user-flag-setting-params) -> result<user-flag-setting, get-user-flag-setting-error>;
 
   /// Specifically enable or disable a feature flag for a user based on their key.
   record put-flag-setting-params {
@@ -899,7 +2748,7 @@ interface user-settings {
     /// The feature flag's key. The key identifies the flag in your code.
     feature-flag-key: string
   }
-  put-flag-setting: func(params: put-flag-setting-params) -> result<string, string>;
+  put-flag-setting: func(params: put-flag-setting-params) -> result<string, put-flag-setting-error>;
 
   /// Get expiring dates on flags for user
   record get-expiring-user-targets-for-user-params {
@@ -910,7 +2759,7 @@ interface user-settings {
     /// The user's key.
     user-key: string
   }
-  get-expiring-user-targets-for-user: func(params: get-expiring-user-targets-for-user-params) -> result<string, string>;
+  get-expiring-user-targets-for-user: func(params: get-expiring-user-targets-for-user-params) -> result<user-targeting-expiration-on-flags-for-user, get-expiring-user-targets-for-user-error>;
 
   /// Update, add, or delete expiring user targets for a single user on all flags
   record patch-expiring-user-targets-for-flags-params {
@@ -921,37 +2770,120 @@ interface user-settings {
     /// The user's key.
     user-key: string
   }
-  patch-expiring-user-targets-for-flags: func(params: patch-expiring-user-targets-for-flags-params) -> result<string, string>;
+  patch-expiring-user-targets-for-flags: func(params: patch-expiring-user-targets-for-flags-params) -> result<user-targeting-expiration-on-flags-for-user, patch-expiring-user-targets-for-flags-error>;
 
 }
 
 interface webhooks {
+  enum statement-effect-enum {
+    allow,
+    deny,
+  }
+
+  record webhooks {
+    links: option<links>,
+    items: option<list<webhook>>
+  }
+
+  record links {
+    next: option<link>,
+    self: option<link>
+  }
+
+  record link {
+    href: option<string>,
+    type-op: option<string>
+  }
+
+  record webhook {
+    id: option<id>,
+    links: option<links>,
+    /// The name of the webhook.
+    name: option<string>,
+    /// Whether this webhook is enabled or not.
+    on: option<bool>,
+    /// If defined, the webhooks post request will include a X-LD-Signature header whose value will contain an HMAC SHA256 hex digest of the webhook payload, using the secret as the key.
+    secret: option<string>,
+    statements: option<list<statement>>,
+    /// Tags assigned to this webhook.
+    tags: option<list<string>>,
+    /// The URL of the remote webhook.
+    url: option<string>
+  }
+
+  /// The unique resource id.
+  record id {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  record statement {
+    actions: option<list<string>>,
+    effect: option<statement-effect-enum>,
+    /// Targeted actions will be those actions NOT in this list. The "actions" field must be empty to use this field.
+    not-actions: option<list<string>>,
+    /// Targeted resource will be those resources NOT in this list. The "resources`" field must be empty to use this field.
+    not-resources: option<list<string>>,
+    resources: option<list<string>>
+  }
+
+  variant get-webhooks-error {
+    unauthorized(string),
+    other(string)
+  }
+
+  variant post-webhook-error {
+    bad-request(string),
+    unauthorized(string),
+    other(string)
+  }
+
+  variant get-webhook-error {
+    unauthorized(string),
+    not-found(string),
+    other(string)
+  }
+
+  variant patch-webhook-error {
+    bad-request(string),
+    unauthorized(string),
+    not-found(string),
+    conflict(string),
+    other(string)
+  }
+
+  variant delete-webhook-error {
+    unauthorized(string),
+    not-found(string),
+    other(string)
+  }
+
   /// Fetch a list of all webhooks.
-  get-webhooks: func() -> result<string, string>;
+  get-webhooks: func() -> result<webhooks, get-webhooks-error>;
 
   /// Create a webhook.
-  post-webhook: func() -> result<string, string>;
+  post-webhook: func() -> result<webhook, post-webhook-error>;
 
   /// Get a webhook by ID.
   record get-webhook-params {
     /// The resource ID.
     resource-id: string
   }
-  get-webhook: func(params: get-webhook-params) -> result<string, string>;
+  get-webhook: func(params: get-webhook-params) -> result<webhook, get-webhook-error>;
 
   /// Modify a webhook by ID.
   record patch-webhook-params {
     /// The resource ID.
     resource-id: string
   }
-  patch-webhook: func(params: patch-webhook-params) -> result<string, string>;
+  patch-webhook: func(params: patch-webhook-params) -> result<webhook, patch-webhook-error>;
 
   /// Delete a webhook by ID.
   record delete-webhook-params {
     /// The resource ID.
     resource-id: string
   }
-  delete-webhook: func(params: delete-webhook-params) -> result<string, string>;
+  delete-webhook: func(params: delete-webhook-params) -> result<string, delete-webhook-error>;
 
 }
 /// The component world: imports the secrets host capability

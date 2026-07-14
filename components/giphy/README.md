@@ -20,8 +20,8 @@ triggered.
 
 | Setting | Value |
 | --- | --- |
-| Package | `autostamp:giphy@0.3.0` |
-| Published version | `0.3.0+giphy-1.0` |
+| Package | `autostamp:giphy@0.5.0` |
+| Published version | `0.5.0+giphy-1.0` |
 | Tag filter | all tags |
 | Operations generated | 10 |
 | Infer API-key credentials | enabled — not triggered |

@@ -1,13 +1,41 @@
-package autostamp:wikimedia@0.3.0;
+package autostamp:wikimedia@0.5.0;
 
 interface feed-content-availability {
+  record availability {
+    /// domains for wikis with this feature enabled, or [ '*.<project>.org' ] for all wikis in a project
+    in-the-news: list<string>,
+    /// domains for wikis with this feature enabled, or [ '*.<project>.org' ] for all wikis in a project
+    most-read: list<string>,
+    /// domains for wikis with this feature enabled, or [ '*.<project>.org' ] for all wikis in a project
+    on-this-day: list<string>,
+    /// domains for wikis with this feature enabled, or [ '*.<project>.org' ] for all wikis in a project
+    picture-of-the-day: list<string>,
+    /// domains for wikis with this feature enabled, or [ '*.<project>.org' ] for all wikis in a project
+    todays-featured-article: list<string>
+  }
+
   /// Gets availability of featured feed content for the apps by wiki domain.
-  get-feed-availability: func() -> result<string, string>;
+  get-feed-availability: func() -> result<availability, string>;
 
 }
 
 
 interface math {
+  variant post-media-math-check-type-error {
+    bad-request(string),
+    other(string)
+  }
+
+  variant get-media-math-formula-hash-error {
+    not-found(string),
+    other(string)
+  }
+
+  variant get-media-math-render-format-hash-error {
+    not-found(string),
+    other(string)
+  }
+
   /// Check and normalize a TeX formula.
   record post-media-math-check-type-params {
     /// The input type of the given formula; can be tex or inline-tex
@@ -15,14 +43,14 @@ interface math {
     /// The formula to check
     q: string
   }
-  post-media-math-check-type: func(params: post-media-math-check-type-params) -> result<string, string>;
+  post-media-math-check-type: func(params: post-media-math-check-type-params) -> result<string, post-media-math-check-type-error>;
 
   /// Get a previously-stored formula
   record get-media-math-formula-hash-params {
     /// The hash string of the previous POST data
     hash: string
   }
-  get-media-math-formula-hash: func(params: get-media-math-formula-hash-params) -> result<string, string>;
+  get-media-math-formula-hash: func(params: get-media-math-formula-hash-params) -> result<string, get-media-math-formula-hash-error>;
 
   /// Get rendered formula in the given format.
   record get-media-math-render-format-hash-params {
@@ -31,11 +59,79 @@ interface math {
     /// The hash string of the previous POST data
     hash: string
   }
-  get-media-math-render-format-hash: func(params: get-media-math-render-format-hash-params) -> result<string, string>;
+  get-media-math-render-format-hash: func(params: get-media-math-render-format-hash-params) -> result<string, get-media-math-render-format-hash-error>;
 
 }
 
 interface bytes-difference-data {
+  record absolute-bytes-difference {
+    items: option<list<absolute-bytes-difference-items-item>>
+  }
+
+  record absolute-bytes-difference-items-item {
+    editor-type: option<string>,
+    granularity: option<string>,
+    page-type: option<string>,
+    project: option<string>,
+    results: option<list<absolute-bytes-difference-items-item-results-item>>
+  }
+
+  record absolute-bytes-difference-items-item-results-item {
+    abs-bytes-diff: option<s64>,
+    timestamp: option<string>
+  }
+
+  record absolute-bytes-difference-per-page {
+    items: option<list<absolute-bytes-difference-per-page-items-item>>
+  }
+
+  record absolute-bytes-difference-per-page-items-item {
+    editor-type: option<string>,
+    granularity: option<string>,
+    page-title: option<string>,
+    project: option<string>,
+    results: option<list<absolute-bytes-difference-per-page-items-item-results-item>>
+  }
+
+  record absolute-bytes-difference-per-page-items-item-results-item {
+    abs-bytes-diff: option<s64>,
+    timestamp: option<string>
+  }
+
+  record net-bytes-difference {
+    items: option<list<net-bytes-difference-items-item>>
+  }
+
+  record net-bytes-difference-items-item {
+    editor-type: option<string>,
+    granularity: option<string>,
+    page-type: option<string>,
+    project: option<string>,
+    results: option<list<net-bytes-difference-items-item-results-item>>
+  }
+
+  record net-bytes-difference-items-item-results-item {
+    net-bytes-diff: option<s64>,
+    timestamp: option<string>
+  }
+
+  record net-bytes-difference-per-page {
+    items: option<list<net-bytes-difference-per-page-items-item>>
+  }
+
+  record net-bytes-difference-per-page-items-item {
+    editor-type: option<string>,
+    granularity: option<string>,
+    page-title: option<string>,
+    project: option<string>,
+    results: option<list<net-bytes-difference-per-page-items-item-results-item>>
+  }
+
+  record net-bytes-difference-per-page-items-item-results-item {
+    net-bytes-diff: option<s64>,
+    timestamp: option<string>
+  }
+
   /// Get the sum of absolute value of text bytes difference between current edit and
   /// previous one.
   record get-metrics-bytes-difference-absolute-aggregate-project-editor-type-page-type-granularity-start-end-params {
@@ -55,7 +151,7 @@ interface bytes-difference-data {
     /// The date of the last day to include, in YYYYMMDD format
     end: string
   }
-  get-metrics-bytes-difference-absolute-aggregate-project-editor-type-page-type-granularity-start-end: func(params: get-metrics-bytes-difference-absolute-aggregate-project-editor-type-page-type-granularity-start-end-params) -> result<string, string>;
+  get-metrics-bytes-difference-absolute-aggregate-project-editor-type-page-type-granularity-start-end: func(params: get-metrics-bytes-difference-absolute-aggregate-project-editor-type-page-type-granularity-start-end-params) -> result<absolute-bytes-difference, string>;
 
   /// Get the sum of absolute text bytes difference per page.
   record get-metrics-bytes-difference-absolute-per-page-project-page-title-editor-type-granularity-start-end-params {
@@ -75,7 +171,7 @@ interface bytes-difference-data {
     /// The date of the last day to include, in YYYYMMDD format
     end: string
   }
-  get-metrics-bytes-difference-absolute-per-page-project-page-title-editor-type-granularity-start-end: func(params: get-metrics-bytes-difference-absolute-per-page-project-page-title-editor-type-granularity-start-end-params) -> result<string, string>;
+  get-metrics-bytes-difference-absolute-per-page-project-page-title-editor-type-granularity-start-end: func(params: get-metrics-bytes-difference-absolute-per-page-project-page-title-editor-type-granularity-start-end-params) -> result<absolute-bytes-difference-per-page, string>;
 
   /// Get the sum of net text bytes difference between current edit and previous one.
   record get-metrics-bytes-difference-net-aggregate-project-editor-type-page-type-granularity-start-end-params {
@@ -95,7 +191,7 @@ interface bytes-difference-data {
     /// The date of the last day to include, in YYYYMMDD format
     end: string
   }
-  get-metrics-bytes-difference-net-aggregate-project-editor-type-page-type-granularity-start-end: func(params: get-metrics-bytes-difference-net-aggregate-project-editor-type-page-type-granularity-start-end-params) -> result<string, string>;
+  get-metrics-bytes-difference-net-aggregate-project-editor-type-page-type-granularity-start-end: func(params: get-metrics-bytes-difference-net-aggregate-project-editor-type-page-type-granularity-start-end-params) -> result<net-bytes-difference, string>;
 
   /// Get the sum of net text bytes difference per page.
   record get-metrics-bytes-difference-net-per-page-project-page-title-editor-type-granularity-start-end-params {
@@ -115,11 +211,115 @@ interface bytes-difference-data {
     /// The date of the last day to include, in YYYYMMDD format
     end: string
   }
-  get-metrics-bytes-difference-net-per-page-project-page-title-editor-type-granularity-start-end: func(params: get-metrics-bytes-difference-net-per-page-project-page-title-editor-type-granularity-start-end-params) -> result<string, string>;
+  get-metrics-bytes-difference-net-per-page-project-page-title-editor-type-granularity-start-end: func(params: get-metrics-bytes-difference-net-per-page-project-page-title-editor-type-granularity-start-end-params) -> result<net-bytes-difference-per-page, string>;
 
 }
 
 interface edited-pages-data {
+  record edited-pages {
+    items: option<list<edited-pages-items-item>>
+  }
+
+  record edited-pages-items-item {
+    activity-level: option<string>,
+    editor-type: option<string>,
+    granularity: option<string>,
+    page-type: option<string>,
+    project: option<string>,
+    results: option<list<edited-pages-items-item-results-item>>
+  }
+
+  record edited-pages-items-item-results-item {
+    edited-pages: option<s32>,
+    timestamp: option<string>
+  }
+
+  record new-pages {
+    items: option<list<new-pages-items-item>>
+  }
+
+  record new-pages-items-item {
+    editor-type: option<string>,
+    granularity: option<string>,
+    page-type: option<string>,
+    project: option<string>,
+    results: option<list<new-pages-items-item-results-item>>
+  }
+
+  record new-pages-items-item-results-item {
+    new-pages: option<s32>,
+    timestamp: option<string>
+  }
+
+  record top-edited-pages-by-abs-bytes-diff {
+    items: option<list<top-edited-pages-by-abs-bytes-diff-items-item>>
+  }
+
+  record top-edited-pages-by-abs-bytes-diff-items-item {
+    editor-type: option<string>,
+    granularity: option<string>,
+    page-type: option<string>,
+    project: option<string>,
+    results: option<list<top-edited-pages-by-abs-bytes-diff-items-item-results-item>>
+  }
+
+  record top-edited-pages-by-abs-bytes-diff-items-item-results-item {
+    timestamp: option<string>,
+    top: option<list<top-edited-pages-by-abs-bytes-diff-items-item-results-item-top-item>>
+  }
+
+  record top-edited-pages-by-abs-bytes-diff-items-item-results-item-top-item {
+    abs-bytes-diff: option<s64>,
+    page-title: option<string>,
+    rank: option<s32>
+  }
+
+  record top-edited-pages-by-edits {
+    items: option<list<top-edited-pages-by-edits-items-item>>
+  }
+
+  record top-edited-pages-by-edits-items-item {
+    editor-type: option<string>,
+    granularity: option<string>,
+    page-type: option<string>,
+    project: option<string>,
+    results: option<list<top-edited-pages-by-edits-items-item-results-item>>
+  }
+
+  record top-edited-pages-by-edits-items-item-results-item {
+    timestamp: option<string>,
+    top: option<list<top-edited-pages-by-edits-items-item-results-item-top-item>>
+  }
+
+  record top-edited-pages-by-edits-items-item-results-item-top-item {
+    edits: option<s64>,
+    page-title: option<string>,
+    rank: option<s32>
+  }
+
+  record top-edited-pages-by-net-bytes-diff {
+    items: option<list<top-edited-pages-by-net-bytes-diff-items-item>>
+  }
+
+  record top-edited-pages-by-net-bytes-diff-items-item {
+    editor-type: option<string>,
+    granularity: option<string>,
+    page-type: option<string>,
+    project: option<string>,
+    results: option<list<top-edited-pages-by-net-bytes-diff-items-item-results-item>>
+  }
+
+  record top-edited-pages-by-net-bytes-diff-items-item-results-item {
+    timestamp: option<string>,
+    top: option<list<top-edited-pages-by-net-bytes-diff-items-item-results-item-top-item>>
+  }
+
+  record top-edited-pages-by-net-bytes-diff-items-item-results-item-top-item {
+    net-bytes-diff: option<s64>,
+    page-title: option<string>,
+    rank: option<s32>
+  }
+
   /// Get edited-pages counts for a project.
   record get-metrics-edited-pages-aggregate-project-editor-type-page-type-activity-level-granularity-start-end-params {
     /// The name of any Wikimedia project formatted like {language code}.{project name},
@@ -142,7 +342,7 @@ interface edited-pages-data {
     /// The date of the last day to include, in YYYYMMDD format
     end: string
   }
-  get-metrics-edited-pages-aggregate-project-editor-type-page-type-activity-level-granularity-start-end: func(params: get-metrics-edited-pages-aggregate-project-editor-type-page-type-activity-level-granularity-start-end-params) -> result<string, string>;
+  get-metrics-edited-pages-aggregate-project-editor-type-page-type-activity-level-granularity-start-end: func(params: get-metrics-edited-pages-aggregate-project-editor-type-page-type-activity-level-granularity-start-end-params) -> result<edited-pages, string>;
 
   /// Get new pages counts for a project.
   record get-metrics-edited-pages-new-project-editor-type-page-type-granularity-start-end-params {
@@ -163,7 +363,7 @@ interface edited-pages-data {
     /// The date of the last day to include, in YYYYMMDD format
     end: string
   }
-  get-metrics-edited-pages-new-project-editor-type-page-type-granularity-start-end: func(params: get-metrics-edited-pages-new-project-editor-type-page-type-granularity-start-end-params) -> result<string, string>;
+  get-metrics-edited-pages-new-project-editor-type-page-type-granularity-start-end: func(params: get-metrics-edited-pages-new-project-editor-type-page-type-granularity-start-end-params) -> result<new-pages, string>;
 
   /// Get top 100 edited-pages by absolute bytes-difference.
   record get-metrics-edited-pages-top-by-absolute-bytes-difference-project-editor-type-page-type-year-month-day-params {
@@ -183,7 +383,7 @@ interface edited-pages-data {
     /// The day of the date for which to retrieve top edited-pages, in DD format, or all-days for a monthly value.
     day: string
   }
-  get-metrics-edited-pages-top-by-absolute-bytes-difference-project-editor-type-page-type-year-month-day: func(params: get-metrics-edited-pages-top-by-absolute-bytes-difference-project-editor-type-page-type-year-month-day-params) -> result<string, string>;
+  get-metrics-edited-pages-top-by-absolute-bytes-difference-project-editor-type-page-type-year-month-day: func(params: get-metrics-edited-pages-top-by-absolute-bytes-difference-project-editor-type-page-type-year-month-day-params) -> result<top-edited-pages-by-abs-bytes-diff, string>;
 
   /// Get top 100 edited-pages by edits count.
   record get-metrics-edited-pages-top-by-edits-project-editor-type-page-type-year-month-day-params {
@@ -203,7 +403,7 @@ interface edited-pages-data {
     /// The day of the date for which to retrieve top edited-pages, in DD format, or all-days for a monthly value.
     day: string
   }
-  get-metrics-edited-pages-top-by-edits-project-editor-type-page-type-year-month-day: func(params: get-metrics-edited-pages-top-by-edits-project-editor-type-page-type-year-month-day-params) -> result<string, string>;
+  get-metrics-edited-pages-top-by-edits-project-editor-type-page-type-year-month-day: func(params: get-metrics-edited-pages-top-by-edits-project-editor-type-page-type-year-month-day-params) -> result<top-edited-pages-by-edits, string>;
 
   /// Get top 100 edited-pages by net bytes-difference.
   record get-metrics-edited-pages-top-by-net-bytes-difference-project-editor-type-page-type-year-month-day-params {
@@ -223,11 +423,98 @@ interface edited-pages-data {
     /// The day of the date for which to retrieve top edited-pages, in DD format, or all-days for a monthly value.
     day: string
   }
-  get-metrics-edited-pages-top-by-net-bytes-difference-project-editor-type-page-type-year-month-day: func(params: get-metrics-edited-pages-top-by-net-bytes-difference-project-editor-type-page-type-year-month-day-params) -> result<string, string>;
+  get-metrics-edited-pages-top-by-net-bytes-difference-project-editor-type-page-type-year-month-day: func(params: get-metrics-edited-pages-top-by-net-bytes-difference-project-editor-type-page-type-year-month-day-params) -> result<top-edited-pages-by-net-bytes-diff, string>;
 
 }
 
 interface editors-data {
+  record editors {
+    items: option<list<editors-items-item>>
+  }
+
+  record editors-items-item {
+    activity-level: option<string>,
+    editor-type: option<string>,
+    granularity: option<string>,
+    page-type: option<string>,
+    project: option<string>,
+    results: option<list<editors-items-item-results-item>>
+  }
+
+  record editors-items-item-results-item {
+    editors: option<s32>,
+    timestamp: option<string>
+  }
+
+  record top-editors-by-abs-bytes-diff {
+    items: option<list<top-editors-by-abs-bytes-diff-items-item>>
+  }
+
+  record top-editors-by-abs-bytes-diff-items-item {
+    editor-type: option<string>,
+    granularity: option<string>,
+    page-type: option<string>,
+    project: option<string>,
+    results: option<list<top-editors-by-abs-bytes-diff-items-item-results-item>>
+  }
+
+  record top-editors-by-abs-bytes-diff-items-item-results-item {
+    timestamp: option<string>,
+    top: option<list<top-editors-by-abs-bytes-diff-items-item-results-item-top-item>>
+  }
+
+  record top-editors-by-abs-bytes-diff-items-item-results-item-top-item {
+    abs-bytes-diff: option<s64>,
+    rank: option<s32>,
+    user-text: option<string>
+  }
+
+  record top-editors-by-edits {
+    items: option<list<top-editors-by-edits-items-item>>
+  }
+
+  record top-editors-by-edits-items-item {
+    editor-type: option<string>,
+    granularity: option<string>,
+    page-type: option<string>,
+    project: option<string>,
+    results: option<list<top-editors-by-edits-items-item-results-item>>
+  }
+
+  record top-editors-by-edits-items-item-results-item {
+    timestamp: option<string>,
+    top: option<list<top-editors-by-edits-items-item-results-item-top-item>>
+  }
+
+  record top-editors-by-edits-items-item-results-item-top-item {
+    edits: option<s64>,
+    rank: option<s32>,
+    user-text: option<string>
+  }
+
+  record top-editors-by-net-bytes-diff {
+    items: option<list<top-editors-by-net-bytes-diff-items-item>>
+  }
+
+  record top-editors-by-net-bytes-diff-items-item {
+    editor-type: option<string>,
+    granularity: option<string>,
+    page-type: option<string>,
+    project: option<string>,
+    results: option<list<top-editors-by-net-bytes-diff-items-item-results-item>>
+  }
+
+  record top-editors-by-net-bytes-diff-items-item-results-item {
+    timestamp: option<string>,
+    top: option<list<top-editors-by-net-bytes-diff-items-item-results-item-top-item>>
+  }
+
+  record top-editors-by-net-bytes-diff-items-item-results-item-top-item {
+    net-bytes-diff: option<s64>,
+    rank: option<s32>,
+    user-text: option<string>
+  }
+
   /// Get editors counts for a project.
   record get-metrics-editors-aggregate-project-editor-type-page-type-activity-level-granularity-start-end-params {
     /// The name of any Wikimedia project formatted like {language code}.{project name},
@@ -250,7 +537,7 @@ interface editors-data {
     /// The date of the last day to include, in YYYYMMDD format
     end: string
   }
-  get-metrics-editors-aggregate-project-editor-type-page-type-activity-level-granularity-start-end: func(params: get-metrics-editors-aggregate-project-editor-type-page-type-activity-level-granularity-start-end-params) -> result<string, string>;
+  get-metrics-editors-aggregate-project-editor-type-page-type-activity-level-granularity-start-end: func(params: get-metrics-editors-aggregate-project-editor-type-page-type-activity-level-granularity-start-end-params) -> result<editors, string>;
 
   /// Get top 100 editors by absolute bytes-difference.
   record get-metrics-editors-top-by-absolute-bytes-difference-project-editor-type-page-type-year-month-day-params {
@@ -270,7 +557,7 @@ interface editors-data {
     /// The day of the date for which to retrieve top editors, in DD format, or all-days for a monthly value.
     day: string
   }
-  get-metrics-editors-top-by-absolute-bytes-difference-project-editor-type-page-type-year-month-day: func(params: get-metrics-editors-top-by-absolute-bytes-difference-project-editor-type-page-type-year-month-day-params) -> result<string, string>;
+  get-metrics-editors-top-by-absolute-bytes-difference-project-editor-type-page-type-year-month-day: func(params: get-metrics-editors-top-by-absolute-bytes-difference-project-editor-type-page-type-year-month-day-params) -> result<top-editors-by-abs-bytes-diff, string>;
 
   /// Get top 100 editors by edits count.
   record get-metrics-editors-top-by-edits-project-editor-type-page-type-year-month-day-params {
@@ -290,7 +577,7 @@ interface editors-data {
     /// The day of the date for which to retrieve top editors, in DD format, or all-days for a monthly value.
     day: string
   }
-  get-metrics-editors-top-by-edits-project-editor-type-page-type-year-month-day: func(params: get-metrics-editors-top-by-edits-project-editor-type-page-type-year-month-day-params) -> result<string, string>;
+  get-metrics-editors-top-by-edits-project-editor-type-page-type-year-month-day: func(params: get-metrics-editors-top-by-edits-project-editor-type-page-type-year-month-day-params) -> result<top-editors-by-edits, string>;
 
   /// Get top 100 editors by net bytes-difference.
   record get-metrics-editors-top-by-net-bytes-difference-project-editor-type-page-type-year-month-day-params {
@@ -310,11 +597,45 @@ interface editors-data {
     /// The day of the date for which to retrieve top editors, in DD format, or all-days for a monthly value.
     day: string
   }
-  get-metrics-editors-top-by-net-bytes-difference-project-editor-type-page-type-year-month-day: func(params: get-metrics-editors-top-by-net-bytes-difference-project-editor-type-page-type-year-month-day-params) -> result<string, string>;
+  get-metrics-editors-top-by-net-bytes-difference-project-editor-type-page-type-year-month-day: func(params: get-metrics-editors-top-by-net-bytes-difference-project-editor-type-page-type-year-month-day-params) -> result<top-editors-by-net-bytes-diff, string>;
 
 }
 
 interface edits-data {
+  record edits {
+    items: option<list<edits-items-item>>
+  }
+
+  record edits-items-item {
+    editor-type: option<string>,
+    granularity: option<string>,
+    page-type: option<string>,
+    project: option<string>,
+    results: option<list<edits-items-item-results-item>>
+  }
+
+  record edits-items-item-results-item {
+    edits: option<s64>,
+    timestamp: option<string>
+  }
+
+  record edits-per-page {
+    items: option<list<edits-per-page-items-item>>
+  }
+
+  record edits-per-page-items-item {
+    editor-type: option<string>,
+    granularity: option<string>,
+    page-title: option<string>,
+    project: option<string>,
+    results: option<list<edits-per-page-items-item-results-item>>
+  }
+
+  record edits-per-page-items-item-results-item {
+    edits: option<s64>,
+    timestamp: option<string>
+  }
+
   /// Get edits counts for a project.
   record get-metrics-edits-aggregate-project-editor-type-page-type-granularity-start-end-params {
     /// The name of any Wikimedia project formatted like {language code}.{project name},
@@ -334,7 +655,7 @@ interface edits-data {
     /// The date of the last day to include, in YYYYMMDD format
     end: string
   }
-  get-metrics-edits-aggregate-project-editor-type-page-type-granularity-start-end: func(params: get-metrics-edits-aggregate-project-editor-type-page-type-granularity-start-end-params) -> result<string, string>;
+  get-metrics-edits-aggregate-project-editor-type-page-type-granularity-start-end: func(params: get-metrics-edits-aggregate-project-editor-type-page-type-granularity-start-end-params) -> result<edits, string>;
 
   /// Get edit counts for a page in a project.
   record get-metrics-edits-per-page-project-page-title-editor-type-granularity-start-end-params {
@@ -354,11 +675,23 @@ interface edits-data {
     /// The date of the last day to include, in YYYYMMDD format
     end: string
   }
-  get-metrics-edits-per-page-project-page-title-editor-type-granularity-start-end: func(params: get-metrics-edits-per-page-project-page-title-editor-type-granularity-start-end-params) -> result<string, string>;
+  get-metrics-edits-per-page-project-page-title-editor-type-granularity-start-end: func(params: get-metrics-edits-per-page-project-page-title-editor-type-granularity-start-end-params) -> result<edits-per-page, string>;
 
 }
 
 interface legacy-data {
+  record pagecounts-project {
+    items: option<list<pagecounts-project-items-item>>
+  }
+
+  record pagecounts-project-items-item {
+    access-site: option<string>,
+    count: option<s64>,
+    granularity: option<string>,
+    project: option<string>,
+    timestamp: option<string>
+  }
+
   record get-metrics-legacy-pagecounts-aggregate-project-access-site-granularity-start-end-params {
     /// The name of any Wikimedia project formatted like {language code}.{project name},
     /// for example en.wikipedia. You may pass en.wikipedia.org and the .org will be stripped
@@ -374,11 +707,75 @@ interface legacy-data {
     /// In hourly and daily granularities this value is inclusive, in the monthly granularity
     end: string
   }
-  get-metrics-legacy-pagecounts-aggregate-project-access-site-granularity-start-end: func(params: get-metrics-legacy-pagecounts-aggregate-project-access-site-granularity-start-end-params) -> result<string, string>;
+  get-metrics-legacy-pagecounts-aggregate-project-access-site-granularity-start-end: func(params: get-metrics-legacy-pagecounts-aggregate-project-access-site-granularity-start-end-params) -> result<pagecounts-project, string>;
 
 }
 
 interface pageviews-data {
+  record pageview-project {
+    items: option<list<pageview-project-items-item>>
+  }
+
+  record pageview-project-items-item {
+    access: option<string>,
+    agent: option<string>,
+    granularity: option<string>,
+    project: option<string>,
+    timestamp: option<string>,
+    views: option<s64>
+  }
+
+  record pageview-article {
+    items: option<list<pageview-article-items-item>>
+  }
+
+  record pageview-article-items-item {
+    access: option<string>,
+    agent: option<string>,
+    article: option<string>,
+    granularity: option<string>,
+    project: option<string>,
+    timestamp: option<string>,
+    views: option<s64>
+  }
+
+  record by-country {
+    items: option<list<by-country-items-item>>
+  }
+
+  record by-country-items-item {
+    access: option<string>,
+    countries: option<list<by-country-items-item-countries-item>>,
+    month: option<string>,
+    project: option<string>,
+    year: option<string>
+  }
+
+  record by-country-items-item-countries-item {
+    country: option<string>,
+    rank: option<s32>,
+    views: option<s64>
+  }
+
+  record pageview-tops {
+    items: option<list<pageview-tops-items-item>>
+  }
+
+  record pageview-tops-items-item {
+    access: option<string>,
+    articles: option<list<pageview-tops-items-item-articles-item>>,
+    day: option<string>,
+    month: option<string>,
+    project: option<string>,
+    year: option<string>
+  }
+
+  record pageview-tops-items-item-articles-item {
+    article: option<string>,
+    rank: option<s32>,
+    views: option<s64>
+  }
+
   /// Get pageview counts for a project.
   record get-metrics-pageviews-aggregate-project-access-agent-granularity-start-end-params {
     /// If you want to filter by project, use the domain of any Wikimedia project,
@@ -398,7 +795,7 @@ interface pageviews-data {
     /// The timestamp of the last hour/day/month to include, in YYYYMMDDHH format
     end: string
   }
-  get-metrics-pageviews-aggregate-project-access-agent-granularity-start-end: func(params: get-metrics-pageviews-aggregate-project-access-agent-granularity-start-end-params) -> result<string, string>;
+  get-metrics-pageviews-aggregate-project-access-agent-granularity-start-end: func(params: get-metrics-pageviews-aggregate-project-access-agent-granularity-start-end-params) -> result<pageview-project, string>;
 
   /// Get pageview counts for a page.
   record get-metrics-pageviews-per-article-project-access-agent-article-granularity-start-end-params {
@@ -422,7 +819,7 @@ interface pageviews-data {
     /// The date of the last day to include, in YYYYMMDD or YYYYMMDDHH format
     end: string
   }
-  get-metrics-pageviews-per-article-project-access-agent-article-granularity-start-end: func(params: get-metrics-pageviews-per-article-project-access-agent-article-granularity-start-end-params) -> result<string, string>;
+  get-metrics-pageviews-per-article-project-access-agent-article-granularity-start-end: func(params: get-metrics-pageviews-per-article-project-access-agent-article-granularity-start-end-params) -> result<pageview-article, string>;
 
   /// Get pageviews by country and access method.
   record get-metrics-pageviews-top-by-country-project-access-year-month-params {
@@ -437,7 +834,7 @@ interface pageviews-data {
     /// The month of the date for which to retrieve top countries, in MM format.
     month: string
   }
-  get-metrics-pageviews-top-by-country-project-access-year-month: func(params: get-metrics-pageviews-top-by-country-project-access-year-month-params) -> result<string, string>;
+  get-metrics-pageviews-top-by-country-project-access-year-month: func(params: get-metrics-pageviews-top-by-country-project-access-year-month-params) -> result<by-country, string>;
 
   /// Get the most viewed articles for a project.
   record get-metrics-pageviews-top-project-access-year-month-day-params {
@@ -455,11 +852,26 @@ interface pageviews-data {
     /// The day of the date for which to retrieve top articles, in DD format.
     day: string
   }
-  get-metrics-pageviews-top-project-access-year-month-day: func(params: get-metrics-pageviews-top-project-access-year-month-day-params) -> result<string, string>;
+  get-metrics-pageviews-top-project-access-year-month-day: func(params: get-metrics-pageviews-top-project-access-year-month-day-params) -> result<pageview-tops, string>;
 
 }
 
 interface registered-users-data {
+  record new-registered-users {
+    items: option<list<new-registered-users-items-item>>
+  }
+
+  record new-registered-users-items-item {
+    granularity: option<string>,
+    project: option<string>,
+    results: option<list<new-registered-users-items-item-results-item>>
+  }
+
+  record new-registered-users-items-item-results-item {
+    new-registered-users: option<s32>,
+    timestamp: option<string>
+  }
+
   /// Get newly registered users counts for a project.
   record get-metrics-registered-users-new-project-granularity-start-end-params {
     /// The name of any Wikimedia project formatted like {language code}.{project name},
@@ -473,11 +885,23 @@ interface registered-users-data {
     /// The date of the last day to include, in YYYYMMDD format
     end: string
   }
-  get-metrics-registered-users-new-project-granularity-start-end: func(params: get-metrics-registered-users-new-project-granularity-start-end-params) -> result<string, string>;
+  get-metrics-registered-users-new-project-granularity-start-end: func(params: get-metrics-registered-users-new-project-granularity-start-end-params) -> result<new-registered-users, string>;
 
 }
 
 interface unique-devices-data {
+  record unique-devices {
+    items: option<list<unique-devices-items-item>>
+  }
+
+  record unique-devices-items-item {
+    access-site: option<string>,
+    devices: option<s64>,
+    granularity: option<string>,
+    project: option<string>,
+    timestamp: option<string>
+  }
+
   /// Get unique devices count per project
   record get-metrics-unique-devices-project-access-site-granularity-start-end-params {
     /// If you want to filter by project, use the domain of any Wikimedia project,
@@ -494,11 +918,49 @@ interface unique-devices-data {
     /// The timestamp of the last day/month to include, in YYYYMMDD format
     end: string
   }
-  get-metrics-unique-devices-project-access-site-granularity-start-end: func(params: get-metrics-unique-devices-project-access-site-granularity-start-end-params) -> result<string, string>;
+  get-metrics-unique-devices-project-access-site-granularity-start-end: func(params: get-metrics-unique-devices-project-access-site-granularity-start-end-params) -> result<unique-devices, string>;
 
 }
 
 interface transform {
+  record cx-mt {
+    /// the translated content
+    contents: option<string>
+  }
+
+  record cx-languagepairs {
+    /// the list of available source languages
+    source: option<list<string>>,
+    /// the list of available destination languages
+    target: option<list<string>>
+  }
+
+  record cx-list-tools {
+    /// the list of tools available for the given language pair
+    tools: option<list<string>>
+  }
+
+  record cx-list-pairs-for-tool {
+    /// JSON-encoded free-form object payload
+    data: option<string>
+  }
+
+  record cx-dict {
+    /// the original word to look up
+    source: option<string>,
+    /// the translations found
+    translations: option<list<cx-dict-translations-item>>
+  }
+
+  record cx-dict-translations-item {
+    /// extra information about the phrase
+    info: option<string>,
+    /// the translated phrase
+    phrase: option<string>,
+    /// the source dictionary used for the translation
+    sources: option<string>
+  }
+
   /// Machine-translate content
   record post-transform-html-from-from-lang-to-to-lang-params {
     /// The source language code
@@ -508,7 +970,7 @@ interface transform {
     /// The HTML content to translate
     html: string
   }
-  post-transform-html-from-from-lang-to-to-lang: func(params: post-transform-html-from-from-lang-to-to-lang-params) -> result<string, string>;
+  post-transform-html-from-from-lang-to-to-lang: func(params: post-transform-html-from-from-lang-to-to-lang-params) -> result<cx-mt, string>;
 
   /// Machine-translate content
   record post-transform-html-from-from-lang-to-to-lang-provider-params {
@@ -521,10 +983,10 @@ interface transform {
     /// The HTML content to translate
     html: string
   }
-  post-transform-html-from-from-lang-to-to-lang-provider: func(params: post-transform-html-from-from-lang-to-to-lang-provider-params) -> result<string, string>;
+  post-transform-html-from-from-lang-to-to-lang-provider: func(params: post-transform-html-from-from-lang-to-to-lang-provider-params) -> result<cx-mt, string>;
 
   /// Lists the language pairs supported by the back-end
-  get-transform-list-languagepairs: func() -> result<string, string>;
+  get-transform-list-languagepairs: func() -> result<cx-languagepairs, string>;
 
   /// Lists the tools available for a language pair
   record get-transform-list-pair-from-to-params {
@@ -533,14 +995,14 @@ interface transform {
     /// The target language code
     to: string
   }
-  get-transform-list-pair-from-to: func(params: get-transform-list-pair-from-to-params) -> result<string, string>;
+  get-transform-list-pair-from-to: func(params: get-transform-list-pair-from-to-params) -> result<cx-list-tools, string>;
 
   /// Lists the tools and language pairs available for the given tool category
   record get-transform-list-tool-tool-params {
     /// The tool category to list tools and language pairs for
     tool: string
   }
-  get-transform-list-tool-tool: func(params: get-transform-list-tool-tool-params) -> result<string, string>;
+  get-transform-list-tool-tool: func(params: get-transform-list-tool-tool-params) -> result<cx-list-pairs-for-tool, string>;
 
   /// Lists the tools and language pairs available for the given tool category
   record get-transform-list-tool-tool-from-params {
@@ -549,7 +1011,7 @@ interface transform {
     /// The source language code
     from-op: string
   }
-  get-transform-list-tool-tool-from: func(params: get-transform-list-tool-tool-from-params) -> result<string, string>;
+  get-transform-list-tool-tool-from: func(params: get-transform-list-tool-tool-from-params) -> result<cx-list-pairs-for-tool, string>;
 
   /// Lists the tools and language pairs available for the given tool category
   record get-transform-list-tool-tool-from-to-params {
@@ -560,7 +1022,7 @@ interface transform {
     /// The target language code
     to: string
   }
-  get-transform-list-tool-tool-from-to: func(params: get-transform-list-tool-tool-from-to-params) -> result<string, string>;
+  get-transform-list-tool-tool-from-to: func(params: get-transform-list-tool-tool-from-to-params) -> result<cx-list-pairs-for-tool, string>;
 
   /// Fetch the dictionary meaning of a word
   record get-transform-word-from-from-lang-to-to-lang-word-params {
@@ -571,7 +1033,7 @@ interface transform {
     /// The word to lookup
     word: string
   }
-  get-transform-word-from-from-lang-to-to-lang-word: func(params: get-transform-word-from-from-lang-to-to-lang-word-params) -> result<string, string>;
+  get-transform-word-from-from-lang-to-to-lang-word: func(params: get-transform-word-from-from-lang-to-to-lang-word-params) -> result<cx-dict, string>;
 
   /// Fetch the dictionary meaning of a word
   record get-transform-word-from-from-lang-to-to-lang-word-provider-params {
@@ -584,7 +1046,7 @@ interface transform {
     /// The dictionary provider id
     provider: string
   }
-  get-transform-word-from-from-lang-to-to-lang-word-provider: func(params: get-transform-word-from-from-lang-to-to-lang-word-provider-params) -> result<string, string>;
+  get-transform-word-from-from-lang-to-to-lang-word-provider: func(params: get-transform-word-from-from-lang-to-to-lang-word-provider-params) -> result<cx-dict, string>;
 
 }
 /// The component world: imports the secrets host capability

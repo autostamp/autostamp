@@ -6,9 +6,96 @@
 /// | Secret name | Applied to each request as |
 /// | --- | --- |
 /// | `SessionAuth` | cookie `sessionid` |
-package autostamp:zapier@0.3.0;
+package autostamp:zapier@0.5.0;
 
 interface api {
+  enum execute-response-status-enum {
+    success,
+    error,
+    empty,
+    preview,
+  }
+
+  /// This is a summary of the results given the action that was executed.
+  record execute-response {
+    /// The name of the action that was executed.
+    action-used: string,
+    /// The rest of the full results. Always returns an array of objects
+    additional-results: list<execute-response-additional-results-item>,
+    /// A hint for the assistant on what to do next.
+    assistant-hint: option<string>,
+    /// The error message if the execution failed.
+    error: option<string>,
+    /// The id of the execution log.
+    id: string,
+    /// The params we used / will use to execute the action.
+    input-params: execute-response-input-params,
+    /// A trimmed down result of the first item of the full results. Ideal for humans and language models!
+    result-op: option<execute-response-result-op>,
+    /// Human readable labels for some of the keys in the result.
+    result-field-labels: option<execute-response-result-field-labels>,
+    /// The URL to run the action or review the AI choices the AI made for input_params given instructions.
+    review-url: string,
+    /// The status of the execution.
+    status: option<execute-response-status-enum>
+  }
+
+  record execute-response-additional-results-item {
+    /// JSON-encoded free-form object payload
+    data: option<string>
+  }
+
+  /// The params we used / will use to execute the action.
+  record execute-response-input-params {
+    /// JSON-encoded free-form object payload
+    data: option<string>
+  }
+
+  /// A trimmed down result of the first item of the full results. Ideal for humans and language models!
+  record execute-response-result-op {
+    /// JSON-encoded free-form object payload
+    data: option<string>
+  }
+
+  /// Human readable labels for some of the keys in the result.
+  record execute-response-result-field-labels {
+    /// JSON-encoded free-form object payload
+    data: option<string>
+  }
+
+  record exposed-action-response-schema {
+    /// URL to configure and expose more actions.
+    configuration-link: string,
+    results: list<exposed-action-schema>
+  }
+
+  record exposed-action-schema {
+    /// Description of the action.
+    description: string,
+    /// The unique ID of the exposed action.
+    id: string,
+    /// The operation ID of the exposed action.
+    operation-id: string,
+    /// Available hint fields for the action.
+    params: exposed-action-schema-params
+  }
+
+  /// Available hint fields for the action.
+  record exposed-action-schema-params {
+    /// JSON-encoded free-form object payload
+    data: option<string>
+  }
+
+  variant get-execution-log-endpoint-error {
+    bad-request(string),
+    other(string)
+  }
+
+  variant execute-app-action-endpoint-error {
+    bad-request(string),
+    other(string)
+  }
+
   /// Check
   check: func() -> result<string, string>;
 
@@ -19,10 +106,10 @@ interface api {
   record get-execution-log-endpoint-params {
     execution-log-id: string
   }
-  get-execution-log-endpoint: func(params: get-execution-log-endpoint-params) -> result<string, string>;
+  get-execution-log-endpoint: func(params: get-execution-log-endpoint-params) -> result<execute-response, get-execution-log-endpoint-error>;
 
   /// List Exposed Actions
-  list-exposed-actions: func() -> result<string, string>;
+  list-exposed-actions: func() -> result<exposed-action-response-schema, string>;
 
   /// Execute App Action Endpoint
   record execute-app-action-endpoint-params {
@@ -32,7 +119,7 @@ interface api {
     /// If true, we will not execute the action, but will return the params of the preview.
     preview-only: option<bool>
   }
-  execute-app-action-endpoint: func(params: execute-app-action-endpoint-params) -> result<string, string>;
+  execute-app-action-endpoint: func(params: execute-app-action-endpoint-params) -> result<execute-response, execute-app-action-endpoint-error>;
 
 }
 

@@ -20,8 +20,8 @@ triggered.
 
 | Setting | Value |
 | --- | --- |
-| Package | `autostamp:nasa@0.3.0` |
-| Published version | `0.3.0+nasa-1.0.0` |
+| Package | `autostamp:nasa@0.5.0` |
+| Published version | `0.5.0+nasa-1.0.0` |
 | Tag filter | all tags |
 | Operations generated | 1 |
 | Infer API-key credentials | enabled — not triggered |

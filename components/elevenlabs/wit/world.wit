@@ -1,12 +1,78 @@
-package autostamp:elevenlabs@0.3.0;
+package autostamp:elevenlabs@0.5.0;
 
 interface history {
+  enum item-response-model-state-enum {
+    created,
+    deleted,
+    processing,
+  }
+
+  record get-history-response-model {
+    history: list<item-response-model>
+  }
+
+  record item-response-model {
+    character-count-change-from: s32,
+    character-count-change-to: s32,
+    content-type: string,
+    date-unix: s32,
+    feedback: feedback-response-model,
+    history-item-id: string,
+    request-id: string,
+    settings: item-response-model-settings,
+    state: item-response-model-state-enum,
+    text: string,
+    voice-id: string,
+    voice-name: string
+  }
+
+  record feedback-response-model {
+    audio-quality: bool,
+    emotions: bool,
+    feedback: string,
+    glitches: bool,
+    inaccurate-clone: bool,
+    other: bool,
+    review-status: option<string>,
+    thumbs-up: bool
+  }
+
+  record item-response-model-settings {
+    /// JSON-encoded free-form object payload
+    data: option<string>
+  }
+
+  variant get-generated-items-v1-history-get-error {
+    unprocessable-entity(string),
+    other(string)
+  }
+
+  variant delete-history-items-v1-history-delete-post-error {
+    unprocessable-entity(string),
+    other(string)
+  }
+
+  variant download-history-items-v1-history-download-post-error {
+    unprocessable-entity(string),
+    other(string)
+  }
+
+  variant delete-history-item-v1-history-history-item-id-delete-error {
+    unprocessable-entity(string),
+    other(string)
+  }
+
+  variant get-audio-from-history-item-v1-history-history-item-id-audio-get-error {
+    unprocessable-entity(string),
+    other(string)
+  }
+
   /// Get Generated Items
   record get-generated-items-v1-history-get-params {
     /// Your API key. This is required by most endpoints to access our API programatically. You can view your xi-api-key using the 'Profile' tab on the website.
     xi-api-key: option<string>
   }
-  get-generated-items-v1-history-get: func(params: get-generated-items-v1-history-get-params) -> result<string, string>;
+  get-generated-items-v1-history-get: func(params: get-generated-items-v1-history-get-params) -> result<get-history-response-model, get-generated-items-v1-history-get-error>;
 
   /// Delete History Items
   record delete-history-items-v1-history-delete-post-params {
@@ -15,7 +81,7 @@ interface history {
     /// A list of history items to remove, you can get IDs of history items and other metadata using the GET https://api.elevenlabs.io/v1/history endpoint.
     history-item-ids: list<string>
   }
-  delete-history-items-v1-history-delete-post: func(params: delete-history-items-v1-history-delete-post-params) -> result<string, string>;
+  delete-history-items-v1-history-delete-post: func(params: delete-history-items-v1-history-delete-post-params) -> result<string, delete-history-items-v1-history-delete-post-error>;
 
   /// Download History Items
   record download-history-items-v1-history-download-post-params {
@@ -24,7 +90,7 @@ interface history {
     /// A list of history items to download, you can get IDs of history items and other metadata using the GET https://api.elevenlabs.io/v1/history endpoint.
     history-item-ids: list<string>
   }
-  download-history-items-v1-history-download-post: func(params: download-history-items-v1-history-download-post-params) -> result<string, string>;
+  download-history-items-v1-history-download-post: func(params: download-history-items-v1-history-download-post-params) -> result<string, download-history-items-v1-history-download-post-error>;
 
   /// Delete History Item
   record delete-history-item-v1-history-history-item-id-delete-params {
@@ -33,7 +99,7 @@ interface history {
     /// Your API key. This is required by most endpoints to access our API programatically. You can view your xi-api-key using the 'Profile' tab on the website.
     xi-api-key: option<string>
   }
-  delete-history-item-v1-history-history-item-id-delete: func(params: delete-history-item-v1-history-history-item-id-delete-params) -> result<string, string>;
+  delete-history-item-v1-history-history-item-id-delete: func(params: delete-history-item-v1-history-history-item-id-delete-params) -> result<string, delete-history-item-v1-history-history-item-id-delete-error>;
 
   /// Get Audio From History Item
   record get-audio-from-history-item-v1-history-history-item-id-audio-get-params {
@@ -42,12 +108,27 @@ interface history {
     /// Your API key. This is required by most endpoints to access our API programatically. You can view your xi-api-key using the 'Profile' tab on the website.
     xi-api-key: option<string>
   }
-  get-audio-from-history-item-v1-history-history-item-id-audio-get: func(params: get-audio-from-history-item-v1-history-history-item-id-audio-get-params) -> result<string, string>;
+  get-audio-from-history-item-v1-history-history-item-id-audio-get: func(params: get-audio-from-history-item-v1-history-history-item-id-audio-get-params) -> result<string, get-audio-from-history-item-v1-history-history-item-id-audio-get-error>;
 
 }
 
 
 interface text-to-speech {
+  record voice-settings-response-model {
+    similarity-boost: f64,
+    stability: f64
+  }
+
+  variant v1-text-to-speech-voice-id-post-error {
+    unprocessable-entity(string),
+    other(string)
+  }
+
+  variant v1-text-to-speech-voice-id-stream-post-error {
+    unprocessable-entity(string),
+    other(string)
+  }
+
   /// Text To Speech
   record v1-text-to-speech-voice-id-post-params {
     /// Voice ID to be used, you can use https://api.elevenlabs.io/v1/voices to list all the available voices.
@@ -57,9 +138,9 @@ interface text-to-speech {
     /// The text that will get converted into speech. Currently only English text is supported.
     text: string,
     /// Voice settings overriding stored setttings for the given voice. They are applied only on the given TTS request.
-    voice-settings: option<string>
+    voice-settings: option<voice-settings-response-model>
   }
-  v1-text-to-speech-voice-id-post: func(params: v1-text-to-speech-voice-id-post-params) -> result<string, string>;
+  v1-text-to-speech-voice-id-post: func(params: v1-text-to-speech-voice-id-post-params) -> result<string, v1-text-to-speech-voice-id-post-error>;
 
   /// Text To Speech
   record v1-text-to-speech-voice-id-stream-post-params {
@@ -70,46 +151,247 @@ interface text-to-speech {
     /// The text that will get converted into speech. Currently only English text is supported.
     text: string,
     /// Voice settings overriding stored setttings for the given voice. They are applied only on the given TTS request.
-    voice-settings: option<string>
+    voice-settings: option<voice-settings-response-model>
   }
-  v1-text-to-speech-voice-id-stream-post: func(params: v1-text-to-speech-voice-id-stream-post-params) -> result<string, string>;
+  v1-text-to-speech-voice-id-stream-post: func(params: v1-text-to-speech-voice-id-stream-post-params) -> result<string, v1-text-to-speech-voice-id-stream-post-error>;
 
 }
 
 interface user {
+  enum subscription-response-model-currency-enum {
+    usd,
+    eur,
+  }
+
+  enum subscription-response-model-status-enum {
+    trialing,
+    active,
+    incomplete,
+    incomplete-expired,
+    past-due,
+    canceled,
+    unpaid,
+    free,
+  }
+
+  record response-model {
+    is-new-user: bool,
+    subscription: subscription-response-model,
+    xi-api-key: string
+  }
+
+  record subscription-response-model {
+    allowed-to-extend-character-limit: bool,
+    available-models: list<tts-model-response-model>,
+    can-extend-character-limit: bool,
+    can-extend-voice-limit: bool,
+    can-use-delayed-payment-methods: bool,
+    can-use-instant-voice-cloning: bool,
+    can-use-professional-voice-cloning: bool,
+    character-count: s32,
+    character-limit: s32,
+    currency: subscription-response-model-currency-enum,
+    next-character-count-reset-unix: s32,
+    professional-voice-limit: s32,
+    status: subscription-response-model-status-enum,
+    tier: string,
+    voice-limit: s32
+  }
+
+  record tts-model-response-model {
+    display-name: string,
+    model-id: string,
+    supported-language: list<language-response-model>
+  }
+
+  record language-response-model {
+    display-name: string,
+    iso-code: string
+  }
+
+  record extended-subscription-response-model {
+    allowed-to-extend-character-limit: bool,
+    available-models: list<tts-model-response-model>,
+    can-extend-character-limit: bool,
+    can-extend-voice-limit: bool,
+    can-use-delayed-payment-methods: bool,
+    can-use-instant-voice-cloning: bool,
+    can-use-professional-voice-cloning: bool,
+    character-count: s32,
+    character-limit: s32,
+    currency: subscription-response-model-currency-enum,
+    next-character-count-reset-unix: s32,
+    next-invoice: invoice-response-model,
+    professional-voice-limit: s32,
+    status: subscription-response-model-status-enum,
+    tier: string,
+    voice-limit: s32
+  }
+
+  record invoice-response-model {
+    amount-due-cents: s32,
+    next-payment-attempt-unix: s32
+  }
+
+  variant get-user-info-v1-user-get-error {
+    unprocessable-entity(string),
+    other(string)
+  }
+
+  variant get-user-subscription-info-v1-user-subscription-get-error {
+    unprocessable-entity(string),
+    other(string)
+  }
+
   /// Get User Info
   record get-user-info-v1-user-get-params {
     /// Your API key. This is required by most endpoints to access our API programatically. You can view your xi-api-key using the 'Profile' tab on the website.
     xi-api-key: option<string>
   }
-  get-user-info-v1-user-get: func(params: get-user-info-v1-user-get-params) -> result<string, string>;
+  get-user-info-v1-user-get: func(params: get-user-info-v1-user-get-params) -> result<response-model, get-user-info-v1-user-get-error>;
 
   /// Get User Subscription Info
   record get-user-subscription-info-v1-user-subscription-get-params {
     /// Your API key. This is required by most endpoints to access our API programatically. You can view your xi-api-key using the 'Profile' tab on the website.
     xi-api-key: option<string>
   }
-  get-user-subscription-info-v1-user-subscription-get: func(params: get-user-subscription-info-v1-user-subscription-get-params) -> result<string, string>;
+  get-user-subscription-info-v1-user-subscription-get: func(params: get-user-subscription-info-v1-user-subscription-get-params) -> result<extended-subscription-response-model, get-user-subscription-info-v1-user-subscription-get-error>;
 
 }
 
 interface voices {
+  enum fine-tuning-response-model-finetuning-state-enum {
+    not-started,
+    is-fine-tuning,
+    fine-tuned,
+  }
+
+  record get-voices-response-model {
+    voices: list<voice-response-model>
+  }
+
+  record voice-response-model {
+    available-for-tiers: list<string>,
+    category: string,
+    description: string,
+    fine-tuning: fine-tuning-response-model,
+    labels: voice-response-model-labels,
+    name: string,
+    preview-url: string,
+    samples: list<sample-response-model>,
+    settings: voice-settings-response-model,
+    voice-id: string
+  }
+
+  record fine-tuning-response-model {
+    fine-tuning-requested: bool,
+    finetuning-state: fine-tuning-response-model-finetuning-state-enum,
+    is-allowed-to-fine-tune: bool,
+    model-id: string,
+    slice-ids: list<string>,
+    verification-attempts: list<verification-attempt-response-model>,
+    verification-attempts-count: s32,
+    verification-failures: list<string>
+  }
+
+  record verification-attempt-response-model {
+    accepted: bool,
+    date-unix: s32,
+    levenshtein-distance: f64,
+    recording: recording-response-model,
+    similarity: f64,
+    text: string
+  }
+
+  record recording-response-model {
+    mime-type: string,
+    recording-id: string,
+    size-bytes: s32,
+    transcription: string,
+    upload-date-unix: s32
+  }
+
+  record voice-response-model-labels {
+    /// JSON-encoded free-form object payload
+    data: option<string>
+  }
+
+  record sample-response-model {
+    file-name: string,
+    hash: string,
+    mime-type: string,
+    sample-id: string,
+    size-bytes: s32
+  }
+
+  record voice-settings-response-model {
+    similarity-boost: f64,
+    stability: f64
+  }
+
+  record add-voice-response-model {
+    voice-id: string
+  }
+
+  variant get-voices-v1-voices-get-error {
+    unprocessable-entity(string),
+    other(string)
+  }
+
+  variant add-voice-v1-voices-add-post-error {
+    unprocessable-entity(string),
+    other(string)
+  }
+
+  variant get-voice-v1-voices-voice-id-get-error {
+    unprocessable-entity(string),
+    other(string)
+  }
+
+  variant delete-voice-v1-voices-voice-id-delete-error {
+    unprocessable-entity(string),
+    other(string)
+  }
+
+  variant edit-voice-v1-voices-voice-id-edit-post-error {
+    unprocessable-entity(string),
+    other(string)
+  }
+
+  variant get-voice-settings-v1-voices-voice-id-settings-get-error {
+    unprocessable-entity(string),
+    other(string)
+  }
+
+  variant edit-voice-settings-v1-voices-voice-id-settings-edit-post-error {
+    unprocessable-entity(string),
+    other(string)
+  }
+
   /// Get Voices
   record get-voices-v1-voices-get-params {
     /// Your API key. This is required by most endpoints to access our API programatically. You can view your xi-api-key using the 'Profile' tab on the website.
     xi-api-key: option<string>
   }
-  get-voices-v1-voices-get: func(params: get-voices-v1-voices-get-params) -> result<string, string>;
+  get-voices-v1-voices-get: func(params: get-voices-v1-voices-get-params) -> result<get-voices-response-model, get-voices-v1-voices-get-error>;
 
   /// Add Voice
   record add-voice-v1-voices-add-post-params {
     /// Your API key. This is required by most endpoints to access our API programatically. You can view your xi-api-key using the 'Profile' tab on the website.
-    xi-api-key: option<string>
+    xi-api-key: option<string>,
+    /// How would you describe the voice?
+    description: option<string>,
+    /// One or more audio files to clone the voice from
+    files: list<string>,
+    /// Serialized labels dictionary for the voice.
+    labels: option<string>,
+    /// The name that identifies this voice. This will be displayed in the dropdown of the website.
+    name: string
   }
-  add-voice-v1-voices-add-post: func(params: add-voice-v1-voices-add-post-params) -> result<string, string>;
+  add-voice-v1-voices-add-post: func(params: add-voice-v1-voices-add-post-params) -> result<add-voice-response-model, add-voice-v1-voices-add-post-error>;
 
   /// Get Default Voice Settings.
-  get-default-voice-settings-v1-voices-settings-default-get: func() -> result<string, string>;
+  get-default-voice-settings-v1-voices-settings-default-get: func() -> result<voice-settings-response-model, string>;
 
   /// Get Voice
   record get-voice-v1-voices-voice-id-get-params {
@@ -120,7 +402,7 @@ interface voices {
     /// Your API key. This is required by most endpoints to access our API programatically. You can view your xi-api-key using the 'Profile' tab on the website.
     xi-api-key: option<string>
   }
-  get-voice-v1-voices-voice-id-get: func(params: get-voice-v1-voices-voice-id-get-params) -> result<string, string>;
+  get-voice-v1-voices-voice-id-get: func(params: get-voice-v1-voices-voice-id-get-params) -> result<voice-response-model, get-voice-v1-voices-voice-id-get-error>;
 
   /// Delete Voice
   record delete-voice-v1-voices-voice-id-delete-params {
@@ -129,16 +411,24 @@ interface voices {
     /// Your API key. This is required by most endpoints to access our API programatically. You can view your xi-api-key using the 'Profile' tab on the website.
     xi-api-key: option<string>
   }
-  delete-voice-v1-voices-voice-id-delete: func(params: delete-voice-v1-voices-voice-id-delete-params) -> result<string, string>;
+  delete-voice-v1-voices-voice-id-delete: func(params: delete-voice-v1-voices-voice-id-delete-params) -> result<string, delete-voice-v1-voices-voice-id-delete-error>;
 
   /// Edit Voice
   record edit-voice-v1-voices-voice-id-edit-post-params {
     /// Voice ID to be used, you can use https://api.elevenlabs.io/v1/voices to list all the available voices.
     voice-id: string,
     /// Your API key. This is required by most endpoints to access our API programatically. You can view your xi-api-key using the 'Profile' tab on the website.
-    xi-api-key: option<string>
+    xi-api-key: option<string>,
+    /// How would you describe the voice?
+    description: option<string>,
+    /// Audio files to add to the voice
+    files: option<list<string>>,
+    /// Serialized labels dictionary for the voice.
+    labels: option<string>,
+    /// The name that identifies this voice. This will be displayed in the dropdown of the website.
+    name: string
   }
-  edit-voice-v1-voices-voice-id-edit-post: func(params: edit-voice-v1-voices-voice-id-edit-post-params) -> result<string, string>;
+  edit-voice-v1-voices-voice-id-edit-post: func(params: edit-voice-v1-voices-voice-id-edit-post-params) -> result<string, edit-voice-v1-voices-voice-id-edit-post-error>;
 
   /// Get Voice Settings
   record get-voice-settings-v1-voices-voice-id-settings-get-params {
@@ -147,7 +437,7 @@ interface voices {
     /// Your API key. This is required by most endpoints to access our API programatically. You can view your xi-api-key using the 'Profile' tab on the website.
     xi-api-key: option<string>
   }
-  get-voice-settings-v1-voices-voice-id-settings-get: func(params: get-voice-settings-v1-voices-voice-id-settings-get-params) -> result<string, string>;
+  get-voice-settings-v1-voices-voice-id-settings-get: func(params: get-voice-settings-v1-voices-voice-id-settings-get-params) -> result<voice-settings-response-model, get-voice-settings-v1-voices-voice-id-settings-get-error>;
 
   /// Edit Voice Settings
   record edit-voice-settings-v1-voices-voice-id-settings-edit-post-params {
@@ -155,13 +445,24 @@ interface voices {
     voice-id: string,
     /// Your API key. This is required by most endpoints to access our API programatically. You can view your xi-api-key using the 'Profile' tab on the website.
     xi-api-key: option<string>,
-    body: string
+    similarity-boost: f64,
+    stability: f64
   }
-  edit-voice-settings-v1-voices-voice-id-settings-edit-post: func(params: edit-voice-settings-v1-voices-voice-id-settings-edit-post-params) -> result<string, string>;
+  edit-voice-settings-v1-voices-voice-id-settings-edit-post: func(params: edit-voice-settings-v1-voices-voice-id-settings-edit-post-params) -> result<string, edit-voice-settings-v1-voices-voice-id-settings-edit-post-error>;
 
 }
 
 interface samples {
+  variant delete-sample-v1-voices-voice-id-samples-sample-id-delete-error {
+    unprocessable-entity(string),
+    other(string)
+  }
+
+  variant get-audio-from-sample-v1-voices-voice-id-samples-sample-id-audio-get-error {
+    unprocessable-entity(string),
+    other(string)
+  }
+
   /// Delete Sample
   record delete-sample-v1-voices-voice-id-samples-sample-id-delete-params {
     /// Voice ID to be used, you can use https://api.elevenlabs.io/v1/voices to list all the available voices.
@@ -171,7 +472,7 @@ interface samples {
     /// Your API key. This is required by most endpoints to access our API programatically. You can view your xi-api-key using the 'Profile' tab on the website.
     xi-api-key: option<string>
   }
-  delete-sample-v1-voices-voice-id-samples-sample-id-delete: func(params: delete-sample-v1-voices-voice-id-samples-sample-id-delete-params) -> result<string, string>;
+  delete-sample-v1-voices-voice-id-samples-sample-id-delete: func(params: delete-sample-v1-voices-voice-id-samples-sample-id-delete-params) -> result<string, delete-sample-v1-voices-voice-id-samples-sample-id-delete-error>;
 
   /// Get Audio From Sample
   record get-audio-from-sample-v1-voices-voice-id-samples-sample-id-audio-get-params {
@@ -182,7 +483,7 @@ interface samples {
     /// Your API key. This is required by most endpoints to access our API programatically. You can view your xi-api-key using the 'Profile' tab on the website.
     xi-api-key: option<string>
   }
-  get-audio-from-sample-v1-voices-voice-id-samples-sample-id-audio-get: func(params: get-audio-from-sample-v1-voices-voice-id-samples-sample-id-audio-get-params) -> result<string, string>;
+  get-audio-from-sample-v1-voices-voice-id-samples-sample-id-audio-get: func(params: get-audio-from-sample-v1-voices-voice-id-samples-sample-id-audio-get-params) -> result<string, get-audio-from-sample-v1-voices-voice-id-samples-sample-id-audio-get-error>;
 
 }
 /// The component world: imports the secrets host capability

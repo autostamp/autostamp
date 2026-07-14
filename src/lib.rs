@@ -32,7 +32,9 @@
 //! let package = PackageName::parse("incidentio:api@0.1.0")?;
 //! let generated = generate(&spec, &package, None)?;
 //! std::fs::write("api.wit", &generated.wit)?;
-//! std::fs::write("api.rs", &generated.rust)?;
+//! for file in &generated.rust {
+//!     std::fs::write(&file.path, &file.contents)?;
+//! }
 //! std::fs::write("Cargo.toml", &generated.cargo_toml)?;
 //! std::fs::write("README.md", &generated.readme)?;
 //! # Ok(())
@@ -62,6 +64,7 @@ mod version;
 mod wit_type;
 
 pub use generated::Generated;
+pub use generated::RustSource;
 pub use package_name::PackageName;
 
 use anyhow::{Context, Result, bail};

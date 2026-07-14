@@ -44,10 +44,15 @@ pub(crate) enum FieldLocation {
     Body,
 }
 
-/// A single operation parameter: the snake-case key it carries in the params JSON and where
-/// it belongs in the request.
+/// A single operation parameter. `snake` keys the field in the internal params JSON (and, for a
+/// path field, matches the `{snake}` placeholder in the path template); `wire` is the verbatim name
+/// the field takes on the HTTP wire (query key, header name, or body property). The two differ
+/// whenever the source name isn't already snake_case (e.g. `dryRun` → snake `dry_run`, wire
+/// `dryRun`), and let distinct inputs that share a snake key (`DateCreated`, `DateCreated<`) still
+/// travel under their true names.
 pub(crate) struct FieldSpec {
     pub(crate) snake: &'static str,
+    pub(crate) wire: &'static str,
     pub(crate) location: FieldLocation,
 }
 
@@ -71,6 +76,16 @@ pub(crate) struct AuthApply {
     pub(crate) kind: AuthKind,
 }
 
+/// The failure modes of [`dispatch`], kept structured so each generated operation can map them
+/// onto its own typed error: an `Http` failure carries the response status and body (routed to
+/// the matching error-variant case), while a `Transport` failure carries a message for the
+/// catch-all case (a secret lookup, connection, or decode failure that never produced an HTTP
+/// status).
+pub(crate) enum DispatchError {
+    Http { status: u16, body: String },
+    Transport(String),
+}
+
 /// A single API operation: HTTP method, path template (with `{snake}` placeholders), the
 /// parameter fields, and the security schemes to apply.
 pub(crate) struct OpSpec {
@@ -81,8 +96,9 @@ pub(crate) struct OpSpec {
 }
 
 /// Execute `op` with the supplied `params` (a JSON object keyed by snake-case field names)
-/// and return the response body as a string, or an error message.
-pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, String> {
+/// and return the raw 2xx response body, or a structured [`DispatchError`] the caller maps
+/// onto the operation's typed error.
+pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, DispatchError> {
     let obj = match &params {
         Value::Object(map) => Some(map),
         _ => None,
@@ -105,10 +121,10 @@ pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, String> {
                 let placeholder = format!("{{{}}}", field.snake);
                 path = path.replace(&placeholder, &percent_encode(&scalar(value)));
             }
-            FieldLocation::Query => query.push((field.snake.to_string(), scalar(value))),
-            FieldLocation::Header => headers.push((field.snake.to_string(), scalar(value))),
+            FieldLocation::Query => query.push((field.wire.to_string(), scalar(value))),
+            FieldLocation::Header => headers.push((field.wire.to_string(), scalar(value))),
             FieldLocation::Body => {
-                body.insert(field.snake.to_string(), value.clone());
+                body.insert(field.wire.to_string(), value.clone());
             }
         }
     }
@@ -116,7 +132,7 @@ pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, String> {
     // Apply each resolved security scheme, sourcing its value from wasmcloud:secrets.
     let mut cookies: Vec<String> = Vec::new();
     for apply in op.auth {
-        let secret = fetch_secret(apply.secret_key)?;
+        let secret = fetch_secret(apply.secret_key).map_err(DispatchError::Transport)?;
         match &apply.kind {
             AuthKind::Bearer => headers.push(("authorization".into(), format!("Bearer {secret}"))),
             AuthKind::Basic => {
@@ -177,17 +193,18 @@ fn fetch_secret(key: &str) -> Result<String, String> {
 }
 
 /// Build and send the outgoing request with `wstd`, returning the response body on a 2xx
-/// status. The generated guest exports are synchronous, so the async `wstd` client is driven
-/// to completion on a local reactor via `wstd::runtime::block_on`.
+/// status and a structured [`DispatchError`] otherwise. The generated guest exports are
+/// synchronous, so the async `wstd` client is driven to completion on a local reactor via
+/// `wstd::runtime::block_on`.
 fn perform(
     method: &str,
     path_with_query: &str,
     headers: &[(String, String)],
     body: &[u8],
-) -> Result<String, String> {
+) -> Result<String, DispatchError> {
     let url = join_url(crate::BASE_URL, path_with_query);
     let method = Method::from_bytes(method.as_bytes())
-        .map_err(|err| format!("invalid HTTP method `{method}`: {err}"))?;
+        .map_err(|err| DispatchError::Transport(format!("invalid HTTP method `{method}`: {err}")))?;
 
     let mut builder = Request::builder().method(method).uri(url);
     for (name, value) in headers {
@@ -199,27 +216,29 @@ fn perform(
         } else {
             Body::from(body.to_vec())
         })
-        .map_err(|err| format!("failed to build request: {err}"))?;
+        .map_err(|err| DispatchError::Transport(format!("failed to build request: {err}")))?;
 
     wstd::runtime::block_on(async move {
         let client = Client::new();
         let response = client
             .send(request)
             .await
-            .map_err(|err| format!("request failed: {err:#}"))?;
+            .map_err(|err| DispatchError::Transport(format!("request failed: {err:#}")))?;
 
         let status = response.status().as_u16();
         let mut response_body = response.into_body();
-        let bytes = response_body
-            .contents()
-            .await
-            .map_err(|err| format!("failed to read response body: {err:#}"))?;
+        let bytes = response_body.contents().await.map_err(|err| {
+            DispatchError::Transport(format!("failed to read response body: {err:#}"))
+        })?;
         let body_text = String::from_utf8_lossy(bytes).into_owned();
 
         if (200..300).contains(&status) {
             Ok(body_text)
         } else {
-            Err(format!("HTTP {status}: {body_text}"))
+            Err(DispatchError::Http {
+                status,
+                body: body_text,
+            })
         }
     })
 }
@@ -279,621 +298,9 @@ fn base64(input: &[u8]) -> String {
 }
 }
 
-use crate::runtime::{dispatch, AuthApply, AuthKind, FieldLocation, FieldSpec, OpSpec};
-use serde_json::{Map, Value};
-
-use crate::exports::autostamp::postmarkapp::domains_api as iface_domains_api;
-
-const OP_DOMAINS_API_LIST_DOMAINS: OpSpec = OpSpec {
-    method: "GET",
-    path_template: "/domains",
-    fields: &[
-        FieldSpec { snake: "x_postmark_account_token", location: FieldLocation::Header },
-        FieldSpec { snake: "count", location: FieldLocation::Query },
-        FieldSpec { snake: "offset", location: FieldLocation::Query },
-    ],
-    auth: &[
-    ],
-};
-
-const OP_DOMAINS_API_CREATE_DOMAIN: OpSpec = OpSpec {
-    method: "POST",
-    path_template: "/domains",
-    fields: &[
-        FieldSpec { snake: "x_postmark_account_token", location: FieldLocation::Header },
-        FieldSpec { snake: "name", location: FieldLocation::Body },
-        FieldSpec { snake: "return_path_domain", location: FieldLocation::Body },
-    ],
-    auth: &[
-    ],
-};
-
-const OP_DOMAINS_API_GET_DOMAIN: OpSpec = OpSpec {
-    method: "GET",
-    path_template: "/domains/{domainid}",
-    fields: &[
-        FieldSpec { snake: "x_postmark_account_token", location: FieldLocation::Header },
-        FieldSpec { snake: "domainid", location: FieldLocation::Path },
-    ],
-    auth: &[
-    ],
-};
-
-const OP_DOMAINS_API_EDIT_DOMAIN: OpSpec = OpSpec {
-    method: "PUT",
-    path_template: "/domains/{domainid}",
-    fields: &[
-        FieldSpec { snake: "x_postmark_account_token", location: FieldLocation::Header },
-        FieldSpec { snake: "domainid", location: FieldLocation::Path },
-        FieldSpec { snake: "return_path_domain", location: FieldLocation::Body },
-    ],
-    auth: &[
-    ],
-};
-
-const OP_DOMAINS_API_DELETE_DOMAIN: OpSpec = OpSpec {
-    method: "DELETE",
-    path_template: "/domains/{domainid}",
-    fields: &[
-        FieldSpec { snake: "x_postmark_account_token", location: FieldLocation::Header },
-        FieldSpec { snake: "domainid", location: FieldLocation::Path },
-    ],
-    auth: &[
-    ],
-};
-
-const OP_DOMAINS_API_ROTATE_DKIM_KEY_FOR_DOMAIN: OpSpec = OpSpec {
-    method: "POST",
-    path_template: "/domains/{domainid}/rotatedkim",
-    fields: &[
-        FieldSpec { snake: "x_postmark_account_token", location: FieldLocation::Header },
-        FieldSpec { snake: "domainid", location: FieldLocation::Path },
-    ],
-    auth: &[
-    ],
-};
-
-const OP_DOMAINS_API_REQUEST_DKIM_VERIFICATION_FOR_DOMAIN: OpSpec = OpSpec {
-    method: "PUT",
-    path_template: "/domains/{domainid}/verifydkim",
-    fields: &[
-        FieldSpec { snake: "x_postmark_account_token", location: FieldLocation::Header },
-        FieldSpec { snake: "domainid", location: FieldLocation::Path },
-    ],
-    auth: &[
-    ],
-};
-
-const OP_DOMAINS_API_REQUEST_RETURN_PATH_VERIFICATION_FOR_DOMAIN: OpSpec = OpSpec {
-    method: "PUT",
-    path_template: "/domains/{domainid}/verifyreturnpath",
-    fields: &[
-        FieldSpec { snake: "x_postmark_account_token", location: FieldLocation::Header },
-        FieldSpec { snake: "domainid", location: FieldLocation::Path },
-    ],
-    auth: &[
-    ],
-};
-
-const OP_DOMAINS_API_REQUEST_SPF_VERIFICATION_FOR_DOMAIN: OpSpec = OpSpec {
-    method: "POST",
-    path_template: "/domains/{domainid}/verifyspf",
-    fields: &[
-        FieldSpec { snake: "x_postmark_account_token", location: FieldLocation::Header },
-        FieldSpec { snake: "domainid", location: FieldLocation::Path },
-    ],
-    auth: &[
-    ],
-};
-
-fn iface_domains_api__list_domains_params__to_json(p: &iface_domains_api::ListDomainsParams) -> Value {
-    let mut m = Map::new();
-    m.insert("x_postmark_account_token".into(), Value::String((&p.x_postmark_account_token).clone()));
-    m.insert("count".into(), Value::Number(serde_json::Number::from(*(&p.count))));
-    m.insert("offset".into(), Value::Number(serde_json::Number::from(*(&p.offset))));
-    Value::Object(m)
-}
-
-fn iface_domains_api__create_domain_params__to_json(p: &iface_domains_api::CreateDomainParams) -> Value {
-    let mut m = Map::new();
-    m.insert("x_postmark_account_token".into(), Value::String((&p.x_postmark_account_token).clone()));
-    m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("return_path_domain".into(), match (&p.return_path_domain) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_domains_api__get_domain_params__to_json(p: &iface_domains_api::GetDomainParams) -> Value {
-    let mut m = Map::new();
-    m.insert("x_postmark_account_token".into(), Value::String((&p.x_postmark_account_token).clone()));
-    m.insert("domainid".into(), Value::String((&p.domainid).clone()));
-    Value::Object(m)
-}
-
-fn iface_domains_api__edit_domain_params__to_json(p: &iface_domains_api::EditDomainParams) -> Value {
-    let mut m = Map::new();
-    m.insert("x_postmark_account_token".into(), Value::String((&p.x_postmark_account_token).clone()));
-    m.insert("domainid".into(), Value::String((&p.domainid).clone()));
-    m.insert("return_path_domain".into(), match (&p.return_path_domain) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_domains_api__delete_domain_params__to_json(p: &iface_domains_api::DeleteDomainParams) -> Value {
-    let mut m = Map::new();
-    m.insert("x_postmark_account_token".into(), Value::String((&p.x_postmark_account_token).clone()));
-    m.insert("domainid".into(), Value::String((&p.domainid).clone()));
-    Value::Object(m)
-}
-
-fn iface_domains_api__rotate_dkim_key_for_domain_params__to_json(p: &iface_domains_api::RotateDkimKeyForDomainParams) -> Value {
-    let mut m = Map::new();
-    m.insert("x_postmark_account_token".into(), Value::String((&p.x_postmark_account_token).clone()));
-    m.insert("domainid".into(), Value::String((&p.domainid).clone()));
-    Value::Object(m)
-}
-
-fn iface_domains_api__request_dkim_verification_for_domain_params__to_json(p: &iface_domains_api::RequestDkimVerificationForDomainParams) -> Value {
-    let mut m = Map::new();
-    m.insert("x_postmark_account_token".into(), Value::String((&p.x_postmark_account_token).clone()));
-    m.insert("domainid".into(), Value::String((&p.domainid).clone()));
-    Value::Object(m)
-}
-
-fn iface_domains_api__request_return_path_verification_for_domain_params__to_json(p: &iface_domains_api::RequestReturnPathVerificationForDomainParams) -> Value {
-    let mut m = Map::new();
-    m.insert("x_postmark_account_token".into(), Value::String((&p.x_postmark_account_token).clone()));
-    m.insert("domainid".into(), Value::String((&p.domainid).clone()));
-    Value::Object(m)
-}
-
-fn iface_domains_api__request_spf_verification_for_domain_params__to_json(p: &iface_domains_api::RequestSpfVerificationForDomainParams) -> Value {
-    let mut m = Map::new();
-    m.insert("x_postmark_account_token".into(), Value::String((&p.x_postmark_account_token).clone()));
-    m.insert("domainid".into(), Value::String((&p.domainid).clone()));
-    Value::Object(m)
-}
-
-impl iface_domains_api::Guest for crate::Component {
-    fn list_domains(params: iface_domains_api::ListDomainsParams) -> Result<String, String> {
-        let json = iface_domains_api__list_domains_params__to_json(&params);
-        dispatch(&OP_DOMAINS_API_LIST_DOMAINS, json)
-    }
-    fn create_domain(params: iface_domains_api::CreateDomainParams) -> Result<String, String> {
-        let json = iface_domains_api__create_domain_params__to_json(&params);
-        dispatch(&OP_DOMAINS_API_CREATE_DOMAIN, json)
-    }
-    fn get_domain(params: iface_domains_api::GetDomainParams) -> Result<String, String> {
-        let json = iface_domains_api__get_domain_params__to_json(&params);
-        dispatch(&OP_DOMAINS_API_GET_DOMAIN, json)
-    }
-    fn edit_domain(params: iface_domains_api::EditDomainParams) -> Result<String, String> {
-        let json = iface_domains_api__edit_domain_params__to_json(&params);
-        dispatch(&OP_DOMAINS_API_EDIT_DOMAIN, json)
-    }
-    fn delete_domain(params: iface_domains_api::DeleteDomainParams) -> Result<String, String> {
-        let json = iface_domains_api__delete_domain_params__to_json(&params);
-        dispatch(&OP_DOMAINS_API_DELETE_DOMAIN, json)
-    }
-    fn rotate_dkim_key_for_domain(params: iface_domains_api::RotateDkimKeyForDomainParams) -> Result<String, String> {
-        let json = iface_domains_api__rotate_dkim_key_for_domain_params__to_json(&params);
-        dispatch(&OP_DOMAINS_API_ROTATE_DKIM_KEY_FOR_DOMAIN, json)
-    }
-    fn request_dkim_verification_for_domain(params: iface_domains_api::RequestDkimVerificationForDomainParams) -> Result<String, String> {
-        let json = iface_domains_api__request_dkim_verification_for_domain_params__to_json(&params);
-        dispatch(&OP_DOMAINS_API_REQUEST_DKIM_VERIFICATION_FOR_DOMAIN, json)
-    }
-    fn request_return_path_verification_for_domain(params: iface_domains_api::RequestReturnPathVerificationForDomainParams) -> Result<String, String> {
-        let json = iface_domains_api__request_return_path_verification_for_domain_params__to_json(&params);
-        dispatch(&OP_DOMAINS_API_REQUEST_RETURN_PATH_VERIFICATION_FOR_DOMAIN, json)
-    }
-    fn request_spf_verification_for_domain(params: iface_domains_api::RequestSpfVerificationForDomainParams) -> Result<String, String> {
-        let json = iface_domains_api__request_spf_verification_for_domain_params__to_json(&params);
-        dispatch(&OP_DOMAINS_API_REQUEST_SPF_VERIFICATION_FOR_DOMAIN, json)
-    }
-}
-use crate::exports::autostamp::postmarkapp::sender_signatures_api as iface_sender_signatures_api;
-
-const OP_SENDER_SIGNATURES_API_LIST_SENDER_SIGNATURES: OpSpec = OpSpec {
-    method: "GET",
-    path_template: "/senders",
-    fields: &[
-        FieldSpec { snake: "x_postmark_account_token", location: FieldLocation::Header },
-        FieldSpec { snake: "count", location: FieldLocation::Query },
-        FieldSpec { snake: "offset", location: FieldLocation::Query },
-    ],
-    auth: &[
-    ],
-};
-
-const OP_SENDER_SIGNATURES_API_CREATE_SENDER_SIGNATURE: OpSpec = OpSpec {
-    method: "POST",
-    path_template: "/senders",
-    fields: &[
-        FieldSpec { snake: "x_postmark_account_token", location: FieldLocation::Header },
-        FieldSpec { snake: "from_email", location: FieldLocation::Body },
-        FieldSpec { snake: "name", location: FieldLocation::Body },
-        FieldSpec { snake: "reply_to_email", location: FieldLocation::Body },
-        FieldSpec { snake: "return_path_domain", location: FieldLocation::Body },
-    ],
-    auth: &[
-    ],
-};
-
-const OP_SENDER_SIGNATURES_API_GET_SENDER_SIGNATURE: OpSpec = OpSpec {
-    method: "GET",
-    path_template: "/senders/{signatureid}",
-    fields: &[
-        FieldSpec { snake: "x_postmark_account_token", location: FieldLocation::Header },
-        FieldSpec { snake: "signatureid", location: FieldLocation::Path },
-    ],
-    auth: &[
-    ],
-};
-
-const OP_SENDER_SIGNATURES_API_EDIT_SENDER_SIGNATURE: OpSpec = OpSpec {
-    method: "PUT",
-    path_template: "/senders/{signatureid}",
-    fields: &[
-        FieldSpec { snake: "x_postmark_account_token", location: FieldLocation::Header },
-        FieldSpec { snake: "signatureid", location: FieldLocation::Path },
-        FieldSpec { snake: "name", location: FieldLocation::Body },
-        FieldSpec { snake: "reply_to_email", location: FieldLocation::Body },
-        FieldSpec { snake: "return_path_domain", location: FieldLocation::Body },
-    ],
-    auth: &[
-    ],
-};
-
-const OP_SENDER_SIGNATURES_API_DELETE_SENDER_SIGNATURE: OpSpec = OpSpec {
-    method: "DELETE",
-    path_template: "/senders/{signatureid}",
-    fields: &[
-        FieldSpec { snake: "x_postmark_account_token", location: FieldLocation::Header },
-        FieldSpec { snake: "signatureid", location: FieldLocation::Path },
-    ],
-    auth: &[
-    ],
-};
-
-const OP_SENDER_SIGNATURES_API_REQUEST_NEW_DKIM_KEY_FOR_SENDER_SIGNATURE: OpSpec = OpSpec {
-    method: "POST",
-    path_template: "/senders/{signatureid}/requestnewdkim",
-    fields: &[
-        FieldSpec { snake: "x_postmark_account_token", location: FieldLocation::Header },
-        FieldSpec { snake: "signatureid", location: FieldLocation::Path },
-    ],
-    auth: &[
-    ],
-};
-
-const OP_SENDER_SIGNATURES_API_RESEND_SENDER_SIGNATURE_CONFIRMATION_EMAIL: OpSpec = OpSpec {
-    method: "POST",
-    path_template: "/senders/{signatureid}/resend",
-    fields: &[
-        FieldSpec { snake: "x_postmark_account_token", location: FieldLocation::Header },
-        FieldSpec { snake: "signatureid", location: FieldLocation::Path },
-    ],
-    auth: &[
-    ],
-};
-
-const OP_SENDER_SIGNATURES_API_REQUEST_SPF_VERIFICATION_FOR_SENDER_SIGNATURE: OpSpec = OpSpec {
-    method: "POST",
-    path_template: "/senders/{signatureid}/verifyspf",
-    fields: &[
-        FieldSpec { snake: "x_postmark_account_token", location: FieldLocation::Header },
-        FieldSpec { snake: "signatureid", location: FieldLocation::Path },
-    ],
-    auth: &[
-    ],
-};
-
-fn iface_sender_signatures_api__list_sender_signatures_params__to_json(p: &iface_sender_signatures_api::ListSenderSignaturesParams) -> Value {
-    let mut m = Map::new();
-    m.insert("x_postmark_account_token".into(), Value::String((&p.x_postmark_account_token).clone()));
-    m.insert("count".into(), Value::Number(serde_json::Number::from(*(&p.count))));
-    m.insert("offset".into(), Value::Number(serde_json::Number::from(*(&p.offset))));
-    Value::Object(m)
-}
-
-fn iface_sender_signatures_api__create_sender_signature_params__to_json(p: &iface_sender_signatures_api::CreateSenderSignatureParams) -> Value {
-    let mut m = Map::new();
-    m.insert("x_postmark_account_token".into(), Value::String((&p.x_postmark_account_token).clone()));
-    m.insert("from_email".into(), match (&p.from_email) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("reply_to_email".into(), match (&p.reply_to_email) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("return_path_domain".into(), match (&p.return_path_domain) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_sender_signatures_api__get_sender_signature_params__to_json(p: &iface_sender_signatures_api::GetSenderSignatureParams) -> Value {
-    let mut m = Map::new();
-    m.insert("x_postmark_account_token".into(), Value::String((&p.x_postmark_account_token).clone()));
-    m.insert("signatureid".into(), Value::String((&p.signatureid).clone()));
-    Value::Object(m)
-}
-
-fn iface_sender_signatures_api__edit_sender_signature_params__to_json(p: &iface_sender_signatures_api::EditSenderSignatureParams) -> Value {
-    let mut m = Map::new();
-    m.insert("x_postmark_account_token".into(), Value::String((&p.x_postmark_account_token).clone()));
-    m.insert("signatureid".into(), Value::String((&p.signatureid).clone()));
-    m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("reply_to_email".into(), match (&p.reply_to_email) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("return_path_domain".into(), match (&p.return_path_domain) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_sender_signatures_api__delete_sender_signature_params__to_json(p: &iface_sender_signatures_api::DeleteSenderSignatureParams) -> Value {
-    let mut m = Map::new();
-    m.insert("x_postmark_account_token".into(), Value::String((&p.x_postmark_account_token).clone()));
-    m.insert("signatureid".into(), Value::String((&p.signatureid).clone()));
-    Value::Object(m)
-}
-
-fn iface_sender_signatures_api__request_new_dkim_key_for_sender_signature_params__to_json(p: &iface_sender_signatures_api::RequestNewDkimKeyForSenderSignatureParams) -> Value {
-    let mut m = Map::new();
-    m.insert("x_postmark_account_token".into(), Value::String((&p.x_postmark_account_token).clone()));
-    m.insert("signatureid".into(), Value::String((&p.signatureid).clone()));
-    Value::Object(m)
-}
-
-fn iface_sender_signatures_api__resend_sender_signature_confirmation_email_params__to_json(p: &iface_sender_signatures_api::ResendSenderSignatureConfirmationEmailParams) -> Value {
-    let mut m = Map::new();
-    m.insert("x_postmark_account_token".into(), Value::String((&p.x_postmark_account_token).clone()));
-    m.insert("signatureid".into(), Value::String((&p.signatureid).clone()));
-    Value::Object(m)
-}
-
-fn iface_sender_signatures_api__request_spf_verification_for_sender_signature_params__to_json(p: &iface_sender_signatures_api::RequestSpfVerificationForSenderSignatureParams) -> Value {
-    let mut m = Map::new();
-    m.insert("x_postmark_account_token".into(), Value::String((&p.x_postmark_account_token).clone()));
-    m.insert("signatureid".into(), Value::String((&p.signatureid).clone()));
-    Value::Object(m)
-}
-
-impl iface_sender_signatures_api::Guest for crate::Component {
-    fn list_sender_signatures(params: iface_sender_signatures_api::ListSenderSignaturesParams) -> Result<String, String> {
-        let json = iface_sender_signatures_api__list_sender_signatures_params__to_json(&params);
-        dispatch(&OP_SENDER_SIGNATURES_API_LIST_SENDER_SIGNATURES, json)
-    }
-    fn create_sender_signature(params: iface_sender_signatures_api::CreateSenderSignatureParams) -> Result<String, String> {
-        let json = iface_sender_signatures_api__create_sender_signature_params__to_json(&params);
-        dispatch(&OP_SENDER_SIGNATURES_API_CREATE_SENDER_SIGNATURE, json)
-    }
-    fn get_sender_signature(params: iface_sender_signatures_api::GetSenderSignatureParams) -> Result<String, String> {
-        let json = iface_sender_signatures_api__get_sender_signature_params__to_json(&params);
-        dispatch(&OP_SENDER_SIGNATURES_API_GET_SENDER_SIGNATURE, json)
-    }
-    fn edit_sender_signature(params: iface_sender_signatures_api::EditSenderSignatureParams) -> Result<String, String> {
-        let json = iface_sender_signatures_api__edit_sender_signature_params__to_json(&params);
-        dispatch(&OP_SENDER_SIGNATURES_API_EDIT_SENDER_SIGNATURE, json)
-    }
-    fn delete_sender_signature(params: iface_sender_signatures_api::DeleteSenderSignatureParams) -> Result<String, String> {
-        let json = iface_sender_signatures_api__delete_sender_signature_params__to_json(&params);
-        dispatch(&OP_SENDER_SIGNATURES_API_DELETE_SENDER_SIGNATURE, json)
-    }
-    fn request_new_dkim_key_for_sender_signature(params: iface_sender_signatures_api::RequestNewDkimKeyForSenderSignatureParams) -> Result<String, String> {
-        let json = iface_sender_signatures_api__request_new_dkim_key_for_sender_signature_params__to_json(&params);
-        dispatch(&OP_SENDER_SIGNATURES_API_REQUEST_NEW_DKIM_KEY_FOR_SENDER_SIGNATURE, json)
-    }
-    fn resend_sender_signature_confirmation_email(params: iface_sender_signatures_api::ResendSenderSignatureConfirmationEmailParams) -> Result<String, String> {
-        let json = iface_sender_signatures_api__resend_sender_signature_confirmation_email_params__to_json(&params);
-        dispatch(&OP_SENDER_SIGNATURES_API_RESEND_SENDER_SIGNATURE_CONFIRMATION_EMAIL, json)
-    }
-    fn request_spf_verification_for_sender_signature(params: iface_sender_signatures_api::RequestSpfVerificationForSenderSignatureParams) -> Result<String, String> {
-        let json = iface_sender_signatures_api__request_spf_verification_for_sender_signature_params__to_json(&params);
-        dispatch(&OP_SENDER_SIGNATURES_API_REQUEST_SPF_VERIFICATION_FOR_SENDER_SIGNATURE, json)
-    }
-}
-use crate::exports::autostamp::postmarkapp::server_management_api as iface_server_management_api;
-
-const OP_SERVER_MANAGEMENT_API_LIST_SERVERS: OpSpec = OpSpec {
-    method: "GET",
-    path_template: "/servers",
-    fields: &[
-        FieldSpec { snake: "x_postmark_account_token", location: FieldLocation::Header },
-        FieldSpec { snake: "count", location: FieldLocation::Query },
-        FieldSpec { snake: "offset", location: FieldLocation::Query },
-        FieldSpec { snake: "name", location: FieldLocation::Query },
-    ],
-    auth: &[
-    ],
-};
-
-const OP_SERVER_MANAGEMENT_API_CREATE_SERVER: OpSpec = OpSpec {
-    method: "POST",
-    path_template: "/servers",
-    fields: &[
-        FieldSpec { snake: "x_postmark_account_token", location: FieldLocation::Header },
-        FieldSpec { snake: "bounce_hook_url", location: FieldLocation::Body },
-        FieldSpec { snake: "click_hook_url", location: FieldLocation::Body },
-        FieldSpec { snake: "color", location: FieldLocation::Body },
-        FieldSpec { snake: "delivery_hook_url", location: FieldLocation::Body },
-        FieldSpec { snake: "inbound_domain", location: FieldLocation::Body },
-        FieldSpec { snake: "inbound_hook_url", location: FieldLocation::Body },
-        FieldSpec { snake: "inbound_spam_threshold", location: FieldLocation::Body },
-        FieldSpec { snake: "name", location: FieldLocation::Body },
-        FieldSpec { snake: "open_hook_url", location: FieldLocation::Body },
-        FieldSpec { snake: "post_first_open_only", location: FieldLocation::Body },
-        FieldSpec { snake: "raw_email_enabled", location: FieldLocation::Body },
-        FieldSpec { snake: "smtp_api_activated", location: FieldLocation::Body },
-        FieldSpec { snake: "track_links", location: FieldLocation::Body },
-        FieldSpec { snake: "track_opens", location: FieldLocation::Body },
-    ],
-    auth: &[
-    ],
-};
-
-const OP_SERVER_MANAGEMENT_API_GET_SERVER_INFORMATION: OpSpec = OpSpec {
-    method: "GET",
-    path_template: "/servers/{serverid}",
-    fields: &[
-        FieldSpec { snake: "x_postmark_account_token", location: FieldLocation::Header },
-        FieldSpec { snake: "serverid", location: FieldLocation::Path },
-    ],
-    auth: &[
-    ],
-};
-
-const OP_SERVER_MANAGEMENT_API_EDIT_SERVER_INFORMATION: OpSpec = OpSpec {
-    method: "PUT",
-    path_template: "/servers/{serverid}",
-    fields: &[
-        FieldSpec { snake: "x_postmark_account_token", location: FieldLocation::Header },
-        FieldSpec { snake: "serverid", location: FieldLocation::Path },
-        FieldSpec { snake: "bounce_hook_url", location: FieldLocation::Body },
-        FieldSpec { snake: "click_hook_url", location: FieldLocation::Body },
-        FieldSpec { snake: "color", location: FieldLocation::Body },
-        FieldSpec { snake: "delivery_hook_url", location: FieldLocation::Body },
-        FieldSpec { snake: "inbound_domain", location: FieldLocation::Body },
-        FieldSpec { snake: "inbound_hook_url", location: FieldLocation::Body },
-        FieldSpec { snake: "inbound_spam_threshold", location: FieldLocation::Body },
-        FieldSpec { snake: "name", location: FieldLocation::Body },
-        FieldSpec { snake: "open_hook_url", location: FieldLocation::Body },
-        FieldSpec { snake: "post_first_open_only", location: FieldLocation::Body },
-        FieldSpec { snake: "raw_email_enabled", location: FieldLocation::Body },
-        FieldSpec { snake: "smtp_api_activated", location: FieldLocation::Body },
-        FieldSpec { snake: "track_links", location: FieldLocation::Body },
-        FieldSpec { snake: "track_opens", location: FieldLocation::Body },
-    ],
-    auth: &[
-    ],
-};
-
-const OP_SERVER_MANAGEMENT_API_DELETE_SERVER: OpSpec = OpSpec {
-    method: "DELETE",
-    path_template: "/servers/{serverid}",
-    fields: &[
-        FieldSpec { snake: "x_postmark_account_token", location: FieldLocation::Header },
-        FieldSpec { snake: "serverid", location: FieldLocation::Path },
-    ],
-    auth: &[
-    ],
-};
-
-fn iface_server_management_api__create_server_payload_track_links_enum__to_str(e: &iface_server_management_api::CreateServerPayloadTrackLinksEnum) -> &'static str {
-    match e {
-        iface_server_management_api::CreateServerPayloadTrackLinksEnum::None => "None",
-        iface_server_management_api::CreateServerPayloadTrackLinksEnum::HtmlAndTextTracking => "HtmlAndTextTracking",
-        iface_server_management_api::CreateServerPayloadTrackLinksEnum::HtmlOnlyTracking => "HtmlOnlyTracking",
-        iface_server_management_api::CreateServerPayloadTrackLinksEnum::TextOnlyTracking => "TextOnlyTracking",
-    }
-}
-
-fn iface_server_management_api__list_servers_params__to_json(p: &iface_server_management_api::ListServersParams) -> Value {
-    let mut m = Map::new();
-    m.insert("x_postmark_account_token".into(), Value::String((&p.x_postmark_account_token).clone()));
-    m.insert("count".into(), Value::Number(serde_json::Number::from(*(&p.count))));
-    m.insert("offset".into(), Value::Number(serde_json::Number::from(*(&p.offset))));
-    m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_server_management_api__create_server_params__to_json(p: &iface_server_management_api::CreateServerParams) -> Value {
-    let mut m = Map::new();
-    m.insert("x_postmark_account_token".into(), Value::String((&p.x_postmark_account_token).clone()));
-    m.insert("bounce_hook_url".into(), match (&p.bounce_hook_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("click_hook_url".into(), match (&p.click_hook_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("color".into(), match (&p.color) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("delivery_hook_url".into(), match (&p.delivery_hook_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("inbound_domain".into(), match (&p.inbound_domain) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("inbound_hook_url".into(), match (&p.inbound_hook_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("inbound_spam_threshold".into(), match (&p.inbound_spam_threshold) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("open_hook_url".into(), match (&p.open_hook_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("post_first_open_only".into(), match (&p.post_first_open_only) { Some(v) => Value::Bool(*(v)), None => Value::Null });
-    m.insert("raw_email_enabled".into(), match (&p.raw_email_enabled) { Some(v) => Value::Bool(*(v)), None => Value::Null });
-    m.insert("smtp_api_activated".into(), match (&p.smtp_api_activated) { Some(v) => Value::Bool(*(v)), None => Value::Null });
-    m.insert("track_links".into(), match (&p.track_links) { Some(v) => Value::String(iface_server_management_api__create_server_payload_track_links_enum__to_str(v).into()), None => Value::Null });
-    m.insert("track_opens".into(), match (&p.track_opens) { Some(v) => Value::Bool(*(v)), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_server_management_api__get_server_information_params__to_json(p: &iface_server_management_api::GetServerInformationParams) -> Value {
-    let mut m = Map::new();
-    m.insert("x_postmark_account_token".into(), Value::String((&p.x_postmark_account_token).clone()));
-    m.insert("serverid".into(), Value::String((&p.serverid).clone()));
-    Value::Object(m)
-}
-
-fn iface_server_management_api__edit_server_information_params__to_json(p: &iface_server_management_api::EditServerInformationParams) -> Value {
-    let mut m = Map::new();
-    m.insert("x_postmark_account_token".into(), Value::String((&p.x_postmark_account_token).clone()));
-    m.insert("serverid".into(), Value::String((&p.serverid).clone()));
-    m.insert("bounce_hook_url".into(), match (&p.bounce_hook_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("click_hook_url".into(), match (&p.click_hook_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("color".into(), match (&p.color) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("delivery_hook_url".into(), match (&p.delivery_hook_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("inbound_domain".into(), match (&p.inbound_domain) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("inbound_hook_url".into(), match (&p.inbound_hook_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("inbound_spam_threshold".into(), match (&p.inbound_spam_threshold) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("open_hook_url".into(), match (&p.open_hook_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("post_first_open_only".into(), match (&p.post_first_open_only) { Some(v) => Value::Bool(*(v)), None => Value::Null });
-    m.insert("raw_email_enabled".into(), match (&p.raw_email_enabled) { Some(v) => Value::Bool(*(v)), None => Value::Null });
-    m.insert("smtp_api_activated".into(), match (&p.smtp_api_activated) { Some(v) => Value::Bool(*(v)), None => Value::Null });
-    m.insert("track_links".into(), match (&p.track_links) { Some(v) => Value::String(iface_server_management_api__create_server_payload_track_links_enum__to_str(v).into()), None => Value::Null });
-    m.insert("track_opens".into(), match (&p.track_opens) { Some(v) => Value::Bool(*(v)), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_server_management_api__delete_server_params__to_json(p: &iface_server_management_api::DeleteServerParams) -> Value {
-    let mut m = Map::new();
-    m.insert("x_postmark_account_token".into(), Value::String((&p.x_postmark_account_token).clone()));
-    m.insert("serverid".into(), Value::String((&p.serverid).clone()));
-    Value::Object(m)
-}
-
-impl iface_server_management_api::Guest for crate::Component {
-    fn list_servers(params: iface_server_management_api::ListServersParams) -> Result<String, String> {
-        let json = iface_server_management_api__list_servers_params__to_json(&params);
-        dispatch(&OP_SERVER_MANAGEMENT_API_LIST_SERVERS, json)
-    }
-    fn create_server(params: iface_server_management_api::CreateServerParams) -> Result<String, String> {
-        let json = iface_server_management_api__create_server_params__to_json(&params);
-        dispatch(&OP_SERVER_MANAGEMENT_API_CREATE_SERVER, json)
-    }
-    fn get_server_information(params: iface_server_management_api::GetServerInformationParams) -> Result<String, String> {
-        let json = iface_server_management_api__get_server_information_params__to_json(&params);
-        dispatch(&OP_SERVER_MANAGEMENT_API_GET_SERVER_INFORMATION, json)
-    }
-    fn edit_server_information(params: iface_server_management_api::EditServerInformationParams) -> Result<String, String> {
-        let json = iface_server_management_api__edit_server_information_params__to_json(&params);
-        dispatch(&OP_SERVER_MANAGEMENT_API_EDIT_SERVER_INFORMATION, json)
-    }
-    fn delete_server(params: iface_server_management_api::DeleteServerParams) -> Result<String, String> {
-        let json = iface_server_management_api__delete_server_params__to_json(&params);
-        dispatch(&OP_SERVER_MANAGEMENT_API_DELETE_SERVER, json)
-    }
-}
-use crate::exports::autostamp::postmarkapp::templates_api as iface_templates_api;
-
-const OP_TEMPLATES_API_PUSH_TEMPLATES: OpSpec = OpSpec {
-    method: "PUT",
-    path_template: "/templates/push",
-    fields: &[
-        FieldSpec { snake: "x_postmark_account_token", location: FieldLocation::Header },
-        FieldSpec { snake: "destination_server_id", location: FieldLocation::Body },
-        FieldSpec { snake: "perform_changes", location: FieldLocation::Body },
-        FieldSpec { snake: "source_server_id", location: FieldLocation::Body },
-    ],
-    auth: &[
-    ],
-};
-
-fn iface_templates_api__push_templates_params__to_json(p: &iface_templates_api::PushTemplatesParams) -> Value {
-    let mut m = Map::new();
-    m.insert("x_postmark_account_token".into(), Value::String((&p.x_postmark_account_token).clone()));
-    m.insert("destination_server_id".into(), match (&p.destination_server_id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    m.insert("perform_changes".into(), match (&p.perform_changes) { Some(v) => Value::Bool(*(v)), None => Value::Null });
-    m.insert("source_server_id".into(), match (&p.source_server_id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    Value::Object(m)
-}
-
-impl iface_templates_api::Guest for crate::Component {
-    fn push_templates(params: iface_templates_api::PushTemplatesParams) -> Result<String, String> {
-        let json = iface_templates_api__push_templates_params__to_json(&params);
-        dispatch(&OP_TEMPLATES_API_PUSH_TEMPLATES, json)
-    }
-}
+mod iface_domains_api;
+mod iface_sender_signatures_api;
+mod iface_server_management_api;
+mod iface_templates_api;
 
 export!(Component);

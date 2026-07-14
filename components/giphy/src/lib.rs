@@ -44,10 +44,15 @@ pub(crate) enum FieldLocation {
     Body,
 }
 
-/// A single operation parameter: the snake-case key it carries in the params JSON and where
-/// it belongs in the request.
+/// A single operation parameter. `snake` keys the field in the internal params JSON (and, for a
+/// path field, matches the `{snake}` placeholder in the path template); `wire` is the verbatim name
+/// the field takes on the HTTP wire (query key, header name, or body property). The two differ
+/// whenever the source name isn't already snake_case (e.g. `dryRun` → snake `dry_run`, wire
+/// `dryRun`), and let distinct inputs that share a snake key (`DateCreated`, `DateCreated<`) still
+/// travel under their true names.
 pub(crate) struct FieldSpec {
     pub(crate) snake: &'static str,
+    pub(crate) wire: &'static str,
     pub(crate) location: FieldLocation,
 }
 
@@ -71,6 +76,16 @@ pub(crate) struct AuthApply {
     pub(crate) kind: AuthKind,
 }
 
+/// The failure modes of [`dispatch`], kept structured so each generated operation can map them
+/// onto its own typed error: an `Http` failure carries the response status and body (routed to
+/// the matching error-variant case), while a `Transport` failure carries a message for the
+/// catch-all case (a secret lookup, connection, or decode failure that never produced an HTTP
+/// status).
+pub(crate) enum DispatchError {
+    Http { status: u16, body: String },
+    Transport(String),
+}
+
 /// A single API operation: HTTP method, path template (with `{snake}` placeholders), the
 /// parameter fields, and the security schemes to apply.
 pub(crate) struct OpSpec {
@@ -81,8 +96,9 @@ pub(crate) struct OpSpec {
 }
 
 /// Execute `op` with the supplied `params` (a JSON object keyed by snake-case field names)
-/// and return the response body as a string, or an error message.
-pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, String> {
+/// and return the raw 2xx response body, or a structured [`DispatchError`] the caller maps
+/// onto the operation's typed error.
+pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, DispatchError> {
     let obj = match &params {
         Value::Object(map) => Some(map),
         _ => None,
@@ -105,10 +121,10 @@ pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, String> {
                 let placeholder = format!("{{{}}}", field.snake);
                 path = path.replace(&placeholder, &percent_encode(&scalar(value)));
             }
-            FieldLocation::Query => query.push((field.snake.to_string(), scalar(value))),
-            FieldLocation::Header => headers.push((field.snake.to_string(), scalar(value))),
+            FieldLocation::Query => query.push((field.wire.to_string(), scalar(value))),
+            FieldLocation::Header => headers.push((field.wire.to_string(), scalar(value))),
             FieldLocation::Body => {
-                body.insert(field.snake.to_string(), value.clone());
+                body.insert(field.wire.to_string(), value.clone());
             }
         }
     }
@@ -116,7 +132,7 @@ pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, String> {
     // Apply each resolved security scheme, sourcing its value from wasmcloud:secrets.
     let mut cookies: Vec<String> = Vec::new();
     for apply in op.auth {
-        let secret = fetch_secret(apply.secret_key)?;
+        let secret = fetch_secret(apply.secret_key).map_err(DispatchError::Transport)?;
         match &apply.kind {
             AuthKind::Bearer => headers.push(("authorization".into(), format!("Bearer {secret}"))),
             AuthKind::Basic => {
@@ -177,17 +193,18 @@ fn fetch_secret(key: &str) -> Result<String, String> {
 }
 
 /// Build and send the outgoing request with `wstd`, returning the response body on a 2xx
-/// status. The generated guest exports are synchronous, so the async `wstd` client is driven
-/// to completion on a local reactor via `wstd::runtime::block_on`.
+/// status and a structured [`DispatchError`] otherwise. The generated guest exports are
+/// synchronous, so the async `wstd` client is driven to completion on a local reactor via
+/// `wstd::runtime::block_on`.
 fn perform(
     method: &str,
     path_with_query: &str,
     headers: &[(String, String)],
     body: &[u8],
-) -> Result<String, String> {
+) -> Result<String, DispatchError> {
     let url = join_url(crate::BASE_URL, path_with_query);
     let method = Method::from_bytes(method.as_bytes())
-        .map_err(|err| format!("invalid HTTP method `{method}`: {err}"))?;
+        .map_err(|err| DispatchError::Transport(format!("invalid HTTP method `{method}`: {err}")))?;
 
     let mut builder = Request::builder().method(method).uri(url);
     for (name, value) in headers {
@@ -199,27 +216,29 @@ fn perform(
         } else {
             Body::from(body.to_vec())
         })
-        .map_err(|err| format!("failed to build request: {err}"))?;
+        .map_err(|err| DispatchError::Transport(format!("failed to build request: {err}")))?;
 
     wstd::runtime::block_on(async move {
         let client = Client::new();
         let response = client
             .send(request)
             .await
-            .map_err(|err| format!("request failed: {err:#}"))?;
+            .map_err(|err| DispatchError::Transport(format!("request failed: {err:#}")))?;
 
         let status = response.status().as_u16();
         let mut response_body = response.into_body();
-        let bytes = response_body
-            .contents()
-            .await
-            .map_err(|err| format!("failed to read response body: {err:#}"))?;
+        let bytes = response_body.contents().await.map_err(|err| {
+            DispatchError::Transport(format!("failed to read response body: {err:#}"))
+        })?;
         let body_text = String::from_utf8_lossy(bytes).into_owned();
 
         if (200..300).contains(&status) {
             Ok(body_text)
         } else {
-            Err(format!("HTTP {status}: {body_text}"))
+            Err(DispatchError::Http {
+                status,
+                body: body_text,
+            })
         }
     })
 }
@@ -279,254 +298,7 @@ fn base64(input: &[u8]) -> String {
 }
 }
 
-use crate::runtime::{dispatch, AuthApply, AuthKind, FieldLocation, FieldSpec, OpSpec};
-use serde_json::{Map, Value};
-
-use crate::exports::autostamp::giphy::gifs as iface_gifs;
-
-const OP_GIFS_GET_GIFS_BY_ID: OpSpec = OpSpec {
-    method: "GET",
-    path_template: "/gifs",
-    fields: &[
-        FieldSpec { snake: "ids", location: FieldLocation::Query },
-    ],
-    auth: &[
-        AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("api_key") },
-    ],
-};
-
-const OP_GIFS_RANDOM_GIF: OpSpec = OpSpec {
-    method: "GET",
-    path_template: "/gifs/random",
-    fields: &[
-        FieldSpec { snake: "tag", location: FieldLocation::Query },
-        FieldSpec { snake: "rating", location: FieldLocation::Query },
-    ],
-    auth: &[
-        AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("api_key") },
-    ],
-};
-
-const OP_GIFS_SEARCH_GIFS: OpSpec = OpSpec {
-    method: "GET",
-    path_template: "/gifs/search",
-    fields: &[
-        FieldSpec { snake: "q", location: FieldLocation::Query },
-        FieldSpec { snake: "limit", location: FieldLocation::Query },
-        FieldSpec { snake: "offset", location: FieldLocation::Query },
-        FieldSpec { snake: "rating", location: FieldLocation::Query },
-        FieldSpec { snake: "lang", location: FieldLocation::Query },
-    ],
-    auth: &[
-        AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("api_key") },
-    ],
-};
-
-const OP_GIFS_TRANSLATE_GIF: OpSpec = OpSpec {
-    method: "GET",
-    path_template: "/gifs/translate",
-    fields: &[
-        FieldSpec { snake: "s", location: FieldLocation::Query },
-    ],
-    auth: &[
-        AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("api_key") },
-    ],
-};
-
-const OP_GIFS_TRENDING_GIFS: OpSpec = OpSpec {
-    method: "GET",
-    path_template: "/gifs/trending",
-    fields: &[
-        FieldSpec { snake: "limit", location: FieldLocation::Query },
-        FieldSpec { snake: "offset", location: FieldLocation::Query },
-        FieldSpec { snake: "rating", location: FieldLocation::Query },
-    ],
-    auth: &[
-        AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("api_key") },
-    ],
-};
-
-const OP_GIFS_GET_GIF_BY_ID: OpSpec = OpSpec {
-    method: "GET",
-    path_template: "/gifs/{gif_id}",
-    fields: &[
-        FieldSpec { snake: "gif_id", location: FieldLocation::Path },
-    ],
-    auth: &[
-        AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("api_key") },
-    ],
-};
-
-fn iface_gifs__get_gifs_by_id_params__to_json(p: &iface_gifs::GetGifsByIdParams) -> Value {
-    let mut m = Map::new();
-    m.insert("ids".into(), match (&p.ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_gifs__random_gif_params__to_json(p: &iface_gifs::RandomGifParams) -> Value {
-    let mut m = Map::new();
-    m.insert("tag".into(), match (&p.tag) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("rating".into(), match (&p.rating) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_gifs__search_gifs_params__to_json(p: &iface_gifs::SearchGifsParams) -> Value {
-    let mut m = Map::new();
-    m.insert("q".into(), Value::String((&p.q).clone()));
-    m.insert("limit".into(), match (&p.limit) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    m.insert("offset".into(), match (&p.offset) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    m.insert("rating".into(), match (&p.rating) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("lang".into(), match (&p.lang) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_gifs__translate_gif_params__to_json(p: &iface_gifs::TranslateGifParams) -> Value {
-    let mut m = Map::new();
-    m.insert("s".into(), Value::String((&p.s).clone()));
-    Value::Object(m)
-}
-
-fn iface_gifs__trending_gifs_params__to_json(p: &iface_gifs::TrendingGifsParams) -> Value {
-    let mut m = Map::new();
-    m.insert("limit".into(), match (&p.limit) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    m.insert("offset".into(), match (&p.offset) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    m.insert("rating".into(), match (&p.rating) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_gifs__get_gif_by_id_params__to_json(p: &iface_gifs::GetGifByIdParams) -> Value {
-    let mut m = Map::new();
-    m.insert("gif_id".into(), Value::String((&p.gif_id).clone()));
-    Value::Object(m)
-}
-
-impl iface_gifs::Guest for crate::Component {
-    fn get_gifs_by_id(params: iface_gifs::GetGifsByIdParams) -> Result<String, String> {
-        let json = iface_gifs__get_gifs_by_id_params__to_json(&params);
-        dispatch(&OP_GIFS_GET_GIFS_BY_ID, json)
-    }
-    fn random_gif(params: iface_gifs::RandomGifParams) -> Result<String, String> {
-        let json = iface_gifs__random_gif_params__to_json(&params);
-        dispatch(&OP_GIFS_RANDOM_GIF, json)
-    }
-    fn search_gifs(params: iface_gifs::SearchGifsParams) -> Result<String, String> {
-        let json = iface_gifs__search_gifs_params__to_json(&params);
-        dispatch(&OP_GIFS_SEARCH_GIFS, json)
-    }
-    fn translate_gif(params: iface_gifs::TranslateGifParams) -> Result<String, String> {
-        let json = iface_gifs__translate_gif_params__to_json(&params);
-        dispatch(&OP_GIFS_TRANSLATE_GIF, json)
-    }
-    fn trending_gifs(params: iface_gifs::TrendingGifsParams) -> Result<String, String> {
-        let json = iface_gifs__trending_gifs_params__to_json(&params);
-        dispatch(&OP_GIFS_TRENDING_GIFS, json)
-    }
-    fn get_gif_by_id(params: iface_gifs::GetGifByIdParams) -> Result<String, String> {
-        let json = iface_gifs__get_gif_by_id_params__to_json(&params);
-        dispatch(&OP_GIFS_GET_GIF_BY_ID, json)
-    }
-}
-use crate::exports::autostamp::giphy::stickers as iface_stickers;
-
-const OP_STICKERS_RANDOM_STICKER: OpSpec = OpSpec {
-    method: "GET",
-    path_template: "/stickers/random",
-    fields: &[
-        FieldSpec { snake: "tag", location: FieldLocation::Query },
-        FieldSpec { snake: "rating", location: FieldLocation::Query },
-    ],
-    auth: &[
-        AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("api_key") },
-    ],
-};
-
-const OP_STICKERS_SEARCH_STICKERS: OpSpec = OpSpec {
-    method: "GET",
-    path_template: "/stickers/search",
-    fields: &[
-        FieldSpec { snake: "q", location: FieldLocation::Query },
-        FieldSpec { snake: "limit", location: FieldLocation::Query },
-        FieldSpec { snake: "offset", location: FieldLocation::Query },
-        FieldSpec { snake: "rating", location: FieldLocation::Query },
-        FieldSpec { snake: "lang", location: FieldLocation::Query },
-    ],
-    auth: &[
-        AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("api_key") },
-    ],
-};
-
-const OP_STICKERS_TRANSLATE_STICKER: OpSpec = OpSpec {
-    method: "GET",
-    path_template: "/stickers/translate",
-    fields: &[
-        FieldSpec { snake: "s", location: FieldLocation::Query },
-    ],
-    auth: &[
-        AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("api_key") },
-    ],
-};
-
-const OP_STICKERS_TRENDING_STICKERS: OpSpec = OpSpec {
-    method: "GET",
-    path_template: "/stickers/trending",
-    fields: &[
-        FieldSpec { snake: "limit", location: FieldLocation::Query },
-        FieldSpec { snake: "offset", location: FieldLocation::Query },
-        FieldSpec { snake: "rating", location: FieldLocation::Query },
-    ],
-    auth: &[
-        AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("api_key") },
-    ],
-};
-
-fn iface_stickers__random_sticker_params__to_json(p: &iface_stickers::RandomStickerParams) -> Value {
-    let mut m = Map::new();
-    m.insert("tag".into(), match (&p.tag) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("rating".into(), match (&p.rating) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_stickers__search_stickers_params__to_json(p: &iface_stickers::SearchStickersParams) -> Value {
-    let mut m = Map::new();
-    m.insert("q".into(), Value::String((&p.q).clone()));
-    m.insert("limit".into(), match (&p.limit) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    m.insert("offset".into(), match (&p.offset) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    m.insert("rating".into(), match (&p.rating) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("lang".into(), match (&p.lang) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_stickers__translate_sticker_params__to_json(p: &iface_stickers::TranslateStickerParams) -> Value {
-    let mut m = Map::new();
-    m.insert("s".into(), Value::String((&p.s).clone()));
-    Value::Object(m)
-}
-
-fn iface_stickers__trending_stickers_params__to_json(p: &iface_stickers::TrendingStickersParams) -> Value {
-    let mut m = Map::new();
-    m.insert("limit".into(), match (&p.limit) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    m.insert("offset".into(), match (&p.offset) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    m.insert("rating".into(), match (&p.rating) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    Value::Object(m)
-}
-
-impl iface_stickers::Guest for crate::Component {
-    fn random_sticker(params: iface_stickers::RandomStickerParams) -> Result<String, String> {
-        let json = iface_stickers__random_sticker_params__to_json(&params);
-        dispatch(&OP_STICKERS_RANDOM_STICKER, json)
-    }
-    fn search_stickers(params: iface_stickers::SearchStickersParams) -> Result<String, String> {
-        let json = iface_stickers__search_stickers_params__to_json(&params);
-        dispatch(&OP_STICKERS_SEARCH_STICKERS, json)
-    }
-    fn translate_sticker(params: iface_stickers::TranslateStickerParams) -> Result<String, String> {
-        let json = iface_stickers__translate_sticker_params__to_json(&params);
-        dispatch(&OP_STICKERS_TRANSLATE_STICKER, json)
-    }
-    fn trending_stickers(params: iface_stickers::TrendingStickersParams) -> Result<String, String> {
-        let json = iface_stickers__trending_stickers_params__to_json(&params);
-        dispatch(&OP_STICKERS_TRENDING_STICKERS, json)
-    }
-}
+mod iface_gifs;
+mod iface_stickers;
 
 export!(Component);

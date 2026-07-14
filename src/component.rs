@@ -41,11 +41,20 @@ impl From<crate::Generated> for wit::Generated {
     fn from(value: crate::Generated) -> Self {
         wit::Generated {
             wit: value.wit,
-            rust: value.rust,
+            rust: value.rust.into_iter().map(Into::into).collect(),
             cargo_toml: value.cargo_toml,
             wasm_toml: value.wasm_toml,
             readme: value.readme,
             interfaces: value.interfaces,
+        }
+    }
+}
+
+impl From<crate::RustSource> for wit::RustSource {
+    fn from(value: crate::RustSource) -> Self {
+        wit::RustSource {
+            path: value.path,
+            contents: value.contents,
         }
     }
 }

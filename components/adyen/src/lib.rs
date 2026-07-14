@@ -44,10 +44,15 @@ pub(crate) enum FieldLocation {
     Body,
 }
 
-/// A single operation parameter: the snake-case key it carries in the params JSON and where
-/// it belongs in the request.
+/// A single operation parameter. `snake` keys the field in the internal params JSON (and, for a
+/// path field, matches the `{snake}` placeholder in the path template); `wire` is the verbatim name
+/// the field takes on the HTTP wire (query key, header name, or body property). The two differ
+/// whenever the source name isn't already snake_case (e.g. `dryRun` → snake `dry_run`, wire
+/// `dryRun`), and let distinct inputs that share a snake key (`DateCreated`, `DateCreated<`) still
+/// travel under their true names.
 pub(crate) struct FieldSpec {
     pub(crate) snake: &'static str,
+    pub(crate) wire: &'static str,
     pub(crate) location: FieldLocation,
 }
 
@@ -71,6 +76,16 @@ pub(crate) struct AuthApply {
     pub(crate) kind: AuthKind,
 }
 
+/// The failure modes of [`dispatch`], kept structured so each generated operation can map them
+/// onto its own typed error: an `Http` failure carries the response status and body (routed to
+/// the matching error-variant case), while a `Transport` failure carries a message for the
+/// catch-all case (a secret lookup, connection, or decode failure that never produced an HTTP
+/// status).
+pub(crate) enum DispatchError {
+    Http { status: u16, body: String },
+    Transport(String),
+}
+
 /// A single API operation: HTTP method, path template (with `{snake}` placeholders), the
 /// parameter fields, and the security schemes to apply.
 pub(crate) struct OpSpec {
@@ -81,8 +96,9 @@ pub(crate) struct OpSpec {
 }
 
 /// Execute `op` with the supplied `params` (a JSON object keyed by snake-case field names)
-/// and return the response body as a string, or an error message.
-pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, String> {
+/// and return the raw 2xx response body, or a structured [`DispatchError`] the caller maps
+/// onto the operation's typed error.
+pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, DispatchError> {
     let obj = match &params {
         Value::Object(map) => Some(map),
         _ => None,
@@ -105,10 +121,10 @@ pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, String> {
                 let placeholder = format!("{{{}}}", field.snake);
                 path = path.replace(&placeholder, &percent_encode(&scalar(value)));
             }
-            FieldLocation::Query => query.push((field.snake.to_string(), scalar(value))),
-            FieldLocation::Header => headers.push((field.snake.to_string(), scalar(value))),
+            FieldLocation::Query => query.push((field.wire.to_string(), scalar(value))),
+            FieldLocation::Header => headers.push((field.wire.to_string(), scalar(value))),
             FieldLocation::Body => {
-                body.insert(field.snake.to_string(), value.clone());
+                body.insert(field.wire.to_string(), value.clone());
             }
         }
     }
@@ -116,7 +132,7 @@ pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, String> {
     // Apply each resolved security scheme, sourcing its value from wasmcloud:secrets.
     let mut cookies: Vec<String> = Vec::new();
     for apply in op.auth {
-        let secret = fetch_secret(apply.secret_key)?;
+        let secret = fetch_secret(apply.secret_key).map_err(DispatchError::Transport)?;
         match &apply.kind {
             AuthKind::Bearer => headers.push(("authorization".into(), format!("Bearer {secret}"))),
             AuthKind::Basic => {
@@ -177,17 +193,18 @@ fn fetch_secret(key: &str) -> Result<String, String> {
 }
 
 /// Build and send the outgoing request with `wstd`, returning the response body on a 2xx
-/// status. The generated guest exports are synchronous, so the async `wstd` client is driven
-/// to completion on a local reactor via `wstd::runtime::block_on`.
+/// status and a structured [`DispatchError`] otherwise. The generated guest exports are
+/// synchronous, so the async `wstd` client is driven to completion on a local reactor via
+/// `wstd::runtime::block_on`.
 fn perform(
     method: &str,
     path_with_query: &str,
     headers: &[(String, String)],
     body: &[u8],
-) -> Result<String, String> {
+) -> Result<String, DispatchError> {
     let url = join_url(crate::BASE_URL, path_with_query);
     let method = Method::from_bytes(method.as_bytes())
-        .map_err(|err| format!("invalid HTTP method `{method}`: {err}"))?;
+        .map_err(|err| DispatchError::Transport(format!("invalid HTTP method `{method}`: {err}")))?;
 
     let mut builder = Request::builder().method(method).uri(url);
     for (name, value) in headers {
@@ -199,27 +216,29 @@ fn perform(
         } else {
             Body::from(body.to_vec())
         })
-        .map_err(|err| format!("failed to build request: {err}"))?;
+        .map_err(|err| DispatchError::Transport(format!("failed to build request: {err}")))?;
 
     wstd::runtime::block_on(async move {
         let client = Client::new();
         let response = client
             .send(request)
             .await
-            .map_err(|err| format!("request failed: {err:#}"))?;
+            .map_err(|err| DispatchError::Transport(format!("request failed: {err:#}")))?;
 
         let status = response.status().as_u16();
         let mut response_body = response.into_body();
-        let bytes = response_body
-            .contents()
-            .await
-            .map_err(|err| format!("failed to read response body: {err:#}"))?;
+        let bytes = response_body.contents().await.map_err(|err| {
+            DispatchError::Transport(format!("failed to read response body: {err:#}"))
+        })?;
         let body_text = String::from_utf8_lossy(bytes).into_owned();
 
         if (200..300).contains(&status) {
             Ok(body_text)
         } else {
-            Err(format!("HTTP {status}: {body_text}"))
+            Err(DispatchError::Http {
+                status,
+                body: body_text,
+            })
         }
     })
 }
@@ -279,753 +298,8 @@ fn base64(input: &[u8]) -> String {
 }
 }
 
-use crate::runtime::{dispatch, AuthApply, AuthKind, FieldLocation, FieldSpec, OpSpec};
-use serde_json::{Map, Value};
-
-use crate::exports::autostamp::adyen::accounts as iface_accounts;
-
-const OP_ACCOUNTS_POST_CLOSE_ACCOUNT: OpSpec = OpSpec {
-    method: "POST",
-    path_template: "/closeAccount",
-    fields: &[
-        FieldSpec { snake: "account_code", location: FieldLocation::Body },
-    ],
-    auth: &[
-        AuthApply { secret_key: "BasicAuth", kind: AuthKind::Basic },
-    ],
-};
-
-const OP_ACCOUNTS_POST_CREATE_ACCOUNT: OpSpec = OpSpec {
-    method: "POST",
-    path_template: "/createAccount",
-    fields: &[
-        FieldSpec { snake: "account_holder_code", location: FieldLocation::Body },
-        FieldSpec { snake: "payout_schedule", location: FieldLocation::Body },
-        FieldSpec { snake: "payout_schedule_reason", location: FieldLocation::Body },
-    ],
-    auth: &[
-        AuthApply { secret_key: "BasicAuth", kind: AuthKind::Basic },
-    ],
-};
-
-const OP_ACCOUNTS_POST_UPDATE_ACCOUNT: OpSpec = OpSpec {
-    method: "POST",
-    path_template: "/updateAccount",
-    fields: &[
-        FieldSpec { snake: "account_code", location: FieldLocation::Body },
-        FieldSpec { snake: "payout_schedule", location: FieldLocation::Body },
-    ],
-    auth: &[
-        AuthApply { secret_key: "BasicAuth", kind: AuthKind::Basic },
-    ],
-};
-
-fn iface_accounts__create_account_request_payout_schedule_enum__to_str(e: &iface_accounts::CreateAccountRequestPayoutScheduleEnum) -> &'static str {
-    match e {
-        iface_accounts::CreateAccountRequestPayoutScheduleEnum::BiweeklyOnV1stAndV15thAtMidnight => "BIWEEKLY_ON_1ST_AND_15TH_AT_MIDNIGHT",
-        iface_accounts::CreateAccountRequestPayoutScheduleEnum::Daily => "DAILY",
-        iface_accounts::CreateAccountRequestPayoutScheduleEnum::DailyAu => "DAILY_AU",
-        iface_accounts::CreateAccountRequestPayoutScheduleEnum::DailyEu => "DAILY_EU",
-        iface_accounts::CreateAccountRequestPayoutScheduleEnum::DailySg => "DAILY_SG",
-        iface_accounts::CreateAccountRequestPayoutScheduleEnum::DailyUs => "DAILY_US",
-        iface_accounts::CreateAccountRequestPayoutScheduleEnum::Hold => "HOLD",
-        iface_accounts::CreateAccountRequestPayoutScheduleEnum::Monthly => "MONTHLY",
-        iface_accounts::CreateAccountRequestPayoutScheduleEnum::Weekly => "WEEKLY",
-        iface_accounts::CreateAccountRequestPayoutScheduleEnum::WeeklyMonToFriAu => "WEEKLY_MON_TO_FRI_AU",
-        iface_accounts::CreateAccountRequestPayoutScheduleEnum::WeeklyMonToFriEu => "WEEKLY_MON_TO_FRI_EU",
-        iface_accounts::CreateAccountRequestPayoutScheduleEnum::WeeklyMonToFriUs => "WEEKLY_MON_TO_FRI_US",
-        iface_accounts::CreateAccountRequestPayoutScheduleEnum::WeeklyOnTueFriMidnight => "WEEKLY_ON_TUE_FRI_MIDNIGHT",
-        iface_accounts::CreateAccountRequestPayoutScheduleEnum::WeeklySunToThuAu => "WEEKLY_SUN_TO_THU_AU",
-        iface_accounts::CreateAccountRequestPayoutScheduleEnum::WeeklySunToThuUs => "WEEKLY_SUN_TO_THU_US",
-    }
-}
-
-fn iface_accounts__update_payout_schedule_request_action_enum__to_str(e: &iface_accounts::UpdatePayoutScheduleRequestActionEnum) -> &'static str {
-    match e {
-        iface_accounts::UpdatePayoutScheduleRequestActionEnum::Close => "CLOSE",
-        iface_accounts::UpdatePayoutScheduleRequestActionEnum::Nothing => "NOTHING",
-        iface_accounts::UpdatePayoutScheduleRequestActionEnum::Update => "UPDATE",
-    }
-}
-
-fn iface_accounts__update_payout_schedule_request__to_json(p: &iface_accounts::UpdatePayoutScheduleRequest) -> Value {
-    let mut m = Map::new();
-    m.insert("action".into(), match (&p.action) { Some(v) => Value::String(iface_accounts__update_payout_schedule_request_action_enum__to_str(v).into()), None => Value::Null });
-    m.insert("reason".into(), match (&p.reason) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("schedule".into(), Value::String(iface_accounts__create_account_request_payout_schedule_enum__to_str(&p.schedule).into()));
-    Value::Object(m)
-}
-
-fn iface_accounts__post_close_account_params__to_json(p: &iface_accounts::PostCloseAccountParams) -> Value {
-    let mut m = Map::new();
-    m.insert("account_code".into(), Value::String((&p.account_code).clone()));
-    Value::Object(m)
-}
-
-fn iface_accounts__post_create_account_params__to_json(p: &iface_accounts::PostCreateAccountParams) -> Value {
-    let mut m = Map::new();
-    m.insert("account_holder_code".into(), Value::String((&p.account_holder_code).clone()));
-    m.insert("payout_schedule".into(), match (&p.payout_schedule) { Some(v) => Value::String(iface_accounts__create_account_request_payout_schedule_enum__to_str(v).into()), None => Value::Null });
-    m.insert("payout_schedule_reason".into(), match (&p.payout_schedule_reason) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_accounts__post_update_account_params__to_json(p: &iface_accounts::PostUpdateAccountParams) -> Value {
-    let mut m = Map::new();
-    m.insert("account_code".into(), Value::String((&p.account_code).clone()));
-    m.insert("payout_schedule".into(), iface_accounts__update_payout_schedule_request__to_json(&p.payout_schedule));
-    Value::Object(m)
-}
-
-impl iface_accounts::Guest for crate::Component {
-    fn post_close_account(params: iface_accounts::PostCloseAccountParams) -> Result<String, String> {
-        let json = iface_accounts__post_close_account_params__to_json(&params);
-        dispatch(&OP_ACCOUNTS_POST_CLOSE_ACCOUNT, json)
-    }
-    fn post_create_account(params: iface_accounts::PostCreateAccountParams) -> Result<String, String> {
-        let json = iface_accounts__post_create_account_params__to_json(&params);
-        dispatch(&OP_ACCOUNTS_POST_CREATE_ACCOUNT, json)
-    }
-    fn post_update_account(params: iface_accounts::PostUpdateAccountParams) -> Result<String, String> {
-        let json = iface_accounts__post_update_account_params__to_json(&params);
-        dispatch(&OP_ACCOUNTS_POST_UPDATE_ACCOUNT, json)
-    }
-}
-use crate::exports::autostamp::adyen::account_holders as iface_account_holders;
-
-const OP_ACCOUNT_HOLDERS_POST_CLOSE_ACCOUNT_HOLDER: OpSpec = OpSpec {
-    method: "POST",
-    path_template: "/closeAccountHolder",
-    fields: &[
-        FieldSpec { snake: "account_holder_code", location: FieldLocation::Body },
-    ],
-    auth: &[
-        AuthApply { secret_key: "BasicAuth", kind: AuthKind::Basic },
-    ],
-};
-
-const OP_ACCOUNT_HOLDERS_POST_CREATE_ACCOUNT_HOLDER: OpSpec = OpSpec {
-    method: "POST",
-    path_template: "/createAccountHolder",
-    fields: &[
-        FieldSpec { snake: "account_holder_code", location: FieldLocation::Body },
-        FieldSpec { snake: "account_holder_details", location: FieldLocation::Body },
-        FieldSpec { snake: "create_default_account", location: FieldLocation::Body },
-        FieldSpec { snake: "legal_entity", location: FieldLocation::Body },
-        FieldSpec { snake: "processing_tier", location: FieldLocation::Body },
-    ],
-    auth: &[
-        AuthApply { secret_key: "BasicAuth", kind: AuthKind::Basic },
-    ],
-};
-
-const OP_ACCOUNT_HOLDERS_POST_GET_ACCOUNT_HOLDER: OpSpec = OpSpec {
-    method: "POST",
-    path_template: "/getAccountHolder",
-    fields: &[
-        FieldSpec { snake: "account_code", location: FieldLocation::Body },
-        FieldSpec { snake: "account_holder_code", location: FieldLocation::Body },
-    ],
-    auth: &[
-        AuthApply { secret_key: "BasicAuth", kind: AuthKind::Basic },
-    ],
-};
-
-const OP_ACCOUNT_HOLDERS_POST_GET_TAX_FORM: OpSpec = OpSpec {
-    method: "POST",
-    path_template: "/getTaxForm",
-    fields: &[
-        FieldSpec { snake: "account_holder_code", location: FieldLocation::Body },
-        FieldSpec { snake: "form_type", location: FieldLocation::Body },
-        FieldSpec { snake: "year", location: FieldLocation::Body },
-    ],
-    auth: &[
-        AuthApply { secret_key: "BasicAuth", kind: AuthKind::Basic },
-    ],
-};
-
-const OP_ACCOUNT_HOLDERS_POST_SUSPEND_ACCOUNT_HOLDER: OpSpec = OpSpec {
-    method: "POST",
-    path_template: "/suspendAccountHolder",
-    fields: &[
-        FieldSpec { snake: "account_holder_code", location: FieldLocation::Body },
-    ],
-    auth: &[
-        AuthApply { secret_key: "BasicAuth", kind: AuthKind::Basic },
-    ],
-};
-
-const OP_ACCOUNT_HOLDERS_POST_UN_SUSPEND_ACCOUNT_HOLDER: OpSpec = OpSpec {
-    method: "POST",
-    path_template: "/unSuspendAccountHolder",
-    fields: &[
-        FieldSpec { snake: "account_holder_code", location: FieldLocation::Body },
-    ],
-    auth: &[
-        AuthApply { secret_key: "BasicAuth", kind: AuthKind::Basic },
-    ],
-};
-
-const OP_ACCOUNT_HOLDERS_POST_UPDATE_ACCOUNT_HOLDER: OpSpec = OpSpec {
-    method: "POST",
-    path_template: "/updateAccountHolder",
-    fields: &[
-        FieldSpec { snake: "account_holder_code", location: FieldLocation::Body },
-        FieldSpec { snake: "account_holder_details", location: FieldLocation::Body },
-        FieldSpec { snake: "processing_tier", location: FieldLocation::Body },
-    ],
-    auth: &[
-        AuthApply { secret_key: "BasicAuth", kind: AuthKind::Basic },
-    ],
-};
-
-const OP_ACCOUNT_HOLDERS_POST_UPDATE_ACCOUNT_HOLDER_STATE: OpSpec = OpSpec {
-    method: "POST",
-    path_template: "/updateAccountHolderState",
-    fields: &[
-        FieldSpec { snake: "account_holder_code", location: FieldLocation::Body },
-        FieldSpec { snake: "disable", location: FieldLocation::Body },
-        FieldSpec { snake: "reason", location: FieldLocation::Body },
-        FieldSpec { snake: "state_type", location: FieldLocation::Body },
-    ],
-    auth: &[
-        AuthApply { secret_key: "BasicAuth", kind: AuthKind::Basic },
-    ],
-};
-
-fn iface_account_holders__vias_name_gender_enum__to_str(e: &iface_account_holders::ViasNameGenderEnum) -> &'static str {
-    match e {
-        iface_account_holders::ViasNameGenderEnum::Male => "MALE",
-        iface_account_holders::ViasNameGenderEnum::Female => "FEMALE",
-        iface_account_holders::ViasNameGenderEnum::Unknown => "UNKNOWN",
-    }
-}
-
-fn iface_account_holders__personal_document_data_type_op_enum__to_str(e: &iface_account_holders::PersonalDocumentDataTypeOpEnum) -> &'static str {
-    match e {
-        iface_account_holders::PersonalDocumentDataTypeOpEnum::Drivinglicense => "DRIVINGLICENSE",
-        iface_account_holders::PersonalDocumentDataTypeOpEnum::Id => "ID",
-        iface_account_holders::PersonalDocumentDataTypeOpEnum::Passport => "PASSPORT",
-        iface_account_holders::PersonalDocumentDataTypeOpEnum::Socialsecurity => "SOCIALSECURITY",
-        iface_account_holders::PersonalDocumentDataTypeOpEnum::Visa => "VISA",
-    }
-}
-
-fn iface_account_holders__vias_phone_number_phone_type_enum__to_str(e: &iface_account_holders::ViasPhoneNumberPhoneTypeEnum) -> &'static str {
-    match e {
-        iface_account_holders::ViasPhoneNumberPhoneTypeEnum::Fax => "Fax",
-        iface_account_holders::ViasPhoneNumberPhoneTypeEnum::Landline => "Landline",
-        iface_account_holders::ViasPhoneNumberPhoneTypeEnum::Mobile => "Mobile",
-        iface_account_holders::ViasPhoneNumberPhoneTypeEnum::Sip => "SIP",
-    }
-}
-
-fn iface_account_holders__shareholder_contact_shareholder_type_enum__to_str(e: &iface_account_holders::ShareholderContactShareholderTypeEnum) -> &'static str {
-    match e {
-        iface_account_holders::ShareholderContactShareholderTypeEnum::Controller => "Controller",
-        iface_account_holders::ShareholderContactShareholderTypeEnum::Owner => "Owner",
-        iface_account_holders::ShareholderContactShareholderTypeEnum::Signatory => "Signatory",
-    }
-}
-
-fn iface_account_holders__create_account_holder_request_legal_entity_enum__to_str(e: &iface_account_holders::CreateAccountHolderRequestLegalEntityEnum) -> &'static str {
-    match e {
-        iface_account_holders::CreateAccountHolderRequestLegalEntityEnum::Business => "Business",
-        iface_account_holders::CreateAccountHolderRequestLegalEntityEnum::Individual => "Individual",
-        iface_account_holders::CreateAccountHolderRequestLegalEntityEnum::NonProfit => "NonProfit",
-    }
-}
-
-fn iface_account_holders__update_account_holder_state_request_state_type_enum__to_str(e: &iface_account_holders::UpdateAccountHolderStateRequestStateTypeEnum) -> &'static str {
-    match e {
-        iface_account_holders::UpdateAccountHolderStateRequestStateTypeEnum::LimitedPayout => "LimitedPayout",
-        iface_account_holders::UpdateAccountHolderStateRequestStateTypeEnum::LimitedProcessing => "LimitedProcessing",
-        iface_account_holders::UpdateAccountHolderStateRequestStateTypeEnum::LimitlessPayout => "LimitlessPayout",
-        iface_account_holders::UpdateAccountHolderStateRequestStateTypeEnum::LimitlessProcessing => "LimitlessProcessing",
-        iface_account_holders::UpdateAccountHolderStateRequestStateTypeEnum::Payout => "Payout",
-        iface_account_holders::UpdateAccountHolderStateRequestStateTypeEnum::Processing => "Processing",
-    }
-}
-
-fn iface_account_holders__account_holder_details__to_json(p: &iface_account_holders::AccountHolderDetails) -> Value {
-    let mut m = Map::new();
-    m.insert("address".into(), iface_account_holders__vias_address__to_json(&p.address));
-    m.insert("bank_account_details".into(), match (&p.bank_account_details) { Some(v) => Value::Array((v).iter().map(|v| iface_account_holders__bank_account_detail_wrapper__to_json(v)).collect()), None => Value::Null });
-    m.insert("business_details".into(), match (&p.business_details) { Some(v) => iface_account_holders__business_details__to_json(v), None => Value::Null });
-    m.insert("email".into(), match (&p.email) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("full_phone_number".into(), match (&p.full_phone_number) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("individual_details".into(), match (&p.individual_details) { Some(v) => iface_account_holders__individual_details__to_json(v), None => Value::Null });
-    m.insert("last_review_date".into(), match (&p.last_review_date) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("merchant_category_code".into(), match (&p.merchant_category_code) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("metadata".into(), match (&p.metadata) { Some(v) => iface_account_holders__account_holder_details_metadata__to_json(v), None => Value::Null });
-    m.insert("principal_business_address".into(), match (&p.principal_business_address) { Some(v) => iface_account_holders__vias_address__to_json(v), None => Value::Null });
-    m.insert("web_address".into(), match (&p.web_address) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_account_holders__vias_address__to_json(p: &iface_account_holders::ViasAddress) -> Value {
-    let mut m = Map::new();
-    m.insert("city".into(), match (&p.city) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("country".into(), Value::String((&p.country).clone()));
-    m.insert("house_number_or_name".into(), match (&p.house_number_or_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("postal_code".into(), match (&p.postal_code) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("state_or_province".into(), match (&p.state_or_province) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("street".into(), match (&p.street) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_account_holders__bank_account_detail_wrapper__to_json(p: &iface_account_holders::BankAccountDetailWrapper) -> Value {
-    let mut m = Map::new();
-    m.insert("bank_account_detail".into(), match (&p.bank_account_detail) { Some(v) => iface_account_holders__bank_account_detail__to_json(v), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_account_holders__bank_account_detail__to_json(p: &iface_account_holders::BankAccountDetail) -> Value {
-    let mut m = Map::new();
-    m.insert("account_number".into(), match (&p.account_number) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("account_type".into(), match (&p.account_type) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("bank_account_name".into(), match (&p.bank_account_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("bank_account_uuid".into(), match (&p.bank_account_uuid) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("bank_bic_swift".into(), match (&p.bank_bic_swift) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("bank_city".into(), match (&p.bank_city) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("bank_code".into(), match (&p.bank_code) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("bank_name".into(), match (&p.bank_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("branch_code".into(), match (&p.branch_code) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("check_code".into(), match (&p.check_code) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("country_code".into(), match (&p.country_code) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("currency_code".into(), match (&p.currency_code) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("iban".into(), match (&p.iban) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("owner_city".into(), match (&p.owner_city) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("owner_country_code".into(), match (&p.owner_country_code) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("owner_date_of_birth".into(), match (&p.owner_date_of_birth) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("owner_house_number_or_name".into(), match (&p.owner_house_number_or_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("owner_name".into(), match (&p.owner_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("owner_nationality".into(), match (&p.owner_nationality) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("owner_postal_code".into(), match (&p.owner_postal_code) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("owner_state".into(), match (&p.owner_state) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("owner_street".into(), match (&p.owner_street) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("primary_account".into(), match (&p.primary_account) { Some(v) => Value::Bool(*(v)), None => Value::Null });
-    m.insert("tax_id".into(), match (&p.tax_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("url_for_verification".into(), match (&p.url_for_verification) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_account_holders__business_details__to_json(p: &iface_account_holders::BusinessDetails) -> Value {
-    let mut m = Map::new();
-    m.insert("doing_business_as".into(), match (&p.doing_business_as) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("legal_business_name".into(), match (&p.legal_business_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("listed_ultimate_parent_company".into(), match (&p.listed_ultimate_parent_company) { Some(v) => Value::Array((v).iter().map(|v| iface_account_holders__ultimate_parent_company_wrapper__to_json(v)).collect()), None => Value::Null });
-    m.insert("shareholders".into(), match (&p.shareholders) { Some(v) => Value::Array((v).iter().map(|v| iface_account_holders__shareholder_contact_wrapper__to_json(v)).collect()), None => Value::Null });
-    m.insert("signatories".into(), match (&p.signatories) { Some(v) => Value::Array((v).iter().map(|v| iface_account_holders__signatory_contact_wrapper__to_json(v)).collect()), None => Value::Null });
-    m.insert("tax_id".into(), match (&p.tax_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_account_holders__ultimate_parent_company_wrapper__to_json(p: &iface_account_holders::UltimateParentCompanyWrapper) -> Value {
-    let mut m = Map::new();
-    m.insert("ultimate_parent_company".into(), match (&p.ultimate_parent_company) { Some(v) => iface_account_holders__ultimate_parent_company__to_json(v), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_account_holders__ultimate_parent_company__to_json(p: &iface_account_holders::UltimateParentCompany) -> Value {
-    let mut m = Map::new();
-    m.insert("address".into(), match (&p.address) { Some(v) => iface_account_holders__vias_address__to_json(v), None => Value::Null });
-    m.insert("business_details".into(), match (&p.business_details) { Some(v) => iface_account_holders__ultimate_parent_company_business_details__to_json(v), None => Value::Null });
-    m.insert("ultimate_parent_company_code".into(), match (&p.ultimate_parent_company_code) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_account_holders__ultimate_parent_company_business_details__to_json(p: &iface_account_holders::UltimateParentCompanyBusinessDetails) -> Value {
-    let mut m = Map::new();
-    m.insert("legal_business_name".into(), match (&p.legal_business_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("registration_number".into(), match (&p.registration_number) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("stock_exchange".into(), match (&p.stock_exchange) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("stock_number".into(), match (&p.stock_number) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("stock_ticker".into(), match (&p.stock_ticker) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_account_holders__shareholder_contact_wrapper__to_json(p: &iface_account_holders::ShareholderContactWrapper) -> Value {
-    let mut m = Map::new();
-    m.insert("shareholder_contact".into(), match (&p.shareholder_contact) { Some(v) => iface_account_holders__shareholder_contact__to_json(v), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_account_holders__shareholder_contact__to_json(p: &iface_account_holders::ShareholderContact) -> Value {
-    let mut m = Map::new();
-    m.insert("address".into(), match (&p.address) { Some(v) => iface_account_holders__vias_address__to_json(v), None => Value::Null });
-    m.insert("email".into(), match (&p.email) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("full_phone_number".into(), match (&p.full_phone_number) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("job_title".into(), match (&p.job_title) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("name".into(), match (&p.name) { Some(v) => iface_account_holders__vias_name__to_json(v), None => Value::Null });
-    m.insert("personal_data".into(), match (&p.personal_data) { Some(v) => iface_account_holders__vias_personal_data__to_json(v), None => Value::Null });
-    m.insert("phone_number".into(), match (&p.phone_number) { Some(v) => iface_account_holders__vias_phone_number__to_json(v), None => Value::Null });
-    m.insert("shareholder_code".into(), match (&p.shareholder_code) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("shareholder_type".into(), match (&p.shareholder_type) { Some(v) => Value::String(iface_account_holders__shareholder_contact_shareholder_type_enum__to_str(v).into()), None => Value::Null });
-    m.insert("web_address".into(), match (&p.web_address) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_account_holders__vias_name__to_json(p: &iface_account_holders::ViasName) -> Value {
-    let mut m = Map::new();
-    m.insert("first_name".into(), match (&p.first_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("gender".into(), match (&p.gender) { Some(v) => Value::String(iface_account_holders__vias_name_gender_enum__to_str(v).into()), None => Value::Null });
-    m.insert("infix".into(), match (&p.infix) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("last_name".into(), match (&p.last_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_account_holders__vias_personal_data__to_json(p: &iface_account_holders::ViasPersonalData) -> Value {
-    let mut m = Map::new();
-    m.insert("date_of_birth".into(), match (&p.date_of_birth) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("document_data".into(), match (&p.document_data) { Some(v) => Value::Array((v).iter().map(|v| iface_account_holders__personal_document_data_wrapper__to_json(v)).collect()), None => Value::Null });
-    m.insert("id_number".into(), match (&p.id_number) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("nationality".into(), match (&p.nationality) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_account_holders__personal_document_data_wrapper__to_json(p: &iface_account_holders::PersonalDocumentDataWrapper) -> Value {
-    let mut m = Map::new();
-    m.insert("personal_document_data".into(), match (&p.personal_document_data) { Some(v) => iface_account_holders__personal_document_data__to_json(v), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_account_holders__personal_document_data__to_json(p: &iface_account_holders::PersonalDocumentData) -> Value {
-    let mut m = Map::new();
-    m.insert("expiration_date".into(), match (&p.expiration_date) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("issuer_country".into(), match (&p.issuer_country) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("issuer_state".into(), match (&p.issuer_state) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("number".into(), match (&p.number) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("type".into(), Value::String(iface_account_holders__personal_document_data_type_op_enum__to_str(&p.type_op).into()));
-    Value::Object(m)
-}
-
-fn iface_account_holders__vias_phone_number__to_json(p: &iface_account_holders::ViasPhoneNumber) -> Value {
-    let mut m = Map::new();
-    m.insert("phone_country_code".into(), match (&p.phone_country_code) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("phone_number".into(), match (&p.phone_number) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("phone_type".into(), match (&p.phone_type) { Some(v) => Value::String(iface_account_holders__vias_phone_number_phone_type_enum__to_str(v).into()), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_account_holders__signatory_contact_wrapper__to_json(p: &iface_account_holders::SignatoryContactWrapper) -> Value {
-    let mut m = Map::new();
-    m.insert("signatory_contact".into(), match (&p.signatory_contact) { Some(v) => iface_account_holders__signatory_contact__to_json(v), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_account_holders__signatory_contact__to_json(p: &iface_account_holders::SignatoryContact) -> Value {
-    let mut m = Map::new();
-    m.insert("address".into(), match (&p.address) { Some(v) => iface_account_holders__vias_address__to_json(v), None => Value::Null });
-    m.insert("email".into(), match (&p.email) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("full_phone_number".into(), match (&p.full_phone_number) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("job_title".into(), match (&p.job_title) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("name".into(), match (&p.name) { Some(v) => iface_account_holders__vias_name__to_json(v), None => Value::Null });
-    m.insert("personal_data".into(), match (&p.personal_data) { Some(v) => iface_account_holders__vias_personal_data__to_json(v), None => Value::Null });
-    m.insert("phone_number".into(), match (&p.phone_number) { Some(v) => iface_account_holders__vias_phone_number__to_json(v), None => Value::Null });
-    m.insert("signatory_code".into(), match (&p.signatory_code) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("signatory_reference".into(), match (&p.signatory_reference) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("web_address".into(), match (&p.web_address) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_account_holders__individual_details__to_json(p: &iface_account_holders::IndividualDetails) -> Value {
-    let mut m = Map::new();
-    m.insert("name".into(), match (&p.name) { Some(v) => iface_account_holders__vias_name__to_json(v), None => Value::Null });
-    m.insert("personal_data".into(), match (&p.personal_data) { Some(v) => iface_account_holders__vias_personal_data__to_json(v), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_account_holders__account_holder_details_metadata__to_json(p: &iface_account_holders::AccountHolderDetailsMetadata) -> Value {
-    let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_account_holders__post_close_account_holder_params__to_json(p: &iface_account_holders::PostCloseAccountHolderParams) -> Value {
-    let mut m = Map::new();
-    m.insert("account_holder_code".into(), Value::String((&p.account_holder_code).clone()));
-    Value::Object(m)
-}
-
-fn iface_account_holders__post_create_account_holder_params__to_json(p: &iface_account_holders::PostCreateAccountHolderParams) -> Value {
-    let mut m = Map::new();
-    m.insert("account_holder_code".into(), Value::String((&p.account_holder_code).clone()));
-    m.insert("account_holder_details".into(), iface_account_holders__account_holder_details__to_json(&p.account_holder_details));
-    m.insert("create_default_account".into(), match (&p.create_default_account) { Some(v) => Value::Bool(*(v)), None => Value::Null });
-    m.insert("legal_entity".into(), Value::String(iface_account_holders__create_account_holder_request_legal_entity_enum__to_str(&p.legal_entity).into()));
-    m.insert("processing_tier".into(), match (&p.processing_tier) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_account_holders__post_get_account_holder_params__to_json(p: &iface_account_holders::PostGetAccountHolderParams) -> Value {
-    let mut m = Map::new();
-    m.insert("account_code".into(), match (&p.account_code) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("account_holder_code".into(), match (&p.account_holder_code) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_account_holders__post_get_tax_form_params__to_json(p: &iface_account_holders::PostGetTaxFormParams) -> Value {
-    let mut m = Map::new();
-    m.insert("account_holder_code".into(), Value::String((&p.account_holder_code).clone()));
-    m.insert("form_type".into(), Value::String((&p.form_type).clone()));
-    m.insert("year".into(), Value::Number(serde_json::Number::from(*(&p.year))));
-    Value::Object(m)
-}
-
-fn iface_account_holders__post_suspend_account_holder_params__to_json(p: &iface_account_holders::PostSuspendAccountHolderParams) -> Value {
-    let mut m = Map::new();
-    m.insert("account_holder_code".into(), Value::String((&p.account_holder_code).clone()));
-    Value::Object(m)
-}
-
-fn iface_account_holders__post_un_suspend_account_holder_params__to_json(p: &iface_account_holders::PostUnSuspendAccountHolderParams) -> Value {
-    let mut m = Map::new();
-    m.insert("account_holder_code".into(), Value::String((&p.account_holder_code).clone()));
-    Value::Object(m)
-}
-
-fn iface_account_holders__post_update_account_holder_params__to_json(p: &iface_account_holders::PostUpdateAccountHolderParams) -> Value {
-    let mut m = Map::new();
-    m.insert("account_holder_code".into(), Value::String((&p.account_holder_code).clone()));
-    m.insert("account_holder_details".into(), match (&p.account_holder_details) { Some(v) => iface_account_holders__account_holder_details__to_json(v), None => Value::Null });
-    m.insert("processing_tier".into(), match (&p.processing_tier) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_account_holders__post_update_account_holder_state_params__to_json(p: &iface_account_holders::PostUpdateAccountHolderStateParams) -> Value {
-    let mut m = Map::new();
-    m.insert("account_holder_code".into(), Value::String((&p.account_holder_code).clone()));
-    m.insert("disable".into(), Value::Bool(*(&p.disable)));
-    m.insert("reason".into(), match (&p.reason) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("state_type".into(), Value::String(iface_account_holders__update_account_holder_state_request_state_type_enum__to_str(&p.state_type).into()));
-    Value::Object(m)
-}
-
-impl iface_account_holders::Guest for crate::Component {
-    fn post_close_account_holder(params: iface_account_holders::PostCloseAccountHolderParams) -> Result<String, String> {
-        let json = iface_account_holders__post_close_account_holder_params__to_json(&params);
-        dispatch(&OP_ACCOUNT_HOLDERS_POST_CLOSE_ACCOUNT_HOLDER, json)
-    }
-    fn post_create_account_holder(params: iface_account_holders::PostCreateAccountHolderParams) -> Result<String, String> {
-        let json = iface_account_holders__post_create_account_holder_params__to_json(&params);
-        dispatch(&OP_ACCOUNT_HOLDERS_POST_CREATE_ACCOUNT_HOLDER, json)
-    }
-    fn post_get_account_holder(params: iface_account_holders::PostGetAccountHolderParams) -> Result<String, String> {
-        let json = iface_account_holders__post_get_account_holder_params__to_json(&params);
-        dispatch(&OP_ACCOUNT_HOLDERS_POST_GET_ACCOUNT_HOLDER, json)
-    }
-    fn post_get_tax_form(params: iface_account_holders::PostGetTaxFormParams) -> Result<String, String> {
-        let json = iface_account_holders__post_get_tax_form_params__to_json(&params);
-        dispatch(&OP_ACCOUNT_HOLDERS_POST_GET_TAX_FORM, json)
-    }
-    fn post_suspend_account_holder(params: iface_account_holders::PostSuspendAccountHolderParams) -> Result<String, String> {
-        let json = iface_account_holders__post_suspend_account_holder_params__to_json(&params);
-        dispatch(&OP_ACCOUNT_HOLDERS_POST_SUSPEND_ACCOUNT_HOLDER, json)
-    }
-    fn post_un_suspend_account_holder(params: iface_account_holders::PostUnSuspendAccountHolderParams) -> Result<String, String> {
-        let json = iface_account_holders__post_un_suspend_account_holder_params__to_json(&params);
-        dispatch(&OP_ACCOUNT_HOLDERS_POST_UN_SUSPEND_ACCOUNT_HOLDER, json)
-    }
-    fn post_update_account_holder(params: iface_account_holders::PostUpdateAccountHolderParams) -> Result<String, String> {
-        let json = iface_account_holders__post_update_account_holder_params__to_json(&params);
-        dispatch(&OP_ACCOUNT_HOLDERS_POST_UPDATE_ACCOUNT_HOLDER, json)
-    }
-    fn post_update_account_holder_state(params: iface_account_holders::PostUpdateAccountHolderStateParams) -> Result<String, String> {
-        let json = iface_account_holders__post_update_account_holder_state_params__to_json(&params);
-        dispatch(&OP_ACCOUNT_HOLDERS_POST_UPDATE_ACCOUNT_HOLDER_STATE, json)
-    }
-}
-use crate::exports::autostamp::adyen::verification as iface_verification;
-
-const OP_VERIFICATION_POST_DELETE_BANK_ACCOUNTS: OpSpec = OpSpec {
-    method: "POST",
-    path_template: "/deleteBankAccounts",
-    fields: &[
-        FieldSpec { snake: "account_holder_code", location: FieldLocation::Body },
-        FieldSpec { snake: "bank_account_uui_ds", location: FieldLocation::Body },
-    ],
-    auth: &[
-        AuthApply { secret_key: "BasicAuth", kind: AuthKind::Basic },
-    ],
-};
-
-const OP_VERIFICATION_POST_DELETE_LEGAL_ARRANGEMENTS: OpSpec = OpSpec {
-    method: "POST",
-    path_template: "/deleteLegalArrangements",
-    fields: &[
-        FieldSpec { snake: "account_holder_code", location: FieldLocation::Body },
-        FieldSpec { snake: "legal_arrangements", location: FieldLocation::Body },
-    ],
-    auth: &[
-        AuthApply { secret_key: "BasicAuth", kind: AuthKind::Basic },
-    ],
-};
-
-const OP_VERIFICATION_POST_DELETE_SHAREHOLDERS: OpSpec = OpSpec {
-    method: "POST",
-    path_template: "/deleteShareholders",
-    fields: &[
-        FieldSpec { snake: "account_holder_code", location: FieldLocation::Body },
-        FieldSpec { snake: "shareholder_codes", location: FieldLocation::Body },
-    ],
-    auth: &[
-        AuthApply { secret_key: "BasicAuth", kind: AuthKind::Basic },
-    ],
-};
-
-const OP_VERIFICATION_POST_DELETE_SIGNATORIES: OpSpec = OpSpec {
-    method: "POST",
-    path_template: "/deleteSignatories",
-    fields: &[
-        FieldSpec { snake: "account_holder_code", location: FieldLocation::Body },
-        FieldSpec { snake: "signatory_codes", location: FieldLocation::Body },
-    ],
-    auth: &[
-        AuthApply { secret_key: "BasicAuth", kind: AuthKind::Basic },
-    ],
-};
-
-const OP_VERIFICATION_POST_GET_UPLOADED_DOCUMENTS: OpSpec = OpSpec {
-    method: "POST",
-    path_template: "/getUploadedDocuments",
-    fields: &[
-        FieldSpec { snake: "account_holder_code", location: FieldLocation::Body },
-        FieldSpec { snake: "bank_account_uuid", location: FieldLocation::Body },
-        FieldSpec { snake: "shareholder_code", location: FieldLocation::Body },
-    ],
-    auth: &[
-        AuthApply { secret_key: "BasicAuth", kind: AuthKind::Basic },
-    ],
-};
-
-const OP_VERIFICATION_POST_UPLOAD_DOCUMENT: OpSpec = OpSpec {
-    method: "POST",
-    path_template: "/uploadDocument",
-    fields: &[
-        FieldSpec { snake: "account_holder_code", location: FieldLocation::Body },
-        FieldSpec { snake: "bank_account_uuid", location: FieldLocation::Body },
-        FieldSpec { snake: "document_content", location: FieldLocation::Body },
-        FieldSpec { snake: "document_detail", location: FieldLocation::Body },
-        FieldSpec { snake: "shareholder_code", location: FieldLocation::Body },
-    ],
-    auth: &[
-        AuthApply { secret_key: "BasicAuth", kind: AuthKind::Basic },
-    ],
-};
-
-fn iface_verification__document_detail_document_type_enum__to_str(e: &iface_verification::DocumentDetailDocumentTypeEnum) -> &'static str {
-    match e {
-        iface_verification::DocumentDetailDocumentTypeEnum::BankStatement => "BANK_STATEMENT",
-        iface_verification::DocumentDetailDocumentTypeEnum::Bsn => "BSN",
-        iface_verification::DocumentDetailDocumentTypeEnum::DrivingLicence => "DRIVING_LICENCE",
-        iface_verification::DocumentDetailDocumentTypeEnum::DrivingLicenceBack => "DRIVING_LICENCE_BACK",
-        iface_verification::DocumentDetailDocumentTypeEnum::DrivingLicenceFront => "DRIVING_LICENCE_FRONT",
-        iface_verification::DocumentDetailDocumentTypeEnum::IdCard => "ID_CARD",
-        iface_verification::DocumentDetailDocumentTypeEnum::IdCardBack => "ID_CARD_BACK",
-        iface_verification::DocumentDetailDocumentTypeEnum::IdCardFront => "ID_CARD_FRONT",
-        iface_verification::DocumentDetailDocumentTypeEnum::Passport => "PASSPORT",
-        iface_verification::DocumentDetailDocumentTypeEnum::ProofOfResidency => "PROOF_OF_RESIDENCY",
-        iface_verification::DocumentDetailDocumentTypeEnum::Ssn => "SSN",
-    }
-}
-
-fn iface_verification__legal_arrangement_request_wrapper__to_json(p: &iface_verification::LegalArrangementRequestWrapper) -> Value {
-    let mut m = Map::new();
-    m.insert("legal_arrangement_request".into(), match (&p.legal_arrangement_request) { Some(v) => iface_verification__legal_arrangement_request__to_json(v), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_verification__legal_arrangement_request__to_json(p: &iface_verification::LegalArrangementRequest) -> Value {
-    let mut m = Map::new();
-    m.insert("legal_arrangement_code".into(), Value::String((&p.legal_arrangement_code).clone()));
-    m.insert("legal_arrangement_entity_codes".into(), match (&p.legal_arrangement_entity_codes) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_verification__document_detail__to_json(p: &iface_verification::DocumentDetail) -> Value {
-    let mut m = Map::new();
-    m.insert("account_holder_code".into(), match (&p.account_holder_code) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("bank_account_uuid".into(), match (&p.bank_account_uuid) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("description".into(), match (&p.description) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("document_type".into(), Value::String(iface_verification__document_detail_document_type_enum__to_str(&p.document_type).into()));
-    m.insert("filename".into(), match (&p.filename) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("shareholder_code".into(), match (&p.shareholder_code) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("signatory_code".into(), match (&p.signatory_code) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_verification__post_delete_bank_accounts_params__to_json(p: &iface_verification::PostDeleteBankAccountsParams) -> Value {
-    let mut m = Map::new();
-    m.insert("account_holder_code".into(), Value::String((&p.account_holder_code).clone()));
-    m.insert("bank_account_uui_ds".into(), Value::Array((&p.bank_account_uui_ds).iter().map(|v| Value::String((v).clone())).collect()));
-    Value::Object(m)
-}
-
-fn iface_verification__post_delete_legal_arrangements_params__to_json(p: &iface_verification::PostDeleteLegalArrangementsParams) -> Value {
-    let mut m = Map::new();
-    m.insert("account_holder_code".into(), Value::String((&p.account_holder_code).clone()));
-    m.insert("legal_arrangements".into(), Value::Array((&p.legal_arrangements).iter().map(|v| iface_verification__legal_arrangement_request_wrapper__to_json(v)).collect()));
-    Value::Object(m)
-}
-
-fn iface_verification__post_delete_shareholders_params__to_json(p: &iface_verification::PostDeleteShareholdersParams) -> Value {
-    let mut m = Map::new();
-    m.insert("account_holder_code".into(), Value::String((&p.account_holder_code).clone()));
-    m.insert("shareholder_codes".into(), Value::Array((&p.shareholder_codes).iter().map(|v| Value::String((v).clone())).collect()));
-    Value::Object(m)
-}
-
-fn iface_verification__post_delete_signatories_params__to_json(p: &iface_verification::PostDeleteSignatoriesParams) -> Value {
-    let mut m = Map::new();
-    m.insert("account_holder_code".into(), Value::String((&p.account_holder_code).clone()));
-    m.insert("signatory_codes".into(), Value::Array((&p.signatory_codes).iter().map(|v| Value::String((v).clone())).collect()));
-    Value::Object(m)
-}
-
-fn iface_verification__post_get_uploaded_documents_params__to_json(p: &iface_verification::PostGetUploadedDocumentsParams) -> Value {
-    let mut m = Map::new();
-    m.insert("account_holder_code".into(), Value::String((&p.account_holder_code).clone()));
-    m.insert("bank_account_uuid".into(), match (&p.bank_account_uuid) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("shareholder_code".into(), match (&p.shareholder_code) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_verification__post_upload_document_params__to_json(p: &iface_verification::PostUploadDocumentParams) -> Value {
-    let mut m = Map::new();
-    m.insert("account_holder_code".into(), match (&p.account_holder_code) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("bank_account_uuid".into(), match (&p.bank_account_uuid) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("document_content".into(), Value::String((&p.document_content).clone()));
-    m.insert("document_detail".into(), iface_verification__document_detail__to_json(&p.document_detail));
-    m.insert("shareholder_code".into(), match (&p.shareholder_code) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    Value::Object(m)
-}
-
-impl iface_verification::Guest for crate::Component {
-    fn post_delete_bank_accounts(params: iface_verification::PostDeleteBankAccountsParams) -> Result<String, String> {
-        let json = iface_verification__post_delete_bank_accounts_params__to_json(&params);
-        dispatch(&OP_VERIFICATION_POST_DELETE_BANK_ACCOUNTS, json)
-    }
-    fn post_delete_legal_arrangements(params: iface_verification::PostDeleteLegalArrangementsParams) -> Result<String, String> {
-        let json = iface_verification__post_delete_legal_arrangements_params__to_json(&params);
-        dispatch(&OP_VERIFICATION_POST_DELETE_LEGAL_ARRANGEMENTS, json)
-    }
-    fn post_delete_shareholders(params: iface_verification::PostDeleteShareholdersParams) -> Result<String, String> {
-        let json = iface_verification__post_delete_shareholders_params__to_json(&params);
-        dispatch(&OP_VERIFICATION_POST_DELETE_SHAREHOLDERS, json)
-    }
-    fn post_delete_signatories(params: iface_verification::PostDeleteSignatoriesParams) -> Result<String, String> {
-        let json = iface_verification__post_delete_signatories_params__to_json(&params);
-        dispatch(&OP_VERIFICATION_POST_DELETE_SIGNATORIES, json)
-    }
-    fn post_get_uploaded_documents(params: iface_verification::PostGetUploadedDocumentsParams) -> Result<String, String> {
-        let json = iface_verification__post_get_uploaded_documents_params__to_json(&params);
-        dispatch(&OP_VERIFICATION_POST_GET_UPLOADED_DOCUMENTS, json)
-    }
-    fn post_upload_document(params: iface_verification::PostUploadDocumentParams) -> Result<String, String> {
-        let json = iface_verification__post_upload_document_params__to_json(&params);
-        dispatch(&OP_VERIFICATION_POST_UPLOAD_DOCUMENT, json)
-    }
-}
+mod iface_accounts;
+mod iface_account_holders;
+mod iface_verification;
 
 export!(Component);
