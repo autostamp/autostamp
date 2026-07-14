@@ -1,26 +1,85 @@
-package autostamp:tfl@0.3.0;
+package autostamp:tfl@0.5.0;
 
 interface accident-stats {
+  record tfl-api-presentation-entities-accident-stats-accident-detail {
+    borough: option<string>,
+    casualties: option<list<tfl-api-presentation-entities-accident-stats-casualty>>,
+    date: option<string>,
+    id: option<s32>,
+    lat: option<f64>,
+    location: option<string>,
+    lon: option<f64>,
+    severity: option<string>,
+    vehicles: option<list<tfl-api-presentation-entities-accident-stats-vehicle>>
+  }
+
+  record tfl-api-presentation-entities-accident-stats-casualty {
+    age: option<s32>,
+    age-band: option<string>,
+    class: option<string>,
+    mode: option<string>,
+    severity: option<string>
+  }
+
+  record tfl-api-presentation-entities-accident-stats-vehicle {
+    type-op: option<string>
+  }
+
   /// Gets all accident details for accidents occuring in the specified year
   record get-params {
     /// The year for which to filter the accidents on.
     year: string
   }
-  get: func(params: get-params) -> result<string, string>;
+  get: func(params: get-params) -> result<list<tfl-api-presentation-entities-accident-stats-accident-detail>, string>;
 
 }
 
 
 interface air-quality {
+  record system-object {
+    /// JSON-encoded free-form object payload
+    data: option<string>
+  }
+
   /// Gets air quality data feed
-  get: func() -> result<string, string>;
+  get: func() -> result<system-object, string>;
 
 }
 
 interface bike-point {
+  record tfl-api-presentation-entities-place {
+    /// A bag of additional key/value pairs with extra information about this place.
+    additional-properties: option<list<tfl-api-presentation-entities-additional-properties>>,
+    children: option<list<string>>,
+    children-urls: option<list<string>>,
+    /// A human readable name.
+    common-name: option<string>,
+    /// The distance of the place from its search point, if this is the result
+    ///             of a geographical search, otherwise zero.
+    distance: option<f64>,
+    /// A unique identifier.
+    id: option<string>,
+    /// WGS84 latitude of the location.
+    lat: option<f64>,
+    /// WGS84 longitude of the location.
+    lon: option<f64>,
+    /// The type of Place. See /Place/Meta/placeTypes for possible values.
+    place-type: option<string>,
+    /// The unique location of this resource.
+    url: option<string>
+  }
+
+  record tfl-api-presentation-entities-additional-properties {
+    category: option<string>,
+    key: option<string>,
+    modified: option<string>,
+    source-system-key: option<string>,
+    value: option<string>
+  }
+
   /// Gets all bike point locations. The Place object has an addtionalProperties array which contains the nbBikes, nbDocks and nbSpaces
   ///             numbers which give the status of the BikePoint. A mismatch in these numbers i.e. nbDocks - (nbBikes + nbSpaces) != 0 indicates broken docks.
-  get-all: func() -> result<string, string>;
+  get-all: func() -> result<list<tfl-api-presentation-entities-place>, string>;
 
   /// Search for bike stations by their name, a bike point's name often contains information about the name of the street
   ///             or nearby landmarks, for example. Note that the search result does not contain the PlaceProperties i.e. the status
@@ -29,18 +88,23 @@ interface bike-point {
     /// The search term e.g. "St. James"
     query: string
   }
-  search: func(params: search-params) -> result<string, string>;
+  search: func(params: search-params) -> result<list<tfl-api-presentation-entities-place>, string>;
 
   /// Gets the bike point with the given id.
   record get-params {
     /// A bike point id (a list of ids can be obtained from the above BikePoint call)
     id: string
   }
-  get: func(params: get-params) -> result<string, string>;
+  get: func(params: get-params) -> result<tfl-api-presentation-entities-place, string>;
 
 }
 
 interface cabwise {
+  record system-object {
+    /// JSON-encoded free-form object payload
+    data: option<string>
+  }
+
   /// Gets taxis and minicabs contact information
   record get-params {
     /// Latitude
@@ -64,7 +128,7 @@ interface cabwise {
     /// Twenty Four Seven Only
     twenty-four-seven-only: option<bool>
   }
-  get: func(params: get-params) -> result<string, string>;
+  get: func(params: get-params) -> result<system-object, string>;
 
 }
 
@@ -107,6 +171,511 @@ interface journey {
     easy,
     moderate,
     fast,
+  }
+
+  enum tfl-api-presentation-entities-identifier-route-type-enum {
+    unknown,
+    all,
+    cycle-superhighways,
+    quietways,
+    cycleways,
+    mini-hollands,
+    central-london-grid,
+    streetspace-route,
+  }
+
+  enum tfl-api-presentation-entities-identifier-status-enum {
+    unknown,
+    all,
+    open,
+    in-progress,
+    planned,
+    planned-subject-to-feasibility-and-consultation,
+    not-open,
+  }
+
+  enum tfl-api-presentation-entities-disruption-category-enum {
+    undefined,
+    real-time,
+    planned-work,
+    information,
+    event,
+    crowding,
+    status-alert,
+  }
+
+  enum tfl-api-presentation-entities-instruction-step-sky-direction-description-enum {
+    north,
+    north-east,
+    east,
+    south-east,
+    south,
+    south-west,
+    west,
+    north-west,
+  }
+
+  enum tfl-api-presentation-entities-instruction-step-track-type-enum {
+    cycle-super-highway,
+    canal-towpath,
+    quiet-road,
+    provision-for-cyclists,
+    busy-roads,
+    none,
+    push-bike,
+    quietway,
+  }
+
+  /// A DTO representing a list of possible journeys.
+  record tfl-api-presentation-entities-journey-planner-itinerary-result {
+    cycle-hire-docking-station-data: option<tfl-api-presentation-entities-journey-planner-journey-planner-cycle-hire-docking-station-data>,
+    journey-vector: option<tfl-api-presentation-entities-journey-planner-journey-vector>,
+    journeys: option<list<tfl-api-presentation-entities-journey-planner-journey>>,
+    lines: option<list<tfl-api-presentation-entities-line>>,
+    recommended-max-age-minutes: option<s32>,
+    search-criteria: option<tfl-api-presentation-entities-journey-planner-search-criteria>,
+    stop-messages: option<list<string>>
+  }
+
+  record tfl-api-presentation-entities-journey-planner-journey-planner-cycle-hire-docking-station-data {
+    destination-id: option<string>,
+    destination-number-of-bikes: option<s32>,
+    destination-number-of-empty-slots: option<s32>,
+    origin-id: option<string>,
+    origin-number-of-bikes: option<s32>,
+    origin-number-of-empty-slots: option<s32>
+  }
+
+  record tfl-api-presentation-entities-journey-planner-journey-vector {
+    from-op: option<string>,
+    to: option<string>,
+    uri: option<string>,
+    via: option<string>
+  }
+
+  /// Object that represents an end to end journey (see schematic).
+  record tfl-api-presentation-entities-journey-planner-journey {
+    arrival-date-time: option<string>,
+    duration: option<s32>,
+    fare: option<tfl-api-presentation-entities-journey-planner-journey-fare>,
+    legs: option<list<tfl-api-presentation-entities-journey-planner-leg>>,
+    start-date-time: option<string>
+  }
+
+  record tfl-api-presentation-entities-journey-planner-journey-fare {
+    caveats: option<list<tfl-api-presentation-entities-journey-planner-fare-caveat>>,
+    fares: option<list<tfl-api-presentation-entities-journey-planner-fare>>,
+    total-cost: option<s32>
+  }
+
+  record tfl-api-presentation-entities-journey-planner-fare-caveat {
+    text: option<string>,
+    type-op: option<string>
+  }
+
+  record tfl-api-presentation-entities-journey-planner-fare {
+    charge-level: option<string>,
+    charge-profile-name: option<string>,
+    cost: option<s32>,
+    high-zone: option<s32>,
+    is-hopper-fare: option<bool>,
+    low-zone: option<s32>,
+    off-peak: option<s32>,
+    peak: option<s32>,
+    taps: option<list<tfl-api-presentation-entities-journey-planner-fare-tap>>
+  }
+
+  record tfl-api-presentation-entities-journey-planner-fare-tap {
+    atco-code: option<string>,
+    tap-details: option<tfl-api-presentation-entities-journey-planner-fare-tap-details>
+  }
+
+  record tfl-api-presentation-entities-journey-planner-fare-tap-details {
+    bus-route-id: option<string>,
+    host-device-type: option<string>,
+    mode-type: option<string>,
+    national-location-code: option<s32>,
+    tap-timestamp: option<string>,
+    validation-type: option<string>
+  }
+
+  record tfl-api-presentation-entities-journey-planner-leg {
+    arrival-point: option<tfl-api-presentation-entities-point>,
+    arrival-time: option<string>,
+    departure-point: option<tfl-api-presentation-entities-point>,
+    departure-time: option<string>,
+    disruptions: option<list<tfl-api-presentation-entities-disruption>>,
+    distance: option<f64>,
+    duration: option<s32>,
+    has-fixed-locations: option<bool>,
+    instruction: option<tfl-api-presentation-entities-instruction>,
+    inter-change-duration: option<string>,
+    inter-change-position: option<string>,
+    is-disrupted: option<bool>,
+    mode: option<tfl-api-presentation-entities-identifier>,
+    obstacles: option<list<tfl-api-presentation-entities-journey-planner-obstacle>>,
+    path: option<tfl-api-presentation-entities-journey-planner-path>,
+    planned-works: option<list<tfl-api-presentation-entities-journey-planner-planned-work>>,
+    route-options: option<list<tfl-api-presentation-entities-journey-planner-route-option>>,
+    scheduled-arrival-time: option<string>,
+    scheduled-departure-time: option<string>,
+    speed: option<string>
+  }
+
+  /// Represents a point located at a latitude and longitude using the WGS84 co-ordinate system.
+  record tfl-api-presentation-entities-point {
+    /// WGS84 latitude of the location.
+    lat: option<f64>,
+    /// WGS84 longitude of the location.
+    lon: option<f64>
+  }
+
+  /// Represents a disruption to a route within the transport network.
+  record tfl-api-presentation-entities-disruption {
+    /// Gets or sets the additionaInfo of this disruption.
+    additional-info: option<string>,
+    /// Gets or sets the routes affected by this disruption
+    affected-routes: option<list<tfl-api-presentation-entities-disrupted-route>>,
+    /// Gets or sets the stops affected by this disruption
+    affected-stops: option<list<tfl-api-presentation-entities-stop-point>>,
+    /// Gets or sets the category of this dispruption.
+    category: option<tfl-api-presentation-entities-disruption-category-enum>,
+    /// Gets or sets the description of the category.
+    category-description: option<string>,
+    /// Text describing the closure type
+    closure-text: option<string>,
+    /// Gets or sets the date/time when this disruption was created.
+    created: option<string>,
+    /// Gets or sets the description of this disruption.
+    description: option<string>,
+    /// Gets or sets the date/time when this disruption was last updated.
+    last-update: option<string>,
+    /// Gets or sets the summary of this disruption.
+    summary: option<string>,
+    /// Gets or sets the disruption type of this dispruption.
+    type-op: option<string>
+  }
+
+  /// keep old RouteSection name so as not to break contract
+  record tfl-api-presentation-entities-disrupted-route {
+    /// The name of the Destination StopPoint
+    destination-name: option<string>,
+    /// Inbound or Outbound
+    direction: option<string>,
+    /// The Id of the route
+    id: option<string>,
+    /// Whether this represents the entire route section
+    is-entire-route-section: option<bool>,
+    /// The Id of the Line
+    line-id: option<string>,
+    /// The co-ordinates of the route's path as a geoJSON lineString
+    line-string: option<string>,
+    /// Name such as "72"
+    name: option<string>,
+    /// The name of the Origin StopPoint
+    origination-name: option<string>,
+    /// The route code
+    route-code: option<string>,
+    route-section-naptan-entry-sequence: option<list<tfl-api-presentation-entities-route-section-naptan-entry-sequence>>,
+    /// The DateTime that the Service containing this Route is valid from.
+    valid-from: option<string>,
+    /// The DateTime that the Service containing this Route is valid until.
+    valid-to: option<string>,
+    via: option<tfl-api-presentation-entities-route-section-naptan-entry-sequence>
+  }
+
+  record tfl-api-presentation-entities-route-section-naptan-entry-sequence {
+    ordinal: option<s32>,
+    stop-point: option<tfl-api-presentation-entities-stop-point>
+  }
+
+  record tfl-api-presentation-entities-stop-point {
+    accessibility-summary: option<string>,
+    /// A bag of additional key/value pairs with extra information about this place.
+    additional-properties: option<list<tfl-api-presentation-entities-additional-properties>>,
+    children: option<list<tfl-api-presentation-entities-place>>,
+    children-urls: option<list<string>>,
+    /// A human readable name.
+    common-name: option<string>,
+    /// The distance of the place from its search point, if this is the result
+    ///             of a geographical search, otherwise zero.
+    distance: option<f64>,
+    full-name: option<string>,
+    hub-naptan-code: option<string>,
+    ics-code: option<string>,
+    /// A unique identifier.
+    id: option<string>,
+    /// The indicator of the stop point e.g. "Stop K"
+    indicator: option<string>,
+    individual-stop-id: option<string>,
+    /// WGS84 latitude of the location.
+    lat: option<f64>,
+    line-group: option<list<tfl-api-presentation-entities-line-group>>,
+    line-mode-groups: option<list<tfl-api-presentation-entities-line-mode-group>>,
+    lines: option<list<tfl-api-presentation-entities-identifier>>,
+    /// WGS84 longitude of the location.
+    lon: option<f64>,
+    modes: option<list<string>>,
+    naptan-id: option<string>,
+    naptan-mode: option<string>,
+    /// The type of Place. See /Place/Meta/placeTypes for possible values.
+    place-type: option<string>,
+    platform-name: option<string>,
+    sms-code: option<string>,
+    station-naptan: option<string>,
+    status: option<bool>,
+    /// The stop letter, if it could be cleansed from the Indicator e.g. "K"
+    stop-letter: option<string>,
+    stop-type: option<string>,
+    /// The unique location of this resource.
+    url: option<string>
+  }
+
+  record tfl-api-presentation-entities-additional-properties {
+    category: option<string>,
+    key: option<string>,
+    modified: option<string>,
+    source-system-key: option<string>,
+    value: option<string>
+  }
+
+  record tfl-api-presentation-entities-place {
+    /// A bag of additional key/value pairs with extra information about this place.
+    additional-properties: option<list<tfl-api-presentation-entities-additional-properties>>,
+    children: option<list<string>>,
+    children-urls: option<list<string>>,
+    /// A human readable name.
+    common-name: option<string>,
+    /// The distance of the place from its search point, if this is the result
+    ///             of a geographical search, otherwise zero.
+    distance: option<f64>,
+    /// A unique identifier.
+    id: option<string>,
+    /// WGS84 latitude of the location.
+    lat: option<f64>,
+    /// WGS84 longitude of the location.
+    lon: option<f64>,
+    /// The type of Place. See /Place/Meta/placeTypes for possible values.
+    place-type: option<string>,
+    /// The unique location of this resource.
+    url: option<string>
+  }
+
+  record tfl-api-presentation-entities-line-group {
+    line-identifier: option<list<string>>,
+    naptan-id-reference: option<string>,
+    station-atco-code: option<string>
+  }
+
+  record tfl-api-presentation-entities-line-mode-group {
+    line-identifier: option<list<string>>,
+    mode-name: option<string>
+  }
+
+  record tfl-api-presentation-entities-identifier {
+    crowding: option<tfl-api-presentation-entities-crowding>,
+    full-name: option<string>,
+    id: option<string>,
+    mot-type: option<string>,
+    name: option<string>,
+    network: option<string>,
+    route-type: option<tfl-api-presentation-entities-identifier-route-type-enum>,
+    status: option<tfl-api-presentation-entities-identifier-status-enum>,
+    type-op: option<string>,
+    uri: option<string>
+  }
+
+  record tfl-api-presentation-entities-crowding {
+    /// Busiest times at a station (static information)
+    passenger-flows: option<list<tfl-api-presentation-entities-passenger-flow>>,
+    /// Train Loading on a scale 1-6, 1 being "Very quiet" and 6 being "Exceptionally busy" (static information)
+    train-loadings: option<list<tfl-api-presentation-entities-train-loading>>
+  }
+
+  record tfl-api-presentation-entities-passenger-flow {
+    /// Time in 24hr format with 15 minute intervals e.g. 0500-0515, 0515-0530 etc.
+    time-slice: option<string>,
+    /// Count of passenger flow towards a platform
+    value: option<s32>
+  }
+
+  record tfl-api-presentation-entities-train-loading {
+    /// Direction in regards to Journey Planner i.e. inbound or outbound
+    direction: option<string>,
+    /// The Line Name e.g. "Victoria"
+    line: option<string>,
+    /// Direction of the Line e.g. NB, SB, WB etc.
+    line-direction: option<string>,
+    /// Naptan of the adjacent station
+    naptan-to: option<string>,
+    /// Direction displayed on the platform e.g. NB, SB, WB etc.
+    platform-direction: option<string>,
+    /// Time in 24hr format with 15 minute intervals e.g. 0500-0515, 0515-0530 etc.
+    time-slice: option<string>,
+    /// Scale between 1-6, 
+    ///              1 = Very quiet, 2 = Quiet, 3 = Fairly busy, 4 = Busy, 5 = Very busy, 6 = Exceptionally busy
+    value: option<s32>
+  }
+
+  record tfl-api-presentation-entities-instruction {
+    detailed: option<string>,
+    steps: option<list<tfl-api-presentation-entities-instruction-step>>,
+    summary: option<string>
+  }
+
+  record tfl-api-presentation-entities-instruction-step {
+    cumulative-distance: option<s32>,
+    cumulative-travel-time: option<s32>,
+    description: option<string>,
+    description-heading: option<string>,
+    distance: option<s32>,
+    latitude: option<f64>,
+    longitude: option<f64>,
+    path-attribute: option<tfl-api-presentation-entities-path-attribute>,
+    sky-direction: option<s32>,
+    sky-direction-description: option<tfl-api-presentation-entities-instruction-step-sky-direction-description-enum>,
+    street-name: option<string>,
+    track-type: option<tfl-api-presentation-entities-instruction-step-track-type-enum>,
+    turn-direction: option<string>
+  }
+
+  record tfl-api-presentation-entities-path-attribute {
+    name: option<string>,
+    value: option<string>
+  }
+
+  record tfl-api-presentation-entities-journey-planner-obstacle {
+    incline: option<string>,
+    position: option<string>,
+    stop-id: option<s32>,
+    type-op: option<string>
+  }
+
+  record tfl-api-presentation-entities-journey-planner-path {
+    elevation: option<list<tfl-api-common-journey-planner-jp-elevation>>,
+    line-string: option<string>,
+    stop-points: option<list<tfl-api-presentation-entities-identifier>>
+  }
+
+  record tfl-api-common-journey-planner-jp-elevation {
+    distance: option<s32>,
+    end-lat: option<f64>,
+    end-lon: option<f64>,
+    gradient: option<f64>,
+    height-from-previous-point: option<s32>,
+    start-lat: option<f64>,
+    start-lon: option<f64>
+  }
+
+  record tfl-api-presentation-entities-journey-planner-planned-work {
+    created-date-time: option<string>,
+    description: option<string>,
+    id: option<string>,
+    last-update-date-time: option<string>
+  }
+
+  record tfl-api-presentation-entities-journey-planner-route-option {
+    /// The direction of the route, i.e. outbound or inbound.
+    direction: option<string>,
+    directions: option<list<string>>,
+    /// The Id of the route
+    id: option<string>,
+    line-identifier: option<tfl-api-presentation-entities-identifier>,
+    /// Name such as "72"
+    name: option<string>
+  }
+
+  record tfl-api-presentation-entities-line {
+    created: option<string>,
+    crowding: option<tfl-api-presentation-entities-crowding>,
+    disruptions: option<list<tfl-api-presentation-entities-disruption>>,
+    id: option<string>,
+    line-statuses: option<list<tfl-api-presentation-entities-line-status>>,
+    mode-name: option<string>,
+    modified: option<string>,
+    name: option<string>,
+    route-sections: option<list<tfl-api-presentation-entities-matched-route>>,
+    service-types: option<list<tfl-api-presentation-entities-line-service-type-info>>
+  }
+
+  record tfl-api-presentation-entities-line-status {
+    created: option<string>,
+    disruption: option<tfl-api-presentation-entities-disruption>,
+    id: option<s32>,
+    line-id: option<string>,
+    modified: option<string>,
+    reason: option<string>,
+    status-severity: option<s32>,
+    status-severity-description: option<string>,
+    validity-periods: option<list<tfl-api-presentation-entities-validity-period>>
+  }
+
+  /// Represents a period for which a planned works is valid.
+  record tfl-api-presentation-entities-validity-period {
+    /// Gets or sets the start date.
+    from-date: option<string>,
+    /// If true is a realtime status rather than planned or info
+    is-now: option<bool>,
+    /// Gets or sets the end date.
+    to-date: option<string>
+  }
+
+  /// Description of a Route used in Route search results.
+  record tfl-api-presentation-entities-matched-route {
+    /// The Id (NaPTAN code) or the Destination StopPoint
+    destination: option<string>,
+    /// The name of the Destination StopPoint
+    destination-name: option<string>,
+    /// Inbound or Outbound
+    direction: option<string>,
+    /// Name such as "72"
+    name: option<string>,
+    /// The name of the Origin StopPoint
+    origination-name: option<string>,
+    /// The Id (NaPTAN code) of the Origin StopPoint
+    originator: option<string>,
+    /// The route code
+    route-code: option<string>,
+    /// Regular or Night
+    service-type: option<string>,
+    /// The DateTime that the Service containing this Route is valid from.
+    valid-from: option<string>,
+    /// The DateTime that the Service containing this Route is valid until.
+    valid-to: option<string>
+  }
+
+  record tfl-api-presentation-entities-line-service-type-info {
+    name: option<string>,
+    uri: option<string>
+  }
+
+  record tfl-api-presentation-entities-journey-planner-search-criteria {
+    date-time: option<string>,
+    date-time-type: option<journey-results-time-is-enum>,
+    time-adjustments: option<tfl-api-presentation-entities-journey-planner-time-adjustments>
+  }
+
+  record tfl-api-presentation-entities-journey-planner-time-adjustments {
+    earlier: option<tfl-api-presentation-entities-journey-planner-time-adjustment>,
+    earliest: option<tfl-api-presentation-entities-journey-planner-time-adjustment>,
+    later: option<tfl-api-presentation-entities-journey-planner-time-adjustment>,
+    latest: option<tfl-api-presentation-entities-journey-planner-time-adjustment>
+  }
+
+  record tfl-api-presentation-entities-journey-planner-time-adjustment {
+    date: option<string>,
+    time: option<string>,
+    time-is: option<string>,
+    uri: option<string>
+  }
+
+  record tfl-api-presentation-entities-mode {
+    is-fare-paying: option<bool>,
+    is-scheduled-service: option<bool>,
+    is-tfl-service: option<bool>,
+    mode-name: option<string>,
+    mot-type: option<string>,
+    network: option<string>
   }
 
   /// Perform a Journey Planner search from the parameters specified in simple types
@@ -168,14 +737,45 @@ interface journey {
     /// A boolean to make Journey Planner calculate journeys in one temporal direction only. In other words, only calculate journeys after the 'depart' time, or before the 'arrive' time. By default, the Journey Planner engine (EFA) calculates journeys in both temporal directions.
     calc-one-direction: option<bool>
   }
-  journey-results: func(params: journey-results-params) -> result<string, string>;
+  journey-results: func(params: journey-results-params) -> result<tfl-api-presentation-entities-journey-planner-itinerary-result, string>;
 
   /// Gets a list of all of the available journey planner modes
-  meta: func() -> result<string, string>;
+  meta: func() -> result<list<tfl-api-presentation-entities-mode>, string>;
 
 }
 
 interface line {
+  enum tfl-api-presentation-entities-identifier-route-type-enum {
+    unknown,
+    all,
+    cycle-superhighways,
+    quietways,
+    cycleways,
+    mini-hollands,
+    central-london-grid,
+    streetspace-route,
+  }
+
+  enum tfl-api-presentation-entities-identifier-status-enum {
+    unknown,
+    all,
+    open,
+    in-progress,
+    planned,
+    planned-subject-to-feasibility-and-consultation,
+    not-open,
+  }
+
+  enum tfl-api-presentation-entities-disruption-category-enum {
+    undefined,
+    real-time,
+    planned-work,
+    information,
+    event,
+    crowding,
+    status-alert,
+  }
+
   enum route-by-mode-service-types-item-enum {
     regular,
     night,
@@ -187,31 +787,518 @@ interface line {
     all,
   }
 
+  enum tfl-api-presentation-entities-period-type-op-enum {
+    normal,
+    frequency-hours,
+    frequency-minutes,
+    unknown,
+  }
+
+  record tfl-api-presentation-entities-mode {
+    is-fare-paying: option<bool>,
+    is-scheduled-service: option<bool>,
+    is-tfl-service: option<bool>,
+    mode-name: option<string>,
+    mot-type: option<string>,
+    network: option<string>
+  }
+
+  record tfl-api-presentation-entities-status-severity {
+    description: option<string>,
+    mode-name: option<string>,
+    severity-level: option<s32>
+  }
+
+  record tfl-api-presentation-entities-line {
+    created: option<string>,
+    crowding: option<tfl-api-presentation-entities-crowding>,
+    disruptions: option<list<tfl-api-presentation-entities-disruption>>,
+    id: option<string>,
+    line-statuses: option<list<tfl-api-presentation-entities-line-status>>,
+    mode-name: option<string>,
+    modified: option<string>,
+    name: option<string>,
+    route-sections: option<list<tfl-api-presentation-entities-matched-route>>,
+    service-types: option<list<tfl-api-presentation-entities-line-service-type-info>>
+  }
+
+  record tfl-api-presentation-entities-crowding {
+    /// Busiest times at a station (static information)
+    passenger-flows: option<list<tfl-api-presentation-entities-passenger-flow>>,
+    /// Train Loading on a scale 1-6, 1 being "Very quiet" and 6 being "Exceptionally busy" (static information)
+    train-loadings: option<list<tfl-api-presentation-entities-train-loading>>
+  }
+
+  record tfl-api-presentation-entities-passenger-flow {
+    /// Time in 24hr format with 15 minute intervals e.g. 0500-0515, 0515-0530 etc.
+    time-slice: option<string>,
+    /// Count of passenger flow towards a platform
+    value: option<s32>
+  }
+
+  record tfl-api-presentation-entities-train-loading {
+    /// Direction in regards to Journey Planner i.e. inbound or outbound
+    direction: option<string>,
+    /// The Line Name e.g. "Victoria"
+    line: option<string>,
+    /// Direction of the Line e.g. NB, SB, WB etc.
+    line-direction: option<string>,
+    /// Naptan of the adjacent station
+    naptan-to: option<string>,
+    /// Direction displayed on the platform e.g. NB, SB, WB etc.
+    platform-direction: option<string>,
+    /// Time in 24hr format with 15 minute intervals e.g. 0500-0515, 0515-0530 etc.
+    time-slice: option<string>,
+    /// Scale between 1-6, 
+    ///              1 = Very quiet, 2 = Quiet, 3 = Fairly busy, 4 = Busy, 5 = Very busy, 6 = Exceptionally busy
+    value: option<s32>
+  }
+
+  /// Represents a disruption to a route within the transport network.
+  record tfl-api-presentation-entities-disruption {
+    /// Gets or sets the additionaInfo of this disruption.
+    additional-info: option<string>,
+    /// Gets or sets the routes affected by this disruption
+    affected-routes: option<list<tfl-api-presentation-entities-disrupted-route>>,
+    /// Gets or sets the stops affected by this disruption
+    affected-stops: option<list<tfl-api-presentation-entities-stop-point>>,
+    /// Gets or sets the category of this dispruption.
+    category: option<tfl-api-presentation-entities-disruption-category-enum>,
+    /// Gets or sets the description of the category.
+    category-description: option<string>,
+    /// Text describing the closure type
+    closure-text: option<string>,
+    /// Gets or sets the date/time when this disruption was created.
+    created: option<string>,
+    /// Gets or sets the description of this disruption.
+    description: option<string>,
+    /// Gets or sets the date/time when this disruption was last updated.
+    last-update: option<string>,
+    /// Gets or sets the summary of this disruption.
+    summary: option<string>,
+    /// Gets or sets the disruption type of this dispruption.
+    type-op: option<string>
+  }
+
+  /// keep old RouteSection name so as not to break contract
+  record tfl-api-presentation-entities-disrupted-route {
+    /// The name of the Destination StopPoint
+    destination-name: option<string>,
+    /// Inbound or Outbound
+    direction: option<string>,
+    /// The Id of the route
+    id: option<string>,
+    /// Whether this represents the entire route section
+    is-entire-route-section: option<bool>,
+    /// The Id of the Line
+    line-id: option<string>,
+    /// The co-ordinates of the route's path as a geoJSON lineString
+    line-string: option<string>,
+    /// Name such as "72"
+    name: option<string>,
+    /// The name of the Origin StopPoint
+    origination-name: option<string>,
+    /// The route code
+    route-code: option<string>,
+    route-section-naptan-entry-sequence: option<list<tfl-api-presentation-entities-route-section-naptan-entry-sequence>>,
+    /// The DateTime that the Service containing this Route is valid from.
+    valid-from: option<string>,
+    /// The DateTime that the Service containing this Route is valid until.
+    valid-to: option<string>,
+    via: option<tfl-api-presentation-entities-route-section-naptan-entry-sequence>
+  }
+
+  record tfl-api-presentation-entities-route-section-naptan-entry-sequence {
+    ordinal: option<s32>,
+    stop-point: option<tfl-api-presentation-entities-stop-point>
+  }
+
+  record tfl-api-presentation-entities-stop-point {
+    accessibility-summary: option<string>,
+    /// A bag of additional key/value pairs with extra information about this place.
+    additional-properties: option<list<tfl-api-presentation-entities-additional-properties>>,
+    children: option<list<tfl-api-presentation-entities-place>>,
+    children-urls: option<list<string>>,
+    /// A human readable name.
+    common-name: option<string>,
+    /// The distance of the place from its search point, if this is the result
+    ///             of a geographical search, otherwise zero.
+    distance: option<f64>,
+    full-name: option<string>,
+    hub-naptan-code: option<string>,
+    ics-code: option<string>,
+    /// A unique identifier.
+    id: option<string>,
+    /// The indicator of the stop point e.g. "Stop K"
+    indicator: option<string>,
+    individual-stop-id: option<string>,
+    /// WGS84 latitude of the location.
+    lat: option<f64>,
+    line-group: option<list<tfl-api-presentation-entities-line-group>>,
+    line-mode-groups: option<list<tfl-api-presentation-entities-line-mode-group>>,
+    lines: option<list<tfl-api-presentation-entities-identifier>>,
+    /// WGS84 longitude of the location.
+    lon: option<f64>,
+    modes: option<list<string>>,
+    naptan-id: option<string>,
+    naptan-mode: option<string>,
+    /// The type of Place. See /Place/Meta/placeTypes for possible values.
+    place-type: option<string>,
+    platform-name: option<string>,
+    sms-code: option<string>,
+    station-naptan: option<string>,
+    status: option<bool>,
+    /// The stop letter, if it could be cleansed from the Indicator e.g. "K"
+    stop-letter: option<string>,
+    stop-type: option<string>,
+    /// The unique location of this resource.
+    url: option<string>
+  }
+
+  record tfl-api-presentation-entities-additional-properties {
+    category: option<string>,
+    key: option<string>,
+    modified: option<string>,
+    source-system-key: option<string>,
+    value: option<string>
+  }
+
+  record tfl-api-presentation-entities-place {
+    /// A bag of additional key/value pairs with extra information about this place.
+    additional-properties: option<list<tfl-api-presentation-entities-additional-properties>>,
+    children: option<list<string>>,
+    children-urls: option<list<string>>,
+    /// A human readable name.
+    common-name: option<string>,
+    /// The distance of the place from its search point, if this is the result
+    ///             of a geographical search, otherwise zero.
+    distance: option<f64>,
+    /// A unique identifier.
+    id: option<string>,
+    /// WGS84 latitude of the location.
+    lat: option<f64>,
+    /// WGS84 longitude of the location.
+    lon: option<f64>,
+    /// The type of Place. See /Place/Meta/placeTypes for possible values.
+    place-type: option<string>,
+    /// The unique location of this resource.
+    url: option<string>
+  }
+
+  record tfl-api-presentation-entities-line-group {
+    line-identifier: option<list<string>>,
+    naptan-id-reference: option<string>,
+    station-atco-code: option<string>
+  }
+
+  record tfl-api-presentation-entities-line-mode-group {
+    line-identifier: option<list<string>>,
+    mode-name: option<string>
+  }
+
+  record tfl-api-presentation-entities-identifier {
+    crowding: option<tfl-api-presentation-entities-crowding>,
+    full-name: option<string>,
+    id: option<string>,
+    mot-type: option<string>,
+    name: option<string>,
+    network: option<string>,
+    route-type: option<tfl-api-presentation-entities-identifier-route-type-enum>,
+    status: option<tfl-api-presentation-entities-identifier-status-enum>,
+    type-op: option<string>,
+    uri: option<string>
+  }
+
+  record tfl-api-presentation-entities-line-status {
+    created: option<string>,
+    disruption: option<tfl-api-presentation-entities-disruption>,
+    id: option<s32>,
+    line-id: option<string>,
+    modified: option<string>,
+    reason: option<string>,
+    status-severity: option<s32>,
+    status-severity-description: option<string>,
+    validity-periods: option<list<tfl-api-presentation-entities-validity-period>>
+  }
+
+  /// Represents a period for which a planned works is valid.
+  record tfl-api-presentation-entities-validity-period {
+    /// Gets or sets the start date.
+    from-date: option<string>,
+    /// If true is a realtime status rather than planned or info
+    is-now: option<bool>,
+    /// Gets or sets the end date.
+    to-date: option<string>
+  }
+
+  /// Description of a Route used in Route search results.
+  record tfl-api-presentation-entities-matched-route {
+    /// The Id (NaPTAN code) or the Destination StopPoint
+    destination: option<string>,
+    /// The name of the Destination StopPoint
+    destination-name: option<string>,
+    /// Inbound or Outbound
+    direction: option<string>,
+    /// Name such as "72"
+    name: option<string>,
+    /// The name of the Origin StopPoint
+    origination-name: option<string>,
+    /// The Id (NaPTAN code) of the Origin StopPoint
+    originator: option<string>,
+    /// The route code
+    route-code: option<string>,
+    /// Regular or Night
+    service-type: option<string>,
+    /// The DateTime that the Service containing this Route is valid from.
+    valid-from: option<string>,
+    /// The DateTime that the Service containing this Route is valid until.
+    valid-to: option<string>
+  }
+
+  record tfl-api-presentation-entities-line-service-type-info {
+    name: option<string>,
+    uri: option<string>
+  }
+
+  record tfl-api-presentation-entities-route-search-response {
+    input: option<string>,
+    search-matches: option<list<tfl-api-presentation-entities-route-search-match>>
+  }
+
+  record tfl-api-presentation-entities-route-search-match {
+    id: option<string>,
+    lat: option<f64>,
+    line-id: option<string>,
+    line-name: option<string>,
+    line-route-section: option<list<tfl-api-presentation-entities-line-route-section>>,
+    lon: option<f64>,
+    matched-route-sections: option<list<tfl-api-presentation-entities-matched-route-sections>>,
+    matched-stops: option<list<tfl-api-presentation-entities-matched-stop>>,
+    mode: option<string>,
+    name: option<string>,
+    url: option<string>
+  }
+
+  record tfl-api-presentation-entities-line-route-section {
+    destination: option<string>,
+    direction: option<string>,
+    from-station: option<string>,
+    route-id: option<s32>,
+    service-type: option<string>,
+    to-station: option<string>,
+    vehicle-destination-text: option<string>
+  }
+
+  record tfl-api-presentation-entities-matched-route-sections {
+    id: option<s32>
+  }
+
+  record tfl-api-presentation-entities-matched-stop {
+    accessibility-summary: option<string>,
+    direction: option<string>,
+    has-disruption: option<bool>,
+    ics-id: option<string>,
+    id: option<string>,
+    lat: option<f64>,
+    lines: option<list<tfl-api-presentation-entities-identifier>>,
+    lon: option<f64>,
+    modes: option<list<string>>,
+    name: option<string>,
+    parent-id: option<string>,
+    route-id: option<s32>,
+    station-id: option<string>,
+    status: option<bool>,
+    stop-letter: option<string>,
+    stop-type: option<string>,
+    top-most-parent-id: option<string>,
+    towards: option<string>,
+    url: option<string>,
+    zone: option<string>
+  }
+
+  /// DTO to capture the prediction details
+  record tfl-api-presentation-entities-prediction {
+    /// Bearing (between 0 to 359)
+    bearing: option<string>,
+    /// The current location of the vehicle.
+    current-location: option<string>,
+    /// Name of the destination
+    destination-name: option<string>,
+    /// Naptan Identifier for the prediction's destination
+    destination-naptan-id: option<string>,
+    /// Direction (unified to inbound/outbound)
+    direction: option<string>,
+    /// The expected arrival time of the vehicle at the stop/station
+    expected-arrival: option<string>,
+    /// The identitier for the prediction
+    id: option<string>,
+    /// Unique identifier for the Line
+    line-id: option<string>,
+    /// Line Name
+    line-name: option<string>,
+    /// The mode name of the station/line the prediction relates to
+    mode-name: option<string>,
+    /// Identifier for the prediction
+    naptan-id: option<string>,
+    /// The type of the operation (1: is new or has been updated, 2: should be deleted from any client cache)
+    operation-type: option<s32>,
+    /// Platform name (for bus, this is the stop letter)
+    platform-name: option<string>,
+    /// Station name
+    station-name: option<string>,
+    /// The expiry time for the prediction
+    time-to-live: option<string>,
+    /// Prediction of the Time to station in seconds
+    time-to-station: option<s32>,
+    /// Timestamp for when the prediction was inserted/modified (source column drives what objects are broadcast on each iteration)
+    timestamp: option<string>,
+    timing: option<tfl-api-presentation-entities-prediction-timing>,
+    /// Routing information or other descriptive text about the path of the vehicle towards the destination
+    towards: option<string>,
+    /// The actual vehicle in transit (for train modes, the leading car of the rolling set)
+    vehicle-id: option<string>
+  }
+
+  record tfl-api-presentation-entities-prediction-timing {
+    countdown-server-adjustment: option<string>,
+    insert: option<string>,
+    read: option<string>,
+    received: option<string>,
+    sent: option<string>,
+    source: option<string>
+  }
+
+  record tfl-api-presentation-entities-route-sequence {
+    direction: option<string>,
+    is-outbound-only: option<bool>,
+    line-id: option<string>,
+    line-name: option<string>,
+    line-strings: option<list<string>>,
+    mode: option<string>,
+    ordered-line-routes: option<list<tfl-api-presentation-entities-ordered-route>>,
+    stations: option<list<tfl-api-presentation-entities-matched-stop>>,
+    stop-point-sequences: option<list<tfl-api-presentation-entities-stop-point-sequence>>
+  }
+
+  record tfl-api-presentation-entities-ordered-route {
+    name: option<string>,
+    naptan-ids: option<list<string>>,
+    service-type: option<string>
+  }
+
+  record tfl-api-presentation-entities-stop-point-sequence {
+    /// The id of this branch.
+    branch-id: option<s32>,
+    direction: option<string>,
+    line-id: option<string>,
+    line-name: option<string>,
+    /// The ids of the next branch(es) in the sequence. Note that the next and previous branch id can be
+    ///             identical in the case of a looped route e.g. the Circle line.
+    next-branch-ids: option<list<s32>>,
+    /// The ids of the previous branch(es) in the sequence. Note that the next and previous branch id can be
+    ///             identical in the case of a looped route e.g. the Circle line.
+    prev-branch-ids: option<list<s32>>,
+    service-type: option<route-by-mode-service-types-item-enum>,
+    stop-point: option<list<tfl-api-presentation-entities-matched-stop>>
+  }
+
+  record tfl-api-presentation-entities-timetable-response {
+    direction: option<string>,
+    disambiguation: option<tfl-api-presentation-entities-timetables-disambiguation>,
+    line-id: option<string>,
+    line-name: option<string>,
+    pdf-url: option<string>,
+    stations: option<list<tfl-api-presentation-entities-matched-stop>>,
+    status-error-message: option<string>,
+    stops: option<list<tfl-api-presentation-entities-matched-stop>>,
+    timetable: option<tfl-api-presentation-entities-timetable>
+  }
+
+  record tfl-api-presentation-entities-timetables-disambiguation {
+    disambiguation-options: option<list<tfl-api-presentation-entities-timetables-disambiguation-option>>
+  }
+
+  record tfl-api-presentation-entities-timetables-disambiguation-option {
+    description: option<string>,
+    uri: option<string>
+  }
+
+  record tfl-api-presentation-entities-timetable {
+    departure-stop-id: option<string>,
+    routes: option<list<tfl-api-presentation-entities-timetable-route>>
+  }
+
+  record tfl-api-presentation-entities-timetable-route {
+    schedules: option<list<tfl-api-presentation-entities-schedule>>,
+    station-intervals: option<list<tfl-api-presentation-entities-station-interval>>
+  }
+
+  record tfl-api-presentation-entities-schedule {
+    first-journey: option<tfl-api-presentation-entities-known-journey>,
+    known-journeys: option<list<tfl-api-presentation-entities-known-journey>>,
+    last-journey: option<tfl-api-presentation-entities-known-journey>,
+    name: option<string>,
+    periods: option<list<tfl-api-presentation-entities-period>>
+  }
+
+  record tfl-api-presentation-entities-known-journey {
+    hour: option<string>,
+    interval-id: option<s32>,
+    minute: option<string>
+  }
+
+  record tfl-api-presentation-entities-period {
+    frequency: option<tfl-api-presentation-entities-service-frequency>,
+    from-time: option<tfl-api-presentation-entities-twenty-four-hour-clock-time>,
+    to-time: option<tfl-api-presentation-entities-twenty-four-hour-clock-time>,
+    type-op: option<tfl-api-presentation-entities-period-type-op-enum>
+  }
+
+  record tfl-api-presentation-entities-service-frequency {
+    highest-frequency: option<f64>,
+    lowest-frequency: option<f64>
+  }
+
+  record tfl-api-presentation-entities-twenty-four-hour-clock-time {
+    hour: option<string>,
+    minute: option<string>
+  }
+
+  record tfl-api-presentation-entities-station-interval {
+    id: option<string>,
+    intervals: option<list<tfl-api-presentation-entities-interval>>
+  }
+
+  record tfl-api-presentation-entities-interval {
+    stop-id: option<string>,
+    time-to-arrival: option<f64>
+  }
+
   /// Gets a list of valid disruption categories
-  meta-disruption-categories: func() -> result<string, string>;
+  meta-disruption-categories: func() -> result<list<string>, string>;
 
   /// Gets a list of valid modes
-  meta-modes: func() -> result<string, string>;
+  meta-modes: func() -> result<list<tfl-api-presentation-entities-mode>, string>;
 
   /// Gets a list of valid ServiceTypes to filter on
-  meta-service-types: func() -> result<string, string>;
+  meta-service-types: func() -> result<list<string>, string>;
 
   /// Gets a list of valid severity codes
-  meta-severity: func() -> result<string, string>;
+  meta-severity: func() -> result<list<tfl-api-presentation-entities-status-severity>, string>;
 
   /// Gets lines that serve the given modes.
   record get-by-mode-params {
     /// A comma-separated list of modes e.g. tube,dlr
     modes: string
   }
-  get-by-mode: func(params: get-by-mode-params) -> result<string, string>;
+  get-by-mode: func(params: get-by-mode-params) -> result<list<tfl-api-presentation-entities-line>, string>;
 
   /// Get disruptions for all lines of the given modes.
   record disruption-by-mode-params {
     /// A comma-separated list of modes e.g. tube,dlr
     modes: string
   }
-  disruption-by-mode: func(params: disruption-by-mode-params) -> result<string, string>;
+  disruption-by-mode: func(params: disruption-by-mode-params) -> result<list<tfl-api-presentation-entities-disruption>, string>;
 
   /// Gets all lines and their valid routes for given modes, including the name and id of the originating and terminating stops for each route
   record route-by-mode-params {
@@ -220,7 +1307,7 @@ interface line {
     /// A comma seperated list of service types to filter on. Supported values: Regular, Night. Defaulted to 'Regular' if not specified
     service-types: option<list<route-by-mode-service-types-item-enum>>
   }
-  route-by-mode: func(params: route-by-mode-params) -> result<string, string>;
+  route-by-mode: func(params: route-by-mode-params) -> result<list<tfl-api-presentation-entities-line>, string>;
 
   /// Gets the line status of for all lines for the given modes
   record status-by-mode-params {
@@ -231,14 +1318,14 @@ interface line {
     /// If specified, ensures that only those line status(es) are returned within the lines that have disruptions with the matching severity level.
     severity-level: option<string>
   }
-  status-by-mode: func(params: status-by-mode-params) -> result<string, string>;
+  status-by-mode: func(params: status-by-mode-params) -> result<list<tfl-api-presentation-entities-line>, string>;
 
   /// Get all valid routes for all lines, including the name and id of the originating and terminating stops for each route.
   record route-params {
     /// A comma seperated list of service types to filter on. Supported values: Regular, Night. Defaulted to 'Regular' if not specified
     service-types: option<list<route-by-mode-service-types-item-enum>>
   }
-  route: func(params: route-params) -> result<string, string>;
+  route: func(params: route-params) -> result<list<tfl-api-presentation-entities-line>, string>;
 
   /// Search for lines or routes matching the query string
   record search-params {
@@ -249,7 +1336,7 @@ interface line {
     /// A comma seperated list of service types to filter on. Supported values: Regular, Night. Defaulted to 'Regular' if not specified
     service-types: option<list<route-by-mode-service-types-item-enum>>
   }
-  search: func(params: search-params) -> result<string, string>;
+  search: func(params: search-params) -> result<tfl-api-presentation-entities-route-search-response, string>;
 
   /// Gets the line status for all lines with a given severity
   ///             A list of valid severity codes can be obtained from a call to Line/Meta/Severity
@@ -257,14 +1344,14 @@ interface line {
     /// The level of severity (eg: a number from 0 to 14)
     severity: string
   }
-  status-by-severity: func(params: status-by-severity-params) -> result<string, string>;
+  status-by-severity: func(params: status-by-severity-params) -> result<list<tfl-api-presentation-entities-line>, string>;
 
   /// Gets lines that match the specified line ids.
   record get-params {
     /// A comma-separated list of line ids e.g. victoria,circle,N133. Max. approx. 20 ids.
     ids: string
   }
-  get: func(params: get-params) -> result<string, string>;
+  get: func(params: get-params) -> result<list<tfl-api-presentation-entities-line>, string>;
 
   /// Get the list of arrival predictions for given line ids based at the given stop
   record arrivals-params {
@@ -277,14 +1364,14 @@ interface line {
     /// Optional. Id of destination stop
     destination-station-id: option<string>
   }
-  arrivals: func(params: arrivals-params) -> result<string, string>;
+  arrivals: func(params: arrivals-params) -> result<list<tfl-api-presentation-entities-prediction>, string>;
 
   /// Get disruptions for the given line ids
   record disruption-params {
     /// A comma-separated list of line ids e.g. victoria,circle,N133. Max. approx. 20 ids.
     ids: string
   }
-  disruption: func(params: disruption-params) -> result<string, string>;
+  disruption: func(params: disruption-params) -> result<list<tfl-api-presentation-entities-disruption>, string>;
 
   /// Get all valid routes for given line ids, including the name and id of the originating and terminating stops for each route.
   record line-routes-by-ids-params {
@@ -293,7 +1380,7 @@ interface line {
     /// A comma seperated list of service types to filter on. Supported values: Regular, Night. Defaulted to 'Regular' if not specified
     service-types: option<list<route-by-mode-service-types-item-enum>>
   }
-  line-routes-by-ids: func(params: line-routes-by-ids-params) -> result<string, string>;
+  line-routes-by-ids: func(params: line-routes-by-ids-params) -> result<list<tfl-api-presentation-entities-line>, string>;
 
   /// Gets the line status of for given line ids e.g Minor Delays
   record status-by-ids-params {
@@ -302,7 +1389,7 @@ interface line {
     /// Include details of the disruptions that are causing the line status including the affected stops and routes
     detail: option<bool>
   }
-  status-by-ids: func(params: status-by-ids-params) -> result<string, string>;
+  status-by-ids: func(params: status-by-ids-params) -> result<list<tfl-api-presentation-entities-line>, string>;
 
   /// Gets the line status for given line ids during the provided dates e.g Minor Delays
   record status-params {
@@ -313,9 +1400,13 @@ interface line {
     start-date: string,
     end-date: string,
     date-range-start-date: option<string>,
-    date-range-end-date: option<string>
+    date-range-end-date: option<string>,
+    /// Automatically added
+    start-date-v2: string,
+    /// Automatically added
+    end-date-v2: string
   }
-  status: func(params: status-params) -> result<string, string>;
+  status: func(params: status-params) -> result<list<tfl-api-presentation-entities-line>, string>;
 
   /// Gets all valid routes for given line id, including the sequence of stops on each route.
   record route-sequence-params {
@@ -328,7 +1419,7 @@ interface line {
     /// That excludes crowding from line disruptions. Can be true or false.
     exclude-crowding: option<bool>
   }
-  route-sequence: func(params: route-sequence-params) -> result<string, string>;
+  route-sequence: func(params: route-sequence-params) -> result<tfl-api-presentation-entities-route-sequence, string>;
 
   /// Gets a list of the stations that serve the given line id
   record stop-points-params {
@@ -337,7 +1428,7 @@ interface line {
     /// If the national-rail line is requested, this flag will filter the national rail stations so that only those operated by TfL are returned
     tfl-operated-national-rail-stations-only: option<bool>
   }
-  stop-points: func(params: stop-points-params) -> result<string, string>;
+  stop-points: func(params: stop-points-params) -> result<list<tfl-api-presentation-entities-stop-point>, string>;
 
   /// Gets the timetable for a specified station on the give line
   record timetable-params {
@@ -346,7 +1437,7 @@ interface line {
     /// A single line id e.g. victoria
     id: string
   }
-  timetable: func(params: timetable-params) -> result<string, string>;
+  timetable: func(params: timetable-params) -> result<tfl-api-presentation-entities-timetable-response, string>;
 
   /// Gets the timetable for a specified station on the give line with specified destination
   record timetable-to-params {
@@ -357,14 +1448,71 @@ interface line {
     /// The destination stations's Naptan code
     to-stop-point-id: string
   }
-  timetable-to: func(params: timetable-to-params) -> result<string, string>;
+  timetable-to: func(params: timetable-to-params) -> result<tfl-api-presentation-entities-timetable-response, string>;
 
 }
 
 interface mode {
+  record tfl-api-presentation-entities-active-service-type {
+    mode: option<string>,
+    service-type: option<string>
+  }
+
+  /// DTO to capture the prediction details
+  record tfl-api-presentation-entities-prediction {
+    /// Bearing (between 0 to 359)
+    bearing: option<string>,
+    /// The current location of the vehicle.
+    current-location: option<string>,
+    /// Name of the destination
+    destination-name: option<string>,
+    /// Naptan Identifier for the prediction's destination
+    destination-naptan-id: option<string>,
+    /// Direction (unified to inbound/outbound)
+    direction: option<string>,
+    /// The expected arrival time of the vehicle at the stop/station
+    expected-arrival: option<string>,
+    /// The identitier for the prediction
+    id: option<string>,
+    /// Unique identifier for the Line
+    line-id: option<string>,
+    /// Line Name
+    line-name: option<string>,
+    /// The mode name of the station/line the prediction relates to
+    mode-name: option<string>,
+    /// Identifier for the prediction
+    naptan-id: option<string>,
+    /// The type of the operation (1: is new or has been updated, 2: should be deleted from any client cache)
+    operation-type: option<s32>,
+    /// Platform name (for bus, this is the stop letter)
+    platform-name: option<string>,
+    /// Station name
+    station-name: option<string>,
+    /// The expiry time for the prediction
+    time-to-live: option<string>,
+    /// Prediction of the Time to station in seconds
+    time-to-station: option<s32>,
+    /// Timestamp for when the prediction was inserted/modified (source column drives what objects are broadcast on each iteration)
+    timestamp: option<string>,
+    timing: option<tfl-api-presentation-entities-prediction-timing>,
+    /// Routing information or other descriptive text about the path of the vehicle towards the destination
+    towards: option<string>,
+    /// The actual vehicle in transit (for train modes, the leading car of the rolling set)
+    vehicle-id: option<string>
+  }
+
+  record tfl-api-presentation-entities-prediction-timing {
+    countdown-server-adjustment: option<string>,
+    insert: option<string>,
+    read: option<string>,
+    received: option<string>,
+    sent: option<string>,
+    source: option<string>
+  }
+
   /// Returns the service type active for a mode.
   ///             Currently only supports tube
-  get-active-service-types: func() -> result<string, string>;
+  get-active-service-types: func() -> result<list<tfl-api-presentation-entities-active-service-type>, string>;
 
   /// Gets the next arrival predictions for all stops of a given mode
   record arrivals-params {
@@ -373,38 +1521,235 @@ interface mode {
     /// A number of arrivals to return for each stop, -1 to return all available.
     count: option<s32>
   }
-  arrivals: func(params: arrivals-params) -> result<string, string>;
+  arrivals: func(params: arrivals-params) -> result<list<tfl-api-presentation-entities-prediction>, string>;
 
 }
 
 interface occupancy {
+  /// Bike point occupancy
+  record tfl-api-presentation-entities-bike-point-occupancy {
+    /// Total bike counts
+    bikes-count: option<s32>,
+    /// Total ebikes count
+    e-bikes-count: option<s32>,
+    /// Empty docks
+    empty-docks: option<s32>,
+    /// Id of the bike point such as BikePoints_1
+    id: option<string>,
+    /// Name / Common name of the bike point
+    name: option<string>,
+    /// Total standard bikes count
+    standard-bikes-count: option<s32>,
+    /// Total docks available
+    total-docks: option<s32>
+  }
+
+  record tfl-api-presentation-entities-car-park-occupancy {
+    bays: option<list<tfl-api-presentation-entities-bay>>,
+    car-park-details-url: option<string>,
+    id: option<string>,
+    name: option<string>
+  }
+
+  record tfl-api-presentation-entities-bay {
+    bay-count: option<s32>,
+    bay-type: option<string>,
+    free: option<s32>,
+    occupied: option<s32>
+  }
+
+  record tfl-api-presentation-entities-charge-connector-occupancy {
+    id: option<s32>,
+    source-system-place-id: option<string>,
+    status: option<string>
+  }
+
   /// Get the occupancy for bike points.
   record get-bike-points-occupancies-params {
     ids: string
   }
-  get-bike-points-occupancies: func(params: get-bike-points-occupancies-params) -> result<string, string>;
+  get-bike-points-occupancies: func(params: get-bike-points-occupancies-params) -> result<list<tfl-api-presentation-entities-bike-point-occupancy>, string>;
 
   /// Gets the occupancy for all car parks that have occupancy data
-  get-occupancy-car-park: func() -> result<string, string>;
+  get-occupancy-car-park: func() -> result<list<tfl-api-presentation-entities-car-park-occupancy>, string>;
 
   /// Gets the occupancy for a car park with a given id
   record get-params {
     id: string
   }
-  get: func(params: get-params) -> result<string, string>;
+  get: func(params: get-params) -> result<tfl-api-presentation-entities-car-park-occupancy, string>;
 
   /// Gets the occupancy for all charge connectors
-  get-all-charge-connector-status: func() -> result<string, string>;
+  get-all-charge-connector-status: func() -> result<list<tfl-api-presentation-entities-charge-connector-occupancy>, string>;
 
   /// Gets the occupancy for a charge connectors with a given id (sourceSystemPlaceId)
   record get-charge-connector-status-params {
     ids: string
   }
-  get-charge-connector-status: func(params: get-charge-connector-status-params) -> result<string, string>;
+  get-charge-connector-status: func(params: get-charge-connector-status-params) -> result<list<tfl-api-presentation-entities-charge-connector-occupancy>, string>;
 
 }
 
 interface place {
+  enum tfl-api-presentation-entities-identifier-route-type-enum {
+    unknown,
+    all,
+    cycle-superhighways,
+    quietways,
+    cycleways,
+    mini-hollands,
+    central-london-grid,
+    streetspace-route,
+  }
+
+  enum tfl-api-presentation-entities-identifier-status-enum {
+    unknown,
+    all,
+    open,
+    in-progress,
+    planned,
+    planned-subject-to-feasibility-and-consultation,
+    not-open,
+  }
+
+  record tfl-api-presentation-entities-stop-point {
+    accessibility-summary: option<string>,
+    /// A bag of additional key/value pairs with extra information about this place.
+    additional-properties: option<list<tfl-api-presentation-entities-additional-properties>>,
+    children: option<list<tfl-api-presentation-entities-place>>,
+    children-urls: option<list<string>>,
+    /// A human readable name.
+    common-name: option<string>,
+    /// The distance of the place from its search point, if this is the result
+    ///             of a geographical search, otherwise zero.
+    distance: option<f64>,
+    full-name: option<string>,
+    hub-naptan-code: option<string>,
+    ics-code: option<string>,
+    /// A unique identifier.
+    id: option<string>,
+    /// The indicator of the stop point e.g. "Stop K"
+    indicator: option<string>,
+    individual-stop-id: option<string>,
+    /// WGS84 latitude of the location.
+    lat: option<f64>,
+    line-group: option<list<tfl-api-presentation-entities-line-group>>,
+    line-mode-groups: option<list<tfl-api-presentation-entities-line-mode-group>>,
+    lines: option<list<tfl-api-presentation-entities-identifier>>,
+    /// WGS84 longitude of the location.
+    lon: option<f64>,
+    modes: option<list<string>>,
+    naptan-id: option<string>,
+    naptan-mode: option<string>,
+    /// The type of Place. See /Place/Meta/placeTypes for possible values.
+    place-type: option<string>,
+    platform-name: option<string>,
+    sms-code: option<string>,
+    station-naptan: option<string>,
+    status: option<bool>,
+    /// The stop letter, if it could be cleansed from the Indicator e.g. "K"
+    stop-letter: option<string>,
+    stop-type: option<string>,
+    /// The unique location of this resource.
+    url: option<string>
+  }
+
+  record tfl-api-presentation-entities-additional-properties {
+    category: option<string>,
+    key: option<string>,
+    modified: option<string>,
+    source-system-key: option<string>,
+    value: option<string>
+  }
+
+  record tfl-api-presentation-entities-place {
+    /// A bag of additional key/value pairs with extra information about this place.
+    additional-properties: option<list<tfl-api-presentation-entities-additional-properties>>,
+    children: option<list<string>>,
+    children-urls: option<list<string>>,
+    /// A human readable name.
+    common-name: option<string>,
+    /// The distance of the place from its search point, if this is the result
+    ///             of a geographical search, otherwise zero.
+    distance: option<f64>,
+    /// A unique identifier.
+    id: option<string>,
+    /// WGS84 latitude of the location.
+    lat: option<f64>,
+    /// WGS84 longitude of the location.
+    lon: option<f64>,
+    /// The type of Place. See /Place/Meta/placeTypes for possible values.
+    place-type: option<string>,
+    /// The unique location of this resource.
+    url: option<string>
+  }
+
+  record tfl-api-presentation-entities-line-group {
+    line-identifier: option<list<string>>,
+    naptan-id-reference: option<string>,
+    station-atco-code: option<string>
+  }
+
+  record tfl-api-presentation-entities-line-mode-group {
+    line-identifier: option<list<string>>,
+    mode-name: option<string>
+  }
+
+  record tfl-api-presentation-entities-identifier {
+    crowding: option<tfl-api-presentation-entities-crowding>,
+    full-name: option<string>,
+    id: option<string>,
+    mot-type: option<string>,
+    name: option<string>,
+    network: option<string>,
+    route-type: option<tfl-api-presentation-entities-identifier-route-type-enum>,
+    status: option<tfl-api-presentation-entities-identifier-status-enum>,
+    type-op: option<string>,
+    uri: option<string>
+  }
+
+  record tfl-api-presentation-entities-crowding {
+    /// Busiest times at a station (static information)
+    passenger-flows: option<list<tfl-api-presentation-entities-passenger-flow>>,
+    /// Train Loading on a scale 1-6, 1 being "Very quiet" and 6 being "Exceptionally busy" (static information)
+    train-loadings: option<list<tfl-api-presentation-entities-train-loading>>
+  }
+
+  record tfl-api-presentation-entities-passenger-flow {
+    /// Time in 24hr format with 15 minute intervals e.g. 0500-0515, 0515-0530 etc.
+    time-slice: option<string>,
+    /// Count of passenger flow towards a platform
+    value: option<s32>
+  }
+
+  record tfl-api-presentation-entities-train-loading {
+    /// Direction in regards to Journey Planner i.e. inbound or outbound
+    direction: option<string>,
+    /// The Line Name e.g. "Victoria"
+    line: option<string>,
+    /// Direction of the Line e.g. NB, SB, WB etc.
+    line-direction: option<string>,
+    /// Naptan of the adjacent station
+    naptan-to: option<string>,
+    /// Direction displayed on the platform e.g. NB, SB, WB etc.
+    platform-direction: option<string>,
+    /// Time in 24hr format with 15 minute intervals e.g. 0500-0515, 0515-0530 etc.
+    time-slice: option<string>,
+    /// Scale between 1-6, 
+    ///              1 = Very quiet, 2 = Quiet, 3 = Fairly busy, 4 = Busy, 5 = Very busy, 6 = Exceptionally busy
+    value: option<s32>
+  }
+
+  record system-object {
+    /// JSON-encoded free-form object payload
+    data: option<string>
+  }
+
+  record tfl-api-presentation-entities-place-category {
+    available-keys: option<list<string>>,
+    category: option<string>
+  }
+
   /// Gets the places that lie within a geographic region. The geographic region of interest can either be specified
   ///             by using a lat/lon geo-point and a radius in metres to return places within the locus defined by the lat/lon of
   ///             its centre or alternatively, by the use of a bounding box defined by the lat/lon of its north-west and south-east corners.
@@ -429,20 +1774,22 @@ interface place {
     place-geo-lat: option<f64>,
     place-geo-lon: option<f64>
   }
-  get-by-geo: func(params: get-by-geo-params) -> result<string, string>;
+  get-by-geo: func(params: get-by-geo-params) -> result<list<tfl-api-presentation-entities-stop-point>, string>;
 
   /// Gets the set of streets associated with a post code.
   record get-streets-by-post-code-params {
     postcode: string,
-    postcode-input-postcode: option<string>
+    postcode-input-postcode: option<string>,
+    /// Automatically added
+    postcode-v2: string
   }
-  get-streets-by-post-code: func(params: get-streets-by-post-code-params) -> result<string, string>;
+  get-streets-by-post-code: func(params: get-streets-by-post-code-params) -> result<system-object, string>;
 
   /// Gets a list of all of the available place property categories and keys.
-  meta-categories: func() -> result<string, string>;
+  meta-categories: func() -> result<list<tfl-api-presentation-entities-place-category>, string>;
 
   /// Gets a list of the available types of Place.
-  meta-place-types: func() -> result<string, string>;
+  meta-place-types: func() -> result<list<tfl-api-presentation-entities-place-category>, string>;
 
   /// Gets all places that matches the given query
   record search-params {
@@ -451,7 +1798,7 @@ interface place {
     /// A comma-separated list of the types to return. Max. approx 12 types.
     types: option<list<string>>
   }
-  search: func(params: search-params) -> result<string, string>;
+  search: func(params: search-params) -> result<list<tfl-api-presentation-entities-place>, string>;
 
   /// Gets all places of a given type
   record get-by-type-params {
@@ -461,7 +1808,7 @@ interface place {
     /// An optional parameter to limit the results to active records only (Currently only the 'VariableMessageSign' place type is supported)
     active-only: option<bool>
   }
-  get-by-type: func(params: get-by-type-params) -> result<string, string>;
+  get-by-type: func(params: get-by-type-params) -> result<list<tfl-api-presentation-entities-place>, string>;
 
   /// Gets the place with the given id.
   record get-params {
@@ -470,7 +1817,7 @@ interface place {
     /// Defaults to false. If true child places e.g. individual charging stations at a charge point while be included, otherwise just the URLs of any child places will be returned
     include-children: option<bool>
   }
-  get: func(params: get-params) -> result<string, string>;
+  get: func(params: get-params) -> result<list<tfl-api-presentation-entities-place>, string>;
 
   /// Gets any places of the given type whose geography intersects the given latitude and longitude. In practice this means the Place
   ///             must be polygonal e.g. a BoroughBoundary.
@@ -480,9 +1827,13 @@ interface place {
     lat: string,
     lon: string,
     location-lat: f64,
-    location-lon: f64
+    location-lon: f64,
+    /// Automatically added
+    lat-v2: string,
+    /// Automatically added
+    lon-v2: string
   }
-  get-at: func(params: get-at-params) -> result<string, string>;
+  get-at: func(params: get-at-params) -> result<system-object, string>;
 
   /// Gets the place overlay for a given set of co-ordinates and a given width/height.
   record get-overlay-params {
@@ -497,21 +1848,220 @@ interface place {
     lat: string,
     lon: string,
     location-lat: f64,
-    location-lon: f64
+    location-lon: f64,
+    /// Automatically added
+    lat-v2: string,
+    /// Automatically added
+    lon-v2: string
   }
-  get-overlay: func(params: get-overlay-params) -> result<string, string>;
+  get-overlay: func(params: get-overlay-params) -> result<system-object, string>;
 
 }
 
 interface road {
+  enum tfl-api-presentation-entities-road-project-phase-enum {
+    unscoped,
+    concept,
+    consultation-ended,
+    consultation,
+    construction,
+    complete,
+  }
+
+  record tfl-api-presentation-entities-road-corridor {
+    /// The Bounds of the Corridor, given by the south-east followed by the north-west co-ordinate
+    ///             pair in geoJSON format e.g. "[[-1.241531,51.242151],[1.641223,53.765721]]"
+    bounds: option<string>,
+    /// The display name of the Corridor e.g. "North Circular (A406)". This
+    ///             may be identical to the Id.
+    display-name: option<string>,
+    /// The Envelope of the Corridor, given by the corner co-ordinates of a rectangular (four-point) polygon
+    ///             in geoJSON format e.g. "[[-1.241531,51.242151],[-1.241531,53.765721],[1.641223,53.765721],[1.641223,51.242151]]"
+    envelope: option<string>,
+    /// The group name of the Corridor e.g. "Central London". Most corridors are not grouped, in which case this field can be null.
+    group: option<string>,
+    /// The Id of the Corridor e.g. "A406"
+    id: option<string>,
+    /// The end of the period over which status has been aggregated, or null if this is the current corridor status.
+    status-aggregation-end-date: option<string>,
+    /// The start of the period over which status has been aggregated, or null if this is the current corridor status.
+    status-aggregation-start-date: option<string>,
+    /// Standard multi-mode status severity code
+    status-severity: option<string>,
+    /// Description of the status severity as applied to RoadCorridors
+    status-severity-description: option<string>,
+    /// URL to retrieve this Corridor.
+    url: option<string>
+  }
+
+  record tfl-api-presentation-entities-status-severity {
+    description: option<string>,
+    mode-name: option<string>,
+    severity-level: option<s32>
+  }
+
+  record tfl-api-presentation-entities-road-disruption {
+    /// Describes the nature of disruption e.g. Traffic Incidents, Works
+    category: option<string>,
+    /// Full text of comments describing the disruption, including details of any road closures and diversions, where appropriate.
+    comments: option<string>,
+    /// The Ids of affected corridors, if any.
+    corridor-ids: option<list<string>>,
+    /// Text of the most recent update from the LSTCC on the state of the
+    ///              disruption, including the current traffic impact and any advice to
+    current-update: option<string>,
+    /// The time when the last CurrentUpdate description was recorded, 
+    ///             or null if no CurrentUpdate has been applied.
+    current-update-date-time: option<string>,
+    /// The date and time on which the disruption ended. For planned disruptions, this date will have a valid value. For unplanned 
+    ///             disruptions in progress, this field will be omitted.
+    end-date-time: option<string>,
+    geography: option<system-data-spatial-db-geography>,
+    geometry: option<system-data-spatial-db-geography>,
+    /// True if any of the affected Streets have a "Full Closure" status, false otherwise. A RoadDisruption that has HasClosures is considered a 
+    ///             Severe or Serious disruption for severity filtering purposes.
+    has-closures: option<bool>,
+    /// Unique identifier for the road disruption
+    id: option<string>,
+    /// True if the disruption is planned on a future date that is open to change
+    is-provisional: option<bool>,
+    /// The date and time on which the disruption was last modified in the system. This information can reliably be used by a developer to quickly
+    ///             compare two instances of the same disruption to determine if it has been changed.
+    last-modified-time: option<string>,
+    /// This describes the level of potential impact on traffic operations of the disruption. 
+    ///             High = e.g. a one-off disruption on a major or high profile route which will require a high level of operational attention 
+    level-of-interest: option<string>,
+    /// The text of any associated link
+    link-text: option<string>,
+    /// The url of any associated link
+    link-url: option<string>,
+    /// Main road name / number (borough) or preset area name where the disruption is located. This might be useful for a map popup where space is limited.
+    location: option<string>,
+    /// An ordinal of the disruption based on severity, level of interest and corridor.
+    ordinal: option<s32>,
+    /// Latitude and longitude (WGS84) of the centroid of the disruption, stored in a geoJSON-formatted string.
+    point: option<string>,
+    publish-end-date: option<string>,
+    /// TDM Additional properties
+    publish-start-date: option<string>,
+    recurring-schedules: option<list<tfl-api-presentation-entities-road-disruption-schedule>>,
+    road-disruption-impact-areas: option<list<tfl-api-presentation-entities-road-disruption-impact-area>>,
+    road-disruption-lines: option<list<tfl-api-presentation-entities-road-disruption-line>>,
+    road-project: option<tfl-api-presentation-entities-road-project>,
+    /// A description of the severity of the disruption.
+    severity: option<string>,
+    /// The date and time which the disruption started. For a planned disruption (i.e. planned road works) this date will be in the future.
+    ///             For unplanned disruptions, this will default to the date on which the disruption was first recorded, but may be adjusted by the operator.
+    start-date-time: option<string>,
+    /// This describes the status of the disruption.  
+    ///             Active = currently in progress 
+    status: option<string>,
+    /// A collection of zero or more streets affected by the disruption.
+    streets: option<list<tfl-api-presentation-entities-street>>,
+    /// Describes the sub-category of disruption e.g. Collapsed Manhole, Abnormal Load
+    sub-category: option<string>,
+    time-frame: option<string>,
+    /// URL to retrieve this road disruption
+    url: option<string>
+  }
+
+  record system-data-spatial-db-geography {
+    geography: option<system-data-spatial-db-geography-well-known-value>
+  }
+
+  record system-data-spatial-db-geography-well-known-value {
+    coordinate-system-id: option<s32>,
+    well-known-binary: option<string>,
+    well-known-text: option<string>
+  }
+
+  record tfl-api-presentation-entities-road-disruption-schedule {
+    end-time: option<string>,
+    start-time: option<string>
+  }
+
+  record tfl-api-presentation-entities-road-disruption-impact-area {
+    end-date: option<string>,
+    end-time: option<string>,
+    id: option<s32>,
+    polygon: option<system-data-spatial-db-geography>,
+    road-disruption-id: option<string>,
+    start-date: option<string>,
+    start-time: option<string>
+  }
+
+  record tfl-api-presentation-entities-road-disruption-line {
+    end-date: option<string>,
+    end-time: option<string>,
+    id: option<s32>,
+    is-diversion: option<bool>,
+    multi-line-string: option<system-data-spatial-db-geography>,
+    road-disruption-id: option<string>,
+    start-date: option<string>,
+    start-time: option<string>
+  }
+
+  record tfl-api-presentation-entities-road-project {
+    boroughs-benefited: option<list<string>>,
+    construction-end-date: option<string>,
+    construction-start-date: option<string>,
+    consultation-end-date: option<string>,
+    consultation-page-url: option<string>,
+    consultation-start-date: option<string>,
+    contact-email: option<string>,
+    contact-name: option<string>,
+    cycle-superhighway-id: option<string>,
+    external-page-url: option<string>,
+    phase: option<tfl-api-presentation-entities-road-project-phase-enum>,
+    project-description: option<string>,
+    project-id: option<string>,
+    project-name: option<string>,
+    project-page-url: option<string>,
+    project-summary-page-url: option<string>,
+    scheme-name: option<string>
+  }
+
+  record tfl-api-presentation-entities-street {
+    /// Type of road closure. Some example values:
+    ///             Open = road is open, not blocked, not closed, not restricted. It maybe that the disruption has been moved out of the carriageway.
+    closure: option<string>,
+    /// The direction of the disruption on the street. Some example values:
+    ///             All Directions
+    directions: option<string>,
+    /// Street name
+    name: option<string>,
+    /// Geographic description of the sections of this street that are affected.
+    segments: option<list<tfl-api-presentation-entities-street-segment>>,
+    /// The ID from the source system of the disruption that this street belongs to.
+    source-system-id: option<s64>,
+    /// The key of the source system of the disruption that this street belongs to.
+    source-system-key: option<string>
+  }
+
+  record tfl-api-presentation-entities-street-segment {
+    /// geoJSON formatted LineString containing two latitude/longitude (WGS84) pairs that identify the start and end points of the street segment.
+    line-string: option<string>,
+    /// The ID from the source system of the disruption that this street belongs to.
+    source-system-id: option<s64>,
+    /// The key of the source system of the disruption that this street belongs to.
+    source-system-key: option<string>,
+    /// A 16 digit unique integer identifying a OS ITN (Ordnance Survey Integrated Transport Network) road link.
+    toid: option<string>
+  }
+
+  record system-object {
+    /// JSON-encoded free-form object payload
+    data: option<string>
+  }
+
   /// Gets all roads managed by TfL
-  get: func() -> result<string, string>;
+  get: func() -> result<list<tfl-api-presentation-entities-road-corridor>, string>;
 
   /// Gets a list of valid RoadDisruption categories
-  meta-categories: func() -> result<string, string>;
+  meta-categories: func() -> result<list<string>, string>;
 
   /// Gets a list of valid RoadDisruption severity codes
-  meta-severities: func() -> result<string, string>;
+  meta-severities: func() -> result<list<tfl-api-presentation-entities-status-severity>, string>;
 
   /// Gets a list of active disruptions filtered by disruption Ids.
   record disruption-by-id-params {
@@ -520,7 +2070,7 @@ interface road {
     /// Optional, defaults to false. When true, removes every property/node except for id, point, severity, severityDescription, startDate, endDate, corridor details, location and comments.
     strip-content: option<bool>
   }
-  disruption-by-id: func(params: disruption-by-id-params) -> result<string, string>;
+  disruption-by-id: func(params: disruption-by-id-params) -> result<tfl-api-presentation-entities-road-disruption, string>;
 
   /// Gets a list of disrupted streets. If no date filters are provided, current disruptions are returned.
   record disrupted-streets-params {
@@ -529,14 +2079,14 @@ interface road {
     /// Optional, The end time to filter on.
     end-date: string
   }
-  disrupted-streets: func(params: disrupted-streets-params) -> result<string, string>;
+  disrupted-streets: func(params: disrupted-streets-params) -> result<system-object, string>;
 
   /// Gets the road with the specified id (e.g. A1)
   record get-road-ids-params {
     /// Comma-separated list of road identifiers e.g. "A406, A2" (a full list of supported road identifiers can be found at the /Road/ endpoint)
     ids: string
   }
-  get-road-ids: func(params: get-road-ids-params) -> result<string, string>;
+  get-road-ids: func(params: get-road-ids-params) -> result<list<tfl-api-presentation-entities-road-corridor>, string>;
 
   /// Get active disruptions, filtered by road ids
   record disruption-params {
@@ -551,7 +2101,7 @@ interface road {
     /// Optional, defaults to true. When true, always includes disruptions that have road closures, regardless of the severity filter. When false, the severity filter works as normal.
     closures: option<bool>
   }
-  disruption: func(params: disruption-params) -> result<string, string>;
+  disruption: func(params: disruption-params) -> result<list<tfl-api-presentation-entities-road-disruption>, string>;
 
   /// Gets the specified roads with the status aggregated over the date range specified, or now until the end of today if no dates are passed.
   record status-params {
@@ -560,38 +2110,85 @@ interface road {
     date-range-nullable-start-date: option<string>,
     date-range-nullable-end-date: option<string>
   }
-  status: func(params: status-params) -> result<string, string>;
+  status: func(params: status-params) -> result<list<tfl-api-presentation-entities-road-corridor>, string>;
 
 }
 
 interface search {
+  record tfl-api-presentation-entities-search-response {
+    from-op: option<s32>,
+    matches: option<list<tfl-api-presentation-entities-search-match>>,
+    max-score: option<f64>,
+    page: option<s32>,
+    page-size: option<s32>,
+    provider: option<string>,
+    query: option<string>,
+    total: option<s32>
+  }
+
+  record tfl-api-presentation-entities-search-match {
+    id: option<string>,
+    lat: option<f64>,
+    lon: option<f64>,
+    name: option<string>,
+    url: option<string>
+  }
+
   /// Search the site for occurrences of the query string. The maximum number of results returned is equal to the maximum page size
   ///             of 100. To return subsequent pages, use the paginated overload.
   record get-params {
     /// The search query
     query: string
   }
-  get: func(params: get-params) -> result<string, string>;
+  get: func(params: get-params) -> result<tfl-api-presentation-entities-search-response, string>;
 
   /// Searches the bus schedules folder on S3 for a given bus number.
   record bus-schedules-params {
     /// The search query
     query: string
   }
-  bus-schedules: func(params: bus-schedules-params) -> result<string, string>;
+  bus-schedules: func(params: bus-schedules-params) -> result<tfl-api-presentation-entities-search-response, string>;
 
   /// Gets the available search categories.
-  meta-categories: func() -> result<string, string>;
+  meta-categories: func() -> result<list<string>, string>;
 
   /// Gets the available searchProvider names.
-  meta-search-providers: func() -> result<string, string>;
+  meta-search-providers: func() -> result<list<string>, string>;
 
   /// Gets the available sorting options.
-  meta-sorts: func() -> result<string, string>;
+  meta-sorts: func() -> result<list<string>, string>;
 
 }
 
 interface stop-point {
+  enum tfl-api-presentation-entities-identifier-route-type-enum {
+    unknown,
+    all,
+    cycle-superhighways,
+    quietways,
+    cycleways,
+    mini-hollands,
+    central-london-grid,
+    streetspace-route,
+  }
+
+  enum tfl-api-presentation-entities-identifier-status-enum {
+    unknown,
+    all,
+    open,
+    in-progress,
+    planned,
+    planned-subject-to-feasibility-and-consultation,
+    not-open,
+  }
+
+  enum tfl-api-presentation-entities-arrival-departure-departure-status-enum {
+    on-time,
+    delayed,
+    cancelled,
+    not-stopping-at-station,
+  }
+
   enum reachable-from-service-types-item-enum {
     regular,
     night,
@@ -601,6 +2198,312 @@ interface stop-point {
     inbound,
     outbound,
     all,
+  }
+
+  /// A paged response containing StopPoints
+  record tfl-api-presentation-entities-stop-points-response {
+    /// The centre latitude/longitude of this list of StopPoints
+    centre-point: option<list<f64>>,
+    /// The index of this page
+    page: option<s32>,
+    /// The maximum size of the page in this response i.e. the maximum number of StopPoints
+    page-size: option<s32>,
+    /// Collection of stop points
+    stop-points: option<list<tfl-api-presentation-entities-stop-point>>,
+    /// The total number of StopPoints available across all pages
+    total: option<s32>
+  }
+
+  record tfl-api-presentation-entities-stop-point {
+    accessibility-summary: option<string>,
+    /// A bag of additional key/value pairs with extra information about this place.
+    additional-properties: option<list<tfl-api-presentation-entities-additional-properties>>,
+    children: option<list<tfl-api-presentation-entities-place>>,
+    children-urls: option<list<string>>,
+    /// A human readable name.
+    common-name: option<string>,
+    /// The distance of the place from its search point, if this is the result
+    ///             of a geographical search, otherwise zero.
+    distance: option<f64>,
+    full-name: option<string>,
+    hub-naptan-code: option<string>,
+    ics-code: option<string>,
+    /// A unique identifier.
+    id: option<string>,
+    /// The indicator of the stop point e.g. "Stop K"
+    indicator: option<string>,
+    individual-stop-id: option<string>,
+    /// WGS84 latitude of the location.
+    lat: option<f64>,
+    line-group: option<list<tfl-api-presentation-entities-line-group>>,
+    line-mode-groups: option<list<tfl-api-presentation-entities-line-mode-group>>,
+    lines: option<list<tfl-api-presentation-entities-identifier>>,
+    /// WGS84 longitude of the location.
+    lon: option<f64>,
+    modes: option<list<string>>,
+    naptan-id: option<string>,
+    naptan-mode: option<string>,
+    /// The type of Place. See /Place/Meta/placeTypes for possible values.
+    place-type: option<string>,
+    platform-name: option<string>,
+    sms-code: option<string>,
+    station-naptan: option<string>,
+    status: option<bool>,
+    /// The stop letter, if it could be cleansed from the Indicator e.g. "K"
+    stop-letter: option<string>,
+    stop-type: option<string>,
+    /// The unique location of this resource.
+    url: option<string>
+  }
+
+  record tfl-api-presentation-entities-additional-properties {
+    category: option<string>,
+    key: option<string>,
+    modified: option<string>,
+    source-system-key: option<string>,
+    value: option<string>
+  }
+
+  record tfl-api-presentation-entities-place {
+    /// A bag of additional key/value pairs with extra information about this place.
+    additional-properties: option<list<tfl-api-presentation-entities-additional-properties>>,
+    children: option<list<string>>,
+    children-urls: option<list<string>>,
+    /// A human readable name.
+    common-name: option<string>,
+    /// The distance of the place from its search point, if this is the result
+    ///             of a geographical search, otherwise zero.
+    distance: option<f64>,
+    /// A unique identifier.
+    id: option<string>,
+    /// WGS84 latitude of the location.
+    lat: option<f64>,
+    /// WGS84 longitude of the location.
+    lon: option<f64>,
+    /// The type of Place. See /Place/Meta/placeTypes for possible values.
+    place-type: option<string>,
+    /// The unique location of this resource.
+    url: option<string>
+  }
+
+  record tfl-api-presentation-entities-line-group {
+    line-identifier: option<list<string>>,
+    naptan-id-reference: option<string>,
+    station-atco-code: option<string>
+  }
+
+  record tfl-api-presentation-entities-line-mode-group {
+    line-identifier: option<list<string>>,
+    mode-name: option<string>
+  }
+
+  record tfl-api-presentation-entities-identifier {
+    crowding: option<tfl-api-presentation-entities-crowding>,
+    full-name: option<string>,
+    id: option<string>,
+    mot-type: option<string>,
+    name: option<string>,
+    network: option<string>,
+    route-type: option<tfl-api-presentation-entities-identifier-route-type-enum>,
+    status: option<tfl-api-presentation-entities-identifier-status-enum>,
+    type-op: option<string>,
+    uri: option<string>
+  }
+
+  record tfl-api-presentation-entities-crowding {
+    /// Busiest times at a station (static information)
+    passenger-flows: option<list<tfl-api-presentation-entities-passenger-flow>>,
+    /// Train Loading on a scale 1-6, 1 being "Very quiet" and 6 being "Exceptionally busy" (static information)
+    train-loadings: option<list<tfl-api-presentation-entities-train-loading>>
+  }
+
+  record tfl-api-presentation-entities-passenger-flow {
+    /// Time in 24hr format with 15 minute intervals e.g. 0500-0515, 0515-0530 etc.
+    time-slice: option<string>,
+    /// Count of passenger flow towards a platform
+    value: option<s32>
+  }
+
+  record tfl-api-presentation-entities-train-loading {
+    /// Direction in regards to Journey Planner i.e. inbound or outbound
+    direction: option<string>,
+    /// The Line Name e.g. "Victoria"
+    line: option<string>,
+    /// Direction of the Line e.g. NB, SB, WB etc.
+    line-direction: option<string>,
+    /// Naptan of the adjacent station
+    naptan-to: option<string>,
+    /// Direction displayed on the platform e.g. NB, SB, WB etc.
+    platform-direction: option<string>,
+    /// Time in 24hr format with 15 minute intervals e.g. 0500-0515, 0515-0530 etc.
+    time-slice: option<string>,
+    /// Scale between 1-6, 
+    ///              1 = Very quiet, 2 = Quiet, 3 = Fairly busy, 4 = Busy, 5 = Very busy, 6 = Exceptionally busy
+    value: option<s32>
+  }
+
+  record tfl-api-presentation-entities-stop-point-category {
+    available-keys: option<list<string>>,
+    category: option<string>
+  }
+
+  record tfl-api-presentation-entities-mode {
+    is-fare-paying: option<bool>,
+    is-scheduled-service: option<bool>,
+    is-tfl-service: option<bool>,
+    mode-name: option<string>,
+    mot-type: option<string>,
+    network: option<string>
+  }
+
+  record tfl-api-presentation-entities-disrupted-point {
+    additional-information: option<string>,
+    appearance: option<string>,
+    atco-code: option<string>,
+    common-name: option<string>,
+    description: option<string>,
+    from-date: option<string>,
+    mode: option<string>,
+    station-atco-code: option<string>,
+    to-date: option<string>,
+    type-op: option<string>
+  }
+
+  record tfl-api-presentation-entities-search-response {
+    from-op: option<s32>,
+    matches: option<list<tfl-api-presentation-entities-search-match>>,
+    max-score: option<f64>,
+    page: option<s32>,
+    page-size: option<s32>,
+    provider: option<string>,
+    query: option<string>,
+    total: option<s32>
+  }
+
+  record tfl-api-presentation-entities-search-match {
+    id: option<string>,
+    lat: option<f64>,
+    lon: option<f64>,
+    name: option<string>,
+    url: option<string>
+  }
+
+  record tfl-api-presentation-entities-line-service-type {
+    line-name: option<string>,
+    line-specific-service-types: option<list<tfl-api-presentation-entities-line-specific-service-type>>
+  }
+
+  record tfl-api-presentation-entities-line-specific-service-type {
+    service-type: option<tfl-api-presentation-entities-line-service-type-info>,
+    stop-serves-service-type: option<bool>
+  }
+
+  record tfl-api-presentation-entities-line-service-type-info {
+    name: option<string>,
+    uri: option<string>
+  }
+
+  record system-object {
+    /// JSON-encoded free-form object payload
+    data: option<string>
+  }
+
+  /// DTO to capture the prediction details
+  record tfl-api-presentation-entities-arrival-departure {
+    /// Reason for cancellation or delay
+    cause: option<string>,
+    /// Status of departure
+    departure-status: option<tfl-api-presentation-entities-arrival-departure-departure-status-enum>,
+    /// Name of the destination
+    destination-name: option<string>,
+    /// Naptan Identifier for the prediction's destination
+    destination-naptan-id: option<string>,
+    /// Estimated time of arrival
+    estimated-time-of-arrival: option<string>,
+    /// Estimated time of arrival
+    estimated-time-of-departure: option<string>,
+    /// Estimated time of arrival
+    minutes-and-seconds-to-arrival: option<string>,
+    /// Estimated time of arrival
+    minutes-and-seconds-to-departure: option<string>,
+    /// Identifier for the prediction
+    naptan-id: option<string>,
+    /// Platform name (for bus, this is the stop letter)
+    platform-name: option<string>,
+    /// Estimated time of arrival
+    scheduled-time-of-arrival: option<string>,
+    /// Estimated time of arrival
+    scheduled-time-of-departure: option<string>,
+    /// Station name
+    station-name: option<string>,
+    timing: option<tfl-api-presentation-entities-prediction-timing>
+  }
+
+  record tfl-api-presentation-entities-prediction-timing {
+    countdown-server-adjustment: option<string>,
+    insert: option<string>,
+    read: option<string>,
+    received: option<string>,
+    sent: option<string>,
+    source: option<string>
+  }
+
+  /// DTO to capture the prediction details
+  record tfl-api-presentation-entities-prediction {
+    /// Bearing (between 0 to 359)
+    bearing: option<string>,
+    /// The current location of the vehicle.
+    current-location: option<string>,
+    /// Name of the destination
+    destination-name: option<string>,
+    /// Naptan Identifier for the prediction's destination
+    destination-naptan-id: option<string>,
+    /// Direction (unified to inbound/outbound)
+    direction: option<string>,
+    /// The expected arrival time of the vehicle at the stop/station
+    expected-arrival: option<string>,
+    /// The identitier for the prediction
+    id: option<string>,
+    /// Unique identifier for the Line
+    line-id: option<string>,
+    /// Line Name
+    line-name: option<string>,
+    /// The mode name of the station/line the prediction relates to
+    mode-name: option<string>,
+    /// Identifier for the prediction
+    naptan-id: option<string>,
+    /// The type of the operation (1: is new or has been updated, 2: should be deleted from any client cache)
+    operation-type: option<s32>,
+    /// Platform name (for bus, this is the stop letter)
+    platform-name: option<string>,
+    /// Station name
+    station-name: option<string>,
+    /// The expiry time for the prediction
+    time-to-live: option<string>,
+    /// Prediction of the Time to station in seconds
+    time-to-station: option<s32>,
+    /// Timestamp for when the prediction was inserted/modified (source column drives what objects are broadcast on each iteration)
+    timestamp: option<string>,
+    timing: option<tfl-api-presentation-entities-prediction-timing>,
+    /// Routing information or other descriptive text about the path of the vehicle towards the destination
+    towards: option<string>,
+    /// The actual vehicle in transit (for train modes, the leading car of the rolling set)
+    vehicle-id: option<string>
+  }
+
+  record tfl-api-presentation-entities-stop-point-route-section {
+    destination-name: option<string>,
+    direction: option<string>,
+    is-active: option<bool>,
+    line-id: option<string>,
+    line-string: option<string>,
+    mode: option<string>,
+    naptan-id: option<string>,
+    route-section-name: option<string>,
+    service-type: option<string>,
+    valid-from: option<string>,
+    valid-to: option<string>,
+    vehicle-destination-text: option<string>
   }
 
   /// Gets a list of StopPoints within {radius} by the specified criteria
@@ -620,16 +2523,16 @@ interface stop-point {
     location-lat: f64,
     location-lon: f64
   }
-  get-by-geo-point: func(params: get-by-geo-point-params) -> result<string, string>;
+  get-by-geo-point: func(params: get-by-geo-point-params) -> result<tfl-api-presentation-entities-stop-points-response, string>;
 
   /// Gets the list of available StopPoint additional information categories
-  meta-categories: func() -> result<string, string>;
+  meta-categories: func() -> result<list<tfl-api-presentation-entities-stop-point-category>, string>;
 
   /// Gets the list of available StopPoint modes
-  meta-modes: func() -> result<string, string>;
+  meta-modes: func() -> result<list<tfl-api-presentation-entities-mode>, string>;
 
   /// Gets the list of available StopPoint types
-  meta-stop-types: func() -> result<string, string>;
+  meta-stop-types: func() -> result<list<string>, string>;
 
   /// Gets a list of StopPoints filtered by the modes available at that StopPoint.
   record get-by-mode-params {
@@ -638,7 +2541,7 @@ interface stop-point {
     /// The data set page to return. Page 1 equates to the first 1000 stop points, page 2 equates to 1001-2000 etc. Must be entered for bus mode as data set is too large.
     page: option<s32>
   }
-  get-by-mode: func(params: get-by-mode-params) -> result<string, string>;
+  get-by-mode: func(params: get-by-mode-params) -> result<tfl-api-presentation-entities-stop-points-response, string>;
 
   /// Gets a distinct list of disrupted stop points for the given modes
   record disruption-by-mode-params {
@@ -646,7 +2549,7 @@ interface stop-point {
     modes: string,
     include-route-blocked-stops: option<bool>
   }
-  disruption-by-mode: func(params: disruption-by-mode-params) -> result<string, string>;
+  disruption-by-mode: func(params: disruption-by-mode-params) -> result<list<tfl-api-presentation-entities-disrupted-point>, string>;
 
   /// Search StopPoints by their common name, or their 5-digit Countdown Bus Stop Code.
   record get-stop-point-search-params {
@@ -666,7 +2569,7 @@ interface stop-point {
     /// If the national-rail mode is included, this flag will filter the national rail stations so that only those operated by TfL are returned
     tfl-operated-national-rail-stations-only: option<bool>
   }
-  get-stop-point-search: func(params: get-stop-point-search-params) -> result<string, string>;
+  get-stop-point-search: func(params: get-stop-point-search-params) -> result<tfl-api-presentation-entities-search-response, string>;
 
   /// Search StopPoints by their common name, or their 5-digit Countdown Bus Stop Code.
   record search-params {
@@ -686,7 +2589,7 @@ interface stop-point {
     /// If the national-rail mode is included, this flag will filter the national rail stations so that only those operated by TfL are returned
     tfl-operated-national-rail-stations-only: option<bool>
   }
-  search: func(params: search-params) -> result<string, string>;
+  search: func(params: search-params) -> result<tfl-api-presentation-entities-search-response, string>;
 
   /// Gets the service types for a given stoppoint
   record get-service-types-params {
@@ -697,7 +2600,7 @@ interface stop-point {
     /// The modes which the lines are relevant to (all if empty)
     modes: option<list<string>>
   }
-  get-service-types: func(params: get-service-types-params) -> result<string, string>;
+  get-service-types: func(params: get-service-types-params) -> result<list<tfl-api-presentation-entities-line-service-type>, string>;
 
   /// Gets a StopPoint for a given sms code.
   record get-by-sms-params {
@@ -706,7 +2609,7 @@ interface stop-point {
     /// If set to "web", a 302 redirect to relevant website bus stop page is returned. Valid values are : web. All other values are ignored.
     output: option<string>
   }
-  get-by-sms: func(params: get-by-sms-params) -> result<string, string>;
+  get-by-sms: func(params: get-by-sms-params) -> result<system-object, string>;
 
   /// Gets all stop points of a given type
   record get-by-type-params {
@@ -714,14 +2617,14 @@ interface stop-point {
     ///             A list of valid stop types can be obtained from the StopPoint/meta/stoptypes endpoint.
     types: string
   }
-  get-by-type: func(params: get-by-type-params) -> result<string, string>;
+  get-by-type: func(params: get-by-type-params) -> result<list<tfl-api-presentation-entities-stop-point>, string>;
 
   /// Gets all the stop points of given type(s) with a page number
   record get-by-type-with-pagination-params {
     types: string,
     page: string
   }
-  get-by-type-with-pagination: func(params: get-by-type-with-pagination-params) -> result<string, string>;
+  get-by-type-with-pagination: func(params: get-by-type-with-pagination-params) -> result<list<tfl-api-presentation-entities-stop-point>, string>;
 
   /// Gets a list of StopPoints corresponding to the given list of stop ids.
   record get-params {
@@ -731,7 +2634,7 @@ interface stop-point {
     /// Include the crowding data (static). To Filter further use: /StopPoint/{ids}/Crowding/{line}
     include-crowding-data: option<bool>
   }
-  get: func(params: get-params) -> result<string, string>;
+  get: func(params: get-params) -> result<list<tfl-api-presentation-entities-stop-point>, string>;
 
   /// Gets all disruptions for the specified StopPointId, plus disruptions for any child Naptan records it may have.
   record disruption-params {
@@ -744,7 +2647,7 @@ interface stop-point {
     /// Specify true to associate all disruptions with parent stop point. (Only applicable when getFamily is true).
     flatten-response: option<bool>
   }
-  disruption: func(params: disruption-params) -> result<string, string>;
+  disruption: func(params: disruption-params) -> result<list<tfl-api-presentation-entities-disrupted-point>, string>;
 
   /// Gets the list of arrival and departure predictions for the given stop point id (overground, Elizabeth line and thameslink only)
   record arrival-departures-params {
@@ -753,14 +2656,14 @@ interface stop-point {
     /// A comma-separated list of line ids e.g. elizabeth, london-overground, thameslink
     line-ids: list<string>
   }
-  arrival-departures: func(params: arrival-departures-params) -> result<string, string>;
+  arrival-departures: func(params: arrival-departures-params) -> result<list<tfl-api-presentation-entities-arrival-departure>, string>;
 
   /// Gets the list of arrival predictions for the given stop point id
   record arrivals-params {
     /// A StopPoint id (station naptan code e.g. 940GZZLUASL, you can use /StopPoint/Search/{query} endpoint to find a stop point id from a station name)
     id: string
   }
-  arrivals: func(params: arrivals-params) -> result<string, string>;
+  arrivals: func(params: arrivals-params) -> result<list<tfl-api-presentation-entities-prediction>, string>;
 
   /// Gets Stopoints that are reachable from a station/line combination.
   record reachable-from-params {
@@ -771,7 +2674,7 @@ interface stop-point {
     /// A comma-separated list of service types to filter on. If not specified. Supported values: Regular, Night. Defaulted to 'Regular' if not specified
     service-types: option<list<reachable-from-service-types-item-enum>>
   }
-  reachable-from: func(params: reachable-from-params) -> result<string, string>;
+  reachable-from: func(params: reachable-from-params) -> result<list<tfl-api-presentation-entities-stop-point>, string>;
 
   /// Gets all the Crowding data (static) for the StopPointId, plus crowding data for a given line and optionally a particular direction.
   record crowding-params {
@@ -782,7 +2685,7 @@ interface stop-point {
     /// The direction of travel. Can be inbound or outbound.
     direction: crowding-direction-enum
   }
-  crowding: func(params: crowding-params) -> result<string, string>;
+  crowding: func(params: crowding-params) -> result<list<tfl-api-presentation-entities-stop-point>, string>;
 
   /// Returns the canonical direction, "inbound" or "outbound", for a given pair of stop point Ids in the direction from -&gt; to.
   record direction-params {
@@ -802,7 +2705,7 @@ interface stop-point {
     /// A comma-separated list of service types to filter on. If not specified. Supported values: Regular, Night. Defaulted to 'Regular' if not specified
     service-types: option<list<reachable-from-service-types-item-enum>>
   }
-  route: func(params: route-params) -> result<string, string>;
+  route: func(params: route-params) -> result<list<tfl-api-presentation-entities-stop-point-route-section>, string>;
 
   /// Get a list of places corresponding to a given id and place types.
   record get-stop-point-id-place-types-params {
@@ -811,21 +2714,21 @@ interface stop-point {
     /// A comcomma-separated value representing the place types.
     place-types: list<string>
   }
-  get-stop-point-id-place-types: func(params: get-stop-point-id-place-types-params) -> result<string, string>;
+  get-stop-point-id-place-types: func(params: get-stop-point-id-place-types-params) -> result<list<tfl-api-presentation-entities-place>, string>;
 
   /// Get car parks corresponding to the given stop point id.
   record get-car-parks-by-id-params {
     /// stopPointId is required to get the car parks.
     stop-point-id: string
   }
-  get-car-parks-by-id: func(params: get-car-parks-by-id-params) -> result<string, string>;
+  get-car-parks-by-id: func(params: get-car-parks-by-id-params) -> result<list<tfl-api-presentation-entities-place>, string>;
 
   /// Gets a list of taxi ranks corresponding to the given stop point id.
   record get-taxi-ranks-by-ids-params {
     /// stopPointId is required to get the taxi ranks.
     stop-point-id: string
   }
-  get-taxi-ranks-by-ids: func(params: get-taxi-ranks-by-ids-params) -> result<string, string>;
+  get-taxi-ranks-by-ids: func(params: get-taxi-ranks-by-ids-params) -> result<list<tfl-api-presentation-entities-place>, string>;
 
 }
 
@@ -834,6 +2737,11 @@ interface travel-time {
     average,
     from-op,
     to,
+  }
+
+  record system-object {
+    /// JSON-encoded free-form object payload
+    data: option<string>
   }
 
   /// Gets the TravelTime overlay.
@@ -865,7 +2773,7 @@ interface travel-time {
     compare-type: string,
     compare-value: string
   }
-  get-compare-overlay: func(params: get-compare-overlay-params) -> result<string, string>;
+  get-compare-overlay: func(params: get-compare-overlay-params) -> result<system-object, string>;
 
   /// Gets the TravelTime overlay.
   record get-overlay-params {
@@ -894,17 +2802,69 @@ interface travel-time {
     /// The total minutes between the travel time bands
     travel-time-interval: s32
   }
-  get-overlay: func(params: get-overlay-params) -> result<string, string>;
+  get-overlay: func(params: get-overlay-params) -> result<system-object, string>;
 
 }
 
 interface vehicle {
+  /// DTO to capture the prediction details
+  record tfl-api-presentation-entities-prediction {
+    /// Bearing (between 0 to 359)
+    bearing: option<string>,
+    /// The current location of the vehicle.
+    current-location: option<string>,
+    /// Name of the destination
+    destination-name: option<string>,
+    /// Naptan Identifier for the prediction's destination
+    destination-naptan-id: option<string>,
+    /// Direction (unified to inbound/outbound)
+    direction: option<string>,
+    /// The expected arrival time of the vehicle at the stop/station
+    expected-arrival: option<string>,
+    /// The identitier for the prediction
+    id: option<string>,
+    /// Unique identifier for the Line
+    line-id: option<string>,
+    /// Line Name
+    line-name: option<string>,
+    /// The mode name of the station/line the prediction relates to
+    mode-name: option<string>,
+    /// Identifier for the prediction
+    naptan-id: option<string>,
+    /// The type of the operation (1: is new or has been updated, 2: should be deleted from any client cache)
+    operation-type: option<s32>,
+    /// Platform name (for bus, this is the stop letter)
+    platform-name: option<string>,
+    /// Station name
+    station-name: option<string>,
+    /// The expiry time for the prediction
+    time-to-live: option<string>,
+    /// Prediction of the Time to station in seconds
+    time-to-station: option<s32>,
+    /// Timestamp for when the prediction was inserted/modified (source column drives what objects are broadcast on each iteration)
+    timestamp: option<string>,
+    timing: option<tfl-api-presentation-entities-prediction-timing>,
+    /// Routing information or other descriptive text about the path of the vehicle towards the destination
+    towards: option<string>,
+    /// The actual vehicle in transit (for train modes, the leading car of the rolling set)
+    vehicle-id: option<string>
+  }
+
+  record tfl-api-presentation-entities-prediction-timing {
+    countdown-server-adjustment: option<string>,
+    insert: option<string>,
+    read: option<string>,
+    received: option<string>,
+    sent: option<string>,
+    source: option<string>
+  }
+
   /// Gets the predictions for a given list of vehicle Id's.
   record get-params {
     /// A comma-separated list of vehicle ids e.g. LX58CFV,LX11AZB,LX58CFE. Max approx. 25 ids.
     ids: string
   }
-  get: func(params: get-params) -> result<string, string>;
+  get: func(params: get-params) -> result<list<tfl-api-presentation-entities-prediction>, string>;
 
 }
 /// The component world: imports the secrets host capability

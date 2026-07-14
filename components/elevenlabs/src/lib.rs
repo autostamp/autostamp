@@ -44,10 +44,15 @@ pub(crate) enum FieldLocation {
     Body,
 }
 
-/// A single operation parameter: the snake-case key it carries in the params JSON and where
-/// it belongs in the request.
+/// A single operation parameter. `snake` keys the field in the internal params JSON (and, for a
+/// path field, matches the `{snake}` placeholder in the path template); `wire` is the verbatim name
+/// the field takes on the HTTP wire (query key, header name, or body property). The two differ
+/// whenever the source name isn't already snake_case (e.g. `dryRun` → snake `dry_run`, wire
+/// `dryRun`), and let distinct inputs that share a snake key (`DateCreated`, `DateCreated<`) still
+/// travel under their true names.
 pub(crate) struct FieldSpec {
     pub(crate) snake: &'static str,
+    pub(crate) wire: &'static str,
     pub(crate) location: FieldLocation,
 }
 
@@ -71,6 +76,16 @@ pub(crate) struct AuthApply {
     pub(crate) kind: AuthKind,
 }
 
+/// The failure modes of [`dispatch`], kept structured so each generated operation can map them
+/// onto its own typed error: an `Http` failure carries the response status and body (routed to
+/// the matching error-variant case), while a `Transport` failure carries a message for the
+/// catch-all case (a secret lookup, connection, or decode failure that never produced an HTTP
+/// status).
+pub(crate) enum DispatchError {
+    Http { status: u16, body: String },
+    Transport(String),
+}
+
 /// A single API operation: HTTP method, path template (with `{snake}` placeholders), the
 /// parameter fields, and the security schemes to apply.
 pub(crate) struct OpSpec {
@@ -81,8 +96,9 @@ pub(crate) struct OpSpec {
 }
 
 /// Execute `op` with the supplied `params` (a JSON object keyed by snake-case field names)
-/// and return the response body as a string, or an error message.
-pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, String> {
+/// and return the raw 2xx response body, or a structured [`DispatchError`] the caller maps
+/// onto the operation's typed error.
+pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, DispatchError> {
     let obj = match &params {
         Value::Object(map) => Some(map),
         _ => None,
@@ -105,10 +121,10 @@ pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, String> {
                 let placeholder = format!("{{{}}}", field.snake);
                 path = path.replace(&placeholder, &percent_encode(&scalar(value)));
             }
-            FieldLocation::Query => query.push((field.snake.to_string(), scalar(value))),
-            FieldLocation::Header => headers.push((field.snake.to_string(), scalar(value))),
+            FieldLocation::Query => query.push((field.wire.to_string(), scalar(value))),
+            FieldLocation::Header => headers.push((field.wire.to_string(), scalar(value))),
             FieldLocation::Body => {
-                body.insert(field.snake.to_string(), value.clone());
+                body.insert(field.wire.to_string(), value.clone());
             }
         }
     }
@@ -116,7 +132,7 @@ pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, String> {
     // Apply each resolved security scheme, sourcing its value from wasmcloud:secrets.
     let mut cookies: Vec<String> = Vec::new();
     for apply in op.auth {
-        let secret = fetch_secret(apply.secret_key)?;
+        let secret = fetch_secret(apply.secret_key).map_err(DispatchError::Transport)?;
         match &apply.kind {
             AuthKind::Bearer => headers.push(("authorization".into(), format!("Bearer {secret}"))),
             AuthKind::Basic => {
@@ -177,17 +193,18 @@ fn fetch_secret(key: &str) -> Result<String, String> {
 }
 
 /// Build and send the outgoing request with `wstd`, returning the response body on a 2xx
-/// status. The generated guest exports are synchronous, so the async `wstd` client is driven
-/// to completion on a local reactor via `wstd::runtime::block_on`.
+/// status and a structured [`DispatchError`] otherwise. The generated guest exports are
+/// synchronous, so the async `wstd` client is driven to completion on a local reactor via
+/// `wstd::runtime::block_on`.
 fn perform(
     method: &str,
     path_with_query: &str,
     headers: &[(String, String)],
     body: &[u8],
-) -> Result<String, String> {
+) -> Result<String, DispatchError> {
     let url = join_url(crate::BASE_URL, path_with_query);
     let method = Method::from_bytes(method.as_bytes())
-        .map_err(|err| format!("invalid HTTP method `{method}`: {err}"))?;
+        .map_err(|err| DispatchError::Transport(format!("invalid HTTP method `{method}`: {err}")))?;
 
     let mut builder = Request::builder().method(method).uri(url);
     for (name, value) in headers {
@@ -199,27 +216,29 @@ fn perform(
         } else {
             Body::from(body.to_vec())
         })
-        .map_err(|err| format!("failed to build request: {err}"))?;
+        .map_err(|err| DispatchError::Transport(format!("failed to build request: {err}")))?;
 
     wstd::runtime::block_on(async move {
         let client = Client::new();
         let response = client
             .send(request)
             .await
-            .map_err(|err| format!("request failed: {err:#}"))?;
+            .map_err(|err| DispatchError::Transport(format!("request failed: {err:#}")))?;
 
         let status = response.status().as_u16();
         let mut response_body = response.into_body();
-        let bytes = response_body
-            .contents()
-            .await
-            .map_err(|err| format!("failed to read response body: {err:#}"))?;
+        let bytes = response_body.contents().await.map_err(|err| {
+            DispatchError::Transport(format!("failed to read response body: {err:#}"))
+        })?;
         let body_text = String::from_utf8_lossy(bytes).into_owned();
 
         if (200..300).contains(&status) {
             Ok(body_text)
         } else {
-            Err(format!("HTTP {status}: {body_text}"))
+            Err(DispatchError::Http {
+                status,
+                body: body_text,
+            })
         }
     })
 }
@@ -279,442 +298,10 @@ fn base64(input: &[u8]) -> String {
 }
 }
 
-use crate::runtime::{dispatch, AuthApply, AuthKind, FieldLocation, FieldSpec, OpSpec};
-use serde_json::{Map, Value};
-
-use crate::exports::autostamp::elevenlabs::history as iface_history;
-
-const OP_HISTORY_GET_GENERATED_ITEMS_V1_HISTORY_GET: OpSpec = OpSpec {
-    method: "GET",
-    path_template: "/v1/history",
-    fields: &[
-        FieldSpec { snake: "xi_api_key", location: FieldLocation::Header },
-    ],
-    auth: &[
-    ],
-};
-
-const OP_HISTORY_DELETE_HISTORY_ITEMS_V1_HISTORY_DELETE_POST: OpSpec = OpSpec {
-    method: "POST",
-    path_template: "/v1/history/delete",
-    fields: &[
-        FieldSpec { snake: "xi_api_key", location: FieldLocation::Header },
-        FieldSpec { snake: "history_item_ids", location: FieldLocation::Body },
-    ],
-    auth: &[
-    ],
-};
-
-const OP_HISTORY_DOWNLOAD_HISTORY_ITEMS_V1_HISTORY_DOWNLOAD_POST: OpSpec = OpSpec {
-    method: "POST",
-    path_template: "/v1/history/download",
-    fields: &[
-        FieldSpec { snake: "xi_api_key", location: FieldLocation::Header },
-        FieldSpec { snake: "history_item_ids", location: FieldLocation::Body },
-    ],
-    auth: &[
-    ],
-};
-
-const OP_HISTORY_DELETE_HISTORY_ITEM_V1_HISTORY_HISTORY_ITEM_ID_DELETE: OpSpec = OpSpec {
-    method: "DELETE",
-    path_template: "/v1/history/{history_item_id}",
-    fields: &[
-        FieldSpec { snake: "history_item_id", location: FieldLocation::Path },
-        FieldSpec { snake: "xi_api_key", location: FieldLocation::Header },
-    ],
-    auth: &[
-    ],
-};
-
-const OP_HISTORY_GET_AUDIO_FROM_HISTORY_ITEM_V1_HISTORY_HISTORY_ITEM_ID_AUDIO_GET: OpSpec = OpSpec {
-    method: "GET",
-    path_template: "/v1/history/{history_item_id}/audio",
-    fields: &[
-        FieldSpec { snake: "history_item_id", location: FieldLocation::Path },
-        FieldSpec { snake: "xi_api_key", location: FieldLocation::Header },
-    ],
-    auth: &[
-    ],
-};
-
-fn iface_history__get_generated_items_v1_history_get_params__to_json(p: &iface_history::GetGeneratedItemsV1HistoryGetParams) -> Value {
-    let mut m = Map::new();
-    m.insert("xi_api_key".into(), match (&p.xi_api_key) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_history__delete_history_items_v1_history_delete_post_params__to_json(p: &iface_history::DeleteHistoryItemsV1HistoryDeletePostParams) -> Value {
-    let mut m = Map::new();
-    m.insert("xi_api_key".into(), match (&p.xi_api_key) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("history_item_ids".into(), Value::Array((&p.history_item_ids).iter().map(|v| Value::String((v).clone())).collect()));
-    Value::Object(m)
-}
-
-fn iface_history__download_history_items_v1_history_download_post_params__to_json(p: &iface_history::DownloadHistoryItemsV1HistoryDownloadPostParams) -> Value {
-    let mut m = Map::new();
-    m.insert("xi_api_key".into(), match (&p.xi_api_key) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("history_item_ids".into(), Value::Array((&p.history_item_ids).iter().map(|v| Value::String((v).clone())).collect()));
-    Value::Object(m)
-}
-
-fn iface_history__delete_history_item_v1_history_history_item_id_delete_params__to_json(p: &iface_history::DeleteHistoryItemV1HistoryHistoryItemIdDeleteParams) -> Value {
-    let mut m = Map::new();
-    m.insert("history_item_id".into(), Value::String((&p.history_item_id).clone()));
-    m.insert("xi_api_key".into(), match (&p.xi_api_key) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_history__get_audio_from_history_item_v1_history_history_item_id_audio_get_params__to_json(p: &iface_history::GetAudioFromHistoryItemV1HistoryHistoryItemIdAudioGetParams) -> Value {
-    let mut m = Map::new();
-    m.insert("history_item_id".into(), Value::String((&p.history_item_id).clone()));
-    m.insert("xi_api_key".into(), match (&p.xi_api_key) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    Value::Object(m)
-}
-
-impl iface_history::Guest for crate::Component {
-    fn get_generated_items_v1_history_get(params: iface_history::GetGeneratedItemsV1HistoryGetParams) -> Result<String, String> {
-        let json = iface_history__get_generated_items_v1_history_get_params__to_json(&params);
-        dispatch(&OP_HISTORY_GET_GENERATED_ITEMS_V1_HISTORY_GET, json)
-    }
-    fn delete_history_items_v1_history_delete_post(params: iface_history::DeleteHistoryItemsV1HistoryDeletePostParams) -> Result<String, String> {
-        let json = iface_history__delete_history_items_v1_history_delete_post_params__to_json(&params);
-        dispatch(&OP_HISTORY_DELETE_HISTORY_ITEMS_V1_HISTORY_DELETE_POST, json)
-    }
-    fn download_history_items_v1_history_download_post(params: iface_history::DownloadHistoryItemsV1HistoryDownloadPostParams) -> Result<String, String> {
-        let json = iface_history__download_history_items_v1_history_download_post_params__to_json(&params);
-        dispatch(&OP_HISTORY_DOWNLOAD_HISTORY_ITEMS_V1_HISTORY_DOWNLOAD_POST, json)
-    }
-    fn delete_history_item_v1_history_history_item_id_delete(params: iface_history::DeleteHistoryItemV1HistoryHistoryItemIdDeleteParams) -> Result<String, String> {
-        let json = iface_history__delete_history_item_v1_history_history_item_id_delete_params__to_json(&params);
-        dispatch(&OP_HISTORY_DELETE_HISTORY_ITEM_V1_HISTORY_HISTORY_ITEM_ID_DELETE, json)
-    }
-    fn get_audio_from_history_item_v1_history_history_item_id_audio_get(params: iface_history::GetAudioFromHistoryItemV1HistoryHistoryItemIdAudioGetParams) -> Result<String, String> {
-        let json = iface_history__get_audio_from_history_item_v1_history_history_item_id_audio_get_params__to_json(&params);
-        dispatch(&OP_HISTORY_GET_AUDIO_FROM_HISTORY_ITEM_V1_HISTORY_HISTORY_ITEM_ID_AUDIO_GET, json)
-    }
-}
-use crate::exports::autostamp::elevenlabs::text_to_speech as iface_text_to_speech;
-
-const OP_TEXT_TO_SPEECH_V1_TEXT_TO_SPEECH_VOICE_ID_POST: OpSpec = OpSpec {
-    method: "POST",
-    path_template: "/v1/text-to-speech/{voice_id}",
-    fields: &[
-        FieldSpec { snake: "voice_id", location: FieldLocation::Path },
-        FieldSpec { snake: "xi_api_key", location: FieldLocation::Header },
-        FieldSpec { snake: "text", location: FieldLocation::Body },
-        FieldSpec { snake: "voice_settings", location: FieldLocation::Body },
-    ],
-    auth: &[
-    ],
-};
-
-const OP_TEXT_TO_SPEECH_V1_TEXT_TO_SPEECH_VOICE_ID_STREAM_POST: OpSpec = OpSpec {
-    method: "POST",
-    path_template: "/v1/text-to-speech/{voice_id}/stream",
-    fields: &[
-        FieldSpec { snake: "voice_id", location: FieldLocation::Path },
-        FieldSpec { snake: "xi_api_key", location: FieldLocation::Header },
-        FieldSpec { snake: "text", location: FieldLocation::Body },
-        FieldSpec { snake: "voice_settings", location: FieldLocation::Body },
-    ],
-    auth: &[
-    ],
-};
-
-fn iface_text_to_speech__v1_text_to_speech_voice_id_post_params__to_json(p: &iface_text_to_speech::V1TextToSpeechVoiceIdPostParams) -> Value {
-    let mut m = Map::new();
-    m.insert("voice_id".into(), Value::String((&p.voice_id).clone()));
-    m.insert("xi_api_key".into(), match (&p.xi_api_key) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("text".into(), Value::String((&p.text).clone()));
-    m.insert("voice_settings".into(), match (&p.voice_settings) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_text_to_speech__v1_text_to_speech_voice_id_stream_post_params__to_json(p: &iface_text_to_speech::V1TextToSpeechVoiceIdStreamPostParams) -> Value {
-    let mut m = Map::new();
-    m.insert("voice_id".into(), Value::String((&p.voice_id).clone()));
-    m.insert("xi_api_key".into(), match (&p.xi_api_key) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("text".into(), Value::String((&p.text).clone()));
-    m.insert("voice_settings".into(), match (&p.voice_settings) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    Value::Object(m)
-}
-
-impl iface_text_to_speech::Guest for crate::Component {
-    fn v1_text_to_speech_voice_id_post(params: iface_text_to_speech::V1TextToSpeechVoiceIdPostParams) -> Result<String, String> {
-        let json = iface_text_to_speech__v1_text_to_speech_voice_id_post_params__to_json(&params);
-        dispatch(&OP_TEXT_TO_SPEECH_V1_TEXT_TO_SPEECH_VOICE_ID_POST, json)
-    }
-    fn v1_text_to_speech_voice_id_stream_post(params: iface_text_to_speech::V1TextToSpeechVoiceIdStreamPostParams) -> Result<String, String> {
-        let json = iface_text_to_speech__v1_text_to_speech_voice_id_stream_post_params__to_json(&params);
-        dispatch(&OP_TEXT_TO_SPEECH_V1_TEXT_TO_SPEECH_VOICE_ID_STREAM_POST, json)
-    }
-}
-use crate::exports::autostamp::elevenlabs::user as iface_user;
-
-const OP_USER_GET_USER_INFO_V1_USER_GET: OpSpec = OpSpec {
-    method: "GET",
-    path_template: "/v1/user",
-    fields: &[
-        FieldSpec { snake: "xi_api_key", location: FieldLocation::Header },
-    ],
-    auth: &[
-    ],
-};
-
-const OP_USER_GET_USER_SUBSCRIPTION_INFO_V1_USER_SUBSCRIPTION_GET: OpSpec = OpSpec {
-    method: "GET",
-    path_template: "/v1/user/subscription",
-    fields: &[
-        FieldSpec { snake: "xi_api_key", location: FieldLocation::Header },
-    ],
-    auth: &[
-    ],
-};
-
-fn iface_user__get_user_info_v1_user_get_params__to_json(p: &iface_user::GetUserInfoV1UserGetParams) -> Value {
-    let mut m = Map::new();
-    m.insert("xi_api_key".into(), match (&p.xi_api_key) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_user__get_user_subscription_info_v1_user_subscription_get_params__to_json(p: &iface_user::GetUserSubscriptionInfoV1UserSubscriptionGetParams) -> Value {
-    let mut m = Map::new();
-    m.insert("xi_api_key".into(), match (&p.xi_api_key) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    Value::Object(m)
-}
-
-impl iface_user::Guest for crate::Component {
-    fn get_user_info_v1_user_get(params: iface_user::GetUserInfoV1UserGetParams) -> Result<String, String> {
-        let json = iface_user__get_user_info_v1_user_get_params__to_json(&params);
-        dispatch(&OP_USER_GET_USER_INFO_V1_USER_GET, json)
-    }
-    fn get_user_subscription_info_v1_user_subscription_get(params: iface_user::GetUserSubscriptionInfoV1UserSubscriptionGetParams) -> Result<String, String> {
-        let json = iface_user__get_user_subscription_info_v1_user_subscription_get_params__to_json(&params);
-        dispatch(&OP_USER_GET_USER_SUBSCRIPTION_INFO_V1_USER_SUBSCRIPTION_GET, json)
-    }
-}
-use crate::exports::autostamp::elevenlabs::voices as iface_voices;
-
-const OP_VOICES_GET_VOICES_V1_VOICES_GET: OpSpec = OpSpec {
-    method: "GET",
-    path_template: "/v1/voices",
-    fields: &[
-        FieldSpec { snake: "xi_api_key", location: FieldLocation::Header },
-    ],
-    auth: &[
-    ],
-};
-
-const OP_VOICES_ADD_VOICE_V1_VOICES_ADD_POST: OpSpec = OpSpec {
-    method: "POST",
-    path_template: "/v1/voices/add",
-    fields: &[
-        FieldSpec { snake: "xi_api_key", location: FieldLocation::Header },
-    ],
-    auth: &[
-    ],
-};
-
-const OP_VOICES_GET_DEFAULT_VOICE_SETTINGS_V1_VOICES_SETTINGS_DEFAULT_GET: OpSpec = OpSpec {
-    method: "GET",
-    path_template: "/v1/voices/settings/default",
-    fields: &[
-    ],
-    auth: &[
-    ],
-};
-
-const OP_VOICES_GET_VOICE_V1_VOICES_VOICE_ID_GET: OpSpec = OpSpec {
-    method: "GET",
-    path_template: "/v1/voices/{voice_id}",
-    fields: &[
-        FieldSpec { snake: "voice_id", location: FieldLocation::Path },
-        FieldSpec { snake: "with_settings", location: FieldLocation::Query },
-        FieldSpec { snake: "xi_api_key", location: FieldLocation::Header },
-    ],
-    auth: &[
-    ],
-};
-
-const OP_VOICES_DELETE_VOICE_V1_VOICES_VOICE_ID_DELETE: OpSpec = OpSpec {
-    method: "DELETE",
-    path_template: "/v1/voices/{voice_id}",
-    fields: &[
-        FieldSpec { snake: "voice_id", location: FieldLocation::Path },
-        FieldSpec { snake: "xi_api_key", location: FieldLocation::Header },
-    ],
-    auth: &[
-    ],
-};
-
-const OP_VOICES_EDIT_VOICE_V1_VOICES_VOICE_ID_EDIT_POST: OpSpec = OpSpec {
-    method: "POST",
-    path_template: "/v1/voices/{voice_id}/edit",
-    fields: &[
-        FieldSpec { snake: "voice_id", location: FieldLocation::Path },
-        FieldSpec { snake: "xi_api_key", location: FieldLocation::Header },
-    ],
-    auth: &[
-    ],
-};
-
-const OP_VOICES_GET_VOICE_SETTINGS_V1_VOICES_VOICE_ID_SETTINGS_GET: OpSpec = OpSpec {
-    method: "GET",
-    path_template: "/v1/voices/{voice_id}/settings",
-    fields: &[
-        FieldSpec { snake: "voice_id", location: FieldLocation::Path },
-        FieldSpec { snake: "xi_api_key", location: FieldLocation::Header },
-    ],
-    auth: &[
-    ],
-};
-
-const OP_VOICES_EDIT_VOICE_SETTINGS_V1_VOICES_VOICE_ID_SETTINGS_EDIT_POST: OpSpec = OpSpec {
-    method: "POST",
-    path_template: "/v1/voices/{voice_id}/settings/edit",
-    fields: &[
-        FieldSpec { snake: "voice_id", location: FieldLocation::Path },
-        FieldSpec { snake: "xi_api_key", location: FieldLocation::Header },
-        FieldSpec { snake: "body", location: FieldLocation::Body },
-    ],
-    auth: &[
-    ],
-};
-
-fn iface_voices__get_voices_v1_voices_get_params__to_json(p: &iface_voices::GetVoicesV1VoicesGetParams) -> Value {
-    let mut m = Map::new();
-    m.insert("xi_api_key".into(), match (&p.xi_api_key) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_voices__add_voice_v1_voices_add_post_params__to_json(p: &iface_voices::AddVoiceV1VoicesAddPostParams) -> Value {
-    let mut m = Map::new();
-    m.insert("xi_api_key".into(), match (&p.xi_api_key) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_voices__get_voice_v1_voices_voice_id_get_params__to_json(p: &iface_voices::GetVoiceV1VoicesVoiceIdGetParams) -> Value {
-    let mut m = Map::new();
-    m.insert("voice_id".into(), Value::String((&p.voice_id).clone()));
-    m.insert("with_settings".into(), match (&p.with_settings) { Some(v) => Value::Bool(*(v)), None => Value::Null });
-    m.insert("xi_api_key".into(), match (&p.xi_api_key) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_voices__delete_voice_v1_voices_voice_id_delete_params__to_json(p: &iface_voices::DeleteVoiceV1VoicesVoiceIdDeleteParams) -> Value {
-    let mut m = Map::new();
-    m.insert("voice_id".into(), Value::String((&p.voice_id).clone()));
-    m.insert("xi_api_key".into(), match (&p.xi_api_key) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_voices__edit_voice_v1_voices_voice_id_edit_post_params__to_json(p: &iface_voices::EditVoiceV1VoicesVoiceIdEditPostParams) -> Value {
-    let mut m = Map::new();
-    m.insert("voice_id".into(), Value::String((&p.voice_id).clone()));
-    m.insert("xi_api_key".into(), match (&p.xi_api_key) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_voices__get_voice_settings_v1_voices_voice_id_settings_get_params__to_json(p: &iface_voices::GetVoiceSettingsV1VoicesVoiceIdSettingsGetParams) -> Value {
-    let mut m = Map::new();
-    m.insert("voice_id".into(), Value::String((&p.voice_id).clone()));
-    m.insert("xi_api_key".into(), match (&p.xi_api_key) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_voices__edit_voice_settings_v1_voices_voice_id_settings_edit_post_params__to_json(p: &iface_voices::EditVoiceSettingsV1VoicesVoiceIdSettingsEditPostParams) -> Value {
-    let mut m = Map::new();
-    m.insert("voice_id".into(), Value::String((&p.voice_id).clone()));
-    m.insert("xi_api_key".into(), match (&p.xi_api_key) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("body".into(), Value::String((&p.body).clone()));
-    Value::Object(m)
-}
-
-impl iface_voices::Guest for crate::Component {
-    fn get_voices_v1_voices_get(params: iface_voices::GetVoicesV1VoicesGetParams) -> Result<String, String> {
-        let json = iface_voices__get_voices_v1_voices_get_params__to_json(&params);
-        dispatch(&OP_VOICES_GET_VOICES_V1_VOICES_GET, json)
-    }
-    fn add_voice_v1_voices_add_post(params: iface_voices::AddVoiceV1VoicesAddPostParams) -> Result<String, String> {
-        let json = iface_voices__add_voice_v1_voices_add_post_params__to_json(&params);
-        dispatch(&OP_VOICES_ADD_VOICE_V1_VOICES_ADD_POST, json)
-    }
-    fn get_default_voice_settings_v1_voices_settings_default_get() -> Result<String, String> {
-        dispatch(&OP_VOICES_GET_DEFAULT_VOICE_SETTINGS_V1_VOICES_SETTINGS_DEFAULT_GET, Value::Object(Map::new()))
-    }
-    fn get_voice_v1_voices_voice_id_get(params: iface_voices::GetVoiceV1VoicesVoiceIdGetParams) -> Result<String, String> {
-        let json = iface_voices__get_voice_v1_voices_voice_id_get_params__to_json(&params);
-        dispatch(&OP_VOICES_GET_VOICE_V1_VOICES_VOICE_ID_GET, json)
-    }
-    fn delete_voice_v1_voices_voice_id_delete(params: iface_voices::DeleteVoiceV1VoicesVoiceIdDeleteParams) -> Result<String, String> {
-        let json = iface_voices__delete_voice_v1_voices_voice_id_delete_params__to_json(&params);
-        dispatch(&OP_VOICES_DELETE_VOICE_V1_VOICES_VOICE_ID_DELETE, json)
-    }
-    fn edit_voice_v1_voices_voice_id_edit_post(params: iface_voices::EditVoiceV1VoicesVoiceIdEditPostParams) -> Result<String, String> {
-        let json = iface_voices__edit_voice_v1_voices_voice_id_edit_post_params__to_json(&params);
-        dispatch(&OP_VOICES_EDIT_VOICE_V1_VOICES_VOICE_ID_EDIT_POST, json)
-    }
-    fn get_voice_settings_v1_voices_voice_id_settings_get(params: iface_voices::GetVoiceSettingsV1VoicesVoiceIdSettingsGetParams) -> Result<String, String> {
-        let json = iface_voices__get_voice_settings_v1_voices_voice_id_settings_get_params__to_json(&params);
-        dispatch(&OP_VOICES_GET_VOICE_SETTINGS_V1_VOICES_VOICE_ID_SETTINGS_GET, json)
-    }
-    fn edit_voice_settings_v1_voices_voice_id_settings_edit_post(params: iface_voices::EditVoiceSettingsV1VoicesVoiceIdSettingsEditPostParams) -> Result<String, String> {
-        let json = iface_voices__edit_voice_settings_v1_voices_voice_id_settings_edit_post_params__to_json(&params);
-        dispatch(&OP_VOICES_EDIT_VOICE_SETTINGS_V1_VOICES_VOICE_ID_SETTINGS_EDIT_POST, json)
-    }
-}
-use crate::exports::autostamp::elevenlabs::samples as iface_samples;
-
-const OP_SAMPLES_DELETE_SAMPLE_V1_VOICES_VOICE_ID_SAMPLES_SAMPLE_ID_DELETE: OpSpec = OpSpec {
-    method: "DELETE",
-    path_template: "/v1/voices/{voice_id}/samples/{sample_id}",
-    fields: &[
-        FieldSpec { snake: "voice_id", location: FieldLocation::Path },
-        FieldSpec { snake: "sample_id", location: FieldLocation::Path },
-        FieldSpec { snake: "xi_api_key", location: FieldLocation::Header },
-    ],
-    auth: &[
-    ],
-};
-
-const OP_SAMPLES_GET_AUDIO_FROM_SAMPLE_V1_VOICES_VOICE_ID_SAMPLES_SAMPLE_ID_AUDIO_GET: OpSpec = OpSpec {
-    method: "GET",
-    path_template: "/v1/voices/{voice_id}/samples/{sample_id}/audio",
-    fields: &[
-        FieldSpec { snake: "voice_id", location: FieldLocation::Path },
-        FieldSpec { snake: "sample_id", location: FieldLocation::Path },
-        FieldSpec { snake: "xi_api_key", location: FieldLocation::Header },
-    ],
-    auth: &[
-    ],
-};
-
-fn iface_samples__delete_sample_v1_voices_voice_id_samples_sample_id_delete_params__to_json(p: &iface_samples::DeleteSampleV1VoicesVoiceIdSamplesSampleIdDeleteParams) -> Value {
-    let mut m = Map::new();
-    m.insert("voice_id".into(), Value::String((&p.voice_id).clone()));
-    m.insert("sample_id".into(), Value::String((&p.sample_id).clone()));
-    m.insert("xi_api_key".into(), match (&p.xi_api_key) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_samples__get_audio_from_sample_v1_voices_voice_id_samples_sample_id_audio_get_params__to_json(p: &iface_samples::GetAudioFromSampleV1VoicesVoiceIdSamplesSampleIdAudioGetParams) -> Value {
-    let mut m = Map::new();
-    m.insert("voice_id".into(), Value::String((&p.voice_id).clone()));
-    m.insert("sample_id".into(), Value::String((&p.sample_id).clone()));
-    m.insert("xi_api_key".into(), match (&p.xi_api_key) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    Value::Object(m)
-}
-
-impl iface_samples::Guest for crate::Component {
-    fn delete_sample_v1_voices_voice_id_samples_sample_id_delete(params: iface_samples::DeleteSampleV1VoicesVoiceIdSamplesSampleIdDeleteParams) -> Result<String, String> {
-        let json = iface_samples__delete_sample_v1_voices_voice_id_samples_sample_id_delete_params__to_json(&params);
-        dispatch(&OP_SAMPLES_DELETE_SAMPLE_V1_VOICES_VOICE_ID_SAMPLES_SAMPLE_ID_DELETE, json)
-    }
-    fn get_audio_from_sample_v1_voices_voice_id_samples_sample_id_audio_get(params: iface_samples::GetAudioFromSampleV1VoicesVoiceIdSamplesSampleIdAudioGetParams) -> Result<String, String> {
-        let json = iface_samples__get_audio_from_sample_v1_voices_voice_id_samples_sample_id_audio_get_params__to_json(&params);
-        dispatch(&OP_SAMPLES_GET_AUDIO_FROM_SAMPLE_V1_VOICES_VOICE_ID_SAMPLES_SAMPLE_ID_AUDIO_GET, json)
-    }
-}
+mod iface_history;
+mod iface_text_to_speech;
+mod iface_user;
+mod iface_voices;
+mod iface_samples;
 
 export!(Component);

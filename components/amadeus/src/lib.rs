@@ -44,10 +44,15 @@ pub(crate) enum FieldLocation {
     Body,
 }
 
-/// A single operation parameter: the snake-case key it carries in the params JSON and where
-/// it belongs in the request.
+/// A single operation parameter. `snake` keys the field in the internal params JSON (and, for a
+/// path field, matches the `{snake}` placeholder in the path template); `wire` is the verbatim name
+/// the field takes on the HTTP wire (query key, header name, or body property). The two differ
+/// whenever the source name isn't already snake_case (e.g. `dryRun` → snake `dry_run`, wire
+/// `dryRun`), and let distinct inputs that share a snake key (`DateCreated`, `DateCreated<`) still
+/// travel under their true names.
 pub(crate) struct FieldSpec {
     pub(crate) snake: &'static str,
+    pub(crate) wire: &'static str,
     pub(crate) location: FieldLocation,
 }
 
@@ -71,6 +76,16 @@ pub(crate) struct AuthApply {
     pub(crate) kind: AuthKind,
 }
 
+/// The failure modes of [`dispatch`], kept structured so each generated operation can map them
+/// onto its own typed error: an `Http` failure carries the response status and body (routed to
+/// the matching error-variant case), while a `Transport` failure carries a message for the
+/// catch-all case (a secret lookup, connection, or decode failure that never produced an HTTP
+/// status).
+pub(crate) enum DispatchError {
+    Http { status: u16, body: String },
+    Transport(String),
+}
+
 /// A single API operation: HTTP method, path template (with `{snake}` placeholders), the
 /// parameter fields, and the security schemes to apply.
 pub(crate) struct OpSpec {
@@ -81,8 +96,9 @@ pub(crate) struct OpSpec {
 }
 
 /// Execute `op` with the supplied `params` (a JSON object keyed by snake-case field names)
-/// and return the response body as a string, or an error message.
-pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, String> {
+/// and return the raw 2xx response body, or a structured [`DispatchError`] the caller maps
+/// onto the operation's typed error.
+pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, DispatchError> {
     let obj = match &params {
         Value::Object(map) => Some(map),
         _ => None,
@@ -105,10 +121,10 @@ pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, String> {
                 let placeholder = format!("{{{}}}", field.snake);
                 path = path.replace(&placeholder, &percent_encode(&scalar(value)));
             }
-            FieldLocation::Query => query.push((field.snake.to_string(), scalar(value))),
-            FieldLocation::Header => headers.push((field.snake.to_string(), scalar(value))),
+            FieldLocation::Query => query.push((field.wire.to_string(), scalar(value))),
+            FieldLocation::Header => headers.push((field.wire.to_string(), scalar(value))),
             FieldLocation::Body => {
-                body.insert(field.snake.to_string(), value.clone());
+                body.insert(field.wire.to_string(), value.clone());
             }
         }
     }
@@ -116,7 +132,7 @@ pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, String> {
     // Apply each resolved security scheme, sourcing its value from wasmcloud:secrets.
     let mut cookies: Vec<String> = Vec::new();
     for apply in op.auth {
-        let secret = fetch_secret(apply.secret_key)?;
+        let secret = fetch_secret(apply.secret_key).map_err(DispatchError::Transport)?;
         match &apply.kind {
             AuthKind::Bearer => headers.push(("authorization".into(), format!("Bearer {secret}"))),
             AuthKind::Basic => {
@@ -177,17 +193,18 @@ fn fetch_secret(key: &str) -> Result<String, String> {
 }
 
 /// Build and send the outgoing request with `wstd`, returning the response body on a 2xx
-/// status. The generated guest exports are synchronous, so the async `wstd` client is driven
-/// to completion on a local reactor via `wstd::runtime::block_on`.
+/// status and a structured [`DispatchError`] otherwise. The generated guest exports are
+/// synchronous, so the async `wstd` client is driven to completion on a local reactor via
+/// `wstd::runtime::block_on`.
 fn perform(
     method: &str,
     path_with_query: &str,
     headers: &[(String, String)],
     body: &[u8],
-) -> Result<String, String> {
+) -> Result<String, DispatchError> {
     let url = join_url(crate::BASE_URL, path_with_query);
     let method = Method::from_bytes(method.as_bytes())
-        .map_err(|err| format!("invalid HTTP method `{method}`: {err}"))?;
+        .map_err(|err| DispatchError::Transport(format!("invalid HTTP method `{method}`: {err}")))?;
 
     let mut builder = Request::builder().method(method).uri(url);
     for (name, value) in headers {
@@ -199,27 +216,29 @@ fn perform(
         } else {
             Body::from(body.to_vec())
         })
-        .map_err(|err| format!("failed to build request: {err}"))?;
+        .map_err(|err| DispatchError::Transport(format!("failed to build request: {err}")))?;
 
     wstd::runtime::block_on(async move {
         let client = Client::new();
         let response = client
             .send(request)
             .await
-            .map_err(|err| format!("request failed: {err:#}"))?;
+            .map_err(|err| DispatchError::Transport(format!("request failed: {err:#}")))?;
 
         let status = response.status().as_u16();
         let mut response_body = response.into_body();
-        let bytes = response_body
-            .contents()
-            .await
-            .map_err(|err| format!("failed to read response body: {err:#}"))?;
+        let bytes = response_body.contents().await.map_err(|err| {
+            DispatchError::Transport(format!("failed to read response body: {err:#}"))
+        })?;
         let body_text = String::from_utf8_lossy(bytes).into_owned();
 
         if (200..300).contains(&status) {
             Ok(body_text)
         } else {
-            Err(format!("HTTP {status}: {body_text}"))
+            Err(DispatchError::Http {
+                status,
+                body: body_text,
+            })
         }
     })
 }
@@ -279,87 +298,6 @@ fn base64(input: &[u8]) -> String {
 }
 }
 
-use crate::runtime::{dispatch, AuthApply, AuthKind, FieldLocation, FieldSpec, OpSpec};
-use serde_json::{Map, Value};
-
-use crate::exports::autostamp::amadeus::shopping as iface_shopping;
-
-const OP_SHOPPING_GET_FLIGHT_OFFERS: OpSpec = OpSpec {
-    method: "GET",
-    path_template: "/shopping/flight-offers",
-    fields: &[
-        FieldSpec { snake: "origin_location_code", location: FieldLocation::Query },
-        FieldSpec { snake: "destination_location_code", location: FieldLocation::Query },
-        FieldSpec { snake: "departure_date", location: FieldLocation::Query },
-        FieldSpec { snake: "return_date", location: FieldLocation::Query },
-        FieldSpec { snake: "adults", location: FieldLocation::Query },
-        FieldSpec { snake: "children", location: FieldLocation::Query },
-        FieldSpec { snake: "infants", location: FieldLocation::Query },
-        FieldSpec { snake: "travel_class", location: FieldLocation::Query },
-        FieldSpec { snake: "included_airline_codes", location: FieldLocation::Query },
-        FieldSpec { snake: "excluded_airline_codes", location: FieldLocation::Query },
-        FieldSpec { snake: "non_stop", location: FieldLocation::Query },
-        FieldSpec { snake: "currency_code", location: FieldLocation::Query },
-        FieldSpec { snake: "max_price", location: FieldLocation::Query },
-        FieldSpec { snake: "max", location: FieldLocation::Query },
-    ],
-    auth: &[
-    ],
-};
-
-const OP_SHOPPING_SEARCH_FLIGHT_OFFERS: OpSpec = OpSpec {
-    method: "POST",
-    path_template: "/shopping/flight-offers",
-    fields: &[
-        FieldSpec { snake: "x_http_method_override", location: FieldLocation::Header },
-    ],
-    auth: &[
-    ],
-};
-
-fn iface_shopping__get_flight_offers_travel_class_enum__to_str(e: &iface_shopping::GetFlightOffersTravelClassEnum) -> &'static str {
-    match e {
-        iface_shopping::GetFlightOffersTravelClassEnum::Economy => "ECONOMY",
-        iface_shopping::GetFlightOffersTravelClassEnum::PremiumEconomy => "PREMIUM_ECONOMY",
-        iface_shopping::GetFlightOffersTravelClassEnum::Business => "BUSINESS",
-        iface_shopping::GetFlightOffersTravelClassEnum::First => "FIRST",
-    }
-}
-
-fn iface_shopping__get_flight_offers_params__to_json(p: &iface_shopping::GetFlightOffersParams) -> Value {
-    let mut m = Map::new();
-    m.insert("origin_location_code".into(), Value::String((&p.origin_location_code).clone()));
-    m.insert("destination_location_code".into(), Value::String((&p.destination_location_code).clone()));
-    m.insert("departure_date".into(), Value::String((&p.departure_date).clone()));
-    m.insert("return_date".into(), match (&p.return_date) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("adults".into(), Value::Number(serde_json::Number::from(*(&p.adults))));
-    m.insert("children".into(), match (&p.children) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    m.insert("infants".into(), match (&p.infants) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    m.insert("travel_class".into(), match (&p.travel_class) { Some(v) => Value::String(iface_shopping__get_flight_offers_travel_class_enum__to_str(v).into()), None => Value::Null });
-    m.insert("included_airline_codes".into(), match (&p.included_airline_codes) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("excluded_airline_codes".into(), match (&p.excluded_airline_codes) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("non_stop".into(), match (&p.non_stop) { Some(v) => Value::Bool(*(v)), None => Value::Null });
-    m.insert("currency_code".into(), match (&p.currency_code) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("max_price".into(), match (&p.max_price) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    m.insert("max".into(), match (&p.max) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_shopping__search_flight_offers_params__to_json(p: &iface_shopping::SearchFlightOffersParams) -> Value {
-    let mut m = Map::new();
-    m.insert("x_http_method_override".into(), Value::String((&p.x_http_method_override).clone()));
-    Value::Object(m)
-}
-
-impl iface_shopping::Guest for crate::Component {
-    fn get_flight_offers(params: iface_shopping::GetFlightOffersParams) -> Result<String, String> {
-        let json = iface_shopping__get_flight_offers_params__to_json(&params);
-        dispatch(&OP_SHOPPING_GET_FLIGHT_OFFERS, json)
-    }
-    fn search_flight_offers(params: iface_shopping::SearchFlightOffersParams) -> Result<String, String> {
-        let json = iface_shopping__search_flight_offers_params__to_json(&params);
-        dispatch(&OP_SHOPPING_SEARCH_FLIGHT_OFFERS, json)
-    }
-}
+mod iface_shopping;
 
 export!(Component);

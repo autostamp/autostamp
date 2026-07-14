@@ -6,22 +6,235 @@
 /// | Secret name | Applied to each request as |
 /// | --- | --- |
 /// | `oauth_2_0` | `Authorization: Bearer <secret>` |
-package autostamp:spotify@0.3.0;
+package autostamp:spotify@0.5.0;
 
 interface albums {
+  enum album-object-album-type-enum {
+    album,
+    single,
+    compilation,
+  }
+
+  enum album-object-release-date-precision-enum {
+    year,
+    month,
+    day,
+  }
+
+  enum album-restriction-object-reason-enum {
+    market,
+    product,
+    explicit,
+  }
+
+  enum album-object-type-op-enum {
+    album,
+  }
+
+  enum artist-object-type-op-enum {
+    artist,
+  }
+
+  record get-multiple-albums-response {
+    albums: list<album-object>
+  }
+
+  record album-object {
+    /// The type of the album.
+    album-type: album-object-album-type-enum,
+    /// The markets in which the album is available: [ISO 3166-1 alpha-2 country codes](http://en.wikipedia.org/wiki/ISO_3166-1_alpha-2). _**NOTE**: an album is considered available in a market when at least 1 of its tracks is available in that market._
+    available-markets: list<string>,
+    /// The copyright statements of the album.
+    copyrights: option<list<copyright-object>>,
+    /// Known external IDs for the album.
+    external-ids: option<external-id-object>,
+    /// Known external URLs for this album.
+    external-urls: external-url-object,
+    /// A list of the genres the album is associated with. If not yet classified, the array is empty.
+    genres: option<list<string>>,
+    /// A link to the Web API endpoint providing full details of the album.
+    href: string,
+    /// The [Spotify ID](/documentation/web-api/concepts/spotify-uris-ids) for the album.
+    id: string,
+    /// The cover art for the album in various sizes, widest first.
+    images: list<image-object>,
+    /// The label associated with the album.
+    label: option<string>,
+    /// The name of the album. In case of an album takedown, the value may be an empty string.
+    name: string,
+    /// The popularity of the album. The value will be between 0 and 100, with 100 being the most popular.
+    popularity: option<s32>,
+    /// The date the album was first released.
+    release-date: string,
+    /// The precision with which `release_date` value is known.
+    release-date-precision: album-object-release-date-precision-enum,
+    /// Included in the response when a content restriction is applied.
+    restrictions: option<album-restriction-object>,
+    /// The number of tracks in the album.
+    total-tracks: s32,
+    /// The object type.
+    type-op: album-object-type-op-enum,
+    /// The [Spotify URI](/documentation/web-api/concepts/spotify-uris-ids) for the album.
+    uri: string,
+    /// The artists of the album. Each artist object includes a link in `href` to more detailed information about the artist.
+    artists: option<list<artist-object>>,
+    tracks: option<paging-simplified-track-object>
+  }
+
+  record copyright-object {
+    /// The copyright text for this content.
+    text: option<string>,
+    /// The type of copyright: `C` = the copyright, `P` = the sound recording (performance) copyright.
+    type-op: option<string>
+  }
+
+  record external-id-object {
+    /// [International Article Number](http://en.wikipedia.org/wiki/International_Article_Number_%28EAN%29)
+    ean: option<string>,
+    /// [International Standard Recording Code](http://en.wikipedia.org/wiki/International_Standard_Recording_Code)
+    isrc: option<string>,
+    /// [Universal Product Code](http://en.wikipedia.org/wiki/Universal_Product_Code)
+    upc: option<string>
+  }
+
+  record external-url-object {
+    /// The [Spotify URL](/documentation/web-api/concepts/spotify-uris-ids) for the object.
+    spotify: option<string>
+  }
+
+  record image-object {
+    /// The image height in pixels.
+    height: s32,
+    /// The source URL of the image.
+    url: string,
+    /// The image width in pixels.
+    width: s32
+  }
+
+  record album-restriction-object {
+    /// The reason for the restriction. Albums may be restricted if the content is not available in a given market, to the user's subscription type, or when the user's account is set to not play explicit content.
+    /// Additional reasons may be added in the future.
+    reason: option<album-restriction-object-reason-enum>
+  }
+
+  record artist-object {
+    /// Known external URLs for this artist.
+    external-urls: option<external-url-object>,
+    /// Information about the followers of the artist.
+    followers: option<followers-object>,
+    /// A list of the genres the artist is associated with. If not yet classified, the array is empty.
+    genres: option<list<string>>,
+    /// A link to the Web API endpoint providing full details of the artist.
+    href: option<string>,
+    /// The [Spotify ID](/documentation/web-api/concepts/spotify-uris-ids) for the artist.
+    id: option<string>,
+    /// Images of the artist in various sizes, widest first.
+    images: option<list<image-object>>,
+    /// The name of the artist.
+    name: option<string>,
+    /// The popularity of the artist. The value will be between 0 and 100, with 100 being the most popular. The artist's popularity is calculated from the popularity of all the artist's tracks.
+    popularity: option<s32>,
+    /// The object type.
+    type-op: option<artist-object-type-op-enum>,
+    /// The [Spotify URI](/documentation/web-api/concepts/spotify-uris-ids) for the artist.
+    uri: option<string>
+  }
+
+  record followers-object {
+    /// This will always be set to null, as the Web API does not support it at the moment.
+    href: option<string>,
+    /// The total number of followers.
+    total: option<s32>
+  }
+
+  record paging-simplified-track-object {
+    /// JSON-encoded free-form object payload
+    data: option<string>
+  }
+
+  record get-new-releases-response {
+    albums: paging-simplified-album-object
+  }
+
+  record paging-simplified-album-object {
+    /// JSON-encoded free-form object payload
+    data: option<string>
+  }
+
+  record paging-saved-album-object {
+    /// JSON-encoded free-form object payload
+    data: option<string>
+  }
+
+  variant get-multiple-albums-error {
+    unauthorized(string),
+    forbidden(string),
+    too-many-requests(string),
+    other(string)
+  }
+
+  variant get-an-album-error {
+    unauthorized(string),
+    forbidden(string),
+    too-many-requests(string),
+    other(string)
+  }
+
+  variant get-an-albums-tracks-error {
+    unauthorized(string),
+    forbidden(string),
+    too-many-requests(string),
+    other(string)
+  }
+
+  variant get-new-releases-error {
+    unauthorized(string),
+    forbidden(string),
+    too-many-requests(string),
+    other(string)
+  }
+
+  variant get-users-saved-albums-error {
+    unauthorized(string),
+    forbidden(string),
+    too-many-requests(string),
+    other(string)
+  }
+
+  variant save-albums-user-error {
+    unauthorized(string),
+    forbidden(string),
+    too-many-requests(string),
+    other(string)
+  }
+
+  variant remove-albums-user-error {
+    unauthorized(string),
+    forbidden(string),
+    too-many-requests(string),
+    other(string)
+  }
+
+  variant check-users-saved-albums-error {
+    unauthorized(string),
+    forbidden(string),
+    too-many-requests(string),
+    other(string)
+  }
+
   /// Get Several Albums
   record get-multiple-albums-params {
     ids: string,
     market: option<string>
   }
-  get-multiple-albums: func(params: get-multiple-albums-params) -> result<string, string>;
+  get-multiple-albums: func(params: get-multiple-albums-params) -> result<get-multiple-albums-response, get-multiple-albums-error>;
 
   /// Get Album
   record get-an-album-params {
     id: string,
     market: option<string>
   }
-  get-an-album: func(params: get-an-album-params) -> result<string, string>;
+  get-an-album: func(params: get-an-album-params) -> result<album-object, get-an-album-error>;
 
   /// Get Album Tracks
   record get-an-albums-tracks-params {
@@ -30,7 +243,7 @@ interface albums {
     limit: option<s32>,
     offset: option<s32>
   }
-  get-an-albums-tracks: func(params: get-an-albums-tracks-params) -> result<string, string>;
+  get-an-albums-tracks: func(params: get-an-albums-tracks-params) -> result<paging-simplified-track-object, get-an-albums-tracks-error>;
 
   /// Get New Releases
   record get-new-releases-params {
@@ -38,7 +251,7 @@ interface albums {
     limit: option<s32>,
     offset: option<s32>
   }
-  get-new-releases: func(params: get-new-releases-params) -> result<string, string>;
+  get-new-releases: func(params: get-new-releases-params) -> result<get-new-releases-response, get-new-releases-error>;
 
   /// Get User's Saved Albums
   record get-users-saved-albums-params {
@@ -46,41 +259,313 @@ interface albums {
     offset: option<s32>,
     market: option<string>
   }
-  get-users-saved-albums: func(params: get-users-saved-albums-params) -> result<string, string>;
+  get-users-saved-albums: func(params: get-users-saved-albums-params) -> result<paging-saved-album-object, get-users-saved-albums-error>;
 
   /// Save Albums for Current User
   record save-albums-user-params {
-    ids: string
+    ids: string,
+    /// A JSON array of the [Spotify IDs](/documentation/web-api/concepts/spotify-uris-ids). For example: `["4iV5W9uYEdYUVa79Axb7Rh", "1301WleyT98MSxVHPZCA6M"]`<br/>A maximum of 50 items can be specified in one request. _**Note**: if the `ids` parameter is present in the query string, any IDs listed here in the body will be ignored._
+    ids-v2: option<list<string>>
   }
-  save-albums-user: func(params: save-albums-user-params) -> result<string, string>;
+  save-albums-user: func(params: save-albums-user-params) -> result<string, save-albums-user-error>;
 
   /// Remove Users' Saved Albums
   record remove-albums-user-params {
-    ids: string
+    ids: string,
+    /// A JSON array of the [Spotify IDs](/documentation/web-api/concepts/spotify-uris-ids). For example: `["4iV5W9uYEdYUVa79Axb7Rh", "1301WleyT98MSxVHPZCA6M"]`<br/>A maximum of 50 items can be specified in one request. _**Note**: if the `ids` parameter is present in the query string, any IDs listed here in the body will be ignored._
+    ids-v2: option<list<string>>
   }
-  remove-albums-user: func(params: remove-albums-user-params) -> result<string, string>;
+  remove-albums-user: func(params: remove-albums-user-params) -> result<string, remove-albums-user-error>;
 
   /// Check User's Saved Albums
   record check-users-saved-albums-params {
     ids: string
   }
-  check-users-saved-albums: func(params: check-users-saved-albums-params) -> result<string, string>;
+  check-users-saved-albums: func(params: check-users-saved-albums-params) -> result<list<bool>, check-users-saved-albums-error>;
 
 }
 
 
 interface artists {
+  enum artist-object-type-op-enum {
+    artist,
+  }
+
+  enum simplified-album-object-album-type-enum {
+    album,
+    single,
+    compilation,
+  }
+
+  enum simplified-album-object-release-date-precision-enum {
+    year,
+    month,
+    day,
+  }
+
+  enum album-restriction-object-reason-enum {
+    market,
+    product,
+    explicit,
+  }
+
+  enum simplified-album-object-type-op-enum {
+    album,
+  }
+
+  enum simplified-album-object-album-group-enum {
+    album,
+    single,
+    compilation,
+    appears-on,
+  }
+
+  enum track-object-type-op-enum {
+    track,
+  }
+
+  record get-multiple-artists-response {
+    artists: list<artist-object>
+  }
+
+  record artist-object {
+    /// Known external URLs for this artist.
+    external-urls: option<external-url-object>,
+    /// Information about the followers of the artist.
+    followers: option<followers-object>,
+    /// A list of the genres the artist is associated with. If not yet classified, the array is empty.
+    genres: option<list<string>>,
+    /// A link to the Web API endpoint providing full details of the artist.
+    href: option<string>,
+    /// The [Spotify ID](/documentation/web-api/concepts/spotify-uris-ids) for the artist.
+    id: option<string>,
+    /// Images of the artist in various sizes, widest first.
+    images: option<list<image-object>>,
+    /// The name of the artist.
+    name: option<string>,
+    /// The popularity of the artist. The value will be between 0 and 100, with 100 being the most popular. The artist's popularity is calculated from the popularity of all the artist's tracks.
+    popularity: option<s32>,
+    /// The object type.
+    type-op: option<artist-object-type-op-enum>,
+    /// The [Spotify URI](/documentation/web-api/concepts/spotify-uris-ids) for the artist.
+    uri: option<string>
+  }
+
+  record external-url-object {
+    /// The [Spotify URL](/documentation/web-api/concepts/spotify-uris-ids) for the object.
+    spotify: option<string>
+  }
+
+  record followers-object {
+    /// This will always be set to null, as the Web API does not support it at the moment.
+    href: option<string>,
+    /// The total number of followers.
+    total: option<s32>
+  }
+
+  record image-object {
+    /// The image height in pixels.
+    height: s32,
+    /// The source URL of the image.
+    url: string,
+    /// The image width in pixels.
+    width: s32
+  }
+
+  record paging-simplified-album-object {
+    /// JSON-encoded free-form object payload
+    data: option<string>
+  }
+
+  record get-an-artists-related-artists-response {
+    artists: list<artist-object>
+  }
+
+  record get-an-artists-top-tracks-response {
+    tracks: list<track-object>
+  }
+
+  record track-object {
+    /// The album on which the track appears. The album object includes a link in `href` to full information about the album.
+    album: option<simplified-album-object>,
+    /// The artists who performed the track. Each artist object includes a link in `href` to more detailed information about the artist.
+    artists: option<list<artist-object>>,
+    /// A list of the countries in which the track can be played, identified by their [ISO 3166-1 alpha-2](http://en.wikipedia.org/wiki/ISO_3166-1_alpha-2) code.
+    available-markets: option<list<string>>,
+    /// The disc number (usually `1` unless the album consists of more than one disc).
+    disc-number: option<s32>,
+    /// The track length in milliseconds.
+    duration-ms: option<s32>,
+    /// Whether or not the track has explicit lyrics ( `true` = yes it does; `false` = no it does not OR unknown).
+    explicit: option<bool>,
+    /// Known external IDs for the track.
+    external-ids: option<external-id-object>,
+    /// Known external URLs for this track.
+    external-urls: option<external-url-object>,
+    /// A link to the Web API endpoint providing full details of the track.
+    href: option<string>,
+    /// The [Spotify ID](/documentation/web-api/concepts/spotify-uris-ids) for the track.
+    id: option<string>,
+    /// Whether or not the track is from a local file.
+    is-local: option<bool>,
+    /// Part of the response when [Track Relinking](/documentation/web-api/concepts/track-relinking) is applied. If `true`, the track is playable in the given market. Otherwise `false`.
+    is-playable: option<bool>,
+    /// Part of the response when [Track Relinking](/documentation/web-api/concepts/track-relinking) is applied, and the requested track has been replaced with different track. The track in the `linked_from` object contains information about the originally requested track.
+    linked-from: option<track-object-linked-from>,
+    /// The name of the track.
+    name: option<string>,
+    /// The popularity of the track. The value will be between 0 and 100, with 100 being the most popular.<br/>The popularity of a track is a value between 0 and 100, with 100 being the most popular. The popularity is calculated by algorithm and is based, in the most part, on the total number of plays the track has had and how recent those plays are.<br/>Generally speaking, songs that are being played a lot now will have a higher popularity than songs that were played a lot in the past. Duplicate tracks (e.g. the same track from a single and an album) are rated independently. Artist and album popularity is derived mathematically from track popularity. _**Note**: the popularity value may lag actual popularity by a few days: the value is not updated in real time._
+    popularity: option<s32>,
+    /// A link to a 30 second preview (MP3 format) of the track. Can be `null`
+    preview-url: option<string>,
+    /// Included in the response when a content restriction is applied.
+    restrictions: option<track-restriction-object>,
+    /// The number of the track. If an album has several discs, the track number is the number on the specified disc.
+    track-number: option<s32>,
+    /// The object type: "track".
+    type-op: option<track-object-type-op-enum>,
+    /// The [Spotify URI](/documentation/web-api/concepts/spotify-uris-ids) for the track.
+    uri: option<string>
+  }
+
+  record simplified-album-object {
+    /// The type of the album.
+    album-type: simplified-album-object-album-type-enum,
+    /// The markets in which the album is available: [ISO 3166-1 alpha-2 country codes](http://en.wikipedia.org/wiki/ISO_3166-1_alpha-2). _**NOTE**: an album is considered available in a market when at least 1 of its tracks is available in that market._
+    available-markets: list<string>,
+    /// The copyright statements of the album.
+    copyrights: option<list<copyright-object>>,
+    /// Known external IDs for the album.
+    external-ids: option<external-id-object>,
+    /// Known external URLs for this album.
+    external-urls: external-url-object,
+    /// A list of the genres the album is associated with. If not yet classified, the array is empty.
+    genres: option<list<string>>,
+    /// A link to the Web API endpoint providing full details of the album.
+    href: string,
+    /// The [Spotify ID](/documentation/web-api/concepts/spotify-uris-ids) for the album.
+    id: string,
+    /// The cover art for the album in various sizes, widest first.
+    images: list<image-object>,
+    /// The label associated with the album.
+    label: option<string>,
+    /// The name of the album. In case of an album takedown, the value may be an empty string.
+    name: string,
+    /// The popularity of the album. The value will be between 0 and 100, with 100 being the most popular.
+    popularity: option<s32>,
+    /// The date the album was first released.
+    release-date: string,
+    /// The precision with which `release_date` value is known.
+    release-date-precision: simplified-album-object-release-date-precision-enum,
+    /// Included in the response when a content restriction is applied.
+    restrictions: option<album-restriction-object>,
+    /// The number of tracks in the album.
+    total-tracks: s32,
+    /// The object type.
+    type-op: simplified-album-object-type-op-enum,
+    /// The [Spotify URI](/documentation/web-api/concepts/spotify-uris-ids) for the album.
+    uri: string,
+    /// The field is present when getting an artist's albums. Compare to album_type this field represents relationship between the artist and the album.
+    album-group: option<simplified-album-object-album-group-enum>,
+    /// The artists of the album. Each artist object includes a link in `href` to more detailed information about the artist.
+    artists: list<simplified-artist-object>
+  }
+
+  record copyright-object {
+    /// The copyright text for this content.
+    text: option<string>,
+    /// The type of copyright: `C` = the copyright, `P` = the sound recording (performance) copyright.
+    type-op: option<string>
+  }
+
+  record external-id-object {
+    /// [International Article Number](http://en.wikipedia.org/wiki/International_Article_Number_%28EAN%29)
+    ean: option<string>,
+    /// [International Standard Recording Code](http://en.wikipedia.org/wiki/International_Standard_Recording_Code)
+    isrc: option<string>,
+    /// [Universal Product Code](http://en.wikipedia.org/wiki/Universal_Product_Code)
+    upc: option<string>
+  }
+
+  record album-restriction-object {
+    /// The reason for the restriction. Albums may be restricted if the content is not available in a given market, to the user's subscription type, or when the user's account is set to not play explicit content.
+    /// Additional reasons may be added in the future.
+    reason: option<album-restriction-object-reason-enum>
+  }
+
+  record simplified-artist-object {
+    /// Known external URLs for this artist.
+    external-urls: option<external-url-object>,
+    /// A link to the Web API endpoint providing full details of the artist.
+    href: option<string>,
+    /// The [Spotify ID](/documentation/web-api/concepts/spotify-uris-ids) for the artist.
+    id: option<string>,
+    /// The name of the artist.
+    name: option<string>,
+    /// The object type.
+    type-op: option<artist-object-type-op-enum>,
+    /// The [Spotify URI](/documentation/web-api/concepts/spotify-uris-ids) for the artist.
+    uri: option<string>
+  }
+
+  /// Part of the response when [Track Relinking](/documentation/web-api/concepts/track-relinking) is applied, and the requested track has been replaced with different track. The track in the `linked_from` object contains information about the originally requested track.
+  record track-object-linked-from {
+    /// JSON-encoded free-form object payload
+    data: option<string>
+  }
+
+  record track-restriction-object {
+    /// The reason for the restriction. Supported values:
+    /// - `market` - The content item is not available in the given market.
+    reason: option<string>
+  }
+
+  variant get-multiple-artists-error {
+    unauthorized(string),
+    forbidden(string),
+    too-many-requests(string),
+    other(string)
+  }
+
+  variant get-an-artist-error {
+    unauthorized(string),
+    forbidden(string),
+    too-many-requests(string),
+    other(string)
+  }
+
+  variant get-an-artists-albums-error {
+    unauthorized(string),
+    forbidden(string),
+    too-many-requests(string),
+    other(string)
+  }
+
+  variant get-an-artists-related-artists-error {
+    unauthorized(string),
+    forbidden(string),
+    too-many-requests(string),
+    other(string)
+  }
+
+  variant get-an-artists-top-tracks-error {
+    unauthorized(string),
+    forbidden(string),
+    too-many-requests(string),
+    other(string)
+  }
+
   /// Get Several Artists
   record get-multiple-artists-params {
     ids: string
   }
-  get-multiple-artists: func(params: get-multiple-artists-params) -> result<string, string>;
+  get-multiple-artists: func(params: get-multiple-artists-params) -> result<get-multiple-artists-response, get-multiple-artists-error>;
 
   /// Get Artist
   record get-an-artist-params {
     id: string
   }
-  get-an-artist: func(params: get-an-artist-params) -> result<string, string>;
+  get-an-artist: func(params: get-an-artist-params) -> result<artist-object, get-an-artist-error>;
 
   /// Get Artist's Albums
   record get-an-artists-albums-params {
@@ -90,41 +575,570 @@ interface artists {
     limit: option<s32>,
     offset: option<s32>
   }
-  get-an-artists-albums: func(params: get-an-artists-albums-params) -> result<string, string>;
+  get-an-artists-albums: func(params: get-an-artists-albums-params) -> result<paging-simplified-album-object, get-an-artists-albums-error>;
 
   /// Get Artist's Related Artists
   record get-an-artists-related-artists-params {
     id: string
   }
-  get-an-artists-related-artists: func(params: get-an-artists-related-artists-params) -> result<string, string>;
+  get-an-artists-related-artists: func(params: get-an-artists-related-artists-params) -> result<get-an-artists-related-artists-response, get-an-artists-related-artists-error>;
 
   /// Get Artist's Top Tracks
   record get-an-artists-top-tracks-params {
     id: string,
     market: option<string>
   }
-  get-an-artists-top-tracks: func(params: get-an-artists-top-tracks-params) -> result<string, string>;
+  get-an-artists-top-tracks: func(params: get-an-artists-top-tracks-params) -> result<get-an-artists-top-tracks-response, get-an-artists-top-tracks-error>;
 
 }
 
 interface tracks {
+  enum audio-features-object-type-op-enum {
+    audio-features,
+  }
+
+  enum simplified-album-object-album-type-enum {
+    album,
+    single,
+    compilation,
+  }
+
+  enum simplified-album-object-release-date-precision-enum {
+    year,
+    month,
+    day,
+  }
+
+  enum album-restriction-object-reason-enum {
+    market,
+    product,
+    explicit,
+  }
+
+  enum simplified-album-object-type-op-enum {
+    album,
+  }
+
+  enum simplified-album-object-album-group-enum {
+    album,
+    single,
+    compilation,
+    appears-on,
+  }
+
+  enum simplified-artist-object-type-op-enum {
+    artist,
+  }
+
+  enum track-object-type-op-enum {
+    track,
+  }
+
+  record audio-analysis-object {
+    /// The time intervals of the bars throughout the track. A bar (or measure) is a segment of time defined as a given number of beats.
+    bars: option<list<time-interval-object>>,
+    /// The time intervals of beats throughout the track. A beat is the basic time unit of a piece of music; for example, each tick of a metronome. Beats are typically multiples of tatums.
+    beats: option<list<time-interval-object>>,
+    meta: option<audio-analysis-object-meta>,
+    /// Sections are defined by large variations in rhythm or timbre, e.g. chorus, verse, bridge, guitar solo, etc. Each section contains its own descriptions of tempo, key, mode, time_signature, and loudness.
+    sections: option<list<section-object>>,
+    /// Each segment contains a roughly conisistent sound throughout its duration.
+    segments: option<list<segment-object>>,
+    /// A tatum represents the lowest regular pulse train that a listener intuitively infers from the timing of perceived musical events (segments).
+    tatums: option<list<time-interval-object>>,
+    track: option<audio-analysis-object-track>
+  }
+
+  record time-interval-object {
+    /// The confidence, from 0.0 to 1.0, of the reliability of the interval.
+    confidence: option<f64>,
+    /// The duration (in seconds) of the time interval.
+    duration: option<f64>,
+    /// The starting point (in seconds) of the time interval.
+    start: option<f64>
+  }
+
+  record audio-analysis-object-meta {
+    /// The amount of time taken to analyze this track.
+    analysis-time: option<f64>,
+    /// The version of the Analyzer used to analyze this track.
+    analyzer-version: option<string>,
+    /// A detailed status code for this track. If analysis data is missing, this code may explain why.
+    detailed-status: option<string>,
+    /// The method used to read the track's audio data.
+    input-process: option<string>,
+    /// The platform used to read the track's audio data.
+    platform: option<string>,
+    /// The return code of the analyzer process. 0 if successful, 1 if any errors occurred.
+    status-code: option<s32>,
+    /// The Unix timestamp (in seconds) at which this track was analyzed.
+    timestamp: option<s32>
+  }
+
+  record section-object {
+    /// The confidence, from 0.0 to 1.0, of the reliability of the section's "designation".
+    confidence: option<f64>,
+    /// The duration (in seconds) of the section.
+    duration: option<f64>,
+    /// The estimated overall key of the section. The values in this field ranging from 0 to 11 mapping to pitches using standard Pitch Class notation (E.g. 0 = C, 1 = C♯/D♭, 2 = D, and so on). If no key was detected, the value is -1.
+    key: option<s32>,
+    /// The confidence, from 0.0 to 1.0, of the reliability of the key. Songs with many key changes may correspond to low values in this field.
+    key-confidence: option<f64>,
+    /// The overall loudness of the section in decibels (dB). Loudness values are useful for comparing relative loudness of sections within tracks.
+    loudness: option<f64>,
+    /// Indicates the modality (major or minor) of a section, the type of scale from which its melodic content is derived. This field will contain a 0 for "minor", a 1 for "major", or a -1 for no result. Note that the major key (e.g. C major) could more likely be confused with the minor key at 3 semitones lower (e.g. A minor) as both keys carry the same pitches.
+    mode: option<f64>,
+    /// The confidence, from 0.0 to 1.0, of the reliability of the `mode`.
+    mode-confidence: option<f64>,
+    /// The starting point (in seconds) of the section.
+    start: option<f64>,
+    /// The overall estimated tempo of the section in beats per minute (BPM). In musical terminology, tempo is the speed or pace of a given piece and derives directly from the average beat duration.
+    tempo: option<f64>,
+    /// The confidence, from 0.0 to 1.0, of the reliability of the tempo. Some tracks contain tempo changes or sounds which don't contain tempo (like pure speech) which would correspond to a low value in this field.
+    tempo-confidence: option<f64>,
+    time-signature: option<time-signature>,
+    /// The confidence, from 0.0 to 1.0, of the reliability of the `time_signature`. Sections with time signature changes may correspond to low values in this field.
+    time-signature-confidence: option<f64>
+  }
+
+  /// An estimated time signature. The time signature (meter) is a notational convention to specify how many beats are in each bar (or measure). The time signature ranges from 3 to 7 indicating time signatures of "3/4", to "7/4".
+  record time-signature {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  record segment-object {
+    /// The confidence, from 0.0 to 1.0, of the reliability of the segmentation. Segments of the song which are difficult to logically segment (e.g: noise) may correspond to low values in this field.
+    confidence: option<f64>,
+    /// The duration (in seconds) of the segment.
+    duration: option<f64>,
+    /// The offset loudness of the segment in decibels (dB). This value should be equivalent to the loudness_start of the following segment.
+    loudness-end: option<f64>,
+    /// The peak loudness of the segment in decibels (dB). Combined with `loudness_start` and `loudness_max_time`, these components can be used to describe the "attack" of the segment.
+    loudness-max: option<f64>,
+    /// The segment-relative offset of the segment peak loudness in seconds. Combined with `loudness_start` and `loudness_max`, these components can be used to desctibe the "attack" of the segment.
+    loudness-max-time: option<f64>,
+    /// The onset loudness of the segment in decibels (dB). Combined with `loudness_max` and `loudness_max_time`, these components can be used to describe the "attack" of the segment.
+    loudness-start: option<f64>,
+    /// Pitch content is given by a “chroma” vector, corresponding to the 12 pitch classes C, C#, D to B, with values ranging from 0 to 1 that describe the relative dominance of every pitch in the chromatic scale. For example a C Major chord would likely be represented by large values of C, E and G (i.e. classes 0, 4, and 7).
+    /// 
+    pitches: option<list<f64>>,
+    /// The starting point (in seconds) of the segment.
+    start: option<f64>,
+    /// Timbre is the quality of a musical note or sound that distinguishes different types of musical instruments, or voices. It is a complex notion also referred to as sound color, texture, or tone quality, and is derived from the shape of a segment’s spectro-temporal surface, independently of pitch and loudness. The timbre feature is a vector that includes 12 unbounded values roughly centered around 0. Those values are high level abstractions of the spectral surface, ordered by degree of importance.
+    /// 
+    timbre: option<list<f64>>
+  }
+
+  record audio-analysis-object-track {
+    /// The number of channels used for analysis. If 1, all channels are summed together to mono before analysis.
+    analysis-channels: option<s32>,
+    /// The sample rate used to decode and analyze this track. May differ from the actual sample rate of this track available on Spotify.
+    analysis-sample-rate: option<s32>,
+    /// A version number for the Echo Nest Musical Fingerprint format used in the codestring field.
+    code-version: option<f64>,
+    /// An [Echo Nest Musical Fingerprint (ENMFP)](https://academiccommons.columbia.edu/doi/10.7916/D8Q248M4) codestring for this track.
+    codestring: option<string>,
+    /// Length of the track in seconds.
+    duration: option<f64>,
+    /// A version number for the EchoPrint format used in the echoprintstring field.
+    echoprint-version: option<f64>,
+    /// An [EchoPrint](https://github.com/spotify/echoprint-codegen) codestring for this track.
+    echoprintstring: option<string>,
+    /// The time, in seconds, at which the track's fade-in period ends. If the track has no fade-in, this will be 0.0.
+    end-of-fade-in: option<f64>,
+    key: option<key>,
+    /// The confidence, from 0.0 to 1.0, of the reliability of the `key`.
+    key-confidence: option<f64>,
+    loudness: option<loudness>,
+    mode: option<mode>,
+    /// The confidence, from 0.0 to 1.0, of the reliability of the `mode`.
+    mode-confidence: option<f64>,
+    /// The exact number of audio samples analyzed from this track. See also `analysis_sample_rate`.
+    num-samples: option<s32>,
+    /// An offset to the start of the region of the track that was analyzed. (As the entire track is analyzed, this should always be 0.)
+    offset-seconds: option<s32>,
+    /// A version number for the Rhythmstring used in the rhythmstring field.
+    rhythm-version: option<f64>,
+    /// A Rhythmstring for this track. The format of this string is similar to the Synchstring.
+    rhythmstring: option<string>,
+    /// This field will always contain the empty string.
+    sample-md5: option<string>,
+    /// The time, in seconds, at which the track's fade-out period starts. If the track has no fade-out, this should match the track's length.
+    start-of-fade-out: option<f64>,
+    /// A version number for the Synchstring used in the synchstring field.
+    synch-version: option<f64>,
+    /// A [Synchstring](https://github.com/echonest/synchdata) for this track.
+    synchstring: option<string>,
+    tempo: option<tempo>,
+    /// The confidence, from 0.0 to 1.0, of the reliability of the `tempo`.
+    tempo-confidence: option<f64>,
+    time-signature: option<time-signature>,
+    /// The confidence, from 0.0 to 1.0, of the reliability of the `time_signature`.
+    time-signature-confidence: option<f64>,
+    /// The length of the region of the track was analyzed, if a subset of the track was analyzed. (As the entire track is analyzed, this should always be 0.)
+    window-seconds: option<s32>
+  }
+
+  /// The key the track is in. Integers map to pitches using standard [Pitch Class notation](https://en.wikipedia.org/wiki/Pitch_class). E.g. 0 = C, 1 = C♯/D♭, 2 = D, and so on. If no key was detected, the value is -1.
+  record key {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  /// The overall loudness of a track in decibels (dB). Loudness values are averaged across the entire track and are useful for comparing relative loudness of tracks. Loudness is the quality of a sound that is the primary psychological correlate of physical strength (amplitude). Values typically range between -60 and 0 db.
+  record loudness {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  /// Mode indicates the modality (major or minor) of a track, the type of scale from which its melodic content is derived. Major is represented by 1 and minor is 0.
+  record mode {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  /// The overall estimated tempo of a track in beats per minute (BPM). In musical terminology, tempo is the speed or pace of a given piece and derives directly from the average beat duration.
+  record tempo {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  record get-several-audio-features-response {
+    audio-features: list<audio-features-object>
+  }
+
+  record audio-features-object {
+    /// A confidence measure from 0.0 to 1.0 of whether the track is acoustic. 1.0 represents high confidence the track is acoustic.
+    acousticness: option<f64>,
+    /// A URL to access the full audio analysis of this track. An access token is required to access this data.
+    analysis-url: option<string>,
+    /// Danceability describes how suitable a track is for dancing based on a combination of musical elements including tempo, rhythm stability, beat strength, and overall regularity. A value of 0.0 is least danceable and 1.0 is most danceable.
+    danceability: option<f64>,
+    /// The duration of the track in milliseconds.
+    duration-ms: option<s32>,
+    /// Energy is a measure from 0.0 to 1.0 and represents a perceptual measure of intensity and activity. Typically, energetic tracks feel fast, loud, and noisy. For example, death metal has high energy, while a Bach prelude scores low on the scale. Perceptual features contributing to this attribute include dynamic range, perceived loudness, timbre, onset rate, and general entropy.
+    energy: option<f64>,
+    /// The Spotify ID for the track.
+    id: option<string>,
+    /// Predicts whether a track contains no vocals. "Ooh" and "aah" sounds are treated as instrumental in this context. Rap or spoken word tracks are clearly "vocal". The closer the instrumentalness value is to 1.0, the greater likelihood the track contains no vocal content. Values above 0.5 are intended to represent instrumental tracks, but confidence is higher as the value approaches 1.0.
+    instrumentalness: option<f64>,
+    key: option<key>,
+    /// Detects the presence of an audience in the recording. Higher liveness values represent an increased probability that the track was performed live. A value above 0.8 provides strong likelihood that the track is live.
+    liveness: option<f64>,
+    loudness: option<loudness>,
+    mode: option<mode>,
+    /// Speechiness detects the presence of spoken words in a track. The more exclusively speech-like the recording (e.g. talk show, audio book, poetry), the closer to 1.0 the attribute value. Values above 0.66 describe tracks that are probably made entirely of spoken words. Values between 0.33 and 0.66 describe tracks that may contain both music and speech, either in sections or layered, including such cases as rap music. Values below 0.33 most likely represent music and other non-speech-like tracks.
+    speechiness: option<f64>,
+    tempo: option<tempo>,
+    time-signature: option<time-signature>,
+    /// A link to the Web API endpoint providing full details of the track.
+    track-href: option<string>,
+    /// The object type.
+    type-op: option<audio-features-object-type-op-enum>,
+    /// The Spotify URI for the track.
+    uri: option<string>,
+    /// A measure from 0.0 to 1.0 describing the musical positiveness conveyed by a track. Tracks with high valence sound more positive (e.g. happy, cheerful, euphoric), while tracks with low valence sound more negative (e.g. sad, depressed, angry).
+    valence: option<f64>
+  }
+
+  record paging-saved-track-object {
+    /// JSON-encoded free-form object payload
+    data: option<string>
+  }
+
+  record recommendations-object {
+    /// An array of recommendation seed objects.
+    seeds: list<recommendation-seed-object>,
+    /// An array of track object (simplified) ordered according to the parameters supplied.
+    tracks: list<track-object>
+  }
+
+  record recommendation-seed-object {
+    /// The number of tracks available after min\_\* and max\_\* filters have been applied.
+    after-filtering-size: option<s32>,
+    /// The number of tracks available after relinking for regional availability.
+    after-relinking-size: option<s32>,
+    /// A link to the full track or artist data for this seed. For tracks this will be a link to a Track Object. For artists a link to an Artist Object. For genre seeds, this value will be `null`.
+    href: option<string>,
+    /// The id used to select this seed. This will be the same as the string used in the `seed_artists`, `seed_tracks` or `seed_genres` parameter.
+    id: option<string>,
+    /// The number of recommended tracks available for this seed.
+    initial-pool-size: option<s32>,
+    /// The entity type of this seed. One of `artist`, `track` or `genre`.
+    type-op: option<string>
+  }
+
+  record track-object {
+    /// The album on which the track appears. The album object includes a link in `href` to full information about the album.
+    album: option<simplified-album-object>,
+    /// The artists who performed the track. Each artist object includes a link in `href` to more detailed information about the artist.
+    artists: option<list<artist-object>>,
+    /// A list of the countries in which the track can be played, identified by their [ISO 3166-1 alpha-2](http://en.wikipedia.org/wiki/ISO_3166-1_alpha-2) code.
+    available-markets: option<list<string>>,
+    /// The disc number (usually `1` unless the album consists of more than one disc).
+    disc-number: option<s32>,
+    /// The track length in milliseconds.
+    duration-ms: option<s32>,
+    /// Whether or not the track has explicit lyrics ( `true` = yes it does; `false` = no it does not OR unknown).
+    explicit: option<bool>,
+    /// Known external IDs for the track.
+    external-ids: option<external-id-object>,
+    /// Known external URLs for this track.
+    external-urls: option<external-url-object>,
+    /// A link to the Web API endpoint providing full details of the track.
+    href: option<string>,
+    /// The [Spotify ID](/documentation/web-api/concepts/spotify-uris-ids) for the track.
+    id: option<string>,
+    /// Whether or not the track is from a local file.
+    is-local: option<bool>,
+    /// Part of the response when [Track Relinking](/documentation/web-api/concepts/track-relinking) is applied. If `true`, the track is playable in the given market. Otherwise `false`.
+    is-playable: option<bool>,
+    /// Part of the response when [Track Relinking](/documentation/web-api/concepts/track-relinking) is applied, and the requested track has been replaced with different track. The track in the `linked_from` object contains information about the originally requested track.
+    linked-from: option<track-object-linked-from>,
+    /// The name of the track.
+    name: option<string>,
+    /// The popularity of the track. The value will be between 0 and 100, with 100 being the most popular.<br/>The popularity of a track is a value between 0 and 100, with 100 being the most popular. The popularity is calculated by algorithm and is based, in the most part, on the total number of plays the track has had and how recent those plays are.<br/>Generally speaking, songs that are being played a lot now will have a higher popularity than songs that were played a lot in the past. Duplicate tracks (e.g. the same track from a single and an album) are rated independently. Artist and album popularity is derived mathematically from track popularity. _**Note**: the popularity value may lag actual popularity by a few days: the value is not updated in real time._
+    popularity: option<s32>,
+    /// A link to a 30 second preview (MP3 format) of the track. Can be `null`
+    preview-url: option<string>,
+    /// Included in the response when a content restriction is applied.
+    restrictions: option<track-restriction-object>,
+    /// The number of the track. If an album has several discs, the track number is the number on the specified disc.
+    track-number: option<s32>,
+    /// The object type: "track".
+    type-op: option<track-object-type-op-enum>,
+    /// The [Spotify URI](/documentation/web-api/concepts/spotify-uris-ids) for the track.
+    uri: option<string>
+  }
+
+  record simplified-album-object {
+    /// The type of the album.
+    album-type: simplified-album-object-album-type-enum,
+    /// The markets in which the album is available: [ISO 3166-1 alpha-2 country codes](http://en.wikipedia.org/wiki/ISO_3166-1_alpha-2). _**NOTE**: an album is considered available in a market when at least 1 of its tracks is available in that market._
+    available-markets: list<string>,
+    /// The copyright statements of the album.
+    copyrights: option<list<copyright-object>>,
+    /// Known external IDs for the album.
+    external-ids: option<external-id-object>,
+    /// Known external URLs for this album.
+    external-urls: external-url-object,
+    /// A list of the genres the album is associated with. If not yet classified, the array is empty.
+    genres: option<list<string>>,
+    /// A link to the Web API endpoint providing full details of the album.
+    href: string,
+    /// The [Spotify ID](/documentation/web-api/concepts/spotify-uris-ids) for the album.
+    id: string,
+    /// The cover art for the album in various sizes, widest first.
+    images: list<image-object>,
+    /// The label associated with the album.
+    label: option<string>,
+    /// The name of the album. In case of an album takedown, the value may be an empty string.
+    name: string,
+    /// The popularity of the album. The value will be between 0 and 100, with 100 being the most popular.
+    popularity: option<s32>,
+    /// The date the album was first released.
+    release-date: string,
+    /// The precision with which `release_date` value is known.
+    release-date-precision: simplified-album-object-release-date-precision-enum,
+    /// Included in the response when a content restriction is applied.
+    restrictions: option<album-restriction-object>,
+    /// The number of tracks in the album.
+    total-tracks: s32,
+    /// The object type.
+    type-op: simplified-album-object-type-op-enum,
+    /// The [Spotify URI](/documentation/web-api/concepts/spotify-uris-ids) for the album.
+    uri: string,
+    /// The field is present when getting an artist's albums. Compare to album_type this field represents relationship between the artist and the album.
+    album-group: option<simplified-album-object-album-group-enum>,
+    /// The artists of the album. Each artist object includes a link in `href` to more detailed information about the artist.
+    artists: list<simplified-artist-object>
+  }
+
+  record copyright-object {
+    /// The copyright text for this content.
+    text: option<string>,
+    /// The type of copyright: `C` = the copyright, `P` = the sound recording (performance) copyright.
+    type-op: option<string>
+  }
+
+  record external-id-object {
+    /// [International Article Number](http://en.wikipedia.org/wiki/International_Article_Number_%28EAN%29)
+    ean: option<string>,
+    /// [International Standard Recording Code](http://en.wikipedia.org/wiki/International_Standard_Recording_Code)
+    isrc: option<string>,
+    /// [Universal Product Code](http://en.wikipedia.org/wiki/Universal_Product_Code)
+    upc: option<string>
+  }
+
+  record external-url-object {
+    /// The [Spotify URL](/documentation/web-api/concepts/spotify-uris-ids) for the object.
+    spotify: option<string>
+  }
+
+  record image-object {
+    /// The image height in pixels.
+    height: s32,
+    /// The source URL of the image.
+    url: string,
+    /// The image width in pixels.
+    width: s32
+  }
+
+  record album-restriction-object {
+    /// The reason for the restriction. Albums may be restricted if the content is not available in a given market, to the user's subscription type, or when the user's account is set to not play explicit content.
+    /// Additional reasons may be added in the future.
+    reason: option<album-restriction-object-reason-enum>
+  }
+
+  record simplified-artist-object {
+    /// Known external URLs for this artist.
+    external-urls: option<external-url-object>,
+    /// A link to the Web API endpoint providing full details of the artist.
+    href: option<string>,
+    /// The [Spotify ID](/documentation/web-api/concepts/spotify-uris-ids) for the artist.
+    id: option<string>,
+    /// The name of the artist.
+    name: option<string>,
+    /// The object type.
+    type-op: option<simplified-artist-object-type-op-enum>,
+    /// The [Spotify URI](/documentation/web-api/concepts/spotify-uris-ids) for the artist.
+    uri: option<string>
+  }
+
+  record artist-object {
+    /// Known external URLs for this artist.
+    external-urls: option<external-url-object>,
+    /// Information about the followers of the artist.
+    followers: option<followers-object>,
+    /// A list of the genres the artist is associated with. If not yet classified, the array is empty.
+    genres: option<list<string>>,
+    /// A link to the Web API endpoint providing full details of the artist.
+    href: option<string>,
+    /// The [Spotify ID](/documentation/web-api/concepts/spotify-uris-ids) for the artist.
+    id: option<string>,
+    /// Images of the artist in various sizes, widest first.
+    images: option<list<image-object>>,
+    /// The name of the artist.
+    name: option<string>,
+    /// The popularity of the artist. The value will be between 0 and 100, with 100 being the most popular. The artist's popularity is calculated from the popularity of all the artist's tracks.
+    popularity: option<s32>,
+    /// The object type.
+    type-op: option<simplified-artist-object-type-op-enum>,
+    /// The [Spotify URI](/documentation/web-api/concepts/spotify-uris-ids) for the artist.
+    uri: option<string>
+  }
+
+  record followers-object {
+    /// This will always be set to null, as the Web API does not support it at the moment.
+    href: option<string>,
+    /// The total number of followers.
+    total: option<s32>
+  }
+
+  /// Part of the response when [Track Relinking](/documentation/web-api/concepts/track-relinking) is applied, and the requested track has been replaced with different track. The track in the `linked_from` object contains information about the originally requested track.
+  record track-object-linked-from {
+    /// JSON-encoded free-form object payload
+    data: option<string>
+  }
+
+  record track-restriction-object {
+    /// The reason for the restriction. Supported values:
+    /// - `market` - The content item is not available in the given market.
+    reason: option<string>
+  }
+
+  record get-several-tracks-response {
+    tracks: list<track-object>
+  }
+
+  variant get-audio-analysis-error {
+    unauthorized(string),
+    forbidden(string),
+    too-many-requests(string),
+    other(string)
+  }
+
+  variant get-several-audio-features-error {
+    unauthorized(string),
+    forbidden(string),
+    too-many-requests(string),
+    other(string)
+  }
+
+  variant get-audio-features-error {
+    unauthorized(string),
+    forbidden(string),
+    too-many-requests(string),
+    other(string)
+  }
+
+  variant get-users-saved-tracks-error {
+    unauthorized(string),
+    forbidden(string),
+    too-many-requests(string),
+    other(string)
+  }
+
+  variant save-tracks-user-error {
+    unauthorized(string),
+    forbidden(string),
+    too-many-requests(string),
+    other(string)
+  }
+
+  variant remove-tracks-user-error {
+    unauthorized(string),
+    forbidden(string),
+    too-many-requests(string),
+    other(string)
+  }
+
+  variant check-users-saved-tracks-error {
+    unauthorized(string),
+    forbidden(string),
+    too-many-requests(string),
+    other(string)
+  }
+
+  variant get-recommendations-error {
+    unauthorized(string),
+    forbidden(string),
+    too-many-requests(string),
+    other(string)
+  }
+
+  variant get-several-tracks-error {
+    unauthorized(string),
+    forbidden(string),
+    too-many-requests(string),
+    other(string)
+  }
+
+  variant get-track-error {
+    unauthorized(string),
+    forbidden(string),
+    too-many-requests(string),
+    other(string)
+  }
+
   /// Get Track's Audio Analysis
   record get-audio-analysis-params {
     id: string
   }
-  get-audio-analysis: func(params: get-audio-analysis-params) -> result<string, string>;
+  get-audio-analysis: func(params: get-audio-analysis-params) -> result<audio-analysis-object, get-audio-analysis-error>;
 
   /// Get Tracks' Audio Features
   record get-several-audio-features-params {
     ids: string
   }
-  get-several-audio-features: func(params: get-several-audio-features-params) -> result<string, string>;
+  get-several-audio-features: func(params: get-several-audio-features-params) -> result<get-several-audio-features-response, get-several-audio-features-error>;
 
   /// Get Track's Audio Features
   record get-audio-features-params {
     id: string
   }
-  get-audio-features: func(params: get-audio-features-params) -> result<string, string>;
+  get-audio-features: func(params: get-audio-features-params) -> result<audio-features-object, get-audio-features-error>;
 
   /// Get User's Saved Tracks
   record get-users-saved-tracks-params {
@@ -132,25 +1146,29 @@ interface tracks {
     limit: option<s32>,
     offset: option<s32>
   }
-  get-users-saved-tracks: func(params: get-users-saved-tracks-params) -> result<string, string>;
+  get-users-saved-tracks: func(params: get-users-saved-tracks-params) -> result<paging-saved-track-object, get-users-saved-tracks-error>;
 
   /// Save Tracks for Current User
   record save-tracks-user-params {
-    ids: string
+    ids: string,
+    /// A JSON array of the [Spotify IDs](/documentation/web-api/concepts/spotify-uris-ids). For example: `["4iV5W9uYEdYUVa79Axb7Rh", "1301WleyT98MSxVHPZCA6M"]`<br/>A maximum of 50 items can be specified in one request. _**Note**: if the `ids` parameter is present in the query string, any IDs listed here in the body will be ignored._
+    ids-v2: option<list<string>>
   }
-  save-tracks-user: func(params: save-tracks-user-params) -> result<string, string>;
+  save-tracks-user: func(params: save-tracks-user-params) -> result<string, save-tracks-user-error>;
 
   /// Remove User's Saved Tracks
   record remove-tracks-user-params {
-    ids: string
+    ids: string,
+    /// A JSON array of the [Spotify IDs](/documentation/web-api/concepts/spotify-uris-ids). For example: `["4iV5W9uYEdYUVa79Axb7Rh", "1301WleyT98MSxVHPZCA6M"]`<br/>A maximum of 50 items can be specified in one request. _**Note**: if the `ids` parameter is present in the query string, any IDs listed here in the body will be ignored._
+    ids-v2: option<list<string>>
   }
-  remove-tracks-user: func(params: remove-tracks-user-params) -> result<string, string>;
+  remove-tracks-user: func(params: remove-tracks-user-params) -> result<string, remove-tracks-user-error>;
 
   /// Check User's Saved Tracks
   record check-users-saved-tracks-params {
     ids: string
   }
-  check-users-saved-tracks: func(params: check-users-saved-tracks-params) -> result<string, string>;
+  check-users-saved-tracks: func(params: check-users-saved-tracks-params) -> result<list<bool>, check-users-saved-tracks-error>;
 
   /// Get Recommendations
   record get-recommendations-params {
@@ -202,38 +1220,181 @@ interface tracks {
     max-valence: option<f64>,
     target-valence: option<f64>
   }
-  get-recommendations: func(params: get-recommendations-params) -> result<string, string>;
+  get-recommendations: func(params: get-recommendations-params) -> result<recommendations-object, get-recommendations-error>;
 
   /// Get Several Tracks
   record get-several-tracks-params {
     market: option<string>,
     ids: string
   }
-  get-several-tracks: func(params: get-several-tracks-params) -> result<string, string>;
+  get-several-tracks: func(params: get-several-tracks-params) -> result<get-several-tracks-response, get-several-tracks-error>;
 
   /// Get Track
   record get-track-params {
     id: string,
     market: option<string>
   }
-  get-track: func(params: get-track-params) -> result<string, string>;
+  get-track: func(params: get-track-params) -> result<track-object, get-track-error>;
 
 }
 
 interface audiobooks {
+  enum audiobook-object-type-op-enum {
+    audiobook,
+  }
+
+  record get-multiple-audiobooks-response {
+    audiobooks: list<audiobook-object>
+  }
+
+  record audiobook-object {
+    /// The author(s) for the audiobook.
+    authors: list<author-object>,
+    /// A list of the countries in which the audiobook can be played, identified by their [ISO 3166-1 alpha-2](http://en.wikipedia.org/wiki/ISO_3166-1_alpha-2) code.
+    available-markets: list<string>,
+    /// The copyright statements of the audiobook.
+    copyrights: list<copyright-object>,
+    /// A description of the audiobook. HTML tags are stripped away from this field, use `html_description` field in case HTML tags are needed.
+    description: string,
+    /// The edition of the audiobook.
+    edition: option<string>,
+    /// Whether or not the audiobook has explicit content (true = yes it does; false = no it does not OR unknown).
+    explicit: bool,
+    /// External URLs for this audiobook.
+    external-urls: external-url-object,
+    /// A link to the Web API endpoint providing full details of the audiobook.
+    href: string,
+    /// A description of the audiobook. This field may contain HTML tags.
+    html-description: string,
+    /// The [Spotify ID](/documentation/web-api/concepts/spotify-uris-ids) for the audiobook.
+    id: string,
+    /// The cover art for the audiobook in various sizes, widest first.
+    images: list<image-object>,
+    /// A list of the languages used in the audiobook, identified by their [ISO 639](https://en.wikipedia.org/wiki/ISO_639) code.
+    languages: list<string>,
+    /// The media type of the audiobook.
+    media-type: string,
+    /// The name of the audiobook.
+    name: string,
+    /// The narrator(s) for the audiobook.
+    narrators: list<narrator-object>,
+    /// The publisher of the audiobook.
+    publisher: string,
+    /// The number of chapters in this audiobook.
+    total-chapters: s32,
+    /// The object type.
+    type-op: audiobook-object-type-op-enum,
+    /// The [Spotify URI](/documentation/web-api/concepts/spotify-uris-ids) for the audiobook.
+    uri: string,
+    /// The chapters of the audiobook.
+    chapters: string
+  }
+
+  record author-object {
+    /// The name of the author.
+    name: option<string>
+  }
+
+  record copyright-object {
+    /// The copyright text for this content.
+    text: option<string>,
+    /// The type of copyright: `C` = the copyright, `P` = the sound recording (performance) copyright.
+    type-op: option<string>
+  }
+
+  record external-url-object {
+    /// The [Spotify URL](/documentation/web-api/concepts/spotify-uris-ids) for the object.
+    spotify: option<string>
+  }
+
+  record image-object {
+    /// The image height in pixels.
+    height: s32,
+    /// The source URL of the image.
+    url: string,
+    /// The image width in pixels.
+    width: s32
+  }
+
+  record narrator-object {
+    /// The name of the Narrator.
+    name: option<string>
+  }
+
+  record paging-simplified-chapter-object {
+    /// JSON-encoded free-form object payload
+    data: option<string>
+  }
+
+  record paging-simplified-audiobook-object {
+    /// JSON-encoded free-form object payload
+    data: option<string>
+  }
+
+  variant get-multiple-audiobooks-error {
+    unauthorized(string),
+    forbidden(string),
+    too-many-requests(string),
+    other(string)
+  }
+
+  variant get-an-audiobook-error {
+    bad-request(string),
+    unauthorized(string),
+    forbidden(string),
+    not-found(string),
+    too-many-requests(string),
+    other(string)
+  }
+
+  variant get-audiobook-chapters-error {
+    unauthorized(string),
+    forbidden(string),
+    too-many-requests(string),
+    other(string)
+  }
+
+  variant get-users-saved-audiobooks-error {
+    unauthorized(string),
+    forbidden(string),
+    too-many-requests(string),
+    other(string)
+  }
+
+  variant save-audiobooks-user-error {
+    unauthorized(string),
+    forbidden(string),
+    too-many-requests(string),
+    other(string)
+  }
+
+  variant remove-audiobooks-user-error {
+    unauthorized(string),
+    forbidden(string),
+    too-many-requests(string),
+    other(string)
+  }
+
+  variant check-users-saved-audiobooks-error {
+    unauthorized(string),
+    forbidden(string),
+    too-many-requests(string),
+    other(string)
+  }
+
   /// Get Several Audiobooks
   record get-multiple-audiobooks-params {
     ids: string,
     market: option<string>
   }
-  get-multiple-audiobooks: func(params: get-multiple-audiobooks-params) -> result<string, string>;
+  get-multiple-audiobooks: func(params: get-multiple-audiobooks-params) -> result<get-multiple-audiobooks-response, get-multiple-audiobooks-error>;
 
   /// Get an Audiobook
   record get-an-audiobook-params {
     id: string,
     market: option<string>
   }
-  get-an-audiobook: func(params: get-an-audiobook-params) -> result<string, string>;
+  get-an-audiobook: func(params: get-an-audiobook-params) -> result<audiobook-object, get-an-audiobook-error>;
 
   /// Get Audiobook Chapters
   record get-audiobook-chapters-params {
@@ -242,36 +1403,89 @@ interface audiobooks {
     limit: option<s32>,
     offset: option<s32>
   }
-  get-audiobook-chapters: func(params: get-audiobook-chapters-params) -> result<string, string>;
+  get-audiobook-chapters: func(params: get-audiobook-chapters-params) -> result<paging-simplified-chapter-object, get-audiobook-chapters-error>;
 
   /// Get User's Saved Audiobooks
   record get-users-saved-audiobooks-params {
     limit: option<s32>,
     offset: option<s32>
   }
-  get-users-saved-audiobooks: func(params: get-users-saved-audiobooks-params) -> result<string, string>;
+  get-users-saved-audiobooks: func(params: get-users-saved-audiobooks-params) -> result<paging-simplified-audiobook-object, get-users-saved-audiobooks-error>;
 
   /// Save Audiobooks for Current User
   record save-audiobooks-user-params {
     ids: string
   }
-  save-audiobooks-user: func(params: save-audiobooks-user-params) -> result<string, string>;
+  save-audiobooks-user: func(params: save-audiobooks-user-params) -> result<string, save-audiobooks-user-error>;
 
   /// Remove User's Saved Audiobooks
   record remove-audiobooks-user-params {
     ids: string
   }
-  remove-audiobooks-user: func(params: remove-audiobooks-user-params) -> result<string, string>;
+  remove-audiobooks-user: func(params: remove-audiobooks-user-params) -> result<string, remove-audiobooks-user-error>;
 
   /// Check User's Saved Audiobooks
   record check-users-saved-audiobooks-params {
     ids: string
   }
-  check-users-saved-audiobooks: func(params: check-users-saved-audiobooks-params) -> result<string, string>;
+  check-users-saved-audiobooks: func(params: check-users-saved-audiobooks-params) -> result<list<bool>, check-users-saved-audiobooks-error>;
 
 }
 
 interface categories {
+  record get-categories-response {
+    categories: paging-object
+  }
+
+  record paging-object {
+    /// A link to the Web API endpoint returning the full result of the request
+    href: string,
+    /// The maximum number of items in the response (as set in the query or by default).
+    limit: s32,
+    /// URL to the next page of items. ( `null` if none)
+    next: string,
+    /// The offset of the items returned (as set in the query or by default)
+    offset: s32,
+    /// URL to the previous page of items. ( `null` if none)
+    previous: string,
+    /// The total number of items available to return.
+    total: s32
+  }
+
+  record category-object {
+    /// A link to the Web API endpoint returning full details of the category.
+    href: string,
+    /// The category icon, in various sizes.
+    icons: list<image-object>,
+    /// The [Spotify category ID](/documentation/web-api/concepts/spotify-uris-ids) of the category.
+    id: string,
+    /// The name of the category.
+    name: string
+  }
+
+  record image-object {
+    /// The image height in pixels.
+    height: s32,
+    /// The source URL of the image.
+    url: string,
+    /// The image width in pixels.
+    width: s32
+  }
+
+  variant get-categories-error {
+    unauthorized(string),
+    forbidden(string),
+    too-many-requests(string),
+    other(string)
+  }
+
+  variant get-a-category-error {
+    unauthorized(string),
+    forbidden(string),
+    too-many-requests(string),
+    other(string)
+  }
+
   /// Get Several Browse Categories
   record get-categories-params {
     country: option<string>,
@@ -279,7 +1493,7 @@ interface categories {
     limit: option<s32>,
     offset: option<s32>
   }
-  get-categories: func(params: get-categories-params) -> result<string, string>;
+  get-categories: func(params: get-categories-params) -> result<get-categories-response, get-categories-error>;
 
   /// Get Single Browse Category
   record get-a-category-params {
@@ -287,14 +1501,205 @@ interface categories {
     country: option<string>,
     locale: option<string>
   }
-  get-a-category: func(params: get-a-category-params) -> result<string, string>;
+  get-a-category: func(params: get-a-category-params) -> result<category-object, get-a-category-error>;
 
 }
 
 interface playlists {
+  enum playlist-owner-object-type-op-enum {
+    user,
+  }
+
+  record paging-featured-playlist-object {
+    message: option<string>,
+    playlists: option<paging-playlist-object>
+  }
+
+  record paging-playlist-object {
+    /// JSON-encoded free-form object payload
+    data: option<string>
+  }
+
+  record playlist-object {
+    /// `true` if the owner allows other users to modify the playlist.
+    collaborative: option<bool>,
+    /// The playlist description. _Only returned for modified, verified playlists, otherwise_ `null`.
+    description: option<string>,
+    /// Known external URLs for this playlist.
+    external-urls: option<external-url-object>,
+    /// Information about the followers of the playlist.
+    followers: option<followers-object>,
+    /// A link to the Web API endpoint providing full details of the playlist.
+    href: option<string>,
+    /// The [Spotify ID](/documentation/web-api/concepts/spotify-uris-ids) for the playlist.
+    id: option<string>,
+    /// Images for the playlist. The array may be empty or contain up to three images. The images are returned by size in descending order. See [Working with Playlists](/documentation/web-api/concepts/playlists). _**Note**: If returned, the source URL for the image (`url`) is temporary and will expire in less than a day._
+    images: option<list<image-object>>,
+    /// The name of the playlist.
+    name: option<string>,
+    /// The user who owns the playlist
+    owner: option<playlist-owner-object>,
+    /// The playlist's public/private status: `true` the playlist is public, `false` the playlist is private, `null` the playlist status is not relevant. For more about public/private status, see [Working with Playlists](/documentation/web-api/concepts/playlists)
+    public: option<bool>,
+    /// The version identifier for the current playlist. Can be supplied in other requests to target a specific playlist version
+    snapshot-id: option<string>,
+    /// The tracks of the playlist.
+    tracks: option<string>,
+    /// The object type: "playlist"
+    type-op: option<string>,
+    /// The [Spotify URI](/documentation/web-api/concepts/spotify-uris-ids) for the playlist.
+    uri: option<string>
+  }
+
+  record external-url-object {
+    /// The [Spotify URL](/documentation/web-api/concepts/spotify-uris-ids) for the object.
+    spotify: option<string>
+  }
+
+  record followers-object {
+    /// This will always be set to null, as the Web API does not support it at the moment.
+    href: option<string>,
+    /// The total number of followers.
+    total: option<s32>
+  }
+
+  record image-object {
+    /// The image height in pixels.
+    height: s32,
+    /// The source URL of the image.
+    url: string,
+    /// The image width in pixels.
+    width: s32
+  }
+
+  record playlist-owner-object {
+    /// Known public external URLs for this user.
+    external-urls: option<external-url-object>,
+    /// Information about the followers of this user.
+    followers: option<followers-object>,
+    /// A link to the Web API endpoint for this user.
+    href: option<string>,
+    /// The [Spotify user ID](/documentation/web-api/concepts/spotify-uris-ids) for this user.
+    id: option<string>,
+    /// The object type.
+    type-op: option<playlist-owner-object-type-op-enum>,
+    /// The [Spotify URI](/documentation/web-api/concepts/spotify-uris-ids) for this user.
+    uri: option<string>,
+    /// The name displayed on the user's profile. `null` if not available.
+    display-name: option<string>
+  }
+
+  record paging-playlist-track-object {
+    /// JSON-encoded free-form object payload
+    data: option<string>
+  }
+
+  record add-tracks-to-playlist-response {
+    snapshot-id: option<string>
+  }
+
+  record reorder-or-replace-playlists-tracks-response {
+    snapshot-id: option<string>
+  }
+
   record remove-tracks-playlist-body-tracks-item {
     /// Spotify URI
     uri: option<string>
+  }
+
+  record remove-tracks-playlist-response {
+    snapshot-id: option<string>
+  }
+
+  variant get-a-categories-playlists-error {
+    unauthorized(string),
+    forbidden(string),
+    too-many-requests(string),
+    other(string)
+  }
+
+  variant get-featured-playlists-error {
+    unauthorized(string),
+    forbidden(string),
+    too-many-requests(string),
+    other(string)
+  }
+
+  variant get-a-list-of-current-users-playlists-error {
+    unauthorized(string),
+    forbidden(string),
+    too-many-requests(string),
+    other(string)
+  }
+
+  variant get-playlist-error {
+    unauthorized(string),
+    forbidden(string),
+    too-many-requests(string),
+    other(string)
+  }
+
+  variant change-playlist-details-error {
+    unauthorized(string),
+    forbidden(string),
+    too-many-requests(string),
+    other(string)
+  }
+
+  variant get-playlist-cover-error {
+    unauthorized(string),
+    forbidden(string),
+    too-many-requests(string),
+    other(string)
+  }
+
+  variant upload-custom-playlist-cover-error {
+    unauthorized(string),
+    forbidden(string),
+    too-many-requests(string),
+    other(string)
+  }
+
+  variant get-playlists-tracks-error {
+    unauthorized(string),
+    forbidden(string),
+    too-many-requests(string),
+    other(string)
+  }
+
+  variant add-tracks-to-playlist-error {
+    unauthorized(string),
+    forbidden(string),
+    too-many-requests(string),
+    other(string)
+  }
+
+  variant reorder-or-replace-playlists-tracks-error {
+    unauthorized(string),
+    forbidden(string),
+    too-many-requests(string),
+    other(string)
+  }
+
+  variant remove-tracks-playlist-error {
+    unauthorized(string),
+    forbidden(string),
+    too-many-requests(string),
+    other(string)
+  }
+
+  variant get-list-users-playlists-error {
+    unauthorized(string),
+    forbidden(string),
+    too-many-requests(string),
+    other(string)
+  }
+
+  variant create-playlist-error {
+    unauthorized(string),
+    forbidden(string),
+    too-many-requests(string),
+    other(string)
   }
 
   /// Get Category's Playlists
@@ -304,7 +1709,7 @@ interface playlists {
     limit: option<s32>,
     offset: option<s32>
   }
-  get-a-categories-playlists: func(params: get-a-categories-playlists-params) -> result<string, string>;
+  get-a-categories-playlists: func(params: get-a-categories-playlists-params) -> result<paging-featured-playlist-object, get-a-categories-playlists-error>;
 
   /// Get Featured Playlists
   record get-featured-playlists-params {
@@ -314,14 +1719,14 @@ interface playlists {
     limit: option<s32>,
     offset: option<s32>
   }
-  get-featured-playlists: func(params: get-featured-playlists-params) -> result<string, string>;
+  get-featured-playlists: func(params: get-featured-playlists-params) -> result<paging-featured-playlist-object, get-featured-playlists-error>;
 
   /// Get Current User's Playlists
   record get-a-list-of-current-users-playlists-params {
     limit: option<s32>,
     offset: option<s32>
   }
-  get-a-list-of-current-users-playlists: func(params: get-a-list-of-current-users-playlists-params) -> result<string, string>;
+  get-a-list-of-current-users-playlists: func(params: get-a-list-of-current-users-playlists-params) -> result<paging-playlist-object, get-a-list-of-current-users-playlists-error>;
 
   /// Get Playlist
   record get-playlist-params {
@@ -330,7 +1735,7 @@ interface playlists {
     fields: option<string>,
     additional-types: option<string>
   }
-  get-playlist: func(params: get-playlist-params) -> result<string, string>;
+  get-playlist: func(params: get-playlist-params) -> result<playlist-object, get-playlist-error>;
 
   /// Change Playlist Details
   record change-playlist-details-params {
@@ -345,19 +1750,20 @@ interface playlists {
     /// If `true` the playlist will be public, if `false` it will be private.
     public: option<bool>
   }
-  change-playlist-details: func(params: change-playlist-details-params) -> result<string, string>;
+  change-playlist-details: func(params: change-playlist-details-params) -> result<string, change-playlist-details-error>;
 
   /// Get Playlist Cover Image
   record get-playlist-cover-params {
     playlist-id: string
   }
-  get-playlist-cover: func(params: get-playlist-cover-params) -> result<string, string>;
+  get-playlist-cover: func(params: get-playlist-cover-params) -> result<list<image-object>, get-playlist-cover-error>;
 
   /// Add Custom Playlist Cover Image
   record upload-custom-playlist-cover-params {
-    playlist-id: string
+    playlist-id: string,
+    body: option<string>
   }
-  upload-custom-playlist-cover: func(params: upload-custom-playlist-cover-params) -> result<string, string>;
+  upload-custom-playlist-cover: func(params: upload-custom-playlist-cover-params) -> result<string, upload-custom-playlist-cover-error>;
 
   /// Get Playlist Items
   record get-playlists-tracks-params {
@@ -368,15 +1774,19 @@ interface playlists {
     offset: option<s32>,
     additional-types: option<string>
   }
-  get-playlists-tracks: func(params: get-playlists-tracks-params) -> result<string, string>;
+  get-playlists-tracks: func(params: get-playlists-tracks-params) -> result<paging-playlist-track-object, get-playlists-tracks-error>;
 
   /// Add Items to Playlist
   record add-tracks-to-playlist-params {
     playlist-id: string,
     position: option<s32>,
-    uris: option<string>
+    uris: option<string>,
+    /// The position to insert the items, a zero-based index. For example, to insert the items in the first position: `position=0` ; to insert the items in the third position: `position=2`. If omitted, the items will be appended to the playlist. Items are added in the order they appear in the uris array. For example: `{"uris": ["spotify:track:4iV5W9uYEdYUVa79Axb7Rh","spotify:track:1301WleyT98MSxVHPZCA6M"], "position": 3}`
+    position-v2: option<s32>,
+    /// A JSON array of the [Spotify URIs](/documentation/web-api/concepts/spotify-uris-ids) to add. For example: `{"uris": ["spotify:track:4iV5W9uYEdYUVa79Axb7Rh","spotify:track:1301WleyT98MSxVHPZCA6M", "spotify:episode:512ojhOuo1ktJprKbVcKyQ"]}`<br/>A maximum of 100 items can be added in one request. _**Note**: if the `uris` parameter is present in the query string, any URIs listed here in the body will be ignored._
+    uris-v2: option<list<string>>
   }
-  add-tracks-to-playlist: func(params: add-tracks-to-playlist-params) -> result<string, string>;
+  add-tracks-to-playlist: func(params: add-tracks-to-playlist-params) -> result<add-tracks-to-playlist-response, add-tracks-to-playlist-error>;
 
   /// Update Playlist Items
   record reorder-or-replace-playlists-tracks-params {
@@ -389,9 +1799,10 @@ interface playlists {
     /// The position of the first item to be reordered.
     range-start: option<s32>,
     /// The playlist's snapshot ID against which you want to make the changes.
-    snapshot-id: option<string>
+    snapshot-id: option<string>,
+    uris-v2: option<list<string>>
   }
-  reorder-or-replace-playlists-tracks: func(params: reorder-or-replace-playlists-tracks-params) -> result<string, string>;
+  reorder-or-replace-playlists-tracks: func(params: reorder-or-replace-playlists-tracks-params) -> result<reorder-or-replace-playlists-tracks-response, reorder-or-replace-playlists-tracks-error>;
 
   /// Remove Playlist Items
   record remove-tracks-playlist-params {
@@ -403,7 +1814,7 @@ interface playlists {
     /// For example: `{ "tracks": [{ "uri": "spotify:track:4iV5W9uYEdYUVa79Axb7Rh" },{ "uri": "spotify:track:1301WleyT98MSxVHPZCA6M" }] }`. A maximum of 100 objects can be sent at once.
     tracks: list<remove-tracks-playlist-body-tracks-item>
   }
-  remove-tracks-playlist: func(params: remove-tracks-playlist-params) -> result<string, string>;
+  remove-tracks-playlist: func(params: remove-tracks-playlist-params) -> result<remove-tracks-playlist-response, remove-tracks-playlist-error>;
 
   /// Get User's Playlists
   record get-list-users-playlists-params {
@@ -411,7 +1822,7 @@ interface playlists {
     limit: option<s32>,
     offset: option<s32>
   }
-  get-list-users-playlists: func(params: get-list-users-playlists-params) -> result<string, string>;
+  get-list-users-playlists: func(params: get-list-users-playlists-params) -> result<paging-playlist-object, get-list-users-playlists-error>;
 
   /// Create Playlist
   record create-playlist-params {
@@ -425,41 +1836,120 @@ interface playlists {
     /// Defaults to `true`. If `true` the playlist will be public, if `false` it will be private. To be able to create private playlists, the user must have granted the `playlist-modify-private` [scope](/documentation/web-api/concepts/scopes/#list-of-scopes)
     public: option<bool>
   }
-  create-playlist: func(params: create-playlist-params) -> result<string, string>;
+  create-playlist: func(params: create-playlist-params) -> result<playlist-object, create-playlist-error>;
 
 }
 
 interface chapters {
+  record get-several-chapters-response {
+    chapters: list<chapter-object>
+  }
+
+  record chapter-object {
+    /// JSON-encoded free-form object payload
+    data: option<string>
+  }
+
+  variant get-several-chapters-error {
+    unauthorized(string),
+    forbidden(string),
+    too-many-requests(string),
+    other(string)
+  }
+
+  variant get-a-chapter-error {
+    unauthorized(string),
+    forbidden(string),
+    too-many-requests(string),
+    other(string)
+  }
+
   /// Get Several Chapters
   record get-several-chapters-params {
     ids: string,
     market: option<string>
   }
-  get-several-chapters: func(params: get-several-chapters-params) -> result<string, string>;
+  get-several-chapters: func(params: get-several-chapters-params) -> result<get-several-chapters-response, get-several-chapters-error>;
 
   /// Get a Chapter
   record get-a-chapter-params {
     id: string,
     market: option<string>
   }
-  get-a-chapter: func(params: get-a-chapter-params) -> result<string, string>;
+  get-a-chapter: func(params: get-a-chapter-params) -> result<chapter-object, get-a-chapter-error>;
 
 }
 
 interface episodes {
+  record get-multiple-episodes-response {
+    episodes: list<episode-object>
+  }
+
+  record episode-object {
+    /// JSON-encoded free-form object payload
+    data: option<string>
+  }
+
+  record paging-saved-episode-object {
+    /// JSON-encoded free-form object payload
+    data: option<string>
+  }
+
+  variant get-multiple-episodes-error {
+    unauthorized(string),
+    forbidden(string),
+    too-many-requests(string),
+    other(string)
+  }
+
+  variant get-an-episode-error {
+    unauthorized(string),
+    forbidden(string),
+    too-many-requests(string),
+    other(string)
+  }
+
+  variant get-users-saved-episodes-error {
+    unauthorized(string),
+    forbidden(string),
+    too-many-requests(string),
+    other(string)
+  }
+
+  variant save-episodes-user-error {
+    unauthorized(string),
+    forbidden(string),
+    too-many-requests(string),
+    other(string)
+  }
+
+  variant remove-episodes-user-error {
+    unauthorized(string),
+    forbidden(string),
+    too-many-requests(string),
+    other(string)
+  }
+
+  variant check-users-saved-episodes-error {
+    unauthorized(string),
+    forbidden(string),
+    too-many-requests(string),
+    other(string)
+  }
+
   /// Get Several Episodes
   record get-multiple-episodes-params {
     ids: string,
     market: option<string>
   }
-  get-multiple-episodes: func(params: get-multiple-episodes-params) -> result<string, string>;
+  get-multiple-episodes: func(params: get-multiple-episodes-params) -> result<get-multiple-episodes-response, get-multiple-episodes-error>;
 
   /// Get Episode
   record get-an-episode-params {
     id: string,
     market: option<string>
   }
-  get-an-episode: func(params: get-an-episode-params) -> result<string, string>;
+  get-an-episode: func(params: get-an-episode-params) -> result<episode-object, get-an-episode-error>;
 
   /// Get User's Saved Episodes
   record get-users-saved-episodes-params {
@@ -467,31 +1957,46 @@ interface episodes {
     limit: option<s32>,
     offset: option<s32>
   }
-  get-users-saved-episodes: func(params: get-users-saved-episodes-params) -> result<string, string>;
+  get-users-saved-episodes: func(params: get-users-saved-episodes-params) -> result<paging-saved-episode-object, get-users-saved-episodes-error>;
 
   /// Save Episodes for Current User
   record save-episodes-user-params {
-    ids: string
+    ids: string,
+    /// A JSON array of the [Spotify IDs](/documentation/web-api/concepts/spotify-uris-ids). <br/>A maximum of 50 items can be specified in one request. _**Note**: if the `ids` parameter is present in the query string, any IDs listed here in the body will be ignored._
+    ids-v2: option<list<string>>
   }
-  save-episodes-user: func(params: save-episodes-user-params) -> result<string, string>;
+  save-episodes-user: func(params: save-episodes-user-params) -> result<string, save-episodes-user-error>;
 
   /// Remove User's Saved Episodes
   record remove-episodes-user-params {
-    ids: string
+    ids: string,
+    /// A JSON array of the [Spotify IDs](/documentation/web-api/concepts/spotify-uris-ids). <br/>A maximum of 50 items can be specified in one request. _**Note**: if the `ids` parameter is present in the query string, any IDs listed here in the body will be ignored._
+    ids-v2: option<list<string>>
   }
-  remove-episodes-user: func(params: remove-episodes-user-params) -> result<string, string>;
+  remove-episodes-user: func(params: remove-episodes-user-params) -> result<string, remove-episodes-user-error>;
 
   /// Check User's Saved Episodes
   record check-users-saved-episodes-params {
     ids: string
   }
-  check-users-saved-episodes: func(params: check-users-saved-episodes-params) -> result<string, string>;
+  check-users-saved-episodes: func(params: check-users-saved-episodes-params) -> result<list<bool>, check-users-saved-episodes-error>;
 
 }
 
 interface markets {
+  record get-available-markets-response {
+    markets: option<list<string>>
+  }
+
+  variant get-available-markets-error {
+    unauthorized(string),
+    forbidden(string),
+    too-many-requests(string),
+    other(string)
+  }
+
   /// Get Available Markets
-  get-available-markets: func() -> result<string, string>;
+  get-available-markets: func() -> result<get-available-markets-response, get-available-markets-error>;
 
 }
 
@@ -505,8 +2010,165 @@ interface users {
     user,
   }
 
+  enum public-user-object-type-op-enum {
+    user,
+  }
+
+  record private-user-object {
+    /// The country of the user, as set in the user's account profile. An [ISO 3166-1 alpha-2 country code](http://en.wikipedia.org/wiki/ISO_3166-1_alpha-2). _This field is only available when the current user has granted access to the [user-read-private](/documentation/web-api/concepts/scopes/#list-of-scopes) scope._
+    country: option<string>,
+    /// The name displayed on the user's profile. `null` if not available.
+    display-name: option<string>,
+    /// The user's email address, as entered by the user when creating their account. _**Important!** This email address is unverified; there is no proof that it actually belongs to the user._ _This field is only available when the current user has granted access to the [user-read-email](/documentation/web-api/concepts/scopes/#list-of-scopes) scope._
+    email: option<string>,
+    /// The user's explicit content settings. _This field is only available when the current user has granted access to the [user-read-private](/documentation/web-api/concepts/scopes/#list-of-scopes) scope._
+    explicit-content: option<explicit-content-settings-object>,
+    /// Known external URLs for this user.
+    external-urls: option<external-url-object>,
+    /// Information about the followers of the user.
+    followers: option<followers-object>,
+    /// A link to the Web API endpoint for this user.
+    href: option<string>,
+    /// The [Spotify user ID](/documentation/web-api/concepts/spotify-uris-ids) for the user.
+    id: option<string>,
+    /// The user's profile image.
+    images: option<list<image-object>>,
+    /// The user's Spotify subscription level: "premium", "free", etc. (The subscription level "open" can be considered the same as "free".) _This field is only available when the current user has granted access to the [user-read-private](/documentation/web-api/concepts/scopes/#list-of-scopes) scope._
+    product: option<string>,
+    /// The object type: "user"
+    type-op: option<string>,
+    /// The [Spotify URI](/documentation/web-api/concepts/spotify-uris-ids) for the user.
+    uri: option<string>
+  }
+
+  record explicit-content-settings-object {
+    /// When `true`, indicates that explicit content should not be played.
+    filter-enabled: option<bool>,
+    /// When `true`, indicates that the explicit content setting is locked and can't be changed by the user.
+    filter-locked: option<bool>
+  }
+
+  record external-url-object {
+    /// The [Spotify URL](/documentation/web-api/concepts/spotify-uris-ids) for the object.
+    spotify: option<string>
+  }
+
+  record followers-object {
+    /// This will always be set to null, as the Web API does not support it at the moment.
+    href: option<string>,
+    /// The total number of followers.
+    total: option<s32>
+  }
+
+  record image-object {
+    /// The image height in pixels.
+    height: s32,
+    /// The source URL of the image.
+    url: string,
+    /// The image width in pixels.
+    width: s32
+  }
+
+  record get-followed-response {
+    artists: cursor-paging-simplified-artist-object
+  }
+
+  record cursor-paging-simplified-artist-object {
+    /// JSON-encoded free-form object payload
+    data: option<string>
+  }
+
+  record public-user-object {
+    /// The name displayed on the user's profile. `null` if not available.
+    display-name: option<string>,
+    /// Known public external URLs for this user.
+    external-urls: option<external-url-object>,
+    /// Information about the followers of this user.
+    followers: option<followers-object>,
+    /// A link to the Web API endpoint for this user.
+    href: option<string>,
+    /// The [Spotify user ID](/documentation/web-api/concepts/spotify-uris-ids) for this user.
+    id: option<string>,
+    /// The user's profile image.
+    images: option<list<image-object>>,
+    /// The object type.
+    type-op: option<public-user-object-type-op-enum>,
+    /// The [Spotify URI](/documentation/web-api/concepts/spotify-uris-ids) for this user.
+    uri: option<string>
+  }
+
+  variant get-current-users-profile-error {
+    unauthorized(string),
+    forbidden(string),
+    too-many-requests(string),
+    other(string)
+  }
+
+  variant get-followed-error {
+    unauthorized(string),
+    forbidden(string),
+    too-many-requests(string),
+    other(string)
+  }
+
+  variant follow-artists-users-error {
+    unauthorized(string),
+    forbidden(string),
+    too-many-requests(string),
+    other(string)
+  }
+
+  variant unfollow-artists-users-error {
+    unauthorized(string),
+    forbidden(string),
+    too-many-requests(string),
+    other(string)
+  }
+
+  variant check-current-user-follows-error {
+    unauthorized(string),
+    forbidden(string),
+    too-many-requests(string),
+    other(string)
+  }
+
+  variant get-users-top-artists-and-tracks-error {
+    unauthorized(string),
+    forbidden(string),
+    too-many-requests(string),
+    other(string)
+  }
+
+  variant follow-playlist-error {
+    unauthorized(string),
+    forbidden(string),
+    too-many-requests(string),
+    other(string)
+  }
+
+  variant unfollow-playlist-error {
+    unauthorized(string),
+    forbidden(string),
+    too-many-requests(string),
+    other(string)
+  }
+
+  variant check-if-user-follows-playlist-error {
+    unauthorized(string),
+    forbidden(string),
+    too-many-requests(string),
+    other(string)
+  }
+
+  variant get-users-profile-error {
+    unauthorized(string),
+    forbidden(string),
+    too-many-requests(string),
+    other(string)
+  }
+
   /// Get Current User's Profile
-  get-current-users-profile: func() -> result<string, string>;
+  get-current-users-profile: func() -> result<private-user-object, get-current-users-profile-error>;
 
   /// Get Followed Artists
   record get-followed-params {
@@ -514,28 +2176,33 @@ interface users {
     after: option<string>,
     limit: option<s32>
   }
-  get-followed: func(params: get-followed-params) -> result<string, string>;
+  get-followed: func(params: get-followed-params) -> result<get-followed-response, get-followed-error>;
 
   /// Follow Artists or Users
   record follow-artists-users-params {
     type-op: follow-artists-users-type-op-enum,
-    ids: string
+    ids: string,
+    /// A JSON array of the artist or user [Spotify IDs](/documentation/web-api/concepts/spotify-uris-ids).
+    /// For example: `{ids:["74ASZWbe4lXaubB36ztrGX", "08td7MxkoHQkXnWAYD8d6Q"]}`. A maximum of 50 IDs can be sent in one request. _**Note**: if the `ids` parameter is present in the query string, any IDs listed here in the body will be ignored._
+    ids-v2: list<string>
   }
-  follow-artists-users: func(params: follow-artists-users-params) -> result<string, string>;
+  follow-artists-users: func(params: follow-artists-users-params) -> result<string, follow-artists-users-error>;
 
   /// Unfollow Artists or Users
   record unfollow-artists-users-params {
     type-op: follow-artists-users-type-op-enum,
-    ids: string
+    ids: string,
+    /// A JSON array of the artist or user [Spotify IDs](/documentation/web-api/concepts/spotify-uris-ids). For example: `{ids:["74ASZWbe4lXaubB36ztrGX", "08td7MxkoHQkXnWAYD8d6Q"]}`. A maximum of 50 IDs can be sent in one request. _**Note**: if the `ids` parameter is present in the query string, any IDs listed here in the body will be ignored._
+    ids-v2: option<list<string>>
   }
-  unfollow-artists-users: func(params: unfollow-artists-users-params) -> result<string, string>;
+  unfollow-artists-users: func(params: unfollow-artists-users-params) -> result<string, unfollow-artists-users-error>;
 
   /// Check If User Follows Artists or Users
   record check-current-user-follows-params {
     type-op: follow-artists-users-type-op-enum,
     ids: string
   }
-  check-current-user-follows: func(params: check-current-user-follows-params) -> result<string, string>;
+  check-current-user-follows: func(params: check-current-user-follows-params) -> result<list<bool>, check-current-user-follows-error>;
 
   /// Get User's Top Items
   record get-users-top-artists-and-tracks-params {
@@ -544,7 +2211,7 @@ interface users {
     limit: option<s32>,
     offset: option<s32>
   }
-  get-users-top-artists-and-tracks: func(params: get-users-top-artists-and-tracks-params) -> result<string, string>;
+  get-users-top-artists-and-tracks: func(params: get-users-top-artists-and-tracks-params) -> result<string, get-users-top-artists-and-tracks-error>;
 
   /// Follow Playlist
   record follow-playlist-params {
@@ -552,30 +2219,113 @@ interface users {
     /// Defaults to `true`. If `true` the playlist will be included in user's public playlists, if `false` it will remain private.
     public: option<bool>
   }
-  follow-playlist: func(params: follow-playlist-params) -> result<string, string>;
+  follow-playlist: func(params: follow-playlist-params) -> result<string, follow-playlist-error>;
 
   /// Unfollow Playlist
   record unfollow-playlist-params {
     playlist-id: string
   }
-  unfollow-playlist: func(params: unfollow-playlist-params) -> result<string, string>;
+  unfollow-playlist: func(params: unfollow-playlist-params) -> result<string, unfollow-playlist-error>;
 
   /// Check if Users Follow Playlist
   record check-if-user-follows-playlist-params {
     playlist-id: string,
     ids: string
   }
-  check-if-user-follows-playlist: func(params: check-if-user-follows-playlist-params) -> result<string, string>;
+  check-if-user-follows-playlist: func(params: check-if-user-follows-playlist-params) -> result<list<bool>, check-if-user-follows-playlist-error>;
 
   /// Get User's Profile
   record get-users-profile-params {
     user-id: string
   }
-  get-users-profile: func(params: get-users-profile-params) -> result<string, string>;
+  get-users-profile: func(params: get-users-profile-params) -> result<public-user-object, get-users-profile-error>;
 
 }
 
 interface player {
+  record currently-playing-context-object {
+    /// Allows to update the user interface based on which playback actions are available within the current context.
+    actions: option<disallows-object>,
+    /// A Context Object. Can be `null`.
+    context: option<context-object>,
+    /// The object type of the currently playing item. Can be one of `track`, `episode`, `ad` or `unknown`.
+    currently-playing-type: option<string>,
+    /// The device that is currently active.
+    device: option<device-object>,
+    /// If something is currently playing, return `true`.
+    is-playing: option<bool>,
+    /// The currently playing track or episode. Can be `null`.
+    item: option<string>,
+    /// Progress into the currently playing track or episode. Can be `null`.
+    progress-ms: option<s32>,
+    /// off, track, context
+    repeat-state: option<string>,
+    /// If shuffle is on or off.
+    shuffle-state: option<bool>,
+    /// Unix Millisecond Timestamp when data was fetched.
+    timestamp: option<s32>
+  }
+
+  record disallows-object {
+    /// Interrupting playback. Optional field.
+    interrupting-playback: option<bool>,
+    /// Pausing. Optional field.
+    pausing: option<bool>,
+    /// Resuming. Optional field.
+    resuming: option<bool>,
+    /// Seeking playback location. Optional field.
+    seeking: option<bool>,
+    /// Skipping to the next context. Optional field.
+    skipping-next: option<bool>,
+    /// Skipping to the previous context. Optional field.
+    skipping-prev: option<bool>,
+    /// Toggling repeat context flag. Optional field.
+    toggling-repeat-context: option<bool>,
+    /// Toggling repeat track flag. Optional field.
+    toggling-repeat-track: option<bool>,
+    /// Toggling shuffle flag. Optional field.
+    toggling-shuffle: option<bool>,
+    /// Transfering playback between devices. Optional field.
+    transferring-playback: option<bool>
+  }
+
+  record context-object {
+    /// External URLs for this context.
+    external-urls: option<external-url-object>,
+    /// A link to the Web API endpoint providing full details of the track.
+    href: option<string>,
+    /// The object type, e.g. "artist", "playlist", "album", "show".
+    type-op: option<string>,
+    /// The [Spotify URI](/documentation/web-api/concepts/spotify-uris-ids) for the context.
+    uri: option<string>
+  }
+
+  record external-url-object {
+    /// The [Spotify URL](/documentation/web-api/concepts/spotify-uris-ids) for the object.
+    spotify: option<string>
+  }
+
+  record device-object {
+    /// The device ID.
+    id: option<string>,
+    /// If this device is the currently active device.
+    is-active: option<bool>,
+    /// If this device is currently in a private session.
+    is-private-session: option<bool>,
+    /// Whether controlling this device is restricted. At present if this is "true" then no Web API commands will be accepted by this device.
+    is-restricted: option<bool>,
+    /// A human-readable name for the device. Some devices have a name that the user can configure (e.g. \"Loudest speaker\") and some devices have a generic name associated with the manufacturer or device model.
+    name: option<string>,
+    /// Device type, such as "computer", "smartphone" or "speaker".
+    type-op: option<string>,
+    /// The current volume in percent.
+    volume-percent: option<s32>
+  }
+
+  record get-a-users-available-devices-response {
+    devices: list<device-object>
+  }
+
   /// Optional. Indicates from where in the context playback should start. Only available when context_uri corresponds to an album or playlist object
   /// "position" is zero based and can’t be negative. Example: `"offset": {"position": 5}`
   /// "uri" is a string representing the uri of the item to start at. Example: `"offset": {"uri": "spotify:track:1301WleyT98MSxVHPZCA6M"}`
@@ -584,12 +2334,129 @@ interface player {
     data: option<string>
   }
 
+  record queue-object {
+    /// The currently playing track or episode. Can be `null`.
+    currently-playing: option<string>,
+    /// The tracks or episodes in the queue. Can be empty.
+    queue: option<list<string>>
+  }
+
+  record cursor-paging-play-history-object {
+    /// JSON-encoded free-form object payload
+    data: option<string>
+  }
+
+  variant get-information-about-the-users-current-playback-error {
+    unauthorized(string),
+    forbidden(string),
+    too-many-requests(string),
+    other(string)
+  }
+
+  variant transfer-a-users-playback-error {
+    unauthorized(string),
+    forbidden(string),
+    too-many-requests(string),
+    other(string)
+  }
+
+  variant get-the-users-currently-playing-track-error {
+    unauthorized(string),
+    forbidden(string),
+    too-many-requests(string),
+    other(string)
+  }
+
+  variant get-a-users-available-devices-error {
+    unauthorized(string),
+    forbidden(string),
+    too-many-requests(string),
+    other(string)
+  }
+
+  variant skip-users-playback-to-next-track-error {
+    unauthorized(string),
+    forbidden(string),
+    too-many-requests(string),
+    other(string)
+  }
+
+  variant pause-a-users-playback-error {
+    unauthorized(string),
+    forbidden(string),
+    too-many-requests(string),
+    other(string)
+  }
+
+  variant start-a-users-playback-error {
+    unauthorized(string),
+    forbidden(string),
+    too-many-requests(string),
+    other(string)
+  }
+
+  variant skip-users-playback-to-previous-track-error {
+    unauthorized(string),
+    forbidden(string),
+    too-many-requests(string),
+    other(string)
+  }
+
+  variant get-queue-error {
+    unauthorized(string),
+    forbidden(string),
+    too-many-requests(string),
+    other(string)
+  }
+
+  variant add-to-queue-error {
+    unauthorized(string),
+    forbidden(string),
+    too-many-requests(string),
+    other(string)
+  }
+
+  variant get-recently-played-error {
+    unauthorized(string),
+    forbidden(string),
+    too-many-requests(string),
+    other(string)
+  }
+
+  variant set-repeat-mode-on-users-playback-error {
+    unauthorized(string),
+    forbidden(string),
+    too-many-requests(string),
+    other(string)
+  }
+
+  variant seek-to-position-in-currently-playing-track-error {
+    unauthorized(string),
+    forbidden(string),
+    too-many-requests(string),
+    other(string)
+  }
+
+  variant toggle-shuffle-for-users-playback-error {
+    unauthorized(string),
+    forbidden(string),
+    too-many-requests(string),
+    other(string)
+  }
+
+  variant set-volume-for-users-playback-error {
+    unauthorized(string),
+    forbidden(string),
+    too-many-requests(string),
+    other(string)
+  }
+
   /// Get Playback State
   record get-information-about-the-users-current-playback-params {
     market: option<string>,
     additional-types: option<string>
   }
-  get-information-about-the-users-current-playback: func(params: get-information-about-the-users-current-playback-params) -> result<string, string>;
+  get-information-about-the-users-current-playback: func(params: get-information-about-the-users-current-playback-params) -> result<currently-playing-context-object, get-information-about-the-users-current-playback-error>;
 
   /// Transfer Playback
   record transfer-a-users-playback-params {
@@ -598,29 +2465,29 @@ interface player {
     /// **true**: ensure playback happens on new device.<br/>**false** or not provided: keep the current playback state.
     play: option<string>
   }
-  transfer-a-users-playback: func(params: transfer-a-users-playback-params) -> result<string, string>;
+  transfer-a-users-playback: func(params: transfer-a-users-playback-params) -> result<string, transfer-a-users-playback-error>;
 
   /// Get Currently Playing Track
   record get-the-users-currently-playing-track-params {
     market: option<string>,
     additional-types: option<string>
   }
-  get-the-users-currently-playing-track: func(params: get-the-users-currently-playing-track-params) -> result<string, string>;
+  get-the-users-currently-playing-track: func(params: get-the-users-currently-playing-track-params) -> result<currently-playing-context-object, get-the-users-currently-playing-track-error>;
 
   /// Get Available Devices
-  get-a-users-available-devices: func() -> result<string, string>;
+  get-a-users-available-devices: func() -> result<get-a-users-available-devices-response, get-a-users-available-devices-error>;
 
   /// Skip To Next
   record skip-users-playback-to-next-track-params {
     device-id: option<string>
   }
-  skip-users-playback-to-next-track: func(params: skip-users-playback-to-next-track-params) -> result<string, string>;
+  skip-users-playback-to-next-track: func(params: skip-users-playback-to-next-track-params) -> result<string, skip-users-playback-to-next-track-error>;
 
   /// Pause Playback
   record pause-a-users-playback-params {
     device-id: option<string>
   }
-  pause-a-users-playback: func(params: pause-a-users-playback-params) -> result<string, string>;
+  pause-a-users-playback: func(params: pause-a-users-playback-params) -> result<string, pause-a-users-playback-error>;
 
   /// Start/Resume Playback
   record start-a-users-playback-params {
@@ -637,23 +2504,23 @@ interface player {
     /// For example: `{"uris": ["spotify:track:4iV5W9uYEdYUVa79Axb7Rh", "spotify:track:1301WleyT98MSxVHPZCA6M"]}`
     uris: option<list<string>>
   }
-  start-a-users-playback: func(params: start-a-users-playback-params) -> result<string, string>;
+  start-a-users-playback: func(params: start-a-users-playback-params) -> result<string, start-a-users-playback-error>;
 
   /// Skip To Previous
   record skip-users-playback-to-previous-track-params {
     device-id: option<string>
   }
-  skip-users-playback-to-previous-track: func(params: skip-users-playback-to-previous-track-params) -> result<string, string>;
+  skip-users-playback-to-previous-track: func(params: skip-users-playback-to-previous-track-params) -> result<string, skip-users-playback-to-previous-track-error>;
 
   /// Get the User's Queue
-  get-queue: func() -> result<string, string>;
+  get-queue: func() -> result<queue-object, get-queue-error>;
 
   /// Add Item to Playback Queue
   record add-to-queue-params {
     uri: string,
     device-id: option<string>
   }
-  add-to-queue: func(params: add-to-queue-params) -> result<string, string>;
+  add-to-queue: func(params: add-to-queue-params) -> result<string, add-to-queue-error>;
 
   /// Get Recently Played Tracks
   record get-recently-played-params {
@@ -661,78 +2528,242 @@ interface player {
     after: option<s32>,
     before: option<s32>
   }
-  get-recently-played: func(params: get-recently-played-params) -> result<string, string>;
+  get-recently-played: func(params: get-recently-played-params) -> result<cursor-paging-play-history-object, get-recently-played-error>;
 
   /// Set Repeat Mode
   record set-repeat-mode-on-users-playback-params {
     state: string,
     device-id: option<string>
   }
-  set-repeat-mode-on-users-playback: func(params: set-repeat-mode-on-users-playback-params) -> result<string, string>;
+  set-repeat-mode-on-users-playback: func(params: set-repeat-mode-on-users-playback-params) -> result<string, set-repeat-mode-on-users-playback-error>;
 
   /// Seek To Position
   record seek-to-position-in-currently-playing-track-params {
     position-ms: s32,
     device-id: option<string>
   }
-  seek-to-position-in-currently-playing-track: func(params: seek-to-position-in-currently-playing-track-params) -> result<string, string>;
+  seek-to-position-in-currently-playing-track: func(params: seek-to-position-in-currently-playing-track-params) -> result<string, seek-to-position-in-currently-playing-track-error>;
 
   /// Toggle Playback Shuffle
   record toggle-shuffle-for-users-playback-params {
     state: bool,
     device-id: option<string>
   }
-  toggle-shuffle-for-users-playback: func(params: toggle-shuffle-for-users-playback-params) -> result<string, string>;
+  toggle-shuffle-for-users-playback: func(params: toggle-shuffle-for-users-playback-params) -> result<string, toggle-shuffle-for-users-playback-error>;
 
   /// Set Playback Volume
   record set-volume-for-users-playback-params {
     volume-percent: s32,
     device-id: option<string>
   }
-  set-volume-for-users-playback: func(params: set-volume-for-users-playback-params) -> result<string, string>;
+  set-volume-for-users-playback: func(params: set-volume-for-users-playback-params) -> result<string, set-volume-for-users-playback-error>;
 
 }
 
 interface shows {
+  enum simplified-show-object-type-op-enum {
+    show,
+  }
+
+  record paging-saved-show-object {
+    /// JSON-encoded free-form object payload
+    data: option<string>
+  }
+
+  record get-multiple-shows-response {
+    shows: list<simplified-show-object>
+  }
+
+  record simplified-show-object {
+    /// A list of the countries in which the show can be played, identified by their [ISO 3166-1 alpha-2](http://en.wikipedia.org/wiki/ISO_3166-1_alpha-2) code.
+    available-markets: list<string>,
+    /// The copyright statements of the show.
+    copyrights: list<copyright-object>,
+    /// A description of the show. HTML tags are stripped away from this field, use `html_description` field in case HTML tags are needed.
+    description: string,
+    /// Whether or not the show has explicit content (true = yes it does; false = no it does not OR unknown).
+    explicit: bool,
+    /// External URLs for this show.
+    external-urls: external-url-object,
+    /// A link to the Web API endpoint providing full details of the show.
+    href: string,
+    /// A description of the show. This field may contain HTML tags.
+    html-description: string,
+    /// The [Spotify ID](/documentation/web-api/concepts/spotify-uris-ids) for the show.
+    id: string,
+    /// The cover art for the show in various sizes, widest first.
+    images: list<image-object>,
+    /// True if all of the shows episodes are hosted outside of Spotify's CDN. This field might be `null` in some cases.
+    is-externally-hosted: bool,
+    /// A list of the languages used in the show, identified by their [ISO 639](https://en.wikipedia.org/wiki/ISO_639) code.
+    languages: list<string>,
+    /// The media type of the show.
+    media-type: string,
+    /// The name of the episode.
+    name: string,
+    /// The publisher of the show.
+    publisher: string,
+    /// The total number of episodes in the show.
+    total-episodes: s32,
+    /// The object type.
+    type-op: simplified-show-object-type-op-enum,
+    /// The [Spotify URI](/documentation/web-api/concepts/spotify-uris-ids) for the show.
+    uri: string
+  }
+
+  record copyright-object {
+    /// The copyright text for this content.
+    text: option<string>,
+    /// The type of copyright: `C` = the copyright, `P` = the sound recording (performance) copyright.
+    type-op: option<string>
+  }
+
+  record external-url-object {
+    /// The [Spotify URL](/documentation/web-api/concepts/spotify-uris-ids) for the object.
+    spotify: option<string>
+  }
+
+  record image-object {
+    /// The image height in pixels.
+    height: s32,
+    /// The source URL of the image.
+    url: string,
+    /// The image width in pixels.
+    width: s32
+  }
+
+  record show-object {
+    /// A list of the countries in which the show can be played, identified by their [ISO 3166-1 alpha-2](http://en.wikipedia.org/wiki/ISO_3166-1_alpha-2) code.
+    available-markets: list<string>,
+    /// The copyright statements of the show.
+    copyrights: list<copyright-object>,
+    /// A description of the show. HTML tags are stripped away from this field, use `html_description` field in case HTML tags are needed.
+    description: string,
+    /// Whether or not the show has explicit content (true = yes it does; false = no it does not OR unknown).
+    explicit: bool,
+    /// External URLs for this show.
+    external-urls: external-url-object,
+    /// A link to the Web API endpoint providing full details of the show.
+    href: string,
+    /// A description of the show. This field may contain HTML tags.
+    html-description: string,
+    /// The [Spotify ID](/documentation/web-api/concepts/spotify-uris-ids) for the show.
+    id: string,
+    /// The cover art for the show in various sizes, widest first.
+    images: list<image-object>,
+    /// True if all of the shows episodes are hosted outside of Spotify's CDN. This field might be `null` in some cases.
+    is-externally-hosted: bool,
+    /// A list of the languages used in the show, identified by their [ISO 639](https://en.wikipedia.org/wiki/ISO_639) code.
+    languages: list<string>,
+    /// The media type of the show.
+    media-type: string,
+    /// The name of the episode.
+    name: string,
+    /// The publisher of the show.
+    publisher: string,
+    /// The total number of episodes in the show.
+    total-episodes: s32,
+    /// The object type.
+    type-op: simplified-show-object-type-op-enum,
+    /// The [Spotify URI](/documentation/web-api/concepts/spotify-uris-ids) for the show.
+    uri: string,
+    /// The episodes of the show.
+    episodes: string
+  }
+
+  record paging-simplified-episode-object {
+    /// JSON-encoded free-form object payload
+    data: option<string>
+  }
+
+  variant get-users-saved-shows-error {
+    unauthorized(string),
+    forbidden(string),
+    too-many-requests(string),
+    other(string)
+  }
+
+  variant save-shows-user-error {
+    unauthorized(string),
+    forbidden(string),
+    too-many-requests(string),
+    other(string)
+  }
+
+  variant remove-shows-user-error {
+    unauthorized(string),
+    forbidden(string),
+    too-many-requests(string),
+    other(string)
+  }
+
+  variant check-users-saved-shows-error {
+    unauthorized(string),
+    forbidden(string),
+    too-many-requests(string),
+    other(string)
+  }
+
+  variant get-multiple-shows-error {
+    unauthorized(string),
+    forbidden(string),
+    too-many-requests(string),
+    other(string)
+  }
+
+  variant get-a-show-error {
+    unauthorized(string),
+    forbidden(string),
+    too-many-requests(string),
+    other(string)
+  }
+
+  variant get-a-shows-episodes-error {
+    unauthorized(string),
+    forbidden(string),
+    too-many-requests(string),
+    other(string)
+  }
+
   /// Get User's Saved Shows
   record get-users-saved-shows-params {
     limit: option<s32>,
     offset: option<s32>
   }
-  get-users-saved-shows: func(params: get-users-saved-shows-params) -> result<string, string>;
+  get-users-saved-shows: func(params: get-users-saved-shows-params) -> result<paging-saved-show-object, get-users-saved-shows-error>;
 
   /// Save Shows for Current User
   record save-shows-user-params {
     ids: string
   }
-  save-shows-user: func(params: save-shows-user-params) -> result<string, string>;
+  save-shows-user: func(params: save-shows-user-params) -> result<string, save-shows-user-error>;
 
   /// Remove User's Saved Shows
   record remove-shows-user-params {
     ids: string,
     market: option<string>
   }
-  remove-shows-user: func(params: remove-shows-user-params) -> result<string, string>;
+  remove-shows-user: func(params: remove-shows-user-params) -> result<string, remove-shows-user-error>;
 
   /// Check User's Saved Shows
   record check-users-saved-shows-params {
     ids: string
   }
-  check-users-saved-shows: func(params: check-users-saved-shows-params) -> result<string, string>;
+  check-users-saved-shows: func(params: check-users-saved-shows-params) -> result<list<bool>, check-users-saved-shows-error>;
 
   /// Get Several Shows
   record get-multiple-shows-params {
     market: option<string>,
     ids: string
   }
-  get-multiple-shows: func(params: get-multiple-shows-params) -> result<string, string>;
+  get-multiple-shows: func(params: get-multiple-shows-params) -> result<get-multiple-shows-response, get-multiple-shows-error>;
 
   /// Get Show
   record get-a-show-params {
     market: option<string>,
     id: string
   }
-  get-a-show: func(params: get-a-show-params) -> result<string, string>;
+  get-a-show: func(params: get-a-show-params) -> result<show-object, get-a-show-error>;
 
   /// Get Show Episodes
   record get-a-shows-episodes-params {
@@ -741,13 +2772,24 @@ interface shows {
     limit: option<s32>,
     offset: option<s32>
   }
-  get-a-shows-episodes: func(params: get-a-shows-episodes-params) -> result<string, string>;
+  get-a-shows-episodes: func(params: get-a-shows-episodes-params) -> result<paging-simplified-episode-object, get-a-shows-episodes-error>;
 
 }
 
 interface genres {
+  record get-recommendation-genres-response {
+    genres: list<string>
+  }
+
+  variant get-recommendation-genres-error {
+    unauthorized(string),
+    forbidden(string),
+    too-many-requests(string),
+    other(string)
+  }
+
   /// Get Available Genre Seeds
-  get-recommendation-genres: func() -> result<string, string>;
+  get-recommendation-genres: func() -> result<get-recommendation-genres-response, get-recommendation-genres-error>;
 
 }
 
@@ -766,6 +2808,58 @@ interface search {
     audio,
   }
 
+  record search-response {
+    albums: option<paging-simplified-album-object>,
+    artists: option<paging-artist-object>,
+    audiobooks: option<paging-simplified-audiobook-object>,
+    episodes: option<paging-simplified-episode-object>,
+    playlists: option<paging-playlist-object>,
+    shows: option<paging-simplified-show-object>,
+    tracks: option<paging-track-object>
+  }
+
+  record paging-simplified-album-object {
+    /// JSON-encoded free-form object payload
+    data: option<string>
+  }
+
+  record paging-artist-object {
+    /// JSON-encoded free-form object payload
+    data: option<string>
+  }
+
+  record paging-simplified-audiobook-object {
+    /// JSON-encoded free-form object payload
+    data: option<string>
+  }
+
+  record paging-simplified-episode-object {
+    /// JSON-encoded free-form object payload
+    data: option<string>
+  }
+
+  record paging-playlist-object {
+    /// JSON-encoded free-form object payload
+    data: option<string>
+  }
+
+  record paging-simplified-show-object {
+    /// JSON-encoded free-form object payload
+    data: option<string>
+  }
+
+  record paging-track-object {
+    /// JSON-encoded free-form object payload
+    data: option<string>
+  }
+
+  variant search-error {
+    unauthorized(string),
+    forbidden(string),
+    too-many-requests(string),
+    other(string)
+  }
+
   /// Search for Item
   record search-params {
     q: string,
@@ -775,7 +2869,7 @@ interface search {
     offset: option<s32>,
     include-external: option<search-include-external-enum>
   }
-  search: func(params: search-params) -> result<string, string>;
+  search: func(params: search-params) -> result<search-response, search-error>;
 
 }
 /// The component world: imports the secrets host capability

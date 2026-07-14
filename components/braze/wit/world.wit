@@ -1,4 +1,4 @@
-package autostamp:braze@0.3.0;
+package autostamp:braze@0.5.0;
 
 interface export-op {
   /// Campaign Analytics

@@ -1,6 +1,17 @@
-package autostamp:google@0.3.0;
+package autostamp:google@0.5.0;
 
 interface accounts {
+  enum travelpartner-accounts-hotels-set-live-on-google-xgafv-enum {
+    v1,
+    v2,
+  }
+
+  enum travelpartner-accounts-hotels-set-live-on-google-alt-enum {
+    json,
+    media,
+    proto,
+  }
+
   enum display-name-disapproval-reason-disapproval-reason-enum {
     disapproval-reason-unspecified,
     punctuation,
@@ -25,6 +36,50 @@ interface accounts {
     text-too-small,
   }
 
+  enum free-booking-links-result-device-type-enum {
+    device-unspecified,
+    device-unknown,
+    desktop,
+    mobile,
+    tablet,
+  }
+
+  enum property-performance-result-advance-booking-window-enum {
+    advance-booking-window-unspecified,
+    advance-booking-window-same-day,
+    advance-booking-window-next-day,
+    advance-booking-window-days-v2-to-v7,
+    advance-booking-window-days-v8-to-v14,
+    advance-booking-window-days-v15-to-v30,
+    advance-booking-window-days-v31-to-v60,
+    advance-booking-window-days-v61-to-v90,
+    advance-booking-window-days-v91-to-v120,
+    advance-booking-window-days-v121-to-v150,
+    advance-booking-window-days-v151-to-v180,
+    advance-booking-window-days-over-v180,
+  }
+
+  enum property-performance-result-length-of-stay-enum {
+    length-of-stay-unspecified,
+    length-of-stay-nights-v1,
+    length-of-stay-nights-v2,
+    length-of-stay-nights-v3,
+    length-of-stay-nights-v4-to-v7,
+    length-of-stay-nights-v8-to-v14,
+    length-of-stay-nights-v15-to-v21,
+    length-of-stay-nights-v22-to-v30,
+    length-of-stay-nights-over-v30,
+  }
+
+  enum property-performance-result-occupancy-enum {
+    occupancy-unspecified,
+    occupancy-v1,
+    occupancy-v2,
+    occupancy-v3,
+    occupancy-v4,
+    occupancy-over-v4,
+  }
+
   enum account-link-status-enum {
     account-link-status-unspecified,
     account-link-status-unknown,
@@ -33,11 +88,195 @@ interface accounts {
     approved,
   }
 
+  enum data-issue-detail-data-issue-severity-enum {
+    data-issue-severity-unspecified,
+    error,
+    warning,
+    info,
+  }
+
+  enum data-issue-detail-data-issue-type-enum {
+    feed-data-issue-unspecified,
+    feed-data-issue-unknown,
+    no-data-issue,
+    duplicate-address,
+    missing-physical-street-address,
+    missing-street-name,
+    missing-street-number,
+    missing-address,
+    missing-country,
+    invalid-postal-code,
+    invalid-postal-code-suffix,
+    unexpected-postal-code-suffix,
+    unexpected-postal-code,
+    invalid-amenities,
+    invalid-email-address,
+    duplicate-latlong,
+    latlong-inconsistent-with-address,
+    missing-latlong,
+    could-not-geocode,
+    missing-hotel-name,
+    hotel-name-empty,
+    invalid-hotel-name,
+    hotel-name-too-long,
+    parse-error-in-xml,
+    unexpected-attribute-in-xml,
+    duplicate-phone-number,
+    missing-phone-number,
+    missing-voice-phone-number,
+    invalid-phone-number-format,
+    invalid-phone-number,
+    invalid-phone-number-country-code,
+    phone-number-too-long,
+    phone-number-too-short,
+    invalid-website-url,
+    adwords-attribute-too-long,
+    brand-not-allowed,
+    flagged-due-to-suspicious-metadata,
+    not-enough-images-provided,
+    image-processing-in-progress,
+    cannot-fetch-images,
+    incompatible-image-size-or-low-quality,
+    missing-lang-in-raw-listing,
+    is-hotel,
+    missing-req-attr,
+    missing-name,
+    missing-lang-in-name,
+    vr-name-too-long,
+    test-property,
+    non-vr-accommodation-type-based-on-listing-name,
+    brand-name-too-long,
+    missing-brand-name,
+    invalid-review-rating,
+    invalid-checkin-format,
+    invalid-checkout-format,
+  }
+
+  enum hotel-view-match-status-enum {
+    match-status-unspecified,
+    match-status-unknown,
+    not-matched,
+    matched,
+    map-overlap,
+  }
+
   enum icon-state-enum {
     state-unspecified,
     new,
     approved,
     rejected,
+  }
+
+  enum rating-type-op-enum {
+    type-unspecified,
+    overall,
+  }
+
+  enum review-type-op-enum {
+    unknown,
+    editorial,
+    user,
+  }
+
+  enum price-accuracy-row-mismatch-reason-enum {
+    mismatch-reason-unspecified,
+    mismatch-reason-unknown,
+    tax-mismatch,
+    room-unavailable,
+    site-error,
+    price-feed-delayed,
+    discount-missing,
+    incorrect-discount-value,
+    wrong-itinerary,
+  }
+
+  enum price-accuracy-row-signal-source-enum {
+    signal-source-unspecified,
+    signal-source-unknown,
+    fetched,
+    pixel,
+  }
+
+  enum summarize-price-accuracy-response-current-book-on-google-score-enum {
+    price-accuracy-state-unspecified,
+    price-accuracy-state-unknown,
+    excellent,
+    good,
+    poor,
+    at-risk,
+    failed,
+  }
+
+  enum price-coverage-bucket-advance-booking-window-range-enum {
+    advance-booking-window-range-unspecified,
+    advance-booking-window-range-unknown,
+    days-v0-to-v30,
+    days-v31-to-v60,
+    days-v61-to-v90,
+    days-v91-to-v120,
+    days-v121-to-v150,
+    days-v151-to-v180,
+    days-v181-to-v210,
+    days-v211-to-v240,
+    days-v241-to-v270,
+    days-v271-to-v300,
+    days-v301-to-v330,
+  }
+
+  enum price-coverage-bucket-length-of-stay-range-enum {
+    length-of-stay-range-unspecified,
+    length-of-stay-range-unknown,
+    length-of-stay-v1-to-v7,
+    length-of-stay-v8-to-v14,
+    length-of-stay-v15-to-v30,
+  }
+
+  /// Response message for HotelService.SetLiveOnGoogle.
+  record set-live-on-google-response {
+    /// Identifies properties that Google could not update.
+    failed-hotel-ids: option<list<string>>,
+    /// Identifies the updated properties.
+    updated-hotel-ids: option<list<string>>
+  }
+
+  /// Reconciliation report (Hotel Ads only). Covers the Reconciliation Reports functionality in pre-v3.0 API versions. Lets you see the status, validate, and upload your Commissions reconciliation reports. This only applies if you are in the Google Hotel Ads Commissions Program (GHACP). For more information about working with reconciliation reports in Hotel Center, refer to [Reconciliation reports](//support.google.com/hotelprices/answer/7019060#sending).
+  record reconciliation-report {
+    /// Required. The contents of the commission report. Report contents must conform to the requirements specified in [Reconciliation reports] (//support.google.com/hotelprices/answer/7019060#creating).
+    contents: option<string>,
+    /// Required. Desired filename of the reconciliation report.
+    file-name: option<string>,
+    /// Resource name in the format `accounts/{account_id}/reconciliationReports/{datetime}~{filename}`. The value for `{datetime}` must be from 0001-01-01T00:00:00 to 9999-12-31T23:59:59 inclusive.
+    name: option<string>
+  }
+
+  /// Brand-level icon and display name configuration. Once approved, the icon and display name appear in the search results for properties that the partner has assigned to this brand.
+  record brand {
+    /// Output only. The brand's active display names in all provided languages, only present if the display name is approved for all provided languages.
+    active-display-names: option<list<localized-text>>,
+    /// Output only. The brand's active [accounts.icon](/hotels/hotel-prices/api-reference/rest/v3/accounts.icons#resource:-iconresource). The value refers to the icons's resource name in the format `accounts/{account_id}/icons/{icon_id}`. An active icon is one that has been approved.
+    active-icon: option<string>,
+    /// Output only. URL of the active icon, only present when the icon has been approved.
+    active-icon-uri: option<string>,
+    /// Output only. Display name's disapproval reason. Only applies to display names with the review state 'REJECTED'.
+    display-name-disapproval-reason: option<list<display-name-disapproval-reason>>,
+    /// Output only. The brand's display names review state, which applies to all display name language entries. If there are both submitted and active display names, this refers to the submitted display names.
+    display-name-state: option<brand-display-name-state-enum>,
+    /// Input only. The name Google displays for the brand's properties. Setting the display names is only necessary if you want to override the landing page display name or account-level display name for the brand. Google reviews the display names for appropriate content. When there are multiple languages, Google will only show the display names once Google approves all the languages.
+    display-names: option<list<localized-text>>,
+    /// Input only. The brand's [accounts.icon](/hotels/hotel-prices/api-reference/rest/v3/accounts.icons#resource:-iconresource) identifying the brand's icon. The value refers to the icons's resource name in the format `accounts/{account_id}/icons/{icon_id}`.
+    icon: option<string>,
+    /// Output only. The icon's disapproval reason(s). Only applies to submitted icons with `REJECTED` state.
+    icon-disapproval-reasons: option<list<brand-icon-disapproval-reasons-item-enum>>,
+    /// Output only. The brand's icon's review state. If there are both submitted and active icons, this refers to the submitted icon.
+    icon-state: option<brand-display-name-state-enum>,
+    /// Output only. The resource name for the brand in the format `accounts/{account_id}/brands/{brand_id}`. The `brand_id` corresponds to the partner's brand identifier used for landing page matching and the property-level brand identifier. A default brand is applied to properties that do not have a brand. The `brand_id` of the default brand is `NO_BRAND_ID`. It can be fetched and updated like any configured brand.
+    name: option<string>,
+    /// Output only. The number of properties with the corresponding brand ID.
+    property-count: option<string>,
+    /// Output only. The brand's submitted display names in all provided languages, only present if the display name is new or rejected for any language.
+    submitted-display-names: option<list<localized-text>>,
+    /// Output only. The brand's submitted [accounts.icon](/hotels/hotel-prices/api-reference/rest/v3/accounts.icons#resource:-iconresource). The value refers to the icons's resource name in the format `accounts/{account_id}/icons/{icon_id}`. A submitted icon is one that is new or rejected.
+    submitted-icon: option<string>
   }
 
   /// Localized variant of a text in a particular language.
@@ -56,6 +295,229 @@ interface accounts {
     language-code: option<string>
   }
 
+  /// A generic empty message that you can re-use to avoid defining duplicated empty messages in your APIs. A typical example is to use it as the request or the response type of an API method. For instance: service Foo { rpc Bar(google.protobuf.Empty) returns (google.protobuf.Empty); }
+  record empty {
+    /// JSON-encoded free-form object payload
+    data: option<string>
+  }
+
+  /// **DEPRECATED:** Use `QueryPropertyPerformanceReportResponse` with `PropertyPerformanceReportService` instead. Response message for FreeBookingLinksReportService.QueryFreeBookingLinksReport.
+  record query-free-booking-links-report-response {
+    /// Pagination token used to retrieve the next page of results. If this field is omitted, there are no subsequent pages.
+    next-page-token: option<string>,
+    /// The list of results that match the query.
+    results: option<list<free-booking-links-result>>
+  }
+
+  /// **DEPRECATED:** Use `PropertyPerformanceResult` with `PropertyPerformanceReportService` instead. Represents a result from querying for free booking link stats for an account.
+  record free-booking-links-result {
+    /// The total number of clicks that were recorded for this result.
+    click-count: option<string>,
+    date: option<date>,
+    /// The user’s device type. Only present if `deviceType` is specified in `aggregateBy` in the request.
+    device-type: option<free-booking-links-result-device-type-enum>,
+    /// Partner's hotel name. Only present if `partnerHotelDisplayName` is specified in `aggregateBy` in the request.
+    partner-hotel-display-name: option<string>,
+    /// Partner's hotel ID. Only present if `partnerHotelId` is specified in `aggregateBy` in the request.
+    partner-hotel-id: option<string>,
+    /// ISO 3116 region code of the country/region of the user. Only present if `userRegionCode` is specified in `aggregateBy` in the request
+    user-region-code: option<string>
+  }
+
+  /// Represents a whole or partial calendar date, such as a birthday. The time of day and time zone are either specified elsewhere or are insignificant. The date is relative to the Gregorian Calendar. This can represent one of the following: * A full date, with non-zero year, month, and day values. * A month and day, with a zero year (for example, an anniversary). * A year on its own, with a zero month and a zero day. * A year and month, with a zero day (for example, a credit card expiration date). Related types: * google.type.TimeOfDay * google.type.DateTime * google.protobuf.Timestamp
+  record date {
+    /// Day of a month. Must be from 1 to 31 and valid for the year and month, or 0 to specify a year by itself or a year and month where the day isn't significant.
+    day: option<s32>,
+    /// Month of a year. Must be from 1 to 12, or 0 to specify a year without a month and day.
+    month: option<s32>,
+    /// Year of the date. Must be from 1 to 9999, or 0 to specify a date without a year.
+    year: option<s32>
+  }
+
+  /// Response message for ParticipationReportService.QueryParticipationReport.
+  record query-participation-report-response {
+    /// Pagination token used to retrieve the next page of results.
+    next-page-token: option<string>,
+    /// The list of results that matches the query.
+    results: option<list<participation-result>>
+  }
+
+  /// Represents a result from querying for participation stats for an account.
+  record participation-result {
+    key: option<key>,
+    /// The total number of opportunities **not** eligible for the Google Ads auction process. Comprised of the following: * Landing page missing * Price missing * Price problem * Price unavailable * Other
+    missed-participation-count: option<string>,
+    missed-participation-count-details: option<missed-participation-count-details>,
+    /// For a specific hotel, the total number of opportunities that were available. Opportunities are the total number of instances when a hotel ad could have been displayed to a user.
+    opportunity-count: option<string>,
+    /// The total number of opportunities for which you were eligible to enter in the Google Ads auction process.
+    participation-count: option<string>,
+    /// The percentage rate of participation where the number of successfully participated opportunities is divided by the total number of opportunities. For example, if a property was eligible to enter the Google Ads auction 90 times out of 100 opportunities, the participation rate is 90%.
+    participation-percent: option<f64>,
+    /// Partner's hotel display name. This field is only populated when the result is aggregated by `partnerHotelId`.
+    partner-hotel-display-name: option<string>
+  }
+
+  /// Key of a result.
+  record key {
+    /// The number of days in advance the user wants to book the itinerary. If `advanceBookingWindow` is not a value of the `aggregateBy` parameter in the request call, then the `advanceBookingWindow` field is not returned in the `Key`.
+    advance-booking-window: option<s32>,
+    checkin-date: option<date>,
+    date: option<date>,
+    /// The user’s device type. If `deviceType` is not a value of the `aggregateBy` parameter in the request call, then the `deviceType` field is not returned in the `Key`.
+    device-type: option<free-booking-links-result-device-type-enum>,
+    /// CLDR region code of the country/region of the hotel. If `hotelRegionCode` is not a value of the `aggregateBy` parameter in the request call, then the `hotelRegionCode` field is not returned in the `Key`.
+    hotel-region-code: option<string>,
+    /// The number of nights for the itinerary. If `lengthOfStayDays` is not a value of the `aggregateBy` parameter in the request call, then the `lengthOfStayDays` field is not returned in the `Key`.
+    length-of-stay-days: option<s32>,
+    /// The total occupancy of the itinerary. If `occupancy` is not a value of the `aggregateBy` parameter in the request call, then the `occupancy` field is not returned in the `Key`.
+    occupancy: option<s32>,
+    /// Partner's hotel ID. If `partnerHotelId` is not a value of the `aggregateBy` parameter in the request call, then the `partnerHotelId` field is not returned in the `Key`.
+    partner-hotel-id: option<string>,
+    /// ISO 3116 region code of the country/region of the user. If `userRegionCode` is not a value of the `aggregateBy` parameter in the request call, then the `userRegionCode` field is not returned in the `Key`.
+    user-region-code: option<string>
+  }
+
+  /// Missed participation count broken down by reason.
+  record missed-participation-count-details {
+    /// The total number of missed participations due to one or more of your hotels being suspended due to price accuracy violations.
+    hotel-suspended-count: option<string>,
+    /// The total number of missed participation due to the hotel/itinerary combination being unavailable, or the traveler was ineligible for the rates. To participate in these auctions, you may need to provide more pricing information.
+    no-availability-count: option<string>,
+    /// No landing page matched the user.
+    no-landing-page-count: option<string>,
+    /// The total number of missed participations due to a price not being offered for the requested itinerary.
+    no-price-count: option<string>,
+    no-price-count-details: option<no-price-count-details>,
+    /// The total number of missed participation due to one or more of your hotels not specifying taxes and fees separately.
+    no-tax-breakdown-count: option<string>,
+    /// Hotel did not participate for an unknown reason.
+    other-reason-count: option<string>,
+    /// The total number of missed participations due to either a price not being present in Google's cache or failing to successfully respond to live pricing. Comprised of the following: * Bandwidth depleted * Cache rate missing * Itinerary blocked * Live pricing not set up * Live pricing timeout * Live pricing error
+    price-missing-count: option<string>,
+    price-missing-count-details: option<price-missing-count-details>,
+    /// The total number of missed participation due to an issue with the accuracy of the price provided for the itinerary. Comprised of the following: * Hotel suspended * Price unusually high * Price unusually low * Taxes and feeds missing
+    price-problem-count: option<string>,
+    price-problem-count-details: option<price-problem-count-details>,
+    /// The total number of missed participation due to price listed as unavailable (-1) for the requested itinerary. Comprised of the following: * Price unavailable * Participation not likely * Other
+    price-unavailable-count: option<string>,
+    price-unavailable-count-details: option<price-unavailable-count-details>
+  }
+
+  /// The reasons that contributed to the no price count and the total count for each reason.
+  record no-price-count-details {
+    /// The total number of missed participation due to live pricing not being triggered for any of the following reasons: * You didn't have live pricing configured for these searches. * You restricted Google from accessing the hotel itinerary in question.
+    live-pricing-config-issue-count: option<string>,
+    /// The total number of missed participation due to live pricing being unavailable. Live pricing will not be triggered for certain default itineraries or UIs. In this scenario, partners will need a cached price to participate.
+    live-pricing-not-available-count: option<string>,
+    /// The total number of missed participation due to live pricing not being triggered for any of the following reasons: * You didn't set a bid. * You didn't have a valid landing page. * There weren't enough prices in the cache.
+    live-pricing-not-triggered-count: option<string>,
+    /// The number of missed participations due to other issues with live pricing.
+    live-pricing-other-reason-count: option<string>,
+    /// The total number of missed participation due to technical issues with live pricing for any of the following reasons: * You didn’t respond quickly enough and exceeded the response deadline (around 4000 milliseconds). * You returned an error. * Your response was malformed.
+    live-pricing-technical-issue-count: option<string>
+  }
+
+  /// The reasons that contributed to the price missing count and the total count for each reason.
+  record price-missing-count-details {
+    /// No price was cached for this itinerary, and there was no live query quota remaining.
+    bandwidth-depleted-count: option<string>,
+    /// No price exists in the cache for this itinerary. A live query was not done due to page constraints.
+    cache-rate-missing-count: option<string>,
+    /// The itinerary was outside of your basic parameters, so no price was pulled for the itinerary from either live query or cache fill.
+    itinerary-blocked-count: option<string>,
+    /// No price was cached for this itinerary. A live query did not time out, but your system returned an error.
+    live-pricing-error-count: option<string>,
+    /// No price was cached for this itinerary, and live query was not configured for this account.
+    live-pricing-not-setup-count: option<string>,
+    /// No price was cached for this itinerary, and a live query sent to your system timed out.
+    live-pricing-timeout-count: option<string>
+  }
+
+  /// The reasons that contributed to the price problem count and the total count for each reason.
+  record price-problem-count-details {
+    /// The hotel was suspended. This may be due to persistent problems in areas such as incorrect taxes and fees.
+    hotel-suspended-count: option<string>,
+    /// The price given for this itinerary seemed oddly high compared to regional trends.
+    price-unusually-high-count: option<string>,
+    /// The price given for this itinerary seemed oddly low compared to regional trends.
+    price-unusually-low-count: option<string>,
+    /// Taxes and fees were missing from pricing.
+    taxes-and-fees-missing-count: option<string>
+  }
+
+  /// The reasons that contributed to the price unavailable count and the total count for each reason.
+  record price-unavailable-count-details {
+    /// No price was cached for this itinerary, and no live query was done because your server usually tells us the hotel is unavailable or sold out.
+    participation-not-likely-count: option<string>,
+    /// Hotel did not participate because it wasn't available for the itinerary dates.
+    price-unavailable-count: option<string>
+  }
+
+  /// Response message for PropertyPerformanceReportService.QueryPropertyPerformanceReport.
+  record query-property-performance-report-response {
+    /// Pagination token used to retrieve the next page of results. If this field is omitted, there are no subsequent pages.
+    next-page-token: option<string>,
+    /// The list of results that match the query.
+    results: option<list<property-performance-result>>
+  }
+
+  /// Represents a result from querying for the property performance report for an account.
+  record property-performance-result {
+    /// The total number of ad clicks that were recorded for this result.
+    ads-click-count: option<string>,
+    /// Equal to `ads_click_count` divided by `ads_impression_count`.
+    ads-clickthrough-rate: option<f64>,
+    /// The total number of ad impressions that were recorded for this result.
+    ads-impression-count: option<string>,
+    /// Difference in days between query date and check-in date in property's local timezone. Only present if `advanceBookingWindow` is specified in `aggregateBy` in the request.
+    advance-booking-window: option<property-performance-result-advance-booking-window-enum>,
+    /// Partner-specified brand for the property. Only present if `brand` is specified in `aggregateBy` in the request.
+    brand: option<string>,
+    /// The total number of free booking link clicks that were recorded for this result.
+    click-count: option<string>,
+    /// Equal to `click_count` divided by `impression_count`.
+    clickthrough-rate: option<f64>,
+    date: option<date>,
+    /// The user’s device type. Only present if `deviceType` is specified in `aggregateBy` in the request.
+    device-type: option<free-booking-links-result-device-type-enum>,
+    /// Whether the user’s query indicated a strong interest in booking. Only present if `highIntentUsers` is specified in `aggregateBy` in the request.
+    high-intent-users: option<bool>,
+    /// The total number of free booking link impressions that were recorded for this result. This value is rounded to preserve user privacy.
+    impression-count: option<string>,
+    /// Number of nights between check-in and check-out dates specified by user. Only present if `lengthOfStay` is specified in `aggregateBy` in the request.
+    length-of-stay: option<property-performance-result-length-of-stay-enum>,
+    /// Requested number of people staying at the property. Only present if `partnerPropertyId` is specified in `aggregateBy` in the request.
+    occupancy: option<property-performance-result-occupancy-enum>,
+    /// Partner's property name. Only present if `partnerPropertyDisplayName` is specified in `aggregateBy` in the request.
+    partner-property-display-name: option<string>,
+    /// Partner's property ID. Only present if `partnerPropertyId` is specified in `aggregateBy` in the request.
+    partner-property-id: option<string>,
+    /// ISO 3116 region code of the country/region of the property. Only present if `propertyRegionCode` is specified in `aggregateBy` in the request
+    property-region-code: option<string>,
+    /// ISO 3116 region code of the country/region of the user. Only present if `userRegionCode` is specified in `aggregateBy` in the request
+    user-region-code: option<string>,
+    /// The total number of clicks on the "Website" button on Google for vacation rentals.
+    vr-website-button-clicks: option<string>
+  }
+
+  /// Response message for AccountLinkService.ListAccountLinks.
+  record list-account-links-response {
+    /// A list of all account links associated with the Hotel Center account being queried.
+    account-links: option<list<account-link>>
+  }
+
+  /// An account link. Represents the link between a Google Ads customer and a Hotel Ads (Hotel Center) account. An account link defines the set of hotels under the Hotel Center account that is linked to the Google Ads customer.
+  record account-link {
+    account-link-target: option<account-link-target>,
+    /// Required for CREATE requests. The value representing the Google Ads customer ID in the format `customers/{google_ads_customer_id}`. For example: `customers/0123456789`. Note that the `googleAdsCustomerName` field is not returned in responses to GET requests.
+    google-ads-customer-name: option<string>,
+    /// The resource name for the account link in the format `accounts/{account_id}/accountLinks/{account_link_id}`.
+    name: option<string>,
+    /// The current status of the account link.
+    status: option<account-link-status-enum>
+  }
+
   /// Defines whether all properties or a subset of properties in the Hotel Center account can be managed with the linked Google Ads account. If a subset, the specific properties are specified.
   record account-link-target {
     /// True if all properties under the Hotel Center account are made available to the account link. The default is `false`.
@@ -69,7 +531,360 @@ interface accounts {
     partner-hotel-ids: option<list<string>>
   }
 
+  /// Response message for BrandService.ListBrands.
+  record list-brands-response {
+    /// A list of all brands associated with the Hotel Center account being queried.
+    brands: option<list<brand>>
+  }
+
+  /// Response message for HotelViewService.ListHotelViews.
+  record list-hotel-views-response {
+    /// The list of rows that match the query.
+    hotel-views: option<list<hotel-view>>,
+    /// Pagination token used to retrieve the next page of results.
+    next-page-token: option<string>
+  }
+
+  /// A hotel view.
+  record hotel-view {
+    /// The type and severity of each data quality issue in the feed. If your feed contains data issues, update the feed and resubmit it. For more information, refer to this article.
+    data-issue-detail: option<list<data-issue-detail>>,
+    /// DEPRECATED. Indicates that the hotel has data quality issues. The value of this field indicates the type of error. This has been replaced with the data_issue_detail field. If your feed contains data issues, update the feed and resubmit it. For more information, refer to this article.
+    data-issues: option<list<data-issue-detail-data-issue-type-enum>>,
+    /// The Google Maps identifier for the hotel.
+    google-cluster-id: option<string>,
+    /// Google's hotel name.
+    google-hotel-display-name: option<string>,
+    /// Google's canonical ID for the hotel.
+    google-hotel-id: option<string>,
+    /// Optional. Whether the hotel appears in Google's hotel booking links. Declaration & behavior to get detection of presence/absence in JSON conversion.
+    live-on-google: option<bool>,
+    /// Current matching status of the hotel.
+    match-status: option<hotel-view-match-status-enum>,
+    /// Other hotels with which the hotel is overclustered. If your feed contains overclustered hotels, update the feed and resubmit it. To do this, you can use the manual match tool.
+    overclustered-partner-hotel-ids: option<list<string>>,
+    /// Partner's hotel name.
+    partner-hotel-display-name: option<string>,
+    /// The unique ID of the hotel that the partner provides in their Hotel List Feed.
+    partner-hotel-id: option<string>,
+    /// The primary hotel in the overclustered set.
+    primary-overclustered-partner-hotel-id: option<string>,
+    /// Optional. A URL to the property on Google. Only available for properties that are listed.
+    property-details: option<string>
+  }
+
+  /// Details on a data issue in the listing.
+  record data-issue-detail {
+    /// The severity of the data issue.
+    data-issue-severity: option<data-issue-detail-data-issue-severity-enum>,
+    /// The type of the data issue.
+    data-issue-type: option<data-issue-detail-data-issue-type-enum>,
+    /// Whether or not the issue is self-resolving. If true, the issue is expected to resolve itself. If false or not set, action is needed to resolve the issue. Refer to documentation on the data issue’s type for further information.
+    is-self-resolving: option<bool>
+  }
+
+  /// Response message for HotelViewService.SummarizeHotelViews.
+  record summarize-hotel-views-response {
+    /// Timestamp of the last hotel feed submission.
+    last-feed-submission-time: option<string>,
+    /// Timestamp of the last hotel manifest update.
+    last-manifest-update-time: option<string>,
+    /// The number of properties that are Live on Google.
+    live-on-google-property-count: option<string>,
+    /// The number of properties that match Google's manifest.
+    matched-property-count: option<string>,
+    /// The number of hotels that are considered overclustered.
+    overclustered-property-count: option<string>,
+    /// The number of overclustered properties that have data-related errors.
+    overclustered-property-with-errors-count: option<string>,
+    /// The number of properties that are considered unmatched.
+    unmatched-property-count: option<string>,
+    /// The number of unmatched properties that have data-related errors.
+    unmatched-property-with-errors-count: option<string>
+  }
+
+  /// Response message for IconService.ListIcons.
+  record list-icons-response {
+    /// A list of all icons associated with the queried partner account.
+    icons: option<list<icon>>
+  }
+
+  /// Information about a partner's icon.
+  record icon {
+    /// Output only. The icon's disapproval reason(s). Only applies to icons with `REJECTED` state.
+    disapproval-reasons: option<list<brand-icon-disapproval-reasons-item-enum>>,
+    /// Output only. The approved icon's Google-hosted URI. Only applies to icons with `APPROVED` state.
+    icon-uri: option<string>,
+    /// Required. Input only. The icon contents, which must be in PNG format, or convertible to PNG.
+    image-data: option<string>,
+    /// Required. Output only. The resource name for the icon in the format `accounts/{account_id}/icons/{icon_id}`. Google generates the `icon_id` during the `create` operation. Use the `icon_id` to associate the icon with a brand using the [accounts.brands](/hotels/hotel-prices/api-reference/rest/v3/accounts.brands#resource:-brand) API.
+    name: option<string>,
+    /// Optional. Value for tracking the icon. It could be the primary key to your icon in your system, or the icon's filename. Google does not use this value.
+    reference: option<string>,
+    /// Output only. The icon's current state.
+    state: option<icon-state-enum>
+  }
+
+  /// Response message for VRPartnerListingVerificationService.VerifyPartnerListings.
+  record verify-listings-response {
+    parsed-listing: option<parsed-listing>
+  }
+
+  /// A parsed listing
+  record parsed-listing {
+    /// If not empty, it indicates that this listing belongs to a brand of the feed.
+    brand: option<string>,
+    /// The partner provided category (accommodation type) of the property.
+    category: option<list<localized-text>>,
+    /// Data issues about this listing
+    data-issue-detail: option<list<data-issue-detail>>,
+    /// Description of the property.
+    description: option<list<localized-text>>,
+    /// Images associated with this listing, localized.
+    image: option<list<image>>,
+    /// Represents the accuracy of the location. The listing can be anywhere within the defined circular area.
+    imprecision-radius-meters: option<s32>,
+    /// Whether the listing can be served based on non image data alone.
+    is-served: option<bool>,
+    /// List of localized names.
+    listing-name: option<list<localized-text>>,
+    location: option<lat-lng>,
+    /// The list id on partner lec feed, provided by partner.
+    partner-list-id: option<string>,
+    /// The country code where the listing is located.
+    region-code: option<string>,
+    /// Reviews associated with this listing. Each review proto has a single language attached to it.
+    review: option<list<review>>,
+    /// VR List attribute.
+    unit-attributes: option<parsed-listing-unit-attributes>
+  }
+
+  /// A single image in a VR Listing. Title and gallery URL are stored per locale. NEXT ID: 4
+  record image {
+    /// URL that is deeplink to the image in a gallery (or a webpage).
+    gallery-uri: option<list<localized-text>>,
+    /// Title of the image.
+    title: option<list<localized-text>>,
+    /// URL that points to the binary image content directly.
+    uri: option<string>
+  }
+
+  /// An object that represents a latitude/longitude pair. This is expressed as a pair of doubles to represent degrees latitude and degrees longitude. Unless specified otherwise, this object must conform to the WGS84 standard. Values must be within normalized ranges.
+  record lat-lng {
+    /// The latitude in degrees. It must be in the range [-90.0, +90.0].
+    latitude: option<f64>,
+    /// The longitude in degrees. It must be in the range [-180.0, +180.0].
+    longitude: option<f64>
+  }
+
+  /// A single review in a VR Listing. NEXT ID: 10
+  record review {
+    /// The author of the review.
+    author: option<string>,
+    /// The body of the review.
+    body: option<string>,
+    /// Language of the review, such as "en", "de", etc.
+    language-code: option<string>,
+    /// The url of the review.
+    link: option<string>,
+    /// Any ratings associated with this review. This is repeated because reviews can include ratings on different aspects of a listing, e.g. location, cleanliness, etc.
+    rating: option<list<rating>>,
+    /// Unix timestamp (in seconds) of the review, in UTC+0.
+    review-time: option<string>,
+    /// The title of the review, for example: Great three bedrooms.
+    title: option<string>,
+    /// The type of the review.
+    type-op: option<review-type-op-enum>,
+    /// Unix timestamp (in seconds) of when the stay was, in UTC+0.
+    visit-time: option<string>
+  }
+
+  /// A rating within a vacation rentals Listing. NEXT ID: 4
+  record rating {
+    /// Maximum rating possible.
+    rating-scale: option<s32>,
+    /// The rating score. (e.g. 8.5)
+    score: option<f64>,
+    /// The type of the rating.
+    type-op: option<rating-type-op-enum>
+  }
+
+  /// VR List attribute.
+  record parsed-listing-unit-attributes {
+    /// JSON-encoded free-form object payload
+    data: option<string>
+  }
+
+  /// Response message for PriceAccuracyViewService.ListPriceAccuracyViews.
+  record list-price-accuracy-views-response {
+    /// The list of rows that match the query.
+    price-accuracy-views: option<list<price-accuracy-view>>
+  }
+
+  /// A price accuracy view. Covers the price accuracy reports functionality in pre-v3.0 API versions. For more information, refer to [Price Accuracy report](https://support.google.com/hotelprices/answer/6318506).
+  record price-accuracy-view {
+    /// Resource name should be in the format `accounts/{account_id}/priceAccuracyViews/{report_date}`.
+    name: option<string>,
+    /// The list of rows that match the query.
+    results: option<list<price-accuracy-row>>
+  }
+
+  /// A price accuracy row.
+  record price-accuracy-row {
+    /// The number of adults in the occupancy details of the validation query.
+    adult-occupancy: option<s32>,
+    /// True if this row affects the placement of a price. This field has been renamed to “Affects placement” in Hotel Center.
+    affects-score: option<bool>,
+    cached-price-record: option<price-record>,
+    checkin-date: option<date>,
+    /// The number of children in the occupancy details of the validation query.
+    child-occupancy: option<s32>,
+    /// Time at which an incorrect price is updated to a correct price.
+    correction-time: option<string>,
+    /// The user's device type.
+    device-type: option<free-booking-links-result-device-type-enum>,
+    fetched-price-record: option<price-record>,
+    /// The domain of the final page from which prices are read.
+    final-domain: option<string>,
+    /// Partner-defined hotel ID.
+    hotel: option<string>,
+    /// The country of the hotel (based on address).
+    hotel-country-code: option<string>,
+    /// Length of stay.
+    length-of-stay-days: option<s32>,
+    /// The reason why the fetched price didn't match the cached price.
+    mismatch-reason: option<price-accuracy-row-mismatch-reason-enum>,
+    /// The rate rule of the advertised price for non-public rates.
+    rate-rule-id: option<string>,
+    /// Source of the price accuracy signal.
+    signal-source: option<price-accuracy-row-signal-source-enum>,
+    /// Initial URL visited on the partner website.
+    url: option<string>,
+    /// The user's region.
+    user-region-code: option<string>
+  }
+
+  /// A price record.
+  record price-record {
+    /// Base price.
+    base-price: option<f64>,
+    /// ISO 4217 currency code.
+    currency-code: option<string>,
+    /// Taxes and fees.
+    taxes-and-fees: option<f64>,
+    /// Timestamp of this price record.
+    time: option<string>
+  }
+
+  /// Response message for PriceAccuracyViewService.SummarizePriceAccuracy.
+  record summarize-price-accuracy-response {
+    /// The current Book on Google price accuracy score.
+    current-book-on-google-score: option<summarize-price-accuracy-response-current-book-on-google-score-enum>,
+    /// The current price accuracy score combining both website and Book on Google scores.
+    current-overall-score: option<summarize-price-accuracy-response-current-book-on-google-score-enum>,
+    /// The current price accuracy score. Contains the same value as `current_website_score`. For clarity, use either `current_website_score` or 'current_overall_score` depending upon which is needed.
+    current-score: option<summarize-price-accuracy-response-current-book-on-google-score-enum>,
+    /// The current website price accuracy score.
+    current-website-score: option<summarize-price-accuracy-response-current-book-on-google-score-enum>,
+    /// The predicted Book on Google price accuracy score.
+    predicted-book-on-google-score: option<summarize-price-accuracy-response-current-book-on-google-score-enum>,
+    /// The predicted price accuracy score combining both website and Book on Google scores.
+    predicted-overall-score: option<summarize-price-accuracy-response-current-book-on-google-score-enum>,
+    /// The predicted price accuracy score. Contains the same value as `predicted_website_score`. For clarity, use either `predicted_website_score` or 'predicted_overall_score` depending upon which is needed.
+    predicted-score: option<summarize-price-accuracy-response-current-book-on-google-score-enum>,
+    /// The predicted website price accuracy score.
+    predicted-website-score: option<summarize-price-accuracy-response-current-book-on-google-score-enum>,
+    /// The update timestamp for the current score.
+    update-time: option<string>
+  }
+
+  /// Response message for PriceCoverageViewService.ListPriceCoverageViews.
+  record list-price-coverage-views-response {
+    /// Hotel price coverage stats.
+    price-coverage-views: option<list<price-coverage-view>>
+  }
+
+  /// A price coverage view. Covers the `price_coverage_stats` Scorecard functionality in pre-v3.0 API versions. For more information, refer to Price Coverage for Push and Hint partners.
+  record price-coverage-view {
+    calculation-date: option<date>,
+    /// The total number of properties that have prices for the given itineraries.
+    matched-property-count: option<s32>,
+    /// The ratio between the number of hotels which have at least one price for the calculation period and `matched_property_count`.
+    price-coverage-binary-percent: option<f64>,
+    /// Price coverage stats for combinations of advance booking window and length of stay ranges.
+    price-coverage-buckets: option<list<price-coverage-bucket>>,
+    /// The overall price coverage for an account. This value is the ratio between the number of hotel prices for the calculation booking window and length of stay range divided by the number of all possible prices, which is `matched_property_count` times 330 (for advance book window) times 30 (for length of stay).
+    price-coverage-percent: option<f64>
+  }
+
+  /// Coverage stats for one combination of advance booking window and length of stay.
+  record price-coverage-bucket {
+    /// Advance booking window range.
+    advance-booking-window-range: option<price-coverage-bucket-advance-booking-window-range-enum>,
+    /// Number of prices for this advance booking window bucket and length of stay bucket.
+    available-price-count: option<string>,
+    /// Length of stay range.
+    length-of-stay-range: option<price-coverage-bucket-length-of-stay-range-enum>,
+    /// The percent of itineraries for which you have coverage for this advance booking window bucket and length of stay bucket.
+    price-coverage-percent: option<f64>
+  }
+
+  /// Response message for ReconciliationReportService.ListReconciliationReports.
+  record list-reconciliation-reports-response {
+    /// The list of names of reconciliation reports. Note that the `contents` and `fileName` fields of each `ReconciliationReport` object are not returned by this call.
+    reconciliation-reports: option<list<reconciliation-report>>
+  }
+
+  /// Response message for ReconciliationReportService.CreateReconciliationReport.
+  record create-reconciliation-report-response {
+    /// Issues that were encountered when validating the file.
+    issues: option<list<reconciliation-report-validation-issue>>,
+    reconciliation-report: option<reconciliation-report>,
+    /// The number of commission records that were successfully saved.
+    successful-record-count: option<s32>
+  }
+
+  /// Represents an issue encountered when validating a reconciliation report.
+  record reconciliation-report-validation-issue {
+    /// Text description of the issue, typically including what was seen and why it was invalid.
+    description: option<string>,
+    /// Name of the invalid field. If no field name is given, this issue applies to the whole line (or file).
+    field-name: option<string>,
+    /// The line number on which the issue was detected. If this field is 0, the issue applies to the whole file.
+    line-num: option<s32>
+  }
+
+  /// Response message for ReconciliationReportService.ValidateReconciliationReport.
+  record validate-reconciliation-report-response {
+    /// Issues that were encountered when validating the file.
+    issues: option<list<reconciliation-report-validation-issue>>,
+    /// The number of commission records that were successfully validated.
+    successful-record-count: option<s32>
+  }
+
   record travelpartner-accounts-hotels-set-live-on-google-params {
+    /// V1 error format.
+    xgafv: option<travelpartner-accounts-hotels-set-live-on-google-xgafv-enum>,
+    /// OAuth access token.
+    access-token: option<string>,
+    /// Data format for response.
+    alt: option<travelpartner-accounts-hotels-set-live-on-google-alt-enum>,
+    /// JSONP
+    callback: option<string>,
+    /// Selector specifying which fields to include in a partial response.
+    fields: option<string>,
+    /// API key. Your API key identifies your project and provides you with API access, quota, and reports. Required unless you provide an OAuth 2.0 token.
+    key: option<string>,
+    /// OAuth 2.0 token for the current user.
+    oauth-token: option<string>,
+    /// Returns response with indentations and line breaks.
+    pretty-print: option<bool>,
+    /// Available to use for quota purposes for server-side applications. Can be any arbitrary string assigned to a user, but should not exceed 40 characters.
+    quota-user: option<string>,
+    /// Upload protocol for media (e.g. "raw", "multipart").
+    upload-protocol: option<string>,
+    /// Legacy upload protocol for media (e.g. "media", "multipart").
+    upload-type: option<string>,
     /// Required. The resource name of the account. The format is accounts/{account_id}.
     account: string,
     /// Required. Whether the property will show on Google. When true, Google will show the properties if their integration is complete and the property is available. When false, Google will never show the properties.
@@ -77,9 +892,31 @@ interface accounts {
     /// Required. Identifies the properties to update with the liveOnGoogle setting.
     partner-hotel-ids: option<list<string>>
   }
-  travelpartner-accounts-hotels-set-live-on-google: func(params: travelpartner-accounts-hotels-set-live-on-google-params) -> result<string, string>;
+  travelpartner-accounts-hotels-set-live-on-google: func(params: travelpartner-accounts-hotels-set-live-on-google-params) -> result<set-live-on-google-response, string>;
 
   record travelpartner-accounts-reconciliation-reports-get-params {
+    /// V1 error format.
+    xgafv: option<travelpartner-accounts-hotels-set-live-on-google-xgafv-enum>,
+    /// OAuth access token.
+    access-token: option<string>,
+    /// Data format for response.
+    alt: option<travelpartner-accounts-hotels-set-live-on-google-alt-enum>,
+    /// JSONP
+    callback: option<string>,
+    /// Selector specifying which fields to include in a partial response.
+    fields: option<string>,
+    /// API key. Your API key identifies your project and provides you with API access, quota, and reports. Required unless you provide an OAuth 2.0 token.
+    key: option<string>,
+    /// OAuth 2.0 token for the current user.
+    oauth-token: option<string>,
+    /// Returns response with indentations and line breaks.
+    pretty-print: option<bool>,
+    /// Available to use for quota purposes for server-side applications. Can be any arbitrary string assigned to a user, but should not exceed 40 characters.
+    quota-user: option<string>,
+    /// Upload protocol for media (e.g. "raw", "multipart").
+    upload-protocol: option<string>,
+    /// Legacy upload protocol for media (e.g. "media", "multipart").
+    upload-type: option<string>,
     /// The resource name of the reconciliation report to fetch. The format is `accounts/{account_id}/reconciliationReports/{datetime}~{filename}`.
     name: string,
     /// Set to true if matched prices are to be added into the report.
@@ -89,9 +926,31 @@ interface accounts {
     /// Set to true if pixel signals are to be added into the report.
     include-pixels: option<bool>
   }
-  travelpartner-accounts-reconciliation-reports-get: func(params: travelpartner-accounts-reconciliation-reports-get-params) -> result<string, string>;
+  travelpartner-accounts-reconciliation-reports-get: func(params: travelpartner-accounts-reconciliation-reports-get-params) -> result<reconciliation-report, string>;
 
   record travelpartner-accounts-brands-patch-params {
+    /// V1 error format.
+    xgafv: option<travelpartner-accounts-hotels-set-live-on-google-xgafv-enum>,
+    /// OAuth access token.
+    access-token: option<string>,
+    /// Data format for response.
+    alt: option<travelpartner-accounts-hotels-set-live-on-google-alt-enum>,
+    /// JSONP
+    callback: option<string>,
+    /// Selector specifying which fields to include in a partial response.
+    fields: option<string>,
+    /// API key. Your API key identifies your project and provides you with API access, quota, and reports. Required unless you provide an OAuth 2.0 token.
+    key: option<string>,
+    /// OAuth 2.0 token for the current user.
+    oauth-token: option<string>,
+    /// Returns response with indentations and line breaks.
+    pretty-print: option<bool>,
+    /// Available to use for quota purposes for server-side applications. Can be any arbitrary string assigned to a user, but should not exceed 40 characters.
+    quota-user: option<string>,
+    /// Upload protocol for media (e.g. "raw", "multipart").
+    upload-protocol: option<string>,
+    /// Legacy upload protocol for media (e.g. "media", "multipart").
+    upload-type: option<string>,
     /// Output only. The resource name for the brand in the format `accounts/{account_id}/brands/{brand_id}`. The `brand_id` corresponds to the partner's brand identifier used for landing page matching and the property-level brand identifier. A default brand is applied to properties that do not have a brand. The `brand_id` of the default brand is `NO_BRAND_ID`. It can be fetched and updated like any configured brand.
     name: string,
     /// When true, and the Brand is not found, a new Brand will be created. In this situation, `update_mask` is ignored.
@@ -116,6 +975,8 @@ interface accounts {
     icon-disapproval-reasons: option<list<brand-icon-disapproval-reasons-item-enum>>,
     /// Output only. The brand's icon's review state. If there are both submitted and active icons, this refers to the submitted icon.
     icon-state: option<brand-display-name-state-enum>,
+    /// Output only. The resource name for the brand in the format `accounts/{account_id}/brands/{brand_id}`. The `brand_id` corresponds to the partner's brand identifier used for landing page matching and the property-level brand identifier. A default brand is applied to properties that do not have a brand. The `brand_id` of the default brand is `NO_BRAND_ID`. It can be fetched and updated like any configured brand.
+    name-v2: option<string>,
     /// Output only. The number of properties with the corresponding brand ID.
     property-count: option<string>,
     /// Output only. The brand's submitted display names in all provided languages, only present if the display name is new or rejected for any language.
@@ -123,15 +984,59 @@ interface accounts {
     /// Output only. The brand's submitted [accounts.icon](/hotels/hotel-prices/api-reference/rest/v3/accounts.icons#resource:-iconresource). The value refers to the icons's resource name in the format `accounts/{account_id}/icons/{icon_id}`. A submitted icon is one that is new or rejected.
     submitted-icon: option<string>
   }
-  travelpartner-accounts-brands-patch: func(params: travelpartner-accounts-brands-patch-params) -> result<string, string>;
+  travelpartner-accounts-brands-patch: func(params: travelpartner-accounts-brands-patch-params) -> result<brand, string>;
 
   record travelpartner-accounts-account-links-delete-params {
+    /// V1 error format.
+    xgafv: option<travelpartner-accounts-hotels-set-live-on-google-xgafv-enum>,
+    /// OAuth access token.
+    access-token: option<string>,
+    /// Data format for response.
+    alt: option<travelpartner-accounts-hotels-set-live-on-google-alt-enum>,
+    /// JSONP
+    callback: option<string>,
+    /// Selector specifying which fields to include in a partial response.
+    fields: option<string>,
+    /// API key. Your API key identifies your project and provides you with API access, quota, and reports. Required unless you provide an OAuth 2.0 token.
+    key: option<string>,
+    /// OAuth 2.0 token for the current user.
+    oauth-token: option<string>,
+    /// Returns response with indentations and line breaks.
+    pretty-print: option<bool>,
+    /// Available to use for quota purposes for server-side applications. Can be any arbitrary string assigned to a user, but should not exceed 40 characters.
+    quota-user: option<string>,
+    /// Upload protocol for media (e.g. "raw", "multipart").
+    upload-protocol: option<string>,
+    /// Legacy upload protocol for media (e.g. "media", "multipart").
+    upload-type: option<string>,
     /// Required. The resource name of the account link being deleted. The format is `accounts/{account_id}/accountLinks/{account_link_id}`.
     name: string
   }
-  travelpartner-accounts-account-links-delete: func(params: travelpartner-accounts-account-links-delete-params) -> result<string, string>;
+  travelpartner-accounts-account-links-delete: func(params: travelpartner-accounts-account-links-delete-params) -> result<empty, string>;
 
   record travelpartner-accounts-free-booking-links-report-views-query-params {
+    /// V1 error format.
+    xgafv: option<travelpartner-accounts-hotels-set-live-on-google-xgafv-enum>,
+    /// OAuth access token.
+    access-token: option<string>,
+    /// Data format for response.
+    alt: option<travelpartner-accounts-hotels-set-live-on-google-alt-enum>,
+    /// JSONP
+    callback: option<string>,
+    /// Selector specifying which fields to include in a partial response.
+    fields: option<string>,
+    /// API key. Your API key identifies your project and provides you with API access, quota, and reports. Required unless you provide an OAuth 2.0 token.
+    key: option<string>,
+    /// OAuth 2.0 token for the current user.
+    oauth-token: option<string>,
+    /// Returns response with indentations and line breaks.
+    pretty-print: option<bool>,
+    /// Available to use for quota purposes for server-side applications. Can be any arbitrary string assigned to a user, but should not exceed 40 characters.
+    quota-user: option<string>,
+    /// Upload protocol for media (e.g. "raw", "multipart").
+    upload-protocol: option<string>,
+    /// Legacy upload protocol for media (e.g. "media", "multipart").
+    upload-type: option<string>,
     /// The resource name of the account being queried. Format: accounts/{account_id}
     name: string,
     /// Specifies how to segment the metrics returned by the query. For example, if `userRegionCode` is specified, the `freeBookingLinksResult` will provide metrics aggregated by user region. The string value is a comma-separated list of fields. Valid fields are: `date`, `userRegionCode`, `deviceType`, `partnerHotelId`, and `partnerHotelDisplayName`. Only fields specified here are included in the FreeBookingLinksResult.
@@ -143,9 +1048,31 @@ interface accounts {
     /// A page token, received from a previous QueryParticipationReport request. Provide this to receive the subsequent page. When paginating, all other parameters provided to QueryParticipationReport must match the call that provided the page token.
     page-token: option<string>
   }
-  travelpartner-accounts-free-booking-links-report-views-query: func(params: travelpartner-accounts-free-booking-links-report-views-query-params) -> result<string, string>;
+  travelpartner-accounts-free-booking-links-report-views-query: func(params: travelpartner-accounts-free-booking-links-report-views-query-params) -> result<query-free-booking-links-report-response, string>;
 
   record travelpartner-accounts-participation-report-views-query-params {
+    /// V1 error format.
+    xgafv: option<travelpartner-accounts-hotels-set-live-on-google-xgafv-enum>,
+    /// OAuth access token.
+    access-token: option<string>,
+    /// Data format for response.
+    alt: option<travelpartner-accounts-hotels-set-live-on-google-alt-enum>,
+    /// JSONP
+    callback: option<string>,
+    /// Selector specifying which fields to include in a partial response.
+    fields: option<string>,
+    /// API key. Your API key identifies your project and provides you with API access, quota, and reports. Required unless you provide an OAuth 2.0 token.
+    key: option<string>,
+    /// OAuth 2.0 token for the current user.
+    oauth-token: option<string>,
+    /// Returns response with indentations and line breaks.
+    pretty-print: option<bool>,
+    /// Available to use for quota purposes for server-side applications. Can be any arbitrary string assigned to a user, but should not exceed 40 characters.
+    quota-user: option<string>,
+    /// Upload protocol for media (e.g. "raw", "multipart").
+    upload-protocol: option<string>,
+    /// Legacy upload protocol for media (e.g. "media", "multipart").
+    upload-type: option<string>,
     /// The resource name of the account being queried. The format is `accounts/{account_id}`.
     name: string,
     /// Specifies how to segment the metrics returned by the query. For example, if `userRegionCode` is specified as the `aggregate_by` value, the `participationResult` will provide metrics aggregated by user region. The string value is a comma-separated list of fields. Valid fields are: `date`, `userRegionCode`, `deviceType`, `partnerHotelId`, `hotelRegionCode`, `advanceBookingWindow`, `lengthOfStayDays`, `checkinDate`, and `occupancy`. Fields that are not specified are not included in the ParticipationResult. Using an `aggregateBy` specification that produces a large number of rows will cause an error. This is especially true when aggregating by `partnerHotelId` or more than two fields. To reduce the possibiliy of an error, filter by `partnerHotelId` and `date` to only include a select number of hotels and dates. Accounts with a large number of hotels will need to further reduce data with more filtering.
@@ -157,9 +1084,31 @@ interface accounts {
     /// A page token, received from a previous QueryParticipationReport request. Provide this to receive the subsequent page. When paginating, all other parameters provided to QueryParticipationReport must match the call that provided the page token.
     page-token: option<string>
   }
-  travelpartner-accounts-participation-report-views-query: func(params: travelpartner-accounts-participation-report-views-query-params) -> result<string, string>;
+  travelpartner-accounts-participation-report-views-query: func(params: travelpartner-accounts-participation-report-views-query-params) -> result<query-participation-report-response, string>;
 
   record travelpartner-accounts-property-performance-report-views-query-params {
+    /// V1 error format.
+    xgafv: option<travelpartner-accounts-hotels-set-live-on-google-xgafv-enum>,
+    /// OAuth access token.
+    access-token: option<string>,
+    /// Data format for response.
+    alt: option<travelpartner-accounts-hotels-set-live-on-google-alt-enum>,
+    /// JSONP
+    callback: option<string>,
+    /// Selector specifying which fields to include in a partial response.
+    fields: option<string>,
+    /// API key. Your API key identifies your project and provides you with API access, quota, and reports. Required unless you provide an OAuth 2.0 token.
+    key: option<string>,
+    /// OAuth 2.0 token for the current user.
+    oauth-token: option<string>,
+    /// Returns response with indentations and line breaks.
+    pretty-print: option<bool>,
+    /// Available to use for quota purposes for server-side applications. Can be any arbitrary string assigned to a user, but should not exceed 40 characters.
+    quota-user: option<string>,
+    /// Upload protocol for media (e.g. "raw", "multipart").
+    upload-protocol: option<string>,
+    /// Legacy upload protocol for media (e.g. "media", "multipart").
+    upload-type: option<string>,
     /// The resource name of the account being queried. Format: accounts/{account_id}
     name: string,
     /// Specifies how to segment the metrics returned by the query. For example, if `userRegionCode` is specified, the `PropertyPerformanceResult` will provide metrics aggregated by user region. The string value is a comma-separated list of fields. Valid fields are: `advanceBookingWindow`, `brand`, `date`, `deviceType`, `highIntentUsers`, `lengthOfStay`, `propertyRegionCode`, `occupancy`, `partnerPropertyId`, `partnerPropertyDisplayName`, and `userRegionCode`. Only fields specified here are included in the PropertyPerformanceResult.
@@ -171,15 +1120,59 @@ interface accounts {
     /// A page token, received from a previous QueryParticipationReport request. Provide this to receive the subsequent page. When paginating, all other parameters provided to QueryParticipationReport must match the call that provided the page token.
     page-token: option<string>
   }
-  travelpartner-accounts-property-performance-report-views-query: func(params: travelpartner-accounts-property-performance-report-views-query-params) -> result<string, string>;
+  travelpartner-accounts-property-performance-report-views-query: func(params: travelpartner-accounts-property-performance-report-views-query-params) -> result<query-property-performance-report-response, string>;
 
   record travelpartner-accounts-account-links-list-params {
+    /// V1 error format.
+    xgafv: option<travelpartner-accounts-hotels-set-live-on-google-xgafv-enum>,
+    /// OAuth access token.
+    access-token: option<string>,
+    /// Data format for response.
+    alt: option<travelpartner-accounts-hotels-set-live-on-google-alt-enum>,
+    /// JSONP
+    callback: option<string>,
+    /// Selector specifying which fields to include in a partial response.
+    fields: option<string>,
+    /// API key. Your API key identifies your project and provides you with API access, quota, and reports. Required unless you provide an OAuth 2.0 token.
+    key: option<string>,
+    /// OAuth 2.0 token for the current user.
+    oauth-token: option<string>,
+    /// Returns response with indentations and line breaks.
+    pretty-print: option<bool>,
+    /// Available to use for quota purposes for server-side applications. Can be any arbitrary string assigned to a user, but should not exceed 40 characters.
+    quota-user: option<string>,
+    /// Upload protocol for media (e.g. "raw", "multipart").
+    upload-protocol: option<string>,
+    /// Legacy upload protocol for media (e.g. "media", "multipart").
+    upload-type: option<string>,
     /// The resource name of the account being queried. The format is `accounts/{account_id}`.
     parent: string
   }
-  travelpartner-accounts-account-links-list: func(params: travelpartner-accounts-account-links-list-params) -> result<string, string>;
+  travelpartner-accounts-account-links-list: func(params: travelpartner-accounts-account-links-list-params) -> result<list-account-links-response, string>;
 
   record travelpartner-accounts-account-links-create-params {
+    /// V1 error format.
+    xgafv: option<travelpartner-accounts-hotels-set-live-on-google-xgafv-enum>,
+    /// OAuth access token.
+    access-token: option<string>,
+    /// Data format for response.
+    alt: option<travelpartner-accounts-hotels-set-live-on-google-alt-enum>,
+    /// JSONP
+    callback: option<string>,
+    /// Selector specifying which fields to include in a partial response.
+    fields: option<string>,
+    /// API key. Your API key identifies your project and provides you with API access, quota, and reports. Required unless you provide an OAuth 2.0 token.
+    key: option<string>,
+    /// OAuth 2.0 token for the current user.
+    oauth-token: option<string>,
+    /// Returns response with indentations and line breaks.
+    pretty-print: option<bool>,
+    /// Available to use for quota purposes for server-side applications. Can be any arbitrary string assigned to a user, but should not exceed 40 characters.
+    quota-user: option<string>,
+    /// Upload protocol for media (e.g. "raw", "multipart").
+    upload-protocol: option<string>,
+    /// Legacy upload protocol for media (e.g. "media", "multipart").
+    upload-type: option<string>,
     /// The resource name of the Hotel Center account being queried. The format is `accounts/{account_id}`.
     parent: string,
     account-link-target: option<account-link-target>,
@@ -190,15 +1183,59 @@ interface accounts {
     /// The current status of the account link.
     status: option<account-link-status-enum>
   }
-  travelpartner-accounts-account-links-create: func(params: travelpartner-accounts-account-links-create-params) -> result<string, string>;
+  travelpartner-accounts-account-links-create: func(params: travelpartner-accounts-account-links-create-params) -> result<account-link, string>;
 
   record travelpartner-accounts-brands-list-params {
+    /// V1 error format.
+    xgafv: option<travelpartner-accounts-hotels-set-live-on-google-xgafv-enum>,
+    /// OAuth access token.
+    access-token: option<string>,
+    /// Data format for response.
+    alt: option<travelpartner-accounts-hotels-set-live-on-google-alt-enum>,
+    /// JSONP
+    callback: option<string>,
+    /// Selector specifying which fields to include in a partial response.
+    fields: option<string>,
+    /// API key. Your API key identifies your project and provides you with API access, quota, and reports. Required unless you provide an OAuth 2.0 token.
+    key: option<string>,
+    /// OAuth 2.0 token for the current user.
+    oauth-token: option<string>,
+    /// Returns response with indentations and line breaks.
+    pretty-print: option<bool>,
+    /// Available to use for quota purposes for server-side applications. Can be any arbitrary string assigned to a user, but should not exceed 40 characters.
+    quota-user: option<string>,
+    /// Upload protocol for media (e.g. "raw", "multipart").
+    upload-protocol: option<string>,
+    /// Legacy upload protocol for media (e.g. "media", "multipart").
+    upload-type: option<string>,
     /// Required. The resource name of the account being queried. The format is `accounts/{account_id}`.
     parent: string
   }
-  travelpartner-accounts-brands-list: func(params: travelpartner-accounts-brands-list-params) -> result<string, string>;
+  travelpartner-accounts-brands-list: func(params: travelpartner-accounts-brands-list-params) -> result<list-brands-response, string>;
 
   record travelpartner-accounts-brands-create-params {
+    /// V1 error format.
+    xgafv: option<travelpartner-accounts-hotels-set-live-on-google-xgafv-enum>,
+    /// OAuth access token.
+    access-token: option<string>,
+    /// Data format for response.
+    alt: option<travelpartner-accounts-hotels-set-live-on-google-alt-enum>,
+    /// JSONP
+    callback: option<string>,
+    /// Selector specifying which fields to include in a partial response.
+    fields: option<string>,
+    /// API key. Your API key identifies your project and provides you with API access, quota, and reports. Required unless you provide an OAuth 2.0 token.
+    key: option<string>,
+    /// OAuth 2.0 token for the current user.
+    oauth-token: option<string>,
+    /// Returns response with indentations and line breaks.
+    pretty-print: option<bool>,
+    /// Available to use for quota purposes for server-side applications. Can be any arbitrary string assigned to a user, but should not exceed 40 characters.
+    quota-user: option<string>,
+    /// Upload protocol for media (e.g. "raw", "multipart").
+    upload-protocol: option<string>,
+    /// Legacy upload protocol for media (e.g. "media", "multipart").
+    upload-type: option<string>,
     /// Required. The resource name of the Hotel Center account being queried. The format is `accounts/{account_id}`.
     parent: string,
     /// Required. The partner-determined brand identifier.
@@ -230,9 +1267,31 @@ interface accounts {
     /// Output only. The brand's submitted [accounts.icon](/hotels/hotel-prices/api-reference/rest/v3/accounts.icons#resource:-iconresource). The value refers to the icons's resource name in the format `accounts/{account_id}/icons/{icon_id}`. A submitted icon is one that is new or rejected.
     submitted-icon: option<string>
   }
-  travelpartner-accounts-brands-create: func(params: travelpartner-accounts-brands-create-params) -> result<string, string>;
+  travelpartner-accounts-brands-create: func(params: travelpartner-accounts-brands-create-params) -> result<brand, string>;
 
   record travelpartner-accounts-hotel-views-list-params {
+    /// V1 error format.
+    xgafv: option<travelpartner-accounts-hotels-set-live-on-google-xgafv-enum>,
+    /// OAuth access token.
+    access-token: option<string>,
+    /// Data format for response.
+    alt: option<travelpartner-accounts-hotels-set-live-on-google-alt-enum>,
+    /// JSONP
+    callback: option<string>,
+    /// Selector specifying which fields to include in a partial response.
+    fields: option<string>,
+    /// API key. Your API key identifies your project and provides you with API access, quota, and reports. Required unless you provide an OAuth 2.0 token.
+    key: option<string>,
+    /// OAuth 2.0 token for the current user.
+    oauth-token: option<string>,
+    /// Returns response with indentations and line breaks.
+    pretty-print: option<bool>,
+    /// Available to use for quota purposes for server-side applications. Can be any arbitrary string assigned to a user, but should not exceed 40 characters.
+    quota-user: option<string>,
+    /// Upload protocol for media (e.g. "raw", "multipart").
+    upload-protocol: option<string>,
+    /// Legacy upload protocol for media (e.g. "media", "multipart").
+    upload-type: option<string>,
     /// The resource name of the account being queried. The format is `accounts/{account_id}`.
     parent: string,
     /// Optional. The conditions (fields and expressions) used to filter HotelViews. The syntax requires spaces surrounding the `in` operator. Otherwise, spaces can be omitted. Conditions cannot be joined. The `hotelId` field can be used to select specific hotels. The `liveOnGoogle` field can select properties that Google shows, or properties that are omitted in google search results. The `matchStatus` field can be used to filter the list of HotelViews returned for the account. Examples of valid conditions and their syntax are as follows: * `hotelId = 'hotel_ABC'` * `hotelId in ('hotel_ABC', 'hotel_XYZ')` * `liveOnGoogle = 'TRUE'` * `liveOnGoogle = 'FALSE'` * `matchStatus = 'NOT_MATCHED'` * `matchStatus in ('NOT_MATCHED', 'MATCHED', 'MAP_OVERLAP')`
@@ -242,21 +1301,87 @@ interface accounts {
     /// Token of the page to retrieve.
     page-token: option<string>
   }
-  travelpartner-accounts-hotel-views-list: func(params: travelpartner-accounts-hotel-views-list-params) -> result<string, string>;
+  travelpartner-accounts-hotel-views-list: func(params: travelpartner-accounts-hotel-views-list-params) -> result<list-hotel-views-response, string>;
 
   record travelpartner-accounts-hotel-views-summarize-params {
+    /// V1 error format.
+    xgafv: option<travelpartner-accounts-hotels-set-live-on-google-xgafv-enum>,
+    /// OAuth access token.
+    access-token: option<string>,
+    /// Data format for response.
+    alt: option<travelpartner-accounts-hotels-set-live-on-google-alt-enum>,
+    /// JSONP
+    callback: option<string>,
+    /// Selector specifying which fields to include in a partial response.
+    fields: option<string>,
+    /// API key. Your API key identifies your project and provides you with API access, quota, and reports. Required unless you provide an OAuth 2.0 token.
+    key: option<string>,
+    /// OAuth 2.0 token for the current user.
+    oauth-token: option<string>,
+    /// Returns response with indentations and line breaks.
+    pretty-print: option<bool>,
+    /// Available to use for quota purposes for server-side applications. Can be any arbitrary string assigned to a user, but should not exceed 40 characters.
+    quota-user: option<string>,
+    /// Upload protocol for media (e.g. "raw", "multipart").
+    upload-protocol: option<string>,
+    /// Legacy upload protocol for media (e.g. "media", "multipart").
+    upload-type: option<string>,
     /// The resource name of the account being queried. The format is `accounts/{account_id}`.
     parent: string
   }
-  travelpartner-accounts-hotel-views-summarize: func(params: travelpartner-accounts-hotel-views-summarize-params) -> result<string, string>;
+  travelpartner-accounts-hotel-views-summarize: func(params: travelpartner-accounts-hotel-views-summarize-params) -> result<summarize-hotel-views-response, string>;
 
   record travelpartner-accounts-icons-list-params {
+    /// V1 error format.
+    xgafv: option<travelpartner-accounts-hotels-set-live-on-google-xgafv-enum>,
+    /// OAuth access token.
+    access-token: option<string>,
+    /// Data format for response.
+    alt: option<travelpartner-accounts-hotels-set-live-on-google-alt-enum>,
+    /// JSONP
+    callback: option<string>,
+    /// Selector specifying which fields to include in a partial response.
+    fields: option<string>,
+    /// API key. Your API key identifies your project and provides you with API access, quota, and reports. Required unless you provide an OAuth 2.0 token.
+    key: option<string>,
+    /// OAuth 2.0 token for the current user.
+    oauth-token: option<string>,
+    /// Returns response with indentations and line breaks.
+    pretty-print: option<bool>,
+    /// Available to use for quota purposes for server-side applications. Can be any arbitrary string assigned to a user, but should not exceed 40 characters.
+    quota-user: option<string>,
+    /// Upload protocol for media (e.g. "raw", "multipart").
+    upload-protocol: option<string>,
+    /// Legacy upload protocol for media (e.g. "media", "multipart").
+    upload-type: option<string>,
     /// Required. The resource name of the queried partner account. The format is `accounts/{account_id}`.
     parent: string
   }
-  travelpartner-accounts-icons-list: func(params: travelpartner-accounts-icons-list-params) -> result<string, string>;
+  travelpartner-accounts-icons-list: func(params: travelpartner-accounts-icons-list-params) -> result<list-icons-response, string>;
 
   record travelpartner-accounts-icons-create-params {
+    /// V1 error format.
+    xgafv: option<travelpartner-accounts-hotels-set-live-on-google-xgafv-enum>,
+    /// OAuth access token.
+    access-token: option<string>,
+    /// Data format for response.
+    alt: option<travelpartner-accounts-hotels-set-live-on-google-alt-enum>,
+    /// JSONP
+    callback: option<string>,
+    /// Selector specifying which fields to include in a partial response.
+    fields: option<string>,
+    /// API key. Your API key identifies your project and provides you with API access, quota, and reports. Required unless you provide an OAuth 2.0 token.
+    key: option<string>,
+    /// OAuth 2.0 token for the current user.
+    oauth-token: option<string>,
+    /// Returns response with indentations and line breaks.
+    pretty-print: option<bool>,
+    /// Available to use for quota purposes for server-side applications. Can be any arbitrary string assigned to a user, but should not exceed 40 characters.
+    quota-user: option<string>,
+    /// Upload protocol for media (e.g. "raw", "multipart").
+    upload-protocol: option<string>,
+    /// Legacy upload protocol for media (e.g. "media", "multipart").
+    upload-type: option<string>,
     /// Required. The resource name of the partner account owning the icon. The format is `accounts/{account_id}`.
     parent: string,
     /// Output only. The icon's disapproval reason(s). Only applies to icons with `REJECTED` state.
@@ -272,41 +1397,173 @@ interface accounts {
     /// Output only. The icon's current state.
     state: option<icon-state-enum>
   }
-  travelpartner-accounts-icons-create: func(params: travelpartner-accounts-icons-create-params) -> result<string, string>;
+  travelpartner-accounts-icons-create: func(params: travelpartner-accounts-icons-create-params) -> result<icon, string>;
 
   record travelpartner-accounts-listings-verify-params {
+    /// V1 error format.
+    xgafv: option<travelpartner-accounts-hotels-set-live-on-google-xgafv-enum>,
+    /// OAuth access token.
+    access-token: option<string>,
+    /// Data format for response.
+    alt: option<travelpartner-accounts-hotels-set-live-on-google-alt-enum>,
+    /// JSONP
+    callback: option<string>,
+    /// Selector specifying which fields to include in a partial response.
+    fields: option<string>,
+    /// API key. Your API key identifies your project and provides you with API access, quota, and reports. Required unless you provide an OAuth 2.0 token.
+    key: option<string>,
+    /// OAuth 2.0 token for the current user.
+    oauth-token: option<string>,
+    /// Returns response with indentations and line breaks.
+    pretty-print: option<bool>,
+    /// Available to use for quota purposes for server-side applications. Can be any arbitrary string assigned to a user, but should not exceed 40 characters.
+    quota-user: option<string>,
+    /// Upload protocol for media (e.g. "raw", "multipart").
+    upload-protocol: option<string>,
+    /// Legacy upload protocol for media (e.g. "media", "multipart").
+    upload-type: option<string>,
     /// The resource name of the account being queried. The format is `accounts/{account_id}`.
     parent: string,
     /// A listing that follows the XML format specified in https://developers.google.com/hotels/hotel-prices/xml-reference/hotel-list-feed.
     xml-listing: option<string>
   }
-  travelpartner-accounts-listings-verify: func(params: travelpartner-accounts-listings-verify-params) -> result<string, string>;
+  travelpartner-accounts-listings-verify: func(params: travelpartner-accounts-listings-verify-params) -> result<verify-listings-response, string>;
 
   record travelpartner-accounts-price-accuracy-views-list-params {
+    /// V1 error format.
+    xgafv: option<travelpartner-accounts-hotels-set-live-on-google-xgafv-enum>,
+    /// OAuth access token.
+    access-token: option<string>,
+    /// Data format for response.
+    alt: option<travelpartner-accounts-hotels-set-live-on-google-alt-enum>,
+    /// JSONP
+    callback: option<string>,
+    /// Selector specifying which fields to include in a partial response.
+    fields: option<string>,
+    /// API key. Your API key identifies your project and provides you with API access, quota, and reports. Required unless you provide an OAuth 2.0 token.
+    key: option<string>,
+    /// OAuth 2.0 token for the current user.
+    oauth-token: option<string>,
+    /// Returns response with indentations and line breaks.
+    pretty-print: option<bool>,
+    /// Available to use for quota purposes for server-side applications. Can be any arbitrary string assigned to a user, but should not exceed 40 characters.
+    quota-user: option<string>,
+    /// Upload protocol for media (e.g. "raw", "multipart").
+    upload-protocol: option<string>,
+    /// Legacy upload protocol for media (e.g. "media", "multipart").
+    upload-type: option<string>,
     /// The resource name of the account being queried. The format is `accounts/{account_id}`.
     parent: string
   }
-  travelpartner-accounts-price-accuracy-views-list: func(params: travelpartner-accounts-price-accuracy-views-list-params) -> result<string, string>;
+  travelpartner-accounts-price-accuracy-views-list: func(params: travelpartner-accounts-price-accuracy-views-list-params) -> result<list-price-accuracy-views-response, string>;
 
   record travelpartner-accounts-price-accuracy-views-summarize-params {
+    /// V1 error format.
+    xgafv: option<travelpartner-accounts-hotels-set-live-on-google-xgafv-enum>,
+    /// OAuth access token.
+    access-token: option<string>,
+    /// Data format for response.
+    alt: option<travelpartner-accounts-hotels-set-live-on-google-alt-enum>,
+    /// JSONP
+    callback: option<string>,
+    /// Selector specifying which fields to include in a partial response.
+    fields: option<string>,
+    /// API key. Your API key identifies your project and provides you with API access, quota, and reports. Required unless you provide an OAuth 2.0 token.
+    key: option<string>,
+    /// OAuth 2.0 token for the current user.
+    oauth-token: option<string>,
+    /// Returns response with indentations and line breaks.
+    pretty-print: option<bool>,
+    /// Available to use for quota purposes for server-side applications. Can be any arbitrary string assigned to a user, but should not exceed 40 characters.
+    quota-user: option<string>,
+    /// Upload protocol for media (e.g. "raw", "multipart").
+    upload-protocol: option<string>,
+    /// Legacy upload protocol for media (e.g. "media", "multipart").
+    upload-type: option<string>,
     /// The resource name of the account that is being queried. The format is `accounts/{account_id}`.
     parent: string
   }
-  travelpartner-accounts-price-accuracy-views-summarize: func(params: travelpartner-accounts-price-accuracy-views-summarize-params) -> result<string, string>;
+  travelpartner-accounts-price-accuracy-views-summarize: func(params: travelpartner-accounts-price-accuracy-views-summarize-params) -> result<summarize-price-accuracy-response, string>;
 
   record travelpartner-accounts-price-coverage-views-list-params {
+    /// V1 error format.
+    xgafv: option<travelpartner-accounts-hotels-set-live-on-google-xgafv-enum>,
+    /// OAuth access token.
+    access-token: option<string>,
+    /// Data format for response.
+    alt: option<travelpartner-accounts-hotels-set-live-on-google-alt-enum>,
+    /// JSONP
+    callback: option<string>,
+    /// Selector specifying which fields to include in a partial response.
+    fields: option<string>,
+    /// API key. Your API key identifies your project and provides you with API access, quota, and reports. Required unless you provide an OAuth 2.0 token.
+    key: option<string>,
+    /// OAuth 2.0 token for the current user.
+    oauth-token: option<string>,
+    /// Returns response with indentations and line breaks.
+    pretty-print: option<bool>,
+    /// Available to use for quota purposes for server-side applications. Can be any arbitrary string assigned to a user, but should not exceed 40 characters.
+    quota-user: option<string>,
+    /// Upload protocol for media (e.g. "raw", "multipart").
+    upload-protocol: option<string>,
+    /// Legacy upload protocol for media (e.g. "media", "multipart").
+    upload-type: option<string>,
     /// The resource name of the account being queried. The format is `accounts/{account_id}`.
     parent: string
   }
-  travelpartner-accounts-price-coverage-views-list: func(params: travelpartner-accounts-price-coverage-views-list-params) -> result<string, string>;
+  travelpartner-accounts-price-coverage-views-list: func(params: travelpartner-accounts-price-coverage-views-list-params) -> result<list-price-coverage-views-response, string>;
 
   record travelpartner-accounts-price-coverage-views-get-latest-params {
+    /// V1 error format.
+    xgafv: option<travelpartner-accounts-hotels-set-live-on-google-xgafv-enum>,
+    /// OAuth access token.
+    access-token: option<string>,
+    /// Data format for response.
+    alt: option<travelpartner-accounts-hotels-set-live-on-google-alt-enum>,
+    /// JSONP
+    callback: option<string>,
+    /// Selector specifying which fields to include in a partial response.
+    fields: option<string>,
+    /// API key. Your API key identifies your project and provides you with API access, quota, and reports. Required unless you provide an OAuth 2.0 token.
+    key: option<string>,
+    /// OAuth 2.0 token for the current user.
+    oauth-token: option<string>,
+    /// Returns response with indentations and line breaks.
+    pretty-print: option<bool>,
+    /// Available to use for quota purposes for server-side applications. Can be any arbitrary string assigned to a user, but should not exceed 40 characters.
+    quota-user: option<string>,
+    /// Upload protocol for media (e.g. "raw", "multipart").
+    upload-protocol: option<string>,
+    /// Legacy upload protocol for media (e.g. "media", "multipart").
+    upload-type: option<string>,
     /// The resource name of the account being queried. The format is `accounts/{account_id}`.
     parent: string
   }
-  travelpartner-accounts-price-coverage-views-get-latest: func(params: travelpartner-accounts-price-coverage-views-get-latest-params) -> result<string, string>;
+  travelpartner-accounts-price-coverage-views-get-latest: func(params: travelpartner-accounts-price-coverage-views-get-latest-params) -> result<price-coverage-view, string>;
 
   record travelpartner-accounts-reconciliation-reports-list-params {
+    /// V1 error format.
+    xgafv: option<travelpartner-accounts-hotels-set-live-on-google-xgafv-enum>,
+    /// OAuth access token.
+    access-token: option<string>,
+    /// Data format for response.
+    alt: option<travelpartner-accounts-hotels-set-live-on-google-alt-enum>,
+    /// JSONP
+    callback: option<string>,
+    /// Selector specifying which fields to include in a partial response.
+    fields: option<string>,
+    /// API key. Your API key identifies your project and provides you with API access, quota, and reports. Required unless you provide an OAuth 2.0 token.
+    key: option<string>,
+    /// OAuth 2.0 token for the current user.
+    oauth-token: option<string>,
+    /// Returns response with indentations and line breaks.
+    pretty-print: option<bool>,
+    /// Available to use for quota purposes for server-side applications. Can be any arbitrary string assigned to a user, but should not exceed 40 characters.
+    quota-user: option<string>,
+    /// Upload protocol for media (e.g. "raw", "multipart").
+    upload-protocol: option<string>,
+    /// Legacy upload protocol for media (e.g. "media", "multipart").
+    upload-type: option<string>,
     /// The resource name of the account being queried. The format is `accounts/{account_id}`.
     parent: string,
     /// End of date range to fetch files for. Format is yyyy-mm-dd[THH[:MM[:SS]]]. If empty, reports until the end of time are fetched.
@@ -314,9 +1571,31 @@ interface accounts {
     /// Beginning of date range to fetch files for. Format is yyyy-MM-dd[THH[:mm[:SS]]]. If empty, reports from the beginning of time onwards are fetched.
     start-date: option<string>
   }
-  travelpartner-accounts-reconciliation-reports-list: func(params: travelpartner-accounts-reconciliation-reports-list-params) -> result<string, string>;
+  travelpartner-accounts-reconciliation-reports-list: func(params: travelpartner-accounts-reconciliation-reports-list-params) -> result<list-reconciliation-reports-response, string>;
 
   record travelpartner-accounts-reconciliation-reports-create-params {
+    /// V1 error format.
+    xgafv: option<travelpartner-accounts-hotels-set-live-on-google-xgafv-enum>,
+    /// OAuth access token.
+    access-token: option<string>,
+    /// Data format for response.
+    alt: option<travelpartner-accounts-hotels-set-live-on-google-alt-enum>,
+    /// JSONP
+    callback: option<string>,
+    /// Selector specifying which fields to include in a partial response.
+    fields: option<string>,
+    /// API key. Your API key identifies your project and provides you with API access, quota, and reports. Required unless you provide an OAuth 2.0 token.
+    key: option<string>,
+    /// OAuth 2.0 token for the current user.
+    oauth-token: option<string>,
+    /// Returns response with indentations and line breaks.
+    pretty-print: option<bool>,
+    /// Available to use for quota purposes for server-side applications. Can be any arbitrary string assigned to a user, but should not exceed 40 characters.
+    quota-user: option<string>,
+    /// Upload protocol for media (e.g. "raw", "multipart").
+    upload-protocol: option<string>,
+    /// Legacy upload protocol for media (e.g. "media", "multipart").
+    upload-type: option<string>,
     /// The resource name of the account being queried. The format is `accounts/{account_id}`.
     parent: string,
     /// Required. The contents of the commission report. Report contents must conform to the requirements specified in [Reconciliation reports] (//support.google.com/hotelprices/answer/7019060#creating).
@@ -326,9 +1605,31 @@ interface accounts {
     /// Resource name in the format `accounts/{account_id}/reconciliationReports/{datetime}~{filename}`. The value for `{datetime}` must be from 0001-01-01T00:00:00 to 9999-12-31T23:59:59 inclusive.
     name: option<string>
   }
-  travelpartner-accounts-reconciliation-reports-create: func(params: travelpartner-accounts-reconciliation-reports-create-params) -> result<string, string>;
+  travelpartner-accounts-reconciliation-reports-create: func(params: travelpartner-accounts-reconciliation-reports-create-params) -> result<create-reconciliation-report-response, string>;
 
   record travelpartner-accounts-reconciliation-reports-validate-params {
+    /// V1 error format.
+    xgafv: option<travelpartner-accounts-hotels-set-live-on-google-xgafv-enum>,
+    /// OAuth access token.
+    access-token: option<string>,
+    /// Data format for response.
+    alt: option<travelpartner-accounts-hotels-set-live-on-google-alt-enum>,
+    /// JSONP
+    callback: option<string>,
+    /// Selector specifying which fields to include in a partial response.
+    fields: option<string>,
+    /// API key. Your API key identifies your project and provides you with API access, quota, and reports. Required unless you provide an OAuth 2.0 token.
+    key: option<string>,
+    /// OAuth 2.0 token for the current user.
+    oauth-token: option<string>,
+    /// Returns response with indentations and line breaks.
+    pretty-print: option<bool>,
+    /// Available to use for quota purposes for server-side applications. Can be any arbitrary string assigned to a user, but should not exceed 40 characters.
+    quota-user: option<string>,
+    /// Upload protocol for media (e.g. "raw", "multipart").
+    upload-protocol: option<string>,
+    /// Legacy upload protocol for media (e.g. "media", "multipart").
+    upload-type: option<string>,
     /// The resource name of the account being queried. The format is `accounts/{account_id}`.
     parent: string,
     /// Required. The contents of the commission report. Report contents must conform to the requirements specified in [Reconciliation reports] (//support.google.com/hotelprices/answer/7019060#creating).
@@ -338,7 +1639,7 @@ interface accounts {
     /// Resource name in the format `accounts/{account_id}/reconciliationReports/{datetime}~{filename}`. The value for `{datetime}` must be from 0001-01-01T00:00:00 to 9999-12-31T23:59:59 inclusive.
     name: option<string>
   }
-  travelpartner-accounts-reconciliation-reports-validate: func(params: travelpartner-accounts-reconciliation-reports-validate-params) -> result<string, string>;
+  travelpartner-accounts-reconciliation-reports-validate: func(params: travelpartner-accounts-reconciliation-reports-validate-params) -> result<validate-reconciliation-report-response, string>;
 
 }
 

@@ -6,9 +6,27 @@
 /// | Secret name | Applied to each request as |
 /// | --- | --- |
 /// | `jwtAuth` | `Authorization: Bearer <secret>` |
-package autostamp:nordigen@0.3.0;
+package autostamp:nordigen@0.5.0;
 
 interface premium {
+  /// Unspecified response body
+  record retrieve-account-transactions-v2-response {
+    /// JSON-encoded free-form object payload
+    data: option<string>
+  }
+
+  variant retrieve-account-transactions-v2-error {
+    bad-request(string),
+    unauthorized(string),
+    forbidden(string),
+    not-found(string),
+    conflict(string),
+    too-many-requests(string),
+    internal-server-error(string),
+    service-unavailable(string),
+    other(string)
+  }
+
   record retrieve-account-transactions-v2-params {
     /// ISO 3166 two-character country code
     country: option<string>,
@@ -16,44 +34,198 @@ interface premium {
     date-to: option<string>,
     id: string
   }
-  retrieve-account-transactions-v2: func(params: retrieve-account-transactions-v2-params) -> result<string, string>;
+  retrieve-account-transactions-v2: func(params: retrieve-account-transactions-v2-params) -> result<retrieve-account-transactions-v2-response, retrieve-account-transactions-v2-error>;
 
 }
 
 
 interface accounts {
+  /// The representation of a bank account.
+  record account {
+    /// The date & time at which the account object was created.
+    created: option<string>,
+    /// The Account IBAN
+    iban: option<string>,
+    /// The ID of this Account, used to refer to this account in other API calls.
+    id: option<string>,
+    /// The ASPSP associated with this account.
+    institution-id: option<string>,
+    /// The date & time at which the account object was last accessed.
+    last-accessed: option<string>,
+    /// The name of the account owner.
+    owner-name: option<string>,
+    /// The processing status of this account.
+    status: option<account-status-enum>
+  }
+
+  record account-status-enum {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  /// Unspecified response body
+  record retrieve-account-balances-v2-response {
+    /// JSON-encoded free-form object payload
+    data: option<string>
+  }
+
+  /// Unspecified response body
+  record retrieve-account-details-v2-response {
+    /// JSON-encoded free-form object payload
+    data: option<string>
+  }
+
+  /// Unspecified response body
+  record retrieve-account-transactions-v2-v2-response {
+    /// JSON-encoded free-form object payload
+    data: option<string>
+  }
+
+  variant retrieve-account-metadata-error {
+    unauthorized(string),
+    forbidden(string),
+    not-found(string),
+    too-many-requests(string),
+    other(string)
+  }
+
+  variant retrieve-account-balances-v2-error {
+    bad-request(string),
+    unauthorized(string),
+    forbidden(string),
+    not-found(string),
+    conflict(string),
+    too-many-requests(string),
+    internal-server-error(string),
+    service-unavailable(string),
+    other(string)
+  }
+
+  variant retrieve-account-details-v2-error {
+    bad-request(string),
+    unauthorized(string),
+    forbidden(string),
+    not-found(string),
+    conflict(string),
+    too-many-requests(string),
+    internal-server-error(string),
+    service-unavailable(string),
+    other(string)
+  }
+
+  variant retrieve-account-transactions-v2-v2-error {
+    bad-request(string),
+    unauthorized(string),
+    forbidden(string),
+    not-found(string),
+    conflict(string),
+    too-many-requests(string),
+    internal-server-error(string),
+    service-unavailable(string),
+    other(string)
+  }
+
   record retrieve-account-metadata-params {
     id: string
   }
-  retrieve-account-metadata: func(params: retrieve-account-metadata-params) -> result<string, string>;
+  retrieve-account-metadata: func(params: retrieve-account-metadata-params) -> result<account, retrieve-account-metadata-error>;
 
   record retrieve-account-balances-v2-params {
     id: string
   }
-  retrieve-account-balances-v2: func(params: retrieve-account-balances-v2-params) -> result<string, string>;
+  retrieve-account-balances-v2: func(params: retrieve-account-balances-v2-params) -> result<retrieve-account-balances-v2-response, retrieve-account-balances-v2-error>;
 
   record retrieve-account-details-v2-params {
     id: string
   }
-  retrieve-account-details-v2: func(params: retrieve-account-details-v2-params) -> result<string, string>;
+  retrieve-account-details-v2: func(params: retrieve-account-details-v2-params) -> result<retrieve-account-details-v2-response, retrieve-account-details-v2-error>;
 
   record retrieve-account-transactions-v2-v2-params {
     date-from: option<string>,
     date-to: option<string>,
     id: string
   }
-  retrieve-account-transactions-v2-v2: func(params: retrieve-account-transactions-v2-v2-params) -> result<string, string>;
+  retrieve-account-transactions-v2-v2: func(params: retrieve-account-transactions-v2-v2-params) -> result<retrieve-account-transactions-v2-v2-response, retrieve-account-transactions-v2-v2-error>;
 
 }
 
 interface agreements {
+  record paginated-end-user-agreement-list {
+    count: option<s32>,
+    next: option<string>,
+    previous: option<string>,
+    results: option<list<end-user-agreement>>
+  }
+
+  /// Represents an end-user agreement.
+  record end-user-agreement {
+    /// The date & time at which the end user accepted the agreement.
+    accepted: option<string>,
+    /// Array containing one or several values of ['balances', 'details', 'transactions']
+    access-scope: option<list<list<string>>>,
+    /// Number of days from acceptance that the access can be used.
+    access-valid-for-days: option<s32>,
+    /// The date & time at which the end user agreement was created.
+    created: option<string>,
+    /// The ID of this End User Agreement, used to refer to this end user agreement in other API calls.
+    id: option<string>,
+    /// an Institution ID for this EUA
+    institution-id: string,
+    /// Maximum number of days of transaction data to retrieve.
+    max-historical-days: option<s32>
+  }
+
+  variant retrieve-all-eu-as-for-an-end-user-v2-error {
+    unauthorized(string),
+    forbidden(string),
+    not-found(string),
+    too-many-requests(string),
+    other(string)
+  }
+
+  variant create-eua-v2-error {
+    bad-request(string),
+    unauthorized(string),
+    forbidden(string),
+    too-many-requests(string),
+    other(string)
+  }
+
+  variant retrieve-eua-by-id-v2-error {
+    bad-request(string),
+    unauthorized(string),
+    forbidden(string),
+    not-found(string),
+    too-many-requests(string),
+    other(string)
+  }
+
+  variant delete-eua-by-id-v2-error {
+    bad-request(string),
+    unauthorized(string),
+    forbidden(string),
+    not-found(string),
+    too-many-requests(string),
+    other(string)
+  }
+
+  variant accept-eua-error {
+    bad-request(string),
+    unauthorized(string),
+    forbidden(string),
+    not-found(string),
+    method-not-allowed(string),
+    too-many-requests(string),
+    other(string)
+  }
+
   record retrieve-all-eu-as-for-an-end-user-v2-params {
     /// Number of results to return per page.
     limit: option<s32>,
     /// The initial index from which to return the results.
     offset: option<s32>
   }
-  retrieve-all-eu-as-for-an-end-user-v2: func(params: retrieve-all-eu-as-for-an-end-user-v2-params) -> result<string, string>;
+  retrieve-all-eu-as-for-an-end-user-v2: func(params: retrieve-all-eu-as-for-an-end-user-v2-params) -> result<paginated-end-user-agreement-list, retrieve-all-eu-as-for-an-end-user-v2-error>;
 
   record create-eua-v2-params {
     /// Array containing one or several values of ['balances', 'details', 'transactions']
@@ -65,19 +237,19 @@ interface agreements {
     /// Maximum number of days of transaction data to retrieve.
     max-historical-days: option<s32>
   }
-  create-eua-v2: func(params: create-eua-v2-params) -> result<string, string>;
+  create-eua-v2: func(params: create-eua-v2-params) -> result<end-user-agreement, create-eua-v2-error>;
 
   record retrieve-eua-by-id-v2-params {
     /// A UUID string identifying this end user agreement.
     id: string
   }
-  retrieve-eua-by-id-v2: func(params: retrieve-eua-by-id-v2-params) -> result<string, string>;
+  retrieve-eua-by-id-v2: func(params: retrieve-eua-by-id-v2-params) -> result<end-user-agreement, retrieve-eua-by-id-v2-error>;
 
   record delete-eua-by-id-v2-params {
     /// A UUID string identifying this end user agreement.
     id: string
   }
-  delete-eua-by-id-v2: func(params: delete-eua-by-id-v2-params) -> result<string, string>;
+  delete-eua-by-id-v2: func(params: delete-eua-by-id-v2-params) -> result<string, delete-eua-by-id-v2-error>;
 
   record accept-eua-params {
     /// A UUID string identifying this end user agreement.
@@ -85,36 +257,130 @@ interface agreements {
     ip-address: string,
     user-agent: string
   }
-  accept-eua: func(params: accept-eua-params) -> result<string, string>;
+  accept-eua: func(params: accept-eua-params) -> result<end-user-agreement, accept-eua-error>;
 
 }
 
 interface institutions {
+  /// Represents an Integration.
+  record integration {
+    bic: option<string>,
+    countries: list<string>,
+    id: string,
+    logo: string,
+    name: string,
+    transaction-total-days: option<string>
+  }
+
+  /// IntegrationSerializer for Retrieve endpoint.
+  record integration-retrieve {
+    bic: option<string>,
+    countries: list<string>,
+    id: string,
+    logo: string,
+    name: string,
+    supported-features: list<string>,
+    supported-payments: integration-retrieve-supported-payments,
+    transaction-total-days: option<string>
+  }
+
+  record integration-retrieve-supported-payments {
+    /// JSON-encoded free-form object payload
+    data: option<string>
+  }
+
+  variant retrieve-all-supported-institutions-in-a-given-country-error {
+    bad-request(string),
+    unauthorized(string),
+    forbidden(string),
+    not-found(string),
+    too-many-requests(string),
+    other(string)
+  }
+
+  variant retrieve-institution-error {
+    unauthorized(string),
+    forbidden(string),
+    not-found(string),
+    too-many-requests(string),
+    other(string)
+  }
+
   record retrieve-all-supported-institutions-in-a-given-country-params {
     /// ISO 3166 two-character country code
     country: option<string>,
     /// Boolean value, indicating if payments are enabled
     payments-enabled: option<string>
   }
-  retrieve-all-supported-institutions-in-a-given-country: func(params: retrieve-all-supported-institutions-in-a-given-country-params) -> result<string, string>;
+  retrieve-all-supported-institutions-in-a-given-country: func(params: retrieve-all-supported-institutions-in-a-given-country-params) -> result<list<integration>, retrieve-all-supported-institutions-in-a-given-country-error>;
 
   record retrieve-institution-params {
     id: string
   }
-  retrieve-institution: func(params: retrieve-institution-params) -> result<string, string>;
+  retrieve-institution: func(params: retrieve-institution-params) -> result<integration-retrieve, retrieve-institution-error>;
 
 }
 
 interface payments {
-  /// Periodic Payment Serializer.
-  record periodic-payment-request {
-    day-of-execution: option<string>,
-    end-date: option<string>,
-    /// Behavior when periodic payment dates fall on holiday.
+  record paginated-payment-read-list {
+    count: option<s32>,
+    next: option<string>,
+    previous: option<string>,
+    results: option<list<payment-read>>
+  }
+
+  /// PaymentReadSerializer.
+  record payment-read {
+    /// Registered creditor account
+    creditor-account: option<string>,
+    /// Creditor account
+    creditor-object: option<creditor-account-write>,
+    /// Payment Custom Payment ID
+    custom-payment-id: option<string>,
+    debtor-account: debtor-account-write,
+    /// Payment description
+    description: option<string>,
+    /// Instructed amount
+    instructed-amount: instructed-amount,
+    /// Payment ID
+    payment-id: option<string>,
+    /// Payment product
     /// 
-    execution-rule: option<string>,
-    frequency: option<string>,
-    start-date: string
+    payment-product: option<payment-product-enum>,
+    /// Payment end to end identification
+    /// 
+    payment-status: option<payment-status-enum>,
+    /// Payment Type
+    /// 
+    payment-type: option<payment-type-enum>,
+    /// Redirect URL to your application after payment is done
+    redirect: string
+  }
+
+  /// Creditor account write serializer.
+  record creditor-account-write {
+    /// Creditor account type identifier
+    account: string,
+    address-country: option<address-country-enum>,
+    /// Creditor account address street
+    address-street: option<string>,
+    /// Creditor account BICFI Identifier
+    agent: option<string>,
+    /// Creditor account agent name
+    agent-name: option<string>,
+    /// Creditor account currency
+    currency: string,
+    /// Unique entry ID
+    id: option<string>,
+    /// an Institution ID for this CreditorAccount
+    institution-id: option<string>,
+    /// Creditor account name
+    name: string,
+    /// Creditor account address post code
+    post-code: option<string>,
+    /// Creditor account type
+    /// 
+    type-op: option<type-enum>
   }
 
   /// * `AT` - Austria
@@ -154,6 +420,111 @@ interface payments {
     value: string
   }
 
+  /// * `IBAN` - IBAN
+  /// * `SCAN` - SortCodeAccountNumber
+  record type-enum {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  /// Debtor account write serializer.
+  record debtor-account-write {
+    /// Debtor account type identifier
+    account: option<string>,
+    /// Debtor account address country
+    address-country: option<string>,
+    /// Debtor account address street
+    address-street: option<string>,
+    /// Debtor account currency
+    currency: option<string>,
+    /// Debtor account name
+    name: string,
+    /// Debtor account post code
+    post-code: option<string>,
+    /// Debtor account type
+    /// 
+    type-op: option<type-enum>,
+    /// Debtor account type identifier
+    type-number: option<string>
+  }
+
+  /// InstructedAmountSerializer.
+  record instructed-amount {
+    /// Instructed amount
+    amount: string,
+    /// Instructed amount currency
+    currency: string
+  }
+
+  /// * `T2P` - target-2-payments
+  /// * `SCT` - sepa-credit-transfers
+  /// * `ISCT` - instant-sepa-credit-transfer
+  /// * `CBCT` - cross-border-credit-transfers
+  /// * `BACS` - Back Payment Scheme
+  /// * `CHAPS` - CHAPS Payment Scheme
+  /// * `FPS` - Faster Payment Scheme
+  /// * `SWIFT` - Swift Payment Service
+  /// * `BT` - Balance Transfer
+  /// * `MT` - Money Transfer
+  record payment-product-enum {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  /// * `INIT` - Initiated. Payment has been initiated.
+  /// * `ERRE` - ExecutionError. We experienced error on payment execution.
+  /// * `ERRS` - StatusError. We experienced error retrieving payment status. Try again.
+  /// * `ACCC` - AcceptedSettlementCompleted. Settlement on the creditor's account has been completed
+  /// * `ACCP` - AcceptedCustomerProfile. Preceding check of technical validation was successful. Customer profile check was successful
+  /// * `ACSC` - AcceptedSettlementCompleted. Settlement on the debtor’s account has been completed
+  /// * `ACSP` - AcceptedSettlementInProcess. All preceding checks such as technical validation and customer profile were successful and therefore the payment initiation has been accepted for execution
+  /// * `ACTC` - AcceptedTechnicalValidation. Authentication and syntactical and semantical validation are successful
+  /// * `ACWC` - AcceptedWithChange. Instruction is accepted but a change will be made, such as date or remittance not sent
+  /// * `ACWP` - AcceptedWithoutPosting. Payment instruction included in the credit transfer is accepted without being posted to the creditor customer’s account
+  /// * `RCVD` - Received. Payment initiation has been received by the receiving agent
+  /// * `PDNG` - Pending. Payment initiation or individual transaction included in the payment initiation is pending. Further checks and status update will be performed
+  /// * `RJCT` - Rejected. Payment initiation or individual transaction included in the payment initiation has been rejected.
+  /// * `CANC` - Cancelled. Payment initiation has been cancelled before execution
+  /// * `ACFC` - AcceptedFundsChecked. Pre-ceeding check of technical validation and customer profile was successful and an automatic funds check was positive
+  /// * `PATC` - PartiallyAcceptedTechnicalCorrect. The payment initiation needs multiple authentications, where some but not yet all have been performed
+  /// * `PART` - PartiallyAccepted. A number of transactions have been accepted, whereas another number of transactions have not yet achieved 'accepted' status
+  record payment-status-enum {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  /// * `single-payment` - payment
+  /// * `bulk-payment` - bulk-payments
+  /// * `periodic-payment` - periodic-payments
+  record payment-type-enum {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  /// Creditor account write serializer.
+  record creditor-account-write-request {
+    /// Creditor account type identifier
+    account: string,
+    address-country: option<address-country-enum>,
+    /// Creditor account address street
+    address-street: option<string>,
+    /// Creditor account BICFI Identifier
+    agent: option<string>,
+    /// Creditor account agent name
+    agent-name: option<string>,
+    /// Creditor account currency
+    currency: string,
+    /// an Institution ID for this CreditorAccount
+    institution-id: option<string>,
+    /// Creditor account name
+    name: string,
+    /// Creditor account address post code
+    post-code: option<string>,
+    /// Creditor account type
+    /// 
+    type-op: option<type-enum>
+  }
+
   /// Debtor account write serializer.
   record debtor-account-write-request {
     /// Debtor account type identifier
@@ -170,9 +541,175 @@ interface payments {
     post-code: option<string>,
     /// Debtor account type
     /// 
-    type-op: option<string>,
+    type-op: option<type-enum>,
     /// Debtor account type identifier
     type-number: option<string>
+  }
+
+  /// InstructedAmountSerializer.
+  record instructed-amount-request {
+    /// Instructed amount
+    amount: string,
+    /// Instructed amount currency
+    currency: string
+  }
+
+  /// Periodic Payment Serializer.
+  record periodic-payment-request {
+    day-of-execution: option<string>,
+    end-date: option<string>,
+    /// Behavior when periodic payment dates fall on holiday.
+    /// 
+    execution-rule: option<execution-rule-enum>,
+    frequency: option<frequency-enum>,
+    start-date: string
+  }
+
+  /// * `following` - following
+  /// * `preceding` - preceding
+  record execution-rule-enum {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  /// * `Daily` - Daily
+  /// * `Weekly` - Weekly
+  /// * `EveryTwoWeeks` - EveryTwoWeeks
+  /// * `Monthly` - Monthly
+  /// * `EveryTwoMonths` - EveryTwoMonths
+  /// * `Quarterly` - Quarterly
+  /// * `SemiAnnual` - SemiAnnual
+  /// * `Annual` - Annual
+  /// * `MonthlyVariable` - MonthlyVariable
+  record frequency-enum {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  /// PaymentWriteSerializer.
+  record payment-write {
+    /// Registered creditor account
+    creditor-account: option<string>,
+    /// Creditor account
+    creditor-object: option<creditor-account-write>,
+    /// Payment Custom Payment ID
+    custom-payment-id: option<string>,
+    /// Payment description
+    description: option<string>,
+    /// Instructed amount
+    instructed-amount: instructed-amount,
+    /// Link to initiate authorization with Institution
+    link: option<string>,
+    /// Payment ID
+    payment-id: option<string>,
+    /// Payment product
+    /// 
+    payment-product: option<payment-product-enum>,
+    /// Payment end to end identification
+    /// 
+    payment-status: option<payment-status-enum>,
+    /// Payment Type
+    /// 
+    payment-type: option<payment-type-enum>,
+    periodic-payment: option<periodic-payment>,
+    /// Redirect URL to your application after payment is done
+    redirect: string,
+    /// Payment Execution date (for periodic payments)
+    requested-execution-date: option<string>,
+    /// Indicates whether payment should be submitted separately
+    submit-payment: option<bool>
+  }
+
+  /// Periodic Payment Serializer.
+  record periodic-payment {
+    day-of-execution: option<string>,
+    end-date: option<string>,
+    /// Behavior when periodic payment dates fall on holiday.
+    /// 
+    execution-rule: option<execution-rule-enum>,
+    frequency: option<frequency-enum>,
+    start-date: string
+  }
+
+  /// Creditor account read serializer.
+  record creditor-account {
+    /// Creditor account type identifier
+    account: string,
+    /// Creditor account address country
+    address-country: option<string>,
+    /// Creditor account currency
+    currency: string,
+    /// Unique entry ID
+    id: option<string>,
+    /// Creditor account name
+    name: string,
+    /// Creditor account type
+    /// 
+    type-op: option<type-enum>
+  }
+
+  record paginated-creditor-account-list {
+    count: option<s32>,
+    next: option<string>,
+    previous: option<string>,
+    results: option<list<creditor-account>>
+  }
+
+  /// Unspecified response body
+  record list-minimum-required-fields-for-institution-response {
+    /// JSON-encoded free-form object payload
+    data: option<string>
+  }
+
+  /// Unspecified response body
+  record delete-periodic-payment-response {
+    /// JSON-encoded free-form object payload
+    data: option<string>
+  }
+
+  variant list-payments-error {
+    bad-request(string),
+    unauthorized(string),
+    forbidden(string),
+    other(string)
+  }
+
+  variant create-payment-error {
+    bad-request(string),
+    unauthorized(string),
+    forbidden(string),
+    other(string)
+  }
+
+  variant retrieve-all-payment-creditor-accounts-error {
+    bad-request(string),
+    unauthorized(string),
+    forbidden(string),
+    other(string)
+  }
+
+  variant list-minimum-required-fields-for-institution-error {
+    bad-request(string),
+    unauthorized(string),
+    forbidden(string),
+    other(string)
+  }
+
+  variant retrieve-payment-error {
+    bad-request(string),
+    unauthorized(string),
+    forbidden(string),
+    not-found(string),
+    other(string)
+  }
+
+  variant delete-periodic-payment-error {
+    bad-request(string),
+    unauthorized(string),
+    forbidden(string),
+    not-found(string),
+    conflict(string),
+    other(string)
   }
 
   record list-payments-params {
@@ -181,26 +718,26 @@ interface payments {
     /// The initial index from which to return the results.
     offset: option<s32>
   }
-  list-payments: func(params: list-payments-params) -> result<string, string>;
+  list-payments: func(params: list-payments-params) -> result<paginated-payment-read-list, list-payments-error>;
 
   record create-payment-params {
     /// Registered creditor account
     creditor-account: option<string>,
     /// Creditor account
-    creditor-object: option<string>,
+    creditor-object: option<creditor-account-write-request>,
     /// Payment Custom Payment ID
     custom-payment-id: option<string>,
     /// Debtor account
-    debtor-account: option<string>,
+    debtor-account: option<debtor-account-write-request>,
     /// Payment description
     description: option<string>,
     /// Institution ID for Payment
     institution-id: option<string>,
     /// Instructed amount
-    instructed-amount: string,
+    instructed-amount: instructed-amount-request,
     /// Payment product
     /// 
-    payment-product: option<string>,
+    payment-product: option<payment-product-enum>,
     periodic-payment: option<periodic-payment-request>,
     /// Redirect URL to your application after payment is done
     redirect: string,
@@ -209,9 +746,9 @@ interface payments {
     /// Indicates whether payment should be submitted separately
     submit-payment: option<bool>
   }
-  create-payment: func(params: create-payment-params) -> result<string, string>;
+  create-payment: func(params: create-payment-params) -> result<payment-write, create-payment-error>;
 
-  retrieve-all-payment-creditor-accounts: func() -> result<string, string>;
+  retrieve-all-payment-creditor-accounts: func() -> result<list<creditor-account>, retrieve-all-payment-creditor-accounts-error>;
 
   record creditors-list-params {
     account: option<string>,
@@ -225,7 +762,7 @@ interface payments {
     offset: option<s32>,
     type-op: option<string>
   }
-  creditors-list: func(params: creditors-list-params) -> result<string, string>;
+  creditors-list: func(params: creditors-list-params) -> result<paginated-creditor-account-list, string>;
 
   record creditors-create-params {
     /// Creditor account type identifier
@@ -247,14 +784,14 @@ interface payments {
     post-code: option<string>,
     /// Creditor account type
     /// 
-    type-op: option<string>
+    type-op: option<type-enum>
   }
-  creditors-create: func(params: creditors-create-params) -> result<string, string>;
+  creditors-create: func(params: creditors-create-params) -> result<creditor-account-write, string>;
 
   record creditors-retrieve-params {
     id: string
   }
-  creditors-retrieve: func(params: creditors-retrieve-params) -> result<string, string>;
+  creditors-retrieve: func(params: creditors-retrieve-params) -> result<creditor-account, string>;
 
   record creditors-destroy-params {
     id: string
@@ -264,24 +801,24 @@ interface payments {
   record list-minimum-required-fields-for-institution-params {
     institution-id: string
   }
-  list-minimum-required-fields-for-institution: func(params: list-minimum-required-fields-for-institution-params) -> result<string, string>;
+  list-minimum-required-fields-for-institution: func(params: list-minimum-required-fields-for-institution-params) -> result<list-minimum-required-fields-for-institution-response, list-minimum-required-fields-for-institution-error>;
 
   record retrieve-payment-params {
     id: string
   }
-  retrieve-payment: func(params: retrieve-payment-params) -> result<string, string>;
+  retrieve-payment: func(params: retrieve-payment-params) -> result<payment-read, retrieve-payment-error>;
 
   record delete-periodic-payment-params {
     id: string
   }
-  delete-periodic-payment: func(params: delete-periodic-payment-params) -> result<string, string>;
+  delete-periodic-payment: func(params: delete-periodic-payment-params) -> result<delete-periodic-payment-response, delete-periodic-payment-error>;
 
   record submit-create-params {
     id: string,
     /// Registered creditor account
     creditor-account: option<string>,
     /// Creditor account
-    creditor-object: option<string>,
+    creditor-object: option<creditor-account-write-request>,
     /// Payment Custom Payment ID
     custom-payment-id: option<string>,
     debtor-account: debtor-account-write-request,
@@ -290,25 +827,131 @@ interface payments {
     /// Institution ID for Payment
     institution-id: option<string>,
     /// Instructed amount
-    instructed-amount: string,
+    instructed-amount: instructed-amount-request,
     /// Payment product
     /// 
-    payment-product: option<string>,
+    payment-product: option<payment-product-enum>,
     /// Redirect URL to your application after payment is done
     redirect: string
   }
-  submit-create: func(params: submit-create-params) -> result<string, string>;
+  submit-create: func(params: submit-create-params) -> result<payment-read, string>;
 
 }
 
 interface requisitions {
+  record paginated-requisition-list {
+    count: option<s32>,
+    next: option<string>,
+    previous: option<string>,
+    results: option<list<requisition>>
+  }
+
+  /// RequisitionSerializer.
+  record requisition {
+    /// option to enable account selection view for the end user
+    account-selection: option<bool>,
+    /// array of account IDs retrieved within a scope of this requisition
+    accounts: option<list<string>>,
+    /// EUA associated with this requisition
+    agreement: option<string>,
+    /// The date & time at which the requisition was created.
+    created: option<string>,
+    id: option<string>,
+    /// an Institution ID for this Requisition
+    institution-id: string,
+    /// link to initiate authorization with Institution
+    link: option<string>,
+    /// redirect URL to your application after end-user authorization with ASPSP
+    redirect: string,
+    /// enable redirect back to the client after account list received
+    redirect-immediate: option<bool>,
+    /// additional ID to identify the end user
+    reference: option<string>,
+    /// optional SSN field to verify ownership of the account
+    ssn: option<string>,
+    /// status of this requisition
+    status: option<status1c5-enum>,
+    /// A two-letter country code (ISO 639-1)
+    user-language: option<string>
+  }
+
+  record status1c5-enum {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  /// Create requisition.
+  record spectacular-requisition {
+    /// option to enable account selection view for the end user
+    account-selection: option<bool>,
+    /// array of account IDs retrieved within a scope of this requisition
+    accounts: option<list<string>>,
+    /// EUA associated with this requisition
+    agreement: option<string>,
+    /// The date & time at which the requisition was created.
+    created: option<string>,
+    id: option<string>,
+    /// an Institution ID for this Requisition
+    institution-id: string,
+    /// link to initiate authorization with Institution
+    link: option<string>,
+    /// redirect URL to your application after end-user authorization with ASPSP
+    redirect: string,
+    /// enable redirect back to the client after account list received
+    redirect-immediate: option<bool>,
+    /// additional ID to identify the end user
+    reference: option<string>,
+    /// optional SSN field to verify ownership of the account
+    ssn: option<string>,
+    /// status of this requisition
+    status: option<status1c5-enum>,
+    /// A two-letter country code (ISO 639-1)
+    user-language: option<string>
+  }
+
+  variant retrieve-all-requisitions-error {
+    bad-request(string),
+    unauthorized(string),
+    forbidden(string),
+    not-found(string),
+    too-many-requests(string),
+    other(string)
+  }
+
+  variant requisition-created-error {
+    bad-request(string),
+    unauthorized(string),
+    forbidden(string),
+    not-found(string),
+    too-many-requests(string),
+    other(string)
+  }
+
+  variant requisition-by-id-error {
+    bad-request(string),
+    unauthorized(string),
+    forbidden(string),
+    not-found(string),
+    too-many-requests(string),
+    other(string)
+  }
+
+  variant delete-requisition-by-id-v2-error {
+    bad-request(string),
+    unauthorized(string),
+    forbidden(string),
+    not-found(string),
+    too-many-requests(string),
+    other(string)
+  }
+
   record retrieve-all-requisitions-params {
     /// Number of results to return per page.
     limit: option<s32>,
     /// The initial index from which to return the results.
     offset: option<s32>
   }
-  retrieve-all-requisitions: func(params: retrieve-all-requisitions-params) -> result<string, string>;
+  retrieve-all-requisitions: func(params: retrieve-all-requisitions-params) -> result<paginated-requisition-list, retrieve-all-requisitions-error>;
 
   record requisition-created-params {
     /// option to enable account selection view for the end user
@@ -328,35 +971,69 @@ interface requisitions {
     /// A two-letter country code (ISO 639-1)
     user-language: option<string>
   }
-  requisition-created: func(params: requisition-created-params) -> result<string, string>;
+  requisition-created: func(params: requisition-created-params) -> result<spectacular-requisition, requisition-created-error>;
 
   record requisition-by-id-params {
     /// A UUID string identifying this requisition.
     id: string
   }
-  requisition-by-id: func(params: requisition-by-id-params) -> result<string, string>;
+  requisition-by-id: func(params: requisition-by-id-params) -> result<requisition, requisition-by-id-error>;
 
   record delete-requisition-by-id-v2-params {
     /// A UUID string identifying this requisition.
     id: string
   }
-  delete-requisition-by-id-v2: func(params: delete-requisition-by-id-v2-params) -> result<string, string>;
+  delete-requisition-by-id-v2: func(params: delete-requisition-by-id-v2-params) -> result<string, delete-requisition-by-id-v2-error>;
 
 }
 
 interface token {
+  /// Obtain new JWT pair.
+  record spectacular-jwt-obtain {
+    /// Your access token
+    access: option<string>,
+    /// Access token expires in seconds
+    access-expires: option<s32>,
+    /// Your refresh token
+    refresh: option<string>,
+    /// Refresh token expires in seconds
+    refresh-expires: option<s32>
+  }
+
+  /// Refresh Access token.
+  record spectacular-jwt-refresh {
+    /// Your access token
+    access: option<string>,
+    /// Access token expires in seconds
+    access-expires: option<s32>
+  }
+
+  variant jwt-obtain-error {
+    unauthorized(string),
+    forbidden(string),
+    too-many-requests(string),
+    other(string)
+  }
+
+  variant jwt-refresh-error {
+    unauthorized(string),
+    forbidden(string),
+    too-many-requests(string),
+    other(string)
+  }
+
   record jwt-obtain-params {
     /// Secret id from /user-secrets/
     secret-id: string,
     /// Secret key from /user-secrets/
     secret-key: string
   }
-  jwt-obtain: func(params: jwt-obtain-params) -> result<string, string>;
+  jwt-obtain: func(params: jwt-obtain-params) -> result<spectacular-jwt-obtain, jwt-obtain-error>;
 
   record jwt-refresh-params {
     refresh: string
   }
-  jwt-refresh: func(params: jwt-refresh-params) -> result<string, string>;
+  jwt-refresh: func(params: jwt-refresh-params) -> result<spectacular-jwt-refresh, jwt-refresh-error>;
 
 }
 /// The component world: imports the secrets host capability

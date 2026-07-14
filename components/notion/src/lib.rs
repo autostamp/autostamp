@@ -44,10 +44,15 @@ pub(crate) enum FieldLocation {
     Body,
 }
 
-/// A single operation parameter: the snake-case key it carries in the params JSON and where
-/// it belongs in the request.
+/// A single operation parameter. `snake` keys the field in the internal params JSON (and, for a
+/// path field, matches the `{snake}` placeholder in the path template); `wire` is the verbatim name
+/// the field takes on the HTTP wire (query key, header name, or body property). The two differ
+/// whenever the source name isn't already snake_case (e.g. `dryRun` → snake `dry_run`, wire
+/// `dryRun`), and let distinct inputs that share a snake key (`DateCreated`, `DateCreated<`) still
+/// travel under their true names.
 pub(crate) struct FieldSpec {
     pub(crate) snake: &'static str,
+    pub(crate) wire: &'static str,
     pub(crate) location: FieldLocation,
 }
 
@@ -71,6 +76,16 @@ pub(crate) struct AuthApply {
     pub(crate) kind: AuthKind,
 }
 
+/// The failure modes of [`dispatch`], kept structured so each generated operation can map them
+/// onto its own typed error: an `Http` failure carries the response status and body (routed to
+/// the matching error-variant case), while a `Transport` failure carries a message for the
+/// catch-all case (a secret lookup, connection, or decode failure that never produced an HTTP
+/// status).
+pub(crate) enum DispatchError {
+    Http { status: u16, body: String },
+    Transport(String),
+}
+
 /// A single API operation: HTTP method, path template (with `{snake}` placeholders), the
 /// parameter fields, and the security schemes to apply.
 pub(crate) struct OpSpec {
@@ -81,8 +96,9 @@ pub(crate) struct OpSpec {
 }
 
 /// Execute `op` with the supplied `params` (a JSON object keyed by snake-case field names)
-/// and return the response body as a string, or an error message.
-pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, String> {
+/// and return the raw 2xx response body, or a structured [`DispatchError`] the caller maps
+/// onto the operation's typed error.
+pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, DispatchError> {
     let obj = match &params {
         Value::Object(map) => Some(map),
         _ => None,
@@ -105,10 +121,10 @@ pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, String> {
                 let placeholder = format!("{{{}}}", field.snake);
                 path = path.replace(&placeholder, &percent_encode(&scalar(value)));
             }
-            FieldLocation::Query => query.push((field.snake.to_string(), scalar(value))),
-            FieldLocation::Header => headers.push((field.snake.to_string(), scalar(value))),
+            FieldLocation::Query => query.push((field.wire.to_string(), scalar(value))),
+            FieldLocation::Header => headers.push((field.wire.to_string(), scalar(value))),
             FieldLocation::Body => {
-                body.insert(field.snake.to_string(), value.clone());
+                body.insert(field.wire.to_string(), value.clone());
             }
         }
     }
@@ -116,7 +132,7 @@ pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, String> {
     // Apply each resolved security scheme, sourcing its value from wasmcloud:secrets.
     let mut cookies: Vec<String> = Vec::new();
     for apply in op.auth {
-        let secret = fetch_secret(apply.secret_key)?;
+        let secret = fetch_secret(apply.secret_key).map_err(DispatchError::Transport)?;
         match &apply.kind {
             AuthKind::Bearer => headers.push(("authorization".into(), format!("Bearer {secret}"))),
             AuthKind::Basic => {
@@ -177,17 +193,18 @@ fn fetch_secret(key: &str) -> Result<String, String> {
 }
 
 /// Build and send the outgoing request with `wstd`, returning the response body on a 2xx
-/// status. The generated guest exports are synchronous, so the async `wstd` client is driven
-/// to completion on a local reactor via `wstd::runtime::block_on`.
+/// status and a structured [`DispatchError`] otherwise. The generated guest exports are
+/// synchronous, so the async `wstd` client is driven to completion on a local reactor via
+/// `wstd::runtime::block_on`.
 fn perform(
     method: &str,
     path_with_query: &str,
     headers: &[(String, String)],
     body: &[u8],
-) -> Result<String, String> {
+) -> Result<String, DispatchError> {
     let url = join_url(crate::BASE_URL, path_with_query);
     let method = Method::from_bytes(method.as_bytes())
-        .map_err(|err| format!("invalid HTTP method `{method}`: {err}"))?;
+        .map_err(|err| DispatchError::Transport(format!("invalid HTTP method `{method}`: {err}")))?;
 
     let mut builder = Request::builder().method(method).uri(url);
     for (name, value) in headers {
@@ -199,27 +216,29 @@ fn perform(
         } else {
             Body::from(body.to_vec())
         })
-        .map_err(|err| format!("failed to build request: {err}"))?;
+        .map_err(|err| DispatchError::Transport(format!("failed to build request: {err}")))?;
 
     wstd::runtime::block_on(async move {
         let client = Client::new();
         let response = client
             .send(request)
             .await
-            .map_err(|err| format!("request failed: {err:#}"))?;
+            .map_err(|err| DispatchError::Transport(format!("request failed: {err:#}")))?;
 
         let status = response.status().as_u16();
         let mut response_body = response.into_body();
-        let bytes = response_body
-            .contents()
-            .await
-            .map_err(|err| format!("failed to read response body: {err:#}"))?;
+        let bytes = response_body.contents().await.map_err(|err| {
+            DispatchError::Transport(format!("failed to read response body: {err:#}"))
+        })?;
         let body_text = String::from_utf8_lossy(bytes).into_owned();
 
         if (200..300).contains(&status) {
             Ok(body_text)
         } else {
-            Err(format!("HTTP {status}: {body_text}"))
+            Err(DispatchError::Http {
+                status,
+                body: body_text,
+            })
         }
     })
 }
@@ -279,434 +298,10 @@ fn base64(input: &[u8]) -> String {
 }
 }
 
-use crate::runtime::{dispatch, AuthApply, AuthKind, FieldLocation, FieldSpec, OpSpec};
-use serde_json::{Map, Value};
-
-use crate::exports::autostamp::notion::blocks as iface_blocks;
-
-const OP_BLOCKS_RETRIEVE_A_BLOCK: OpSpec = OpSpec {
-    method: "GET",
-    path_template: "/v1/blocks/{id}",
-    fields: &[
-        FieldSpec { snake: "notion_version", location: FieldLocation::Header },
-    ],
-    auth: &[
-    ],
-};
-
-const OP_BLOCKS_UPDATE_A_BLOCK: OpSpec = OpSpec {
-    method: "PATCH",
-    path_template: "/v1/blocks/{id}",
-    fields: &[
-        FieldSpec { snake: "notion_version", location: FieldLocation::Header },
-        FieldSpec { snake: "paragraph", location: FieldLocation::Body },
-    ],
-    auth: &[
-    ],
-};
-
-const OP_BLOCKS_DELETE_A_BLOCK: OpSpec = OpSpec {
-    method: "DELETE",
-    path_template: "/v1/blocks/{id}",
-    fields: &[
-        FieldSpec { snake: "notion_version", location: FieldLocation::Header },
-    ],
-    auth: &[
-    ],
-};
-
-const OP_BLOCKS_RETRIEVE_BLOCK_CHILDREN: OpSpec = OpSpec {
-    method: "GET",
-    path_template: "/v1/blocks/{id}/children",
-    fields: &[
-        FieldSpec { snake: "page_size", location: FieldLocation::Query },
-        FieldSpec { snake: "notion_version", location: FieldLocation::Header },
-    ],
-    auth: &[
-    ],
-};
-
-const OP_BLOCKS_APPEND_BLOCK_CHILDREN: OpSpec = OpSpec {
-    method: "PATCH",
-    path_template: "/v1/blocks/{id}/children",
-    fields: &[
-        FieldSpec { snake: "notion_version", location: FieldLocation::Header },
-        FieldSpec { snake: "children", location: FieldLocation::Body },
-    ],
-    auth: &[
-    ],
-};
-
-fn iface_blocks__update_a_block_body_paragraph__to_json(p: &iface_blocks::UpdateABlockBodyParagraph) -> Value {
-    let mut m = Map::new();
-    m.insert("rich_text".into(), match (&p.rich_text) { Some(v) => Value::Array((v).iter().map(|v| iface_blocks__update_a_block_body_paragraph_rich_text_item__to_json(v)).collect()), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_blocks__update_a_block_body_paragraph_rich_text_item__to_json(p: &iface_blocks::UpdateABlockBodyParagraphRichTextItem) -> Value {
-    let mut m = Map::new();
-    m.insert("text".into(), match (&p.text) { Some(v) => iface_blocks__update_a_block_body_paragraph_rich_text_item_text__to_json(v), None => Value::Null });
-    m.insert("type".into(), match (&p.type_op) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_blocks__update_a_block_body_paragraph_rich_text_item_text__to_json(p: &iface_blocks::UpdateABlockBodyParagraphRichTextItemText) -> Value {
-    let mut m = Map::new();
-    m.insert("content".into(), match (&p.content) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_blocks__append_block_children_body_children_item__to_json(p: &iface_blocks::AppendBlockChildrenBodyChildrenItem) -> Value {
-    let mut m = Map::new();
-    m.insert("heading_2".into(), match (&p.heading_v2) { Some(v) => iface_blocks__append_block_children_body_children_item_heading_v2__to_json(v), None => Value::Null });
-    m.insert("object".into(), match (&p.object) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("paragraph".into(), match (&p.paragraph) { Some(v) => iface_blocks__append_block_children_body_children_item_paragraph__to_json(v), None => Value::Null });
-    m.insert("type".into(), match (&p.type_op) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_blocks__append_block_children_body_children_item_heading_v2__to_json(p: &iface_blocks::AppendBlockChildrenBodyChildrenItemHeadingV2) -> Value {
-    let mut m = Map::new();
-    m.insert("text".into(), match (&p.text) { Some(v) => Value::Array((v).iter().map(|v| iface_blocks__append_block_children_body_children_item_heading_v2_text_item__to_json(v)).collect()), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_blocks__append_block_children_body_children_item_heading_v2_text_item__to_json(p: &iface_blocks::AppendBlockChildrenBodyChildrenItemHeadingV2TextItem) -> Value {
-    let mut m = Map::new();
-    m.insert("text".into(), match (&p.text) { Some(v) => iface_blocks__append_block_children_body_children_item_heading_v2_text_item_text__to_json(v), None => Value::Null });
-    m.insert("type".into(), match (&p.type_op) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_blocks__append_block_children_body_children_item_heading_v2_text_item_text__to_json(p: &iface_blocks::AppendBlockChildrenBodyChildrenItemHeadingV2TextItemText) -> Value {
-    let mut m = Map::new();
-    m.insert("content".into(), match (&p.content) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_blocks__append_block_children_body_children_item_paragraph__to_json(p: &iface_blocks::AppendBlockChildrenBodyChildrenItemParagraph) -> Value {
-    let mut m = Map::new();
-    m.insert("rich_text".into(), match (&p.rich_text) { Some(v) => Value::Array((v).iter().map(|v| iface_blocks__append_block_children_body_children_item_paragraph_rich_text_item__to_json(v)).collect()), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_blocks__append_block_children_body_children_item_paragraph_rich_text_item__to_json(p: &iface_blocks::AppendBlockChildrenBodyChildrenItemParagraphRichTextItem) -> Value {
-    let mut m = Map::new();
-    m.insert("text".into(), match (&p.text) { Some(v) => iface_blocks__append_block_children_body_children_item_paragraph_rich_text_item_text__to_json(v), None => Value::Null });
-    m.insert("type".into(), match (&p.type_op) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_blocks__append_block_children_body_children_item_paragraph_rich_text_item_text__to_json(p: &iface_blocks::AppendBlockChildrenBodyChildrenItemParagraphRichTextItemText) -> Value {
-    let mut m = Map::new();
-    m.insert("content".into(), match (&p.content) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("link".into(), match (&p.link) { Some(v) => iface_blocks__append_block_children_body_children_item_paragraph_rich_text_item_text_link__to_json(v), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_blocks__append_block_children_body_children_item_paragraph_rich_text_item_text_link__to_json(p: &iface_blocks::AppendBlockChildrenBodyChildrenItemParagraphRichTextItemTextLink) -> Value {
-    let mut m = Map::new();
-    m.insert("url".into(), match (&p.url) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_blocks__retrieve_a_block_params__to_json(p: &iface_blocks::RetrieveABlockParams) -> Value {
-    let mut m = Map::new();
-    m.insert("notion_version".into(), match (&p.notion_version) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_blocks__update_a_block_params__to_json(p: &iface_blocks::UpdateABlockParams) -> Value {
-    let mut m = Map::new();
-    m.insert("notion_version".into(), match (&p.notion_version) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("paragraph".into(), match (&p.paragraph) { Some(v) => iface_blocks__update_a_block_body_paragraph__to_json(v), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_blocks__delete_a_block_params__to_json(p: &iface_blocks::DeleteABlockParams) -> Value {
-    let mut m = Map::new();
-    m.insert("notion_version".into(), match (&p.notion_version) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_blocks__retrieve_block_children_params__to_json(p: &iface_blocks::RetrieveBlockChildrenParams) -> Value {
-    let mut m = Map::new();
-    m.insert("page_size".into(), match (&p.page_size) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("notion_version".into(), match (&p.notion_version) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_blocks__append_block_children_params__to_json(p: &iface_blocks::AppendBlockChildrenParams) -> Value {
-    let mut m = Map::new();
-    m.insert("notion_version".into(), match (&p.notion_version) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("children".into(), match (&p.children) { Some(v) => Value::Array((v).iter().map(|v| iface_blocks__append_block_children_body_children_item__to_json(v)).collect()), None => Value::Null });
-    Value::Object(m)
-}
-
-impl iface_blocks::Guest for crate::Component {
-    fn retrieve_a_block(params: iface_blocks::RetrieveABlockParams) -> Result<String, String> {
-        let json = iface_blocks__retrieve_a_block_params__to_json(&params);
-        dispatch(&OP_BLOCKS_RETRIEVE_A_BLOCK, json)
-    }
-    fn update_a_block(params: iface_blocks::UpdateABlockParams) -> Result<String, String> {
-        let json = iface_blocks__update_a_block_params__to_json(&params);
-        dispatch(&OP_BLOCKS_UPDATE_A_BLOCK, json)
-    }
-    fn delete_a_block(params: iface_blocks::DeleteABlockParams) -> Result<String, String> {
-        let json = iface_blocks__delete_a_block_params__to_json(&params);
-        dispatch(&OP_BLOCKS_DELETE_A_BLOCK, json)
-    }
-    fn retrieve_block_children(params: iface_blocks::RetrieveBlockChildrenParams) -> Result<String, String> {
-        let json = iface_blocks__retrieve_block_children_params__to_json(&params);
-        dispatch(&OP_BLOCKS_RETRIEVE_BLOCK_CHILDREN, json)
-    }
-    fn append_block_children(params: iface_blocks::AppendBlockChildrenParams) -> Result<String, String> {
-        let json = iface_blocks__append_block_children_params__to_json(&params);
-        dispatch(&OP_BLOCKS_APPEND_BLOCK_CHILDREN, json)
-    }
-}
-use crate::exports::autostamp::notion::comments as iface_comments;
-
-const OP_COMMENTS_RETRIEVE_COMMENTS: OpSpec = OpSpec {
-    method: "GET",
-    path_template: "/v1/comments",
-    fields: &[
-        FieldSpec { snake: "block_id", location: FieldLocation::Query },
-        FieldSpec { snake: "page_size", location: FieldLocation::Query },
-        FieldSpec { snake: "notion_version", location: FieldLocation::Header },
-    ],
-    auth: &[
-    ],
-};
-
-fn iface_comments__retrieve_comments_params__to_json(p: &iface_comments::RetrieveCommentsParams) -> Value {
-    let mut m = Map::new();
-    m.insert("block_id".into(), match (&p.block_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("page_size".into(), match (&p.page_size) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("notion_version".into(), match (&p.notion_version) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    Value::Object(m)
-}
-
-impl iface_comments::Guest for crate::Component {
-    fn retrieve_comments(params: iface_comments::RetrieveCommentsParams) -> Result<String, String> {
-        let json = iface_comments__retrieve_comments_params__to_json(&params);
-        dispatch(&OP_COMMENTS_RETRIEVE_COMMENTS, json)
-    }
-}
-use crate::exports::autostamp::notion::databases as iface_databases;
-
-const OP_DATABASES_RETRIEVE_A_DATABASE: OpSpec = OpSpec {
-    method: "GET",
-    path_template: "/v1/databases/{id}",
-    fields: &[
-        FieldSpec { snake: "notion_version", location: FieldLocation::Header },
-    ],
-    auth: &[
-    ],
-};
-
-const OP_DATABASES_UPDATE_A_DATABASE: OpSpec = OpSpec {
-    method: "PATCH",
-    path_template: "/v1/databases/{id}",
-    fields: &[
-        FieldSpec { snake: "notion_version", location: FieldLocation::Header },
-        FieldSpec { snake: "properties", location: FieldLocation::Body },
-        FieldSpec { snake: "title", location: FieldLocation::Body },
-    ],
-    auth: &[
-    ],
-};
-
-const OP_DATABASES_QUERY_A_DATABASE: OpSpec = OpSpec {
-    method: "POST",
-    path_template: "/v1/databases/{id}/query",
-    fields: &[
-        FieldSpec { snake: "notion_version", location: FieldLocation::Header },
-        FieldSpec { snake: "filter", location: FieldLocation::Body },
-    ],
-    auth: &[
-    ],
-};
-
-fn iface_databases__update_a_database_body_properties__to_json(p: &iface_databases::UpdateADatabaseBodyProperties) -> Value {
-    let mut m = Map::new();
-    m.insert("wine_pairing".into(), match (&p.wine_pairing) { Some(v) => iface_databases__update_a_database_body_properties_wine_pairing__to_json(v), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_databases__update_a_database_body_properties_wine_pairing__to_json(p: &iface_databases::UpdateADatabaseBodyPropertiesWinePairing) -> Value {
-    let mut m = Map::new();
-    m.insert("rich_text".into(), match (&p.rich_text) { Some(v) => iface_databases__update_a_database_body_properties_wine_pairing_rich_text__to_json(v), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_databases__update_a_database_body_properties_wine_pairing_rich_text__to_json(p: &iface_databases::UpdateADatabaseBodyPropertiesWinePairingRichText) -> Value {
-    let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_databases__update_a_database_body_title_item__to_json(p: &iface_databases::UpdateADatabaseBodyTitleItem) -> Value {
-    let mut m = Map::new();
-    m.insert("text".into(), match (&p.text) { Some(v) => iface_databases__update_a_database_body_title_item_text__to_json(v), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_databases__update_a_database_body_title_item_text__to_json(p: &iface_databases::UpdateADatabaseBodyTitleItemText) -> Value {
-    let mut m = Map::new();
-    m.insert("content".into(), match (&p.content) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_databases__query_a_database_body_filter__to_json(p: &iface_databases::QueryADatabaseBodyFilter) -> Value {
-    let mut m = Map::new();
-    m.insert("property".into(), match (&p.property) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("select".into(), match (&p.select) { Some(v) => iface_databases__query_a_database_body_filter_select__to_json(v), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_databases__query_a_database_body_filter_select__to_json(p: &iface_databases::QueryADatabaseBodyFilterSelect) -> Value {
-    let mut m = Map::new();
-    m.insert("equals".into(), match (&p.equals) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_databases__retrieve_a_database_params__to_json(p: &iface_databases::RetrieveADatabaseParams) -> Value {
-    let mut m = Map::new();
-    m.insert("notion_version".into(), match (&p.notion_version) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_databases__update_a_database_params__to_json(p: &iface_databases::UpdateADatabaseParams) -> Value {
-    let mut m = Map::new();
-    m.insert("notion_version".into(), match (&p.notion_version) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("properties".into(), match (&p.properties) { Some(v) => iface_databases__update_a_database_body_properties__to_json(v), None => Value::Null });
-    m.insert("title".into(), match (&p.title) { Some(v) => Value::Array((v).iter().map(|v| iface_databases__update_a_database_body_title_item__to_json(v)).collect()), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_databases__query_a_database_params__to_json(p: &iface_databases::QueryADatabaseParams) -> Value {
-    let mut m = Map::new();
-    m.insert("notion_version".into(), match (&p.notion_version) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("filter".into(), match (&p.filter) { Some(v) => iface_databases__query_a_database_body_filter__to_json(v), None => Value::Null });
-    Value::Object(m)
-}
-
-impl iface_databases::Guest for crate::Component {
-    fn retrieve_a_database(params: iface_databases::RetrieveADatabaseParams) -> Result<String, String> {
-        let json = iface_databases__retrieve_a_database_params__to_json(&params);
-        dispatch(&OP_DATABASES_RETRIEVE_A_DATABASE, json)
-    }
-    fn update_a_database(params: iface_databases::UpdateADatabaseParams) -> Result<String, String> {
-        let json = iface_databases__update_a_database_params__to_json(&params);
-        dispatch(&OP_DATABASES_UPDATE_A_DATABASE, json)
-    }
-    fn query_a_database(params: iface_databases::QueryADatabaseParams) -> Result<String, String> {
-        let json = iface_databases__query_a_database_params__to_json(&params);
-        dispatch(&OP_DATABASES_QUERY_A_DATABASE, json)
-    }
-}
-use crate::exports::autostamp::notion::pages as iface_pages;
-
-const OP_PAGES_RETRIEVE_A_PAGE: OpSpec = OpSpec {
-    method: "GET",
-    path_template: "/v1/pages/{id}",
-    fields: &[
-        FieldSpec { snake: "notion_version", location: FieldLocation::Header },
-        FieldSpec { snake: "", location: FieldLocation::Header },
-    ],
-    auth: &[
-    ],
-};
-
-const OP_PAGES_UPDATE_PAGE_PROPERTIES: OpSpec = OpSpec {
-    method: "PATCH",
-    path_template: "/v1/pages/{id}",
-    fields: &[
-        FieldSpec { snake: "notion_version", location: FieldLocation::Header },
-        FieldSpec { snake: "properties", location: FieldLocation::Body },
-    ],
-    auth: &[
-    ],
-};
-
-const OP_PAGES_RETRIEVE_A_PAGE_PROPERTY_ITEM: OpSpec = OpSpec {
-    method: "GET",
-    path_template: "/v1/pages/{page_id}/properties/{property_id}",
-    fields: &[
-    ],
-    auth: &[
-    ],
-};
-
-fn iface_pages__update_page_properties_body_properties__to_json(p: &iface_pages::UpdatePagePropertiesBodyProperties) -> Value {
-    let mut m = Map::new();
-    m.insert("status".into(), match (&p.status) { Some(v) => iface_pages__update_page_properties_body_properties_status__to_json(v), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_pages__update_page_properties_body_properties_status__to_json(p: &iface_pages::UpdatePagePropertiesBodyPropertiesStatus) -> Value {
-    let mut m = Map::new();
-    m.insert("select".into(), match (&p.select) { Some(v) => iface_pages__update_page_properties_body_properties_status_select__to_json(v), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_pages__update_page_properties_body_properties_status_select__to_json(p: &iface_pages::UpdatePagePropertiesBodyPropertiesStatusSelect) -> Value {
-    let mut m = Map::new();
-    m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_pages__retrieve_a_page_params__to_json(p: &iface_pages::RetrieveAPageParams) -> Value {
-    let mut m = Map::new();
-    m.insert("notion_version".into(), match (&p.notion_version) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("".into(), match (&p.x) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_pages__update_page_properties_params__to_json(p: &iface_pages::UpdatePagePropertiesParams) -> Value {
-    let mut m = Map::new();
-    m.insert("notion_version".into(), match (&p.notion_version) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("properties".into(), match (&p.properties) { Some(v) => iface_pages__update_page_properties_body_properties__to_json(v), None => Value::Null });
-    Value::Object(m)
-}
-
-impl iface_pages::Guest for crate::Component {
-    fn retrieve_a_page(params: iface_pages::RetrieveAPageParams) -> Result<String, String> {
-        let json = iface_pages__retrieve_a_page_params__to_json(&params);
-        dispatch(&OP_PAGES_RETRIEVE_A_PAGE, json)
-    }
-    fn update_page_properties(params: iface_pages::UpdatePagePropertiesParams) -> Result<String, String> {
-        let json = iface_pages__update_page_properties_params__to_json(&params);
-        dispatch(&OP_PAGES_UPDATE_PAGE_PROPERTIES, json)
-    }
-    fn retrieve_a_page_property_item() -> Result<String, String> {
-        dispatch(&OP_PAGES_RETRIEVE_A_PAGE_PROPERTY_ITEM, Value::Object(Map::new()))
-    }
-}
-use crate::exports::autostamp::notion::users as iface_users;
-
-const OP_USERS_RETRIEVE_A_USER: OpSpec = OpSpec {
-    method: "GET",
-    path_template: "/v1/users/{id}",
-    fields: &[
-        FieldSpec { snake: "notion_version", location: FieldLocation::Header },
-    ],
-    auth: &[
-    ],
-};
-
-fn iface_users__retrieve_a_user_params__to_json(p: &iface_users::RetrieveAUserParams) -> Value {
-    let mut m = Map::new();
-    m.insert("notion_version".into(), match (&p.notion_version) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    Value::Object(m)
-}
-
-impl iface_users::Guest for crate::Component {
-    fn retrieve_a_user(params: iface_users::RetrieveAUserParams) -> Result<String, String> {
-        let json = iface_users__retrieve_a_user_params__to_json(&params);
-        dispatch(&OP_USERS_RETRIEVE_A_USER, json)
-    }
-}
+mod iface_blocks;
+mod iface_comments;
+mod iface_databases;
+mod iface_pages;
+mod iface_users;
 
 export!(Component);

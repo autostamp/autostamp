@@ -11,8 +11,8 @@ triggered.
 
 | Setting | Value |
 | --- | --- |
-| Package | `autostamp:snyk@0.3.0` |
-| Published version | `0.3.0+snyk-1.0.0` |
+| Package | `autostamp:snyk@0.5.0` |
+| Published version | `0.5.0+snyk-1.0.0` |
 | Tag filter | all tags |
 | Operations generated | 103 |
 | Infer API-key credentials | enabled — not triggered |

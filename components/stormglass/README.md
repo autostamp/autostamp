@@ -11,8 +11,8 @@ triggered.
 
 | Setting | Value |
 | --- | --- |
-| Package | `autostamp:stormglass@0.3.0` |
-| Published version | `0.3.0+stormglass-1.0.1` |
+| Package | `autostamp:stormglass@0.5.0` |
+| Published version | `0.5.0+stormglass-1.0.1` |
 | Tag filter | all tags |
 | Operations generated | 1 |
 | Infer API-key credentials | enabled — not triggered |

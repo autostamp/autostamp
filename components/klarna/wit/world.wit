@@ -1,6 +1,22 @@
-package autostamp:klarna@0.3.0;
+package autostamp:klarna@0.5.0;
 
 interface open-ai-product-endpoint {
+  record product-response {
+    products: option<list<product>>
+  }
+
+  record product {
+    attributes: option<list<string>>,
+    name: option<string>,
+    price: option<string>,
+    url: option<string>
+  }
+
+  variant products-using-get-error {
+    service-unavailable(string),
+    other(string)
+  }
+
   /// API for fetching Klarna product information
   record products-using-get-params {
     /// A precise query that matches one very small category or product that needs to be searched for to find the products the user is looking for. If the user explicitly stated what they want, use that as a query. The query is as specific as possible to the product name or category mentioned by the user in its singular form, and don't contain any clarifiers like latest, newest, cheapest, budget, premium, expensive or similar. The query is always taken from the latest topic, if there is a new topic a new query is started.
@@ -10,7 +26,7 @@ interface open-ai-product-endpoint {
     /// maximum price of the matching product in local currency, filters results
     budget: option<s32>
   }
-  products-using-get: func(params: products-using-get-params) -> result<string, string>;
+  products-using-get: func(params: products-using-get-params) -> result<product-response, products-using-get-error>;
 
 }
 

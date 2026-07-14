@@ -20,8 +20,8 @@ triggered.
 
 | Setting | Value |
 | --- | --- |
-| Package | `autostamp:ip2location@0.3.0` |
-| Published version | `0.3.0+ip2location-1.0` |
+| Package | `autostamp:ip2location@0.5.0` |
+| Published version | `0.5.0+ip2location-1.0` |
 | Tag filter | all tags |
 | Operations generated | 1 |
 | Infer API-key credentials | enabled — **triggered**, inferred 1 secret: `key` |

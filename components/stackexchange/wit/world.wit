@@ -1,6 +1,39 @@
-package autostamp:stackexchange@0.3.0;
+package autostamp:stackexchange@0.5.0;
 
 interface access-tokens {
+  record access-tokens {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  variant get-access-tokens-access-tokens-error {
+    bad-request(string),
+    unauthorized(string),
+    payment-required(string),
+    forbidden(string),
+    not-found(string),
+    method-not-allowed(string),
+    not-acceptable(string),
+    internal-server-error(string),
+    bad-gateway(string),
+    service-unavailable(string),
+    other(string)
+  }
+
+  variant get-access-tokens-access-tokens-invalidate-error {
+    bad-request(string),
+    unauthorized(string),
+    payment-required(string),
+    forbidden(string),
+    not-found(string),
+    method-not-allowed(string),
+    not-acceptable(string),
+    internal-server-error(string),
+    bad-gateway(string),
+    service-unavailable(string),
+    other(string)
+  }
+
   record get-access-tokens-access-tokens-params {
     /// String list (semicolon delimited).
     access-tokens: string,
@@ -12,7 +45,7 @@ interface access-tokens {
     /// All API responses are JSON, we do support JSONP with the callback query parameter.
     callback: option<string>
   }
-  get-access-tokens-access-tokens: func(params: get-access-tokens-access-tokens-params) -> result<string, string>;
+  get-access-tokens-access-tokens: func(params: get-access-tokens-access-tokens-params) -> result<access-tokens, get-access-tokens-access-tokens-error>;
 
   record get-access-tokens-access-tokens-invalidate-params {
     /// String list (semicolon delimited).
@@ -25,7 +58,7 @@ interface access-tokens {
     /// All API responses are JSON, we do support JSONP with the callback query parameter.
     callback: option<string>
   }
-  get-access-tokens-access-tokens-invalidate: func(params: get-access-tokens-access-tokens-invalidate-params) -> result<string, string>;
+  get-access-tokens-access-tokens-invalidate: func(params: get-access-tokens-access-tokens-invalidate-params) -> result<access-tokens, get-access-tokens-access-tokens-invalidate-error>;
 
 }
 
@@ -45,6 +78,58 @@ interface answers {
   enum get-answers-ids-comments-sort-enum {
     creation,
     votes,
+  }
+
+  record answers {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  record comments {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  variant get-answers-error {
+    bad-request(string),
+    unauthorized(string),
+    payment-required(string),
+    forbidden(string),
+    not-found(string),
+    method-not-allowed(string),
+    not-acceptable(string),
+    internal-server-error(string),
+    bad-gateway(string),
+    service-unavailable(string),
+    other(string)
+  }
+
+  variant get-answers-ids-error {
+    bad-request(string),
+    unauthorized(string),
+    payment-required(string),
+    forbidden(string),
+    not-found(string),
+    method-not-allowed(string),
+    not-acceptable(string),
+    internal-server-error(string),
+    bad-gateway(string),
+    service-unavailable(string),
+    other(string)
+  }
+
+  variant get-answers-ids-comments-error {
+    bad-request(string),
+    unauthorized(string),
+    payment-required(string),
+    forbidden(string),
+    not-found(string),
+    method-not-allowed(string),
+    not-acceptable(string),
+    internal-server-error(string),
+    bad-gateway(string),
+    service-unavailable(string),
+    other(string)
   }
 
   record get-answers-params {
@@ -70,7 +155,7 @@ interface answers {
     /// Each of these methods operates on a single site at a time, identified by the site parameter. This parameter can be the full domain name (ie. "stackoverflow.com"), or a short form identified by api_site_parameter on the site object.
     site: string
   }
-  get-answers: func(params: get-answers-params) -> result<string, string>;
+  get-answers: func(params: get-answers-params) -> result<answers, get-answers-error>;
 
   record get-answers-ids-params {
     /// Number list (semicolon delimited).
@@ -97,7 +182,7 @@ interface answers {
     /// Each of these methods operates on a single site at a time, identified by the site parameter. This parameter can be the full domain name (ie. "stackoverflow.com"), or a short form identified by api_site_parameter on the site object.
     site: string
   }
-  get-answers-ids: func(params: get-answers-ids-params) -> result<string, string>;
+  get-answers-ids: func(params: get-answers-ids-params) -> result<answers, get-answers-ids-error>;
 
   record get-answers-ids-comments-params {
     /// Number list (semicolon delimited).
@@ -124,11 +209,30 @@ interface answers {
     /// Each of these methods operates on a single site at a time, identified by the site parameter. This parameter can be the full domain name (ie. "stackoverflow.com"), or a short form identified by api_site_parameter on the site object.
     site: string
   }
-  get-answers-ids-comments: func(params: get-answers-ids-comments-params) -> result<string, string>;
+  get-answers-ids-comments: func(params: get-answers-ids-comments-params) -> result<comments, get-answers-ids-comments-error>;
 
 }
 
 interface apps {
+  record access-tokens {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  variant get-apps-access-tokens-de-authenticate-error {
+    bad-request(string),
+    unauthorized(string),
+    payment-required(string),
+    forbidden(string),
+    not-found(string),
+    method-not-allowed(string),
+    not-acceptable(string),
+    internal-server-error(string),
+    bad-gateway(string),
+    service-unavailable(string),
+    other(string)
+  }
+
   record get-apps-access-tokens-de-authenticate-params {
     /// String list (semicolon delimited).
     access-tokens: string,
@@ -140,7 +244,7 @@ interface apps {
     /// All API responses are JSON, we do support JSONP with the callback query parameter.
     callback: option<string>
   }
-  get-apps-access-tokens-de-authenticate: func(params: get-apps-access-tokens-de-authenticate-params) -> result<string, string>;
+  get-apps-access-tokens-de-authenticate: func(params: get-apps-access-tokens-de-authenticate-params) -> result<access-tokens, get-apps-access-tokens-de-authenticate-error>;
 
 }
 
@@ -159,6 +263,95 @@ interface badges {
   enum get-badges-name-sort-enum {
     rank,
     name,
+  }
+
+  record badges {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  variant get-badges-error {
+    bad-request(string),
+    unauthorized(string),
+    payment-required(string),
+    forbidden(string),
+    not-found(string),
+    method-not-allowed(string),
+    not-acceptable(string),
+    internal-server-error(string),
+    bad-gateway(string),
+    service-unavailable(string),
+    other(string)
+  }
+
+  variant get-badges-name-error {
+    bad-request(string),
+    unauthorized(string),
+    payment-required(string),
+    forbidden(string),
+    not-found(string),
+    method-not-allowed(string),
+    not-acceptable(string),
+    internal-server-error(string),
+    bad-gateway(string),
+    service-unavailable(string),
+    other(string)
+  }
+
+  variant get-badges-recipients-error {
+    bad-request(string),
+    unauthorized(string),
+    payment-required(string),
+    forbidden(string),
+    not-found(string),
+    method-not-allowed(string),
+    not-acceptable(string),
+    internal-server-error(string),
+    bad-gateway(string),
+    service-unavailable(string),
+    other(string)
+  }
+
+  variant get-badges-tags-error {
+    bad-request(string),
+    unauthorized(string),
+    payment-required(string),
+    forbidden(string),
+    not-found(string),
+    method-not-allowed(string),
+    not-acceptable(string),
+    internal-server-error(string),
+    bad-gateway(string),
+    service-unavailable(string),
+    other(string)
+  }
+
+  variant get-badges-ids-error {
+    bad-request(string),
+    unauthorized(string),
+    payment-required(string),
+    forbidden(string),
+    not-found(string),
+    method-not-allowed(string),
+    not-acceptable(string),
+    internal-server-error(string),
+    bad-gateway(string),
+    service-unavailable(string),
+    other(string)
+  }
+
+  variant get-badges-ids-recipients-error {
+    bad-request(string),
+    unauthorized(string),
+    payment-required(string),
+    forbidden(string),
+    not-found(string),
+    method-not-allowed(string),
+    not-acceptable(string),
+    internal-server-error(string),
+    bad-gateway(string),
+    service-unavailable(string),
+    other(string)
   }
 
   record get-badges-params {
@@ -185,7 +378,7 @@ interface badges {
     /// Each of these methods operates on a single site at a time, identified by the site parameter. This parameter can be the full domain name (ie. "stackoverflow.com"), or a short form identified by api_site_parameter on the site object.
     site: string
   }
-  get-badges: func(params: get-badges-params) -> result<string, string>;
+  get-badges: func(params: get-badges-params) -> result<badges, get-badges-error>;
 
   record get-badges-name-params {
     inname: option<string>,
@@ -211,7 +404,7 @@ interface badges {
     /// Each of these methods operates on a single site at a time, identified by the site parameter. This parameter can be the full domain name (ie. "stackoverflow.com"), or a short form identified by api_site_parameter on the site object.
     site: string
   }
-  get-badges-name: func(params: get-badges-name-params) -> result<string, string>;
+  get-badges-name: func(params: get-badges-name-params) -> result<badges, get-badges-name-error>;
 
   record get-badges-recipients-params {
     /// Unix date.
@@ -228,7 +421,7 @@ interface badges {
     /// Each of these methods operates on a single site at a time, identified by the site parameter. This parameter can be the full domain name (ie. "stackoverflow.com"), or a short form identified by api_site_parameter on the site object.
     site: string
   }
-  get-badges-recipients: func(params: get-badges-recipients-params) -> result<string, string>;
+  get-badges-recipients: func(params: get-badges-recipients-params) -> result<badges, get-badges-recipients-error>;
 
   record get-badges-tags-params {
     inname: option<string>,
@@ -254,7 +447,7 @@ interface badges {
     /// Each of these methods operates on a single site at a time, identified by the site parameter. This parameter can be the full domain name (ie. "stackoverflow.com"), or a short form identified by api_site_parameter on the site object.
     site: string
   }
-  get-badges-tags: func(params: get-badges-tags-params) -> result<string, string>;
+  get-badges-tags: func(params: get-badges-tags-params) -> result<badges, get-badges-tags-error>;
 
   record get-badges-ids-params {
     /// Number list (semicolon delimited).
@@ -281,7 +474,7 @@ interface badges {
     /// Each of these methods operates on a single site at a time, identified by the site parameter. This parameter can be the full domain name (ie. "stackoverflow.com"), or a short form identified by api_site_parameter on the site object.
     site: string
   }
-  get-badges-ids: func(params: get-badges-ids-params) -> result<string, string>;
+  get-badges-ids: func(params: get-badges-ids-params) -> result<badges, get-badges-ids-error>;
 
   record get-badges-ids-recipients-params {
     /// Number list (semicolon delimited).
@@ -300,7 +493,7 @@ interface badges {
     /// Each of these methods operates on a single site at a time, identified by the site parameter. This parameter can be the full domain name (ie. "stackoverflow.com"), or a short form identified by api_site_parameter on the site object.
     site: string
   }
-  get-badges-ids-recipients: func(params: get-badges-ids-recipients-params) -> result<string, string>;
+  get-badges-ids-recipients: func(params: get-badges-ids-recipients-params) -> result<badges, get-badges-ids-recipients-error>;
 
 }
 
@@ -313,6 +506,117 @@ interface comments {
   enum get-comments-sort-enum {
     creation,
     votes,
+  }
+
+  record comments {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  record created-comment {
+    body: option<string>,
+    body-markdown: option<string>,
+    can-flag: option<bool>,
+    comment-id: option<s32>,
+    creation-date: option<s32>,
+    edited: option<bool>,
+    link: option<string>,
+    owner: option<created-comment-owner>,
+    post-id: option<s32>,
+    post-type: option<string>,
+    reply-to-user: option<created-comment-reply-to-user>,
+    score: option<s32>,
+    upvoted: option<bool>
+  }
+
+  record created-comment-owner {
+    accept-rate: option<s32>,
+    badge-counts: option<created-comment-owner-badge-counts>,
+    display-name: option<string>,
+    link: option<string>,
+    profile-image: option<string>,
+    reputation: option<s32>,
+    user-id: option<s32>,
+    user-type: option<string>
+  }
+
+  record created-comment-owner-badge-counts {
+    bronze: option<s32>,
+    gold: option<s32>,
+    silver: option<s32>
+  }
+
+  record created-comment-reply-to-user {
+    accept-rate: option<s32>,
+    badge-counts: option<created-comment-reply-to-user-badge-counts>,
+    display-name: option<string>,
+    link: option<string>,
+    profile-image: option<string>,
+    reputation: option<s32>,
+    user-id: option<s32>,
+    user-type: option<string>
+  }
+
+  record created-comment-reply-to-user-badge-counts {
+    bronze: option<s32>,
+    gold: option<s32>,
+    silver: option<s32>
+  }
+
+  variant get-comments-error {
+    bad-request(string),
+    unauthorized(string),
+    payment-required(string),
+    forbidden(string),
+    not-found(string),
+    method-not-allowed(string),
+    not-acceptable(string),
+    internal-server-error(string),
+    bad-gateway(string),
+    service-unavailable(string),
+    other(string)
+  }
+
+  variant get-comments-ids-error {
+    bad-request(string),
+    unauthorized(string),
+    payment-required(string),
+    forbidden(string),
+    not-found(string),
+    method-not-allowed(string),
+    not-acceptable(string),
+    internal-server-error(string),
+    bad-gateway(string),
+    service-unavailable(string),
+    other(string)
+  }
+
+  variant post-comments-id-delete-error {
+    bad-request(string),
+    unauthorized(string),
+    payment-required(string),
+    forbidden(string),
+    not-found(string),
+    method-not-allowed(string),
+    not-acceptable(string),
+    internal-server-error(string),
+    bad-gateway(string),
+    service-unavailable(string),
+    other(string)
+  }
+
+  variant post-comments-id-edit-error {
+    bad-request(string),
+    unauthorized(string),
+    payment-required(string),
+    forbidden(string),
+    not-found(string),
+    method-not-allowed(string),
+    not-acceptable(string),
+    internal-server-error(string),
+    bad-gateway(string),
+    service-unavailable(string),
+    other(string)
   }
 
   record get-comments-params {
@@ -338,7 +642,7 @@ interface comments {
     /// Each of these methods operates on a single site at a time, identified by the site parameter. This parameter can be the full domain name (ie. "stackoverflow.com"), or a short form identified by api_site_parameter on the site object.
     site: string
   }
-  get-comments: func(params: get-comments-params) -> result<string, string>;
+  get-comments: func(params: get-comments-params) -> result<comments, get-comments-error>;
 
   record get-comments-ids-params {
     /// Number list (semicolon delimited).
@@ -365,7 +669,7 @@ interface comments {
     /// Each of these methods operates on a single site at a time, identified by the site parameter. This parameter can be the full domain name (ie. "stackoverflow.com"), or a short form identified by api_site_parameter on the site object.
     site: string
   }
-  get-comments-ids: func(params: get-comments-ids-params) -> result<string, string>;
+  get-comments-ids: func(params: get-comments-ids-params) -> result<comments, get-comments-ids-error>;
 
   record post-comments-id-delete-params {
     id: string,
@@ -378,7 +682,7 @@ interface comments {
     site: string,
     preview: option<bool>
   }
-  post-comments-id-delete: func(params: post-comments-id-delete-params) -> result<string, string>;
+  post-comments-id-delete: func(params: post-comments-id-delete-params) -> result<string, post-comments-id-delete-error>;
 
   record post-comments-id-edit-params {
     id: string,
@@ -392,11 +696,50 @@ interface comments {
     body: option<string>,
     preview: option<bool>
   }
-  post-comments-id-edit: func(params: post-comments-id-edit-params) -> result<string, string>;
+  post-comments-id-edit: func(params: post-comments-id-edit-params) -> result<created-comment, post-comments-id-edit-error>;
 
 }
 
 interface errors {
+  record errors {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  record error {
+    error-id: option<f64>,
+    error-message: option<string>,
+    error-name: option<string>
+  }
+
+  variant get-errors-error {
+    bad-request(string),
+    unauthorized(string),
+    payment-required(string),
+    forbidden(string),
+    not-found(string),
+    method-not-allowed(string),
+    not-acceptable(string),
+    internal-server-error(string),
+    bad-gateway(string),
+    service-unavailable(string),
+    other(string)
+  }
+
+  variant get-errors-id-error {
+    bad-request(string),
+    unauthorized(string),
+    payment-required(string),
+    forbidden(string),
+    not-found(string),
+    method-not-allowed(string),
+    not-acceptable(string),
+    internal-server-error(string),
+    bad-gateway(string),
+    service-unavailable(string),
+    other(string)
+  }
+
   record get-errors-params {
     pagesize: option<s32>,
     page: option<s32>,
@@ -406,16 +749,35 @@ interface errors {
     /// All API responses are JSON, we do support JSONP with the callback query parameter.
     callback: option<string>
   }
-  get-errors: func(params: get-errors-params) -> result<string, string>;
+  get-errors: func(params: get-errors-params) -> result<errors, get-errors-error>;
 
   record get-errors-id-params {
     id: string
   }
-  get-errors-id: func(params: get-errors-id-params) -> result<string, string>;
+  get-errors-id: func(params: get-errors-id-params) -> result<error, get-errors-id-error>;
 
 }
 
 interface events {
+  record events {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  variant get-events-error {
+    bad-request(string),
+    unauthorized(string),
+    payment-required(string),
+    forbidden(string),
+    not-found(string),
+    method-not-allowed(string),
+    not-acceptable(string),
+    internal-server-error(string),
+    bad-gateway(string),
+    service-unavailable(string),
+    other(string)
+  }
+
   record get-events-params {
     pagesize: option<s32>,
     page: option<s32>,
@@ -429,11 +791,50 @@ interface events {
     /// Unix date.
     since: option<s32>
   }
-  get-events: func(params: get-events-params) -> result<string, string>;
+  get-events: func(params: get-events-params) -> result<events, get-events-error>;
 
 }
 
 interface filters {
+  record single-filter {
+    filter: option<string>,
+    filter-type: option<string>,
+    included-fields: option<list<string>>
+  }
+
+  record filters {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  variant get-filters-create-error {
+    bad-request(string),
+    unauthorized(string),
+    payment-required(string),
+    forbidden(string),
+    not-found(string),
+    method-not-allowed(string),
+    not-acceptable(string),
+    internal-server-error(string),
+    bad-gateway(string),
+    service-unavailable(string),
+    other(string)
+  }
+
+  variant get-filters-filters-error {
+    bad-request(string),
+    unauthorized(string),
+    payment-required(string),
+    forbidden(string),
+    not-found(string),
+    method-not-allowed(string),
+    not-acceptable(string),
+    internal-server-error(string),
+    bad-gateway(string),
+    service-unavailable(string),
+    other(string)
+  }
+
   record get-filters-create-params {
     base: option<string>,
     /// String list (semicolon delimited).
@@ -442,17 +843,50 @@ interface filters {
     include-op: option<string>,
     unsafe: option<bool>
   }
-  get-filters-create: func(params: get-filters-create-params) -> result<string, string>;
+  get-filters-create: func(params: get-filters-create-params) -> result<single-filter, get-filters-create-error>;
 
   record get-filters-filters-params {
     /// String list (semicolon delimited).
     filters: string
   }
-  get-filters-filters: func(params: get-filters-filters-params) -> result<string, string>;
+  get-filters-filters: func(params: get-filters-filters-params) -> result<filters, get-filters-filters-error>;
 
 }
 
 interface inbox {
+  record items {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  variant get-inbox-error {
+    bad-request(string),
+    unauthorized(string),
+    payment-required(string),
+    forbidden(string),
+    not-found(string),
+    method-not-allowed(string),
+    not-acceptable(string),
+    internal-server-error(string),
+    bad-gateway(string),
+    service-unavailable(string),
+    other(string)
+  }
+
+  variant get-inbox-unread-error {
+    bad-request(string),
+    unauthorized(string),
+    payment-required(string),
+    forbidden(string),
+    not-found(string),
+    method-not-allowed(string),
+    not-acceptable(string),
+    internal-server-error(string),
+    bad-gateway(string),
+    service-unavailable(string),
+    other(string)
+  }
+
   record get-inbox-params {
     pagesize: option<s32>,
     page: option<s32>,
@@ -462,7 +896,7 @@ interface inbox {
     /// All API responses are JSON, we do support JSONP with the callback query parameter.
     callback: option<string>
   }
-  get-inbox: func(params: get-inbox-params) -> result<string, string>;
+  get-inbox: func(params: get-inbox-params) -> result<items, get-inbox-error>;
 
   record get-inbox-unread-params {
     pagesize: option<s32>,
@@ -475,16 +909,74 @@ interface inbox {
     /// Unix date.
     since: option<s32>
   }
-  get-inbox-unread: func(params: get-inbox-unread-params) -> result<string, string>;
+  get-inbox-unread: func(params: get-inbox-unread-params) -> result<items, get-inbox-unread-error>;
 
 }
 
 interface info {
+  record object {
+    answers-per-minute: option<f64>,
+    api-revision: option<string>,
+    badges-per-minute: option<f64>,
+    new-active-users: option<s32>,
+    questions-per-minute: option<f64>,
+    site: option<object-site>,
+    total-accepted: option<s32>,
+    total-answers: option<s32>,
+    total-badges: option<s32>,
+    total-comments: option<s32>,
+    total-questions: option<s32>,
+    total-unanswered: option<s32>,
+    total-users: option<s32>,
+    total-votes: option<s32>
+  }
+
+  record object-site {
+    aliases: option<list<string>>,
+    api-site-parameter: option<string>,
+    audience: option<string>,
+    closed-beta-date: option<s32>,
+    favicon-url: option<string>,
+    high-resolution-icon-url: option<string>,
+    icon-url: option<string>,
+    launch-date: option<s32>,
+    logo-url: option<string>,
+    markdown-extensions: option<list<string>>,
+    name: option<string>,
+    open-beta-date: option<s32>,
+    related-sites: option<list<string>>,
+    site-state: option<string>,
+    site-type: option<string>,
+    site-url: option<string>,
+    styling: option<object-site-styling>,
+    twitter-account: option<string>
+  }
+
+  record object-site-styling {
+    link-color: option<string>,
+    tag-background-color: option<string>,
+    tag-foreground-color: option<string>
+  }
+
+  variant get-info-error {
+    bad-request(string),
+    unauthorized(string),
+    payment-required(string),
+    forbidden(string),
+    not-found(string),
+    method-not-allowed(string),
+    not-acceptable(string),
+    internal-server-error(string),
+    bad-gateway(string),
+    service-unavailable(string),
+    other(string)
+  }
+
   record get-info-params {
     /// Each of these methods operates on a single site at a time, identified by the site parameter. This parameter can be the full domain name (ie. "stackoverflow.com"), or a short form identified by api_site_parameter on the site object.
     site: string
   }
-  get-info: func(params: get-info-params) -> result<string, string>;
+  get-info: func(params: get-info-params) -> result<object, get-info-error>;
 
 }
 
@@ -547,6 +1039,543 @@ interface me {
     relevance,
   }
 
+  record user {
+    about-me: option<string>,
+    accept-rate: option<s32>,
+    account-id: option<s32>,
+    age: option<s32>,
+    answer-count: option<s32>,
+    badge-counts: option<user-badge-counts>,
+    creation-date: option<s32>,
+    display-name: option<string>,
+    down-vote-count: option<s32>,
+    is-employee: option<bool>,
+    last-access-date: option<s32>,
+    last-modified-date: option<s32>,
+    link: option<string>,
+    location: option<string>,
+    profile-image: option<string>,
+    question-count: option<s32>,
+    reputation: option<s32>,
+    reputation-change-day: option<s32>,
+    reputation-change-month: option<s32>,
+    reputation-change-quarter: option<s32>,
+    reputation-change-week: option<s32>,
+    reputation-change-year: option<s32>,
+    timed-penalty-date: option<s32>,
+    up-vote-count: option<s32>,
+    user-id: option<s32>,
+    user-type: option<string>,
+    view-count: option<s32>,
+    website-url: option<string>
+  }
+
+  record user-badge-counts {
+    bronze: option<s32>,
+    gold: option<s32>,
+    silver: option<s32>
+  }
+
+  record answers {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  record network-users {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  record badges {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  record comments {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  record questions {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  record inbox-items {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  record account-merge {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  record notifications {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  record privileges {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  record reputation-changes {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  record reputation-history {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  record suggested-edits {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  record tags {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  record user-timeline-objects {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  record top-tag-objects {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  record write-permissions {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  variant get-me-error {
+    bad-request(string),
+    unauthorized(string),
+    payment-required(string),
+    forbidden(string),
+    not-found(string),
+    method-not-allowed(string),
+    not-acceptable(string),
+    internal-server-error(string),
+    bad-gateway(string),
+    service-unavailable(string),
+    other(string)
+  }
+
+  variant get-me-answers-error {
+    bad-request(string),
+    unauthorized(string),
+    payment-required(string),
+    forbidden(string),
+    not-found(string),
+    method-not-allowed(string),
+    not-acceptable(string),
+    internal-server-error(string),
+    bad-gateway(string),
+    service-unavailable(string),
+    other(string)
+  }
+
+  variant get-me-associated-error {
+    bad-request(string),
+    unauthorized(string),
+    payment-required(string),
+    forbidden(string),
+    not-found(string),
+    method-not-allowed(string),
+    not-acceptable(string),
+    internal-server-error(string),
+    bad-gateway(string),
+    service-unavailable(string),
+    other(string)
+  }
+
+  variant get-me-badges-error {
+    bad-request(string),
+    unauthorized(string),
+    payment-required(string),
+    forbidden(string),
+    not-found(string),
+    method-not-allowed(string),
+    not-acceptable(string),
+    internal-server-error(string),
+    bad-gateway(string),
+    service-unavailable(string),
+    other(string)
+  }
+
+  variant get-me-comments-error {
+    bad-request(string),
+    unauthorized(string),
+    payment-required(string),
+    forbidden(string),
+    not-found(string),
+    method-not-allowed(string),
+    not-acceptable(string),
+    internal-server-error(string),
+    bad-gateway(string),
+    service-unavailable(string),
+    other(string)
+  }
+
+  variant get-me-comments-to-id-error {
+    bad-request(string),
+    unauthorized(string),
+    payment-required(string),
+    forbidden(string),
+    not-found(string),
+    method-not-allowed(string),
+    not-acceptable(string),
+    internal-server-error(string),
+    bad-gateway(string),
+    service-unavailable(string),
+    other(string)
+  }
+
+  variant get-me-favorites-error {
+    bad-request(string),
+    unauthorized(string),
+    payment-required(string),
+    forbidden(string),
+    not-found(string),
+    method-not-allowed(string),
+    not-acceptable(string),
+    internal-server-error(string),
+    bad-gateway(string),
+    service-unavailable(string),
+    other(string)
+  }
+
+  variant get-me-inbox-error {
+    bad-request(string),
+    unauthorized(string),
+    payment-required(string),
+    forbidden(string),
+    not-found(string),
+    method-not-allowed(string),
+    not-acceptable(string),
+    internal-server-error(string),
+    bad-gateway(string),
+    service-unavailable(string),
+    other(string)
+  }
+
+  variant get-me-inbox-unread-error {
+    bad-request(string),
+    unauthorized(string),
+    payment-required(string),
+    forbidden(string),
+    not-found(string),
+    method-not-allowed(string),
+    not-acceptable(string),
+    internal-server-error(string),
+    bad-gateway(string),
+    service-unavailable(string),
+    other(string)
+  }
+
+  variant get-me-mentioned-error {
+    bad-request(string),
+    unauthorized(string),
+    payment-required(string),
+    forbidden(string),
+    not-found(string),
+    method-not-allowed(string),
+    not-acceptable(string),
+    internal-server-error(string),
+    bad-gateway(string),
+    service-unavailable(string),
+    other(string)
+  }
+
+  variant get-me-merges-error {
+    bad-request(string),
+    unauthorized(string),
+    payment-required(string),
+    forbidden(string),
+    not-found(string),
+    method-not-allowed(string),
+    not-acceptable(string),
+    internal-server-error(string),
+    bad-gateway(string),
+    service-unavailable(string),
+    other(string)
+  }
+
+  variant get-me-notifications-error {
+    bad-request(string),
+    unauthorized(string),
+    payment-required(string),
+    forbidden(string),
+    not-found(string),
+    method-not-allowed(string),
+    not-acceptable(string),
+    internal-server-error(string),
+    bad-gateway(string),
+    service-unavailable(string),
+    other(string)
+  }
+
+  variant get-me-notifications-unread-error {
+    bad-request(string),
+    unauthorized(string),
+    payment-required(string),
+    forbidden(string),
+    not-found(string),
+    method-not-allowed(string),
+    not-acceptable(string),
+    internal-server-error(string),
+    bad-gateway(string),
+    service-unavailable(string),
+    other(string)
+  }
+
+  variant get-me-privileges-error {
+    bad-request(string),
+    unauthorized(string),
+    payment-required(string),
+    forbidden(string),
+    not-found(string),
+    method-not-allowed(string),
+    not-acceptable(string),
+    internal-server-error(string),
+    bad-gateway(string),
+    service-unavailable(string),
+    other(string)
+  }
+
+  variant get-me-questions-error {
+    bad-request(string),
+    unauthorized(string),
+    payment-required(string),
+    forbidden(string),
+    not-found(string),
+    method-not-allowed(string),
+    not-acceptable(string),
+    internal-server-error(string),
+    bad-gateway(string),
+    service-unavailable(string),
+    other(string)
+  }
+
+  variant get-me-questions-featured-error {
+    bad-request(string),
+    unauthorized(string),
+    payment-required(string),
+    forbidden(string),
+    not-found(string),
+    method-not-allowed(string),
+    not-acceptable(string),
+    internal-server-error(string),
+    bad-gateway(string),
+    service-unavailable(string),
+    other(string)
+  }
+
+  variant get-me-questions-no-answers-error {
+    bad-request(string),
+    unauthorized(string),
+    payment-required(string),
+    forbidden(string),
+    not-found(string),
+    method-not-allowed(string),
+    not-acceptable(string),
+    internal-server-error(string),
+    bad-gateway(string),
+    service-unavailable(string),
+    other(string)
+  }
+
+  variant get-me-questions-unaccepted-error {
+    bad-request(string),
+    unauthorized(string),
+    payment-required(string),
+    forbidden(string),
+    not-found(string),
+    method-not-allowed(string),
+    not-acceptable(string),
+    internal-server-error(string),
+    bad-gateway(string),
+    service-unavailable(string),
+    other(string)
+  }
+
+  variant get-me-questions-unanswered-error {
+    bad-request(string),
+    unauthorized(string),
+    payment-required(string),
+    forbidden(string),
+    not-found(string),
+    method-not-allowed(string),
+    not-acceptable(string),
+    internal-server-error(string),
+    bad-gateway(string),
+    service-unavailable(string),
+    other(string)
+  }
+
+  variant get-me-reputation-error {
+    bad-request(string),
+    unauthorized(string),
+    payment-required(string),
+    forbidden(string),
+    not-found(string),
+    method-not-allowed(string),
+    not-acceptable(string),
+    internal-server-error(string),
+    bad-gateway(string),
+    service-unavailable(string),
+    other(string)
+  }
+
+  variant get-me-reputation-history-error {
+    bad-request(string),
+    unauthorized(string),
+    payment-required(string),
+    forbidden(string),
+    not-found(string),
+    method-not-allowed(string),
+    not-acceptable(string),
+    internal-server-error(string),
+    bad-gateway(string),
+    service-unavailable(string),
+    other(string)
+  }
+
+  variant get-me-reputation-history-full-error {
+    bad-request(string),
+    unauthorized(string),
+    payment-required(string),
+    forbidden(string),
+    not-found(string),
+    method-not-allowed(string),
+    not-acceptable(string),
+    internal-server-error(string),
+    bad-gateway(string),
+    service-unavailable(string),
+    other(string)
+  }
+
+  variant get-me-suggested-edits-error {
+    bad-request(string),
+    unauthorized(string),
+    payment-required(string),
+    forbidden(string),
+    not-found(string),
+    method-not-allowed(string),
+    not-acceptable(string),
+    internal-server-error(string),
+    bad-gateway(string),
+    service-unavailable(string),
+    other(string)
+  }
+
+  variant get-me-tags-error {
+    bad-request(string),
+    unauthorized(string),
+    payment-required(string),
+    forbidden(string),
+    not-found(string),
+    method-not-allowed(string),
+    not-acceptable(string),
+    internal-server-error(string),
+    bad-gateway(string),
+    service-unavailable(string),
+    other(string)
+  }
+
+  variant get-me-tags-tags-top-answers-error {
+    bad-request(string),
+    unauthorized(string),
+    payment-required(string),
+    forbidden(string),
+    not-found(string),
+    method-not-allowed(string),
+    not-acceptable(string),
+    internal-server-error(string),
+    bad-gateway(string),
+    service-unavailable(string),
+    other(string)
+  }
+
+  variant get-me-tags-tags-top-questions-error {
+    bad-request(string),
+    unauthorized(string),
+    payment-required(string),
+    forbidden(string),
+    not-found(string),
+    method-not-allowed(string),
+    not-acceptable(string),
+    internal-server-error(string),
+    bad-gateway(string),
+    service-unavailable(string),
+    other(string)
+  }
+
+  variant get-me-timeline-error {
+    bad-request(string),
+    unauthorized(string),
+    payment-required(string),
+    forbidden(string),
+    not-found(string),
+    method-not-allowed(string),
+    not-acceptable(string),
+    internal-server-error(string),
+    bad-gateway(string),
+    service-unavailable(string),
+    other(string)
+  }
+
+  variant get-me-top-answer-tags-error {
+    bad-request(string),
+    unauthorized(string),
+    payment-required(string),
+    forbidden(string),
+    not-found(string),
+    method-not-allowed(string),
+    not-acceptable(string),
+    internal-server-error(string),
+    bad-gateway(string),
+    service-unavailable(string),
+    other(string)
+  }
+
+  variant get-me-top-question-tags-error {
+    bad-request(string),
+    unauthorized(string),
+    payment-required(string),
+    forbidden(string),
+    not-found(string),
+    method-not-allowed(string),
+    not-acceptable(string),
+    internal-server-error(string),
+    bad-gateway(string),
+    service-unavailable(string),
+    other(string)
+  }
+
+  variant get-me-write-permissions-error {
+    bad-request(string),
+    unauthorized(string),
+    payment-required(string),
+    forbidden(string),
+    not-found(string),
+    method-not-allowed(string),
+    not-acceptable(string),
+    internal-server-error(string),
+    bad-gateway(string),
+    service-unavailable(string),
+    other(string)
+  }
+
   record get-me-params {
     order: option<get-me-order-enum>,
     /// sort = reputation => number
@@ -570,7 +1599,7 @@ interface me {
     /// Each of these methods operates on a single site at a time, identified by the site parameter. This parameter can be the full domain name (ie. "stackoverflow.com"), or a short form identified by api_site_parameter on the site object.
     site: string
   }
-  get-me: func(params: get-me-params) -> result<string, string>;
+  get-me: func(params: get-me-params) -> result<user, get-me-error>;
 
   record get-me-answers-params {
     order: option<get-me-order-enum>,
@@ -595,7 +1624,7 @@ interface me {
     /// Each of these methods operates on a single site at a time, identified by the site parameter. This parameter can be the full domain name (ie. "stackoverflow.com"), or a short form identified by api_site_parameter on the site object.
     site: string
   }
-  get-me-answers: func(params: get-me-answers-params) -> result<string, string>;
+  get-me-answers: func(params: get-me-answers-params) -> result<answers, get-me-answers-error>;
 
   record get-me-associated-params {
     pagesize: option<s32>,
@@ -606,7 +1635,7 @@ interface me {
     /// All API responses are JSON, we do support JSONP with the callback query parameter.
     callback: option<string>
   }
-  get-me-associated: func(params: get-me-associated-params) -> result<string, string>;
+  get-me-associated: func(params: get-me-associated-params) -> result<network-users, get-me-associated-error>;
 
   record get-me-badges-params {
     order: option<get-me-order-enum>,
@@ -631,7 +1660,7 @@ interface me {
     /// Each of these methods operates on a single site at a time, identified by the site parameter. This parameter can be the full domain name (ie. "stackoverflow.com"), or a short form identified by api_site_parameter on the site object.
     site: string
   }
-  get-me-badges: func(params: get-me-badges-params) -> result<string, string>;
+  get-me-badges: func(params: get-me-badges-params) -> result<badges, get-me-badges-error>;
 
   record get-me-comments-params {
     order: option<get-me-order-enum>,
@@ -656,7 +1685,7 @@ interface me {
     /// Each of these methods operates on a single site at a time, identified by the site parameter. This parameter can be the full domain name (ie. "stackoverflow.com"), or a short form identified by api_site_parameter on the site object.
     site: string
   }
-  get-me-comments: func(params: get-me-comments-params) -> result<string, string>;
+  get-me-comments: func(params: get-me-comments-params) -> result<comments, get-me-comments-error>;
 
   record get-me-comments-to-id-params {
     to-id: string,
@@ -682,7 +1711,7 @@ interface me {
     /// Each of these methods operates on a single site at a time, identified by the site parameter. This parameter can be the full domain name (ie. "stackoverflow.com"), or a short form identified by api_site_parameter on the site object.
     site: string
   }
-  get-me-comments-to-id: func(params: get-me-comments-to-id-params) -> result<string, string>;
+  get-me-comments-to-id: func(params: get-me-comments-to-id-params) -> result<comments, get-me-comments-to-id-error>;
 
   record get-me-favorites-params {
     order: option<get-me-order-enum>,
@@ -707,7 +1736,7 @@ interface me {
     /// Each of these methods operates on a single site at a time, identified by the site parameter. This parameter can be the full domain name (ie. "stackoverflow.com"), or a short form identified by api_site_parameter on the site object.
     site: string
   }
-  get-me-favorites: func(params: get-me-favorites-params) -> result<string, string>;
+  get-me-favorites: func(params: get-me-favorites-params) -> result<questions, get-me-favorites-error>;
 
   record get-me-inbox-params {
     pagesize: option<s32>,
@@ -720,7 +1749,7 @@ interface me {
     /// Each of these methods operates on a single site at a time, identified by the site parameter. This parameter can be the full domain name (ie. "stackoverflow.com"), or a short form identified by api_site_parameter on the site object.
     site: string
   }
-  get-me-inbox: func(params: get-me-inbox-params) -> result<string, string>;
+  get-me-inbox: func(params: get-me-inbox-params) -> result<inbox-items, get-me-inbox-error>;
 
   record get-me-inbox-unread-params {
     pagesize: option<s32>,
@@ -735,7 +1764,7 @@ interface me {
     /// Unix date.
     since: option<s32>
   }
-  get-me-inbox-unread: func(params: get-me-inbox-unread-params) -> result<string, string>;
+  get-me-inbox-unread: func(params: get-me-inbox-unread-params) -> result<inbox-items, get-me-inbox-unread-error>;
 
   record get-me-mentioned-params {
     order: option<get-me-order-enum>,
@@ -760,7 +1789,7 @@ interface me {
     /// Each of these methods operates on a single site at a time, identified by the site parameter. This parameter can be the full domain name (ie. "stackoverflow.com"), or a short form identified by api_site_parameter on the site object.
     site: string
   }
-  get-me-mentioned: func(params: get-me-mentioned-params) -> result<string, string>;
+  get-me-mentioned: func(params: get-me-mentioned-params) -> result<comments, get-me-mentioned-error>;
 
   record get-me-merges-params {
     pagesize: option<s32>,
@@ -771,7 +1800,7 @@ interface me {
     /// All API responses are JSON, we do support JSONP with the callback query parameter.
     callback: option<string>
   }
-  get-me-merges: func(params: get-me-merges-params) -> result<string, string>;
+  get-me-merges: func(params: get-me-merges-params) -> result<account-merge, get-me-merges-error>;
 
   record get-me-notifications-params {
     pagesize: option<s32>,
@@ -784,7 +1813,7 @@ interface me {
     /// Each of these methods operates on a single site at a time, identified by the site parameter. This parameter can be the full domain name (ie. "stackoverflow.com"), or a short form identified by api_site_parameter on the site object.
     site: string
   }
-  get-me-notifications: func(params: get-me-notifications-params) -> result<string, string>;
+  get-me-notifications: func(params: get-me-notifications-params) -> result<notifications, get-me-notifications-error>;
 
   record get-me-notifications-unread-params {
     pagesize: option<s32>,
@@ -797,7 +1826,7 @@ interface me {
     /// Each of these methods operates on a single site at a time, identified by the site parameter. This parameter can be the full domain name (ie. "stackoverflow.com"), or a short form identified by api_site_parameter on the site object.
     site: string
   }
-  get-me-notifications-unread: func(params: get-me-notifications-unread-params) -> result<string, string>;
+  get-me-notifications-unread: func(params: get-me-notifications-unread-params) -> result<notifications, get-me-notifications-unread-error>;
 
   record get-me-privileges-params {
     pagesize: option<s32>,
@@ -810,7 +1839,7 @@ interface me {
     /// Each of these methods operates on a single site at a time, identified by the site parameter. This parameter can be the full domain name (ie. "stackoverflow.com"), or a short form identified by api_site_parameter on the site object.
     site: string
   }
-  get-me-privileges: func(params: get-me-privileges-params) -> result<string, string>;
+  get-me-privileges: func(params: get-me-privileges-params) -> result<privileges, get-me-privileges-error>;
 
   record get-me-questions-params {
     order: option<get-me-order-enum>,
@@ -835,7 +1864,7 @@ interface me {
     /// Each of these methods operates on a single site at a time, identified by the site parameter. This parameter can be the full domain name (ie. "stackoverflow.com"), or a short form identified by api_site_parameter on the site object.
     site: string
   }
-  get-me-questions: func(params: get-me-questions-params) -> result<string, string>;
+  get-me-questions: func(params: get-me-questions-params) -> result<questions, get-me-questions-error>;
 
   record get-me-questions-featured-params {
     order: option<get-me-order-enum>,
@@ -860,7 +1889,7 @@ interface me {
     /// Each of these methods operates on a single site at a time, identified by the site parameter. This parameter can be the full domain name (ie. "stackoverflow.com"), or a short form identified by api_site_parameter on the site object.
     site: string
   }
-  get-me-questions-featured: func(params: get-me-questions-featured-params) -> result<string, string>;
+  get-me-questions-featured: func(params: get-me-questions-featured-params) -> result<questions, get-me-questions-featured-error>;
 
   record get-me-questions-no-answers-params {
     order: option<get-me-order-enum>,
@@ -885,7 +1914,7 @@ interface me {
     /// Each of these methods operates on a single site at a time, identified by the site parameter. This parameter can be the full domain name (ie. "stackoverflow.com"), or a short form identified by api_site_parameter on the site object.
     site: string
   }
-  get-me-questions-no-answers: func(params: get-me-questions-no-answers-params) -> result<string, string>;
+  get-me-questions-no-answers: func(params: get-me-questions-no-answers-params) -> result<questions, get-me-questions-no-answers-error>;
 
   record get-me-questions-unaccepted-params {
     order: option<get-me-order-enum>,
@@ -910,7 +1939,7 @@ interface me {
     /// Each of these methods operates on a single site at a time, identified by the site parameter. This parameter can be the full domain name (ie. "stackoverflow.com"), or a short form identified by api_site_parameter on the site object.
     site: string
   }
-  get-me-questions-unaccepted: func(params: get-me-questions-unaccepted-params) -> result<string, string>;
+  get-me-questions-unaccepted: func(params: get-me-questions-unaccepted-params) -> result<questions, get-me-questions-unaccepted-error>;
 
   record get-me-questions-unanswered-params {
     order: option<get-me-order-enum>,
@@ -935,7 +1964,7 @@ interface me {
     /// Each of these methods operates on a single site at a time, identified by the site parameter. This parameter can be the full domain name (ie. "stackoverflow.com"), or a short form identified by api_site_parameter on the site object.
     site: string
   }
-  get-me-questions-unanswered: func(params: get-me-questions-unanswered-params) -> result<string, string>;
+  get-me-questions-unanswered: func(params: get-me-questions-unanswered-params) -> result<questions, get-me-questions-unanswered-error>;
 
   record get-me-reputation-params {
     /// #Discussion
@@ -946,7 +1975,7 @@ interface me {
     /// Each of these methods operates on a single site at a time, identified by the site parameter. This parameter can be the full domain name (ie. "stackoverflow.com"), or a short form identified by api_site_parameter on the site object.
     site: string
   }
-  get-me-reputation: func(params: get-me-reputation-params) -> result<string, string>;
+  get-me-reputation: func(params: get-me-reputation-params) -> result<reputation-changes, get-me-reputation-error>;
 
   record get-me-reputation-history-params {
     pagesize: option<s32>,
@@ -959,7 +1988,7 @@ interface me {
     /// Each of these methods operates on a single site at a time, identified by the site parameter. This parameter can be the full domain name (ie. "stackoverflow.com"), or a short form identified by api_site_parameter on the site object.
     site: string
   }
-  get-me-reputation-history: func(params: get-me-reputation-history-params) -> result<string, string>;
+  get-me-reputation-history: func(params: get-me-reputation-history-params) -> result<reputation-history, get-me-reputation-history-error>;
 
   record get-me-reputation-history-full-params {
     pagesize: option<s32>,
@@ -972,7 +2001,7 @@ interface me {
     /// Each of these methods operates on a single site at a time, identified by the site parameter. This parameter can be the full domain name (ie. "stackoverflow.com"), or a short form identified by api_site_parameter on the site object.
     site: string
   }
-  get-me-reputation-history-full: func(params: get-me-reputation-history-full-params) -> result<string, string>;
+  get-me-reputation-history-full: func(params: get-me-reputation-history-full-params) -> result<reputation-history, get-me-reputation-history-full-error>;
 
   record get-me-suggested-edits-params {
     order: option<get-me-order-enum>,
@@ -997,7 +2026,7 @@ interface me {
     /// Each of these methods operates on a single site at a time, identified by the site parameter. This parameter can be the full domain name (ie. "stackoverflow.com"), or a short form identified by api_site_parameter on the site object.
     site: string
   }
-  get-me-suggested-edits: func(params: get-me-suggested-edits-params) -> result<string, string>;
+  get-me-suggested-edits: func(params: get-me-suggested-edits-params) -> result<suggested-edits, get-me-suggested-edits-error>;
 
   record get-me-tags-params {
     order: option<get-me-order-enum>,
@@ -1022,7 +2051,7 @@ interface me {
     /// Each of these methods operates on a single site at a time, identified by the site parameter. This parameter can be the full domain name (ie. "stackoverflow.com"), or a short form identified by api_site_parameter on the site object.
     site: string
   }
-  get-me-tags: func(params: get-me-tags-params) -> result<string, string>;
+  get-me-tags: func(params: get-me-tags-params) -> result<tags, get-me-tags-error>;
 
   record get-me-tags-tags-top-answers-params {
     /// String list (semicolon delimited).
@@ -1049,7 +2078,7 @@ interface me {
     /// Each of these methods operates on a single site at a time, identified by the site parameter. This parameter can be the full domain name (ie. "stackoverflow.com"), or a short form identified by api_site_parameter on the site object.
     site: string
   }
-  get-me-tags-tags-top-answers: func(params: get-me-tags-tags-top-answers-params) -> result<string, string>;
+  get-me-tags-tags-top-answers: func(params: get-me-tags-tags-top-answers-params) -> result<answers, get-me-tags-tags-top-answers-error>;
 
   record get-me-tags-tags-top-questions-params {
     /// String list (semicolon delimited).
@@ -1076,7 +2105,7 @@ interface me {
     /// Each of these methods operates on a single site at a time, identified by the site parameter. This parameter can be the full domain name (ie. "stackoverflow.com"), or a short form identified by api_site_parameter on the site object.
     site: string
   }
-  get-me-tags-tags-top-questions: func(params: get-me-tags-tags-top-questions-params) -> result<string, string>;
+  get-me-tags-tags-top-questions: func(params: get-me-tags-tags-top-questions-params) -> result<questions, get-me-tags-tags-top-questions-error>;
 
   record get-me-timeline-params {
     /// Unix date.
@@ -1093,7 +2122,7 @@ interface me {
     /// Each of these methods operates on a single site at a time, identified by the site parameter. This parameter can be the full domain name (ie. "stackoverflow.com"), or a short form identified by api_site_parameter on the site object.
     site: string
   }
-  get-me-timeline: func(params: get-me-timeline-params) -> result<string, string>;
+  get-me-timeline: func(params: get-me-timeline-params) -> result<user-timeline-objects, get-me-timeline-error>;
 
   record get-me-top-answer-tags-params {
     pagesize: option<s32>,
@@ -1106,7 +2135,7 @@ interface me {
     /// Each of these methods operates on a single site at a time, identified by the site parameter. This parameter can be the full domain name (ie. "stackoverflow.com"), or a short form identified by api_site_parameter on the site object.
     site: string
   }
-  get-me-top-answer-tags: func(params: get-me-top-answer-tags-params) -> result<string, string>;
+  get-me-top-answer-tags: func(params: get-me-top-answer-tags-params) -> result<top-tag-objects, get-me-top-answer-tags-error>;
 
   record get-me-top-question-tags-params {
     pagesize: option<s32>,
@@ -1119,7 +2148,7 @@ interface me {
     /// Each of these methods operates on a single site at a time, identified by the site parameter. This parameter can be the full domain name (ie. "stackoverflow.com"), or a short form identified by api_site_parameter on the site object.
     site: string
   }
-  get-me-top-question-tags: func(params: get-me-top-question-tags-params) -> result<string, string>;
+  get-me-top-question-tags: func(params: get-me-top-question-tags-params) -> result<top-tag-objects, get-me-top-question-tags-error>;
 
   record get-me-write-permissions-params {
     pagesize: option<s32>,
@@ -1132,11 +2161,44 @@ interface me {
     /// Each of these methods operates on a single site at a time, identified by the site parameter. This parameter can be the full domain name (ie. "stackoverflow.com"), or a short form identified by api_site_parameter on the site object.
     site: string
   }
-  get-me-write-permissions: func(params: get-me-write-permissions-params) -> result<string, string>;
+  get-me-write-permissions: func(params: get-me-write-permissions-params) -> result<write-permissions, get-me-write-permissions-error>;
 
 }
 
 interface notifications {
+  record notifications {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  variant get-notifications-error {
+    bad-request(string),
+    unauthorized(string),
+    payment-required(string),
+    forbidden(string),
+    not-found(string),
+    method-not-allowed(string),
+    not-acceptable(string),
+    internal-server-error(string),
+    bad-gateway(string),
+    service-unavailable(string),
+    other(string)
+  }
+
+  variant get-notifications-unread-error {
+    bad-request(string),
+    unauthorized(string),
+    payment-required(string),
+    forbidden(string),
+    not-found(string),
+    method-not-allowed(string),
+    not-acceptable(string),
+    internal-server-error(string),
+    bad-gateway(string),
+    service-unavailable(string),
+    other(string)
+  }
+
   record get-notifications-params {
     pagesize: option<s32>,
     page: option<s32>,
@@ -1146,7 +2208,7 @@ interface notifications {
     /// All API responses are JSON, we do support JSONP with the callback query parameter.
     callback: option<string>
   }
-  get-notifications: func(params: get-notifications-params) -> result<string, string>;
+  get-notifications: func(params: get-notifications-params) -> result<notifications, get-notifications-error>;
 
   record get-notifications-unread-params {
     pagesize: option<s32>,
@@ -1157,7 +2219,7 @@ interface notifications {
     /// All API responses are JSON, we do support JSONP with the callback query parameter.
     callback: option<string>
   }
-  get-notifications-unread: func(params: get-notifications-unread-params) -> result<string, string>;
+  get-notifications-unread: func(params: get-notifications-unread-params) -> result<notifications, get-notifications-unread-error>;
 
 }
 
@@ -1184,6 +2246,160 @@ interface posts {
     rejection,
   }
 
+  record posts {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  record comments {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  record revisions {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  record suggested-edits {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  record created-comment {
+    body: option<string>,
+    body-markdown: option<string>,
+    can-flag: option<bool>,
+    comment-id: option<s32>,
+    creation-date: option<s32>,
+    edited: option<bool>,
+    link: option<string>,
+    owner: option<created-comment-owner>,
+    post-id: option<s32>,
+    post-type: option<string>,
+    reply-to-user: option<created-comment-reply-to-user>,
+    score: option<s32>,
+    upvoted: option<bool>
+  }
+
+  record created-comment-owner {
+    accept-rate: option<s32>,
+    badge-counts: option<created-comment-owner-badge-counts>,
+    display-name: option<string>,
+    link: option<string>,
+    profile-image: option<string>,
+    reputation: option<s32>,
+    user-id: option<s32>,
+    user-type: option<string>
+  }
+
+  record created-comment-owner-badge-counts {
+    bronze: option<s32>,
+    gold: option<s32>,
+    silver: option<s32>
+  }
+
+  record created-comment-reply-to-user {
+    accept-rate: option<s32>,
+    badge-counts: option<created-comment-reply-to-user-badge-counts>,
+    display-name: option<string>,
+    link: option<string>,
+    profile-image: option<string>,
+    reputation: option<s32>,
+    user-id: option<s32>,
+    user-type: option<string>
+  }
+
+  record created-comment-reply-to-user-badge-counts {
+    bronze: option<s32>,
+    gold: option<s32>,
+    silver: option<s32>
+  }
+
+  variant get-posts-error {
+    bad-request(string),
+    unauthorized(string),
+    payment-required(string),
+    forbidden(string),
+    not-found(string),
+    method-not-allowed(string),
+    not-acceptable(string),
+    internal-server-error(string),
+    bad-gateway(string),
+    service-unavailable(string),
+    other(string)
+  }
+
+  variant get-posts-ids-error {
+    bad-request(string),
+    unauthorized(string),
+    payment-required(string),
+    forbidden(string),
+    not-found(string),
+    method-not-allowed(string),
+    not-acceptable(string),
+    internal-server-error(string),
+    bad-gateway(string),
+    service-unavailable(string),
+    other(string)
+  }
+
+  variant get-posts-ids-comments-error {
+    bad-request(string),
+    unauthorized(string),
+    payment-required(string),
+    forbidden(string),
+    not-found(string),
+    method-not-allowed(string),
+    not-acceptable(string),
+    internal-server-error(string),
+    bad-gateway(string),
+    service-unavailable(string),
+    other(string)
+  }
+
+  variant get-posts-ids-revisions-error {
+    bad-request(string),
+    unauthorized(string),
+    payment-required(string),
+    forbidden(string),
+    not-found(string),
+    method-not-allowed(string),
+    not-acceptable(string),
+    internal-server-error(string),
+    bad-gateway(string),
+    service-unavailable(string),
+    other(string)
+  }
+
+  variant get-posts-ids-suggested-edits-error {
+    bad-request(string),
+    unauthorized(string),
+    payment-required(string),
+    forbidden(string),
+    not-found(string),
+    method-not-allowed(string),
+    not-acceptable(string),
+    internal-server-error(string),
+    bad-gateway(string),
+    service-unavailable(string),
+    other(string)
+  }
+
+  variant post-posts-id-comments-add-error {
+    bad-request(string),
+    unauthorized(string),
+    payment-required(string),
+    forbidden(string),
+    not-found(string),
+    method-not-allowed(string),
+    not-acceptable(string),
+    internal-server-error(string),
+    bad-gateway(string),
+    service-unavailable(string),
+    other(string)
+  }
+
   record get-posts-params {
     order: option<get-posts-order-enum>,
     /// sort = activity => date
@@ -1207,7 +2423,7 @@ interface posts {
     /// Each of these methods operates on a single site at a time, identified by the site parameter. This parameter can be the full domain name (ie. "stackoverflow.com"), or a short form identified by api_site_parameter on the site object.
     site: string
   }
-  get-posts: func(params: get-posts-params) -> result<string, string>;
+  get-posts: func(params: get-posts-params) -> result<posts, get-posts-error>;
 
   record get-posts-ids-params {
     /// Number list (semicolon delimited).
@@ -1234,7 +2450,7 @@ interface posts {
     /// Each of these methods operates on a single site at a time, identified by the site parameter. This parameter can be the full domain name (ie. "stackoverflow.com"), or a short form identified by api_site_parameter on the site object.
     site: string
   }
-  get-posts-ids: func(params: get-posts-ids-params) -> result<string, string>;
+  get-posts-ids: func(params: get-posts-ids-params) -> result<posts, get-posts-ids-error>;
 
   record get-posts-ids-comments-params {
     /// Number list (semicolon delimited).
@@ -1261,7 +2477,7 @@ interface posts {
     /// Each of these methods operates on a single site at a time, identified by the site parameter. This parameter can be the full domain name (ie. "stackoverflow.com"), or a short form identified by api_site_parameter on the site object.
     site: string
   }
-  get-posts-ids-comments: func(params: get-posts-ids-comments-params) -> result<string, string>;
+  get-posts-ids-comments: func(params: get-posts-ids-comments-params) -> result<comments, get-posts-ids-comments-error>;
 
   record get-posts-ids-revisions-params {
     /// Number list (semicolon delimited).
@@ -1280,7 +2496,7 @@ interface posts {
     /// Each of these methods operates on a single site at a time, identified by the site parameter. This parameter can be the full domain name (ie. "stackoverflow.com"), or a short form identified by api_site_parameter on the site object.
     site: string
   }
-  get-posts-ids-revisions: func(params: get-posts-ids-revisions-params) -> result<string, string>;
+  get-posts-ids-revisions: func(params: get-posts-ids-revisions-params) -> result<revisions, get-posts-ids-revisions-error>;
 
   record get-posts-ids-suggested-edits-params {
     /// Number list (semicolon delimited).
@@ -1307,7 +2523,7 @@ interface posts {
     /// Each of these methods operates on a single site at a time, identified by the site parameter. This parameter can be the full domain name (ie. "stackoverflow.com"), or a short form identified by api_site_parameter on the site object.
     site: string
   }
-  get-posts-ids-suggested-edits: func(params: get-posts-ids-suggested-edits-params) -> result<string, string>;
+  get-posts-ids-suggested-edits: func(params: get-posts-ids-suggested-edits-params) -> result<suggested-edits, get-posts-ids-suggested-edits-error>;
 
   record post-posts-id-comments-add-params {
     id: string,
@@ -1321,11 +2537,30 @@ interface posts {
     body: option<string>,
     preview: option<bool>
   }
-  post-posts-id-comments-add: func(params: post-posts-id-comments-add-params) -> result<string, string>;
+  post-posts-id-comments-add: func(params: post-posts-id-comments-add-params) -> result<created-comment, post-posts-id-comments-add-error>;
 
 }
 
 interface privileges {
+  record privileges {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  variant get-privileges-error {
+    bad-request(string),
+    unauthorized(string),
+    payment-required(string),
+    forbidden(string),
+    not-found(string),
+    method-not-allowed(string),
+    not-acceptable(string),
+    internal-server-error(string),
+    bad-gateway(string),
+    service-unavailable(string),
+    other(string)
+  }
+
   record get-privileges-params {
     pagesize: option<s32>,
     page: option<s32>,
@@ -1337,7 +2572,7 @@ interface privileges {
     /// Each of these methods operates on a single site at a time, identified by the site parameter. This parameter can be the full domain name (ie. "stackoverflow.com"), or a short form identified by api_site_parameter on the site object.
     site: string
   }
-  get-privileges: func(params: get-privileges-params) -> result<string, string>;
+  get-privileges: func(params: get-privileges-params) -> result<privileges, get-privileges-error>;
 
 }
 
@@ -1375,6 +2610,166 @@ interface questions {
     rank,
   }
 
+  record questions {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  record answers {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  record comments {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  record question-timeline-events {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  variant get-questions-error {
+    bad-request(string),
+    unauthorized(string),
+    payment-required(string),
+    forbidden(string),
+    not-found(string),
+    method-not-allowed(string),
+    not-acceptable(string),
+    internal-server-error(string),
+    bad-gateway(string),
+    service-unavailable(string),
+    other(string)
+  }
+
+  variant get-questions-featured-error {
+    bad-request(string),
+    unauthorized(string),
+    payment-required(string),
+    forbidden(string),
+    not-found(string),
+    method-not-allowed(string),
+    not-acceptable(string),
+    internal-server-error(string),
+    bad-gateway(string),
+    service-unavailable(string),
+    other(string)
+  }
+
+  variant get-questions-no-answers-error {
+    bad-request(string),
+    unauthorized(string),
+    payment-required(string),
+    forbidden(string),
+    not-found(string),
+    method-not-allowed(string),
+    not-acceptable(string),
+    internal-server-error(string),
+    bad-gateway(string),
+    service-unavailable(string),
+    other(string)
+  }
+
+  variant get-questions-unanswered-error {
+    bad-request(string),
+    unauthorized(string),
+    payment-required(string),
+    forbidden(string),
+    not-found(string),
+    method-not-allowed(string),
+    not-acceptable(string),
+    internal-server-error(string),
+    bad-gateway(string),
+    service-unavailable(string),
+    other(string)
+  }
+
+  variant get-questions-ids-error {
+    bad-request(string),
+    unauthorized(string),
+    payment-required(string),
+    forbidden(string),
+    not-found(string),
+    method-not-allowed(string),
+    not-acceptable(string),
+    internal-server-error(string),
+    bad-gateway(string),
+    service-unavailable(string),
+    other(string)
+  }
+
+  variant get-questions-ids-answers-error {
+    bad-request(string),
+    unauthorized(string),
+    payment-required(string),
+    forbidden(string),
+    not-found(string),
+    method-not-allowed(string),
+    not-acceptable(string),
+    internal-server-error(string),
+    bad-gateway(string),
+    service-unavailable(string),
+    other(string)
+  }
+
+  variant get-questions-ids-comments-error {
+    bad-request(string),
+    unauthorized(string),
+    payment-required(string),
+    forbidden(string),
+    not-found(string),
+    method-not-allowed(string),
+    not-acceptable(string),
+    internal-server-error(string),
+    bad-gateway(string),
+    service-unavailable(string),
+    other(string)
+  }
+
+  variant get-questions-ids-linked-error {
+    bad-request(string),
+    unauthorized(string),
+    payment-required(string),
+    forbidden(string),
+    not-found(string),
+    method-not-allowed(string),
+    not-acceptable(string),
+    internal-server-error(string),
+    bad-gateway(string),
+    service-unavailable(string),
+    other(string)
+  }
+
+  variant get-questions-ids-related-error {
+    bad-request(string),
+    unauthorized(string),
+    payment-required(string),
+    forbidden(string),
+    not-found(string),
+    method-not-allowed(string),
+    not-acceptable(string),
+    internal-server-error(string),
+    bad-gateway(string),
+    service-unavailable(string),
+    other(string)
+  }
+
+  variant get-questions-ids-timeline-error {
+    bad-request(string),
+    unauthorized(string),
+    payment-required(string),
+    forbidden(string),
+    not-found(string),
+    method-not-allowed(string),
+    not-acceptable(string),
+    internal-server-error(string),
+    bad-gateway(string),
+    service-unavailable(string),
+    other(string)
+  }
+
   record get-questions-params {
     /// String list (semicolon delimited).
     tagged: option<string>,
@@ -1400,7 +2795,7 @@ interface questions {
     /// Each of these methods operates on a single site at a time, identified by the site parameter. This parameter can be the full domain name (ie. "stackoverflow.com"), or a short form identified by api_site_parameter on the site object.
     site: string
   }
-  get-questions: func(params: get-questions-params) -> result<string, string>;
+  get-questions: func(params: get-questions-params) -> result<questions, get-questions-error>;
 
   record get-questions-featured-params {
     /// String list (semicolon delimited).
@@ -1427,7 +2822,7 @@ interface questions {
     /// Each of these methods operates on a single site at a time, identified by the site parameter. This parameter can be the full domain name (ie. "stackoverflow.com"), or a short form identified by api_site_parameter on the site object.
     site: string
   }
-  get-questions-featured: func(params: get-questions-featured-params) -> result<string, string>;
+  get-questions-featured: func(params: get-questions-featured-params) -> result<questions, get-questions-featured-error>;
 
   record get-questions-no-answers-params {
     /// String list (semicolon delimited).
@@ -1454,7 +2849,7 @@ interface questions {
     /// Each of these methods operates on a single site at a time, identified by the site parameter. This parameter can be the full domain name (ie. "stackoverflow.com"), or a short form identified by api_site_parameter on the site object.
     site: string
   }
-  get-questions-no-answers: func(params: get-questions-no-answers-params) -> result<string, string>;
+  get-questions-no-answers: func(params: get-questions-no-answers-params) -> result<questions, get-questions-no-answers-error>;
 
   record get-questions-unanswered-params {
     /// String list (semicolon delimited).
@@ -1481,7 +2876,7 @@ interface questions {
     /// Each of these methods operates on a single site at a time, identified by the site parameter. This parameter can be the full domain name (ie. "stackoverflow.com"), or a short form identified by api_site_parameter on the site object.
     site: string
   }
-  get-questions-unanswered: func(params: get-questions-unanswered-params) -> result<string, string>;
+  get-questions-unanswered: func(params: get-questions-unanswered-params) -> result<questions, get-questions-unanswered-error>;
 
   record get-questions-ids-params {
     /// Number list (semicolon delimited).
@@ -1508,7 +2903,7 @@ interface questions {
     /// Each of these methods operates on a single site at a time, identified by the site parameter. This parameter can be the full domain name (ie. "stackoverflow.com"), or a short form identified by api_site_parameter on the site object.
     site: string
   }
-  get-questions-ids: func(params: get-questions-ids-params) -> result<string, string>;
+  get-questions-ids: func(params: get-questions-ids-params) -> result<questions, get-questions-ids-error>;
 
   record get-questions-ids-answers-params {
     /// Number list (semicolon delimited).
@@ -1535,7 +2930,7 @@ interface questions {
     /// Each of these methods operates on a single site at a time, identified by the site parameter. This parameter can be the full domain name (ie. "stackoverflow.com"), or a short form identified by api_site_parameter on the site object.
     site: string
   }
-  get-questions-ids-answers: func(params: get-questions-ids-answers-params) -> result<string, string>;
+  get-questions-ids-answers: func(params: get-questions-ids-answers-params) -> result<answers, get-questions-ids-answers-error>;
 
   record get-questions-ids-comments-params {
     /// Number list (semicolon delimited).
@@ -1562,7 +2957,7 @@ interface questions {
     /// Each of these methods operates on a single site at a time, identified by the site parameter. This parameter can be the full domain name (ie. "stackoverflow.com"), or a short form identified by api_site_parameter on the site object.
     site: string
   }
-  get-questions-ids-comments: func(params: get-questions-ids-comments-params) -> result<string, string>;
+  get-questions-ids-comments: func(params: get-questions-ids-comments-params) -> result<comments, get-questions-ids-comments-error>;
 
   record get-questions-ids-linked-params {
     /// Number list (semicolon delimited).
@@ -1589,7 +2984,7 @@ interface questions {
     /// Each of these methods operates on a single site at a time, identified by the site parameter. This parameter can be the full domain name (ie. "stackoverflow.com"), or a short form identified by api_site_parameter on the site object.
     site: string
   }
-  get-questions-ids-linked: func(params: get-questions-ids-linked-params) -> result<string, string>;
+  get-questions-ids-linked: func(params: get-questions-ids-linked-params) -> result<questions, get-questions-ids-linked-error>;
 
   record get-questions-ids-related-params {
     /// Number list (semicolon delimited).
@@ -1616,7 +3011,7 @@ interface questions {
     /// Each of these methods operates on a single site at a time, identified by the site parameter. This parameter can be the full domain name (ie. "stackoverflow.com"), or a short form identified by api_site_parameter on the site object.
     site: string
   }
-  get-questions-ids-related: func(params: get-questions-ids-related-params) -> result<string, string>;
+  get-questions-ids-related: func(params: get-questions-ids-related-params) -> result<questions, get-questions-ids-related-error>;
 
   record get-questions-ids-timeline-params {
     /// Number list (semicolon delimited).
@@ -1635,11 +3030,30 @@ interface questions {
     /// Each of these methods operates on a single site at a time, identified by the site parameter. This parameter can be the full domain name (ie. "stackoverflow.com"), or a short form identified by api_site_parameter on the site object.
     site: string
   }
-  get-questions-ids-timeline: func(params: get-questions-ids-timeline-params) -> result<string, string>;
+  get-questions-ids-timeline: func(params: get-questions-ids-timeline-params) -> result<question-timeline-events, get-questions-ids-timeline-error>;
 
 }
 
 interface revisions {
+  record revisions {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  variant get-revisions-ids-error {
+    bad-request(string),
+    unauthorized(string),
+    payment-required(string),
+    forbidden(string),
+    not-found(string),
+    method-not-allowed(string),
+    not-acceptable(string),
+    internal-server-error(string),
+    bad-gateway(string),
+    service-unavailable(string),
+    other(string)
+  }
+
   record get-revisions-ids-params {
     /// Guid list (semicolon delimited).
     ids: string,
@@ -1657,7 +3071,7 @@ interface revisions {
     /// Each of these methods operates on a single site at a time, identified by the site parameter. This parameter can be the full domain name (ie. "stackoverflow.com"), or a short form identified by api_site_parameter on the site object.
     site: string
   }
-  get-revisions-ids: func(params: get-revisions-ids-params) -> result<string, string>;
+  get-revisions-ids: func(params: get-revisions-ids-params) -> result<revisions, get-revisions-ids-error>;
 
 }
 
@@ -1672,6 +3086,39 @@ interface search {
     creation,
     votes,
     relevance,
+  }
+
+  record questions {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  variant get-search-error {
+    bad-request(string),
+    unauthorized(string),
+    payment-required(string),
+    forbidden(string),
+    not-found(string),
+    method-not-allowed(string),
+    not-acceptable(string),
+    internal-server-error(string),
+    bad-gateway(string),
+    service-unavailable(string),
+    other(string)
+  }
+
+  variant get-search-advanced-error {
+    bad-request(string),
+    unauthorized(string),
+    payment-required(string),
+    forbidden(string),
+    not-found(string),
+    method-not-allowed(string),
+    not-acceptable(string),
+    internal-server-error(string),
+    bad-gateway(string),
+    service-unavailable(string),
+    other(string)
   }
 
   record get-search-params {
@@ -1702,7 +3149,7 @@ interface search {
     /// String list (semicolon delimited).
     nottagged: option<string>
   }
-  get-search: func(params: get-search-params) -> result<string, string>;
+  get-search: func(params: get-search-params) -> result<questions, get-search-error>;
 
   record get-search-advanced-params {
     /// String list (semicolon delimited).
@@ -1743,7 +3190,7 @@ interface search {
     views: option<s32>,
     wiki: option<string>
   }
-  get-search-advanced: func(params: get-search-advanced-params) -> result<string, string>;
+  get-search-advanced: func(params: get-search-advanced-params) -> result<questions, get-search-advanced-error>;
 
 }
 
@@ -1758,6 +3205,25 @@ interface similar {
     creation,
     votes,
     relevance,
+  }
+
+  record questions {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  variant get-similar-error {
+    bad-request(string),
+    unauthorized(string),
+    payment-required(string),
+    forbidden(string),
+    not-found(string),
+    method-not-allowed(string),
+    not-acceptable(string),
+    internal-server-error(string),
+    bad-gateway(string),
+    service-unavailable(string),
+    other(string)
   }
 
   record get-similar-params {
@@ -1788,11 +3254,30 @@ interface similar {
     nottagged: option<string>,
     title: option<string>
   }
-  get-similar: func(params: get-similar-params) -> result<string, string>;
+  get-similar: func(params: get-similar-params) -> result<questions, get-similar-error>;
 
 }
 
 interface sites {
+  record sites {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  variant get-sites-error {
+    bad-request(string),
+    unauthorized(string),
+    payment-required(string),
+    forbidden(string),
+    not-found(string),
+    method-not-allowed(string),
+    not-acceptable(string),
+    internal-server-error(string),
+    bad-gateway(string),
+    service-unavailable(string),
+    other(string)
+  }
+
   record get-sites-params {
     pagesize: option<s32>,
     page: option<s32>,
@@ -1802,7 +3287,7 @@ interface sites {
     /// All API responses are JSON, we do support JSONP with the callback query parameter.
     callback: option<string>
   }
-  get-sites: func(params: get-sites-params) -> result<string, string>;
+  get-sites: func(params: get-sites-params) -> result<sites, get-sites-error>;
 
 }
 
@@ -1816,6 +3301,39 @@ interface suggested-edits {
     creation,
     approval,
     rejection,
+  }
+
+  record suggested-edits {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  variant get-suggested-edits-error {
+    bad-request(string),
+    unauthorized(string),
+    payment-required(string),
+    forbidden(string),
+    not-found(string),
+    method-not-allowed(string),
+    not-acceptable(string),
+    internal-server-error(string),
+    bad-gateway(string),
+    service-unavailable(string),
+    other(string)
+  }
+
+  variant get-suggested-edits-ids-error {
+    bad-request(string),
+    unauthorized(string),
+    payment-required(string),
+    forbidden(string),
+    not-found(string),
+    method-not-allowed(string),
+    not-acceptable(string),
+    internal-server-error(string),
+    bad-gateway(string),
+    service-unavailable(string),
+    other(string)
   }
 
   record get-suggested-edits-params {
@@ -1841,7 +3359,7 @@ interface suggested-edits {
     /// Each of these methods operates on a single site at a time, identified by the site parameter. This parameter can be the full domain name (ie. "stackoverflow.com"), or a short form identified by api_site_parameter on the site object.
     site: string
   }
-  get-suggested-edits: func(params: get-suggested-edits-params) -> result<string, string>;
+  get-suggested-edits: func(params: get-suggested-edits-params) -> result<suggested-edits, get-suggested-edits-error>;
 
   record get-suggested-edits-ids-params {
     /// Number list (semicolon delimited).
@@ -1868,7 +3386,7 @@ interface suggested-edits {
     /// Each of these methods operates on a single site at a time, identified by the site parameter. This parameter can be the full domain name (ie. "stackoverflow.com"), or a short form identified by api_site_parameter on the site object.
     site: string
   }
-  get-suggested-edits-ids: func(params: get-suggested-edits-ids-params) -> result<string, string>;
+  get-suggested-edits-ids: func(params: get-suggested-edits-ids-params) -> result<suggested-edits, get-suggested-edits-ids-error>;
 
 }
 
@@ -1888,6 +3406,185 @@ interface tags {
     creation,
     applied,
     activity,
+  }
+
+  record tags {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  record tag-synonyms {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  record questions {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  record tag-wikis {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  record tag-score-objects {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  variant get-tags-error {
+    bad-request(string),
+    unauthorized(string),
+    payment-required(string),
+    forbidden(string),
+    not-found(string),
+    method-not-allowed(string),
+    not-acceptable(string),
+    internal-server-error(string),
+    bad-gateway(string),
+    service-unavailable(string),
+    other(string)
+  }
+
+  variant get-tags-moderator-only-error {
+    bad-request(string),
+    unauthorized(string),
+    payment-required(string),
+    forbidden(string),
+    not-found(string),
+    method-not-allowed(string),
+    not-acceptable(string),
+    internal-server-error(string),
+    bad-gateway(string),
+    service-unavailable(string),
+    other(string)
+  }
+
+  variant get-tags-required-error {
+    bad-request(string),
+    unauthorized(string),
+    payment-required(string),
+    forbidden(string),
+    not-found(string),
+    method-not-allowed(string),
+    not-acceptable(string),
+    internal-server-error(string),
+    bad-gateway(string),
+    service-unavailable(string),
+    other(string)
+  }
+
+  variant get-tags-synonyms-error {
+    bad-request(string),
+    unauthorized(string),
+    payment-required(string),
+    forbidden(string),
+    not-found(string),
+    method-not-allowed(string),
+    not-acceptable(string),
+    internal-server-error(string),
+    bad-gateway(string),
+    service-unavailable(string),
+    other(string)
+  }
+
+  variant get-tags-tags-faq-error {
+    bad-request(string),
+    unauthorized(string),
+    payment-required(string),
+    forbidden(string),
+    not-found(string),
+    method-not-allowed(string),
+    not-acceptable(string),
+    internal-server-error(string),
+    bad-gateway(string),
+    service-unavailable(string),
+    other(string)
+  }
+
+  variant get-tags-tags-info-error {
+    bad-request(string),
+    unauthorized(string),
+    payment-required(string),
+    forbidden(string),
+    not-found(string),
+    method-not-allowed(string),
+    not-acceptable(string),
+    internal-server-error(string),
+    bad-gateway(string),
+    service-unavailable(string),
+    other(string)
+  }
+
+  variant get-tags-tags-related-error {
+    bad-request(string),
+    unauthorized(string),
+    payment-required(string),
+    forbidden(string),
+    not-found(string),
+    method-not-allowed(string),
+    not-acceptable(string),
+    internal-server-error(string),
+    bad-gateway(string),
+    service-unavailable(string),
+    other(string)
+  }
+
+  variant get-tags-tags-synonyms-error {
+    bad-request(string),
+    unauthorized(string),
+    payment-required(string),
+    forbidden(string),
+    not-found(string),
+    method-not-allowed(string),
+    not-acceptable(string),
+    internal-server-error(string),
+    bad-gateway(string),
+    service-unavailable(string),
+    other(string)
+  }
+
+  variant get-tags-tags-wikis-error {
+    bad-request(string),
+    unauthorized(string),
+    payment-required(string),
+    forbidden(string),
+    not-found(string),
+    method-not-allowed(string),
+    not-acceptable(string),
+    internal-server-error(string),
+    bad-gateway(string),
+    service-unavailable(string),
+    other(string)
+  }
+
+  variant get-tags-tag-top-answerers-period-error {
+    bad-request(string),
+    unauthorized(string),
+    payment-required(string),
+    forbidden(string),
+    not-found(string),
+    method-not-allowed(string),
+    not-acceptable(string),
+    internal-server-error(string),
+    bad-gateway(string),
+    service-unavailable(string),
+    other(string)
+  }
+
+  variant get-tags-tag-top-askers-period-error {
+    bad-request(string),
+    unauthorized(string),
+    payment-required(string),
+    forbidden(string),
+    not-found(string),
+    method-not-allowed(string),
+    not-acceptable(string),
+    internal-server-error(string),
+    bad-gateway(string),
+    service-unavailable(string),
+    other(string)
   }
 
   record get-tags-params {
@@ -1914,7 +3611,7 @@ interface tags {
     /// Each of these methods operates on a single site at a time, identified by the site parameter. This parameter can be the full domain name (ie. "stackoverflow.com"), or a short form identified by api_site_parameter on the site object.
     site: string
   }
-  get-tags: func(params: get-tags-params) -> result<string, string>;
+  get-tags: func(params: get-tags-params) -> result<tags, get-tags-error>;
 
   record get-tags-moderator-only-params {
     inname: option<string>,
@@ -1940,7 +3637,7 @@ interface tags {
     /// Each of these methods operates on a single site at a time, identified by the site parameter. This parameter can be the full domain name (ie. "stackoverflow.com"), or a short form identified by api_site_parameter on the site object.
     site: string
   }
-  get-tags-moderator-only: func(params: get-tags-moderator-only-params) -> result<string, string>;
+  get-tags-moderator-only: func(params: get-tags-moderator-only-params) -> result<tags, get-tags-moderator-only-error>;
 
   record get-tags-required-params {
     inname: option<string>,
@@ -1966,7 +3663,7 @@ interface tags {
     /// Each of these methods operates on a single site at a time, identified by the site parameter. This parameter can be the full domain name (ie. "stackoverflow.com"), or a short form identified by api_site_parameter on the site object.
     site: string
   }
-  get-tags-required: func(params: get-tags-required-params) -> result<string, string>;
+  get-tags-required: func(params: get-tags-required-params) -> result<tags, get-tags-required-error>;
 
   record get-tags-synonyms-params {
     order: option<get-tags-order-enum>,
@@ -1991,7 +3688,7 @@ interface tags {
     /// Each of these methods operates on a single site at a time, identified by the site parameter. This parameter can be the full domain name (ie. "stackoverflow.com"), or a short form identified by api_site_parameter on the site object.
     site: string
   }
-  get-tags-synonyms: func(params: get-tags-synonyms-params) -> result<string, string>;
+  get-tags-synonyms: func(params: get-tags-synonyms-params) -> result<tag-synonyms, get-tags-synonyms-error>;
 
   record get-tags-tags-faq-params {
     /// String list (semicolon delimited).
@@ -2006,7 +3703,7 @@ interface tags {
     /// Each of these methods operates on a single site at a time, identified by the site parameter. This parameter can be the full domain name (ie. "stackoverflow.com"), or a short form identified by api_site_parameter on the site object.
     site: string
   }
-  get-tags-tags-faq: func(params: get-tags-tags-faq-params) -> result<string, string>;
+  get-tags-tags-faq: func(params: get-tags-tags-faq-params) -> result<questions, get-tags-tags-faq-error>;
 
   record get-tags-tags-info-params {
     /// String list (semicolon delimited).
@@ -2033,7 +3730,7 @@ interface tags {
     /// Each of these methods operates on a single site at a time, identified by the site parameter. This parameter can be the full domain name (ie. "stackoverflow.com"), or a short form identified by api_site_parameter on the site object.
     site: string
   }
-  get-tags-tags-info: func(params: get-tags-tags-info-params) -> result<string, string>;
+  get-tags-tags-info: func(params: get-tags-tags-info-params) -> result<tags, get-tags-tags-info-error>;
 
   record get-tags-tags-related-params {
     /// String list (semicolon delimited).
@@ -2048,7 +3745,7 @@ interface tags {
     /// Each of these methods operates on a single site at a time, identified by the site parameter. This parameter can be the full domain name (ie. "stackoverflow.com"), or a short form identified by api_site_parameter on the site object.
     site: string
   }
-  get-tags-tags-related: func(params: get-tags-tags-related-params) -> result<string, string>;
+  get-tags-tags-related: func(params: get-tags-tags-related-params) -> result<tags, get-tags-tags-related-error>;
 
   record get-tags-tags-synonyms-params {
     /// String list (semicolon delimited).
@@ -2075,7 +3772,7 @@ interface tags {
     /// Each of these methods operates on a single site at a time, identified by the site parameter. This parameter can be the full domain name (ie. "stackoverflow.com"), or a short form identified by api_site_parameter on the site object.
     site: string
   }
-  get-tags-tags-synonyms: func(params: get-tags-tags-synonyms-params) -> result<string, string>;
+  get-tags-tags-synonyms: func(params: get-tags-tags-synonyms-params) -> result<tag-synonyms, get-tags-tags-synonyms-error>;
 
   record get-tags-tags-wikis-params {
     /// String list (semicolon delimited).
@@ -2090,7 +3787,7 @@ interface tags {
     /// Each of these methods operates on a single site at a time, identified by the site parameter. This parameter can be the full domain name (ie. "stackoverflow.com"), or a short form identified by api_site_parameter on the site object.
     site: string
   }
-  get-tags-tags-wikis: func(params: get-tags-tags-wikis-params) -> result<string, string>;
+  get-tags-tags-wikis: func(params: get-tags-tags-wikis-params) -> result<tag-wikis, get-tags-tags-wikis-error>;
 
   record get-tags-tag-top-answerers-period-params {
     tag: string,
@@ -2105,7 +3802,7 @@ interface tags {
     /// Each of these methods operates on a single site at a time, identified by the site parameter. This parameter can be the full domain name (ie. "stackoverflow.com"), or a short form identified by api_site_parameter on the site object.
     site: string
   }
-  get-tags-tag-top-answerers-period: func(params: get-tags-tag-top-answerers-period-params) -> result<string, string>;
+  get-tags-tag-top-answerers-period: func(params: get-tags-tag-top-answerers-period-params) -> result<tag-score-objects, get-tags-tag-top-answerers-period-error>;
 
   record get-tags-tag-top-askers-period-params {
     tag: string,
@@ -2120,7 +3817,7 @@ interface tags {
     /// Each of these methods operates on a single site at a time, identified by the site parameter. This parameter can be the full domain name (ie. "stackoverflow.com"), or a short form identified by api_site_parameter on the site object.
     site: string
   }
-  get-tags-tag-top-askers-period: func(params: get-tags-tag-top-askers-period-params) -> result<string, string>;
+  get-tags-tag-top-askers-period: func(params: get-tags-tag-top-askers-period-params) -> result<tag-score-objects, get-tags-tag-top-askers-period-error>;
 
 }
 
@@ -2174,6 +3871,553 @@ interface users {
     name,
   }
 
+  record users {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  record answers {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  record network-users {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  record badges {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  record comments {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  record questions {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  record account-merge {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  record reputation-changes {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  record reputation-history {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  record suggested-edits {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  record tags {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  record user-timeline-objects {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  record inbox-items {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  record notifications {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  record privileges {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  record top-tag-objects {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  record write-permissions {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  variant get-users-error {
+    bad-request(string),
+    unauthorized(string),
+    payment-required(string),
+    forbidden(string),
+    not-found(string),
+    method-not-allowed(string),
+    not-acceptable(string),
+    internal-server-error(string),
+    bad-gateway(string),
+    service-unavailable(string),
+    other(string)
+  }
+
+  variant get-users-moderators-error {
+    bad-request(string),
+    unauthorized(string),
+    payment-required(string),
+    forbidden(string),
+    not-found(string),
+    method-not-allowed(string),
+    not-acceptable(string),
+    internal-server-error(string),
+    bad-gateway(string),
+    service-unavailable(string),
+    other(string)
+  }
+
+  variant get-users-moderators-elected-error {
+    bad-request(string),
+    unauthorized(string),
+    payment-required(string),
+    forbidden(string),
+    not-found(string),
+    method-not-allowed(string),
+    not-acceptable(string),
+    internal-server-error(string),
+    bad-gateway(string),
+    service-unavailable(string),
+    other(string)
+  }
+
+  variant get-users-ids-error {
+    bad-request(string),
+    unauthorized(string),
+    payment-required(string),
+    forbidden(string),
+    not-found(string),
+    method-not-allowed(string),
+    not-acceptable(string),
+    internal-server-error(string),
+    bad-gateway(string),
+    service-unavailable(string),
+    other(string)
+  }
+
+  variant get-users-ids-answers-error {
+    bad-request(string),
+    unauthorized(string),
+    payment-required(string),
+    forbidden(string),
+    not-found(string),
+    method-not-allowed(string),
+    not-acceptable(string),
+    internal-server-error(string),
+    bad-gateway(string),
+    service-unavailable(string),
+    other(string)
+  }
+
+  variant get-users-ids-associated-error {
+    bad-request(string),
+    unauthorized(string),
+    payment-required(string),
+    forbidden(string),
+    not-found(string),
+    method-not-allowed(string),
+    not-acceptable(string),
+    internal-server-error(string),
+    bad-gateway(string),
+    service-unavailable(string),
+    other(string)
+  }
+
+  variant get-users-ids-badges-error {
+    bad-request(string),
+    unauthorized(string),
+    payment-required(string),
+    forbidden(string),
+    not-found(string),
+    method-not-allowed(string),
+    not-acceptable(string),
+    internal-server-error(string),
+    bad-gateway(string),
+    service-unavailable(string),
+    other(string)
+  }
+
+  variant get-users-ids-comments-error {
+    bad-request(string),
+    unauthorized(string),
+    payment-required(string),
+    forbidden(string),
+    not-found(string),
+    method-not-allowed(string),
+    not-acceptable(string),
+    internal-server-error(string),
+    bad-gateway(string),
+    service-unavailable(string),
+    other(string)
+  }
+
+  variant get-users-ids-comments-toid-error {
+    bad-request(string),
+    unauthorized(string),
+    payment-required(string),
+    forbidden(string),
+    not-found(string),
+    method-not-allowed(string),
+    not-acceptable(string),
+    internal-server-error(string),
+    bad-gateway(string),
+    service-unavailable(string),
+    other(string)
+  }
+
+  variant get-users-ids-favorites-error {
+    bad-request(string),
+    unauthorized(string),
+    payment-required(string),
+    forbidden(string),
+    not-found(string),
+    method-not-allowed(string),
+    not-acceptable(string),
+    internal-server-error(string),
+    bad-gateway(string),
+    service-unavailable(string),
+    other(string)
+  }
+
+  variant get-users-ids-mentioned-error {
+    bad-request(string),
+    unauthorized(string),
+    payment-required(string),
+    forbidden(string),
+    not-found(string),
+    method-not-allowed(string),
+    not-acceptable(string),
+    internal-server-error(string),
+    bad-gateway(string),
+    service-unavailable(string),
+    other(string)
+  }
+
+  variant get-users-ids-merges-error {
+    bad-request(string),
+    unauthorized(string),
+    payment-required(string),
+    forbidden(string),
+    not-found(string),
+    method-not-allowed(string),
+    not-acceptable(string),
+    internal-server-error(string),
+    bad-gateway(string),
+    service-unavailable(string),
+    other(string)
+  }
+
+  variant get-users-ids-questions-error {
+    bad-request(string),
+    unauthorized(string),
+    payment-required(string),
+    forbidden(string),
+    not-found(string),
+    method-not-allowed(string),
+    not-acceptable(string),
+    internal-server-error(string),
+    bad-gateway(string),
+    service-unavailable(string),
+    other(string)
+  }
+
+  variant get-users-ids-questions-featured-error {
+    bad-request(string),
+    unauthorized(string),
+    payment-required(string),
+    forbidden(string),
+    not-found(string),
+    method-not-allowed(string),
+    not-acceptable(string),
+    internal-server-error(string),
+    bad-gateway(string),
+    service-unavailable(string),
+    other(string)
+  }
+
+  variant get-users-ids-questions-no-answers-error {
+    bad-request(string),
+    unauthorized(string),
+    payment-required(string),
+    forbidden(string),
+    not-found(string),
+    method-not-allowed(string),
+    not-acceptable(string),
+    internal-server-error(string),
+    bad-gateway(string),
+    service-unavailable(string),
+    other(string)
+  }
+
+  variant get-users-ids-questions-unaccepted-error {
+    bad-request(string),
+    unauthorized(string),
+    payment-required(string),
+    forbidden(string),
+    not-found(string),
+    method-not-allowed(string),
+    not-acceptable(string),
+    internal-server-error(string),
+    bad-gateway(string),
+    service-unavailable(string),
+    other(string)
+  }
+
+  variant get-users-ids-questions-unanswered-error {
+    bad-request(string),
+    unauthorized(string),
+    payment-required(string),
+    forbidden(string),
+    not-found(string),
+    method-not-allowed(string),
+    not-acceptable(string),
+    internal-server-error(string),
+    bad-gateway(string),
+    service-unavailable(string),
+    other(string)
+  }
+
+  variant get-users-ids-reputation-error {
+    bad-request(string),
+    unauthorized(string),
+    payment-required(string),
+    forbidden(string),
+    not-found(string),
+    method-not-allowed(string),
+    not-acceptable(string),
+    internal-server-error(string),
+    bad-gateway(string),
+    service-unavailable(string),
+    other(string)
+  }
+
+  variant get-users-ids-reputation-history-error {
+    bad-request(string),
+    unauthorized(string),
+    payment-required(string),
+    forbidden(string),
+    not-found(string),
+    method-not-allowed(string),
+    not-acceptable(string),
+    internal-server-error(string),
+    bad-gateway(string),
+    service-unavailable(string),
+    other(string)
+  }
+
+  variant get-users-ids-suggested-edits-error {
+    bad-request(string),
+    unauthorized(string),
+    payment-required(string),
+    forbidden(string),
+    not-found(string),
+    method-not-allowed(string),
+    not-acceptable(string),
+    internal-server-error(string),
+    bad-gateway(string),
+    service-unavailable(string),
+    other(string)
+  }
+
+  variant get-users-ids-tags-error {
+    bad-request(string),
+    unauthorized(string),
+    payment-required(string),
+    forbidden(string),
+    not-found(string),
+    method-not-allowed(string),
+    not-acceptable(string),
+    internal-server-error(string),
+    bad-gateway(string),
+    service-unavailable(string),
+    other(string)
+  }
+
+  variant get-users-ids-timeline-error {
+    bad-request(string),
+    unauthorized(string),
+    payment-required(string),
+    forbidden(string),
+    not-found(string),
+    method-not-allowed(string),
+    not-acceptable(string),
+    internal-server-error(string),
+    bad-gateway(string),
+    service-unavailable(string),
+    other(string)
+  }
+
+  variant get-users-id-inbox-error {
+    bad-request(string),
+    unauthorized(string),
+    payment-required(string),
+    forbidden(string),
+    not-found(string),
+    method-not-allowed(string),
+    not-acceptable(string),
+    internal-server-error(string),
+    bad-gateway(string),
+    service-unavailable(string),
+    other(string)
+  }
+
+  variant get-users-id-inbox-unread-error {
+    bad-request(string),
+    unauthorized(string),
+    payment-required(string),
+    forbidden(string),
+    not-found(string),
+    method-not-allowed(string),
+    not-acceptable(string),
+    internal-server-error(string),
+    bad-gateway(string),
+    service-unavailable(string),
+    other(string)
+  }
+
+  variant get-users-id-notifications-error {
+    bad-request(string),
+    unauthorized(string),
+    payment-required(string),
+    forbidden(string),
+    not-found(string),
+    method-not-allowed(string),
+    not-acceptable(string),
+    internal-server-error(string),
+    bad-gateway(string),
+    service-unavailable(string),
+    other(string)
+  }
+
+  variant get-users-id-notifications-unread-error {
+    bad-request(string),
+    unauthorized(string),
+    payment-required(string),
+    forbidden(string),
+    not-found(string),
+    method-not-allowed(string),
+    not-acceptable(string),
+    internal-server-error(string),
+    bad-gateway(string),
+    service-unavailable(string),
+    other(string)
+  }
+
+  variant get-users-id-privileges-error {
+    bad-request(string),
+    unauthorized(string),
+    payment-required(string),
+    forbidden(string),
+    not-found(string),
+    method-not-allowed(string),
+    not-acceptable(string),
+    internal-server-error(string),
+    bad-gateway(string),
+    service-unavailable(string),
+    other(string)
+  }
+
+  variant get-users-id-reputation-history-full-error {
+    bad-request(string),
+    unauthorized(string),
+    payment-required(string),
+    forbidden(string),
+    not-found(string),
+    method-not-allowed(string),
+    not-acceptable(string),
+    internal-server-error(string),
+    bad-gateway(string),
+    service-unavailable(string),
+    other(string)
+  }
+
+  variant get-users-id-tags-tags-top-answers-error {
+    bad-request(string),
+    unauthorized(string),
+    payment-required(string),
+    forbidden(string),
+    not-found(string),
+    method-not-allowed(string),
+    not-acceptable(string),
+    internal-server-error(string),
+    bad-gateway(string),
+    service-unavailable(string),
+    other(string)
+  }
+
+  variant get-users-id-tags-tags-top-questions-error {
+    bad-request(string),
+    unauthorized(string),
+    payment-required(string),
+    forbidden(string),
+    not-found(string),
+    method-not-allowed(string),
+    not-acceptable(string),
+    internal-server-error(string),
+    bad-gateway(string),
+    service-unavailable(string),
+    other(string)
+  }
+
+  variant get-users-id-top-answer-tags-error {
+    bad-request(string),
+    unauthorized(string),
+    payment-required(string),
+    forbidden(string),
+    not-found(string),
+    method-not-allowed(string),
+    not-acceptable(string),
+    internal-server-error(string),
+    bad-gateway(string),
+    service-unavailable(string),
+    other(string)
+  }
+
+  variant get-users-id-top-question-tags-error {
+    bad-request(string),
+    unauthorized(string),
+    payment-required(string),
+    forbidden(string),
+    not-found(string),
+    method-not-allowed(string),
+    not-acceptable(string),
+    internal-server-error(string),
+    bad-gateway(string),
+    service-unavailable(string),
+    other(string)
+  }
+
+  variant get-users-id-write-permissions-error {
+    bad-request(string),
+    unauthorized(string),
+    payment-required(string),
+    forbidden(string),
+    not-found(string),
+    method-not-allowed(string),
+    not-acceptable(string),
+    internal-server-error(string),
+    bad-gateway(string),
+    service-unavailable(string),
+    other(string)
+  }
+
   record get-users-params {
     inname: option<string>,
     order: option<get-users-order-enum>,
@@ -2198,7 +4442,7 @@ interface users {
     /// Each of these methods operates on a single site at a time, identified by the site parameter. This parameter can be the full domain name (ie. "stackoverflow.com"), or a short form identified by api_site_parameter on the site object.
     site: string
   }
-  get-users: func(params: get-users-params) -> result<string, string>;
+  get-users: func(params: get-users-params) -> result<users, get-users-error>;
 
   record get-users-moderators-params {
     order: option<get-users-order-enum>,
@@ -2223,7 +4467,7 @@ interface users {
     /// Each of these methods operates on a single site at a time, identified by the site parameter. This parameter can be the full domain name (ie. "stackoverflow.com"), or a short form identified by api_site_parameter on the site object.
     site: string
   }
-  get-users-moderators: func(params: get-users-moderators-params) -> result<string, string>;
+  get-users-moderators: func(params: get-users-moderators-params) -> result<users, get-users-moderators-error>;
 
   record get-users-moderators-elected-params {
     order: option<get-users-order-enum>,
@@ -2248,7 +4492,7 @@ interface users {
     /// Each of these methods operates on a single site at a time, identified by the site parameter. This parameter can be the full domain name (ie. "stackoverflow.com"), or a short form identified by api_site_parameter on the site object.
     site: string
   }
-  get-users-moderators-elected: func(params: get-users-moderators-elected-params) -> result<string, string>;
+  get-users-moderators-elected: func(params: get-users-moderators-elected-params) -> result<users, get-users-moderators-elected-error>;
 
   record get-users-ids-params {
     /// Number list (semicolon delimited).
@@ -2275,7 +4519,7 @@ interface users {
     /// Each of these methods operates on a single site at a time, identified by the site parameter. This parameter can be the full domain name (ie. "stackoverflow.com"), or a short form identified by api_site_parameter on the site object.
     site: string
   }
-  get-users-ids: func(params: get-users-ids-params) -> result<string, string>;
+  get-users-ids: func(params: get-users-ids-params) -> result<users, get-users-ids-error>;
 
   record get-users-ids-answers-params {
     /// Number list (semicolon delimited).
@@ -2302,7 +4546,7 @@ interface users {
     /// Each of these methods operates on a single site at a time, identified by the site parameter. This parameter can be the full domain name (ie. "stackoverflow.com"), or a short form identified by api_site_parameter on the site object.
     site: string
   }
-  get-users-ids-answers: func(params: get-users-ids-answers-params) -> result<string, string>;
+  get-users-ids-answers: func(params: get-users-ids-answers-params) -> result<answers, get-users-ids-answers-error>;
 
   record get-users-ids-associated-params {
     /// Number list (semicolon delimited).
@@ -2315,7 +4559,7 @@ interface users {
     /// All API responses are JSON, we do support JSONP with the callback query parameter.
     callback: option<string>
   }
-  get-users-ids-associated: func(params: get-users-ids-associated-params) -> result<string, string>;
+  get-users-ids-associated: func(params: get-users-ids-associated-params) -> result<network-users, get-users-ids-associated-error>;
 
   record get-users-ids-badges-params {
     /// Number list (semicolon delimited).
@@ -2342,7 +4586,7 @@ interface users {
     /// Each of these methods operates on a single site at a time, identified by the site parameter. This parameter can be the full domain name (ie. "stackoverflow.com"), or a short form identified by api_site_parameter on the site object.
     site: string
   }
-  get-users-ids-badges: func(params: get-users-ids-badges-params) -> result<string, string>;
+  get-users-ids-badges: func(params: get-users-ids-badges-params) -> result<badges, get-users-ids-badges-error>;
 
   record get-users-ids-comments-params {
     /// Number list (semicolon delimited).
@@ -2369,7 +4613,7 @@ interface users {
     /// Each of these methods operates on a single site at a time, identified by the site parameter. This parameter can be the full domain name (ie. "stackoverflow.com"), or a short form identified by api_site_parameter on the site object.
     site: string
   }
-  get-users-ids-comments: func(params: get-users-ids-comments-params) -> result<string, string>;
+  get-users-ids-comments: func(params: get-users-ids-comments-params) -> result<comments, get-users-ids-comments-error>;
 
   record get-users-ids-comments-toid-params {
     /// Number list (semicolon delimited).
@@ -2397,7 +4641,7 @@ interface users {
     /// Each of these methods operates on a single site at a time, identified by the site parameter. This parameter can be the full domain name (ie. "stackoverflow.com"), or a short form identified by api_site_parameter on the site object.
     site: string
   }
-  get-users-ids-comments-toid: func(params: get-users-ids-comments-toid-params) -> result<string, string>;
+  get-users-ids-comments-toid: func(params: get-users-ids-comments-toid-params) -> result<comments, get-users-ids-comments-toid-error>;
 
   record get-users-ids-favorites-params {
     /// Number list (semicolon delimited).
@@ -2424,7 +4668,7 @@ interface users {
     /// Each of these methods operates on a single site at a time, identified by the site parameter. This parameter can be the full domain name (ie. "stackoverflow.com"), or a short form identified by api_site_parameter on the site object.
     site: string
   }
-  get-users-ids-favorites: func(params: get-users-ids-favorites-params) -> result<string, string>;
+  get-users-ids-favorites: func(params: get-users-ids-favorites-params) -> result<questions, get-users-ids-favorites-error>;
 
   record get-users-ids-mentioned-params {
     /// Number list (semicolon delimited).
@@ -2451,7 +4695,7 @@ interface users {
     /// Each of these methods operates on a single site at a time, identified by the site parameter. This parameter can be the full domain name (ie. "stackoverflow.com"), or a short form identified by api_site_parameter on the site object.
     site: string
   }
-  get-users-ids-mentioned: func(params: get-users-ids-mentioned-params) -> result<string, string>;
+  get-users-ids-mentioned: func(params: get-users-ids-mentioned-params) -> result<comments, get-users-ids-mentioned-error>;
 
   record get-users-ids-merges-params {
     /// Number list (semicolon delimited).
@@ -2464,7 +4708,7 @@ interface users {
     /// All API responses are JSON, we do support JSONP with the callback query parameter.
     callback: option<string>
   }
-  get-users-ids-merges: func(params: get-users-ids-merges-params) -> result<string, string>;
+  get-users-ids-merges: func(params: get-users-ids-merges-params) -> result<account-merge, get-users-ids-merges-error>;
 
   record get-users-ids-questions-params {
     /// Number list (semicolon delimited).
@@ -2491,7 +4735,7 @@ interface users {
     /// Each of these methods operates on a single site at a time, identified by the site parameter. This parameter can be the full domain name (ie. "stackoverflow.com"), or a short form identified by api_site_parameter on the site object.
     site: string
   }
-  get-users-ids-questions: func(params: get-users-ids-questions-params) -> result<string, string>;
+  get-users-ids-questions: func(params: get-users-ids-questions-params) -> result<questions, get-users-ids-questions-error>;
 
   record get-users-ids-questions-featured-params {
     /// Number list (semicolon delimited).
@@ -2518,7 +4762,7 @@ interface users {
     /// Each of these methods operates on a single site at a time, identified by the site parameter. This parameter can be the full domain name (ie. "stackoverflow.com"), or a short form identified by api_site_parameter on the site object.
     site: string
   }
-  get-users-ids-questions-featured: func(params: get-users-ids-questions-featured-params) -> result<string, string>;
+  get-users-ids-questions-featured: func(params: get-users-ids-questions-featured-params) -> result<questions, get-users-ids-questions-featured-error>;
 
   record get-users-ids-questions-no-answers-params {
     /// Number list (semicolon delimited).
@@ -2545,7 +4789,7 @@ interface users {
     /// Each of these methods operates on a single site at a time, identified by the site parameter. This parameter can be the full domain name (ie. "stackoverflow.com"), or a short form identified by api_site_parameter on the site object.
     site: string
   }
-  get-users-ids-questions-no-answers: func(params: get-users-ids-questions-no-answers-params) -> result<string, string>;
+  get-users-ids-questions-no-answers: func(params: get-users-ids-questions-no-answers-params) -> result<questions, get-users-ids-questions-no-answers-error>;
 
   record get-users-ids-questions-unaccepted-params {
     /// Number list (semicolon delimited).
@@ -2572,7 +4816,7 @@ interface users {
     /// Each of these methods operates on a single site at a time, identified by the site parameter. This parameter can be the full domain name (ie. "stackoverflow.com"), or a short form identified by api_site_parameter on the site object.
     site: string
   }
-  get-users-ids-questions-unaccepted: func(params: get-users-ids-questions-unaccepted-params) -> result<string, string>;
+  get-users-ids-questions-unaccepted: func(params: get-users-ids-questions-unaccepted-params) -> result<questions, get-users-ids-questions-unaccepted-error>;
 
   record get-users-ids-questions-unanswered-params {
     /// Number list (semicolon delimited).
@@ -2599,7 +4843,7 @@ interface users {
     /// Each of these methods operates on a single site at a time, identified by the site parameter. This parameter can be the full domain name (ie. "stackoverflow.com"), or a short form identified by api_site_parameter on the site object.
     site: string
   }
-  get-users-ids-questions-unanswered: func(params: get-users-ids-questions-unanswered-params) -> result<string, string>;
+  get-users-ids-questions-unanswered: func(params: get-users-ids-questions-unanswered-params) -> result<questions, get-users-ids-questions-unanswered-error>;
 
   record get-users-ids-reputation-params {
     /// Number list (semicolon delimited).
@@ -2618,7 +4862,7 @@ interface users {
     /// Each of these methods operates on a single site at a time, identified by the site parameter. This parameter can be the full domain name (ie. "stackoverflow.com"), or a short form identified by api_site_parameter on the site object.
     site: string
   }
-  get-users-ids-reputation: func(params: get-users-ids-reputation-params) -> result<string, string>;
+  get-users-ids-reputation: func(params: get-users-ids-reputation-params) -> result<reputation-changes, get-users-ids-reputation-error>;
 
   record get-users-ids-reputation-history-params {
     /// Number list (semicolon delimited).
@@ -2633,7 +4877,7 @@ interface users {
     /// Each of these methods operates on a single site at a time, identified by the site parameter. This parameter can be the full domain name (ie. "stackoverflow.com"), or a short form identified by api_site_parameter on the site object.
     site: string
   }
-  get-users-ids-reputation-history: func(params: get-users-ids-reputation-history-params) -> result<string, string>;
+  get-users-ids-reputation-history: func(params: get-users-ids-reputation-history-params) -> result<reputation-history, get-users-ids-reputation-history-error>;
 
   record get-users-ids-suggested-edits-params {
     /// Number list (semicolon delimited).
@@ -2660,7 +4904,7 @@ interface users {
     /// Each of these methods operates on a single site at a time, identified by the site parameter. This parameter can be the full domain name (ie. "stackoverflow.com"), or a short form identified by api_site_parameter on the site object.
     site: string
   }
-  get-users-ids-suggested-edits: func(params: get-users-ids-suggested-edits-params) -> result<string, string>;
+  get-users-ids-suggested-edits: func(params: get-users-ids-suggested-edits-params) -> result<suggested-edits, get-users-ids-suggested-edits-error>;
 
   record get-users-ids-tags-params {
     /// Number list (semicolon delimited).
@@ -2687,7 +4931,7 @@ interface users {
     /// Each of these methods operates on a single site at a time, identified by the site parameter. This parameter can be the full domain name (ie. "stackoverflow.com"), or a short form identified by api_site_parameter on the site object.
     site: string
   }
-  get-users-ids-tags: func(params: get-users-ids-tags-params) -> result<string, string>;
+  get-users-ids-tags: func(params: get-users-ids-tags-params) -> result<tags, get-users-ids-tags-error>;
 
   record get-users-ids-timeline-params {
     /// Number list (semicolon delimited).
@@ -2706,7 +4950,7 @@ interface users {
     /// Each of these methods operates on a single site at a time, identified by the site parameter. This parameter can be the full domain name (ie. "stackoverflow.com"), or a short form identified by api_site_parameter on the site object.
     site: string
   }
-  get-users-ids-timeline: func(params: get-users-ids-timeline-params) -> result<string, string>;
+  get-users-ids-timeline: func(params: get-users-ids-timeline-params) -> result<user-timeline-objects, get-users-ids-timeline-error>;
 
   record get-users-id-inbox-params {
     id: string,
@@ -2720,7 +4964,7 @@ interface users {
     /// Each of these methods operates on a single site at a time, identified by the site parameter. This parameter can be the full domain name (ie. "stackoverflow.com"), or a short form identified by api_site_parameter on the site object.
     site: string
   }
-  get-users-id-inbox: func(params: get-users-id-inbox-params) -> result<string, string>;
+  get-users-id-inbox: func(params: get-users-id-inbox-params) -> result<inbox-items, get-users-id-inbox-error>;
 
   record get-users-id-inbox-unread-params {
     id: string,
@@ -2736,7 +4980,7 @@ interface users {
     /// Unix date.
     since: option<s32>
   }
-  get-users-id-inbox-unread: func(params: get-users-id-inbox-unread-params) -> result<string, string>;
+  get-users-id-inbox-unread: func(params: get-users-id-inbox-unread-params) -> result<inbox-items, get-users-id-inbox-unread-error>;
 
   record get-users-id-notifications-params {
     id: string,
@@ -2750,7 +4994,7 @@ interface users {
     /// Each of these methods operates on a single site at a time, identified by the site parameter. This parameter can be the full domain name (ie. "stackoverflow.com"), or a short form identified by api_site_parameter on the site object.
     site: string
   }
-  get-users-id-notifications: func(params: get-users-id-notifications-params) -> result<string, string>;
+  get-users-id-notifications: func(params: get-users-id-notifications-params) -> result<notifications, get-users-id-notifications-error>;
 
   record get-users-id-notifications-unread-params {
     id: string,
@@ -2764,7 +5008,7 @@ interface users {
     /// Each of these methods operates on a single site at a time, identified by the site parameter. This parameter can be the full domain name (ie. "stackoverflow.com"), or a short form identified by api_site_parameter on the site object.
     site: string
   }
-  get-users-id-notifications-unread: func(params: get-users-id-notifications-unread-params) -> result<string, string>;
+  get-users-id-notifications-unread: func(params: get-users-id-notifications-unread-params) -> result<notifications, get-users-id-notifications-unread-error>;
 
   record get-users-id-privileges-params {
     id: string,
@@ -2778,7 +5022,7 @@ interface users {
     /// Each of these methods operates on a single site at a time, identified by the site parameter. This parameter can be the full domain name (ie. "stackoverflow.com"), or a short form identified by api_site_parameter on the site object.
     site: string
   }
-  get-users-id-privileges: func(params: get-users-id-privileges-params) -> result<string, string>;
+  get-users-id-privileges: func(params: get-users-id-privileges-params) -> result<privileges, get-users-id-privileges-error>;
 
   record get-users-id-reputation-history-full-params {
     id: string,
@@ -2792,7 +5036,7 @@ interface users {
     /// Each of these methods operates on a single site at a time, identified by the site parameter. This parameter can be the full domain name (ie. "stackoverflow.com"), or a short form identified by api_site_parameter on the site object.
     site: string
   }
-  get-users-id-reputation-history-full: func(params: get-users-id-reputation-history-full-params) -> result<string, string>;
+  get-users-id-reputation-history-full: func(params: get-users-id-reputation-history-full-params) -> result<reputation-history, get-users-id-reputation-history-full-error>;
 
   record get-users-id-tags-tags-top-answers-params {
     id: string,
@@ -2820,7 +5064,7 @@ interface users {
     /// Each of these methods operates on a single site at a time, identified by the site parameter. This parameter can be the full domain name (ie. "stackoverflow.com"), or a short form identified by api_site_parameter on the site object.
     site: string
   }
-  get-users-id-tags-tags-top-answers: func(params: get-users-id-tags-tags-top-answers-params) -> result<string, string>;
+  get-users-id-tags-tags-top-answers: func(params: get-users-id-tags-tags-top-answers-params) -> result<answers, get-users-id-tags-tags-top-answers-error>;
 
   record get-users-id-tags-tags-top-questions-params {
     id: string,
@@ -2848,7 +5092,7 @@ interface users {
     /// Each of these methods operates on a single site at a time, identified by the site parameter. This parameter can be the full domain name (ie. "stackoverflow.com"), or a short form identified by api_site_parameter on the site object.
     site: string
   }
-  get-users-id-tags-tags-top-questions: func(params: get-users-id-tags-tags-top-questions-params) -> result<string, string>;
+  get-users-id-tags-tags-top-questions: func(params: get-users-id-tags-tags-top-questions-params) -> result<questions, get-users-id-tags-tags-top-questions-error>;
 
   record get-users-id-top-answer-tags-params {
     id: string,
@@ -2862,7 +5106,7 @@ interface users {
     /// Each of these methods operates on a single site at a time, identified by the site parameter. This parameter can be the full domain name (ie. "stackoverflow.com"), or a short form identified by api_site_parameter on the site object.
     site: string
   }
-  get-users-id-top-answer-tags: func(params: get-users-id-top-answer-tags-params) -> result<string, string>;
+  get-users-id-top-answer-tags: func(params: get-users-id-top-answer-tags-params) -> result<top-tag-objects, get-users-id-top-answer-tags-error>;
 
   record get-users-id-top-question-tags-params {
     id: string,
@@ -2876,7 +5120,7 @@ interface users {
     /// Each of these methods operates on a single site at a time, identified by the site parameter. This parameter can be the full domain name (ie. "stackoverflow.com"), or a short form identified by api_site_parameter on the site object.
     site: string
   }
-  get-users-id-top-question-tags: func(params: get-users-id-top-question-tags-params) -> result<string, string>;
+  get-users-id-top-question-tags: func(params: get-users-id-top-question-tags-params) -> result<top-tag-objects, get-users-id-top-question-tags-error>;
 
   record get-users-id-write-permissions-params {
     id: string,
@@ -2890,7 +5134,7 @@ interface users {
     /// Each of these methods operates on a single site at a time, identified by the site parameter. This parameter can be the full domain name (ie. "stackoverflow.com"), or a short form identified by api_site_parameter on the site object.
     site: string
   }
-  get-users-id-write-permissions: func(params: get-users-id-write-permissions-params) -> result<string, string>;
+  get-users-id-write-permissions: func(params: get-users-id-write-permissions-params) -> result<write-permissions, get-users-id-write-permissions-error>;
 
 }
 /// The component world: imports the secrets host capability

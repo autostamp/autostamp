@@ -8,7 +8,8 @@
 //!   Cargo.toml
 //!   wasm.toml      # [package] publish metadata + explicit WIT interface deps
 //!   README.md
-//!   src/lib.rs     # generated Rust (wit-bindgen guest)
+//!   src/lib.rs         # generated Rust crate root (shared runtime + bindings)
+//!   src/iface_*.rs     # one module per interface (its `Guest` impl + helpers)
 //!   wit/world.wit  # generated WIT (deps resolved into wit/deps/ at build time)
 //! ```
 //!
@@ -60,14 +61,34 @@ fn main() -> Result<()> {
         .with_context(|| format!("failed to create wit dir `{}`", wit_dir.display()))?;
 
     let wit_path = wit_dir.join("world.wit");
-    let rust_path = src_dir.join("lib.rs");
     let cargo_path = out_dir.join("Cargo.toml");
     let wasm_path = out_dir.join("wasm.toml");
     let readme_path = out_dir.join("README.md");
     std::fs::write(&wit_path, &generated.wit)
         .with_context(|| format!("failed to write `{}`", wit_path.display()))?;
-    std::fs::write(&rust_path, &generated.rust)
-        .with_context(|| format!("failed to write `{}`", rust_path.display()))?;
+
+    // Remove stale generated `iface_*.rs` modules from a prior run so an interface that was
+    // renamed or dropped doesn't leave an orphan file behind. The generator owns every
+    // `iface_*.rs` in `src/`, so this only ever deletes its own output.
+    for entry in std::fs::read_dir(&src_dir)
+        .with_context(|| format!("failed to read source dir `{}`", src_dir.display()))?
+    {
+        let path = entry?.path();
+        let is_stale_iface = path
+            .file_name()
+            .and_then(|n| n.to_str())
+            .is_some_and(|n| n.starts_with("iface_") && n.ends_with(".rs"));
+        if is_stale_iface {
+            std::fs::remove_file(&path)
+                .with_context(|| format!("failed to remove `{}`", path.display()))?;
+        }
+    }
+
+    for file in &generated.rust {
+        let rust_path = src_dir.join(&file.path);
+        std::fs::write(&rust_path, &file.contents)
+            .with_context(|| format!("failed to write `{}`", rust_path.display()))?;
+    }
     std::fs::write(&cargo_path, &generated.cargo_toml)
         .with_context(|| format!("failed to write `{}`", cargo_path.display()))?;
     std::fs::write(&wasm_path, &generated.wasm_toml)
@@ -76,7 +97,9 @@ fn main() -> Result<()> {
         .with_context(|| format!("failed to write `{}`", readme_path.display()))?;
 
     println!("wrote {}", wit_path.display());
-    println!("wrote {}", rust_path.display());
+    for file in &generated.rust {
+        println!("wrote {}", src_dir.join(&file.path).display());
+    }
     println!("wrote {}", cargo_path.display());
     println!("wrote {}", wasm_path.display());
     println!("wrote {}", readme_path.display());

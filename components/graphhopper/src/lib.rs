@@ -44,10 +44,15 @@ pub(crate) enum FieldLocation {
     Body,
 }
 
-/// A single operation parameter: the snake-case key it carries in the params JSON and where
-/// it belongs in the request.
+/// A single operation parameter. `snake` keys the field in the internal params JSON (and, for a
+/// path field, matches the `{snake}` placeholder in the path template); `wire` is the verbatim name
+/// the field takes on the HTTP wire (query key, header name, or body property). The two differ
+/// whenever the source name isn't already snake_case (e.g. `dryRun` → snake `dry_run`, wire
+/// `dryRun`), and let distinct inputs that share a snake key (`DateCreated`, `DateCreated<`) still
+/// travel under their true names.
 pub(crate) struct FieldSpec {
     pub(crate) snake: &'static str,
+    pub(crate) wire: &'static str,
     pub(crate) location: FieldLocation,
 }
 
@@ -71,6 +76,16 @@ pub(crate) struct AuthApply {
     pub(crate) kind: AuthKind,
 }
 
+/// The failure modes of [`dispatch`], kept structured so each generated operation can map them
+/// onto its own typed error: an `Http` failure carries the response status and body (routed to
+/// the matching error-variant case), while a `Transport` failure carries a message for the
+/// catch-all case (a secret lookup, connection, or decode failure that never produced an HTTP
+/// status).
+pub(crate) enum DispatchError {
+    Http { status: u16, body: String },
+    Transport(String),
+}
+
 /// A single API operation: HTTP method, path template (with `{snake}` placeholders), the
 /// parameter fields, and the security schemes to apply.
 pub(crate) struct OpSpec {
@@ -81,8 +96,9 @@ pub(crate) struct OpSpec {
 }
 
 /// Execute `op` with the supplied `params` (a JSON object keyed by snake-case field names)
-/// and return the response body as a string, or an error message.
-pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, String> {
+/// and return the raw 2xx response body, or a structured [`DispatchError`] the caller maps
+/// onto the operation's typed error.
+pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, DispatchError> {
     let obj = match &params {
         Value::Object(map) => Some(map),
         _ => None,
@@ -105,10 +121,10 @@ pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, String> {
                 let placeholder = format!("{{{}}}", field.snake);
                 path = path.replace(&placeholder, &percent_encode(&scalar(value)));
             }
-            FieldLocation::Query => query.push((field.snake.to_string(), scalar(value))),
-            FieldLocation::Header => headers.push((field.snake.to_string(), scalar(value))),
+            FieldLocation::Query => query.push((field.wire.to_string(), scalar(value))),
+            FieldLocation::Header => headers.push((field.wire.to_string(), scalar(value))),
             FieldLocation::Body => {
-                body.insert(field.snake.to_string(), value.clone());
+                body.insert(field.wire.to_string(), value.clone());
             }
         }
     }
@@ -116,7 +132,7 @@ pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, String> {
     // Apply each resolved security scheme, sourcing its value from wasmcloud:secrets.
     let mut cookies: Vec<String> = Vec::new();
     for apply in op.auth {
-        let secret = fetch_secret(apply.secret_key)?;
+        let secret = fetch_secret(apply.secret_key).map_err(DispatchError::Transport)?;
         match &apply.kind {
             AuthKind::Bearer => headers.push(("authorization".into(), format!("Bearer {secret}"))),
             AuthKind::Basic => {
@@ -177,17 +193,18 @@ fn fetch_secret(key: &str) -> Result<String, String> {
 }
 
 /// Build and send the outgoing request with `wstd`, returning the response body on a 2xx
-/// status. The generated guest exports are synchronous, so the async `wstd` client is driven
-/// to completion on a local reactor via `wstd::runtime::block_on`.
+/// status and a structured [`DispatchError`] otherwise. The generated guest exports are
+/// synchronous, so the async `wstd` client is driven to completion on a local reactor via
+/// `wstd::runtime::block_on`.
 fn perform(
     method: &str,
     path_with_query: &str,
     headers: &[(String, String)],
     body: &[u8],
-) -> Result<String, String> {
+) -> Result<String, DispatchError> {
     let url = join_url(crate::BASE_URL, path_with_query);
     let method = Method::from_bytes(method.as_bytes())
-        .map_err(|err| format!("invalid HTTP method `{method}`: {err}"))?;
+        .map_err(|err| DispatchError::Transport(format!("invalid HTTP method `{method}`: {err}")))?;
 
     let mut builder = Request::builder().method(method).uri(url);
     for (name, value) in headers {
@@ -199,27 +216,29 @@ fn perform(
         } else {
             Body::from(body.to_vec())
         })
-        .map_err(|err| format!("failed to build request: {err}"))?;
+        .map_err(|err| DispatchError::Transport(format!("failed to build request: {err}")))?;
 
     wstd::runtime::block_on(async move {
         let client = Client::new();
         let response = client
             .send(request)
             .await
-            .map_err(|err| format!("request failed: {err:#}"))?;
+            .map_err(|err| DispatchError::Transport(format!("request failed: {err:#}")))?;
 
         let status = response.status().as_u16();
         let mut response_body = response.into_body();
-        let bytes = response_body
-            .contents()
-            .await
-            .map_err(|err| format!("failed to read response body: {err:#}"))?;
+        let bytes = response_body.contents().await.map_err(|err| {
+            DispatchError::Transport(format!("failed to read response body: {err:#}"))
+        })?;
         let body_text = String::from_utf8_lossy(bytes).into_owned();
 
         if (200..300).contains(&status) {
             Ok(body_text)
         } else {
-            Err(format!("HTTP {status}: {body_text}"))
+            Err(DispatchError::Http {
+                status,
+                body: body_text,
+            })
         }
     })
 }
@@ -279,867 +298,12 @@ fn base64(input: &[u8]) -> String {
 }
 }
 
-use crate::runtime::{dispatch, AuthApply, AuthKind, FieldLocation, FieldSpec, OpSpec};
-use serde_json::{Map, Value};
-
-use crate::exports::autostamp::graphhopper::cluster_api as iface_cluster_api;
-
-const OP_CLUSTER_API_SOLVE_CLUSTERING_PROBLEM: OpSpec = OpSpec {
-    method: "POST",
-    path_template: "/cluster",
-    fields: &[
-        FieldSpec { snake: "configuration", location: FieldLocation::Body },
-        FieldSpec { snake: "customers", location: FieldLocation::Body },
-    ],
-    auth: &[
-        AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
-    ],
-};
-
-const OP_CLUSTER_API_ASYNC_CLUSTERING_PROBLEM: OpSpec = OpSpec {
-    method: "POST",
-    path_template: "/cluster/calculate",
-    fields: &[
-        FieldSpec { snake: "configuration", location: FieldLocation::Body },
-        FieldSpec { snake: "customers", location: FieldLocation::Body },
-    ],
-    auth: &[
-        AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
-    ],
-};
-
-const OP_CLUSTER_API_GET_CLUSTER_SOLUTION: OpSpec = OpSpec {
-    method: "GET",
-    path_template: "/cluster/solution/{job_id}",
-    fields: &[
-        FieldSpec { snake: "job_id", location: FieldLocation::Path },
-    ],
-    auth: &[
-        AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
-    ],
-};
-
-fn iface_cluster_api__cluster_configuration__to_json(p: &iface_cluster_api::ClusterConfiguration) -> Value {
-    let mut m = Map::new();
-    m.insert("clustering".into(), match (&p.clustering) { Some(v) => iface_cluster_api__cluster_configuration_clustering__to_json(v), None => Value::Null });
-    m.insert("response_type".into(), match (&p.response_type) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("routing".into(), match (&p.routing) { Some(v) => iface_cluster_api__cluster_configuration_routing__to_json(v), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_cluster_api__cluster_configuration_clustering__to_json(p: &iface_cluster_api::ClusterConfigurationClustering) -> Value {
-    let mut m = Map::new();
-    m.insert("max_quantity".into(), match (&p.max_quantity) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
-    m.insert("min_quantity".into(), match (&p.min_quantity) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
-    m.insert("num_clusters".into(), match (&p.num_clusters) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_cluster_api__cluster_configuration_routing__to_json(p: &iface_cluster_api::ClusterConfigurationRouting) -> Value {
-    let mut m = Map::new();
-    m.insert("cost_per_meter".into(), match (&p.cost_per_meter) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
-    m.insert("cost_per_second".into(), match (&p.cost_per_second) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
-    m.insert("profile".into(), match (&p.profile) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_cluster_api__cluster_customer__to_json(p: &iface_cluster_api::ClusterCustomer) -> Value {
-    let mut m = Map::new();
-    m.insert("address".into(), match (&p.address) { Some(v) => iface_cluster_api__cluster_customer_address__to_json(v), None => Value::Null });
-    m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("quantity".into(), match (&p.quantity) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_cluster_api__cluster_customer_address__to_json(p: &iface_cluster_api::ClusterCustomerAddress) -> Value {
-    let mut m = Map::new();
-    m.insert("lat".into(), match (&p.lat) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
-    m.insert("lon".into(), match (&p.lon) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
-    m.insert("street_hint".into(), match (&p.street_hint) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_cluster_api__solve_clustering_problem_params__to_json(p: &iface_cluster_api::SolveClusteringProblemParams) -> Value {
-    let mut m = Map::new();
-    m.insert("configuration".into(), match (&p.configuration) { Some(v) => iface_cluster_api__cluster_configuration__to_json(v), None => Value::Null });
-    m.insert("customers".into(), match (&p.customers) { Some(v) => Value::Array((v).iter().map(|v| iface_cluster_api__cluster_customer__to_json(v)).collect()), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_cluster_api__async_clustering_problem_params__to_json(p: &iface_cluster_api::AsyncClusteringProblemParams) -> Value {
-    let mut m = Map::new();
-    m.insert("configuration".into(), match (&p.configuration) { Some(v) => iface_cluster_api__cluster_configuration__to_json(v), None => Value::Null });
-    m.insert("customers".into(), match (&p.customers) { Some(v) => Value::Array((v).iter().map(|v| iface_cluster_api__cluster_customer__to_json(v)).collect()), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_cluster_api__get_cluster_solution_params__to_json(p: &iface_cluster_api::GetClusterSolutionParams) -> Value {
-    let mut m = Map::new();
-    m.insert("job_id".into(), Value::String((&p.job_id).clone()));
-    Value::Object(m)
-}
-
-impl iface_cluster_api::Guest for crate::Component {
-    fn solve_clustering_problem(params: iface_cluster_api::SolveClusteringProblemParams) -> Result<String, String> {
-        let json = iface_cluster_api__solve_clustering_problem_params__to_json(&params);
-        dispatch(&OP_CLUSTER_API_SOLVE_CLUSTERING_PROBLEM, json)
-    }
-    fn async_clustering_problem(params: iface_cluster_api::AsyncClusteringProblemParams) -> Result<String, String> {
-        let json = iface_cluster_api__async_clustering_problem_params__to_json(&params);
-        dispatch(&OP_CLUSTER_API_ASYNC_CLUSTERING_PROBLEM, json)
-    }
-    fn get_cluster_solution(params: iface_cluster_api::GetClusterSolutionParams) -> Result<String, String> {
-        let json = iface_cluster_api__get_cluster_solution_params__to_json(&params);
-        dispatch(&OP_CLUSTER_API_GET_CLUSTER_SOLUTION, json)
-    }
-}
-use crate::exports::autostamp::graphhopper::geocoding_api as iface_geocoding_api;
-
-const OP_GEOCODING_API_GET_GEOCODE: OpSpec = OpSpec {
-    method: "GET",
-    path_template: "/geocode",
-    fields: &[
-        FieldSpec { snake: "q", location: FieldLocation::Query },
-        FieldSpec { snake: "locale", location: FieldLocation::Query },
-        FieldSpec { snake: "limit", location: FieldLocation::Query },
-        FieldSpec { snake: "reverse", location: FieldLocation::Query },
-        FieldSpec { snake: "debug", location: FieldLocation::Query },
-        FieldSpec { snake: "point", location: FieldLocation::Query },
-        FieldSpec { snake: "provider", location: FieldLocation::Query },
-    ],
-    auth: &[
-        AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
-    ],
-};
-
-fn iface_geocoding_api__get_geocode_params__to_json(p: &iface_geocoding_api::GetGeocodeParams) -> Value {
-    let mut m = Map::new();
-    m.insert("q".into(), match (&p.q) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("locale".into(), match (&p.locale) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("limit".into(), match (&p.limit) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    m.insert("reverse".into(), match (&p.reverse) { Some(v) => Value::Bool(*(v)), None => Value::Null });
-    m.insert("debug".into(), match (&p.debug) { Some(v) => Value::Bool(*(v)), None => Value::Null });
-    m.insert("point".into(), match (&p.point) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("provider".into(), match (&p.provider) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    Value::Object(m)
-}
-
-impl iface_geocoding_api::Guest for crate::Component {
-    fn get_geocode(params: iface_geocoding_api::GetGeocodeParams) -> Result<String, String> {
-        let json = iface_geocoding_api__get_geocode_params__to_json(&params);
-        dispatch(&OP_GEOCODING_API_GET_GEOCODE, json)
-    }
-}
-use crate::exports::autostamp::graphhopper::isochrone_api as iface_isochrone_api;
-
-const OP_ISOCHRONE_API_GET_ISOCHRONE: OpSpec = OpSpec {
-    method: "GET",
-    path_template: "/isochrone",
-    fields: &[
-        FieldSpec { snake: "point", location: FieldLocation::Query },
-        FieldSpec { snake: "time_limit", location: FieldLocation::Query },
-        FieldSpec { snake: "distance_limit", location: FieldLocation::Query },
-        FieldSpec { snake: "vehicle", location: FieldLocation::Query },
-        FieldSpec { snake: "buckets", location: FieldLocation::Query },
-        FieldSpec { snake: "reverse_flow", location: FieldLocation::Query },
-        FieldSpec { snake: "weighting", location: FieldLocation::Query },
-    ],
-    auth: &[
-        AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
-    ],
-};
-
-fn iface_isochrone_api__get_isochrone_weighting_enum__to_str(e: &iface_isochrone_api::GetIsochroneWeightingEnum) -> &'static str {
-    match e {
-        iface_isochrone_api::GetIsochroneWeightingEnum::Fastest => "fastest",
-        iface_isochrone_api::GetIsochroneWeightingEnum::Shortest => "shortest",
-    }
-}
-
-fn iface_isochrone_api__vehicle_profile_id__to_json(p: &iface_isochrone_api::VehicleProfileId) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_isochrone_api__get_isochrone_params__to_json(p: &iface_isochrone_api::GetIsochroneParams) -> Value {
-    let mut m = Map::new();
-    m.insert("point".into(), Value::String((&p.point).clone()));
-    m.insert("time_limit".into(), match (&p.time_limit) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    m.insert("distance_limit".into(), match (&p.distance_limit) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    m.insert("vehicle".into(), match (&p.vehicle) { Some(v) => iface_isochrone_api__vehicle_profile_id__to_json(v), None => Value::Null });
-    m.insert("buckets".into(), match (&p.buckets) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    m.insert("reverse_flow".into(), match (&p.reverse_flow) { Some(v) => Value::Bool(*(v)), None => Value::Null });
-    m.insert("weighting".into(), match (&p.weighting) { Some(v) => Value::String(iface_isochrone_api__get_isochrone_weighting_enum__to_str(v).into()), None => Value::Null });
-    Value::Object(m)
-}
-
-impl iface_isochrone_api::Guest for crate::Component {
-    fn get_isochrone(params: iface_isochrone_api::GetIsochroneParams) -> Result<String, String> {
-        let json = iface_isochrone_api__get_isochrone_params__to_json(&params);
-        dispatch(&OP_ISOCHRONE_API_GET_ISOCHRONE, json)
-    }
-}
-use crate::exports::autostamp::graphhopper::map_matching_api as iface_map_matching_api;
-
-const OP_MAP_MATCHING_API_POST_GPX: OpSpec = OpSpec {
-    method: "POST",
-    path_template: "/match",
-    fields: &[
-        FieldSpec { snake: "gps_accuracy", location: FieldLocation::Query },
-        FieldSpec { snake: "vehicle", location: FieldLocation::Query },
-    ],
-    auth: &[
-        AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
-    ],
-};
-
-fn iface_map_matching_api__post_gpx_params__to_json(p: &iface_map_matching_api::PostGpxParams) -> Value {
-    let mut m = Map::new();
-    m.insert("gps_accuracy".into(), match (&p.gps_accuracy) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    m.insert("vehicle".into(), match (&p.vehicle) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    Value::Object(m)
-}
-
-impl iface_map_matching_api::Guest for crate::Component {
-    fn post_gpx(params: iface_map_matching_api::PostGpxParams) -> Result<String, String> {
-        let json = iface_map_matching_api__post_gpx_params__to_json(&params);
-        dispatch(&OP_MAP_MATCHING_API_POST_GPX, json)
-    }
-}
-use crate::exports::autostamp::graphhopper::matrix_api as iface_matrix_api;
-
-const OP_MATRIX_API_GET_MATRIX: OpSpec = OpSpec {
-    method: "GET",
-    path_template: "/matrix",
-    fields: &[
-        FieldSpec { snake: "point", location: FieldLocation::Query },
-        FieldSpec { snake: "from_point", location: FieldLocation::Query },
-        FieldSpec { snake: "to_point", location: FieldLocation::Query },
-        FieldSpec { snake: "point_hint", location: FieldLocation::Query },
-        FieldSpec { snake: "from_point_hint", location: FieldLocation::Query },
-        FieldSpec { snake: "to_point_hint", location: FieldLocation::Query },
-        FieldSpec { snake: "snap_prevention", location: FieldLocation::Query },
-        FieldSpec { snake: "curbside", location: FieldLocation::Query },
-        FieldSpec { snake: "from_curbside", location: FieldLocation::Query },
-        FieldSpec { snake: "to_curbside", location: FieldLocation::Query },
-        FieldSpec { snake: "out_array", location: FieldLocation::Query },
-        FieldSpec { snake: "vehicle", location: FieldLocation::Query },
-        FieldSpec { snake: "fail_fast", location: FieldLocation::Query },
-        FieldSpec { snake: "turn_costs", location: FieldLocation::Query },
-    ],
-    auth: &[
-        AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
-    ],
-};
-
-const OP_MATRIX_API_POST_MATRIX: OpSpec = OpSpec {
-    method: "POST",
-    path_template: "/matrix",
-    fields: &[
-        FieldSpec { snake: "body", location: FieldLocation::Body },
-    ],
-    auth: &[
-        AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
-    ],
-};
-
-const OP_MATRIX_API_CALCULATE_MATRIX: OpSpec = OpSpec {
-    method: "POST",
-    path_template: "/matrix/calculate",
-    fields: &[
-        FieldSpec { snake: "body", location: FieldLocation::Body },
-    ],
-    auth: &[
-        AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
-    ],
-};
-
-const OP_MATRIX_API_GET_MATRIX_SOLUTION: OpSpec = OpSpec {
-    method: "GET",
-    path_template: "/matrix/solution/{job_id}",
-    fields: &[
-        FieldSpec { snake: "job_id", location: FieldLocation::Path },
-    ],
-    auth: &[
-        AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
-    ],
-};
-
-fn iface_matrix_api__get_matrix_curbside_item_enum__to_str(e: &iface_matrix_api::GetMatrixCurbsideItemEnum) -> &'static str {
-    match e {
-        iface_matrix_api::GetMatrixCurbsideItemEnum::Any => "any",
-        iface_matrix_api::GetMatrixCurbsideItemEnum::Right => "right",
-        iface_matrix_api::GetMatrixCurbsideItemEnum::Left => "left",
-    }
-}
-
-fn iface_matrix_api__vehicle_profile_id__to_json(p: &iface_matrix_api::VehicleProfileId) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_matrix_api__get_matrix_params__to_json(p: &iface_matrix_api::GetMatrixParams) -> Value {
-    let mut m = Map::new();
-    m.insert("point".into(), match (&p.point) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
-    m.insert("from_point".into(), match (&p.from_point) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
-    m.insert("to_point".into(), match (&p.to_point) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
-    m.insert("point_hint".into(), match (&p.point_hint) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
-    m.insert("from_point_hint".into(), match (&p.from_point_hint) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
-    m.insert("to_point_hint".into(), match (&p.to_point_hint) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
-    m.insert("snap_prevention".into(), match (&p.snap_prevention) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
-    m.insert("curbside".into(), match (&p.curbside) { Some(v) => Value::Array((v).iter().map(|v| Value::String(iface_matrix_api__get_matrix_curbside_item_enum__to_str(v).into())).collect()), None => Value::Null });
-    m.insert("from_curbside".into(), match (&p.from_curbside) { Some(v) => Value::Array((v).iter().map(|v| Value::String(iface_matrix_api__get_matrix_curbside_item_enum__to_str(v).into())).collect()), None => Value::Null });
-    m.insert("to_curbside".into(), match (&p.to_curbside) { Some(v) => Value::Array((v).iter().map(|v| Value::String(iface_matrix_api__get_matrix_curbside_item_enum__to_str(v).into())).collect()), None => Value::Null });
-    m.insert("out_array".into(), match (&p.out_array) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
-    m.insert("vehicle".into(), match (&p.vehicle) { Some(v) => iface_matrix_api__vehicle_profile_id__to_json(v), None => Value::Null });
-    m.insert("fail_fast".into(), match (&p.fail_fast) { Some(v) => Value::Bool(*(v)), None => Value::Null });
-    m.insert("turn_costs".into(), match (&p.turn_costs) { Some(v) => Value::Bool(*(v)), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_matrix_api__post_matrix_params__to_json(p: &iface_matrix_api::PostMatrixParams) -> Value {
-    let mut m = Map::new();
-    m.insert("body".into(), match (&p.body) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_matrix_api__calculate_matrix_params__to_json(p: &iface_matrix_api::CalculateMatrixParams) -> Value {
-    let mut m = Map::new();
-    m.insert("body".into(), match (&p.body) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_matrix_api__get_matrix_solution_params__to_json(p: &iface_matrix_api::GetMatrixSolutionParams) -> Value {
-    let mut m = Map::new();
-    m.insert("job_id".into(), Value::String((&p.job_id).clone()));
-    Value::Object(m)
-}
-
-impl iface_matrix_api::Guest for crate::Component {
-    fn get_matrix(params: iface_matrix_api::GetMatrixParams) -> Result<String, String> {
-        let json = iface_matrix_api__get_matrix_params__to_json(&params);
-        dispatch(&OP_MATRIX_API_GET_MATRIX, json)
-    }
-    fn post_matrix(params: iface_matrix_api::PostMatrixParams) -> Result<String, String> {
-        let json = iface_matrix_api__post_matrix_params__to_json(&params);
-        dispatch(&OP_MATRIX_API_POST_MATRIX, json)
-    }
-    fn calculate_matrix(params: iface_matrix_api::CalculateMatrixParams) -> Result<String, String> {
-        let json = iface_matrix_api__calculate_matrix_params__to_json(&params);
-        dispatch(&OP_MATRIX_API_CALCULATE_MATRIX, json)
-    }
-    fn get_matrix_solution(params: iface_matrix_api::GetMatrixSolutionParams) -> Result<String, String> {
-        let json = iface_matrix_api__get_matrix_solution_params__to_json(&params);
-        dispatch(&OP_MATRIX_API_GET_MATRIX_SOLUTION, json)
-    }
-}
-use crate::exports::autostamp::graphhopper::routing_api as iface_routing_api;
-
-const OP_ROUTING_API_GET_ROUTE: OpSpec = OpSpec {
-    method: "GET",
-    path_template: "/route",
-    fields: &[
-        FieldSpec { snake: "point", location: FieldLocation::Query },
-        FieldSpec { snake: "point_hint", location: FieldLocation::Query },
-        FieldSpec { snake: "snap_prevention", location: FieldLocation::Query },
-        FieldSpec { snake: "vehicle", location: FieldLocation::Query },
-        FieldSpec { snake: "curbside", location: FieldLocation::Query },
-        FieldSpec { snake: "turn_costs", location: FieldLocation::Query },
-        FieldSpec { snake: "locale", location: FieldLocation::Query },
-        FieldSpec { snake: "elevation", location: FieldLocation::Query },
-        FieldSpec { snake: "details", location: FieldLocation::Query },
-        FieldSpec { snake: "optimize", location: FieldLocation::Query },
-        FieldSpec { snake: "instructions", location: FieldLocation::Query },
-        FieldSpec { snake: "calc_points", location: FieldLocation::Query },
-        FieldSpec { snake: "debug", location: FieldLocation::Query },
-        FieldSpec { snake: "points_encoded", location: FieldLocation::Query },
-        FieldSpec { snake: "ch_disable", location: FieldLocation::Query },
-        FieldSpec { snake: "weighting", location: FieldLocation::Query },
-        FieldSpec { snake: "heading", location: FieldLocation::Query },
-        FieldSpec { snake: "heading_penalty", location: FieldLocation::Query },
-        FieldSpec { snake: "pass_through", location: FieldLocation::Query },
-        FieldSpec { snake: "block_area", location: FieldLocation::Query },
-        FieldSpec { snake: "avoid", location: FieldLocation::Query },
-        FieldSpec { snake: "algorithm", location: FieldLocation::Query },
-        FieldSpec { snake: "round_trip_distance", location: FieldLocation::Query },
-        FieldSpec { snake: "round_trip_seed", location: FieldLocation::Query },
-        FieldSpec { snake: "alternative_route_max_paths", location: FieldLocation::Query },
-        FieldSpec { snake: "alternative_route_max_weight_factor", location: FieldLocation::Query },
-        FieldSpec { snake: "alternative_route_max_share_factor", location: FieldLocation::Query },
-    ],
-    auth: &[
-        AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
-    ],
-};
-
-const OP_ROUTING_API_POST_ROUTE: OpSpec = OpSpec {
-    method: "POST",
-    path_template: "/route",
-    fields: &[
-        FieldSpec { snake: "algorithm", location: FieldLocation::Body },
-        FieldSpec { snake: "alternative_route_max_paths", location: FieldLocation::Body },
-        FieldSpec { snake: "alternative_route_max_share_factor", location: FieldLocation::Body },
-        FieldSpec { snake: "alternative_route_max_weight_factor", location: FieldLocation::Body },
-        FieldSpec { snake: "avoid", location: FieldLocation::Body },
-        FieldSpec { snake: "block_area", location: FieldLocation::Body },
-        FieldSpec { snake: "calc_points", location: FieldLocation::Body },
-        FieldSpec { snake: "ch_disable", location: FieldLocation::Body },
-        FieldSpec { snake: "curbsides", location: FieldLocation::Body },
-        FieldSpec { snake: "debug", location: FieldLocation::Body },
-        FieldSpec { snake: "details", location: FieldLocation::Body },
-        FieldSpec { snake: "elevation", location: FieldLocation::Body },
-        FieldSpec { snake: "heading_penalty", location: FieldLocation::Body },
-        FieldSpec { snake: "headings", location: FieldLocation::Body },
-        FieldSpec { snake: "instructions", location: FieldLocation::Body },
-        FieldSpec { snake: "locale", location: FieldLocation::Body },
-        FieldSpec { snake: "optimize", location: FieldLocation::Body },
-        FieldSpec { snake: "pass_through", location: FieldLocation::Body },
-        FieldSpec { snake: "point_hints", location: FieldLocation::Body },
-        FieldSpec { snake: "points", location: FieldLocation::Body },
-        FieldSpec { snake: "points_encoded", location: FieldLocation::Body },
-        FieldSpec { snake: "round_trip_distance", location: FieldLocation::Body },
-        FieldSpec { snake: "round_trip_seed", location: FieldLocation::Body },
-        FieldSpec { snake: "snap_preventions", location: FieldLocation::Body },
-        FieldSpec { snake: "vehicle", location: FieldLocation::Body },
-        FieldSpec { snake: "weighting", location: FieldLocation::Body },
-    ],
-    auth: &[
-        AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
-    ],
-};
-
-const OP_ROUTING_API_GET_ROUTE_INFO: OpSpec = OpSpec {
-    method: "GET",
-    path_template: "/route/info",
-    fields: &[
-    ],
-    auth: &[
-        AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
-    ],
-};
-
-fn iface_routing_api__get_route_curbside_item_enum__to_str(e: &iface_routing_api::GetRouteCurbsideItemEnum) -> &'static str {
-    match e {
-        iface_routing_api::GetRouteCurbsideItemEnum::Any => "any",
-        iface_routing_api::GetRouteCurbsideItemEnum::Right => "right",
-        iface_routing_api::GetRouteCurbsideItemEnum::Left => "left",
-    }
-}
-
-fn iface_routing_api__get_route_algorithm_enum__to_str(e: &iface_routing_api::GetRouteAlgorithmEnum) -> &'static str {
-    match e {
-        iface_routing_api::GetRouteAlgorithmEnum::RoundTrip => "round_trip",
-        iface_routing_api::GetRouteAlgorithmEnum::AlternativeRoute => "alternative_route",
-    }
-}
-
-fn iface_routing_api__vehicle_profile_id__to_json(p: &iface_routing_api::VehicleProfileId) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_routing_api__get_route_params__to_json(p: &iface_routing_api::GetRouteParams) -> Value {
-    let mut m = Map::new();
-    m.insert("point".into(), Value::Array((&p.point).iter().map(|v| Value::String((v).clone())).collect()));
-    m.insert("point_hint".into(), match (&p.point_hint) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
-    m.insert("snap_prevention".into(), match (&p.snap_prevention) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
-    m.insert("vehicle".into(), match (&p.vehicle) { Some(v) => iface_routing_api__vehicle_profile_id__to_json(v), None => Value::Null });
-    m.insert("curbside".into(), match (&p.curbside) { Some(v) => Value::Array((v).iter().map(|v| Value::String(iface_routing_api__get_route_curbside_item_enum__to_str(v).into())).collect()), None => Value::Null });
-    m.insert("turn_costs".into(), match (&p.turn_costs) { Some(v) => Value::Bool(*(v)), None => Value::Null });
-    m.insert("locale".into(), match (&p.locale) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("elevation".into(), match (&p.elevation) { Some(v) => Value::Bool(*(v)), None => Value::Null });
-    m.insert("details".into(), match (&p.details) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
-    m.insert("optimize".into(), match (&p.optimize) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("instructions".into(), match (&p.instructions) { Some(v) => Value::Bool(*(v)), None => Value::Null });
-    m.insert("calc_points".into(), match (&p.calc_points) { Some(v) => Value::Bool(*(v)), None => Value::Null });
-    m.insert("debug".into(), match (&p.debug) { Some(v) => Value::Bool(*(v)), None => Value::Null });
-    m.insert("points_encoded".into(), match (&p.points_encoded) { Some(v) => Value::Bool(*(v)), None => Value::Null });
-    m.insert("ch_disable".into(), match (&p.ch_disable) { Some(v) => Value::Bool(*(v)), None => Value::Null });
-    m.insert("weighting".into(), match (&p.weighting) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("heading".into(), match (&p.heading) { Some(v) => Value::Array((v).iter().map(|v| Value::Number(serde_json::Number::from(*(v)))).collect()), None => Value::Null });
-    m.insert("heading_penalty".into(), match (&p.heading_penalty) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    m.insert("pass_through".into(), match (&p.pass_through) { Some(v) => Value::Bool(*(v)), None => Value::Null });
-    m.insert("block_area".into(), match (&p.block_area) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("avoid".into(), match (&p.avoid) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("algorithm".into(), match (&p.algorithm) { Some(v) => Value::String(iface_routing_api__get_route_algorithm_enum__to_str(v).into()), None => Value::Null });
-    m.insert("round_trip_distance".into(), match (&p.round_trip_distance) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    m.insert("round_trip_seed".into(), match (&p.round_trip_seed) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    m.insert("alternative_route_max_paths".into(), match (&p.alternative_route_max_paths) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    m.insert("alternative_route_max_weight_factor".into(), match (&p.alternative_route_max_weight_factor) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
-    m.insert("alternative_route_max_share_factor".into(), match (&p.alternative_route_max_share_factor) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_routing_api__post_route_params__to_json(p: &iface_routing_api::PostRouteParams) -> Value {
-    let mut m = Map::new();
-    m.insert("algorithm".into(), match (&p.algorithm) { Some(v) => Value::String(iface_routing_api__get_route_algorithm_enum__to_str(v).into()), None => Value::Null });
-    m.insert("alternative_route_max_paths".into(), match (&p.alternative_route_max_paths) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    m.insert("alternative_route_max_share_factor".into(), match (&p.alternative_route_max_share_factor) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
-    m.insert("alternative_route_max_weight_factor".into(), match (&p.alternative_route_max_weight_factor) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
-    m.insert("avoid".into(), match (&p.avoid) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("block_area".into(), match (&p.block_area) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("calc_points".into(), match (&p.calc_points) { Some(v) => Value::Bool(*(v)), None => Value::Null });
-    m.insert("ch_disable".into(), match (&p.ch_disable) { Some(v) => Value::Bool(*(v)), None => Value::Null });
-    m.insert("curbsides".into(), match (&p.curbsides) { Some(v) => Value::Array((v).iter().map(|v| Value::String(iface_routing_api__get_route_curbside_item_enum__to_str(v).into())).collect()), None => Value::Null });
-    m.insert("debug".into(), match (&p.debug) { Some(v) => Value::Bool(*(v)), None => Value::Null });
-    m.insert("details".into(), match (&p.details) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
-    m.insert("elevation".into(), match (&p.elevation) { Some(v) => Value::Bool(*(v)), None => Value::Null });
-    m.insert("heading_penalty".into(), match (&p.heading_penalty) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    m.insert("headings".into(), match (&p.headings) { Some(v) => Value::Array((v).iter().map(|v| Value::Number(serde_json::Number::from(*(v)))).collect()), None => Value::Null });
-    m.insert("instructions".into(), match (&p.instructions) { Some(v) => Value::Bool(*(v)), None => Value::Null });
-    m.insert("locale".into(), match (&p.locale) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("optimize".into(), match (&p.optimize) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("pass_through".into(), match (&p.pass_through) { Some(v) => Value::Bool(*(v)), None => Value::Null });
-    m.insert("point_hints".into(), match (&p.point_hints) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
-    m.insert("points".into(), match (&p.points) { Some(v) => Value::Array((v).iter().map(|v| Value::Array((v).iter().map(|v| serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null)).collect())).collect()), None => Value::Null });
-    m.insert("points_encoded".into(), match (&p.points_encoded) { Some(v) => Value::Bool(*(v)), None => Value::Null });
-    m.insert("round_trip_distance".into(), match (&p.round_trip_distance) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    m.insert("round_trip_seed".into(), match (&p.round_trip_seed) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    m.insert("snap_preventions".into(), match (&p.snap_preventions) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
-    m.insert("vehicle".into(), match (&p.vehicle) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("weighting".into(), match (&p.weighting) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    Value::Object(m)
-}
-
-impl iface_routing_api::Guest for crate::Component {
-    fn get_route(params: iface_routing_api::GetRouteParams) -> Result<String, String> {
-        let json = iface_routing_api__get_route_params__to_json(&params);
-        dispatch(&OP_ROUTING_API_GET_ROUTE, json)
-    }
-    fn post_route(params: iface_routing_api::PostRouteParams) -> Result<String, String> {
-        let json = iface_routing_api__post_route_params__to_json(&params);
-        dispatch(&OP_ROUTING_API_POST_ROUTE, json)
-    }
-    fn get_route_info() -> Result<String, String> {
-        dispatch(&OP_ROUTING_API_GET_ROUTE_INFO, Value::Object(Map::new()))
-    }
-}
-use crate::exports::autostamp::graphhopper::route_optimization_api as iface_route_optimization_api;
-
-const OP_ROUTE_OPTIMIZATION_API_SOLVE_VRP: OpSpec = OpSpec {
-    method: "POST",
-    path_template: "/vrp",
-    fields: &[
-        FieldSpec { snake: "algorithm", location: FieldLocation::Body },
-        FieldSpec { snake: "configuration", location: FieldLocation::Body },
-        FieldSpec { snake: "cost_matrices", location: FieldLocation::Body },
-        FieldSpec { snake: "objectives", location: FieldLocation::Body },
-        FieldSpec { snake: "relations", location: FieldLocation::Body },
-        FieldSpec { snake: "services", location: FieldLocation::Body },
-        FieldSpec { snake: "shipments", location: FieldLocation::Body },
-        FieldSpec { snake: "vehicle_types", location: FieldLocation::Body },
-        FieldSpec { snake: "vehicles", location: FieldLocation::Body },
-    ],
-    auth: &[
-        AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
-    ],
-};
-
-const OP_ROUTE_OPTIMIZATION_API_ASYNC_VRP: OpSpec = OpSpec {
-    method: "POST",
-    path_template: "/vrp/optimize",
-    fields: &[
-        FieldSpec { snake: "algorithm", location: FieldLocation::Body },
-        FieldSpec { snake: "configuration", location: FieldLocation::Body },
-        FieldSpec { snake: "cost_matrices", location: FieldLocation::Body },
-        FieldSpec { snake: "objectives", location: FieldLocation::Body },
-        FieldSpec { snake: "relations", location: FieldLocation::Body },
-        FieldSpec { snake: "services", location: FieldLocation::Body },
-        FieldSpec { snake: "shipments", location: FieldLocation::Body },
-        FieldSpec { snake: "vehicle_types", location: FieldLocation::Body },
-        FieldSpec { snake: "vehicles", location: FieldLocation::Body },
-    ],
-    auth: &[
-        AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
-    ],
-};
-
-const OP_ROUTE_OPTIMIZATION_API_GET_SOLUTION: OpSpec = OpSpec {
-    method: "GET",
-    path_template: "/vrp/solution/{job_id}",
-    fields: &[
-        FieldSpec { snake: "job_id", location: FieldLocation::Path },
-    ],
-    auth: &[
-        AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
-    ],
-};
-
-fn iface_route_optimization_api__algorithm_objective_enum__to_str(e: &iface_route_optimization_api::AlgorithmObjectiveEnum) -> &'static str {
-    match e {
-        iface_route_optimization_api::AlgorithmObjectiveEnum::TransportTime => "transport_time",
-        iface_route_optimization_api::AlgorithmObjectiveEnum::CompletionTime => "completion_time",
-    }
-}
-
-fn iface_route_optimization_api__algorithm_problem_type_enum__to_str(e: &iface_route_optimization_api::AlgorithmProblemTypeEnum) -> &'static str {
-    match e {
-        iface_route_optimization_api::AlgorithmProblemTypeEnum::Min => "min",
-        iface_route_optimization_api::AlgorithmProblemTypeEnum::MinMax => "min-max",
-    }
-}
-
-fn iface_route_optimization_api__routing_curbside_strictness_enum__to_str(e: &iface_route_optimization_api::RoutingCurbsideStrictnessEnum) -> &'static str {
-    match e {
-        iface_route_optimization_api::RoutingCurbsideStrictnessEnum::Ignore => "ignore",
-        iface_route_optimization_api::RoutingCurbsideStrictnessEnum::Soft => "soft",
-        iface_route_optimization_api::RoutingCurbsideStrictnessEnum::Strict => "strict",
-    }
-}
-
-fn iface_route_optimization_api__routing_network_data_provider_enum__to_str(e: &iface_route_optimization_api::RoutingNetworkDataProviderEnum) -> &'static str {
-    match e {
-        iface_route_optimization_api::RoutingNetworkDataProviderEnum::Openstreetmap => "openstreetmap",
-        iface_route_optimization_api::RoutingNetworkDataProviderEnum::Tomtom => "tomtom",
-    }
-}
-
-fn iface_route_optimization_api__routing_snap_preventions_item_enum__to_str(e: &iface_route_optimization_api::RoutingSnapPreventionsItemEnum) -> &'static str {
-    match e {
-        iface_route_optimization_api::RoutingSnapPreventionsItemEnum::Motorway => "motorway",
-        iface_route_optimization_api::RoutingSnapPreventionsItemEnum::Trunk => "trunk",
-        iface_route_optimization_api::RoutingSnapPreventionsItemEnum::Bridge => "bridge",
-        iface_route_optimization_api::RoutingSnapPreventionsItemEnum::Ford => "ford",
-        iface_route_optimization_api::RoutingSnapPreventionsItemEnum::Tunnel => "tunnel",
-        iface_route_optimization_api::RoutingSnapPreventionsItemEnum::Ferry => "ferry",
-    }
-}
-
-fn iface_route_optimization_api__cost_matrix_type_op_enum__to_str(e: &iface_route_optimization_api::CostMatrixTypeOpEnum) -> &'static str {
-    match e {
-        iface_route_optimization_api::CostMatrixTypeOpEnum::Default => "default",
-        iface_route_optimization_api::CostMatrixTypeOpEnum::Google => "google",
-    }
-}
-
-fn iface_route_optimization_api__objective_value_enum__to_str(e: &iface_route_optimization_api::ObjectiveValueEnum) -> &'static str {
-    match e {
-        iface_route_optimization_api::ObjectiveValueEnum::CompletionTime => "completion_time",
-        iface_route_optimization_api::ObjectiveValueEnum::TransportTime => "transport_time",
-        iface_route_optimization_api::ObjectiveValueEnum::Vehicles => "vehicles",
-        iface_route_optimization_api::ObjectiveValueEnum::Activities => "activities",
-    }
-}
-
-fn iface_route_optimization_api__address_curbside_enum__to_str(e: &iface_route_optimization_api::AddressCurbsideEnum) -> &'static str {
-    match e {
-        iface_route_optimization_api::AddressCurbsideEnum::Right => "right",
-        iface_route_optimization_api::AddressCurbsideEnum::Left => "left",
-        iface_route_optimization_api::AddressCurbsideEnum::Any => "any",
-    }
-}
-
-fn iface_route_optimization_api__service_type_op_enum__to_str(e: &iface_route_optimization_api::ServiceTypeOpEnum) -> &'static str {
-    match e {
-        iface_route_optimization_api::ServiceTypeOpEnum::Service => "service",
-        iface_route_optimization_api::ServiceTypeOpEnum::Pickup => "pickup",
-        iface_route_optimization_api::ServiceTypeOpEnum::Delivery => "delivery",
-    }
-}
-
-fn iface_route_optimization_api__algorithm__to_json(p: &iface_route_optimization_api::Algorithm) -> Value {
-    let mut m = Map::new();
-    m.insert("objective".into(), match (&p.objective) { Some(v) => Value::String(iface_route_optimization_api__algorithm_objective_enum__to_str(v).into()), None => Value::Null });
-    m.insert("problem_type".into(), match (&p.problem_type) { Some(v) => Value::String(iface_route_optimization_api__algorithm_problem_type_enum__to_str(v).into()), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_route_optimization_api__configuration__to_json(p: &iface_route_optimization_api::Configuration) -> Value {
-    let mut m = Map::new();
-    m.insert("routing".into(), match (&p.routing) { Some(v) => iface_route_optimization_api__routing__to_json(v), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_route_optimization_api__routing__to_json(p: &iface_route_optimization_api::Routing) -> Value {
-    let mut m = Map::new();
-    m.insert("calc_points".into(), match (&p.calc_points) { Some(v) => Value::Bool(*(v)), None => Value::Null });
-    m.insert("consider_traffic".into(), match (&p.consider_traffic) { Some(v) => Value::Bool(*(v)), None => Value::Null });
-    m.insert("curbside_strictness".into(), match (&p.curbside_strictness) { Some(v) => Value::String(iface_route_optimization_api__routing_curbside_strictness_enum__to_str(v).into()), None => Value::Null });
-    m.insert("fail_fast".into(), match (&p.fail_fast) { Some(v) => Value::Bool(*(v)), None => Value::Null });
-    m.insert("network_data_provider".into(), match (&p.network_data_provider) { Some(v) => Value::String(iface_route_optimization_api__routing_network_data_provider_enum__to_str(v).into()), None => Value::Null });
-    m.insert("return_snapped_waypoints".into(), match (&p.return_snapped_waypoints) { Some(v) => Value::Bool(*(v)), None => Value::Null });
-    m.insert("snap_preventions".into(), match (&p.snap_preventions) { Some(v) => Value::Array((v).iter().map(|v| Value::String(iface_route_optimization_api__routing_snap_preventions_item_enum__to_str(v).into())).collect()), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_route_optimization_api__cost_matrix__to_json(p: &iface_route_optimization_api::CostMatrix) -> Value {
-    let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => iface_route_optimization_api__cost_matrix_data__to_json(v), None => Value::Null });
-    m.insert("location_ids".into(), match (&p.location_ids) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
-    m.insert("profile".into(), match (&p.profile) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("type".into(), match (&p.type_op) { Some(v) => Value::String(iface_route_optimization_api__cost_matrix_type_op_enum__to_str(v).into()), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_route_optimization_api__cost_matrix_data__to_json(p: &iface_route_optimization_api::CostMatrixData) -> Value {
-    let mut m = Map::new();
-    m.insert("distances".into(), match (&p.distances) { Some(v) => Value::Array((v).iter().map(|v| Value::Array((v).iter().map(|v| serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null)).collect())).collect()), None => Value::Null });
-    m.insert("info".into(), match (&p.info) { Some(v) => iface_route_optimization_api__cost_matrix_data_info__to_json(v), None => Value::Null });
-    m.insert("times".into(), match (&p.times) { Some(v) => Value::Array((v).iter().map(|v| Value::Array((v).iter().map(|v| Value::Number(serde_json::Number::from(*(v)))).collect())).collect()), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_route_optimization_api__cost_matrix_data_info__to_json(p: &iface_route_optimization_api::CostMatrixDataInfo) -> Value {
-    let mut m = Map::new();
-    m.insert("copyrights".into(), match (&p.copyrights) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
-    m.insert("took".into(), match (&p.took) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_route_optimization_api__objective__to_json(p: &iface_route_optimization_api::Objective) -> Value {
-    let mut m = Map::new();
-    m.insert("type".into(), Value::String(iface_route_optimization_api__algorithm_problem_type_enum__to_str(&p.type_op).into()));
-    m.insert("value".into(), Value::String(iface_route_optimization_api__objective_value_enum__to_str(&p.value).into()));
-    Value::Object(m)
-}
-
-fn iface_route_optimization_api__service__to_json(p: &iface_route_optimization_api::Service) -> Value {
-    let mut m = Map::new();
-    m.insert("address".into(), match (&p.address) { Some(v) => iface_route_optimization_api__address__to_json(v), None => Value::Null });
-    m.insert("allowed_vehicles".into(), match (&p.allowed_vehicles) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
-    m.insert("disallowed_vehicles".into(), match (&p.disallowed_vehicles) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
-    m.insert("duration".into(), match (&p.duration) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    m.insert("group".into(), match (&p.group) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("id".into(), Value::String((&p.id).clone()));
-    m.insert("max_time_in_vehicle".into(), match (&p.max_time_in_vehicle) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("preparation_time".into(), match (&p.preparation_time) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    m.insert("priority".into(), match (&p.priority) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    m.insert("required_skills".into(), match (&p.required_skills) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
-    m.insert("size".into(), match (&p.size) { Some(v) => Value::Array((v).iter().map(|v| Value::Number(serde_json::Number::from(*(v)))).collect()), None => Value::Null });
-    m.insert("time_windows".into(), match (&p.time_windows) { Some(v) => Value::Array((v).iter().map(|v| iface_route_optimization_api__time_window__to_json(v)).collect()), None => Value::Null });
-    m.insert("type".into(), match (&p.type_op) { Some(v) => Value::String(iface_route_optimization_api__service_type_op_enum__to_str(v).into()), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_route_optimization_api__address__to_json(p: &iface_route_optimization_api::Address) -> Value {
-    let mut m = Map::new();
-    m.insert("curbside".into(), match (&p.curbside) { Some(v) => Value::String(iface_route_optimization_api__address_curbside_enum__to_str(v).into()), None => Value::Null });
-    m.insert("lat".into(), serde_json::Number::from_f64(*(&p.lat)).map(Value::Number).unwrap_or(Value::Null));
-    m.insert("location_id".into(), Value::String((&p.location_id).clone()));
-    m.insert("lon".into(), serde_json::Number::from_f64(*(&p.lon)).map(Value::Number).unwrap_or(Value::Null));
-    m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("street_hint".into(), match (&p.street_hint) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_route_optimization_api__time_window__to_json(p: &iface_route_optimization_api::TimeWindow) -> Value {
-    let mut m = Map::new();
-    m.insert("earliest".into(), match (&p.earliest) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    m.insert("latest".into(), match (&p.latest) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_route_optimization_api__shipment__to_json(p: &iface_route_optimization_api::Shipment) -> Value {
-    let mut m = Map::new();
-    m.insert("allowed_vehicles".into(), match (&p.allowed_vehicles) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
-    m.insert("delivery".into(), iface_route_optimization_api__stop__to_json(&p.delivery));
-    m.insert("disallowed_vehicles".into(), match (&p.disallowed_vehicles) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
-    m.insert("id".into(), Value::String((&p.id).clone()));
-    m.insert("max_time_in_vehicle".into(), match (&p.max_time_in_vehicle) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("pickup".into(), iface_route_optimization_api__stop__to_json(&p.pickup));
-    m.insert("priority".into(), match (&p.priority) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    m.insert("required_skills".into(), match (&p.required_skills) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
-    m.insert("size".into(), match (&p.size) { Some(v) => Value::Array((v).iter().map(|v| Value::Number(serde_json::Number::from(*(v)))).collect()), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_route_optimization_api__stop__to_json(p: &iface_route_optimization_api::Stop) -> Value {
-    let mut m = Map::new();
-    m.insert("address".into(), match (&p.address) { Some(v) => iface_route_optimization_api__address__to_json(v), None => Value::Null });
-    m.insert("duration".into(), match (&p.duration) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    m.insert("group".into(), match (&p.group) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("preparation_time".into(), match (&p.preparation_time) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    m.insert("time_windows".into(), match (&p.time_windows) { Some(v) => Value::Array((v).iter().map(|v| iface_route_optimization_api__time_window__to_json(v)).collect()), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_route_optimization_api__vehicle_type__to_json(p: &iface_route_optimization_api::VehicleType) -> Value {
-    let mut m = Map::new();
-    m.insert("capacity".into(), match (&p.capacity) { Some(v) => Value::Array((v).iter().map(|v| Value::Number(serde_json::Number::from(*(v)))).collect()), None => Value::Null });
-    m.insert("consider_traffic".into(), match (&p.consider_traffic) { Some(v) => Value::Bool(*(v)), None => Value::Null });
-    m.insert("cost_per_activation".into(), match (&p.cost_per_activation) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
-    m.insert("cost_per_meter".into(), match (&p.cost_per_meter) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
-    m.insert("cost_per_second".into(), match (&p.cost_per_second) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
-    m.insert("network_data_provider".into(), match (&p.network_data_provider) { Some(v) => Value::String(iface_route_optimization_api__routing_network_data_provider_enum__to_str(v).into()), None => Value::Null });
-    m.insert("profile".into(), match (&p.profile) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("service_time_factor".into(), match (&p.service_time_factor) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
-    m.insert("speed_factor".into(), match (&p.speed_factor) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
-    m.insert("type_id".into(), Value::String((&p.type_id).clone()));
-    Value::Object(m)
-}
-
-fn iface_route_optimization_api__vehicle__to_json(p: &iface_route_optimization_api::Vehicle) -> Value {
-    let mut m = Map::new();
-    m.insert("break".into(), match (&p.break_) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("earliest_start".into(), match (&p.earliest_start) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    m.insert("end_address".into(), match (&p.end_address) { Some(v) => iface_route_optimization_api__address__to_json(v), None => Value::Null });
-    m.insert("latest_end".into(), match (&p.latest_end) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    m.insert("max_activities".into(), match (&p.max_activities) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    m.insert("max_distance".into(), match (&p.max_distance) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    m.insert("max_driving_time".into(), match (&p.max_driving_time) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    m.insert("max_jobs".into(), match (&p.max_jobs) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    m.insert("min_jobs".into(), match (&p.min_jobs) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    m.insert("move_to_end_address".into(), match (&p.move_to_end_address) { Some(v) => Value::Bool(*(v)), None => Value::Null });
-    m.insert("return_to_depot".into(), match (&p.return_to_depot) { Some(v) => Value::Bool(*(v)), None => Value::Null });
-    m.insert("skills".into(), match (&p.skills) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
-    m.insert("start_address".into(), iface_route_optimization_api__address__to_json(&p.start_address));
-    m.insert("type_id".into(), match (&p.type_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("vehicle_id".into(), Value::String((&p.vehicle_id).clone()));
-    Value::Object(m)
-}
-
-fn iface_route_optimization_api__solve_vrp_params__to_json(p: &iface_route_optimization_api::SolveVrpParams) -> Value {
-    let mut m = Map::new();
-    m.insert("algorithm".into(), match (&p.algorithm) { Some(v) => iface_route_optimization_api__algorithm__to_json(v), None => Value::Null });
-    m.insert("configuration".into(), match (&p.configuration) { Some(v) => iface_route_optimization_api__configuration__to_json(v), None => Value::Null });
-    m.insert("cost_matrices".into(), match (&p.cost_matrices) { Some(v) => Value::Array((v).iter().map(|v| iface_route_optimization_api__cost_matrix__to_json(v)).collect()), None => Value::Null });
-    m.insert("objectives".into(), match (&p.objectives) { Some(v) => Value::Array((v).iter().map(|v| iface_route_optimization_api__objective__to_json(v)).collect()), None => Value::Null });
-    m.insert("relations".into(), match (&p.relations) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
-    m.insert("services".into(), match (&p.services) { Some(v) => Value::Array((v).iter().map(|v| iface_route_optimization_api__service__to_json(v)).collect()), None => Value::Null });
-    m.insert("shipments".into(), match (&p.shipments) { Some(v) => Value::Array((v).iter().map(|v| iface_route_optimization_api__shipment__to_json(v)).collect()), None => Value::Null });
-    m.insert("vehicle_types".into(), match (&p.vehicle_types) { Some(v) => Value::Array((v).iter().map(|v| iface_route_optimization_api__vehicle_type__to_json(v)).collect()), None => Value::Null });
-    m.insert("vehicles".into(), match (&p.vehicles) { Some(v) => Value::Array((v).iter().map(|v| iface_route_optimization_api__vehicle__to_json(v)).collect()), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_route_optimization_api__async_vrp_params__to_json(p: &iface_route_optimization_api::AsyncVrpParams) -> Value {
-    let mut m = Map::new();
-    m.insert("algorithm".into(), match (&p.algorithm) { Some(v) => iface_route_optimization_api__algorithm__to_json(v), None => Value::Null });
-    m.insert("configuration".into(), match (&p.configuration) { Some(v) => iface_route_optimization_api__configuration__to_json(v), None => Value::Null });
-    m.insert("cost_matrices".into(), match (&p.cost_matrices) { Some(v) => Value::Array((v).iter().map(|v| iface_route_optimization_api__cost_matrix__to_json(v)).collect()), None => Value::Null });
-    m.insert("objectives".into(), match (&p.objectives) { Some(v) => Value::Array((v).iter().map(|v| iface_route_optimization_api__objective__to_json(v)).collect()), None => Value::Null });
-    m.insert("relations".into(), match (&p.relations) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
-    m.insert("services".into(), match (&p.services) { Some(v) => Value::Array((v).iter().map(|v| iface_route_optimization_api__service__to_json(v)).collect()), None => Value::Null });
-    m.insert("shipments".into(), match (&p.shipments) { Some(v) => Value::Array((v).iter().map(|v| iface_route_optimization_api__shipment__to_json(v)).collect()), None => Value::Null });
-    m.insert("vehicle_types".into(), match (&p.vehicle_types) { Some(v) => Value::Array((v).iter().map(|v| iface_route_optimization_api__vehicle_type__to_json(v)).collect()), None => Value::Null });
-    m.insert("vehicles".into(), match (&p.vehicles) { Some(v) => Value::Array((v).iter().map(|v| iface_route_optimization_api__vehicle__to_json(v)).collect()), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_route_optimization_api__get_solution_params__to_json(p: &iface_route_optimization_api::GetSolutionParams) -> Value {
-    let mut m = Map::new();
-    m.insert("job_id".into(), Value::String((&p.job_id).clone()));
-    Value::Object(m)
-}
-
-impl iface_route_optimization_api::Guest for crate::Component {
-    fn solve_vrp(params: iface_route_optimization_api::SolveVrpParams) -> Result<String, String> {
-        let json = iface_route_optimization_api__solve_vrp_params__to_json(&params);
-        dispatch(&OP_ROUTE_OPTIMIZATION_API_SOLVE_VRP, json)
-    }
-    fn async_vrp(params: iface_route_optimization_api::AsyncVrpParams) -> Result<String, String> {
-        let json = iface_route_optimization_api__async_vrp_params__to_json(&params);
-        dispatch(&OP_ROUTE_OPTIMIZATION_API_ASYNC_VRP, json)
-    }
-    fn get_solution(params: iface_route_optimization_api::GetSolutionParams) -> Result<String, String> {
-        let json = iface_route_optimization_api__get_solution_params__to_json(&params);
-        dispatch(&OP_ROUTE_OPTIMIZATION_API_GET_SOLUTION, json)
-    }
-}
+mod iface_cluster_api;
+mod iface_geocoding_api;
+mod iface_isochrone_api;
+mod iface_map_matching_api;
+mod iface_matrix_api;
+mod iface_routing_api;
+mod iface_route_optimization_api;
 
 export!(Component);

@@ -11,8 +11,8 @@ triggered.
 
 | Setting | Value |
 | --- | --- |
-| Package | `autostamp:postmarkapp@0.3.0` |
-| Published version | `0.3.0+postmarkapp-0.9.0` |
+| Package | `autostamp:postmarkapp@0.5.0` |
+| Published version | `0.5.0+postmarkapp-0.9.0` |
 | Tag filter | all tags |
 | Operations generated | 23 |
 | Infer API-key credentials | enabled — not triggered |

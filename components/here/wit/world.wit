@@ -6,14 +6,26 @@
 /// | Secret name | Applied to each request as |
 /// | --- | --- |
 /// | `APIKey` | query `apiKey` |
-package autostamp:here@0.3.0;
+package autostamp:here@0.5.0;
 
 interface api-information {
+  record api-health-status {
+    /// Health status of API
+    status: option<string>
+  }
+
+  record api-version {
+    /// Version of API
+    api-version: option<string>,
+    /// Version of the Service
+    service-version: option<string>
+  }
+
   /// Service health
-  get-health: func() -> result<string, string>;
+  get-health: func() -> result<api-health-status, string>;
 
   /// API version
-  get-api-version: func() -> result<string, string>;
+  get-api-version: func() -> result<api-version, string>;
 
 }
 
@@ -377,6 +389,49 @@ interface location {
     value: string
   }
 
+  /// Object wrapper for the response to a location request.
+  record post-locate-response {
+    location: position-locate
+  }
+
+  /// Object containing information on a location where a measurement was taken.
+  record position-locate {
+    /// Uncertainty circle radius in meters (degree of confidence according to the `confidence` parameter).
+    accuracy: f64,
+    /// Altitude in meters (referenced to the WGS-84 ellipsoid) negative or positive.
+    alt: option<f64>,
+    /// Uncertainty of the altitude estimate in meters (degree of confidence according to the `confidence` parameter). This field superceeds old `altaccuracy`.
+    alt-accuracy: option<f64>,
+    lat: latitude,
+    lng: longitude
+  }
+
+  /// Latitude in WGS-84 format, decimal representation ranging from -90 to 90.
+  record latitude {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  /// Longitude in WGS-84 format, decimal representation ranging from -180 to 180.
+  record longitude {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  variant post-locate-error {
+    bad-request(string),
+    unauthorized(string),
+    forbidden(string),
+    not-found(string),
+    method-not-allowed(string),
+    payload-too-large(string),
+    uri-too-long(string),
+    unsupported-media-type(string),
+    internal-server-error(string),
+    service-unavailable(string),
+    other(string)
+  }
+
   /// Location query
   record post-locate-params {
     /// Confidence level in percent for the accuracy/uncertainty in the location estimate response. If not specified, the default is 68 (this corresponds to a 68% probability that the true position is within the accuracy/uncertainty radius of the location estimate: the higher the number, the greater the confidence level).
@@ -406,7 +461,7 @@ interface location {
     /// WLAN access positions. For privacy reasons positioning based on a single WLAN AP is not possible; there has to be at least one other matching wlan or cell. Alternatively, you can allow fallbacks to less accurate single WLAN AP location estimates by using the setting `fallback=singleWifi`.
     wlan: option<list<wlan-locate>>
   }
-  post-locate: func(params: post-locate-params) -> result<string, string>;
+  post-locate: func(params: post-locate-params) -> result<post-locate-response, post-locate-error>;
 
 }
 /// The component world: imports the secrets host capability

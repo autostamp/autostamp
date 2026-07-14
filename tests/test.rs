@@ -1,6 +1,18 @@
 //! Integration tests for `openapi-bindgen`.
 
-use openapi_bindgen::{NoOperations, PackageName, generate, parse_openapi};
+use openapi_bindgen::{Generated, NoOperations, PackageName, generate, parse_openapi};
+
+/// Join every generated Rust source file into one string. The generator splits its output
+/// across a `lib.rs` crate root plus one `iface_*.rs` module per interface; assertions that
+/// only care about the emitted code search the concatenation.
+fn rust_src(generated: &Generated) -> String {
+    generated
+        .rust
+        .iter()
+        .map(|f| f.contents.as_str())
+        .collect::<Vec<_>>()
+        .join("\n")
+}
 
 /// A minimal OpenAPI 3 document with a single tagged operation.
 const MINIMAL_SPEC: &str = r#"{
@@ -489,7 +501,7 @@ fn emits_base_url_and_auth_tables() {
     let spec = parse_openapi(AUTH_SPEC).unwrap();
     let package = PackageName::parse("widget:api@0.1.0").unwrap();
     let generated = generate(&spec, &package, None).unwrap();
-    let rust = &generated.rust;
+    let rust = rust_src(&generated);
 
     // The base URL is resolved from `servers` (trailing slash stripped).
     assert!(rust.contains(r#"const BASE_URL: &str = "https://api.example.com/v1";"#));
@@ -571,7 +583,7 @@ fn prunes_request_fields_that_duplicate_injected_credentials() {
     // The credential is still injected centrally: the OpSpec carries the auth table even
     // though the body field is gone.
     assert!(
-        generated.rust.contains(
+        rust_src(&generated).contains(
             r#"AuthApply { secret_key: "secret", kind: AuthKind::ApiKeyHeader("X-Secret") }"#
         ),
         "auth table retained after pruning"
@@ -714,11 +726,10 @@ fn infers_api_key_credential_from_naked_param() {
     // It is injected centrally instead: the op carries a synthesized query-key auth entry, keyed
     // by the param's kebab name, applying the secret to the `key` query param verbatim.
     assert!(
-        generated
-            .rust
+        rust_src(&generated)
             .contains(r#"AuthApply { secret_key: "key", kind: AuthKind::ApiKeyQuery("key") }"#),
         "synthesized auth entry present:\n{}",
-        generated.rust
+        rust_src(&generated)
     );
 
     // The inferred secret is documented in the Authentication table in both surfaces …
@@ -965,15 +976,124 @@ fn exports_tag_module_is_aliased() {
     // The module import is aliased, and the `Guest` impl targets the alias — never a bare
     // `exports` that would shadow wit-bindgen's top-level `exports` module.
     assert!(
-        generated.rust.contains("::exports as iface_exports;"),
+        rust_src(&generated).contains("::exports as iface_exports;"),
         "exports interface module should be aliased:\n{}",
-        generated.rust
+        rust_src(&generated)
     );
-    assert!(generated.rust.contains("impl iface_exports::Guest"));
+    assert!(rust_src(&generated).contains("impl iface_exports::Guest"));
     assert!(
-        !generated.rust.contains("::demo::exports;"),
+        !rust_src(&generated).contains("::demo::exports;"),
         "must not emit a bare `exports` import that collides with wit-bindgen's module"
     );
+}
+
+// r[verify codegen.output.multi-file]
+// The generator splits its Rust output across files — a `lib.rs` crate root plus one
+// `iface_<name>.rs` module per interface — so no single file grows too large for `rustc` to
+// parse. The crate-level scaffolding stays in `lib.rs`; each interface's `Guest` impl lives in
+// its own module file.
+#[test]
+fn splits_rust_into_lib_and_interface_modules() {
+    let spec = parse_openapi(MINIMAL_SPEC).unwrap();
+    let package = PackageName::parse("demo:api@0.1.0").unwrap();
+    let generated = generate(&spec, &package, None).unwrap();
+
+    // `lib.rs` is always the first emitted file.
+    let lib = &generated.rust[0];
+    assert_eq!(lib.path, "lib.rs");
+
+    // It carries the shared crate scaffolding …
+    for needle in [
+        "#![allow(",
+        "wit_bindgen::generate!",
+        "const BASE_URL",
+        "struct Component;",
+        "mod runtime {",
+        "mod iface_things;",
+        "export!(Component);",
+    ] {
+        assert!(
+            lib.contents.contains(needle),
+            "lib.rs should contain `{needle}`:\n{}",
+            lib.contents
+        );
+    }
+    // … but the interface's `Guest` impl lives in its own module, not the crate root.
+    assert!(
+        !lib.contents.contains("impl iface_things::Guest"),
+        "the Guest impl must not be in lib.rs:\n{}",
+        lib.contents
+    );
+
+    // The `things` interface has its own `iface_things.rs` module carrying its `Guest` impl and
+    // the imports it needs to compile standalone.
+    let module = generated
+        .rust
+        .iter()
+        .find(|f| f.path == "iface_things.rs")
+        .expect("iface_things.rs module should be emitted");
+    for needle in [
+        "impl iface_things::Guest for crate::Component",
+        "use crate::runtime::{dispatch,",
+        "use serde_json::{Map, Value};",
+        "as iface_things;",
+    ] {
+        assert!(
+            module.contents.contains(needle),
+            "iface_things.rs should contain `{needle}`:\n{}",
+            module.contents
+        );
+    }
+}
+
+// r[verify codegen.output.one-module-per-interface]
+// Every interface is emitted as its own `iface_<name>.rs` module, and `lib.rs` declares each
+// with a `mod` item so they all compile into the crate.
+#[test]
+fn emits_one_module_file_per_interface() {
+    let spec_json = r#"{
+      "openapi": "3.0.0",
+      "info": { "title": "demo", "version": "1.0.0" },
+      "paths": {
+        "/things": {
+          "get": { "tags": ["things"], "operationId": "listThings",
+            "responses": { "200": { "description": "ok" } } }
+        },
+        "/widgets": {
+          "get": { "tags": ["widgets"], "operationId": "listWidgets",
+            "responses": { "200": { "description": "ok" } } }
+        }
+      }
+    }"#;
+    let spec = parse_openapi(spec_json).unwrap();
+    let package = PackageName::parse("demo:api@0.1.0").unwrap();
+    let generated = generate(&spec, &package, None).unwrap();
+
+    // lib.rs plus one module per interface.
+    assert_eq!(generated.interfaces.len(), 2);
+    assert_eq!(generated.rust.len(), generated.interfaces.len() + 1);
+    assert_eq!(generated.rust[0].path, "lib.rs");
+
+    for iface in &generated.interfaces {
+        let module_path = format!("iface_{iface}.rs");
+        assert!(
+            generated.rust.iter().any(|f| f.path == module_path),
+            "expected a module file `{module_path}`; got {:?}",
+            generated.rust.iter().map(|f| &f.path).collect::<Vec<_>>()
+        );
+        assert!(
+            generated.rust[0]
+                .contents
+                .contains(&format!("mod iface_{iface};")),
+            "lib.rs should declare `mod iface_{iface};`:\n{}",
+            generated.rust[0].contents
+        );
+    }
+
+    // Every interface module targets the shared crate-level `Component`.
+    for module in generated.rust.iter().skip(1) {
+        assert!(module.contents.contains("for crate::Component"));
+    }
 }
 
 // r[verify codegen.enum.escape-wire-value]
@@ -1009,12 +1129,12 @@ fn escapes_enum_wire_values_with_quotes() {
 
     // The escaped literal is present; the doubled-quote form that fails to lex is not.
     assert!(
-        generated.rust.contains(r#"=> "\"Ashburn, VA\"","#),
+        rust_src(&generated).contains(r#"=> "\"Ashburn, VA\"","#),
         "enum wire value should be escaped:\n{}",
-        generated.rust
+        rust_src(&generated)
     );
     assert!(
-        !generated.rust.contains(r#"=> ""Ashburn"#),
+        !rust_src(&generated).contains(r#"=> ""Ashburn"#),
         "must not emit the doubled-quote form that fails to lex"
     );
 }
@@ -1067,18 +1187,18 @@ fn resolves_component_parameter_refs() {
     // The path placeholders have matching `FieldLocation::Path` fields in the runtime OpSpec, so
     // `{owner}`/`{repo}` are fillable rather than emitted verbatim into the request URL.
     assert!(
-        generated.rust.contains(
+        rust_src(&generated).contains(
             "FieldSpec { snake: \"owner\", wire: \"owner\", location: FieldLocation::Path }"
         ),
         "{}",
-        generated.rust
+        rust_src(&generated)
     );
     assert!(
-        generated.rust.contains(
+        rust_src(&generated).contains(
             "FieldSpec { snake: \"repo\", wire: \"repo\", location: FieldLocation::Path }"
         ),
         "{}",
-        generated.rust
+        rust_src(&generated)
     );
 }
 
@@ -1119,22 +1239,23 @@ fn merges_path_item_level_parameters() {
     let generated = generate(&spec, &package, None).unwrap();
 
     // The shared path-item `id` reaches both operations and fills `{id}` for each.
-    let id_path_fields = generated
-        .rust
+    let id_path_fields = rust_src(&generated)
         .matches("FieldSpec { snake: \"id\", wire: \"id\", location: FieldLocation::Path }")
         .count();
     assert_eq!(
-        id_path_fields, 2,
+        id_path_fields,
+        2,
         "both operations should carry the shared path-item `id` field:\n{}",
-        generated.rust
+        rust_src(&generated)
     );
     // `trace` appears once per operation (2 total): the delete op's operation-level `trace`
     // overrides — rather than duplicates — the path-level one.
-    let trace_fields = generated.rust.matches("snake: \"trace\"").count();
+    let trace_fields = rust_src(&generated).matches("snake: \"trace\"").count();
     assert_eq!(
-        trace_fields, 2,
+        trace_fields,
+        2,
         "operation-level param must override, not duplicate, the path-level param:\n{}",
-        generated.rust
+        rust_src(&generated)
     );
     // getThing keeps the path-level optional `trace`; deleteThing's override is required.
     assert!(
@@ -1182,21 +1303,21 @@ fn keeps_same_named_path_and_query_parameters() {
 
     // The path `{path}` segment is still fillable: a path-location field named `path` survives.
     assert!(
-        generated.rust.contains(
+        rust_src(&generated).contains(
             "FieldSpec { snake: \"path\", wire: \"path\", location: FieldLocation::Path }"
         ),
         "the path `{{path}}` segment must keep its path field:\n{}",
-        generated.rust
+        rust_src(&generated)
     );
     // The distinct query parameter `path` is not dropped: it survives as a query-location field.
     // Its internal params key (`snake`) is disambiguated to keep the params record unambiguous,
     // but its wire name stays `path`, so the runtime still sends `?path=…`.
     assert!(
-        generated.rust.contains(
+        rust_src(&generated).contains(
             "FieldSpec { snake: \"path_v2\", wire: \"path\", location: FieldLocation::Query }"
         ),
         "the same-named query parameter must be carried, not dropped:\n{}",
-        generated.rust
+        rust_src(&generated)
     );
     // Nothing is left unfillable: the params record exposes two distinct fields for the two
     // `path` inputs (`path` and a suffix-disambiguated sibling).
@@ -1241,34 +1362,34 @@ fn preserves_verbatim_wire_names() {
 
     // A camelCase parameter travels under its verbatim wire name, keyed internally by snake_case.
     assert!(
-        generated.rust.contains(
+        rust_src(&generated).contains(
             "FieldSpec { snake: \"phone_number\", wire: \"phoneNumber\", location: FieldLocation::Query }"
         ),
         "camelCase query parameter must keep its verbatim wire name:\n{}",
-        generated.rust
+        rust_src(&generated)
     );
     // The params record the guest serializes keys by the internal snake name, not the wire name;
     // the runtime re-keys to `wire` during dispatch.
     assert!(
-        generated.rust.contains("m.insert(\"phone_number\".into()"),
+        rust_src(&generated).contains("m.insert(\"phone_number\".into()"),
         "params record should key by the internal snake name:\n{}",
-        generated.rust
+        rust_src(&generated)
     );
     // `DateCreated` and `DateCreated<` are distinct inputs: both survive, each under its own wire
     // name, with disambiguated internal snake keys so they can't clobber each other.
     assert!(
-        generated.rust.contains(
+        rust_src(&generated).contains(
             "FieldSpec { snake: \"date_created\", wire: \"DateCreated\", location: FieldLocation::Query }"
         ),
         "first DateCreated filter must keep its wire name:\n{}",
-        generated.rust
+        rust_src(&generated)
     );
     assert!(
-        generated.rust.contains(
+        rust_src(&generated).contains(
             "FieldSpec { snake: \"date_created_v2\", wire: \"DateCreated<\", location: FieldLocation::Query }"
         ),
         "the `DateCreated<` range filter must survive with its distinct wire name:\n{}",
-        generated.rust
+        rust_src(&generated)
     );
 }
 
@@ -1481,9 +1602,9 @@ fn types_success_response_body_as_record() {
     );
     // The generated Rust deserializes the raw body into the record type.
     assert!(
-        generated.rust.contains("__ok(body: String)"),
+        rust_src(&generated).contains("__ok(body: String)"),
         "a typed ok body should emit a `__ok` decoder over the raw body:\n{}",
-        generated.rust
+        rust_src(&generated)
     );
 }
 
@@ -1651,20 +1772,21 @@ fn enumerates_declared_error_responses() {
     );
     // The generated Rust maps each HTTP status onto its case, with a catch-all for the rest.
     assert!(
-        generated.rust.contains("404u16 =>") && generated.rust.contains("::NotFound(body)"),
+        rust_src(&generated).contains("404u16 =>")
+            && rust_src(&generated).contains("::NotFound(body)"),
         "404 should map onto the NotFound case in Rust:\n{}",
-        generated.rust
+        rust_src(&generated)
     );
     assert!(
-        generated.rust.contains("500u16 =>")
-            && generated.rust.contains("::InternalServerError(body)"),
+        rust_src(&generated).contains("500u16 =>")
+            && rust_src(&generated).contains("::InternalServerError(body)"),
         "500 should map onto the InternalServerError case in Rust:\n{}",
-        generated.rust
+        rust_src(&generated)
     );
     assert!(
-        generated.rust.contains("_ =>") && generated.rust.contains("::Other(body)"),
+        rust_src(&generated).contains("_ =>") && rust_src(&generated).contains("::Other(body)"),
         "undeclared statuses fall through to the Other case:\n{}",
-        generated.rust
+        rust_src(&generated)
     );
 }
 
@@ -1701,14 +1823,14 @@ fn maps_error_status_ranges_to_variant_cases() {
         generated.wit
     );
     assert!(
-        generated.rust.contains("(400u16..500u16).contains(&s)"),
+        rust_src(&generated).contains("(400u16..500u16).contains(&s)"),
         "a 4XX range should map onto a guarded 400..500 match arm:\n{}",
-        generated.rust
+        rust_src(&generated)
     );
     assert!(
-        generated.rust.contains("(500u16..600u16).contains(&s)"),
+        rust_src(&generated).contains("(500u16..600u16).contains(&s)"),
         "a 5XX range should map onto a guarded 500..600 match arm:\n{}",
-        generated.rust
+        rust_src(&generated)
     );
 }
 
@@ -2021,12 +2143,13 @@ fn types_free_form_object_as_string_map() {
         generated.wit
     );
     // The map serializes to a JSON *object*, not serde's default array-of-`{key, value}` objects.
+    let rust = rust_src(&generated);
     assert!(
-        generated.rust.contains(
+        rust.contains(
             ".iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()"
         ),
         "the map must serialize into a JSON object:\n{}",
-        generated.rust
+        rust
     );
 }
 

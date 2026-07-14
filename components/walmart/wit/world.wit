@@ -1,4 +1,4 @@
-package autostamp:walmart@0.3.0;
+package autostamp:walmart@0.5.0;
 
 interface inventory {
   enum update-bulk-inventory-feed-type-enum {
@@ -6,8 +6,195 @@ interface inventory {
     mp-inventory,
   }
 
-  enum update-multi-node-inventory-body-inventories-nodes-item-input-qty-unit-enum {
+  enum get-multi-node-inventory-for-all-sku-and-all-ship-nodes-response-elements-inventories-item-nodes-item-avail-to-sell-qty-unit-enum {
     each,
+  }
+
+  enum get-multi-node-inventory-for-sku-and-all-shipnodes-response-nodes-item-errors-item-category-enum {
+    application,
+    system,
+    request,
+    data,
+  }
+
+  enum get-multi-node-inventory-for-sku-and-all-shipnodes-response-nodes-item-errors-item-severity-enum {
+    info,
+    warn,
+    error,
+  }
+
+  record update-bulk-inventory-response {
+    additional-attributes: option<update-bulk-inventory-response-additional-attributes>,
+    errors: option<update-bulk-inventory-response-errors>,
+    /// A unique ID, returned from the Bulk Upload API, used for tracking the feed file
+    feed-id: option<string>
+  }
+
+  record update-bulk-inventory-response-additional-attributes {
+    /// JSON-encoded free-form object payload
+    data: option<string>
+  }
+
+  record update-bulk-inventory-response-errors {
+    /// JSON-encoded free-form object payload
+    data: option<string>
+  }
+
+  record get-wfs-inventory-response {
+    headers: option<get-wfs-inventory-response-headers>,
+    payload: option<get-wfs-inventory-response-payload>
+  }
+
+  record get-wfs-inventory-response-headers {
+    /// Information about the quantity in inventory
+    limit: option<s32>,
+    /// Offset is the number of records you wish to skip before selecting results.
+    offset: option<s32>,
+    /// Total number of results for query.
+    total-count: option<s32>
+  }
+
+  record get-wfs-inventory-response-payload {
+    inventory: option<list<get-wfs-inventory-response-payload-inventory-item>>
+  }
+
+  record get-wfs-inventory-response-payload-inventory-item {
+    ship-nodes: option<list<get-wfs-inventory-response-payload-inventory-item-ship-nodes-item>>,
+    /// An arbitrary alphanumeric unique ID, specified by the seller, which identifies each item.
+    sku: option<string>
+  }
+
+  record get-wfs-inventory-response-payload-inventory-item-ship-nodes-item {
+    /// The available quantity is the quantity of an item that is available to be allocated to orders.
+    avail-to-sell-qty: option<s32>,
+    /// Last changes date for the item.
+    modified-date: option<string>,
+    /// The on-hand balance is the quantity of active inventory stored at the warehouse.Active inventory is defined as the usable amount of an item that is in the warehouse.Inventory is active if it is not damaged, expired or being inspected.
+    on-hand-qty: option<s32>,
+    /// Identifies fulfillment aspect of invetory. Walmart, seller or 3PL fulfilled. Possible value is 'WFSFulfilled'. In later phase we will also add seller fulfilled inventory.
+    ship-node-type: option<string>
+  }
+
+  record get-multi-node-inventory-for-all-sku-and-all-ship-nodes-response {
+    elements: option<get-multi-node-inventory-for-all-sku-and-all-ship-nodes-response-elements>,
+    meta: option<get-multi-node-inventory-for-all-sku-and-all-ship-nodes-response-meta>
+  }
+
+  record get-multi-node-inventory-for-all-sku-and-all-ship-nodes-response-elements {
+    inventories: option<list<get-multi-node-inventory-for-all-sku-and-all-ship-nodes-response-elements-inventories-item>>
+  }
+
+  record get-multi-node-inventory-for-all-sku-and-all-ship-nodes-response-elements-inventories-item {
+    nodes: option<list<get-multi-node-inventory-for-all-sku-and-all-ship-nodes-response-elements-inventories-item-nodes-item>>,
+    /// An arbitrary alphanumeric unique ID, specified by the seller, which identifies each item.
+    sku: option<string>
+  }
+
+  record get-multi-node-inventory-for-all-sku-and-all-ship-nodes-response-elements-inventories-item-nodes-item {
+    /// Quantity of an item that is available to be allocated to orders
+    avail-to-sell-qty: option<get-multi-node-inventory-for-all-sku-and-all-ship-nodes-response-elements-inventories-item-nodes-item-avail-to-sell-qty>,
+    /// Quantity of an item that is input by the seller
+    input-qty: option<get-multi-node-inventory-for-all-sku-and-all-ship-nodes-response-elements-inventories-item-nodes-item-input-qty>,
+    /// Quantity that has been ordered by the customers but not yet shipped
+    reserved-qty: option<get-multi-node-inventory-for-all-sku-and-all-ship-nodes-response-elements-inventories-item-nodes-item-reserved-qty>,
+    /// ShipNode Id of the ship node for which the inventory is requested
+    ship-node: option<string>
+  }
+
+  /// Quantity of an item that is available to be allocated to orders
+  record get-multi-node-inventory-for-all-sku-and-all-ship-nodes-response-elements-inventories-item-nodes-item-avail-to-sell-qty {
+    /// Inventory Count
+    amount: f64,
+    /// The unit of measurement. Example: 'EACH'
+    unit: get-multi-node-inventory-for-all-sku-and-all-ship-nodes-response-elements-inventories-item-nodes-item-avail-to-sell-qty-unit-enum
+  }
+
+  /// Quantity of an item that is input by the seller
+  record get-multi-node-inventory-for-all-sku-and-all-ship-nodes-response-elements-inventories-item-nodes-item-input-qty {
+    /// Inventory Count
+    amount: f64,
+    /// The unit of measurement. Example: 'EACH'
+    unit: get-multi-node-inventory-for-all-sku-and-all-ship-nodes-response-elements-inventories-item-nodes-item-avail-to-sell-qty-unit-enum
+  }
+
+  /// Quantity that has been ordered by the customers but not yet shipped
+  record get-multi-node-inventory-for-all-sku-and-all-ship-nodes-response-elements-inventories-item-nodes-item-reserved-qty {
+    /// Inventory Count
+    amount: f64,
+    /// The unit of measurement. Example: 'EACH'
+    unit: get-multi-node-inventory-for-all-sku-and-all-ship-nodes-response-elements-inventories-item-nodes-item-avail-to-sell-qty-unit-enum
+  }
+
+  record get-multi-node-inventory-for-all-sku-and-all-ship-nodes-response-meta {
+    /// Used for pagination to fetch the next set of items.
+    next-cursor: option<string>,
+    /// Total number of Skus of the Seller. Example: '235'
+    total-count: option<f64>
+  }
+
+  record get-multi-node-inventory-for-sku-and-all-shipnodes-response {
+    nodes: option<list<get-multi-node-inventory-for-sku-and-all-shipnodes-response-nodes-item>>,
+    /// An arbitrary alphanumeric unique ID, specified by the seller, which identifies each item.
+    sku: option<string>
+  }
+
+  record get-multi-node-inventory-for-sku-and-all-shipnodes-response-nodes-item {
+    /// Quantity of an item that is available to be allocated to orders
+    avail-to-sell-qty: option<get-multi-node-inventory-for-sku-and-all-shipnodes-response-nodes-item-avail-to-sell-qty>,
+    errors: option<list<get-multi-node-inventory-for-sku-and-all-shipnodes-response-nodes-item-errors-item>>,
+    /// Quantity of an item that is input by the seller
+    input-qty: option<get-multi-node-inventory-for-sku-and-all-shipnodes-response-nodes-item-input-qty>,
+    /// Quantity that has been ordered by the customers but not yet shipped
+    reserved-qty: option<get-multi-node-inventory-for-sku-and-all-shipnodes-response-nodes-item-reserved-qty>,
+    /// ShipNode Id of the ship node for which the inventory is requested
+    ship-node: option<string>
+  }
+
+  /// Quantity of an item that is available to be allocated to orders
+  record get-multi-node-inventory-for-sku-and-all-shipnodes-response-nodes-item-avail-to-sell-qty {
+    /// Inventory Count
+    amount: f64,
+    /// The unit of measurement. Example: 'EACH'
+    unit: get-multi-node-inventory-for-all-sku-and-all-ship-nodes-response-elements-inventories-item-nodes-item-avail-to-sell-qty-unit-enum
+  }
+
+  record get-multi-node-inventory-for-sku-and-all-shipnodes-response-nodes-item-errors-item {
+    category: option<get-multi-node-inventory-for-sku-and-all-shipnodes-response-nodes-item-errors-item-category-enum>,
+    causes: option<list<get-multi-node-inventory-for-sku-and-all-shipnodes-response-nodes-item-errors-item-causes-item>>,
+    code: string,
+    description: option<string>,
+    error-identifiers: option<get-multi-node-inventory-for-sku-and-all-shipnodes-response-nodes-item-errors-item-error-identifiers>,
+    field: option<string>,
+    info: option<string>,
+    severity: option<get-multi-node-inventory-for-sku-and-all-shipnodes-response-nodes-item-errors-item-severity-enum>
+  }
+
+  record get-multi-node-inventory-for-sku-and-all-shipnodes-response-nodes-item-errors-item-causes-item {
+    code: option<string>,
+    description: option<string>,
+    field: option<string>,
+    type-op: option<string>
+  }
+
+  record get-multi-node-inventory-for-sku-and-all-shipnodes-response-nodes-item-errors-item-error-identifiers {
+    /// JSON-encoded free-form object payload
+    data: option<string>
+  }
+
+  /// Quantity of an item that is input by the seller
+  record get-multi-node-inventory-for-sku-and-all-shipnodes-response-nodes-item-input-qty {
+    /// Inventory Count
+    amount: f64,
+    /// The unit of measurement. Example: 'EACH'
+    unit: get-multi-node-inventory-for-all-sku-and-all-ship-nodes-response-elements-inventories-item-nodes-item-avail-to-sell-qty-unit-enum
+  }
+
+  /// Quantity that has been ordered by the customers but not yet shipped
+  record get-multi-node-inventory-for-sku-and-all-shipnodes-response-nodes-item-reserved-qty {
+    /// Inventory Count
+    amount: f64,
+    /// The unit of measurement. Example: 'EACH'
+    unit: get-multi-node-inventory-for-all-sku-and-all-ship-nodes-response-elements-inventories-item-nodes-item-avail-to-sell-qty-unit-enum
   }
 
   record update-multi-node-inventory-body-inventories {
@@ -26,7 +213,60 @@ interface inventory {
     /// Inventory Count
     amount: f64,
     /// The unit of measurement. Example: 'EACH'
-    unit: update-multi-node-inventory-body-inventories-nodes-item-input-qty-unit-enum
+    unit: get-multi-node-inventory-for-all-sku-and-all-ship-nodes-response-elements-inventories-item-nodes-item-avail-to-sell-qty-unit-enum
+  }
+
+  record update-multi-node-inventory-response {
+    nodes: option<list<update-multi-node-inventory-response-nodes-item>>,
+    /// An arbitrary alphanumeric unique ID, specified by the seller, which identifies each item.
+    sku: option<string>
+  }
+
+  record update-multi-node-inventory-response-nodes-item {
+    /// Node Update Error description.
+    errors: option<list<update-multi-node-inventory-response-nodes-item-errors-item>>,
+    /// ShipNode Id of the ship node for which the inventory is requested
+    ship-node: option<string>,
+    /// Node Update status. Example: 'Success'
+    status: option<string>
+  }
+
+  record update-multi-node-inventory-response-nodes-item-errors-item {
+    category: option<get-multi-node-inventory-for-sku-and-all-shipnodes-response-nodes-item-errors-item-category-enum>,
+    causes: option<list<update-multi-node-inventory-response-nodes-item-errors-item-causes-item>>,
+    code: string,
+    description: option<string>,
+    error-identifiers: option<update-multi-node-inventory-response-nodes-item-errors-item-error-identifiers>,
+    field: option<string>,
+    info: option<string>,
+    severity: option<get-multi-node-inventory-for-sku-and-all-shipnodes-response-nodes-item-errors-item-severity-enum>
+  }
+
+  record update-multi-node-inventory-response-nodes-item-errors-item-causes-item {
+    code: option<string>,
+    description: option<string>,
+    field: option<string>,
+    type-op: option<string>
+  }
+
+  record update-multi-node-inventory-response-nodes-item-errors-item-error-identifiers {
+    /// JSON-encoded free-form object payload
+    data: option<string>
+  }
+
+  record get-inventory-response {
+    /// Quantity that has been ordered by the customers but not yet shipped
+    quantity: get-inventory-response-quantity,
+    /// A seller-provided Product ID. Response will have decoded value.
+    sku: string
+  }
+
+  /// Quantity that has been ordered by the customers but not yet shipped
+  record get-inventory-response-quantity {
+    /// Inventory Count
+    amount: f64,
+    /// The unit of measurement. Example: 'EACH'
+    unit: get-multi-node-inventory-for-all-sku-and-all-ship-nodes-response-elements-inventories-item-nodes-item-avail-to-sell-qty-unit-enum
   }
 
   /// Quantity that has been ordered by the customers but not yet shipped
@@ -34,7 +274,22 @@ interface inventory {
     /// Inventory Count
     amount: f64,
     /// The unit of measurement. Example: 'EACH'
-    unit: update-multi-node-inventory-body-inventories-nodes-item-input-qty-unit-enum
+    unit: get-multi-node-inventory-for-all-sku-and-all-ship-nodes-response-elements-inventories-item-nodes-item-avail-to-sell-qty-unit-enum
+  }
+
+  record update-inventory-for-an-item-response {
+    /// Quantity that has been ordered by the customers but not yet shipped
+    quantity: update-inventory-for-an-item-response-quantity,
+    /// A seller-provided Product ID. Response will have decoded value.
+    sku: string
+  }
+
+  /// Quantity that has been ordered by the customers but not yet shipped
+  record update-inventory-for-an-item-response-quantity {
+    /// Inventory Count
+    amount: f64,
+    /// The unit of measurement. Example: 'EACH'
+    unit: get-multi-node-inventory-for-all-sku-and-all-ship-nodes-response-elements-inventories-item-nodes-item-avail-to-sell-qty-unit-enum
   }
 
   /// Bulk Item Inventory Update
@@ -50,9 +305,11 @@ interface inventory {
     /// A unique ID which identifies each API call and used to track and debug issues; use a random generated GUID for this ID
     wm-qos-correlation-id: string,
     /// Walmart Service Name
-    wm-svc-name: string
+    wm-svc-name: string,
+    /// Feed file to upload
+    file: string
   }
-  update-bulk-inventory: func(params: update-bulk-inventory-params) -> result<string, string>;
+  update-bulk-inventory: func(params: update-bulk-inventory-params) -> result<update-bulk-inventory-response, string>;
 
   /// WFS Inventory
   record get-wfs-inventory-params {
@@ -75,7 +332,7 @@ interface inventory {
     /// Walmart Service Name
     wm-svc-name: string
   }
-  get-wfs-inventory: func(params: get-wfs-inventory-params) -> result<string, string>;
+  get-wfs-inventory: func(params: get-wfs-inventory-params) -> result<get-wfs-inventory-response, string>;
 
   /// Multiple Item Inventory for All Ship Nodes
   record get-multi-node-inventory-for-all-sku-and-all-ship-nodes-params {
@@ -92,7 +349,7 @@ interface inventory {
     /// Walmart Service Name
     wm-svc-name: string
   }
-  get-multi-node-inventory-for-all-sku-and-all-ship-nodes: func(params: get-multi-node-inventory-for-all-sku-and-all-ship-nodes-params) -> result<string, string>;
+  get-multi-node-inventory-for-all-sku-and-all-ship-nodes: func(params: get-multi-node-inventory-for-all-sku-and-all-ship-nodes-params) -> result<get-multi-node-inventory-for-all-sku-and-all-ship-nodes-response, string>;
 
   /// Single Item Inventory by Ship Node
   record get-multi-node-inventory-for-sku-and-all-shipnodes-params {
@@ -109,7 +366,7 @@ interface inventory {
     /// Walmart Service Name
     wm-svc-name: string
   }
-  get-multi-node-inventory-for-sku-and-all-shipnodes: func(params: get-multi-node-inventory-for-sku-and-all-shipnodes-params) -> result<string, string>;
+  get-multi-node-inventory-for-sku-and-all-shipnodes: func(params: get-multi-node-inventory-for-sku-and-all-shipnodes-params) -> result<get-multi-node-inventory-for-sku-and-all-shipnodes-response, string>;
 
   /// Update Item Inventory per Ship Node
   record update-multi-node-inventory-params {
@@ -125,7 +382,7 @@ interface inventory {
     wm-svc-name: string,
     inventories: update-multi-node-inventory-body-inventories
   }
-  update-multi-node-inventory: func(params: update-multi-node-inventory-params) -> result<string, string>;
+  update-multi-node-inventory: func(params: update-multi-node-inventory-params) -> result<update-multi-node-inventory-response, string>;
 
   /// Inventory
   record get-inventory-params {
@@ -142,7 +399,7 @@ interface inventory {
     /// Walmart Service Name
     wm-svc-name: string
   }
-  get-inventory: func(params: get-inventory-params) -> result<string, string>;
+  get-inventory: func(params: get-inventory-params) -> result<get-inventory-response, string>;
 
   /// Update inventory
   record update-inventory-for-an-item-params {
@@ -159,9 +416,11 @@ interface inventory {
     /// Walmart Service Name
     wm-svc-name: string,
     /// Quantity that has been ordered by the customers but not yet shipped
-    quantity: update-inventory-for-an-item-body-quantity
+    quantity: update-inventory-for-an-item-body-quantity,
+    /// A seller-provided Product ID. Response will have decoded value.
+    sku-v2: string
   }
-  update-inventory-for-an-item: func(params: update-inventory-for-an-item-params) -> result<string, string>;
+  update-inventory-for-an-item: func(params: update-inventory-for-an-item-params) -> result<update-inventory-for-an-item-response, string>;
 
 }
 

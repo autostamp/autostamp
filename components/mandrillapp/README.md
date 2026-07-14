@@ -11,8 +11,8 @@ triggered.
 
 | Setting | Value |
 | --- | --- |
-| Package | `autostamp:mandrillapp@0.3.0` |
-| Published version | `0.3.0+mandrillapp-1.0` |
+| Package | `autostamp:mandrillapp@0.5.0` |
+| Published version | `0.5.0+mandrillapp-1.0` |
 | Tag filter | all tags |
 | Operations generated | 90 |
 | Infer API-key credentials | enabled — not triggered |

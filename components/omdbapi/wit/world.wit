@@ -1,4 +1,4 @@
-package autostamp:omdbapi@0.3.0;
+package autostamp:omdbapi@0.5.0;
 
 interface om-db {
   enum get-om-db-search-type-op-enum {
@@ -15,6 +15,55 @@ interface om-db {
   enum get-om-db-search-r-enum {
     json,
     xml,
+  }
+
+  record combined-result {
+    actors: option<string>,
+    awards: option<string>,
+    box-office: option<string>,
+    country: option<string>,
+    dvd: option<string>,
+    director: option<string>,
+    genre: option<string>,
+    language: option<string>,
+    metascore: option<string>,
+    plot: option<string>,
+    poster: option<string>,
+    production: option<string>,
+    rated: option<string>,
+    released: option<string>,
+    response: string,
+    runtime: option<string>,
+    search: option<list<combined-result-search-item>>,
+    title: option<string>,
+    type-op: option<string>,
+    website: option<string>,
+    writer: option<string>,
+    year: option<string>,
+    imdb-id: option<string>,
+    imdb-rating: option<string>,
+    imdb-votes: option<string>,
+    tomato-consensus: option<string>,
+    tomato-fresh: option<string>,
+    tomato-image: option<string>,
+    tomato-meter: option<string>,
+    tomato-rating: option<string>,
+    tomato-reviews: option<string>,
+    tomato-rotten: option<string>,
+    tomato-url: option<string>,
+    tomato-user-meter: option<string>,
+    tomato-user-rating: option<string>,
+    tomato-user-reviews: option<string>,
+    total-results: option<string>,
+    total-seasons: option<string>
+  }
+
+  record combined-result-search-item {
+    poster: string,
+    title: string,
+    type-op: string,
+    year: string,
+    imdb-id: string
   }
 
   /// OMDb Search
@@ -42,7 +91,7 @@ interface om-db {
     /// JSONP callback name.
     callback: option<string>
   }
-  get-om-db-search: func(params: get-om-db-search-params) -> result<string, string>;
+  get-om-db-search: func(params: get-om-db-search-params) -> result<combined-result, string>;
 
 }
 

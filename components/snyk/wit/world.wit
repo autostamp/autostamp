@@ -1,4 +1,4 @@
-package autostamp:snyk@0.3.0;
+package autostamp:snyk@0.5.0;
 
 interface audit-logs {
   enum get-group-level-audit-logs-body-filters-event-enum {
@@ -170,12 +170,51 @@ interface audit-logs {
 
 
 interface groups {
+  record view-group-settings-response {
+    /// Can only be updated if `API_KEY` has edit access to request access settings.
+    request-access: option<view-group-settings-response-request-access>,
+    /// The new session length for the group in minutes. This must be an integer between 1 and 43200 (30 days). Setting this value to null will result in this group inheriting from the global default of 30 days.
+    session-length: option<f64>
+  }
+
+  /// Can only be updated if `API_KEY` has edit access to request access settings.
+  record view-group-settings-response-request-access {
+    /// Choose whether a user may request access to Snyk orgs in this group that they are not a member of.
+    enabled: bool
+  }
+
+  record update-group-settings-response {
+    /// Can only be updated if `API_KEY` has edit access to request access settings.
+    request-access: option<update-group-settings-response-request-access>,
+    /// The new session length for the group in minutes. This must be an integer between 1 and 43200 (30 days). Setting this value to null will result in this group inheriting from the global default of 30 days.
+    session-length: option<f64>
+  }
+
+  /// Can only be updated if `API_KEY` has edit access to request access settings.
+  record update-group-settings-response-request-access {
+    /// Choose whether a user may request access to Snyk orgs in this group that they are not a member of.
+    enabled: bool
+  }
+
+  record list-all-tags-in-a-group-response {
+    tags: option<list<string>>
+  }
+
+  record delete-tag-from-group-response {
+    /// force delete tag that has entities (default is `false`).
+    force: option<bool>,
+    /// Valid tag key.
+    key: option<string>,
+    /// Valid tag value.
+    value: option<string>
+  }
+
   /// List all members in a group
   record list-all-members-in-a-group-params {
     /// The group ID. The `API_KEY` must have access admin to this group.
     group-id: string
   }
-  list-all-members-in-a-group: func(params: list-all-members-in-a-group-params) -> result<string, string>;
+  list-all-members-in-a-group: func(params: list-all-members-in-a-group-params) -> result<list<string>, string>;
 
   /// Add a member to an organization within a group
   record add-a-member-to-an-organization-within-a-group-params {
@@ -215,14 +254,14 @@ interface groups {
     /// The group ID. The `API_KEY` must have admin access to this group.
     group-id: string
   }
-  view-group-settings: func(params: view-group-settings-params) -> result<string, string>;
+  view-group-settings: func(params: view-group-settings-params) -> result<view-group-settings-response, string>;
 
   /// Update group settings
   record update-group-settings-params {
     /// Automatically added
     group-id: string
   }
-  update-group-settings: func(params: update-group-settings-params) -> result<string, string>;
+  update-group-settings: func(params: update-group-settings-params) -> result<update-group-settings-response, string>;
 
   /// List all tags in a group
   record list-all-tags-in-a-group-params {
@@ -233,7 +272,7 @@ interface groups {
     /// The offset from which to start returning results from.
     page: option<f64>
   }
-  list-all-tags-in-a-group: func(params: list-all-tags-in-a-group-params) -> result<string, string>;
+  list-all-tags-in-a-group: func(params: list-all-tags-in-a-group-params) -> result<list-all-tags-in-a-group-response, string>;
 
   /// Delete tag from group
   record delete-tag-from-group-params {
@@ -246,7 +285,7 @@ interface groups {
     /// Valid tag value.
     value: option<string>
   }
-  delete-tag-from-group: func(params: delete-tag-from-group-params) -> result<string, string>;
+  delete-tag-from-group: func(params: delete-tag-from-group-params) -> result<delete-tag-from-group-response, string>;
 
 }
 
@@ -299,25 +338,64 @@ interface monitor {
 }
 
 interface organizations {
-  enum set-notification-settings-body-new-issues-remediations-issue-severity-enum {
+  enum get-org-org-id-notification-settings-response-new-issues-remediations-issue-severity-enum {
     all,
     high,
   }
 
-  enum set-notification-settings-body-new-issues-remediations-issue-type-enum {
+  enum get-org-org-id-notification-settings-response-new-issues-remediations-issue-type-enum {
     all,
     vuln,
     license,
     none,
   }
 
+  record get-org-org-id-notification-settings-response {
+    new-issues-remediations: option<get-org-org-id-notification-settings-response-new-issues-remediations>,
+    project-imported: option<get-org-org-id-notification-settings-response-project-imported>,
+    test-limit: option<get-org-org-id-notification-settings-response-test-limit>,
+    weekly-report: option<get-org-org-id-notification-settings-response-weekly-report>
+  }
+
+  record get-org-org-id-notification-settings-response-new-issues-remediations {
+    /// Whether notifications should be sent
+    enabled: bool,
+    /// Whether the setting was found on the requested context directly or inherited from a parent
+    inherited: option<bool>,
+    /// The severity levels of issues to send notifications for (only applicable for `new-remediations-vulnerabilities` notificationType)
+    issue-severity: get-org-org-id-notification-settings-response-new-issues-remediations-issue-severity-enum,
+    /// Filter the types of issue to include in notifications (only applicable for `new-remediations-vulnerabilities` notificationType)
+    issue-type: get-org-org-id-notification-settings-response-new-issues-remediations-issue-type-enum
+  }
+
+  record get-org-org-id-notification-settings-response-project-imported {
+    /// Whether notifications should be sent
+    enabled: bool,
+    /// Whether the setting was found on the requested context directly or inherited from a parent
+    inherited: option<bool>
+  }
+
+  record get-org-org-id-notification-settings-response-test-limit {
+    /// Whether notifications should be sent
+    enabled: bool,
+    /// Whether the setting was found on the requested context directly or inherited from a parent
+    inherited: option<bool>
+  }
+
+  record get-org-org-id-notification-settings-response-weekly-report {
+    /// Whether notifications should be sent
+    enabled: bool,
+    /// Whether the setting was found on the requested context directly or inherited from a parent
+    inherited: option<bool>
+  }
+
   record set-notification-settings-body-new-issues-remediations {
     /// Whether notifications should be sent
     enabled: bool,
     /// The severity levels of issues to send notifications for (only applicable for `new-remediations-vulnerabilities` notificationType)
-    issue-severity: set-notification-settings-body-new-issues-remediations-issue-severity-enum,
+    issue-severity: get-org-org-id-notification-settings-response-new-issues-remediations-issue-severity-enum,
     /// Filter the types of issue to include in notifications (only applicable for `new-remediations-vulnerabilities` notificationType)
-    issue-type: set-notification-settings-body-new-issues-remediations-issue-type-enum
+    issue-type: get-org-org-id-notification-settings-response-new-issues-remediations-issue-type-enum
   }
 
   record set-notification-settings-body-project-imported {
@@ -335,10 +413,114 @@ interface organizations {
     enabled: bool
   }
 
+  record set-notification-settings-response {
+    new-issues-remediations: option<set-notification-settings-response-new-issues-remediations>,
+    project-imported: option<set-notification-settings-response-project-imported>,
+    test-limit: option<set-notification-settings-response-test-limit>,
+    weekly-report: option<set-notification-settings-response-weekly-report>
+  }
+
+  record set-notification-settings-response-new-issues-remediations {
+    /// Whether notifications should be sent
+    enabled: bool,
+    /// Whether the setting was found on the requested context directly or inherited from a parent
+    inherited: option<bool>,
+    /// The severity levels of issues to send notifications for (only applicable for `new-remediations-vulnerabilities` notificationType)
+    issue-severity: get-org-org-id-notification-settings-response-new-issues-remediations-issue-severity-enum,
+    /// Filter the types of issue to include in notifications (only applicable for `new-remediations-vulnerabilities` notificationType)
+    issue-type: get-org-org-id-notification-settings-response-new-issues-remediations-issue-type-enum
+  }
+
+  record set-notification-settings-response-project-imported {
+    /// Whether notifications should be sent
+    enabled: bool,
+    /// Whether the setting was found on the requested context directly or inherited from a parent
+    inherited: option<bool>
+  }
+
+  record set-notification-settings-response-test-limit {
+    /// Whether notifications should be sent
+    enabled: bool,
+    /// Whether the setting was found on the requested context directly or inherited from a parent
+    inherited: option<bool>
+  }
+
+  record set-notification-settings-response-weekly-report {
+    /// Whether notifications should be sent
+    enabled: bool,
+    /// Whether the setting was found on the requested context directly or inherited from a parent
+    inherited: option<bool>
+  }
+
+  record provision-a-user-to-the-organization-response {
+    /// Timestamp of when this provision record was created.
+    created: option<string>,
+    /// The email of the user.
+    email: option<string>,
+    /// Name of the role granted for this user.
+    role: option<string>,
+    /// ID of the role to granted for this user.
+    role-public-id: option<string>
+  }
+
+  record delete-pending-user-provision-response {
+    /// Deletion succeeded.
+    ok: option<bool>
+  }
+
+  record view-organization-settings-response {
+    /// Will only be returned if `API_KEY` has read access to request access settings.
+    request-access: option<view-organization-settings-response-request-access>
+  }
+
+  /// Will only be returned if `API_KEY` has read access to request access settings.
+  record view-organization-settings-response-request-access {
+    /// Whether requesting access to the organization is enabled.
+    enabled: bool
+  }
+
   /// Can only be updated if `API_KEY` has edit access to request access settings.
   record update-organization-settings-body-request-access {
     /// Whether requesting access to the organization is enabled.
     enabled: bool
+  }
+
+  record update-organization-settings-response {
+    /// Will only be returned if `API_KEY` has read access to request access settings.
+    request-access: option<update-organization-settings-response-request-access>
+  }
+
+  /// Will only be returned if `API_KEY` has read access to request access settings.
+  record update-organization-settings-response-request-access {
+    /// Whether requesting access to the organization is enabled.
+    enabled: bool
+  }
+
+  variant create-a-new-organization-error {
+    bad-request(string),
+    unauthorized(string),
+    unprocessable-entity(string),
+    other(string)
+  }
+
+  variant list-pending-user-provisions-error {
+    forbidden(string),
+    other(string)
+  }
+
+  variant provision-a-user-to-the-organization-error {
+    forbidden(string),
+    other(string)
+  }
+
+  variant delete-pending-user-provision-error {
+    forbidden(string),
+    other(string)
+  }
+
+  variant update-organization-settings-error {
+    forbidden(string),
+    other(string)
   }
 
   /// Create a new organization
@@ -351,7 +533,7 @@ interface organizations {
     /// 
     source-org-id: option<string>
   }
-  create-a-new-organization: func(params: create-a-new-organization-params) -> result<string, string>;
+  create-a-new-organization: func(params: create-a-new-organization-params) -> result<string, create-a-new-organization-error>;
 
   /// Remove organization
   record remove-organization-params {
@@ -378,7 +560,7 @@ interface organizations {
     /// Include group administrators who also have access to this organization.
     include-group-admins: option<bool>
   }
-  list-members: func(params: list-members-params) -> result<string, string>;
+  list-members: func(params: list-members-params) -> result<list<string>, string>;
 
   /// Update a member's role in the organization
   record update-a-member-s-role-in-the-organization-params {
@@ -416,7 +598,7 @@ interface organizations {
     /// The organization ID. The `API_KEY` must have access to this organization.
     org-id: string
   }
-  get-org-org-id-notification-settings: func(params: get-org-org-id-notification-settings-params) -> result<string, string>;
+  get-org-org-id-notification-settings: func(params: get-org-org-id-notification-settings-params) -> result<get-org-org-id-notification-settings-response, string>;
 
   /// Set notification settings
   record set-notification-settings-params {
@@ -427,14 +609,14 @@ interface organizations {
     test-limit: option<set-notification-settings-body-test-limit>,
     weekly-report: option<set-notification-settings-body-weekly-report>
   }
-  set-notification-settings: func(params: set-notification-settings-params) -> result<string, string>;
+  set-notification-settings: func(params: set-notification-settings-params) -> result<set-notification-settings-response, string>;
 
   /// List pending user provisions
   record list-pending-user-provisions-params {
     /// The organization ID.
     org-id: string
   }
-  list-pending-user-provisions: func(params: list-pending-user-provisions-params) -> result<string, string>;
+  list-pending-user-provisions: func(params: list-pending-user-provisions-params) -> result<list<string>, list-pending-user-provisions-error>;
 
   /// Provision a user to the organization
   record provision-a-user-to-the-organization-params {
@@ -447,21 +629,21 @@ interface organizations {
     /// ID of the role to grant this user.
     role-public-id: option<string>
   }
-  provision-a-user-to-the-organization: func(params: provision-a-user-to-the-organization-params) -> result<string, string>;
+  provision-a-user-to-the-organization: func(params: provision-a-user-to-the-organization-params) -> result<provision-a-user-to-the-organization-response, provision-a-user-to-the-organization-error>;
 
   /// Delete pending user provision
   record delete-pending-user-provision-params {
     /// The organization ID.
     org-id: string
   }
-  delete-pending-user-provision: func(params: delete-pending-user-provision-params) -> result<string, string>;
+  delete-pending-user-provision: func(params: delete-pending-user-provision-params) -> result<delete-pending-user-provision-response, delete-pending-user-provision-error>;
 
   /// View organization settings
   record view-organization-settings-params {
     /// The organization ID. The `API_KEY` must have access to this organization.
     org-id: string
   }
-  view-organization-settings: func(params: view-organization-settings-params) -> result<string, string>;
+  view-organization-settings: func(params: view-organization-settings-params) -> result<view-organization-settings-response, string>;
 
   /// Update organization settings
   record update-organization-settings-params {
@@ -470,7 +652,7 @@ interface organizations {
     /// Can only be updated if `API_KEY` has edit access to request access settings.
     request-access: option<update-organization-settings-body-request-access>
   }
-  update-organization-settings: func(params: update-organization-settings-params) -> result<string, string>;
+  update-organization-settings: func(params: update-organization-settings-params) -> result<update-organization-settings-response, update-organization-settings-error>;
 
   /// List all the organizations a user belongs to
   list-all-the-organizations-a-user-belongs-to: func() -> result<string, string>;
@@ -505,6 +687,66 @@ interface dependencies {
     severity: option<list<string>>
   }
 
+  record list-all-dependencies-response {
+    /// A list of issues
+    results: list<list-all-dependencies-response-results-item>,
+    /// The number of results returned
+    total: option<f64>
+  }
+
+  record list-all-dependencies-response-results-item {
+    /// The copyright notices for the package
+    copyright: option<list<string>>,
+    /// The identifiers of dependencies with issues that are depended upon as a result of this dependency
+    dependencies-with-issues: option<list<string>>,
+    /// The numbers for those versions that are marked as deprecated
+    deprecated-versions: option<list<string>>,
+    /// The timestamp for when the specified package was first published.
+    first-published-date: option<string>,
+    /// The identifier of the package
+    id: string,
+    /// True if the latest version of the package is marked as deprecated; False otherwise.
+    is-deprecated: option<bool>,
+    /// The number of critical severity issues in this dependency
+    issues-critical: option<f64>,
+    /// The number of high severity issues in this dependency
+    issues-high: option<f64>,
+    /// The number of low severity issues in this dependency
+    issues-low: option<f64>,
+    /// The number of medium severity issues in this dependency
+    issues-medium: option<f64>,
+    /// The latest version available for the specified package
+    latest-version: option<string>,
+    /// The timestamp for when the latest version of the specified package was published.
+    latest-version-published-date: option<string>,
+    /// The licenses of the dependency
+    licenses: list<list-all-dependencies-response-results-item-licenses-item>,
+    /// The name of the package
+    name: string,
+    /// The projects which depend on the dependency
+    projects: list<list-all-dependencies-response-results-item-projects-item>,
+    /// The package type of the dependency
+    type-op: string,
+    /// The version of the package
+    version: string
+  }
+
+  record list-all-dependencies-response-results-item-licenses-item {
+    /// The identifier of the license
+    id: string,
+    /// The type of the license
+    license: string,
+    /// The title of the license
+    title: string
+  }
+
+  record list-all-dependencies-response-results-item-projects-item {
+    /// The identifier of the project
+    id: string,
+    /// The name of the project
+    name: string
+  }
+
   /// List all dependencies
   record list-all-dependencies-params {
     /// The organization ID to list projects for. The `API_KEY` must have access to this organization.
@@ -519,7 +761,7 @@ interface dependencies {
     per-page: option<f64>,
     filters: option<list-all-dependencies-body-filters>
   }
-  list-all-dependencies: func(params: list-all-dependencies-params) -> result<string, string>;
+  list-all-dependencies: func(params: list-all-dependencies-params) -> result<list-all-dependencies-response, string>;
 
 }
 
@@ -543,9 +785,65 @@ interface entitlements {
 }
 
 interface integrations {
-  enum update-body-pull-request-assignment-type-op-enum {
+  enum retrieve-response-pull-request-assignment-type-op-enum {
     auto,
     manual,
+  }
+
+  record list-op-response {
+    /// JSON-encoded free-form object payload
+    data: option<string>
+  }
+
+  record retrieve-response {
+    /// Defines if the functionality is enabled
+    auto-dep-upgrade-enabled: option<bool>,
+    /// A list of strings defining what dependencies should be ignored
+    auto-dep-upgrade-ignored-dependencies: option<list<string>>,
+    /// A limit on how many automatic dependency upgrade PRs can be opened simultaneously
+    auto-dep-upgrade-limit: option<f64>,
+    /// The age (in days) that an automatic dependency check is valid for
+    auto-dep-upgrade-min-age: option<f64>,
+    /// Defines automatic remediation policies
+    auto-remediation-prs: option<retrieve-response-auto-remediation-prs>,
+    /// If true, will automatically detect and scan Dockerfiles in your Git repositories, surface base image vulnerabilities and recommend possible fixes
+    dockerfile-scm-enabled: option<bool>,
+    /// Defines manual remediation policies
+    manual-remediation-prs: option<retrieve-response-manual-remediation-prs>,
+    /// assign Snyk pull requests
+    pull-request-assignment: option<retrieve-response-pull-request-assignment>,
+    /// If an opened PR should fail to be validated if any vulnerable dependencies have been detected
+    pull-request-fail-on-any-vulns: option<bool>,
+    /// If an opened PR only should fail its validation if any dependencies are marked as being of high severity
+    pull-request-fail-only-for-high-severity: option<bool>,
+    /// If opened PRs should be tested
+    pull-request-test-enabled: option<bool>
+  }
+
+  /// Defines automatic remediation policies
+  record retrieve-response-auto-remediation-prs {
+    /// If true, allows automatic remediation of prioritized backlog issues
+    backlog-prs-enabled: option<bool>,
+    /// If true, allows automatic remediation of newly identified issues, or older issues where a fix has been identified
+    fresh-prs-enabled: option<bool>,
+    /// If true, allows using patched remediation
+    use-patch-remediation: option<bool>
+  }
+
+  /// Defines manual remediation policies
+  record retrieve-response-manual-remediation-prs {
+    /// If true, allows using patched remediation
+    use-patch-remediation: option<bool>
+  }
+
+  /// assign Snyk pull requests
+  record retrieve-response-pull-request-assignment {
+    /// an array of usernames that have contributed to the organization's project(s).
+    assignees: option<list<string>>,
+    /// if the organization's project(s) will assign Snyk pull requests.
+    enabled: option<bool>,
+    /// a string representing the type of assignment your projects require.
+    type-op: option<retrieve-response-pull-request-assignment-type-op-enum>
   }
 
   /// Defines automatic remediation policies
@@ -571,7 +869,63 @@ interface integrations {
     /// if the organization's project(s) will assign Snyk pull requests.
     enabled: option<bool>,
     /// a string representing the type of assignment your projects require.
-    type-op: option<update-body-pull-request-assignment-type-op-enum>
+    type-op: option<retrieve-response-pull-request-assignment-type-op-enum>
+  }
+
+  record update-response {
+    /// Defines if the functionality is enabled
+    auto-dep-upgrade-enabled: option<bool>,
+    /// A list of strings defining what dependencies should be ignored
+    auto-dep-upgrade-ignored-dependencies: option<list<string>>,
+    /// A limit on how many automatic dependency upgrade PRs can be opened simultaneously
+    auto-dep-upgrade-limit: option<f64>,
+    /// The age (in days) that an automatic dependency check is valid for
+    auto-dep-upgrade-min-age: option<f64>,
+    /// Defines automatic remediation policies
+    auto-remediation-prs: option<update-response-auto-remediation-prs>,
+    /// If true, will automatically detect and scan Dockerfiles in your Git repositories, surface base image vulnerabilities and recommend possible fixes
+    dockerfile-scm-enabled: option<bool>,
+    /// Defines manual remediation policies
+    manual-remediation-prs: option<update-response-manual-remediation-prs>,
+    /// assign Snyk pull requests
+    pull-request-assignment: option<update-response-pull-request-assignment>,
+    /// If an opened PR should fail to be validated if any vulnerable dependencies have been detected
+    pull-request-fail-on-any-vulns: option<bool>,
+    /// If an opened PR only should fail its validation if any dependencies are marked as being of high severity
+    pull-request-fail-only-for-high-severity: option<bool>,
+    /// If opened PRs should be tested
+    pull-request-test-enabled: option<bool>
+  }
+
+  /// Defines automatic remediation policies
+  record update-response-auto-remediation-prs {
+    /// If true, allows automatic remediation of prioritized backlog issues
+    backlog-prs-enabled: option<bool>,
+    /// If true, allows automatic remediation of newly identified issues, or older issues where a fix has been identified
+    fresh-prs-enabled: option<bool>,
+    /// If true, allows using patched remediation
+    use-patch-remediation: option<bool>
+  }
+
+  /// Defines manual remediation policies
+  record update-response-manual-remediation-prs {
+    /// If true, allows using patched remediation
+    use-patch-remediation: option<bool>
+  }
+
+  /// assign Snyk pull requests
+  record update-response-pull-request-assignment {
+    /// an array of usernames that have contributed to the organization's project(s).
+    assignees: option<list<string>>,
+    /// if the organization's project(s) will assign Snyk pull requests.
+    enabled: option<bool>,
+    /// a string representing the type of assignment your projects require.
+    type-op: option<retrieve-response-pull-request-assignment-type-op-enum>
+  }
+
+  record get-existing-integration-by-type-response {
+    /// Alphanumeric UUID including - with a limit of 36 characters
+    id: option<string>
   }
 
   /// List
@@ -579,7 +933,7 @@ interface integrations {
     /// The organization public ID. The `API_KEY` must have admin access to this organization.
     org-id: string
   }
-  list-op: func(params: list-op-params) -> result<string, string>;
+  list-op: func(params: list-op-params) -> result<list-op-response, string>;
 
   /// Add new integration
   record add-new-integration-params {
@@ -642,7 +996,7 @@ interface integrations {
     /// The unique identifier for the configured integration. This can be found on the [Integration page in the Settings area](https://app.snyk.io/manage/integrations) for all integrations that have been configured.
     integration-id: string
   }
-  retrieve: func(params: retrieve-params) -> result<string, string>;
+  retrieve: func(params: retrieve-params) -> result<retrieve-response, string>;
 
   /// Update
   record update-params {
@@ -673,7 +1027,7 @@ interface integrations {
     /// If opened PRs should be tested
     pull-request-test-enabled: option<bool>
   }
-  update: func(params: update-params) -> result<string, string>;
+  update: func(params: update-params) -> result<update-response, string>;
 
   /// Get existing integration by type
   record get-existing-integration-by-type-params {
@@ -682,11 +1036,23 @@ interface integrations {
     /// Integration type.
     type-op: string
   }
-  get-existing-integration-by-type: func(params: get-existing-integration-by-type-params) -> result<string, string>;
+  get-existing-integration-by-type: func(params: get-existing-integration-by-type-params) -> result<get-existing-integration-by-type-response, string>;
 
 }
 
 interface import-projects {
+  record get-import-job-details-response {
+    /// the time when an import job was created represented as a [UTC (ISO-8601)](https://tools.ietf.org/html/rfc3339) string
+    created: option<string>,
+    /// A uuid representing the job's id
+    id: option<string>,
+    /// all organizations imported by the job
+    logs: option<list<string>>,
+    /// a string representing the status of a job.
+    /// 
+    status: option<string>
+  }
+
   /// Import targets
   record import-targets-params {
     /// The organization ID. The `API_KEY` must have admin access to this organization.
@@ -706,7 +1072,7 @@ interface import-projects {
     /// The ID of the job. This can be found in the Location response header from the corresponding POST request that triggered the import job.
     job-id: string
   }
-  get-import-job-details: func(params: get-import-job-details-params) -> result<string, string>;
+  get-import-job-details: func(params: get-import-job-details-params) -> result<get-import-job-details-response, string>;
 
 }
 
@@ -723,6 +1089,13 @@ interface licenses {
     desc,
   }
 
+  enum list-all-licenses-response-results-item-severity-enum {
+    none,
+    high,
+    medium,
+    low,
+  }
+
   record list-all-licenses-body-filters {
     /// The list of dependency IDs to filter the results by
     dependencies: option<string>,
@@ -736,6 +1109,44 @@ interface licenses {
     severity: option<list<string>>
   }
 
+  record list-all-licenses-response {
+    /// A list of licenses
+    results: list<list-all-licenses-response-results-item>,
+    /// The number of results returned
+    total: option<f64>
+  }
+
+  record list-all-licenses-response-results-item {
+    /// The dependencies of projects in the organization which have the license
+    dependencies: list<list-all-licenses-response-results-item-dependencies-item>,
+    /// The identifier of the license
+    id: string,
+    /// Custom instructions assigned to this license
+    instructions: option<string>,
+    /// The projects which contain the license
+    projects: list<list-all-licenses-response-results-item-projects-item>,
+    /// The severity assigned to this license
+    severity: option<list-all-licenses-response-results-item-severity-enum>
+  }
+
+  record list-all-licenses-response-results-item-dependencies-item {
+    /// The identifier of the package
+    id: string,
+    /// The name of the package
+    name: string,
+    /// The package manager of the dependency
+    package-manager: string,
+    /// The version of the package
+    version: string
+  }
+
+  record list-all-licenses-response-results-item-projects-item {
+    /// The identifier of the project
+    id: string,
+    /// The name of the project
+    name: string
+  }
+
   /// List all licenses
   record list-all-licenses-params {
     /// The organization ID to list projects for. The `API_KEY` must have access to this organization.
@@ -746,26 +1157,321 @@ interface licenses {
     order: option<list-all-licenses-order-enum>,
     filters: option<list-all-licenses-body-filters>
   }
-  list-all-licenses: func(params: list-all-licenses-params) -> result<string, string>;
+  list-all-licenses: func(params: list-all-licenses-params) -> result<list-all-licenses-response, string>;
 
 }
 
 interface projects {
+  enum list-all-project-snapshots-response-snapshots-item-method-enum {
+    api,
+    cli,
+    recurring,
+    web,
+    web-test,
+    wizard,
+  }
+
   enum add-ignore-body-reason-type-enum {
     not-vulnerable,
     wont-fix,
     temporary-ignore,
   }
 
-  enum update-project-settings-body-pull-request-assignment-type-op-enum {
+  enum list-project-settings-response-pull-request-assignment-type-op-enum {
     auto,
     manual,
+  }
+
+  record retrieve-a-single-project-response {
+    /// Applied project attributes
+    attributes: option<retrieve-a-single-project-response-attributes>,
+    /// The monitored branch (if available)
+    branch: option<string>,
+    /// URL with project overview
+    browse-url: option<string>,
+    /// The date that the project was created on
+    created: option<string>,
+    /// The hostname for a CLI project, null if not set
+    hostname: option<string>,
+    /// The project identifier
+    id: option<string>,
+    /// For docker projects shows the base image
+    image-base-image: option<string>,
+    /// For Kubernetes projects shows the origin cluster name
+    image-cluster: option<string>,
+    /// For docker projects shows the ID of the image
+    image-id: option<string>,
+    /// For docker projects shows the platform of the image
+    image-platform: option<string>,
+    /// For docker projects shows the tag of the image
+    image-tag: option<string>,
+    /// The user who imported the project
+    importing-user: option<retrieve-a-single-project-response-importing-user>,
+    /// Describes if a project is currently monitored or it is de-activated
+    is-monitored: option<bool>,
+    /// Number of known vulnerabilities in the project, not including ignored issues
+    issue-counts-by-severity: option<retrieve-a-single-project-response-issue-counts-by-severity>,
+    /// The date on which the most recent test was conducted for this project
+    last-tested-date: option<string>,
+    name: option<string>,
+    /// The origin the project was added from
+    origin: option<string>,
+    /// The user who owns the project, null if not set
+    /// 
+    owner: option<retrieve-a-single-project-response-owner>,
+    /// Whether the project is read-only
+    read-only: option<bool>,
+    /// Remediation data (if available)
+    remediation: option<retrieve-a-single-project-response-remediation>,
+    /// The project remote repository url. Only set for projects imported via the Snyk CLI tool.
+    remote-repo-url: option<string>,
+    /// List of applied tags
+    tags: option<list<string>>,
+    /// The identifier for which revision of the resource is scanned by Snyk. For example this may be a branch for SCM project, or a tag for a container image
+    target-reference: option<string>,
+    /// The frequency of automated Snyk re-test. Can be 'daily', 'weekly or 'never'
+    test-frequency: option<string>,
+    /// Number of dependencies of the project
+    total-dependencies: option<f64>,
+    /// The package manager of the project
+    type-op: option<string>
+  }
+
+  /// Applied project attributes
+  record retrieve-a-single-project-response-attributes {
+    criticality: option<list<string>>,
+    environment: option<list<string>>,
+    lifecycle: option<list<string>>
+  }
+
+  /// The user who imported the project
+  record retrieve-a-single-project-response-importing-user {
+    /// The email of the user.
+    email: option<string>,
+    /// The ID of the user.
+    id: option<string>,
+    /// The name of the user.
+    name: option<string>,
+    /// The username of the user.
+    username: option<string>
+  }
+
+  /// Number of known vulnerabilities in the project, not including ignored issues
+  record retrieve-a-single-project-response-issue-counts-by-severity {
+    /// Number of critical severity vulnerabilities
+    critical: option<f64>,
+    /// Number of high severity vulnerabilities
+    high: option<f64>,
+    /// Number of low severity vulnerabilities
+    low: option<f64>,
+    /// Number of medium severity vulnerabilities
+    medium: option<f64>
+  }
+
+  /// The user who owns the project, null if not set
+  /// 
+  /// {
+  ///     "id": "e713cf94-bb02-4ea0-89d9-613cce0caed2",
+  ///     "name": "example-user@snyk.io",
+  ///     "username": "exampleUser",
+  ///     "email": "example-user@snyk.io"
+  /// }
+  record retrieve-a-single-project-response-owner {
+    /// JSON-encoded free-form object payload
+    data: option<string>
+  }
+
+  /// Remediation data (if available)
+  record retrieve-a-single-project-response-remediation {
+    /// Recommended patches to apply to the project
+    /// 
+    patch: option<retrieve-a-single-project-response-remediation-patch>,
+    /// Recommended pins to apply to the project (Python only)
+    /// 
+    pin: option<retrieve-a-single-project-response-remediation-pin>,
+    /// Recommended upgrades to apply to the project
+    /// 
+    upgrade: option<retrieve-a-single-project-response-remediation-upgrade>
+  }
+
+  /// Recommended patches to apply to the project
+  /// 
+  /// (object)
+  ///    paths (array) - List of paths to the vulnerable dependency that can be patched
+  record retrieve-a-single-project-response-remediation-patch {
+    /// JSON-encoded free-form object payload
+    data: option<string>
+  }
+
+  /// Recommended pins to apply to the project (Python only)
+  /// 
+  /// (object)
+  ///     + upgradeTo (string, required) - `package@version` to upgrade to
+  ///     + vulns (array[string], required) - List of vulnerability ids that will be fixed as part of this upgrade
+  ///     + isTransitive (boolean) - Describes if the dependency to be pinned is a transitive dependency
+  record retrieve-a-single-project-response-remediation-pin {
+    /// JSON-encoded free-form object payload
+    data: option<string>
+  }
+
+  /// Recommended upgrades to apply to the project
+  /// 
+  /// (object)
+  ///     + upgradeTo (string, required) - `package@version` to upgrade to
+  ///     + upgrades (array[string], required) -  List of `package@version` that will be upgraded as part of this upgrade
+  ///     + vulns (array[string], required) - List of vulnerability ids that will be fixed as part of this upgrade
+  record retrieve-a-single-project-response-remediation-upgrade {
+    /// JSON-encoded free-form object payload
+    data: option<string>
   }
 
   /// Set to `null` to remove all ownership. User must be a member of the same organization as the project.
   record update-a-project-body-owner {
     /// A user to assign as the project owner.
     id: option<string>
+  }
+
+  record update-a-project-response {
+    /// Applied project attributes
+    attributes: option<update-a-project-response-attributes>,
+    /// The monitored branch (if available)
+    branch: option<string>,
+    /// URL with project overview
+    browse-url: option<string>,
+    /// The date that the project was created on
+    created: option<string>,
+    /// The hostname for a CLI project, null if not set
+    hostname: option<string>,
+    /// The project identifier
+    id: option<string>,
+    /// For docker projects shows the base image
+    image-base-image: option<string>,
+    /// For Kubernetes projects shows the origin cluster name
+    image-cluster: option<string>,
+    /// For docker projects shows the ID of the image
+    image-id: option<string>,
+    /// For docker projects shows the platform of the image
+    image-platform: option<string>,
+    /// For docker projects shows the tag of the image
+    image-tag: option<string>,
+    /// The user who imported the project
+    importing-user: option<update-a-project-response-importing-user>,
+    /// Describes if a project is currently monitored or it is de-activated
+    is-monitored: option<bool>,
+    /// Number of known vulnerabilities in the project, not including ignored issues
+    issue-counts-by-severity: option<update-a-project-response-issue-counts-by-severity>,
+    /// The date on which the most recent test was conducted for this project
+    last-tested-date: option<string>,
+    name: option<string>,
+    /// The origin the project was added from
+    origin: option<string>,
+    /// The user who owns the project, null if not set
+    /// 
+    owner: option<update-a-project-response-owner>,
+    /// Whether the project is read-only
+    read-only: option<bool>,
+    /// Remediation data (if available)
+    remediation: option<update-a-project-response-remediation>,
+    /// The project remote repository url. Only set for projects imported via the Snyk CLI tool.
+    remote-repo-url: option<string>,
+    /// List of applied tags
+    tags: option<list<string>>,
+    /// The identifier for which revision of the resource is scanned by Snyk. For example this may be a branch for SCM project, or a tag for a container image
+    target-reference: option<string>,
+    /// The frequency of automated Snyk re-test. Can be 'daily', 'weekly or 'never'
+    test-frequency: option<string>,
+    /// Number of dependencies of the project
+    total-dependencies: option<f64>,
+    /// The package manager of the project
+    type-op: option<string>
+  }
+
+  /// Applied project attributes
+  record update-a-project-response-attributes {
+    criticality: option<list<string>>,
+    environment: option<list<string>>,
+    lifecycle: option<list<string>>
+  }
+
+  /// The user who imported the project
+  record update-a-project-response-importing-user {
+    /// The email of the user.
+    email: option<string>,
+    /// The ID of the user.
+    id: option<string>,
+    /// The name of the user.
+    name: option<string>,
+    /// The username of the user.
+    username: option<string>
+  }
+
+  /// Number of known vulnerabilities in the project, not including ignored issues
+  record update-a-project-response-issue-counts-by-severity {
+    /// Number of critical severity vulnerabilities
+    critical: option<f64>,
+    /// Number of high severity vulnerabilities
+    high: option<f64>,
+    /// Number of low severity vulnerabilities
+    low: option<f64>,
+    /// Number of medium severity vulnerabilities
+    medium: option<f64>
+  }
+
+  /// The user who owns the project, null if not set
+  /// 
+  /// {
+  ///     "id": "e713cf94-bb02-4ea0-89d9-613cce0caed2",
+  ///     "name": "example-user@snyk.io",
+  ///     "username": "exampleUser",
+  ///     "email": "example-user@snyk.io"
+  /// }
+  record update-a-project-response-owner {
+    /// JSON-encoded free-form object payload
+    data: option<string>
+  }
+
+  /// Remediation data (if available)
+  record update-a-project-response-remediation {
+    /// Recommended patches to apply to the project
+    /// 
+    patch: option<update-a-project-response-remediation-patch>,
+    /// Recommended pins to apply to the project (Python only)
+    /// 
+    pin: option<update-a-project-response-remediation-pin>,
+    /// Recommended upgrades to apply to the project
+    /// 
+    upgrade: option<update-a-project-response-remediation-upgrade>
+  }
+
+  /// Recommended patches to apply to the project
+  /// 
+  /// (object)
+  ///    paths (array) - List of paths to the vulnerable dependency that can be patched
+  record update-a-project-response-remediation-patch {
+    /// JSON-encoded free-form object payload
+    data: option<string>
+  }
+
+  /// Recommended pins to apply to the project (Python only)
+  /// 
+  /// (object)
+  ///     + upgradeTo (string, required) - `package@version` to upgrade to
+  ///     + vulns (array[string], required) - List of vulnerability ids that will be fixed as part of this upgrade
+  ///     + isTransitive (boolean) - Describes if the dependency to be pinned is a transitive dependency
+  record update-a-project-response-remediation-pin {
+    /// JSON-encoded free-form object payload
+    data: option<string>
+  }
+
+  /// Recommended upgrades to apply to the project
+  /// 
+  /// (object)
+  ///     + upgradeTo (string, required) - `package@version` to upgrade to
+  ///     + upgrades (array[string], required) -  List of `package@version` that will be upgraded as part of this upgrade
+  ///     + vulns (array[string], required) - List of vulnerability ids that will be fixed as part of this upgrade
+  record update-a-project-response-remediation-upgrade {
+    /// JSON-encoded free-form object payload
+    data: option<string>
   }
 
   record list-all-aggregated-issues-body-filters {
@@ -795,9 +1501,275 @@ interface projects {
     min: option<f64>
   }
 
+  record list-all-aggregated-issues-response {
+    /// An array of identified issues
+    issues: option<list<list-all-aggregated-issues-response-issues-item>>
+  }
+
+  record list-all-aggregated-issues-response-issues-item {
+    /// Information about fix/upgrade/pinnable options for the issue (Non-IaC projects only)
+    fix-info: option<list-all-aggregated-issues-response-issues-item-fix-info>,
+    /// The identifier of the issue
+    id: string,
+    /// The list of reasons why the issue was ignored
+    ignore-reasons: option<list<string>>,
+    /// The list of what introduced the issue (it is available only for container project with Dockerfile)
+    introduced-through: option<list<string>>,
+    /// Whether the issue has been ignored
+    is-ignored: bool,
+    /// Whether the issue has been patched (Non-IaC projects only)
+    is-patched: bool,
+    /// The details of the issue
+    issue-data: list-all-aggregated-issues-response-issues-item-issue-data,
+    /// type of the issue ('vuln', 'license' or 'configuration')
+    issue-type: string,
+    /// Onward links from this record (Non-IaC projects only)
+    links: option<list-all-aggregated-issues-response-issues-item-links>,
+    /// The package name (Non-IaC projects only)
+    pkg-name: string,
+    /// List of affected package versions (Non-IaC projects only)
+    pkg-versions: list<string>,
+    /// Information about the priority of the issue (Non-IaC projects only)
+    priority: option<list-all-aggregated-issues-response-issues-item-priority>
+  }
+
+  /// Information about fix/upgrade/pinnable options for the issue (Non-IaC projects only)
+  record list-all-aggregated-issues-response-issues-item-fix-info {
+    /// The set of versions in which this issue has been fixed. If the issue spanned multiple versions (i.e. `1.x` and `2.x`) then there will be multiple `fixedIn` entries
+    fixed-in: option<list<string>>,
+    /// Whether all of the issue's paths are fixable. Paths that are already patched are not considered fixable unless they have an alternative remediation (e.g. pinning or upgrading). An upgrade path where the only changes are in transitive dependencies is only considered fixable if the package manager supports it.
+    is-fixable: option<bool>,
+    /// Whether any of the issue's paths can be fixed. Paths that are already patched are not considered fixable unless they have an alternative remediation (e.g. pinning or upgrading).  An upgrade path where the only changes are in transitive dependencies is only considered fixable if the package manager supports it.
+    is-partially-fixable: option<bool>,
+    /// Whether all the of issue's paths are patchable
+    is-patchable: option<bool>,
+    /// Whether the issue can be fixed by pinning a transitive
+    is-pinnable: option<bool>,
+    /// Whether all of the issue's paths are upgradable
+    is-upgradable: option<bool>,
+    /// Nearest version which includes a fix for the issue. This is populated for container projects only.
+    nearest-fixed-in-version: option<string>
+  }
+
+  /// The details of the issue
+  record list-all-aggregated-issues-response-issues-item-issue-data {
+    /// The CVSS v3 string that signifies how the CVSS score was calculated (Non-IaC projects only)
+    cvs-sv3: string,
+    /// The list of people responsible for first uncovering or reporting the issue (Non-IaC projects only)
+    credit: list<string>,
+    /// The CVSS score that results from running the CVSSv3 string (Non-IaC projects only)
+    cvss-score: f64,
+    description: string,
+    /// The date that the vulnerability was first disclosed
+    disclosure-time: string,
+    /// The exploit maturity of the issue
+    exploit-maturity: string,
+    /// The identifier of the issue
+    id: string,
+    /// External identifiers assigned to the issue (Non-IaC projects only)
+    identifiers: list-all-aggregated-issues-response-issues-item-issue-data-identifiers,
+    /// Whether the issue is intentional, indicating a malicious package
+    is-malicious-package: bool,
+    /// The language of the issue (Non-IaC projects only)
+    language: string,
+    /// Nearest version which includes a fix for the issue. This is populated for container projects only. (Non-IaC projects only)
+    nearest-fixed-in-version: string,
+    /// The original severity status of the issue, as retrieved from Snyk Vulnerability database, before policies are applied
+    original-severity: string,
+    /// A list of patches available for the given issue (Non-IaC projects only)
+    patches: list<string>,
+    /// Path to the resource property violating the policy within the scanned project. (IaC projects only)
+    path: string,
+    /// The date that the vulnerability was first published by Snyk (Non-IaC projects only)
+    publication-time: string,
+    /// The ranges that are vulnerable and unaffected by the issue (Non-IaC projects only)
+    semver: list-all-aggregated-issues-response-issues-item-issue-data-semver,
+    /// The severity status of the issue, after policies are applied
+    severity: string,
+    /// The issue title
+    title: string,
+    /// URL to a page containing information about the issue
+    url: string,
+    /// The ID of the violated policy in the issue (IaC projects only)
+    violated-policy-public-id: string
+  }
+
+  /// External identifiers assigned to the issue (Non-IaC projects only)
+  record list-all-aggregated-issues-response-issues-item-issue-data-identifiers {
+    /// Common Vulnerability Enumeration identifiers
+    cve: option<list<string>>,
+    /// Common Weakness Enumeration identifiers
+    cwe: option<list<string>>,
+    /// Identifiers assigned by the Open Source Vulnerability Database (OSVDB)
+    osvdb: option<list<string>>
+  }
+
+  /// The ranges that are vulnerable and unaffected by the issue (Non-IaC projects only)
+  record list-all-aggregated-issues-response-issues-item-issue-data-semver {
+    /// The ranges that are unaffected by the issue
+    unaffected: option<string>,
+    /// The ranges that are vulnerable to the issue. May be an array or a string.
+    vulnerable: option<list<string>>
+  }
+
+  /// Onward links from this record (Non-IaC projects only)
+  record list-all-aggregated-issues-response-issues-item-links {
+    /// The URL for the dependency paths that introduce this issue
+    paths: option<string>
+  }
+
+  /// Information about the priority of the issue (Non-IaC projects only)
+  record list-all-aggregated-issues-response-issues-item-priority {
+    /// The list of factors that contributed to the priority of the issue
+    factors: option<list<string>>,
+    /// The priority score of the issue
+    score: option<f64>
+  }
+
+  record applying-attributes-response {
+    /// Attributes now applied to the project
+    attributes: option<applying-attributes-response-attributes>
+  }
+
+  /// Attributes now applied to the project
+  record applying-attributes-response-attributes {
+    criticality: option<list<string>>,
+    environment: option<list<string>>,
+    lifecycle: option<list<string>>
+  }
+
+  record get-project-dependency-graph-response {
+    /// The dependency-graph object
+    dep-graph: get-project-dependency-graph-response-dep-graph
+  }
+
+  /// The dependency-graph object
+  record get-project-dependency-graph-response-dep-graph {
+    /// A directional graph of the packages in the project
+    graph: get-project-dependency-graph-response-dep-graph-graph,
+    /// The package manager of the project
+    pkg-manager: get-project-dependency-graph-response-dep-graph-pkg-manager,
+    /// A list of dependencies in the project
+    pkgs: list<get-project-dependency-graph-response-dep-graph-pkgs-item>,
+    /// The scheme version of the depGraph object
+    schema-version: string
+  }
+
+  /// A directional graph of the packages in the project
+  record get-project-dependency-graph-response-dep-graph-graph {
+    /// A list of the first-level packages
+    nodes: option<list<get-project-dependency-graph-response-dep-graph-graph-nodes-item>>,
+    /// The internal id of the root node
+    root-node-id: string
+  }
+
+  record get-project-dependency-graph-response-dep-graph-graph-nodes-item {
+    /// A list of the direct dependencies of the package
+    deps: list<get-project-dependency-graph-response-dep-graph-graph-nodes-item-deps-item>,
+    /// The internal id of the node
+    node-id: string,
+    /// The id of the package
+    pkg-id: string
+  }
+
+  record get-project-dependency-graph-response-dep-graph-graph-nodes-item-deps-item {
+    /// The id of the node
+    node-id: string
+  }
+
+  /// The package manager of the project
+  record get-project-dependency-graph-response-dep-graph-pkg-manager {
+    /// The name of the package manager
+    name: string,
+    repositories: option<list<get-project-dependency-graph-response-dep-graph-pkg-manager-repositories-item>>,
+    /// The version of the package manager
+    version: option<string>
+  }
+
+  record get-project-dependency-graph-response-dep-graph-pkg-manager-repositories-item {
+    alias: string
+  }
+
+  record get-project-dependency-graph-response-dep-graph-pkgs-item {
+    /// The internal id of the package
+    id: string,
+    info: get-project-dependency-graph-response-dep-graph-pkgs-item-info
+  }
+
+  record get-project-dependency-graph-response-dep-graph-pkgs-item-info {
+    /// The name of the package
+    name: string,
+    /// The version of the package
+    version: option<string>
+  }
+
   record list-all-project-snapshots-body-filters {
     /// For container projects, filter by the ID of the image
     image-id: option<string>
+  }
+
+  record list-all-project-snapshots-response {
+    /// A list of the project's snapshots, ordered according to date (latest first).
+    snapshots: option<list<list-all-project-snapshots-response-snapshots-item>>,
+    /// The total number of results
+    total: option<f64>
+  }
+
+  record list-all-project-snapshots-response-snapshots-item {
+    /// The date that the snapshot was taken
+    created: string,
+    /// The snapshot identifier
+    id: string,
+    image-base-image: option<string>,
+    image-id: option<string>,
+    image-platform: option<string>,
+    image-tag: option<string>,
+    /// Number of known vulnerabilities in the project, not including ignored issues
+    issue-counts: list-all-project-snapshots-response-snapshots-item-issue-counts,
+    /// The method by which this snapshot was created.
+    method: option<list-all-project-snapshots-response-snapshots-item-method-enum>,
+    /// Number of dependencies of the project
+    total-dependencies: f64
+  }
+
+  /// Number of known vulnerabilities in the project, not including ignored issues
+  record list-all-project-snapshots-response-snapshots-item-issue-counts {
+    license: option<list-all-project-snapshots-response-snapshots-item-issue-counts-license>,
+    sast: option<list-all-project-snapshots-response-snapshots-item-issue-counts-sast>,
+    vuln: option<list-all-project-snapshots-response-snapshots-item-issue-counts-vuln>
+  }
+
+  record list-all-project-snapshots-response-snapshots-item-issue-counts-license {
+    /// Number of critical severity vulnerabilities
+    critical: f64,
+    /// Number of high severity vulnerabilities
+    high: f64,
+    /// Number of low severity vulnerabilities
+    low: f64,
+    /// Number of medium severity vulnerabilities
+    medium: f64
+  }
+
+  record list-all-project-snapshots-response-snapshots-item-issue-counts-sast {
+    /// Number of critical severity vulnerabilities
+    critical: f64,
+    /// Number of high severity vulnerabilities
+    high: f64,
+    /// Number of low severity vulnerabilities
+    low: f64,
+    /// Number of medium severity vulnerabilities
+    medium: f64
+  }
+
+  record list-all-project-snapshots-response-snapshots-item-issue-counts-vuln {
+    /// Number of critical severity vulnerabilities
+    critical: f64,
+    /// Number of high severity vulnerabilities
+    high: f64,
+    /// Number of low severity vulnerabilities
+    low: f64,
+    /// Number of medium severity vulnerabilities
+    medium: f64
   }
 
   record list-all-project-snapshot-aggregated-issues-body-filters {
@@ -827,6 +1799,171 @@ interface projects {
     min: option<f64>
   }
 
+  record list-all-project-snapshot-aggregated-issues-response {
+    /// An array of identified issues
+    issues: option<list<list-all-project-snapshot-aggregated-issues-response-issues-item>>
+  }
+
+  record list-all-project-snapshot-aggregated-issues-response-issues-item {
+    /// Information about fix/upgrade/pinnable options for the issue (Non-IaC projects only)
+    fix-info: option<list-all-project-snapshot-aggregated-issues-response-issues-item-fix-info>,
+    /// The identifier of the issue
+    id: string,
+    /// The list of reasons why the issue was ignored
+    ignore-reasons: option<list<string>>,
+    /// The list of what introduced the issue (it is available only for container project with Dockerfile)
+    introduced-through: option<list<string>>,
+    /// Whether the issue has been ignored
+    is-ignored: bool,
+    /// Whether the issue has been patched (Non-IaC projects only)
+    is-patched: bool,
+    /// The details of the issue
+    issue-data: list-all-project-snapshot-aggregated-issues-response-issues-item-issue-data,
+    /// type of the issue ('vuln', 'license' or 'configuration')
+    issue-type: string,
+    /// Onward links from this record (Non-IaC projects only)
+    links: option<list-all-project-snapshot-aggregated-issues-response-issues-item-links>,
+    /// The package name (Non-IaC projects only)
+    pkg-name: string,
+    /// List of affected package versions (Non-IaC projects only)
+    pkg-versions: list<string>,
+    /// Information about the priority of the issue (Non-IaC projects only)
+    priority: option<list-all-project-snapshot-aggregated-issues-response-issues-item-priority>
+  }
+
+  /// Information about fix/upgrade/pinnable options for the issue (Non-IaC projects only)
+  record list-all-project-snapshot-aggregated-issues-response-issues-item-fix-info {
+    /// The set of versions in which this issue has been fixed. If the issue spanned multiple versions (i.e. `1.x` and `2.x`) then there will be multiple `fixedIn` entries
+    fixed-in: option<list<string>>,
+    /// Whether all of the issue's paths are fixable. Paths that are already patched are not considered fixable unless they have an alternative remediation (e.g. pinning or upgrading). An upgrade path where the only changes are in transitive dependencies is only considered fixable if the package manager supports it.
+    is-fixable: option<bool>,
+    /// Whether any of the issue's paths can be fixed. Paths that are already patched are not considered fixable unless they have an alternative remediation (e.g. pinning or upgrading).  An upgrade path where the only changes are in transitive dependencies is only considered fixable if the package manager supports it.
+    is-partially-fixable: option<bool>,
+    /// Whether all the of issue's paths are patchable
+    is-patchable: option<bool>,
+    /// Whether the issue can be fixed by pinning a transitive
+    is-pinnable: option<bool>,
+    /// Whether all of the issue's paths are upgradable
+    is-upgradable: option<bool>,
+    /// Nearest version which includes a fix for the issue. This is populated for container projects only.
+    nearest-fixed-in-version: option<string>
+  }
+
+  /// The details of the issue
+  record list-all-project-snapshot-aggregated-issues-response-issues-item-issue-data {
+    /// The CVSS v3 string that signifies how the CVSS score was calculated (Non-IaC projects only)
+    cvs-sv3: string,
+    /// The list of people responsible for first uncovering or reporting the issue (Non-IaC projects only)
+    credit: list<string>,
+    /// The CVSS score that results from running the CVSSv3 string (Non-IaC projects only)
+    cvss-score: f64,
+    description: string,
+    /// The date that the vulnerability was first disclosed
+    disclosure-time: string,
+    /// The exploit maturity of the issue
+    exploit-maturity: string,
+    /// The identifier of the issue
+    id: string,
+    /// External identifiers assigned to the issue (Non-IaC projects only)
+    identifiers: list-all-project-snapshot-aggregated-issues-response-issues-item-issue-data-identifiers,
+    /// Whether the issue is intentional, indicating a malicious package
+    is-malicious-package: bool,
+    /// The language of the issue (Non-IaC projects only)
+    language: string,
+    /// Nearest version which includes a fix for the issue. This is populated for container projects only. (Non-IaC projects only)
+    nearest-fixed-in-version: string,
+    /// The original severity status of the issue, as retrieved from Snyk Vulnerability database, before policies are applied
+    original-severity: string,
+    /// A list of patches available for the given issue (Non-IaC projects only)
+    patches: list<string>,
+    /// Path to the resource property violating the policy within the scanned project. (IaC projects only)
+    path: string,
+    /// The date that the vulnerability was first published by Snyk (Non-IaC projects only)
+    publication-time: string,
+    /// The ranges that are vulnerable and unaffected by the issue (Non-IaC projects only)
+    semver: list-all-project-snapshot-aggregated-issues-response-issues-item-issue-data-semver,
+    /// The severity status of the issue, after policies are applied
+    severity: string,
+    /// The issue title
+    title: string,
+    /// URL to a page containing information about the issue
+    url: string,
+    /// The ID of the violated policy in the issue (IaC projects only)
+    violated-policy-public-id: string
+  }
+
+  /// External identifiers assigned to the issue (Non-IaC projects only)
+  record list-all-project-snapshot-aggregated-issues-response-issues-item-issue-data-identifiers {
+    /// Common Vulnerability Enumeration identifiers
+    cve: option<list<string>>,
+    /// Common Weakness Enumeration identifiers
+    cwe: option<list<string>>,
+    /// Identifiers assigned by the Open Source Vulnerability Database (OSVDB)
+    osvdb: option<list<string>>
+  }
+
+  /// The ranges that are vulnerable and unaffected by the issue (Non-IaC projects only)
+  record list-all-project-snapshot-aggregated-issues-response-issues-item-issue-data-semver {
+    /// The ranges that are unaffected by the issue
+    unaffected: option<string>,
+    /// The ranges that are vulnerable to the issue. May be an array or a string.
+    vulnerable: option<list<string>>
+  }
+
+  /// Onward links from this record (Non-IaC projects only)
+  record list-all-project-snapshot-aggregated-issues-response-issues-item-links {
+    /// The URL for the dependency paths that introduce this issue
+    paths: option<string>
+  }
+
+  /// Information about the priority of the issue (Non-IaC projects only)
+  record list-all-project-snapshot-aggregated-issues-response-issues-item-priority {
+    /// The list of factors that contributed to the priority of the issue
+    factors: option<list<string>>,
+    /// The priority score of the issue
+    score: option<f64>
+  }
+
+  record list-all-project-snapshot-issue-paths-response {
+    /// Onward links from this record
+    links: option<list-all-project-snapshot-issue-paths-response-links>,
+    /// A list of the dependency paths that introduce the issue
+    paths: option<list<list<list-all-project-snapshot-issue-paths-response-paths-item-item>>>,
+    /// The identifier of the snapshot for which the paths have been found
+    snapshot-id: option<string>,
+    /// The total number of results
+    total: option<f64>
+  }
+
+  /// Onward links from this record
+  record list-all-project-snapshot-issue-paths-response-links {
+    /// The URL of the last page of paths for the issue
+    last: option<string>,
+    /// The URL of the next page of paths for the issue, if not on the last page
+    next: option<string>,
+    /// The URL of the previous page of paths for the issue, if not on the first page
+    prev: option<string>
+  }
+
+  record list-all-project-snapshot-issue-paths-response-paths-item-item {
+    /// The version to upgrade the package to in order to resolve the issue. This will only appear on the first element of the path, and only if the issue can be fixed by upgrading packages. Note that if the fix requires upgrading transitive dependencies, `fixVersion` will be the same as `version`.
+    fix-version: option<string>,
+    /// The package name
+    name: option<string>,
+    /// The package version
+    version: option<string>
+  }
+
+  record ignore-path {
+    /// JSON-encoded free-form object payload
+    data: option<string>
+  }
+
+  record issue-id {
+    /// JSON-encoded free-form object payload
+    data: option<string>
+  }
+
   record create-jira-issue-body-fields {
     /// See https://developer.atlassian.com/cloud/jira/platform/rest/v3/api-group-issues/#api-rest-api-3-issue-post for details of what to send as fields.
     issuetype: option<create-jira-issue-body-fields-issuetype>,
@@ -848,6 +1985,90 @@ interface projects {
     data: option<string>
   }
 
+  record create-jira-issue-response {
+    /// The details about the jira issue.
+    jira-issue: option<create-jira-issue-response-jira-issue>
+  }
+
+  /// The details about the jira issue.
+  record create-jira-issue-response-jira-issue {
+    /// The id of the issue in Jira.
+    id: option<string>,
+    /// The key of the issue in Jira.
+    key: option<string>
+  }
+
+  record list-all-project-issue-paths-response {
+    /// Onward links from this record
+    links: option<list-all-project-issue-paths-response-links>,
+    /// A list of the dependency paths that introduce the issue
+    paths: option<list<list<list-all-project-issue-paths-response-paths-item-item>>>,
+    /// The identifier of the snapshot for which the paths have been found
+    snapshot-id: option<string>,
+    /// The total number of results
+    total: option<f64>
+  }
+
+  /// Onward links from this record
+  record list-all-project-issue-paths-response-links {
+    /// The URL of the last page of paths for the issue
+    last: option<string>,
+    /// The URL of the next page of paths for the issue, if not on the last page
+    next: option<string>,
+    /// The URL of the previous page of paths for the issue, if not on the first page
+    prev: option<string>
+  }
+
+  record list-all-project-issue-paths-response-paths-item-item {
+    /// The version to upgrade the package to in order to resolve the issue. This will only appear on the first element of the path, and only if the issue can be fixed by upgrading packages. Note that if the fix requires upgrading transitive dependencies, `fixVersion` will be the same as `version`.
+    fix-version: option<string>,
+    /// The package name
+    name: option<string>,
+    /// The package version
+    version: option<string>
+  }
+
+  record list-project-settings-response {
+    /// If set to `true`, Snyk will raise dependency upgrade PRs automatically.
+    auto-dep-upgrade-enabled: option<bool>,
+    /// An array of comma-separated strings with names of dependencies you wish Snyk to ignore to upgrade.
+    auto-dep-upgrade-ignored-dependencies: option<list<string>>,
+    /// The limit on auto dependency upgrade PRs.
+    auto-dep-upgrade-limit: option<f64>,
+    /// The age (in days) that an automatic dependency check is valid for
+    auto-dep-upgrade-min-age: option<f64>,
+    /// Defines automatic remediation policies
+    auto-remediation-prs: option<list-project-settings-response-auto-remediation-prs>,
+    /// assign Snyk pull requests
+    pull-request-assignment: option<list-project-settings-response-pull-request-assignment>,
+    /// If set to `true`, fail Snyk Test if the repo has any vulnerabilities. Otherwise, fail only when the PR is adding a vulnerable dependency.
+    pull-request-fail-on-any-vulns: option<bool>,
+    /// If set to `true`, fail Snyk Test only for high and critical severity vulnerabilities
+    pull-request-fail-only-for-high-severity: option<bool>,
+    /// If set to `true`, Snyk Test checks PRs for vulnerabilities.:cq
+    pull-request-test-enabled: option<bool>
+  }
+
+  /// Defines automatic remediation policies
+  record list-project-settings-response-auto-remediation-prs {
+    /// If true, allows automatic remediation of newly identified issues, or older issues where a fix has been identified
+    backlog-prs-enabled: option<bool>,
+    /// If true, allows automatic remediation of prioritized backlog issues
+    fresh-prs-enabled: option<bool>,
+    /// If true, allows using patched remediation
+    use-patch-remediation: option<bool>
+  }
+
+  /// assign Snyk pull requests
+  record list-project-settings-response-pull-request-assignment {
+    /// an array of usernames that have contributed to the organization's project(s).
+    assignees: option<list<string>>,
+    /// if the organization's project(s) will assign Snyk pull requests.
+    enabled: option<bool>,
+    /// a string representing the type of assignment your projects require.
+    type-op: option<list-project-settings-response-pull-request-assignment-type-op-enum>
+  }
+
   /// Defines automatic remediation policies
   record update-project-settings-body-auto-remediation-prs {
     /// If true, allows automatic remediation of newly identified issues, or older issues where a fix has been identified
@@ -865,7 +2086,58 @@ interface projects {
     /// if the organization's project(s) will assign Snyk pull requests.
     enabled: option<bool>,
     /// a string representing the type of assignment your projects require.
-    type-op: option<update-project-settings-body-pull-request-assignment-type-op-enum>
+    type-op: option<list-project-settings-response-pull-request-assignment-type-op-enum>
+  }
+
+  record update-project-settings-response {
+    /// If set to `true`, Snyk will raise dependency upgrade PRs automatically.
+    auto-dep-upgrade-enabled: option<bool>,
+    /// An array of comma-separated strings with names of dependencies you wish Snyk to ignore to upgrade.
+    auto-dep-upgrade-ignored-dependencies: option<list<string>>,
+    /// The limit on auto dependency upgrade PRs.
+    auto-dep-upgrade-limit: option<f64>,
+    /// The age (in days) that an automatic dependency check is valid for
+    auto-dep-upgrade-min-age: option<f64>,
+    /// Defines automatic remediation policies
+    auto-remediation-prs: option<update-project-settings-response-auto-remediation-prs>,
+    /// assign Snyk pull requests
+    pull-request-assignment: option<update-project-settings-response-pull-request-assignment>,
+    /// If set to `true`, fail Snyk Test if the repo has any vulnerabilities. Otherwise, fail only when the PR is adding a vulnerable dependency.
+    pull-request-fail-on-any-vulns: option<bool>,
+    /// If set to `true`, fail Snyk Test only for high and critical severity vulnerabilities
+    pull-request-fail-only-for-high-severity: option<bool>,
+    /// If set to `true`, Snyk Test checks PRs for vulnerabilities.:cq
+    pull-request-test-enabled: option<bool>
+  }
+
+  /// Defines automatic remediation policies
+  record update-project-settings-response-auto-remediation-prs {
+    /// If true, allows automatic remediation of newly identified issues, or older issues where a fix has been identified
+    backlog-prs-enabled: option<bool>,
+    /// If true, allows automatic remediation of prioritized backlog issues
+    fresh-prs-enabled: option<bool>,
+    /// If true, allows using patched remediation
+    use-patch-remediation: option<bool>
+  }
+
+  /// assign Snyk pull requests
+  record update-project-settings-response-pull-request-assignment {
+    /// an array of usernames that have contributed to the organization's project(s).
+    assignees: option<list<string>>,
+    /// if the organization's project(s) will assign Snyk pull requests.
+    enabled: option<bool>,
+    /// a string representing the type of assignment your projects require.
+    type-op: option<list-project-settings-response-pull-request-assignment-type-op-enum>
+  }
+
+  record add-a-tag-to-a-project-response {
+    /// Tags now applied to the project
+    tags: option<list<string>>
+  }
+
+  record remove-a-tag-from-a-project-response {
+    /// Tags now applied to the project
+    tags: option<list<string>>
   }
 
   record list-all-projects-body-filters {
@@ -897,6 +2169,113 @@ interface projects {
     includes: option<list<string>>
   }
 
+  record list-all-projects-response {
+    org: option<list-all-projects-response-org>,
+    /// A list of org's projects
+    projects: option<list<list-all-projects-response-projects-item>>
+  }
+
+  record list-all-projects-response-org {
+    /// The identifier of the org
+    id: option<string>,
+    name: option<string>
+  }
+
+  record list-all-projects-response-projects-item {
+    /// Applied project attributes
+    attributes: option<list-all-projects-response-projects-item-attributes>,
+    /// The monitored branch (if available)
+    branch: option<string>,
+    /// URL with project overview
+    browse-url: option<string>,
+    /// The date that the project was created on
+    created: option<string>,
+    /// The project identifier
+    id: option<string>,
+    /// For docker projects shows the base image
+    image-base-image: option<string>,
+    /// For Kubernetes projects shows the origin cluster name
+    image-cluster: option<string>,
+    /// For docker projects shows the ID of the image
+    image-id: option<string>,
+    /// For docker projects shows the platform of the image
+    image-platform: option<string>,
+    /// For docker projects shows the tag of the image
+    image-tag: option<string>,
+    /// The user who imported the project
+    importing-user: option<list-all-projects-response-projects-item-importing-user>,
+    /// Describes if a project is currently monitored or it is de-activated
+    is-monitored: option<bool>,
+    /// Number of known vulnerabilities in the project, not including ignored issues
+    issue-counts-by-severity: option<list-all-projects-response-projects-item-issue-counts-by-severity>,
+    /// The date on which the most recent test was conducted for this project
+    last-tested-date: option<string>,
+    name: option<string>,
+    /// The origin the project was added from
+    origin: option<string>,
+    /// The user who owns the project, null if not set
+    /// 
+    owner: option<list-all-projects-response-projects-item-owner>,
+    /// Whether the project is read-only
+    read-only: option<bool>,
+    /// The project remote repository url. Only set for projects imported via the Snyk CLI tool.
+    remote-repo-url: option<string>,
+    /// List of applied tags
+    tags: option<list<string>>,
+    /// The identifier for which revision of the resource is scanned by Snyk. For example this may be a branch for SCM project, or a tag for a container image
+    target-reference: option<string>,
+    /// The frequency of automated Snyk re-test. Can be 'daily', 'weekly or 'never'
+    test-frequency: option<string>,
+    /// Number of dependencies of the project
+    total-dependencies: option<f64>,
+    /// The package manager of the project
+    type-op: option<string>
+  }
+
+  /// Applied project attributes
+  record list-all-projects-response-projects-item-attributes {
+    criticality: option<list<string>>,
+    environment: option<list<string>>,
+    lifecycle: option<list<string>>
+  }
+
+  /// The user who imported the project
+  record list-all-projects-response-projects-item-importing-user {
+    /// The email of the user.
+    email: option<string>,
+    /// The ID of the user.
+    id: option<string>,
+    /// The name of the user.
+    name: option<string>,
+    /// The username of the user.
+    username: option<string>
+  }
+
+  /// Number of known vulnerabilities in the project, not including ignored issues
+  record list-all-projects-response-projects-item-issue-counts-by-severity {
+    /// Number of critical severity vulnerabilities
+    critical: option<f64>,
+    /// Number of high severity vulnerabilities
+    high: option<f64>,
+    /// Number of low severity vulnerabilities
+    low: option<f64>,
+    /// Number of medium severity vulnerabilities
+    medium: option<f64>
+  }
+
+  /// The user who owns the project, null if not set
+  /// 
+  /// {
+  ///     "id": "e713cf94-bb02-4ea0-89d9-613cce0caed2",
+  ///     "name": "example-user@snyk.io",
+  ///     "username": "exampleUser",
+  ///     "email": "example-user@snyk.io"
+  /// }
+  record list-all-projects-response-projects-item-owner {
+    /// JSON-encoded free-form object payload
+    data: option<string>
+  }
+
   /// Retrieve a single project
   record retrieve-a-single-project-params {
     /// The organization ID the project belongs to. The `API_KEY` must have access to this organization.
@@ -904,7 +2283,7 @@ interface projects {
     /// The project ID.
     project-id: string
   }
-  retrieve-a-single-project: func(params: retrieve-a-single-project-params) -> result<string, string>;
+  retrieve-a-single-project: func(params: retrieve-a-single-project-params) -> result<retrieve-a-single-project-response, string>;
 
   /// Update a project
   record update-a-project-params {
@@ -917,7 +2296,7 @@ interface projects {
     /// Set to `null` to remove all ownership. User must be a member of the same organization as the project.
     owner: option<update-a-project-body-owner>
   }
-  update-a-project: func(params: update-a-project-params) -> result<string, string>;
+  update-a-project: func(params: update-a-project-params) -> result<update-a-project-response, string>;
 
   /// Delete a project
   record delete-a-project-params {
@@ -949,7 +2328,7 @@ interface projects {
     /// If set to `true`, Include issue's introducedThrough, if set to `false` (by default), it won't. It's for container only projects (Non-IaC projects only)
     include-introduced-through: option<bool>
   }
-  list-all-aggregated-issues: func(params: list-all-aggregated-issues-params) -> result<string, string>;
+  list-all-aggregated-issues: func(params: list-all-aggregated-issues-params) -> result<list-all-aggregated-issues-response, string>;
 
   /// Applying attributes
   record applying-attributes-params {
@@ -961,7 +2340,7 @@ interface projects {
     environment: option<list<string>>,
     lifecycle: option<list<string>>
   }
-  applying-attributes: func(params: applying-attributes-params) -> result<string, string>;
+  applying-attributes: func(params: applying-attributes-params) -> result<applying-attributes-response, string>;
 
   /// Deactivate
   record deactivate-params {
@@ -979,7 +2358,7 @@ interface projects {
     /// The project ID to return issues for.
     project-id: string
   }
-  get-project-dependency-graph: func(params: get-project-dependency-graph-params) -> result<string, string>;
+  get-project-dependency-graph: func(params: get-project-dependency-graph-params) -> result<get-project-dependency-graph-response, string>;
 
   /// List all project snapshots
   record list-all-project-snapshots-params {
@@ -993,7 +2372,7 @@ interface projects {
     page: option<f64>,
     filters: option<list-all-project-snapshots-body-filters>
   }
-  list-all-project-snapshots: func(params: list-all-project-snapshots-params) -> result<string, string>;
+  list-all-project-snapshots: func(params: list-all-project-snapshots-params) -> result<list-all-project-snapshots-response, string>;
 
   /// List all project snapshot aggregated issues
   record list-all-project-snapshot-aggregated-issues-params {
@@ -1009,7 +2388,7 @@ interface projects {
     /// If set to `true`, Include issue's introducedThrough, if set to `false` (by default), it won't. It's for container only projects (Non-IaC projects only)
     include-introduced-through: option<bool>
   }
-  list-all-project-snapshot-aggregated-issues: func(params: list-all-project-snapshot-aggregated-issues-params) -> result<string, string>;
+  list-all-project-snapshot-aggregated-issues: func(params: list-all-project-snapshot-aggregated-issues-params) -> result<list-all-project-snapshot-aggregated-issues-response, string>;
 
   /// List all project snapshot issue paths
   record list-all-project-snapshot-issue-paths-params {
@@ -1026,7 +2405,7 @@ interface projects {
     /// The page of results to return.
     page: option<f64>
   }
-  list-all-project-snapshot-issue-paths: func(params: list-all-project-snapshot-issue-paths-params) -> result<string, string>;
+  list-all-project-snapshot-issue-paths: func(params: list-all-project-snapshot-issue-paths-params) -> result<list-all-project-snapshot-issue-paths-response, string>;
 
   /// Retrieve ignore
   record retrieve-ignore-params {
@@ -1037,7 +2416,7 @@ interface projects {
     /// The issue ID to modify ignores for. Can be a vulnerability or a license Issue.
     issue-id: string
   }
-  retrieve-ignore: func(params: retrieve-ignore-params) -> result<string, string>;
+  retrieve-ignore: func(params: retrieve-ignore-params) -> result<ignore-path, string>;
 
   /// Add ignore
   record add-ignore-params {
@@ -1058,7 +2437,7 @@ interface projects {
     /// The classification of the ignore.
     reason-type: add-ignore-body-reason-type-enum
   }
-  add-ignore: func(params: add-ignore-params) -> result<string, string>;
+  add-ignore: func(params: add-ignore-params) -> result<ignore-path, string>;
 
   /// Replace ignores
   record replace-ignores-params {
@@ -1069,7 +2448,7 @@ interface projects {
     /// Automatically added
     issue-id: string
   }
-  replace-ignores: func(params: replace-ignores-params) -> result<string, string>;
+  replace-ignores: func(params: replace-ignores-params) -> result<list<string>, string>;
 
   /// Delete ignores
   record delete-ignores-params {
@@ -1089,7 +2468,7 @@ interface projects {
     /// The project ID to list ignores for.
     project-id: string
   }
-  list-all-ignores: func(params: list-all-ignores-params) -> result<string, string>;
+  list-all-ignores: func(params: list-all-ignores-params) -> result<issue-id, string>;
 
   /// Create jira issue
   record create-jira-issue-params {
@@ -1101,7 +2480,7 @@ interface projects {
     project-id: string,
     fields: option<create-jira-issue-body-fields>
   }
-  create-jira-issue: func(params: create-jira-issue-params) -> result<string, string>;
+  create-jira-issue: func(params: create-jira-issue-params) -> result<create-jira-issue-response, string>;
 
   /// List all project issue paths
   record list-all-project-issue-paths-params {
@@ -1118,7 +2497,7 @@ interface projects {
     /// The page of results to return.
     page: option<f64>
   }
-  list-all-project-issue-paths: func(params: list-all-project-issue-paths-params) -> result<string, string>;
+  list-all-project-issue-paths: func(params: list-all-project-issue-paths-params) -> result<list-all-project-issue-paths-response, string>;
 
   /// List all jira issues
   record list-all-jira-issues-params {
@@ -1127,7 +2506,7 @@ interface projects {
     /// The project ID to list Jira issues for.
     project-id: string
   }
-  list-all-jira-issues: func(params: list-all-jira-issues-params) -> result<string, string>;
+  list-all-jira-issues: func(params: list-all-jira-issues-params) -> result<issue-id, string>;
 
   /// Move project to a different organization
   record move-project-to-a-different-organization-params {
@@ -1147,7 +2526,7 @@ interface projects {
     /// The project ID
     project-id: string
   }
-  list-project-settings: func(params: list-project-settings-params) -> result<string, string>;
+  list-project-settings: func(params: list-project-settings-params) -> result<list-project-settings-response, string>;
 
   /// Update project settings
   record update-project-settings-params {
@@ -1174,7 +2553,7 @@ interface projects {
     /// If set to `true`, Snyk Test checks PRs for vulnerabilities.:cq
     pull-request-test-enabled: option<bool>
   }
-  update-project-settings: func(params: update-project-settings-params) -> result<string, string>;
+  update-project-settings: func(params: update-project-settings-params) -> result<update-project-settings-response, string>;
 
   /// Delete project settings
   record delete-project-settings-params {
@@ -1196,7 +2575,7 @@ interface projects {
     /// Alphanumeric including - and _ with a limit of 50 characters
     value: option<string>
   }
-  add-a-tag-to-a-project: func(params: add-a-tag-to-a-project-params) -> result<string, string>;
+  add-a-tag-to-a-project: func(params: add-a-tag-to-a-project-params) -> result<add-a-tag-to-a-project-response, string>;
 
   /// Remove a tag from a project
   record remove-a-tag-from-a-project-params {
@@ -1209,7 +2588,7 @@ interface projects {
     /// Alphanumeric including - and _ with a limit of 50 characters
     value: option<string>
   }
-  remove-a-tag-from-a-project: func(params: remove-a-tag-from-a-project-params) -> result<string, string>;
+  remove-a-tag-from-a-project: func(params: remove-a-tag-from-a-project-params) -> result<remove-a-tag-from-a-project-response, string>;
 
   /// List all projects
   record list-all-projects-params {
@@ -1217,7 +2596,7 @@ interface projects {
     org-id: string,
     filters: option<list-all-projects-body-filters>
   }
-  list-all-projects: func(params: list-all-projects-params) -> result<string, string>;
+  list-all-projects: func(params: list-all-projects-params) -> result<list-all-projects-response, string>;
 
 }
 
@@ -1331,6 +2710,38 @@ interface reporting-api {
     min: option<f64>
   }
 
+  record get-issue-counts-response {
+    /// A list of issue counts by day
+    results: list<get-issue-counts-response-results-item>
+  }
+
+  record get-issue-counts-response-results-item {
+    /// The number of issues
+    count: f64,
+    /// The date in the format `YYYY-MM-DD`
+    day: string,
+    fixable: option<get-issue-counts-response-results-item-fixable>,
+    severity: option<get-issue-counts-response-results-item-severity>
+  }
+
+  record get-issue-counts-response-results-item-fixable {
+    /// The number of non-fixable issues
+    false: option<f64>,
+    /// The number of fixable issues
+    true: option<f64>
+  }
+
+  record get-issue-counts-response-results-item-severity {
+    /// The number of critical severity issues
+    critical: option<f64>,
+    /// The number of high severity issues
+    high: option<f64>,
+    /// The number of low severity issues
+    low: option<f64>,
+    /// The number of medium severity issues
+    medium: option<f64>
+  }
+
   record get-latest-issue-counts-body-filters {
     /// If set to `true`, only include issues which are fixable, if set to `false`, only include issues which are not fixable. An issue is fixable if it is either upgradable, patchable or pinnable. Also see isUpgradable, isPatchable and isPinnable filters.
     fixable: option<bool>,
@@ -1364,6 +2775,38 @@ interface reporting-api {
     min: option<f64>
   }
 
+  record get-latest-issue-counts-response {
+    /// A list of issue counts by day
+    results: list<get-latest-issue-counts-response-results-item>
+  }
+
+  record get-latest-issue-counts-response-results-item {
+    /// The number of issues
+    count: f64,
+    /// The date in the format `YYYY-MM-DD`
+    day: string,
+    fixable: option<get-latest-issue-counts-response-results-item-fixable>,
+    severity: option<get-latest-issue-counts-response-results-item-severity>
+  }
+
+  record get-latest-issue-counts-response-results-item-fixable {
+    /// The number of non-fixable issues
+    false: option<f64>,
+    /// The number of fixable issues
+    true: option<f64>
+  }
+
+  record get-latest-issue-counts-response-results-item-severity {
+    /// The number of critical severity issues
+    critical: option<f64>,
+    /// The number of high severity issues
+    high: option<f64>,
+    /// The number of low severity issues
+    low: option<f64>,
+    /// The number of medium severity issues
+    medium: option<f64>
+  }
+
   record get-project-counts-body-filters {
     /// The type of languages to filter the results by
     languages: option<list<string>>,
@@ -1371,6 +2814,18 @@ interface reporting-api {
     orgs: string,
     /// The list of project IDs to filter the results by, max projects allowed is 1000
     projects: option<string>
+  }
+
+  record get-project-counts-response {
+    /// A list of project counts by day
+    results: list<get-project-counts-response-results-item>
+  }
+
+  record get-project-counts-response-results-item {
+    /// The number of projects
+    count: f64,
+    /// The date in the format `YYYY-MM-DD`
+    day: string
   }
 
   record get-latest-project-counts-body-filters {
@@ -1382,6 +2837,18 @@ interface reporting-api {
     projects: option<string>
   }
 
+  record get-latest-project-counts-response {
+    /// A list of project counts by day
+    results: list<get-latest-project-counts-response-results-item>
+  }
+
+  record get-latest-project-counts-response-results-item {
+    /// The number of projects
+    count: f64,
+    /// The date in the format `YYYY-MM-DD`
+    day: string
+  }
+
   record get-test-counts-body-filters {
     /// If set to `true`, only include tests which were conducted against private projects, if set to `false` only include tests which were conducted against public projects
     is-private: option<bool>,
@@ -1391,6 +2858,32 @@ interface reporting-api {
     orgs: string,
     /// The list of project IDs to filter issues by, max projects allowed is 1000
     projects: option<string>
+  }
+
+  record get-test-counts-response {
+    /// A list of test counts
+    results: list<get-test-counts-response-results-item>
+  }
+
+  record get-test-counts-response-results-item {
+    /// The number of tests conducted
+    count: f64,
+    is-private: option<get-test-counts-response-results-item-is-private>,
+    issues-prevented: option<get-test-counts-response-results-item-issues-prevented>
+  }
+
+  record get-test-counts-response-results-item-is-private {
+    /// The number of tests conducted against public projects
+    false: option<f64>,
+    /// The number of tests conducted against private projects
+    true: option<f64>
+  }
+
+  record get-test-counts-response-results-item-issues-prevented {
+    /// The number of tests that did not prevent issues from being introduced
+    false: option<f64>,
+    /// The number of tests that prevented issues from being introduced
+    true: option<f64>
   }
 
   record get-list-of-issues-body-filters {
@@ -1434,6 +2927,102 @@ interface reporting-api {
     min: option<f64>
   }
 
+  record get-list-of-issues-response {
+    /// A list of issues
+    results: list<get-list-of-issues-response-results-item>,
+    /// The total number of results found
+    total: f64
+  }
+
+  record get-list-of-issues-response-results-item {
+    /// The date that the issue was fixed
+    fixed-date: option<string>,
+    /// The date that the issue was introduced into the project
+    introduced-date: string,
+    /// Whether the issue has been fixed
+    is-fixed: bool,
+    issue: get-list-of-issues-response-results-item-issue,
+    /// The date that the issue was patched
+    patched-date: option<string>
+  }
+
+  record get-list-of-issues-response-results-item-issue {
+    /// The CVSS v3 string that signifies how the CVSS score was calculated (not applicable to licenses)
+    cvs-sv3: option<string>,
+    /// The list of people responsible for first uncovering or reporting the issue (not applicable to licenses)
+    credit: option<list<string>>,
+    /// The CVSS score that results from running the CVSSv3 string (not applicable to licenses)
+    cvss-score: option<f64>,
+    /// The date that the vulnerability was first disclosed (not applicable to licenses)
+    disclosure-time: option<string>,
+    /// The exploit maturity of the issue
+    exploit-maturity: string,
+    /// The identifier of the issue
+    id: string,
+    /// External identifiers assigned to the issue (not applicable to licenses)
+    identifiers: option<get-list-of-issues-response-results-item-issue-identifiers>,
+    /// The list of ignore rules that were applied to the issue (only present if issue was ignored and no `groupBy` in the API request)
+    ignored: option<list<string>>,
+    /// Whether the issue has been ignored (only present if there is no `groupBy` in the API request)
+    is-ignored: option<bool>,
+    /// Whether the issue can be patched
+    is-patchable: option<bool>,
+    /// Whether the issue has been patched (not applicable to licenses and only present if there is no `groupBy` in the API request)
+    is-patched: option<bool>,
+    /// Whether the issue can be pinned
+    is-pinnable: option<bool>,
+    /// Whether the issue can be fixed by upgrading to a later version of the dependency
+    is-upgradable: option<bool>,
+    /// The link to the Jira issue attached to the vulnerability
+    jira-issue-url: option<string>,
+    /// The language of the issue
+    language: option<string>,
+    /// The original severity status of the issue, as retrieved from Snyk Vulnerability database, before policies are applied
+    original-severity: string,
+    /// The name of the package that the issue relates to
+    package-op: string,
+    /// The package manager of the issue
+    package-manager: option<string>,
+    /// A list of patches available for the given issue (not applicable to licenses)
+    patches: option<list<string>>,
+    /// The priority score ranging between 0-1000
+    priority-score: option<f64>,
+    /// The date that the vulnerability was first published by Snyk (not applicable to licenses)
+    publication-time: option<string>,
+    /// The ranges that are vulnerable and unaffected by the issue
+    semver: option<get-list-of-issues-response-results-item-issue-semver>,
+    /// The severity status of the issue, after policies are applied
+    severity: string,
+    /// The issue title
+    title: string,
+    /// The issue type, can be "vuln", "license"
+    type-op: string,
+    /// A list of all severities in issue per projects
+    unique-severities-list: option<list<string>>,
+    /// URL to a page containing information about the issue
+    url: string,
+    /// The version of the package that the issue relates to
+    version: string
+  }
+
+  /// External identifiers assigned to the issue (not applicable to licenses)
+  record get-list-of-issues-response-results-item-issue-identifiers {
+    /// Common Vulnerability Enumeration identifiers
+    cve: option<list<string>>,
+    /// Common Weakness Enumeration identifiers
+    cwe: option<list<string>>,
+    /// Identifiers assigned by the Open Source Vulnerability Database (OSVDB)
+    osvdb: option<list<string>>
+  }
+
+  /// The ranges that are vulnerable and unaffected by the issue
+  record get-list-of-issues-response-results-item-issue-semver {
+    /// The ranges that are unaffected by the issue
+    unaffected: option<string>,
+    /// The ranges that are vulnerable to the issue
+    vulnerable: option<list<string>>
+  }
+
   record get-list-of-latest-issues-body-filters {
     /// The exploit maturity levels of issues to filter the results by
     exploit-maturity: option<list<string>>,
@@ -1475,6 +3064,137 @@ interface reporting-api {
     min: option<f64>
   }
 
+  record get-list-of-latest-issues-response {
+    /// A list of issues
+    results: list<get-list-of-latest-issues-response-results-item>,
+    /// The total number of results found
+    total: f64
+  }
+
+  record get-list-of-latest-issues-response-results-item {
+    /// The date that the issue was fixed
+    fixed-date: option<string>,
+    /// The date that the issue was introduced into the project
+    introduced-date: string,
+    /// Whether the issue has been fixed
+    is-fixed: bool,
+    issue: get-list-of-latest-issues-response-results-item-issue,
+    /// The date that the issue was patched
+    patched-date: option<string>
+  }
+
+  record get-list-of-latest-issues-response-results-item-issue {
+    /// The CVSS v3 string that signifies how the CVSS score was calculated (not applicable to licenses)
+    cvs-sv3: option<string>,
+    /// The list of people responsible for first uncovering or reporting the issue (not applicable to licenses)
+    credit: option<list<string>>,
+    /// The CVSS score that results from running the CVSSv3 string (not applicable to licenses)
+    cvss-score: option<f64>,
+    /// The date that the vulnerability was first disclosed (not applicable to licenses)
+    disclosure-time: option<string>,
+    /// The exploit maturity of the issue
+    exploit-maturity: string,
+    /// The identifier of the issue
+    id: string,
+    /// External identifiers assigned to the issue (not applicable to licenses)
+    identifiers: option<get-list-of-latest-issues-response-results-item-issue-identifiers>,
+    /// The list of ignore rules that were applied to the issue (only present if issue was ignored and no `groupBy` in the API request)
+    ignored: option<list<string>>,
+    /// Whether the issue has been ignored (only present if there is no `groupBy` in the API request)
+    is-ignored: option<bool>,
+    /// Whether the issue can be patched
+    is-patchable: option<bool>,
+    /// Whether the issue has been patched (not applicable to licenses and only present if there is no `groupBy` in the API request)
+    is-patched: option<bool>,
+    /// Whether the issue can be pinned
+    is-pinnable: option<bool>,
+    /// Whether the issue can be fixed by upgrading to a later version of the dependency
+    is-upgradable: option<bool>,
+    /// The link to the Jira issue attached to the vulnerability
+    jira-issue-url: option<string>,
+    /// The language of the issue
+    language: option<string>,
+    /// The original severity status of the issue, as retrieved from Snyk Vulnerability database, before policies are applied
+    original-severity: string,
+    /// The name of the package that the issue relates to
+    package-op: string,
+    /// The package manager of the issue
+    package-manager: option<string>,
+    /// A list of patches available for the given issue (not applicable to licenses)
+    patches: option<list<string>>,
+    /// The priority score ranging between 0-1000
+    priority-score: option<f64>,
+    /// The date that the vulnerability was first published by Snyk (not applicable to licenses)
+    publication-time: option<string>,
+    /// The ranges that are vulnerable and unaffected by the issue
+    semver: option<get-list-of-latest-issues-response-results-item-issue-semver>,
+    /// The severity status of the issue, after policies are applied
+    severity: string,
+    /// The issue title
+    title: string,
+    /// The issue type, can be "vuln", "license"
+    type-op: string,
+    /// A list of all severities in issue per projects
+    unique-severities-list: option<list<string>>,
+    /// URL to a page containing information about the issue
+    url: string,
+    /// The version of the package that the issue relates to
+    version: string
+  }
+
+  /// External identifiers assigned to the issue (not applicable to licenses)
+  record get-list-of-latest-issues-response-results-item-issue-identifiers {
+    /// Common Vulnerability Enumeration identifiers
+    cve: option<list<string>>,
+    /// Common Weakness Enumeration identifiers
+    cwe: option<list<string>>,
+    /// Identifiers assigned by the Open Source Vulnerability Database (OSVDB)
+    osvdb: option<list<string>>
+  }
+
+  /// The ranges that are vulnerable and unaffected by the issue
+  record get-list-of-latest-issues-response-results-item-issue-semver {
+    /// The ranges that are unaffected by the issue
+    unaffected: option<string>,
+    /// The ranges that are vulnerable to the issue
+    vulnerable: option<list<string>>
+  }
+
+  variant get-issue-counts-error {
+    bad-request(string),
+    other(string)
+  }
+
+  variant get-latest-issue-counts-error {
+    bad-request(string),
+    other(string)
+  }
+
+  variant get-project-counts-error {
+    bad-request(string),
+    other(string)
+  }
+
+  variant get-latest-project-counts-error {
+    bad-request(string),
+    other(string)
+  }
+
+  variant get-test-counts-error {
+    bad-request(string),
+    other(string)
+  }
+
+  variant get-list-of-issues-error {
+    bad-request(string),
+    other(string)
+  }
+
+  variant get-list-of-latest-issues-error {
+    bad-request(string),
+    other(string)
+  }
+
   /// Get issue counts
   record get-issue-counts-params {
     /// The date you wish to fetch results from, in the format `YYYY-MM-DD`
@@ -1485,7 +3205,7 @@ interface reporting-api {
     group-by: option<get-issue-counts-group-by-enum>,
     filters: option<get-issue-counts-body-filters>
   }
-  get-issue-counts: func(params: get-issue-counts-params) -> result<string, string>;
+  get-issue-counts: func(params: get-issue-counts-params) -> result<get-issue-counts-response, get-issue-counts-error>;
 
   /// Get latest issue counts
   record get-latest-issue-counts-params {
@@ -1493,7 +3213,7 @@ interface reporting-api {
     group-by: option<get-issue-counts-group-by-enum>,
     filters: option<get-latest-issue-counts-body-filters>
   }
-  get-latest-issue-counts: func(params: get-latest-issue-counts-params) -> result<string, string>;
+  get-latest-issue-counts: func(params: get-latest-issue-counts-params) -> result<get-latest-issue-counts-response, get-latest-issue-counts-error>;
 
   /// Get project counts
   record get-project-counts-params {
@@ -1503,13 +3223,13 @@ interface reporting-api {
     to: string,
     filters: option<get-project-counts-body-filters>
   }
-  get-project-counts: func(params: get-project-counts-params) -> result<string, string>;
+  get-project-counts: func(params: get-project-counts-params) -> result<get-project-counts-response, get-project-counts-error>;
 
   /// Get latest project counts
   record get-latest-project-counts-params {
     filters: option<get-latest-project-counts-body-filters>
   }
-  get-latest-project-counts: func(params: get-latest-project-counts-params) -> result<string, string>;
+  get-latest-project-counts: func(params: get-latest-project-counts-params) -> result<get-latest-project-counts-response, get-latest-project-counts-error>;
 
   /// Get test counts
   record get-test-counts-params {
@@ -1521,7 +3241,7 @@ interface reporting-api {
     group-by: option<get-test-counts-group-by-enum>,
     filters: option<get-test-counts-body-filters>
   }
-  get-test-counts: func(params: get-test-counts-params) -> result<string, string>;
+  get-test-counts: func(params: get-test-counts-params) -> result<get-test-counts-response, get-test-counts-error>;
 
   /// Get list of issues
   record get-list-of-issues-params {
@@ -1541,7 +3261,7 @@ interface reporting-api {
     group-by: option<get-list-of-issues-group-by-enum>,
     filters: option<get-list-of-issues-body-filters>
   }
-  get-list-of-issues: func(params: get-list-of-issues-params) -> result<string, string>;
+  get-list-of-issues: func(params: get-list-of-issues-params) -> result<get-list-of-issues-response, get-list-of-issues-error>;
 
   /// Get list of latest issues
   record get-list-of-latest-issues-params {
@@ -1557,7 +3277,7 @@ interface reporting-api {
     group-by: option<get-list-of-issues-group-by-enum>,
     filters: option<get-list-of-latest-issues-body-filters>
   }
-  get-list-of-latest-issues: func(params: get-list-of-latest-issues-params) -> result<string, string>;
+  get-list-of-latest-issues: func(params: get-list-of-latest-issues-params) -> result<get-list-of-latest-issues-response, get-list-of-latest-issues-error>;
 
 }
 
@@ -1908,25 +3628,75 @@ interface test {
 }
 
 interface users {
-  enum modify-organization-notification-settings-body-new-issues-remediations-issue-severity-enum {
+  enum get-organization-notification-settings-response-new-issues-remediations-issue-severity-enum {
     all,
     high,
   }
 
-  enum modify-organization-notification-settings-body-new-issues-remediations-issue-type-enum {
+  enum get-organization-notification-settings-response-new-issues-remediations-issue-type-enum {
     all,
     vuln,
     license,
     none,
   }
 
+  record get-my-details-response {
+    /// The email of the user.
+    email: option<string>,
+    /// The id of the user.
+    id: option<string>,
+    /// The organizations that the user belongs to.
+    orgs: option<string>,
+    /// The username of the user.
+    username: option<string>
+  }
+
+  record get-organization-notification-settings-response {
+    new-issues-remediations: option<get-organization-notification-settings-response-new-issues-remediations>,
+    project-imported: option<get-organization-notification-settings-response-project-imported>,
+    test-limit: option<get-organization-notification-settings-response-test-limit>,
+    weekly-report: option<get-organization-notification-settings-response-weekly-report>
+  }
+
+  record get-organization-notification-settings-response-new-issues-remediations {
+    /// Whether notifications should be sent
+    enabled: bool,
+    /// Whether the setting was found on the requested context directly or inherited from a parent
+    inherited: option<bool>,
+    /// The severity levels of issues to send notifications for (only applicable for `new-remediations-vulnerabilities` notificationType)
+    issue-severity: get-organization-notification-settings-response-new-issues-remediations-issue-severity-enum,
+    /// Filter the types of issue to include in notifications (only applicable for `new-remediations-vulnerabilities` notificationType)
+    issue-type: get-organization-notification-settings-response-new-issues-remediations-issue-type-enum
+  }
+
+  record get-organization-notification-settings-response-project-imported {
+    /// Whether notifications should be sent
+    enabled: bool,
+    /// Whether the setting was found on the requested context directly or inherited from a parent
+    inherited: option<bool>
+  }
+
+  record get-organization-notification-settings-response-test-limit {
+    /// Whether notifications should be sent
+    enabled: bool,
+    /// Whether the setting was found on the requested context directly or inherited from a parent
+    inherited: option<bool>
+  }
+
+  record get-organization-notification-settings-response-weekly-report {
+    /// Whether notifications should be sent
+    enabled: bool,
+    /// Whether the setting was found on the requested context directly or inherited from a parent
+    inherited: option<bool>
+  }
+
   record modify-organization-notification-settings-body-new-issues-remediations {
     /// Whether notifications should be sent
     enabled: bool,
     /// The severity levels of issues to send notifications for (only applicable for `new-remediations-vulnerabilities` notificationType)
-    issue-severity: modify-organization-notification-settings-body-new-issues-remediations-issue-severity-enum,
+    issue-severity: get-organization-notification-settings-response-new-issues-remediations-issue-severity-enum,
     /// Filter the types of issue to include in notifications (only applicable for `new-remediations-vulnerabilities` notificationType)
-    issue-type: modify-organization-notification-settings-body-new-issues-remediations-issue-type-enum
+    issue-type: get-organization-notification-settings-response-new-issues-remediations-issue-type-enum
   }
 
   record modify-organization-notification-settings-body-project-imported {
@@ -1944,24 +3714,125 @@ interface users {
     enabled: bool
   }
 
+  record modify-organization-notification-settings-response {
+    new-issues-remediations: option<modify-organization-notification-settings-response-new-issues-remediations>,
+    project-imported: option<modify-organization-notification-settings-response-project-imported>,
+    test-limit: option<modify-organization-notification-settings-response-test-limit>,
+    weekly-report: option<modify-organization-notification-settings-response-weekly-report>
+  }
+
+  record modify-organization-notification-settings-response-new-issues-remediations {
+    /// Whether notifications should be sent
+    enabled: bool,
+    /// Whether the setting was found on the requested context directly or inherited from a parent
+    inherited: option<bool>,
+    /// The severity levels of issues to send notifications for (only applicable for `new-remediations-vulnerabilities` notificationType)
+    issue-severity: get-organization-notification-settings-response-new-issues-remediations-issue-severity-enum,
+    /// Filter the types of issue to include in notifications (only applicable for `new-remediations-vulnerabilities` notificationType)
+    issue-type: get-organization-notification-settings-response-new-issues-remediations-issue-type-enum
+  }
+
+  record modify-organization-notification-settings-response-project-imported {
+    /// Whether notifications should be sent
+    enabled: bool,
+    /// Whether the setting was found on the requested context directly or inherited from a parent
+    inherited: option<bool>
+  }
+
+  record modify-organization-notification-settings-response-test-limit {
+    /// Whether notifications should be sent
+    enabled: bool,
+    /// Whether the setting was found on the requested context directly or inherited from a parent
+    inherited: option<bool>
+  }
+
+  record modify-organization-notification-settings-response-weekly-report {
+    /// Whether notifications should be sent
+    enabled: bool,
+    /// Whether the setting was found on the requested context directly or inherited from a parent
+    inherited: option<bool>
+  }
+
+  record get-project-notification-settings-response {
+    new-issues-remediations: option<get-project-notification-settings-response-new-issues-remediations>,
+    project-imported: option<get-project-notification-settings-response-project-imported>,
+    test-limit: option<get-project-notification-settings-response-test-limit>,
+    weekly-report: option<get-project-notification-settings-response-weekly-report>
+  }
+
+  record get-project-notification-settings-response-new-issues-remediations {
+    /// Whether notifications should be sent
+    enabled: bool,
+    /// Whether the setting was found on the requested context directly or inherited from a parent
+    inherited: option<bool>,
+    /// The severity levels of issues to send notifications for (only applicable for `new-remediations-vulnerabilities` notificationType)
+    issue-severity: get-organization-notification-settings-response-new-issues-remediations-issue-severity-enum,
+    /// Filter the types of issue to include in notifications (only applicable for `new-remediations-vulnerabilities` notificationType)
+    issue-type: get-organization-notification-settings-response-new-issues-remediations-issue-type-enum
+  }
+
+  record get-project-notification-settings-response-project-imported {
+    /// Whether notifications should be sent
+    enabled: bool,
+    /// Whether the setting was found on the requested context directly or inherited from a parent
+    inherited: option<bool>
+  }
+
+  record get-project-notification-settings-response-test-limit {
+    /// Whether notifications should be sent
+    enabled: bool,
+    /// Whether the setting was found on the requested context directly or inherited from a parent
+    inherited: option<bool>
+  }
+
+  record get-project-notification-settings-response-weekly-report {
+    /// Whether notifications should be sent
+    enabled: bool,
+    /// Whether the setting was found on the requested context directly or inherited from a parent
+    inherited: option<bool>
+  }
+
   record modify-project-notification-settings-body-new-issues-remediations {
     /// Whether notifications should be sent
     enabled: bool,
     /// The severity levels of issues to send notifications for (only applicable for `new-remediations-vulnerabilities` notificationType)
-    issue-severity: modify-organization-notification-settings-body-new-issues-remediations-issue-severity-enum,
+    issue-severity: get-organization-notification-settings-response-new-issues-remediations-issue-severity-enum,
     /// Filter the types of issue to include in notifications (only applicable for `new-remediations-vulnerabilities` notificationType)
-    issue-type: modify-organization-notification-settings-body-new-issues-remediations-issue-type-enum
+    issue-type: get-organization-notification-settings-response-new-issues-remediations-issue-type-enum
+  }
+
+  record get-user-details-response {
+    /// The email of the user.
+    email: option<string>,
+    /// The id of the user.
+    id: option<string>,
+    /// The name of the user.
+    name: option<string>,
+    /// The username of the user.
+    username: option<string>
+  }
+
+  variant get-my-details-error {
+    unauthorized(string),
+    other(string)
+  }
+
+  variant get-user-details-error {
+    bad-request(string),
+    unauthorized(string),
+    not-found(string),
+    other(string)
   }
 
   /// Get My Details
-  get-my-details: func() -> result<string, string>;
+  get-my-details: func() -> result<get-my-details-response, get-my-details-error>;
 
   /// Get organization notification settings
   record get-organization-notification-settings-params {
     /// The organization ID. The `API_KEY` must have access to this organization.
     org-id: string
   }
-  get-organization-notification-settings: func(params: get-organization-notification-settings-params) -> result<string, string>;
+  get-organization-notification-settings: func(params: get-organization-notification-settings-params) -> result<get-organization-notification-settings-response, string>;
 
   /// Modify organization notification settings
   record modify-organization-notification-settings-params {
@@ -1972,7 +3843,7 @@ interface users {
     test-limit: option<modify-organization-notification-settings-body-test-limit>,
     weekly-report: option<modify-organization-notification-settings-body-weekly-report>
   }
-  modify-organization-notification-settings: func(params: modify-organization-notification-settings-params) -> result<string, string>;
+  modify-organization-notification-settings: func(params: modify-organization-notification-settings-params) -> result<modify-organization-notification-settings-response, string>;
 
   /// Get project notification settings
   record get-project-notification-settings-params {
@@ -1981,7 +3852,7 @@ interface users {
     /// The project ID to return notification settings for.
     project-id: string
   }
-  get-project-notification-settings: func(params: get-project-notification-settings-params) -> result<string, string>;
+  get-project-notification-settings: func(params: get-project-notification-settings-params) -> result<get-project-notification-settings-response, string>;
 
   /// Modify project notification settings
   record modify-project-notification-settings-params {
@@ -1998,7 +3869,7 @@ interface users {
     /// The users ID. The `API_KEY` must have admin access to at least one group or organization where the requested user is a member and must have the `api` entitlement on their preferred organization.
     user-id: string
   }
-  get-user-details: func(params: get-user-details-params) -> result<string, string>;
+  get-user-details: func(params: get-user-details-params) -> result<get-user-details-response, get-user-details-error>;
 
 }
 /// The component world: imports the secrets host capability

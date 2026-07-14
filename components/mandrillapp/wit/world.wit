@@ -1,6 +1,29 @@
-package autostamp:mandrillapp@0.3.0;
+package autostamp:mandrillapp@0.5.0;
 
 interface exports {
+  record satus {
+    created-at: option<string>,
+    finished-at: option<string>,
+    id: option<string>,
+    result-url: option<string>,
+    state: option<string>,
+    type-op: option<string>
+  }
+
+  record info-response {
+    created-at: option<string>,
+    finished-at: option<string>,
+    id: option<string>,
+    result-url: option<string>,
+    state: option<string>,
+    type-op: option<string>
+  }
+
+  record list-response {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
   record post-exports-activity-json-params {
     api-keys: option<list<string>>,
     date-from: option<string>,
@@ -11,40 +34,67 @@ interface exports {
     states: option<list<string>>,
     tags: option<list<string>>
   }
-  post-exports-activity-json: func(params: post-exports-activity-json-params) -> result<string, string>;
+  post-exports-activity-json: func(params: post-exports-activity-json-params) -> result<satus, string>;
 
   record post-exports-info-json-params {
     id: option<string>,
     key: option<string>
   }
-  post-exports-info-json: func(params: post-exports-info-json-params) -> result<string, string>;
+  post-exports-info-json: func(params: post-exports-info-json-params) -> result<info-response, string>;
 
   record post-exports-list-json-params {
     key: option<string>
   }
-  post-exports-list-json: func(params: post-exports-list-json-params) -> result<string, string>;
+  post-exports-list-json: func(params: post-exports-list-json-params) -> result<list-response, string>;
 
   record post-exports-rejects-json-params {
     key: option<string>,
     notify-email: option<string>
   }
-  post-exports-rejects-json: func(params: post-exports-rejects-json-params) -> result<string, string>;
+  post-exports-rejects-json: func(params: post-exports-rejects-json-params) -> result<satus, string>;
 
   record post-exports-whitelist-json-params {
     key: option<string>,
     notify-email: option<string>
   }
-  post-exports-whitelist-json: func(params: post-exports-whitelist-json-params) -> result<string, string>;
+  post-exports-whitelist-json: func(params: post-exports-whitelist-json-params) -> result<satus, string>;
 
 }
 
 
 interface inbound {
+  record info {
+    created-at: option<string>,
+    domain: option<string>,
+    valid-mx: option<bool>
+  }
+
+  record route {
+    id: option<string>,
+    pattern: option<string>,
+    url: option<string>
+  }
+
+  record domains-response {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  record routes-response {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  record send-raw-response {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
   record post-inbound-add-domain-json-params {
     domain: option<string>,
     key: option<string>
   }
-  post-inbound-add-domain-json: func(params: post-inbound-add-domain-json-params) -> result<string, string>;
+  post-inbound-add-domain-json: func(params: post-inbound-add-domain-json-params) -> result<info, string>;
 
   record post-inbound-add-route-json-params {
     domain: option<string>,
@@ -52,36 +102,36 @@ interface inbound {
     pattern: option<string>,
     url: option<string>
   }
-  post-inbound-add-route-json: func(params: post-inbound-add-route-json-params) -> result<string, string>;
+  post-inbound-add-route-json: func(params: post-inbound-add-route-json-params) -> result<route, string>;
 
   record post-inbound-check-domain-json-params {
     domain: option<string>,
     key: option<string>
   }
-  post-inbound-check-domain-json: func(params: post-inbound-check-domain-json-params) -> result<string, string>;
+  post-inbound-check-domain-json: func(params: post-inbound-check-domain-json-params) -> result<info, string>;
 
   record post-inbound-delete-domain-json-params {
     domain: option<string>,
     key: option<string>
   }
-  post-inbound-delete-domain-json: func(params: post-inbound-delete-domain-json-params) -> result<string, string>;
+  post-inbound-delete-domain-json: func(params: post-inbound-delete-domain-json-params) -> result<info, string>;
 
   record post-inbound-delete-route-json-params {
     id: option<string>,
     key: option<string>
   }
-  post-inbound-delete-route-json: func(params: post-inbound-delete-route-json-params) -> result<string, string>;
+  post-inbound-delete-route-json: func(params: post-inbound-delete-route-json-params) -> result<route, string>;
 
   record post-inbound-domains-json-params {
     key: option<string>
   }
-  post-inbound-domains-json: func(params: post-inbound-domains-json-params) -> result<string, string>;
+  post-inbound-domains-json: func(params: post-inbound-domains-json-params) -> result<domains-response, string>;
 
   record post-inbound-routes-json-params {
     domain: option<string>,
     key: option<string>
   }
-  post-inbound-routes-json: func(params: post-inbound-routes-json-params) -> result<string, string>;
+  post-inbound-routes-json: func(params: post-inbound-routes-json-params) -> result<routes-response, string>;
 
   record post-inbound-send-raw-json-params {
     client-address: option<string>,
@@ -91,7 +141,7 @@ interface inbound {
     raw-message: option<string>,
     to: option<list<string>>
   }
-  post-inbound-send-raw-json: func(params: post-inbound-send-raw-json-params) -> result<string, string>;
+  post-inbound-send-raw-json: func(params: post-inbound-send-raw-json-params) -> result<send-raw-response, string>;
 
   record post-inbound-update-route-json-params {
     id: option<string>,
@@ -99,77 +149,154 @@ interface inbound {
     pattern: option<string>,
     url: option<string>
   }
-  post-inbound-update-route-json: func(params: post-inbound-update-route-json-params) -> result<string, string>;
+  post-inbound-update-route-json: func(params: post-inbound-update-route-json-params) -> result<route, string>;
 
 }
 
 interface ips {
+  record ip-info {
+    created-at: option<string>,
+    custom-dns: option<ip-info-custom-dns>,
+    domain: option<string>,
+    ip: option<string>,
+    pool: option<string>,
+    warmup: option<ip-info-warmup>
+  }
+
+  record ip-info-custom-dns {
+    enabled: option<bool>,
+    error: option<string>,
+    valid: option<bool>
+  }
+
+  record ip-info-warmup {
+    end-at: option<string>,
+    start-at: option<string>,
+    warming-up: option<bool>
+  }
+
+  record check-custom-dns-response {
+    error: option<string>,
+    valid: option<bool>
+  }
+
+  record pool {
+    created-at: option<string>,
+    ips: option<list<pool-ips-item>>,
+    name: option<string>
+  }
+
+  record pool-ips-item {
+    created-at: option<string>,
+    custom-dns: option<pool-ips-item-custom-dns>,
+    domain: option<string>,
+    ip: option<string>,
+    pool: option<string>,
+    warmup: option<pool-ips-item-warmup>
+  }
+
+  record pool-ips-item-custom-dns {
+    enabled: option<bool>,
+    error: option<string>,
+    valid: option<bool>
+  }
+
+  record pool-ips-item-warmup {
+    end-at: option<string>,
+    start-at: option<string>,
+    warming-up: option<bool>
+  }
+
+  record delete-pool-response {
+    deleted: option<bool>,
+    pool: option<string>
+  }
+
+  record delete-response {
+    deleted: option<bool>,
+    ip: option<string>
+  }
+
+  record list-pools-response {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  record list-response {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  record provision-response {
+    requested-at: option<string>
+  }
+
   record post-ips-cancel-warmup-json-params {
     ip: option<string>,
     key: option<string>
   }
-  post-ips-cancel-warmup-json: func(params: post-ips-cancel-warmup-json-params) -> result<string, string>;
+  post-ips-cancel-warmup-json: func(params: post-ips-cancel-warmup-json-params) -> result<ip-info, string>;
 
   record post-ips-check-custom-dns-json-params {
     domain: option<string>,
     ip: option<string>,
     key: option<string>
   }
-  post-ips-check-custom-dns-json: func(params: post-ips-check-custom-dns-json-params) -> result<string, string>;
+  post-ips-check-custom-dns-json: func(params: post-ips-check-custom-dns-json-params) -> result<check-custom-dns-response, string>;
 
   record post-ips-create-pool-json-params {
     key: option<string>,
     pool: option<string>
   }
-  post-ips-create-pool-json: func(params: post-ips-create-pool-json-params) -> result<string, string>;
+  post-ips-create-pool-json: func(params: post-ips-create-pool-json-params) -> result<pool, string>;
 
   record post-ips-delete-pool-json-params {
     key: option<string>,
     pool: option<string>
   }
-  post-ips-delete-pool-json: func(params: post-ips-delete-pool-json-params) -> result<string, string>;
+  post-ips-delete-pool-json: func(params: post-ips-delete-pool-json-params) -> result<delete-pool-response, string>;
 
   record post-ips-delete-json-params {
     ip: option<string>,
     key: option<string>
   }
-  post-ips-delete-json: func(params: post-ips-delete-json-params) -> result<string, string>;
+  post-ips-delete-json: func(params: post-ips-delete-json-params) -> result<delete-response, string>;
 
   record post-ips-info-json-params {
     ip: option<string>,
     key: option<string>
   }
-  post-ips-info-json: func(params: post-ips-info-json-params) -> result<string, string>;
+  post-ips-info-json: func(params: post-ips-info-json-params) -> result<ip-info, string>;
 
   record post-ips-list-pools-json-params {
     key: option<string>
   }
-  post-ips-list-pools-json: func(params: post-ips-list-pools-json-params) -> result<string, string>;
+  post-ips-list-pools-json: func(params: post-ips-list-pools-json-params) -> result<list-pools-response, string>;
 
   record post-ips-list-json-params {
     key: option<string>
   }
-  post-ips-list-json: func(params: post-ips-list-json-params) -> result<string, string>;
+  post-ips-list-json: func(params: post-ips-list-json-params) -> result<list-response, string>;
 
   record post-ips-pool-info-json-params {
     key: option<string>,
     pool: option<string>
   }
-  post-ips-pool-info-json: func(params: post-ips-pool-info-json-params) -> result<string, string>;
+  post-ips-pool-info-json: func(params: post-ips-pool-info-json-params) -> result<pool, string>;
 
   record post-ips-provision-json-params {
     key: option<string>,
     pool: option<string>,
     warmup: option<bool>
   }
-  post-ips-provision-json: func(params: post-ips-provision-json-params) -> result<string, string>;
+  post-ips-provision-json: func(params: post-ips-provision-json-params) -> result<provision-response, string>;
 
   record post-ips-set-custom-dns-json-params {
     domain: option<string>,
     ip: option<string>,
     key: option<string>
   }
-  post-ips-set-custom-dns-json: func(params: post-ips-set-custom-dns-json-params) -> result<string, string>;
+  post-ips-set-custom-dns-json: func(params: post-ips-set-custom-dns-json-params) -> result<ip-info, string>;
 
   record post-ips-set-pool-json-params {
     create-pool: option<bool>,
@@ -177,17 +304,152 @@ interface ips {
     key: option<string>,
     pool: option<string>
   }
-  post-ips-set-pool-json: func(params: post-ips-set-pool-json-params) -> result<string, string>;
+  post-ips-set-pool-json: func(params: post-ips-set-pool-json-params) -> result<ip-info, string>;
 
   record post-ips-start-warmup-json-params {
     ip: option<string>,
     key: option<string>
   }
-  post-ips-start-warmup-json: func(params: post-ips-start-warmup-json-params) -> result<string, string>;
+  post-ips-start-warmup-json: func(params: post-ips-start-warmup-json-params) -> result<ip-info, string>;
 
 }
 
 interface messages {
+  record schedulingchange-info {
+    id: option<string>,
+    created-at: option<string>,
+    from-email: option<string>,
+    send-at: option<string>,
+    subject: option<string>,
+    to: option<string>
+  }
+
+  record content-response {
+    id: option<string>,
+    attachments: option<list<content-response-attachments-item>>,
+    from-email: option<string>,
+    from-name: option<string>,
+    headers: option<content-response-headers>,
+    html: option<string>,
+    subject: option<string>,
+    tags: option<list<string>>,
+    text: option<string>,
+    to: option<content-response-to>,
+    ts: option<s32>
+  }
+
+  record content-response-attachments-item {
+    content: option<string>,
+    name: option<string>,
+    type-op: option<string>
+  }
+
+  record content-response-headers {
+    reply-to: option<string>
+  }
+
+  record content-response-to {
+    email: option<string>,
+    name: option<string>
+  }
+
+  record info-response {
+    id: option<string>,
+    clicks: option<s32>,
+    clicks-detail: option<list<info-response-clicks-detail-item>>,
+    email: option<string>,
+    metadata: option<info-response-metadata>,
+    opens: option<s32>,
+    opens-detail: option<list<info-response-opens-detail-item>>,
+    sender: option<string>,
+    smtp-events: option<list<info-response-smtp-events-item>>,
+    state: option<string>,
+    subject: option<string>,
+    tags: option<list<string>>,
+    template: option<string>,
+    ts: option<s32>
+  }
+
+  record info-response-clicks-detail-item {
+    ip: option<string>,
+    location: option<string>,
+    ts: option<s32>,
+    ua: option<string>,
+    url: option<string>
+  }
+
+  record info-response-metadata {
+    user-id: option<string>,
+    website: option<string>
+  }
+
+  record info-response-opens-detail-item {
+    ip: option<string>,
+    location: option<string>,
+    ts: option<s32>,
+    ua: option<string>
+  }
+
+  record info-response-smtp-events-item {
+    diag: option<string>,
+    ts: option<s32>,
+    type-op: option<string>
+  }
+
+  record list-scheduled-response {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  record parse-response {
+    attachments: option<list<parse-response-attachments-item>>,
+    from-email: option<string>,
+    from-name: option<string>,
+    headers: option<parse-response-headers>,
+    html: option<string>,
+    images: option<list<parse-response-images-item>>,
+    subject: option<string>,
+    text: option<string>,
+    to: option<list<parse-response-to-item>>
+  }
+
+  record parse-response-attachments-item {
+    binary: option<bool>,
+    content: option<string>,
+    name: option<string>,
+    type-op: option<string>
+  }
+
+  record parse-response-headers {
+    reply-to: option<string>
+  }
+
+  record parse-response-images-item {
+    content: option<string>,
+    name: option<string>,
+    type-op: option<string>
+  }
+
+  record parse-response-to-item {
+    email: option<string>,
+    name: option<string>
+  }
+
+  record timeseries {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  record search-response {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  record message-send-status {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
   record send-template-message {
     attachments: option<list<send-template-message-attachments-item>>,
     auto-html: option<string>,
@@ -365,38 +627,38 @@ interface messages {
     id: option<string>,
     key: option<string>
   }
-  post-messages-cancel-scheduled-json: func(params: post-messages-cancel-scheduled-json-params) -> result<string, string>;
+  post-messages-cancel-scheduled-json: func(params: post-messages-cancel-scheduled-json-params) -> result<schedulingchange-info, string>;
 
   record post-messages-content-json-params {
     id: option<string>,
     key: option<string>
   }
-  post-messages-content-json: func(params: post-messages-content-json-params) -> result<string, string>;
+  post-messages-content-json: func(params: post-messages-content-json-params) -> result<content-response, string>;
 
   record post-messages-info-json-params {
     id: option<string>,
     key: option<string>
   }
-  post-messages-info-json: func(params: post-messages-info-json-params) -> result<string, string>;
+  post-messages-info-json: func(params: post-messages-info-json-params) -> result<info-response, string>;
 
   record post-messages-list-scheduled-json-params {
     key: option<string>,
     to: option<string>
   }
-  post-messages-list-scheduled-json: func(params: post-messages-list-scheduled-json-params) -> result<string, string>;
+  post-messages-list-scheduled-json: func(params: post-messages-list-scheduled-json-params) -> result<list-scheduled-response, string>;
 
   record post-messages-parse-json-params {
     key: option<string>,
     raw-message: option<string>
   }
-  post-messages-parse-json: func(params: post-messages-parse-json-params) -> result<string, string>;
+  post-messages-parse-json: func(params: post-messages-parse-json-params) -> result<parse-response, string>;
 
   record post-messages-reschedule-json-params {
     id: option<string>,
     key: option<string>,
     send-at: option<string>
   }
-  post-messages-reschedule-json: func(params: post-messages-reschedule-json-params) -> result<string, string>;
+  post-messages-reschedule-json: func(params: post-messages-reschedule-json-params) -> result<schedulingchange-info, string>;
 
   record post-messages-search-time-series-json-params {
     date-from: option<string>,
@@ -406,7 +668,7 @@ interface messages {
     senders: option<list<string>>,
     tags: option<list<string>>
   }
-  post-messages-search-time-series-json: func(params: post-messages-search-time-series-json-params) -> result<string, string>;
+  post-messages-search-time-series-json: func(params: post-messages-search-time-series-json-params) -> result<timeseries, string>;
 
   record post-messages-search-json-params {
     api-keys: option<list<string>>,
@@ -418,7 +680,7 @@ interface messages {
     senders: option<list<string>>,
     tags: option<list<string>>
   }
-  post-messages-search-json: func(params: post-messages-search-json-params) -> result<string, string>;
+  post-messages-search-json: func(params: post-messages-search-json-params) -> result<search-response, string>;
 
   record post-messages-send-raw-json-params {
     async-op: option<bool>,
@@ -431,7 +693,7 @@ interface messages {
     send-at: option<string>,
     to: option<list<string>>
   }
-  post-messages-send-raw-json: func(params: post-messages-send-raw-json-params) -> result<string, string>;
+  post-messages-send-raw-json: func(params: post-messages-send-raw-json-params) -> result<message-send-status, string>;
 
   record post-messages-send-template-json-params {
     async-op: option<bool>,
@@ -442,7 +704,7 @@ interface messages {
     template-content: option<list<send-template-template-content-item>>,
     template-name: option<string>
   }
-  post-messages-send-template-json: func(params: post-messages-send-template-json-params) -> result<string, string>;
+  post-messages-send-template-json: func(params: post-messages-send-template-json-params) -> result<message-send-status, string>;
 
   record post-messages-send-json-params {
     async-op: option<bool>,
@@ -451,53 +713,80 @@ interface messages {
     message: option<send-message>,
     send-at: option<string>
   }
-  post-messages-send-json: func(params: post-messages-send-json-params) -> result<string, string>;
+  post-messages-send-json: func(params: post-messages-send-json-params) -> result<message-send-status, string>;
 
 }
 
 interface metadata {
+  record info {
+    name: option<string>,
+    state: option<string>,
+    view-template: option<string>
+  }
+
+  record list-response {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
   record post-metadata-add-json-params {
     key: option<string>,
     name: option<string>,
     view-template: option<string>
   }
-  post-metadata-add-json: func(params: post-metadata-add-json-params) -> result<string, string>;
+  post-metadata-add-json: func(params: post-metadata-add-json-params) -> result<info, string>;
 
   record post-metadata-delete-json-params {
     key: option<string>,
     name: option<string>
   }
-  post-metadata-delete-json: func(params: post-metadata-delete-json-params) -> result<string, string>;
+  post-metadata-delete-json: func(params: post-metadata-delete-json-params) -> result<info, string>;
 
   record post-metadata-list-json-params {
     key: option<string>
   }
-  post-metadata-list-json: func(params: post-metadata-list-json-params) -> result<string, string>;
+  post-metadata-list-json: func(params: post-metadata-list-json-params) -> result<list-response, string>;
 
   record post-metadata-update-json-params {
     key: option<string>,
     name: option<string>,
     view-template: option<string>
   }
-  post-metadata-update-json: func(params: post-metadata-update-json-params) -> result<string, string>;
+  post-metadata-update-json: func(params: post-metadata-update-json-params) -> result<info, string>;
 
 }
 
 interface rejects {
+  record add-response {
+    added: option<bool>,
+    email: option<string>
+  }
+
+  record delete-response {
+    deleted: option<bool>,
+    email: option<string>,
+    subaccount: option<string>
+  }
+
+  record list-response {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
   record post-rejects-add-json-params {
     comment: option<string>,
     email: option<string>,
     key: option<string>,
     subaccount: option<string>
   }
-  post-rejects-add-json: func(params: post-rejects-add-json-params) -> result<string, string>;
+  post-rejects-add-json: func(params: post-rejects-add-json-params) -> result<add-response, string>;
 
   record post-rejects-delete-json-params {
     email: option<string>,
     key: option<string>,
     subaccount: option<string>
   }
-  post-rejects-delete-json: func(params: post-rejects-delete-json-params) -> result<string, string>;
+  post-rejects-delete-json: func(params: post-rejects-delete-json-params) -> result<delete-response, string>;
 
   record post-rejects-list-json-params {
     email: option<string>,
@@ -505,55 +794,233 @@ interface rejects {
     key: option<string>,
     subaccount: option<string>
   }
-  post-rejects-list-json: func(params: post-rejects-list-json-params) -> result<string, string>;
+  post-rejects-list-json: func(params: post-rejects-list-json-params) -> result<list-response, string>;
 
 }
 
 interface senders {
+  record sender-domain-info {
+    created-at: option<string>,
+    dkim: option<sender-domain-info-dkim>,
+    domain: option<string>,
+    last-tested-at: option<string>,
+    spf: option<sender-domain-info-spf>,
+    valid-signing: option<bool>,
+    verified-at: option<string>
+  }
+
+  record sender-domain-info-dkim {
+    error: option<string>,
+    valid: option<bool>,
+    valid-after: option<string>
+  }
+
+  record sender-domain-info-spf {
+    error: option<string>,
+    valid: option<bool>,
+    valid-after: option<string>
+  }
+
+  record domains-response {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  record info-response {
+    address: option<string>,
+    clicks: option<s32>,
+    complaints: option<s32>,
+    created-at: option<string>,
+    hard-bounces: option<s32>,
+    opens: option<s32>,
+    rejects: option<s32>,
+    sent: option<s32>,
+    soft-bounces: option<s32>,
+    stats: option<info-response-stats>,
+    unsubs: option<s32>
+  }
+
+  record info-response-stats {
+    last-v30-days: option<info-response-stats-last-v30-days>,
+    last-v60-days: option<info-response-stats-last-v60-days>,
+    last-v7-days: option<info-response-stats-last-v7-days>,
+    last-v90-days: option<info-response-stats-last-v90-days>,
+    today: option<info-response-stats-today>
+  }
+
+  record info-response-stats-last-v30-days {
+    clicks: option<s32>,
+    complaints: option<s32>,
+    hard-bounces: option<s32>,
+    opens: option<s32>,
+    rejects: option<s32>,
+    sent: option<s32>,
+    soft-bounces: option<s32>,
+    unique-clicks: option<s32>,
+    unique-opens: option<s32>,
+    unsubs: option<s32>
+  }
+
+  record info-response-stats-last-v60-days {
+    clicks: option<s32>,
+    complaints: option<s32>,
+    hard-bounces: option<s32>,
+    opens: option<s32>,
+    rejects: option<s32>,
+    sent: option<s32>,
+    soft-bounces: option<s32>,
+    unique-clicks: option<s32>,
+    unique-opens: option<s32>,
+    unsubs: option<s32>
+  }
+
+  record info-response-stats-last-v7-days {
+    clicks: option<s32>,
+    complaints: option<s32>,
+    hard-bounces: option<s32>,
+    opens: option<s32>,
+    rejects: option<s32>,
+    sent: option<s32>,
+    soft-bounces: option<s32>,
+    unique-clicks: option<s32>,
+    unique-opens: option<s32>,
+    unsubs: option<s32>
+  }
+
+  record info-response-stats-last-v90-days {
+    clicks: option<s32>,
+    complaints: option<s32>,
+    hard-bounces: option<s32>,
+    opens: option<s32>,
+    rejects: option<s32>,
+    sent: option<s32>,
+    soft-bounces: option<s32>,
+    unique-clicks: option<s32>,
+    unique-opens: option<s32>,
+    unsubs: option<s32>
+  }
+
+  record info-response-stats-today {
+    clicks: option<s32>,
+    complaints: option<s32>,
+    hard-bounces: option<s32>,
+    opens: option<s32>,
+    rejects: option<s32>,
+    sent: option<s32>,
+    soft-bounces: option<s32>,
+    unique-clicks: option<s32>,
+    unique-opens: option<s32>,
+    unsubs: option<s32>
+  }
+
+  record senders {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  record time-series {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  record verify-domain-response {
+    domain: option<string>,
+    email: option<string>,
+    status: option<string>
+  }
+
   record post-senders-add-domain-json-params {
     domain: option<string>,
     key: option<string>
   }
-  post-senders-add-domain-json: func(params: post-senders-add-domain-json-params) -> result<string, string>;
+  post-senders-add-domain-json: func(params: post-senders-add-domain-json-params) -> result<sender-domain-info, string>;
 
   record post-senders-check-domain-json-params {
     domain: option<string>,
     key: option<string>
   }
-  post-senders-check-domain-json: func(params: post-senders-check-domain-json-params) -> result<string, string>;
+  post-senders-check-domain-json: func(params: post-senders-check-domain-json-params) -> result<sender-domain-info, string>;
 
   record post-senders-domains-json-params {
     key: option<string>
   }
-  post-senders-domains-json: func(params: post-senders-domains-json-params) -> result<string, string>;
+  post-senders-domains-json: func(params: post-senders-domains-json-params) -> result<domains-response, string>;
 
   record post-senders-info-json-params {
     address: option<string>,
     key: option<string>
   }
-  post-senders-info-json: func(params: post-senders-info-json-params) -> result<string, string>;
+  post-senders-info-json: func(params: post-senders-info-json-params) -> result<info-response, string>;
 
   record post-senders-list-json-params {
     key: option<string>
   }
-  post-senders-list-json: func(params: post-senders-list-json-params) -> result<string, string>;
+  post-senders-list-json: func(params: post-senders-list-json-params) -> result<senders, string>;
 
   record post-senders-time-series-json-params {
     address: option<string>,
     key: option<string>
   }
-  post-senders-time-series-json: func(params: post-senders-time-series-json-params) -> result<string, string>;
+  post-senders-time-series-json: func(params: post-senders-time-series-json-params) -> result<time-series, string>;
 
   record post-senders-verify-domain-json-params {
     domain: option<string>,
     key: option<string>,
     mailbox: option<string>
   }
-  post-senders-verify-domain-json: func(params: post-senders-verify-domain-json-params) -> result<string, string>;
+  post-senders-verify-domain-json: func(params: post-senders-verify-domain-json-params) -> result<verify-domain-response, string>;
 
 }
 
 interface subaccounts {
+  record subaccount-info2 {
+    created-at: option<string>,
+    custom-quota: option<s32>,
+    first-sent-at: option<string>,
+    id: option<string>,
+    name: option<string>,
+    reputation: option<s32>,
+    sent-monthly: option<s32>,
+    sent-total: option<s32>,
+    sent-weekly: option<s32>,
+    status: option<string>
+  }
+
+  record info-response {
+    created-at: option<string>,
+    custom-quota: option<s32>,
+    first-sent-at: option<string>,
+    hourly-quota: option<s32>,
+    id: option<string>,
+    last-v30-days: option<info-response-last-v30-days>,
+    name: option<string>,
+    notes: option<string>,
+    reputation: option<s32>,
+    sent-hourly: option<s32>,
+    sent-monthly: option<s32>,
+    sent-total: option<s32>,
+    sent-weekly: option<s32>,
+    status: option<string>
+  }
+
+  record info-response-last-v30-days {
+    clicks: option<s32>,
+    complaints: option<s32>,
+    hard-bounces: option<s32>,
+    opens: option<s32>,
+    rejects: option<s32>,
+    sent: option<s32>,
+    soft-bounces: option<s32>,
+    unique-clicks: option<s32>,
+    unique-opens: option<s32>,
+    unsubs: option<s32>
+  }
+
+  record list-response {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
   record post-subaccounts-add-json-params {
     custom-quota: option<s32>,
     id: option<string>,
@@ -561,37 +1028,37 @@ interface subaccounts {
     name: option<string>,
     notes: option<string>
   }
-  post-subaccounts-add-json: func(params: post-subaccounts-add-json-params) -> result<string, string>;
+  post-subaccounts-add-json: func(params: post-subaccounts-add-json-params) -> result<subaccount-info2, string>;
 
   record post-subaccounts-delete-json-params {
     id: option<string>,
     key: option<string>
   }
-  post-subaccounts-delete-json: func(params: post-subaccounts-delete-json-params) -> result<string, string>;
+  post-subaccounts-delete-json: func(params: post-subaccounts-delete-json-params) -> result<subaccount-info2, string>;
 
   record post-subaccounts-info-json-params {
     id: option<string>,
     key: option<string>
   }
-  post-subaccounts-info-json: func(params: post-subaccounts-info-json-params) -> result<string, string>;
+  post-subaccounts-info-json: func(params: post-subaccounts-info-json-params) -> result<info-response, string>;
 
   record post-subaccounts-list-json-params {
     key: option<string>,
     q: option<string>
   }
-  post-subaccounts-list-json: func(params: post-subaccounts-list-json-params) -> result<string, string>;
+  post-subaccounts-list-json: func(params: post-subaccounts-list-json-params) -> result<list-response, string>;
 
   record post-subaccounts-pause-json-params {
     id: option<string>,
     key: option<string>
   }
-  post-subaccounts-pause-json: func(params: post-subaccounts-pause-json-params) -> result<string, string>;
+  post-subaccounts-pause-json: func(params: post-subaccounts-pause-json-params) -> result<subaccount-info2, string>;
 
   record post-subaccounts-resume-json-params {
     id: option<string>,
     key: option<string>
   }
-  post-subaccounts-resume-json: func(params: post-subaccounts-resume-json-params) -> result<string, string>;
+  post-subaccounts-resume-json: func(params: post-subaccounts-resume-json-params) -> result<subaccount-info2, string>;
 
   record post-subaccounts-update-json-params {
     custom-quota: option<s32>,
@@ -600,42 +1067,178 @@ interface subaccounts {
     name: option<string>,
     notes: option<string>
   }
-  post-subaccounts-update-json: func(params: post-subaccounts-update-json-params) -> result<string, string>;
+  post-subaccounts-update-json: func(params: post-subaccounts-update-json-params) -> result<subaccount-info2, string>;
 
 }
 
 interface tags {
+  record timeseries {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  record delete-response {
+    clicks: option<s32>,
+    complaints: option<s32>,
+    hard-bounces: option<s32>,
+    opens: option<s32>,
+    rejects: option<s32>,
+    reputation: option<s32>,
+    sent: option<s32>,
+    soft-bounces: option<s32>,
+    tag: option<string>,
+    unique-clicks: option<s32>,
+    unique-opens: option<s32>,
+    unsubs: option<s32>
+  }
+
+  record info-response {
+    clicks: option<s32>,
+    complaints: option<s32>,
+    hard-bounces: option<s32>,
+    opens: option<s32>,
+    rejects: option<s32>,
+    sent: option<s32>,
+    soft-bounces: option<s32>,
+    stats: option<info-response-stats>,
+    tag: option<string>,
+    unsubs: option<s32>
+  }
+
+  record info-response-stats {
+    last-v30-days: option<info-response-stats-last-v30-days>,
+    last-v60-days: option<info-response-stats-last-v60-days>,
+    last-v7-days: option<info-response-stats-last-v7-days>,
+    last-v90-days: option<info-response-stats-last-v90-days>,
+    today: option<info-response-stats-today>
+  }
+
+  record info-response-stats-last-v30-days {
+    clicks: option<s32>,
+    complaints: option<s32>,
+    hard-bounces: option<s32>,
+    opens: option<s32>,
+    rejects: option<s32>,
+    sent: option<s32>,
+    soft-bounces: option<s32>,
+    unique-clicks: option<s32>,
+    unique-opens: option<s32>,
+    unsubs: option<s32>
+  }
+
+  record info-response-stats-last-v60-days {
+    clicks: option<s32>,
+    complaints: option<s32>,
+    hard-bounces: option<s32>,
+    opens: option<s32>,
+    rejects: option<s32>,
+    sent: option<s32>,
+    soft-bounces: option<s32>,
+    unique-clicks: option<s32>,
+    unique-opens: option<s32>,
+    unsubs: option<s32>
+  }
+
+  record info-response-stats-last-v7-days {
+    clicks: option<s32>,
+    complaints: option<s32>,
+    hard-bounces: option<s32>,
+    opens: option<s32>,
+    rejects: option<s32>,
+    sent: option<s32>,
+    soft-bounces: option<s32>,
+    unique-clicks: option<s32>,
+    unique-opens: option<s32>,
+    unsubs: option<s32>
+  }
+
+  record info-response-stats-last-v90-days {
+    clicks: option<s32>,
+    complaints: option<s32>,
+    hard-bounces: option<s32>,
+    opens: option<s32>,
+    rejects: option<s32>,
+    sent: option<s32>,
+    soft-bounces: option<s32>,
+    unique-clicks: option<s32>,
+    unique-opens: option<s32>,
+    unsubs: option<s32>
+  }
+
+  record info-response-stats-today {
+    clicks: option<s32>,
+    complaints: option<s32>,
+    hard-bounces: option<s32>,
+    opens: option<s32>,
+    rejects: option<s32>,
+    sent: option<s32>,
+    soft-bounces: option<s32>,
+    unique-clicks: option<s32>,
+    unique-opens: option<s32>,
+    unsubs: option<s32>
+  }
+
+  record list-response {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
   record post-tags-all-time-series-json-params {
     key: option<string>
   }
-  post-tags-all-time-series-json: func(params: post-tags-all-time-series-json-params) -> result<string, string>;
+  post-tags-all-time-series-json: func(params: post-tags-all-time-series-json-params) -> result<timeseries, string>;
 
   record post-tags-delete-json-params {
     key: option<string>,
     tag: option<string>
   }
-  post-tags-delete-json: func(params: post-tags-delete-json-params) -> result<string, string>;
+  post-tags-delete-json: func(params: post-tags-delete-json-params) -> result<delete-response, string>;
 
   record post-tags-info-json-params {
     key: option<string>,
     tag: option<string>
   }
-  post-tags-info-json: func(params: post-tags-info-json-params) -> result<string, string>;
+  post-tags-info-json: func(params: post-tags-info-json-params) -> result<info-response, string>;
 
   record post-tags-list-json-params {
     key: option<string>
   }
-  post-tags-list-json: func(params: post-tags-list-json-params) -> result<string, string>;
+  post-tags-list-json: func(params: post-tags-list-json-params) -> result<list-response, string>;
 
   record post-tags-time-series-json-params {
     key: option<string>,
     tag: option<string>
   }
-  post-tags-time-series-json: func(params: post-tags-time-series-json-params) -> result<string, string>;
+  post-tags-time-series-json: func(params: post-tags-time-series-json-params) -> result<timeseries, string>;
 
 }
 
 interface templates {
+  record template-detailed {
+    code: option<string>,
+    created-at: option<string>,
+    from-email: option<string>,
+    from-name: option<string>,
+    labels: option<list<string>>,
+    name: option<string>,
+    publish-code: option<string>,
+    publish-from-email: option<string>,
+    publish-from-name: option<string>,
+    publish-name: option<string>,
+    publish-subject: option<string>,
+    publish-text: option<string>,
+    published-at: option<string>,
+    slug: option<string>,
+    subject: option<string>,
+    text: option<string>,
+    updated-at: option<string>
+  }
+
+  record list-response {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
   record render-merge-vars-item {
     content: option<string>,
     name: option<string>
@@ -644,6 +1247,15 @@ interface templates {
   record render-template-content-item {
     content: option<string>,
     name: option<string>
+  }
+
+  record render-response {
+    html: option<string>
+  }
+
+  record time-series {
+    /// opaque schema; raw JSON
+    value: string
   }
 
   record post-templates-add-json-params {
@@ -657,31 +1269,31 @@ interface templates {
     subject: option<string>,
     text: option<string>
   }
-  post-templates-add-json: func(params: post-templates-add-json-params) -> result<string, string>;
+  post-templates-add-json: func(params: post-templates-add-json-params) -> result<template-detailed, string>;
 
   record post-templates-delete-json-params {
     key: option<string>,
     name: option<string>
   }
-  post-templates-delete-json: func(params: post-templates-delete-json-params) -> result<string, string>;
+  post-templates-delete-json: func(params: post-templates-delete-json-params) -> result<template-detailed, string>;
 
   record post-templates-info-json-params {
     key: option<string>,
     name: option<string>
   }
-  post-templates-info-json: func(params: post-templates-info-json-params) -> result<string, string>;
+  post-templates-info-json: func(params: post-templates-info-json-params) -> result<template-detailed, string>;
 
   record post-templates-list-json-params {
     key: option<string>,
     label: option<string>
   }
-  post-templates-list-json: func(params: post-templates-list-json-params) -> result<string, string>;
+  post-templates-list-json: func(params: post-templates-list-json-params) -> result<list-response, string>;
 
   record post-templates-publish-json-params {
     key: option<string>,
     name: option<string>
   }
-  post-templates-publish-json: func(params: post-templates-publish-json-params) -> result<string, string>;
+  post-templates-publish-json: func(params: post-templates-publish-json-params) -> result<template-detailed, string>;
 
   record post-templates-render-json-params {
     key: option<string>,
@@ -689,13 +1301,13 @@ interface templates {
     template-content: option<list<render-template-content-item>>,
     template-name: option<string>
   }
-  post-templates-render-json: func(params: post-templates-render-json-params) -> result<string, string>;
+  post-templates-render-json: func(params: post-templates-render-json-params) -> result<render-response, string>;
 
   record post-templates-time-series-json-params {
     key: option<string>,
     name: option<string>
   }
-  post-templates-time-series-json: func(params: post-templates-time-series-json-params) -> result<string, string>;
+  post-templates-time-series-json: func(params: post-templates-time-series-json-params) -> result<time-series, string>;
 
   record post-templates-update-json-params {
     code: option<string>,
@@ -708,52 +1320,187 @@ interface templates {
     subject: option<string>,
     text: option<string>
   }
-  post-templates-update-json: func(params: post-templates-update-json-params) -> result<string, string>;
+  post-templates-update-json: func(params: post-templates-update-json-params) -> result<template-detailed, string>;
 
 }
 
 interface urls {
+  record tracking-domain-status {
+    cname: option<tracking-domain-status-cname>,
+    created-at: option<string>,
+    domain: option<string>,
+    last-tested-at: option<string>,
+    valid-tracking: option<bool>
+  }
+
+  record tracking-domain-status-cname {
+    error: option<string>,
+    valid: option<bool>,
+    valid-after: option<string>
+  }
+
+  record url-infos {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  record time-series-response {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  record tracking-domains-response {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
   record post-urls-add-tracking-domain-json-params {
     domain: option<string>,
     key: option<string>
   }
-  post-urls-add-tracking-domain-json: func(params: post-urls-add-tracking-domain-json-params) -> result<string, string>;
+  post-urls-add-tracking-domain-json: func(params: post-urls-add-tracking-domain-json-params) -> result<tracking-domain-status, string>;
 
   record post-urls-check-tracking-domain-json-params {
     domain: option<string>,
     key: option<string>
   }
-  post-urls-check-tracking-domain-json: func(params: post-urls-check-tracking-domain-json-params) -> result<string, string>;
+  post-urls-check-tracking-domain-json: func(params: post-urls-check-tracking-domain-json-params) -> result<tracking-domain-status, string>;
 
   record post-urls-list-json-params {
     key: option<string>
   }
-  post-urls-list-json: func(params: post-urls-list-json-params) -> result<string, string>;
+  post-urls-list-json: func(params: post-urls-list-json-params) -> result<url-infos, string>;
 
   record post-urls-search-json-params {
     key: option<string>,
     q: option<string>
   }
-  post-urls-search-json: func(params: post-urls-search-json-params) -> result<string, string>;
+  post-urls-search-json: func(params: post-urls-search-json-params) -> result<url-infos, string>;
 
   record post-urls-time-series-json-params {
     key: option<string>,
     url: option<string>
   }
-  post-urls-time-series-json: func(params: post-urls-time-series-json-params) -> result<string, string>;
+  post-urls-time-series-json: func(params: post-urls-time-series-json-params) -> result<time-series-response, string>;
 
   record post-urls-tracking-domains-json-params {
     key: option<string>
   }
-  post-urls-tracking-domains-json: func(params: post-urls-tracking-domains-json-params) -> result<string, string>;
+  post-urls-tracking-domains-json: func(params: post-urls-tracking-domains-json-params) -> result<tracking-domains-response, string>;
 
 }
 
 interface users {
+  record info-response {
+    backlog: option<s32>,
+    created-at: option<string>,
+    hourly-quota: option<s32>,
+    public-id: option<string>,
+    reputation: option<s32>,
+    stats: option<info-response-stats>,
+    username: option<string>
+  }
+
+  record info-response-stats {
+    all-time: option<info-response-stats-all-time>,
+    last-v30-days: option<info-response-stats-last-v30-days>,
+    last-v60-days: option<info-response-stats-last-v60-days>,
+    last-v7-days: option<info-response-stats-last-v7-days>,
+    last-v90-days: option<info-response-stats-last-v90-days>,
+    today: option<info-response-stats-today>
+  }
+
+  record info-response-stats-all-time {
+    clicks: option<s32>,
+    complaints: option<s32>,
+    hard-bounces: option<s32>,
+    opens: option<s32>,
+    rejects: option<s32>,
+    sent: option<s32>,
+    soft-bounces: option<s32>,
+    unique-clicks: option<s32>,
+    unique-opens: option<s32>,
+    unsubs: option<s32>
+  }
+
+  record info-response-stats-last-v30-days {
+    clicks: option<s32>,
+    complaints: option<s32>,
+    hard-bounces: option<s32>,
+    opens: option<s32>,
+    rejects: option<s32>,
+    sent: option<s32>,
+    soft-bounces: option<s32>,
+    unique-clicks: option<s32>,
+    unique-opens: option<s32>,
+    unsubs: option<s32>
+  }
+
+  record info-response-stats-last-v60-days {
+    clicks: option<s32>,
+    complaints: option<s32>,
+    hard-bounces: option<s32>,
+    opens: option<s32>,
+    rejects: option<s32>,
+    sent: option<s32>,
+    soft-bounces: option<s32>,
+    unique-clicks: option<s32>,
+    unique-opens: option<s32>,
+    unsubs: option<s32>
+  }
+
+  record info-response-stats-last-v7-days {
+    clicks: option<s32>,
+    complaints: option<s32>,
+    hard-bounces: option<s32>,
+    opens: option<s32>,
+    rejects: option<s32>,
+    sent: option<s32>,
+    soft-bounces: option<s32>,
+    unique-clicks: option<s32>,
+    unique-opens: option<s32>,
+    unsubs: option<s32>
+  }
+
+  record info-response-stats-last-v90-days {
+    clicks: option<s32>,
+    complaints: option<s32>,
+    hard-bounces: option<s32>,
+    opens: option<s32>,
+    rejects: option<s32>,
+    sent: option<s32>,
+    soft-bounces: option<s32>,
+    unique-clicks: option<s32>,
+    unique-opens: option<s32>,
+    unsubs: option<s32>
+  }
+
+  record info-response-stats-today {
+    clicks: option<s32>,
+    complaints: option<s32>,
+    hard-bounces: option<s32>,
+    opens: option<s32>,
+    rejects: option<s32>,
+    sent: option<s32>,
+    soft-bounces: option<s32>,
+    unique-clicks: option<s32>,
+    unique-opens: option<s32>,
+    unsubs: option<s32>
+  }
+
+  record ping2-response {
+    ping: option<string>
+  }
+
+  record senders {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
   record post-users-info-json-params {
     key: option<string>
   }
-  post-users-info-json: func(params: post-users-info-json-params) -> result<string, string>;
+  post-users-info-json: func(params: post-users-info-json-params) -> result<info-response, string>;
 
   record post-users-ping-json-params {
     key: option<string>
@@ -763,40 +1510,58 @@ interface users {
   record post-users-ping2-json-params {
     key: option<string>
   }
-  post-users-ping2-json: func(params: post-users-ping2-json-params) -> result<string, string>;
+  post-users-ping2-json: func(params: post-users-ping2-json-params) -> result<ping2-response, string>;
 
   record post-users-senders-json-params {
     key: option<string>
   }
-  post-users-senders-json: func(params: post-users-senders-json-params) -> result<string, string>;
+  post-users-senders-json: func(params: post-users-senders-json-params) -> result<senders, string>;
 
 }
 
 interface webhooks {
+  record webhook {
+    auth-key: option<string>,
+    batches-sent: option<s32>,
+    created-at: option<string>,
+    description: option<string>,
+    events: option<list<string>>,
+    events-sent: option<s32>,
+    id: option<s32>,
+    last-error: option<string>,
+    last-sent-at: option<string>,
+    url: option<string>
+  }
+
+  record list-response {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
   record post-webhooks-add-json-params {
     description: option<string>,
     events: option<list<string>>,
     key: option<string>,
     url: option<string>
   }
-  post-webhooks-add-json: func(params: post-webhooks-add-json-params) -> result<string, string>;
+  post-webhooks-add-json: func(params: post-webhooks-add-json-params) -> result<webhook, string>;
 
   record post-webhooks-delete-json-params {
     id: option<s32>,
     key: option<string>
   }
-  post-webhooks-delete-json: func(params: post-webhooks-delete-json-params) -> result<string, string>;
+  post-webhooks-delete-json: func(params: post-webhooks-delete-json-params) -> result<webhook, string>;
 
   record post-webhooks-info-json-params {
     id: option<s32>,
     key: option<string>
   }
-  post-webhooks-info-json: func(params: post-webhooks-info-json-params) -> result<string, string>;
+  post-webhooks-info-json: func(params: post-webhooks-info-json-params) -> result<webhook, string>;
 
   record post-webhooks-list-json-params {
     key: option<string>
   }
-  post-webhooks-list-json: func(params: post-webhooks-list-json-params) -> result<string, string>;
+  post-webhooks-list-json: func(params: post-webhooks-list-json-params) -> result<list-response, string>;
 
   record post-webhooks-update-json-params {
     description: option<string>,
@@ -805,28 +1570,43 @@ interface webhooks {
     key: option<string>,
     url: option<string>
   }
-  post-webhooks-update-json: func(params: post-webhooks-update-json-params) -> result<string, string>;
+  post-webhooks-update-json: func(params: post-webhooks-update-json-params) -> result<webhook, string>;
 
 }
 
 interface whitelists {
+  record add-response {
+    email: option<string>,
+    whether: option<bool>
+  }
+
+  record delete-response {
+    deleted: option<bool>,
+    email: option<string>
+  }
+
+  record list-response {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
   record post-whitelists-add-json-params {
     email: option<string>,
     key: option<string>
   }
-  post-whitelists-add-json: func(params: post-whitelists-add-json-params) -> result<string, string>;
+  post-whitelists-add-json: func(params: post-whitelists-add-json-params) -> result<add-response, string>;
 
   record post-whitelists-delete-json-params {
     email: option<string>,
     key: option<string>
   }
-  post-whitelists-delete-json: func(params: post-whitelists-delete-json-params) -> result<string, string>;
+  post-whitelists-delete-json: func(params: post-whitelists-delete-json-params) -> result<delete-response, string>;
 
   record post-whitelists-list-json-params {
     email: option<string>,
     key: option<string>
   }
-  post-whitelists-list-json: func(params: post-whitelists-list-json-params) -> result<string, string>;
+  post-whitelists-list-json: func(params: post-whitelists-list-json-params) -> result<list-response, string>;
 
 }
 /// The component world: imports the secrets host capability

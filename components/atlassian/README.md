@@ -20,8 +20,8 @@ triggered.
 
 | Setting | Value |
 | --- | --- |
-| Package | `autostamp:atlassian@0.3.0` |
-| Published version | `0.3.0+atlassian-1001.0.0-SNAPSHOT` |
+| Package | `autostamp:atlassian@0.5.0` |
+| Published version | `0.5.0+atlassian-1001.0.0-SNAPSHOT` |
 | Tag filter | all tags |
 | Operations generated | 499 |
 | Infer API-key credentials | enabled — not triggered |

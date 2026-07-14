@@ -6,18 +6,41 @@
 /// | Secret name | Applied to each request as |
 /// | --- | --- |
 /// | `api-key` | header `api-key` |
-package autostamp:dev@0.3.0;
+package autostamp:dev@0.5.0;
 
 interface users {
+  variant post-admin-users-create-error {
+    unauthorized(string),
+    unprocessable-entity(string),
+    other(string)
+  }
+
+  variant get-user-me-error {
+    unauthorized(string),
+    other(string)
+  }
+
+  variant suspend-user-error {
+    unauthorized(string),
+    not-found(string),
+    other(string)
+  }
+
+  variant unpublish-user-error {
+    unauthorized(string),
+    not-found(string),
+    other(string)
+  }
+
   /// Invite a User
   record post-admin-users-create-params {
     email: option<string>,
     name: option<string>
   }
-  post-admin-users-create: func(params: post-admin-users-create-params) -> result<string, string>;
+  post-admin-users-create: func(params: post-admin-users-create-params) -> result<string, post-admin-users-create-error>;
 
   /// The authenticated user
-  get-user-me: func() -> result<string, string>;
+  get-user-me: func() -> result<string, get-user-me-error>;
 
   /// A User
   record get-user-params {
@@ -30,14 +53,14 @@ interface users {
     /// The ID of the user to suspend.
     id: string
   }
-  suspend-user: func(params: suspend-user-params) -> result<string, string>;
+  suspend-user: func(params: suspend-user-params) -> result<string, suspend-user-error>;
 
   /// Unpublish a User's Articles and Comments
   record unpublish-user-params {
     /// The ID of the user to unpublish.
     id: string
   }
-  unpublish-user: func(params: unpublish-user-params) -> result<string, string>;
+  unpublish-user: func(params: unpublish-user-params) -> result<string, unpublish-user-error>;
 
 }
 
@@ -47,6 +70,70 @@ interface articles {
     fresh,
     rising,
     all,
+  }
+
+  /// Representation of an article or post returned in a list
+  record article-index {
+    canonical-url: string,
+    cover-image: string,
+    created-at: string,
+    crossposted-at: string,
+    description: string,
+    edited-at: string,
+    flare-tag: option<article-flare-tag>,
+    id: s32,
+    last-comment-at: string,
+    organization: option<shared-organization>,
+    path: string,
+    positive-reactions-count: s32,
+    public-reactions-count: s32,
+    published-at: string,
+    /// Crossposting or published date time
+    published-timestamp: string,
+    readable-publish-date: string,
+    /// Reading time, in minutes
+    reading-time-minutes: s32,
+    slug: string,
+    social-image: string,
+    tag-list: list<string>,
+    tags: string,
+    title: string,
+    type-of: string,
+    url: string,
+    user: shared-user
+  }
+
+  /// Flare tag of the article
+  record article-flare-tag {
+    /// Background color (hexadecimal)
+    bg-color-hex: option<string>,
+    name: option<string>,
+    /// Text color (hexadecimal)
+    text-color-hex: option<string>
+  }
+
+  /// The organization the resource belongs to
+  record shared-organization {
+    name: option<string>,
+    /// Profile image (640x640)
+    profile-image: option<string>,
+    /// Profile image (90x90)
+    profile-image-v90: option<string>,
+    slug: option<string>,
+    username: option<string>
+  }
+
+  /// The resource creator
+  record shared-user {
+    github-username: option<string>,
+    name: option<string>,
+    /// Profile image (640x640)
+    profile-image: option<string>,
+    /// Profile image (90x90)
+    profile-image-v90: option<string>,
+    twitter-username: option<string>,
+    username: option<string>,
+    website-url: option<string>
   }
 
   record article-article {
@@ -59,6 +146,55 @@ interface articles {
     series: option<string>,
     tags: option<string>,
     title: option<string>
+  }
+
+  variant create-article-error {
+    unauthorized(string),
+    unprocessable-entity(string),
+    other(string)
+  }
+
+  variant get-user-articles-error {
+    unauthorized(string),
+    other(string)
+  }
+
+  variant get-user-all-articles-error {
+    unauthorized(string),
+    other(string)
+  }
+
+  variant get-user-published-articles-error {
+    unauthorized(string),
+    other(string)
+  }
+
+  variant get-user-unpublished-articles-error {
+    unauthorized(string),
+    other(string)
+  }
+
+  variant get-article-by-id-error {
+    not-found(string),
+    other(string)
+  }
+
+  variant update-article-error {
+    unauthorized(string),
+    not-found(string),
+    unprocessable-entity(string),
+    other(string)
+  }
+
+  variant unpublish-article-error {
+    unauthorized(string),
+    not-found(string),
+    other(string)
+  }
+
+  variant get-article-by-path-error {
+    not-found(string),
+    other(string)
   }
 
   /// Published articles
@@ -89,13 +225,13 @@ interface articles {
     /// belonging to the requested collection, ordered by ascending publication date.
     collection-id: option<s32>
   }
-  get-articles: func(params: get-articles-params) -> result<string, string>;
+  get-articles: func(params: get-articles-params) -> result<list<article-index>, string>;
 
   /// Publish article
   record create-article-params {
     article: option<article-article>
   }
-  create-article: func(params: create-article-params) -> result<string, string>;
+  create-article: func(params: create-article-params) -> result<string, create-article-error>;
 
   /// Published articles sorted by published date
   record get-latest-articles-params {
@@ -104,7 +240,7 @@ interface articles {
     /// Page size (the number of items to return per page). The default maximum value can be overridden by "API_PER_PAGE_MAX" environment variable.
     per-page: option<s32>
   }
-  get-latest-articles: func(params: get-latest-articles-params) -> result<string, string>;
+  get-latest-articles: func(params: get-latest-articles-params) -> result<list<article-index>, string>;
 
   /// User's articles
   record get-user-articles-params {
@@ -113,7 +249,7 @@ interface articles {
     /// Page size (the number of items to return per page). The default maximum value can be overridden by "API_PER_PAGE_MAX" environment variable.
     per-page: option<s32>
   }
-  get-user-articles: func(params: get-user-articles-params) -> result<string, string>;
+  get-user-articles: func(params: get-user-articles-params) -> result<list<article-index>, get-user-articles-error>;
 
   /// User's all articles
   record get-user-all-articles-params {
@@ -122,7 +258,7 @@ interface articles {
     /// Page size (the number of items to return per page). The default maximum value can be overridden by "API_PER_PAGE_MAX" environment variable.
     per-page: option<s32>
   }
-  get-user-all-articles: func(params: get-user-all-articles-params) -> result<string, string>;
+  get-user-all-articles: func(params: get-user-all-articles-params) -> result<list<article-index>, get-user-all-articles-error>;
 
   /// User's published articles
   record get-user-published-articles-params {
@@ -131,7 +267,7 @@ interface articles {
     /// Page size (the number of items to return per page). The default maximum value can be overridden by "API_PER_PAGE_MAX" environment variable.
     per-page: option<s32>
   }
-  get-user-published-articles: func(params: get-user-published-articles-params) -> result<string, string>;
+  get-user-published-articles: func(params: get-user-published-articles-params) -> result<list<article-index>, get-user-published-articles-error>;
 
   /// User's unpublished articles
   record get-user-unpublished-articles-params {
@@ -140,13 +276,13 @@ interface articles {
     /// Page size (the number of items to return per page). The default maximum value can be overridden by "API_PER_PAGE_MAX" environment variable.
     per-page: option<s32>
   }
-  get-user-unpublished-articles: func(params: get-user-unpublished-articles-params) -> result<string, string>;
+  get-user-unpublished-articles: func(params: get-user-unpublished-articles-params) -> result<list<article-index>, get-user-unpublished-articles-error>;
 
   /// Published article by id
   record get-article-by-id-params {
     id: string
   }
-  get-article-by-id: func(params: get-article-by-id-params) -> result<string, string>;
+  get-article-by-id: func(params: get-article-by-id-params) -> result<string, get-article-by-id-error>;
 
   /// Update an article by id
   record update-article-params {
@@ -154,7 +290,7 @@ interface articles {
     id: string,
     article: option<article-article>
   }
-  update-article: func(params: update-article-params) -> result<string, string>;
+  update-article: func(params: update-article-params) -> result<string, update-article-error>;
 
   /// Unpublish an article
   record unpublish-article-params {
@@ -163,18 +299,37 @@ interface articles {
     /// Content for the note that's created along with unpublishing
     note: option<string>
   }
-  unpublish-article: func(params: unpublish-article-params) -> result<string, string>;
+  unpublish-article: func(params: unpublish-article-params) -> result<string, unpublish-article-error>;
 
   /// Published article by path
   record get-article-by-path-params {
     username: string,
     slug: string
   }
-  get-article-by-path: func(params: get-article-by-path-params) -> result<string, string>;
+  get-article-by-path: func(params: get-article-by-path-params) -> result<string, get-article-by-path-error>;
 
 }
 
 interface comments {
+  /// A Comment on an Article or Podcast Episode
+  record comment {
+    created-at: option<string>,
+    id-code: option<string>,
+    /// Podcast image url
+    image-url: option<string>,
+    type-of: option<string>
+  }
+
+  variant get-comments-by-article-id-error {
+    not-found(string),
+    other(string)
+  }
+
+  variant get-comment-by-id-error {
+    not-found(string),
+    other(string)
+  }
+
   /// Comments
   record get-comments-by-article-id-params {
     /// Article identifier.
@@ -182,33 +337,114 @@ interface comments {
     /// Podcast Episode identifier.
     p-id: option<string>
   }
-  get-comments-by-article-id: func(params: get-comments-by-article-id-params) -> result<string, string>;
+  get-comments-by-article-id: func(params: get-comments-by-article-id-params) -> result<list<comment>, get-comments-by-article-id-error>;
 
   /// Comment by id
   record get-comment-by-id-params {
     /// Comment identifier.
     id: string
   }
-  get-comment-by-id: func(params: get-comment-by-id-params) -> result<string, string>;
+  get-comment-by-id: func(params: get-comment-by-id-params) -> result<string, get-comment-by-id-error>;
 
 }
 
 interface display-ads {
+  enum display-ad-display-to-enum {
+    all,
+    logged-in,
+    logged-out,
+  }
+
+  enum display-ad-placement-area-enum {
+    sidebar-left,
+    sidebar-left-v2,
+    sidebar-right,
+    feed-first,
+    feed-second,
+    feed-third,
+    post-sidebar,
+    post-comments,
+  }
+
+  enum display-ad-type-of-enum {
+    in-house,
+    community,
+    external,
+  }
+
+  /// A Display Ad, aka Billboard, aka Widget
+  record display-ad {
+    /// Ad must be both published and approved to be in rotation
+    approved: option<bool>,
+    /// Articles this ad should *not* appear on (blank means no articles are disallowed, and this ad can appear next to any/all articles). Comma-separated list of integer Article IDs
+    article-exclude-ids: option<string>,
+    /// The text (in markdown) of the ad (required)
+    body-markdown: string,
+    /// Identifies the user who created the ad.
+    creator-id: option<s32>,
+    /// Potentially limits visitors to whom the ad is visible
+    display-to: option<display-ad-display-to-enum>,
+    /// The ID of the Display Ad
+    id: option<s32>,
+    /// For internal use, helps distinguish ads from one another
+    name: string,
+    /// Identifies the organization to which the ad belongs
+    organization-id: option<s32>,
+    /// Identifies which area of site layout the ad can appear in
+    placement-area: display-ad-placement-area-enum,
+    /// Ad must be both published and approved to be in rotation
+    published: option<bool>,
+    /// Tags on which this ad can be displayed (blank is all/any tags)
+    tag-list: option<string>,
+    /// Types of the billboards:
+    /// in_house (created by admins),
+    type-of: option<display-ad-type-of-enum>
+  }
+
+  variant get-api-display-ads-error {
+    unauthorized(string),
+    other(string)
+  }
+
+  variant post-api-display-ads-error {
+    unauthorized(string),
+    unprocessable-entity(string),
+    other(string)
+  }
+
+  variant get-api-display-ads-id-error {
+    unauthorized(string),
+    not-found(string),
+    other(string)
+  }
+
+  variant put-api-display-ads-id-error {
+    unauthorized(string),
+    not-found(string),
+    other(string)
+  }
+
+  variant put-api-display-ads-id-unpublish-error {
+    unauthorized(string),
+    not-found(string),
+    other(string)
+  }
+
   /// display ads
-  get-api-display-ads: func() -> result<string, string>;
+  get-api-display-ads: func() -> result<list<display-ad>, get-api-display-ads-error>;
 
   /// display ads
   record post-api-display-ads-params {
     body: option<string>
   }
-  post-api-display-ads: func(params: post-api-display-ads-params) -> result<string, string>;
+  post-api-display-ads: func(params: post-api-display-ads-params) -> result<string, post-api-display-ads-error>;
 
   /// display ad
   record get-api-display-ads-id-params {
     /// The ID of the display ad.
     id: string
   }
-  get-api-display-ads-id: func(params: get-api-display-ads-id-params) -> result<string, string>;
+  get-api-display-ads-id: func(params: get-api-display-ads-id-params) -> result<string, get-api-display-ads-id-error>;
 
   /// display ads
   record put-api-display-ads-id-params {
@@ -216,18 +452,38 @@ interface display-ads {
     id: string,
     body: option<string>
   }
-  put-api-display-ads-id: func(params: put-api-display-ads-id-params) -> result<string, string>;
+  put-api-display-ads-id: func(params: put-api-display-ads-id-params) -> result<string, put-api-display-ads-id-error>;
 
   /// unpublish
   record put-api-display-ads-id-unpublish-params {
     /// The ID of the display ad to unpublish.
     id: string
   }
-  put-api-display-ads-id-unpublish: func(params: put-api-display-ads-id-unpublish-params) -> result<string, string>;
+  put-api-display-ads-id-unpublish: func(params: put-api-display-ads-id-unpublish-params) -> result<string, put-api-display-ads-id-unpublish-error>;
 
 }
 
 interface followers {
+  /// A follower
+  record get-followers-response-item {
+    id: option<s32>,
+    /// The follower's name
+    name: option<string>,
+    /// A path to the follower's profile
+    path: option<string>,
+    /// Profile image (640x640)
+    profile-image: option<string>,
+    /// user_follower by default
+    type-of: option<string>,
+    /// The follower's user id
+    user-id: option<s32>
+  }
+
+  variant get-followers-error {
+    unauthorized(string),
+    other(string)
+  }
+
   /// Followers
   record get-followers-params {
     /// Pagination page
@@ -238,22 +494,129 @@ interface followers {
     ///                                 relationship. To sort by newest followers first (descending order) specify
     sort: option<string>
   }
-  get-followers: func(params: get-followers-params) -> result<string, string>;
+  get-followers: func(params: get-followers-params) -> result<list<get-followers-response-item>, get-followers-error>;
 
 }
 
 interface followed-tags {
+  /// Representation of a followed tag
+  record followed-tag {
+    /// Tag id
+    id: s64,
+    name: string,
+    points: f64
+  }
+
+  variant get-followed-tags-error {
+    unauthorized(string),
+    other(string)
+  }
+
   /// Followed Tags
-  get-followed-tags: func() -> result<string, string>;
+  get-followed-tags: func() -> result<list<followed-tag>, get-followed-tags-error>;
 
 }
 
 interface organizations {
+  /// Representation of an article or post returned in a list
+  record article-index {
+    canonical-url: string,
+    cover-image: string,
+    created-at: string,
+    crossposted-at: string,
+    description: string,
+    edited-at: string,
+    flare-tag: option<article-flare-tag>,
+    id: s32,
+    last-comment-at: string,
+    organization: option<shared-organization>,
+    path: string,
+    positive-reactions-count: s32,
+    public-reactions-count: s32,
+    published-at: string,
+    /// Crossposting or published date time
+    published-timestamp: string,
+    readable-publish-date: string,
+    /// Reading time, in minutes
+    reading-time-minutes: s32,
+    slug: string,
+    social-image: string,
+    tag-list: list<string>,
+    tags: string,
+    title: string,
+    type-of: string,
+    url: string,
+    user: shared-user
+  }
+
+  /// Flare tag of the article
+  record article-flare-tag {
+    /// Background color (hexadecimal)
+    bg-color-hex: option<string>,
+    name: option<string>,
+    /// Text color (hexadecimal)
+    text-color-hex: option<string>
+  }
+
+  /// The organization the resource belongs to
+  record shared-organization {
+    name: option<string>,
+    /// Profile image (640x640)
+    profile-image: option<string>,
+    /// Profile image (90x90)
+    profile-image-v90: option<string>,
+    slug: option<string>,
+    username: option<string>
+  }
+
+  /// The resource creator
+  record shared-user {
+    github-username: option<string>,
+    name: option<string>,
+    /// Profile image (640x640)
+    profile-image: option<string>,
+    /// Profile image (90x90)
+    profile-image-v90: option<string>,
+    twitter-username: option<string>,
+    username: option<string>,
+    website-url: option<string>
+  }
+
+  /// The representation of a user
+  record user {
+    github-username: option<string>,
+    id: option<s64>,
+    joined-at: option<string>,
+    location: option<string>,
+    name: option<string>,
+    profile-image: option<string>,
+    summary: option<string>,
+    twitter-username: option<string>,
+    type-of: option<string>,
+    username: option<string>,
+    website-url: option<string>
+  }
+
+  variant get-organization-error {
+    not-found(string),
+    other(string)
+  }
+
+  variant get-org-articles-error {
+    not-found(string),
+    other(string)
+  }
+
+  variant get-org-users-error {
+    not-found(string),
+    other(string)
+  }
+
   /// An organization
   record get-organization-params {
     username: string
   }
-  get-organization: func(params: get-organization-params) -> result<string, string>;
+  get-organization: func(params: get-organization-params) -> result<string, get-organization-error>;
 
   /// Organization's Articles
   record get-org-articles-params {
@@ -263,7 +626,7 @@ interface organizations {
     /// Page size (the number of items to return per page). The default maximum value can be overridden by "API_PER_PAGE_MAX" environment variable.
     per-page: option<s32>
   }
-  get-org-articles: func(params: get-org-articles-params) -> result<string, string>;
+  get-org-articles: func(params: get-org-articles-params) -> result<list<article-index>, get-org-articles-error>;
 
   /// Organization's users
   record get-org-users-params {
@@ -273,16 +636,35 @@ interface organizations {
     /// Page size (the number of items to return per page). The default maximum value can be overridden by "API_PER_PAGE_MAX" environment variable.
     per-page: option<s32>
   }
-  get-org-users: func(params: get-org-users-params) -> result<string, string>;
+  get-org-users: func(params: get-org-users-params) -> result<list<user>, get-org-users-error>;
 
 }
 
 interface pages {
-  enum post-api-pages-body-template-enum {
+  enum page-template-enum {
     contained,
     full-within-layout,
     nav-bar-included,
     json,
+  }
+
+  /// Representation of a page object
+  record page {
+    /// For JSON pages, the JSON body
+    body-json: option<string>,
+    /// The text (in markdown) of the ad (required)
+    body-markdown: option<string>,
+    /// For internal use, helps similar pages from one another
+    description: string,
+    /// If true, the page is available at '/{slug}' instead of '/page/{slug}', use with caution
+    is-top-level-path: option<bool>,
+    /// Used to link to this page in URLs, must be unique and URL-safe
+    slug: string,
+    social-image: option<page-social-image>,
+    /// Controls what kind of layout the page is rendered in
+    template: page-template-enum,
+    /// Title of the page
+    title: string
   }
 
   record page-social-image {
@@ -290,8 +672,26 @@ interface pages {
     data: option<string>
   }
 
+  variant post-api-pages-error {
+    unauthorized(string),
+    unprocessable-entity(string),
+    other(string)
+  }
+
+  variant put-api-pages-id-error {
+    unauthorized(string),
+    unprocessable-entity(string),
+    other(string)
+  }
+
+  variant delete-api-pages-id-error {
+    unauthorized(string),
+    unprocessable-entity(string),
+    other(string)
+  }
+
   /// show details for all pages
-  get-api-pages: func() -> result<string, string>;
+  get-api-pages: func() -> result<list<page>, string>;
 
   /// pages
   record post-api-pages-params {
@@ -306,18 +706,18 @@ interface pages {
     /// Used to link to this page in URLs, must be unique and URL-safe
     slug: option<string>,
     /// Controls what kind of layout the page is rendered in
-    template: option<post-api-pages-body-template-enum>,
+    template: option<page-template-enum>,
     /// Title of the page
     title: option<string>
   }
-  post-api-pages: func(params: post-api-pages-params) -> result<string, string>;
+  post-api-pages: func(params: post-api-pages-params) -> result<string, post-api-pages-error>;
 
   /// show details for a page
   record get-api-pages-id-params {
     /// The ID of the page.
     id: string
   }
-  get-api-pages-id: func(params: get-api-pages-id-params) -> result<string, string>;
+  get-api-pages-id: func(params: get-api-pages-id-params) -> result<page, string>;
 
   /// update details for a page
   record put-api-pages-id-params {
@@ -335,22 +735,47 @@ interface pages {
     slug: string,
     social-image: option<page-social-image>,
     /// Controls what kind of layout the page is rendered in
-    template: post-api-pages-body-template-enum,
+    template: page-template-enum,
     /// Title of the page
     title: string
   }
-  put-api-pages-id: func(params: put-api-pages-id-params) -> result<string, string>;
+  put-api-pages-id: func(params: put-api-pages-id-params) -> result<page, put-api-pages-id-error>;
 
   /// remove a page
   record delete-api-pages-id-params {
     /// The ID of the page.
     id: string
   }
-  delete-api-pages-id: func(params: delete-api-pages-id-params) -> result<string, string>;
+  delete-api-pages-id: func(params: delete-api-pages-id-params) -> result<page, delete-api-pages-id-error>;
 
 }
 
 interface podcast-episodes {
+  /// Representation of a podcast episode returned in a list
+  record podcast-episode-index {
+    class-name: string,
+    id: s32,
+    /// Podcast episode image url or podcast image url
+    image-url: string,
+    path: string,
+    podcast: shared-podcast,
+    title: string,
+    type-of: string
+  }
+
+  /// The podcast that the resource belongs to
+  record shared-podcast {
+    /// Podcast image url
+    image-url: option<string>,
+    slug: option<string>,
+    title: option<string>
+  }
+
+  variant get-podcast-episodes-error {
+    not-found(string),
+    other(string)
+  }
+
   /// Podcast Episodes
   record get-podcast-episodes-params {
     /// Pagination page
@@ -360,17 +785,22 @@ interface podcast-episodes {
     /// Using this parameter will retrieve episodes belonging to a specific podcast.
     username: option<string>
   }
-  get-podcast-episodes: func(params: get-podcast-episodes-params) -> result<string, string>;
+  get-podcast-episodes: func(params: get-podcast-episodes-params) -> result<list<podcast-episode-index>, get-podcast-episodes-error>;
 
 }
 
 interface profile-images {
+  variant get-profile-image-error {
+    not-found(string),
+    other(string)
+  }
+
   /// A Users or organizations profile image
   record get-profile-image-params {
     /// The parameter is the username of the user or the username of the organization.
     username: string
   }
-  get-profile-image: func(params: get-profile-image-params) -> result<string, string>;
+  get-profile-image: func(params: get-profile-image-params) -> result<string, get-profile-image-error>;
 
 }
 
@@ -389,13 +819,23 @@ interface reactions {
     user,
   }
 
+  variant post-api-reactions-error {
+    unauthorized(string),
+    other(string)
+  }
+
+  variant post-api-reactions-toggle-error {
+    unauthorized(string),
+    other(string)
+  }
+
   /// create reaction
   record post-api-reactions-params {
     category: post-api-reactions-category-enum,
     reactable-id: s32,
     reactable-type: post-api-reactions-reactable-type-enum
   }
-  post-api-reactions: func(params: post-api-reactions-params) -> result<string, string>;
+  post-api-reactions: func(params: post-api-reactions-params) -> result<string, post-api-reactions-error>;
 
   /// toggle reaction
   record post-api-reactions-toggle-params {
@@ -403,11 +843,80 @@ interface reactions {
     reactable-id: s32,
     reactable-type: post-api-reactions-reactable-type-enum
   }
-  post-api-reactions-toggle: func(params: post-api-reactions-toggle-params) -> result<string, string>;
+  post-api-reactions-toggle: func(params: post-api-reactions-toggle-params) -> result<string, post-api-reactions-toggle-error>;
 
 }
 
 interface readinglist {
+  /// Representation of an article or post returned in a list
+  record article-index {
+    canonical-url: string,
+    cover-image: string,
+    created-at: string,
+    crossposted-at: string,
+    description: string,
+    edited-at: string,
+    flare-tag: option<article-flare-tag>,
+    id: s32,
+    last-comment-at: string,
+    organization: option<shared-organization>,
+    path: string,
+    positive-reactions-count: s32,
+    public-reactions-count: s32,
+    published-at: string,
+    /// Crossposting or published date time
+    published-timestamp: string,
+    readable-publish-date: string,
+    /// Reading time, in minutes
+    reading-time-minutes: s32,
+    slug: string,
+    social-image: string,
+    tag-list: list<string>,
+    tags: string,
+    title: string,
+    type-of: string,
+    url: string,
+    user: shared-user
+  }
+
+  /// Flare tag of the article
+  record article-flare-tag {
+    /// Background color (hexadecimal)
+    bg-color-hex: option<string>,
+    name: option<string>,
+    /// Text color (hexadecimal)
+    text-color-hex: option<string>
+  }
+
+  /// The organization the resource belongs to
+  record shared-organization {
+    name: option<string>,
+    /// Profile image (640x640)
+    profile-image: option<string>,
+    /// Profile image (90x90)
+    profile-image-v90: option<string>,
+    slug: option<string>,
+    username: option<string>
+  }
+
+  /// The resource creator
+  record shared-user {
+    github-username: option<string>,
+    name: option<string>,
+    /// Profile image (640x640)
+    profile-image: option<string>,
+    /// Profile image (90x90)
+    profile-image-v90: option<string>,
+    twitter-username: option<string>,
+    username: option<string>,
+    website-url: option<string>
+  }
+
+  variant get-readinglist-error {
+    unauthorized(string),
+    other(string)
+  }
+
   /// Readinglist
   record get-readinglist-params {
     /// Pagination page
@@ -415,11 +924,20 @@ interface readinglist {
     /// Page size (the number of items to return per page). The default maximum value can be overridden by "API_PER_PAGE_MAX" environment variable.
     per-page: option<s32>
   }
-  get-readinglist: func(params: get-readinglist-params) -> result<string, string>;
+  get-readinglist: func(params: get-readinglist-params) -> result<list<article-index>, get-readinglist-error>;
 
 }
 
 interface tags {
+  /// Representation of a tag
+  record tag {
+    bg-color-hex: option<string>,
+    /// Tag id
+    id: option<s64>,
+    name: option<string>,
+    text-color-hex: option<string>
+  }
+
   /// Tags
   record get-tags-params {
     /// Pagination page
@@ -427,11 +945,30 @@ interface tags {
     /// Page size (the number of items to return per page). The default maximum value can be overridden by "API_PER_PAGE_MAX" environment variable.
     per-page: option<s32>
   }
-  get-tags: func(params: get-tags-params) -> result<string, string>;
+  get-tags: func(params: get-tags-params) -> result<list<tag>, string>;
 
 }
 
 interface videos {
+  /// Representation of an Article with video
+  record video-article {
+    cloudinary-video-url: option<string>,
+    id: option<s64>,
+    path: option<string>,
+    title: option<string>,
+    type-of: option<string>,
+    /// Author of the article
+    user: option<video-article-user>,
+    user-id: option<s64>,
+    video-duration-in-minutes: option<string>,
+    video-source-url: option<string>
+  }
+
+  /// Author of the article
+  record video-article-user {
+    name: option<string>
+  }
+
   /// Articles with a video
   record videos-params {
     /// Pagination page
@@ -439,7 +976,7 @@ interface videos {
     /// Page size (the number of items to return per page). The default maximum value can be overridden by "API_PER_PAGE_MAX" environment variable.
     per-page: option<s32>
   }
-  videos: func(params: videos-params) -> result<string, string>;
+  videos: func(params: videos-params) -> result<list<video-article>, string>;
 
 }
 /// The component world: imports the secrets host capability

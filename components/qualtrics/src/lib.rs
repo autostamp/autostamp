@@ -44,10 +44,15 @@ pub(crate) enum FieldLocation {
     Body,
 }
 
-/// A single operation parameter: the snake-case key it carries in the params JSON and where
-/// it belongs in the request.
+/// A single operation parameter. `snake` keys the field in the internal params JSON (and, for a
+/// path field, matches the `{snake}` placeholder in the path template); `wire` is the verbatim name
+/// the field takes on the HTTP wire (query key, header name, or body property). The two differ
+/// whenever the source name isn't already snake_case (e.g. `dryRun` → snake `dry_run`, wire
+/// `dryRun`), and let distinct inputs that share a snake key (`DateCreated`, `DateCreated<`) still
+/// travel under their true names.
 pub(crate) struct FieldSpec {
     pub(crate) snake: &'static str,
+    pub(crate) wire: &'static str,
     pub(crate) location: FieldLocation,
 }
 
@@ -71,6 +76,16 @@ pub(crate) struct AuthApply {
     pub(crate) kind: AuthKind,
 }
 
+/// The failure modes of [`dispatch`], kept structured so each generated operation can map them
+/// onto its own typed error: an `Http` failure carries the response status and body (routed to
+/// the matching error-variant case), while a `Transport` failure carries a message for the
+/// catch-all case (a secret lookup, connection, or decode failure that never produced an HTTP
+/// status).
+pub(crate) enum DispatchError {
+    Http { status: u16, body: String },
+    Transport(String),
+}
+
 /// A single API operation: HTTP method, path template (with `{snake}` placeholders), the
 /// parameter fields, and the security schemes to apply.
 pub(crate) struct OpSpec {
@@ -81,8 +96,9 @@ pub(crate) struct OpSpec {
 }
 
 /// Execute `op` with the supplied `params` (a JSON object keyed by snake-case field names)
-/// and return the response body as a string, or an error message.
-pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, String> {
+/// and return the raw 2xx response body, or a structured [`DispatchError`] the caller maps
+/// onto the operation's typed error.
+pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, DispatchError> {
     let obj = match &params {
         Value::Object(map) => Some(map),
         _ => None,
@@ -105,10 +121,10 @@ pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, String> {
                 let placeholder = format!("{{{}}}", field.snake);
                 path = path.replace(&placeholder, &percent_encode(&scalar(value)));
             }
-            FieldLocation::Query => query.push((field.snake.to_string(), scalar(value))),
-            FieldLocation::Header => headers.push((field.snake.to_string(), scalar(value))),
+            FieldLocation::Query => query.push((field.wire.to_string(), scalar(value))),
+            FieldLocation::Header => headers.push((field.wire.to_string(), scalar(value))),
             FieldLocation::Body => {
-                body.insert(field.snake.to_string(), value.clone());
+                body.insert(field.wire.to_string(), value.clone());
             }
         }
     }
@@ -116,7 +132,7 @@ pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, String> {
     // Apply each resolved security scheme, sourcing its value from wasmcloud:secrets.
     let mut cookies: Vec<String> = Vec::new();
     for apply in op.auth {
-        let secret = fetch_secret(apply.secret_key)?;
+        let secret = fetch_secret(apply.secret_key).map_err(DispatchError::Transport)?;
         match &apply.kind {
             AuthKind::Bearer => headers.push(("authorization".into(), format!("Bearer {secret}"))),
             AuthKind::Basic => {
@@ -177,17 +193,18 @@ fn fetch_secret(key: &str) -> Result<String, String> {
 }
 
 /// Build and send the outgoing request with `wstd`, returning the response body on a 2xx
-/// status. The generated guest exports are synchronous, so the async `wstd` client is driven
-/// to completion on a local reactor via `wstd::runtime::block_on`.
+/// status and a structured [`DispatchError`] otherwise. The generated guest exports are
+/// synchronous, so the async `wstd` client is driven to completion on a local reactor via
+/// `wstd::runtime::block_on`.
 fn perform(
     method: &str,
     path_with_query: &str,
     headers: &[(String, String)],
     body: &[u8],
-) -> Result<String, String> {
+) -> Result<String, DispatchError> {
     let url = join_url(crate::BASE_URL, path_with_query);
     let method = Method::from_bytes(method.as_bytes())
-        .map_err(|err| format!("invalid HTTP method `{method}`: {err}"))?;
+        .map_err(|err| DispatchError::Transport(format!("invalid HTTP method `{method}`: {err}")))?;
 
     let mut builder = Request::builder().method(method).uri(url);
     for (name, value) in headers {
@@ -199,27 +216,29 @@ fn perform(
         } else {
             Body::from(body.to_vec())
         })
-        .map_err(|err| format!("failed to build request: {err}"))?;
+        .map_err(|err| DispatchError::Transport(format!("failed to build request: {err}")))?;
 
     wstd::runtime::block_on(async move {
         let client = Client::new();
         let response = client
             .send(request)
             .await
-            .map_err(|err| format!("request failed: {err:#}"))?;
+            .map_err(|err| DispatchError::Transport(format!("request failed: {err:#}")))?;
 
         let status = response.status().as_u16();
         let mut response_body = response.into_body();
-        let bytes = response_body
-            .contents()
-            .await
-            .map_err(|err| format!("failed to read response body: {err:#}"))?;
+        let bytes = response_body.contents().await.map_err(|err| {
+            DispatchError::Transport(format!("failed to read response body: {err:#}"))
+        })?;
         let body_text = String::from_utf8_lossy(bytes).into_owned();
 
         if (200..300).contains(&status) {
             Ok(body_text)
         } else {
-            Err(format!("HTTP {status}: {body_text}"))
+            Err(DispatchError::Http {
+                status,
+                body: body_text,
+            })
         }
     })
 }
@@ -279,214 +298,9 @@ fn base64(input: &[u8]) -> String {
 }
 }
 
-use crate::runtime::{dispatch, AuthApply, AuthKind, FieldLocation, FieldSpec, OpSpec};
-use serde_json::{Map, Value};
-
-use crate::exports::autostamp::qualtrics::directories as iface_directories;
-
-const OP_DIRECTORIES_CREATE_CONTACT_IN_MAILINGLIST: OpSpec = OpSpec {
-    method: "POST",
-    path_template: "/directories/{directory_id}/mailinglists/{mailing_list_id}/contacts",
-    fields: &[
-        FieldSpec { snake: "directory_id", location: FieldLocation::Path },
-        FieldSpec { snake: "mailing_list_id", location: FieldLocation::Path },
-        FieldSpec { snake: "email", location: FieldLocation::Body },
-        FieldSpec { snake: "first_name", location: FieldLocation::Body },
-        FieldSpec { snake: "last_name", location: FieldLocation::Body },
-        FieldSpec { snake: "unsubscribed", location: FieldLocation::Body },
-    ],
-    auth: &[
-    ],
-};
-
-fn iface_directories__create_contact_in_mailinglist_params__to_json(p: &iface_directories::CreateContactInMailinglistParams) -> Value {
-    let mut m = Map::new();
-    m.insert("directory_id".into(), Value::String((&p.directory_id).clone()));
-    m.insert("mailing_list_id".into(), Value::String((&p.mailing_list_id).clone()));
-    m.insert("email".into(), match (&p.email) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("first_name".into(), match (&p.first_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("last_name".into(), match (&p.last_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("unsubscribed".into(), match (&p.unsubscribed) { Some(v) => Value::Bool(*(v)), None => Value::Null });
-    Value::Object(m)
-}
-
-impl iface_directories::Guest for crate::Component {
-    fn create_contact_in_mailinglist(params: iface_directories::CreateContactInMailinglistParams) -> Result<String, String> {
-        let json = iface_directories__create_contact_in_mailinglist_params__to_json(&params);
-        dispatch(&OP_DIRECTORIES_CREATE_CONTACT_IN_MAILINGLIST, json)
-    }
-}
-use crate::exports::autostamp::qualtrics::distributions as iface_distributions;
-
-const OP_DISTRIBUTIONS_GET_DISTRIBUTIONS: OpSpec = OpSpec {
-    method: "GET",
-    path_template: "/distributions",
-    fields: &[
-        FieldSpec { snake: "survey_id", location: FieldLocation::Query },
-    ],
-    auth: &[
-    ],
-};
-
-const OP_DISTRIBUTIONS_GENERATE_DISTRIBUTION_LINKS: OpSpec = OpSpec {
-    method: "POST",
-    path_template: "/distributions",
-    fields: &[
-        FieldSpec { snake: "action", location: FieldLocation::Body },
-        FieldSpec { snake: "description", location: FieldLocation::Body },
-        FieldSpec { snake: "expiration_date", location: FieldLocation::Body },
-        FieldSpec { snake: "link_type", location: FieldLocation::Body },
-        FieldSpec { snake: "mailing_list_id", location: FieldLocation::Body },
-        FieldSpec { snake: "survey_id", location: FieldLocation::Body },
-    ],
-    auth: &[
-    ],
-};
-
-const OP_DISTRIBUTIONS_RETRIEVEDISTRIBUTIONLINKS: OpSpec = OpSpec {
-    method: "GET",
-    path_template: "/distributions/{distribution_id}/links",
-    fields: &[
-        FieldSpec { snake: "survey_id", location: FieldLocation::Query },
-        FieldSpec { snake: "distribution_id", location: FieldLocation::Path },
-    ],
-    auth: &[
-    ],
-};
-
-fn iface_distributions__get_distributions_params__to_json(p: &iface_distributions::GetDistributionsParams) -> Value {
-    let mut m = Map::new();
-    m.insert("survey_id".into(), Value::String((&p.survey_id).clone()));
-    Value::Object(m)
-}
-
-fn iface_distributions__generate_distribution_links_params__to_json(p: &iface_distributions::GenerateDistributionLinksParams) -> Value {
-    let mut m = Map::new();
-    m.insert("action".into(), match (&p.action) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("description".into(), match (&p.description) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("expiration_date".into(), match (&p.expiration_date) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("link_type".into(), match (&p.link_type) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("mailing_list_id".into(), match (&p.mailing_list_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("survey_id".into(), match (&p.survey_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_distributions__retrievedistributionlinks_params__to_json(p: &iface_distributions::RetrievedistributionlinksParams) -> Value {
-    let mut m = Map::new();
-    m.insert("survey_id".into(), Value::String((&p.survey_id).clone()));
-    m.insert("distribution_id".into(), Value::String((&p.distribution_id).clone()));
-    Value::Object(m)
-}
-
-impl iface_distributions::Guest for crate::Component {
-    fn get_distributions(params: iface_distributions::GetDistributionsParams) -> Result<String, String> {
-        let json = iface_distributions__get_distributions_params__to_json(&params);
-        dispatch(&OP_DISTRIBUTIONS_GET_DISTRIBUTIONS, json)
-    }
-    fn generate_distribution_links(params: iface_distributions::GenerateDistributionLinksParams) -> Result<String, String> {
-        let json = iface_distributions__generate_distribution_links_params__to_json(&params);
-        dispatch(&OP_DISTRIBUTIONS_GENERATE_DISTRIBUTION_LINKS, json)
-    }
-    fn retrievedistributionlinks(params: iface_distributions::RetrievedistributionlinksParams) -> Result<String, String> {
-        let json = iface_distributions__retrievedistributionlinks_params__to_json(&params);
-        dispatch(&OP_DISTRIBUTIONS_RETRIEVEDISTRIBUTIONLINKS, json)
-    }
-}
-use crate::exports::autostamp::qualtrics::eventsubscriptions as iface_eventsubscriptions;
-
-const OP_EVENTSUBSCRIPTIONS_WHEN_A_RESPONSE_IS_RECEIVED: OpSpec = OpSpec {
-    method: "POST",
-    path_template: "/eventsubscriptions/",
-    fields: &[
-        FieldSpec { snake: "encrypt", location: FieldLocation::Body },
-        FieldSpec { snake: "publication_url", location: FieldLocation::Body },
-        FieldSpec { snake: "topics", location: FieldLocation::Body },
-    ],
-    auth: &[
-    ],
-};
-
-const OP_EVENTSUBSCRIPTIONS_WEBHOOK_DELETE: OpSpec = OpSpec {
-    method: "DELETE",
-    path_template: "/eventsubscriptions/",
-    fields: &[
-        FieldSpec { snake: "encrypt", location: FieldLocation::Body },
-        FieldSpec { snake: "publication_url", location: FieldLocation::Body },
-        FieldSpec { snake: "topics", location: FieldLocation::Body },
-    ],
-    auth: &[
-    ],
-};
-
-const OP_EVENTSUBSCRIPTIONS_GET_EVENT_SUBSCRIPTIONS: OpSpec = OpSpec {
-    method: "GET",
-    path_template: "/eventsubscriptions/{subscription_id}",
-    fields: &[
-        FieldSpec { snake: "subscription_id", location: FieldLocation::Path },
-    ],
-    auth: &[
-    ],
-};
-
-fn iface_eventsubscriptions__when_a_response_is_received_params__to_json(p: &iface_eventsubscriptions::WhenAResponseIsReceivedParams) -> Value {
-    let mut m = Map::new();
-    m.insert("encrypt".into(), match (&p.encrypt) { Some(v) => Value::Bool(*(v)), None => Value::Null });
-    m.insert("publication_url".into(), Value::String((&p.publication_url).clone()));
-    m.insert("topics".into(), Value::String((&p.topics).clone()));
-    Value::Object(m)
-}
-
-fn iface_eventsubscriptions__webhook_delete_params__to_json(p: &iface_eventsubscriptions::WebhookDeleteParams) -> Value {
-    let mut m = Map::new();
-    m.insert("encrypt".into(), match (&p.encrypt) { Some(v) => Value::Bool(*(v)), None => Value::Null });
-    m.insert("publication_url".into(), Value::String((&p.publication_url).clone()));
-    m.insert("topics".into(), Value::String((&p.topics).clone()));
-    Value::Object(m)
-}
-
-fn iface_eventsubscriptions__get_event_subscriptions_params__to_json(p: &iface_eventsubscriptions::GetEventSubscriptionsParams) -> Value {
-    let mut m = Map::new();
-    m.insert("subscription_id".into(), Value::String((&p.subscription_id).clone()));
-    Value::Object(m)
-}
-
-impl iface_eventsubscriptions::Guest for crate::Component {
-    fn when_a_response_is_received(params: iface_eventsubscriptions::WhenAResponseIsReceivedParams) -> Result<String, String> {
-        let json = iface_eventsubscriptions__when_a_response_is_received_params__to_json(&params);
-        dispatch(&OP_EVENTSUBSCRIPTIONS_WHEN_A_RESPONSE_IS_RECEIVED, json)
-    }
-    fn webhook_delete(params: iface_eventsubscriptions::WebhookDeleteParams) -> Result<String, String> {
-        let json = iface_eventsubscriptions__webhook_delete_params__to_json(&params);
-        dispatch(&OP_EVENTSUBSCRIPTIONS_WEBHOOK_DELETE, json)
-    }
-    fn get_event_subscriptions(params: iface_eventsubscriptions::GetEventSubscriptionsParams) -> Result<String, String> {
-        let json = iface_eventsubscriptions__get_event_subscriptions_params__to_json(&params);
-        dispatch(&OP_EVENTSUBSCRIPTIONS_GET_EVENT_SUBSCRIPTIONS, json)
-    }
-}
-use crate::exports::autostamp::qualtrics::survey_definitions as iface_survey_definitions;
-
-const OP_SURVEY_DEFINITIONS_GET_SURVEY: OpSpec = OpSpec {
-    method: "GET",
-    path_template: "/survey-definitions/{survey_id}",
-    fields: &[
-        FieldSpec { snake: "survey_id", location: FieldLocation::Path },
-    ],
-    auth: &[
-    ],
-};
-
-fn iface_survey_definitions__get_survey_params__to_json(p: &iface_survey_definitions::GetSurveyParams) -> Value {
-    let mut m = Map::new();
-    m.insert("survey_id".into(), Value::String((&p.survey_id).clone()));
-    Value::Object(m)
-}
-
-impl iface_survey_definitions::Guest for crate::Component {
-    fn get_survey(params: iface_survey_definitions::GetSurveyParams) -> Result<String, String> {
-        let json = iface_survey_definitions__get_survey_params__to_json(&params);
-        dispatch(&OP_SURVEY_DEFINITIONS_GET_SURVEY, json)
-    }
-}
+mod iface_directories;
+mod iface_distributions;
+mod iface_eventsubscriptions;
+mod iface_survey_definitions;
 
 export!(Component);

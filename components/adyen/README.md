@@ -20,8 +20,8 @@ triggered.
 
 | Setting | Value |
 | --- | --- |
-| Package | `autostamp:adyen@0.3.0` |
-| Published version | `0.3.0+adyen-3` |
+| Package | `autostamp:adyen@0.5.0` |
+| Published version | `0.5.0+adyen-3` |
 | Tag filter | all tags |
 | Operations generated | 17 |
 | Infer API-key credentials | enabled — not triggered |

@@ -12,12 +12,23 @@ interface generator {
         version: option<string>,
     }
 
+    /// A single generated Rust source file.
+    record rust-source {
+        /// The file path relative to the component crate's `src/` directory, e.g. `lib.rs`
+        /// or `iface_charges.rs`.
+        path: string,
+        /// The file contents.
+        contents: string,
+    }
+
     /// The generated WIT and Rust sources.
     record generated {
         /// The generated WIT source, with one interface per OpenAPI tag.
         wit: string,
-        /// The generated Rust source: `guest` impls plus `*-to-json` / `*-to-str` helpers.
-        rust: string,
+        /// The generated Rust source files: a `lib.rs` crate root plus one `iface_<name>.rs`
+        /// module per interface, each holding that interface's `guest` impl and its
+        /// `*-to-json` / `*-to-str` helpers. `lib.rs` is first.
+        rust: list<rust-source>,
         /// The generated `Cargo.toml` manifest for the component crate.
         cargo-toml: string,
         /// The generated `wasm.toml` declaring the component's WIT interface dependencies

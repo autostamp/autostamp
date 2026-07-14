@@ -6,29 +6,188 @@
 /// | Secret name | Applied to each request as |
 /// | --- | --- |
 /// | `cookieAuth` | header `portal` |
-package autostamp:interactivebrokers@0.3.0;
+package autostamp:interactivebrokers@0.5.0;
 
 interface account-portfolio {
+  record get-accounts-response {
+    /// Unique account id
+    accounts: option<list<string>>
+  }
+
+  record get-accounts-account-positions-response-item {
+    average-cost: option<f64>,
+    contract-id: option<f64>,
+    position: option<f64>
+  }
+
+  record get-accounts-account-summary-response {
+    info: option<get-accounts-account-summary-response-info>,
+    ledger: option<list<get-accounts-account-summary-response-ledger-item>>,
+    summary: option<get-accounts-account-summary-response-summary>
+  }
+
+  record get-accounts-account-summary-response-info {
+    account-code: option<string>,
+    account-ready: option<string>,
+    account-type: option<string>,
+    cushion: option<string>,
+    day-trades-remaining: option<string>,
+    day-trades-remaining-t: option<string>,
+    day-trades-remaining-t-v2: option<string>,
+    day-trades-remaining-t-v3: option<string>,
+    day-trades-remaining-t-v4: option<string>,
+    highest-severity: option<string>,
+    leverage-s: option<string>,
+    look-ahead-next-change: option<string>,
+    segment-title-c: option<string>,
+    segment-title-s: option<string>,
+    trading-type-s: option<string>,
+    what-if-pm-enabled: option<string>
+  }
+
+  record get-accounts-account-summary-response-ledger-item {
+    cash-balance: option<f64>,
+    cash-balance-fx-segment: option<f64>,
+    cash-cum-qty: option<f64>,
+    exchange-rate: option<f64>,
+    future-option-market-value: option<f64>,
+    future-pnl: option<f64>,
+    net-dividend: option<f64>,
+    net-interest: option<f64>,
+    net-liquidation: option<f64>,
+    option-market-value: option<f64>,
+    realized-pnl: option<f64>,
+    stock-market-value: option<f64>,
+    total-cash-balance: option<f64>,
+    unrealized-pnl: option<f64>
+  }
+
+  record get-accounts-account-summary-response-summary {
+    accrued-cash: option<f64>,
+    accrued-cash-c: option<f64>,
+    accrued-cash-s: option<f64>,
+    accrued-dividend: option<f64>,
+    accrued-dividend-c: option<f64>,
+    accrued-dividend-s: option<f64>,
+    available-funds: option<f64>,
+    available-funds-c: option<f64>,
+    available-funds-s: option<f64>,
+    billable: option<f64>,
+    billable-c: option<f64>,
+    billable-s: option<f64>,
+    buying-power: option<f64>,
+    equity-with-loan-value: option<f64>,
+    equity-with-loan-value-c: option<f64>,
+    equity-with-loan-value-s: option<f64>,
+    excess-liquidity: option<f64>,
+    excess-liquidity-c: option<f64>,
+    excess-liquidity-s: option<f64>,
+    full-available-funds: option<f64>,
+    full-available-funds-c: option<f64>,
+    full-available-funds-s: option<f64>,
+    full-excess-liquidity: option<f64>,
+    full-excess-liquidity-c: option<f64>,
+    full-excess-liquidity-s: option<f64>,
+    full-init-margin-req: option<f64>,
+    full-init-margin-req-c: option<f64>,
+    full-init-margin-req-s: option<f64>,
+    full-maint-margin-req: option<f64>,
+    full-maint-margin-req-c: option<f64>,
+    full-maint-margin-req-s: option<f64>,
+    gross-position-value: option<f64>,
+    gross-position-value-c: option<f64>,
+    gross-position-value-s: option<f64>,
+    indian-stock-haircut: option<f64>,
+    indian-stock-haircut-c: option<f64>,
+    indian-stock-haircut-s: option<f64>,
+    init-margin-req: option<f64>,
+    init-margin-req-c: option<f64>,
+    init-margin-req-s: option<f64>,
+    insured-deposit: option<f64>,
+    insured-deposit-c: option<f64>,
+    insured-deposit-s: option<f64>,
+    look-ahead-available-funds: option<f64>,
+    look-ahead-available-funds-c: option<f64>,
+    look-ahead-available-funds-s: option<f64>,
+    look-ahead-excess-liquidity: option<f64>,
+    look-ahead-excess-liquidity-c: option<f64>,
+    look-ahead-excess-liquidity-s: option<f64>,
+    look-ahead-init-margin-req: option<f64>,
+    look-ahead-init-margin-req-c: option<f64>,
+    look-ahead-init-margin-req-s: option<f64>,
+    look-ahead-maint-margin-req: option<f64>,
+    look-ahead-maint-margin-req-c: option<f64>,
+    look-ahead-maint-margin-req-s: option<f64>,
+    maint-margin-req: option<f64>,
+    maint-margin-req-c: option<f64>,
+    maint-margin-req-s: option<f64>,
+    net-liquidation: option<f64>,
+    net-liquidation-c: option<f64>,
+    net-liquidation-s: option<f64>,
+    net-liquidation-uncertainty: option<f64>,
+    pa-shares-value: option<f64>,
+    pa-shares-value-c: option<f64>,
+    pa-shares-value-s: option<f64>,
+    post-expiration-excess: option<f64>,
+    post-expiration-excess-c: option<f64>,
+    post-expiration-excess-s: option<f64>,
+    post-expiration-margin: option<f64>,
+    post-expiration-margin-c: option<f64>,
+    post-expiration-margin-s: option<f64>,
+    reg-t-equity: option<f64>,
+    reg-t-equity-s: option<f64>,
+    reg-t-margin: option<f64>,
+    reg-t-margin-s: option<f64>,
+    sma: option<f64>,
+    sma-s: option<f64>,
+    total-cash-value: option<f64>,
+    total-cash-value-c: option<f64>,
+    total-cash-value-s: option<f64>
+  }
+
+  variant get-accounts-error {
+    unauthorized(string),
+    forbidden(string),
+    request-timeout(string),
+    other(string)
+  }
+
+  variant get-accounts-account-positions-error {
+    bad-request(string),
+    unauthorized(string),
+    forbidden(string),
+    request-timeout(string),
+    other(string)
+  }
+
+  variant get-accounts-account-summary-error {
+    bad-request(string),
+    unauthorized(string),
+    forbidden(string),
+    request-timeout(string),
+    other(string)
+  }
+
   /// Brokerage Accounts
   record get-accounts-params {
     /// Account Number
     account: string
   }
-  get-accounts: func(params: get-accounts-params) -> result<string, string>;
+  get-accounts: func(params: get-accounts-params) -> result<get-accounts-response, get-accounts-error>;
 
   /// Account Positions
   record get-accounts-account-positions-params {
     /// Account Number
     account: string
   }
-  get-accounts-account-positions: func(params: get-accounts-account-positions-params) -> result<string, string>;
+  get-accounts-account-positions: func(params: get-accounts-account-positions-params) -> result<list<get-accounts-account-positions-response-item>, get-accounts-account-positions-error>;
 
   /// Account Values Summary
   record get-accounts-account-summary-params {
     /// Account Number
     account: string
   }
-  get-accounts-account-summary: func(params: get-accounts-account-summary-params) -> result<string, string>;
+  get-accounts-account-summary: func(params: get-accounts-account-summary-params) -> result<get-accounts-account-summary-response, get-accounts-account-summary-error>;
 
 }
 
@@ -54,8 +213,31 @@ interface order-margin-requirements {
     value: string
   }
 
+  record post-accounts-account-order-impact-response {
+    commission: option<f64>,
+    commissions-currency: option<string>,
+    equity-with-loan: option<f64>,
+    init-margin: option<f64>,
+    init-margin-before: option<f64>,
+    maint-margin: option<f64>,
+    maint-margin-before: option<f64>,
+    margin-currency: option<string>,
+    max-commissions: option<f64>,
+    min-commissions: option<f64>
+  }
+
+  variant post-accounts-account-order-impact-error {
+    bad-request(string),
+    unauthorized(string),
+    forbidden(string),
+    request-timeout(string),
+    other(string)
+  }
+
   /// Return margin impact info
   record post-accounts-account-order-impact-params {
+    /// Account Number
+    account: string,
     /// Required price to support Stop and Stop Limit orders
     aux-price: option<f64>,
     /// The internal IB identifier for the trading product specified as an integer (can be obtained in response to /secdef request)
@@ -79,16 +261,56 @@ interface order-margin-requirements {
     ticker: option<string>,
     time-in-force: option<time-in-force>
   }
-  post-accounts-account-order-impact: func(params: post-accounts-account-order-impact-params) -> result<string, string>;
+  post-accounts-account-order-impact: func(params: post-accounts-account-order-impact-params) -> result<post-accounts-account-order-impact-response, post-accounts-account-order-impact-error>;
 
 }
 
 interface orders {
+  /// An object containing all the properties defining an order
+  record order-state {
+    contract-id: option<f64>,
+    customer-order-id: option<f64>,
+    filled-quantity: option<f64>,
+    listing-exchange: option<string>,
+    order-type: option<order-type>,
+    outside-rth: option<string>,
+    price: option<f64>,
+    remaining-quantity: option<f64>,
+    side: option<string>,
+    status: option<order-status>,
+    ticker: option<string>,
+    time-in-force: option<time-in-force>,
+    transaction-time: option<string>,
+    warning: option<string>
+  }
+
   /// Market = '1'
   /// Limit = '2'
   /// Stop = '3'
   /// StopLimit = '4'
   record order-type {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  /// Status of the order
+  /// InvalidOrderStatus = '-1'
+  /// New = '0'
+  /// PartiallyFilled = '1'
+  /// Filled = '2'
+  /// DoneForTheDay = '3'
+  /// Canceled = '4'
+  /// Replaced = '5'
+  /// PendingCancelReplace = '6'
+  /// Stopped = '7'
+  /// Rejected = '8'
+  /// Suspended = '9'
+  /// PendingNew = 'A'
+  /// Calculated = 'B'
+  /// Expired = 'C'
+  /// AcceptedForBidding = 'D'
+  /// PendingReplace = 'E'
+  record order-status {
     /// opaque schema; raw JSON
     value: string
   }
@@ -104,11 +326,79 @@ interface orders {
     value: string
   }
 
+  record put-accounts-account-orders-customer-order-id-response-item {
+    customer-order-id: option<string>,
+    order-qty: option<f64>,
+    order-type: option<order-type>,
+    price: option<string>,
+    side: option<f64>,
+    status: option<order-status>,
+    symbol: option<f64>,
+    warning: option<string>
+  }
+
+  record delete-accounts-account-orders-customer-order-id-response-item {
+    customer-order-id: option<string>,
+    order-qty: option<f64>,
+    order-type: option<order-type>,
+    price: option<string>,
+    side: option<f64>,
+    status: option<order-status>,
+    symbol: option<f64>,
+    warning: option<string>
+  }
+
+  variant get-accounts-account-orders-error {
+    bad-request(string),
+    unauthorized(string),
+    forbidden(string),
+    request-timeout(string),
+    other(string)
+  }
+
+  variant post-accounts-account-orders-error {
+    bad-request(string),
+    unauthorized(string),
+    forbidden(string),
+    request-timeout(string),
+    other(string)
+  }
+
+  variant get-accounts-account-orders-customer-order-id-error {
+    bad-request(string),
+    unauthorized(string),
+    forbidden(string),
+    request-timeout(string),
+    other(string)
+  }
+
+  variant put-accounts-account-orders-customer-order-id-error {
+    bad-request(string),
+    unauthorized(string),
+    forbidden(string),
+    request-timeout(string),
+    other(string)
+  }
+
+  variant delete-accounts-account-orders-customer-order-id-error {
+    bad-request(string),
+    unauthorized(string),
+    forbidden(string),
+    request-timeout(string),
+    other(string)
+  }
+
   /// Open Orders
-  get-accounts-account-orders: func() -> result<string, string>;
+  record get-accounts-account-orders-params {
+    /// Account Number
+    account: string
+  }
+  get-accounts-account-orders: func(params: get-accounts-account-orders-params) -> result<list<order-state>, get-accounts-account-orders-error>;
 
   /// Place Order
   record post-accounts-account-orders-params {
+    /// Account Number
+    account: string,
     /// Required Price to support Stop and Stop Limit orders
     aux-price: option<f64>,
     /// The internal IB identifier for the trading product specified as an integer (can be obtained in response to /secdef request)
@@ -147,17 +437,27 @@ interface orders {
     ticker: option<string>,
     time-in-force: option<time-in-force>
   }
-  post-accounts-account-orders: func(params: post-accounts-account-orders-params) -> result<string, string>;
+  post-accounts-account-orders: func(params: post-accounts-account-orders-params) -> result<list<order-state>, post-accounts-account-orders-error>;
 
   /// Return specific order info
-  get-accounts-account-orders-customer-order-id: func() -> result<string, string>;
+  record get-accounts-account-orders-customer-order-id-params {
+    /// Account Number
+    account: string,
+    /// Customer Order ID
+    customer-order-id: string
+  }
+  get-accounts-account-orders-customer-order-id: func(params: get-accounts-account-orders-customer-order-id-params) -> result<list<order-state>, get-accounts-account-orders-customer-order-id-error>;
 
   /// Modify Order
   record put-accounts-account-orders-customer-order-id-params {
+    /// Account Number
+    account: string,
+    /// Customer Order ID
+    customer-order-id: string,
     /// Required Price to support Stop and Stop Limit orders
     aux-price: option<f64>,
     /// The new order ID assigned by the customer for the modification.
-    customer-order-id: option<string>,
+    customer-order-id-v2: option<string>,
     /// By setting this bool to false the customer attests that the order is not subject to German HFT Act, was not generated using any automated algorithm, and no algorithm determined or changed financial instrument, side, quantity, order type, limit or other price, trading venue or timing of this order. Currently we cannot accept orders where this flag is set to true. Such orders will be rejected.
     german-hft-algo: option<bool>,
     /// This field permits specification of the user's preregistered (via account management) MiFID II short code for algos that are responsible for investment decisions
@@ -181,23 +481,82 @@ interface orders {
     side: option<f64>,
     time-in-force: option<time-in-force>
   }
-  put-accounts-account-orders-customer-order-id: func(params: put-accounts-account-orders-customer-order-id-params) -> result<string, string>;
+  put-accounts-account-orders-customer-order-id: func(params: put-accounts-account-orders-customer-order-id-params) -> result<list<put-accounts-account-orders-customer-order-id-response-item>, put-accounts-account-orders-customer-order-id-error>;
 
   /// Cancel Order
-  delete-accounts-account-orders-customer-order-id: func() -> result<string, string>;
+  record delete-accounts-account-orders-customer-order-id-params {
+    /// Account Number
+    account: string,
+    /// Customer Order ID
+    customer-order-id: string
+  }
+  delete-accounts-account-orders-customer-order-id: func(params: delete-accounts-account-orders-customer-order-id-params) -> result<list<delete-accounts-account-orders-customer-order-id-response-item>, delete-accounts-account-orders-customer-order-id-error>;
 
 }
 
 interface trades {
+  record get-accounts-account-trades-response-item {
+    avg-price: option<f64>,
+    commission: option<f64>,
+    commission-currency: option<string>,
+    contract-id: option<f64>,
+    currency: option<string>,
+    customer-order-id: option<f64>,
+    exec-id: option<string>,
+    execution-time: option<string>,
+    filled-quantity: option<f64>,
+    last-market: option<string>,
+    listing-exchange: option<string>,
+    order-id: option<string>,
+    order-type: option<order-type>,
+    quantity: option<f64>,
+    remaining-quantity: option<f64>,
+    side: option<string>,
+    ticker: option<string>,
+    trade-price: option<f64>,
+    trade-size: option<f64>
+  }
+
+  /// Market = '1'
+  /// Limit = '2'
+  /// Stop = '3'
+  /// StopLimit = '4'
+  record order-type {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  variant get-accounts-account-trades-error {
+    bad-request(string),
+    unauthorized(string),
+    forbidden(string),
+    request-timeout(string),
+    other(string)
+  }
+
   /// Returns trades in account
   record get-accounts-account-trades-params {
+    /// Account Number
+    account: string,
     body: option<string>
   }
-  get-accounts-account-trades: func(params: get-accounts-account-trades-params) -> result<string, string>;
+  get-accounts-account-trades: func(params: get-accounts-account-trades-params) -> result<list<get-accounts-account-trades-response-item>, get-accounts-account-trades-error>;
 
 }
 
 interface market-data {
+  record get-marketdata-exchange-components-response-item {
+    complete: option<bool>,
+    con-id: option<f64>,
+    mapping: option<list<get-marketdata-exchange-components-response-item-mapping-item>>
+  }
+
+  record get-marketdata-exchange-components-response-item-mapping-item {
+    bit: option<f64>,
+    code: option<string>,
+    exchange: option<string>
+  }
+
   record get-marketdata-snapshot-body-item {
     /// The internal IB identifier for the trading product specified as an integer.
     conid: option<f64>,
@@ -211,18 +570,107 @@ interface market-data {
     type-op: option<string>
   }
 
+  record get-marketdata-snapshot-response-item {
+    bid: option<get-marketdata-snapshot-response-item-bid>,
+    closing: option<get-marketdata-snapshot-response-item-closing>,
+    complete: option<bool>,
+    conid: option<string>,
+    offer: option<get-marketdata-snapshot-response-item-offer>,
+    /// 0 = Real time data
+    /// 1 = Delayed data
+    temporality: option<f64>,
+    trade: option<get-marketdata-snapshot-response-item-trade>
+  }
+
+  record get-marketdata-snapshot-response-item-bid {
+    market: option<f64>,
+    price: option<f64>,
+    size: option<f64>
+  }
+
+  record get-marketdata-snapshot-response-item-closing {
+    price: option<f64>
+  }
+
+  record get-marketdata-snapshot-response-item-offer {
+    market: option<f64>,
+    price: option<f64>,
+    size: option<f64>
+  }
+
+  record get-marketdata-snapshot-response-item-trade {
+    market: option<f64>,
+    price: option<f64>,
+    size: option<f64>,
+    time: option<f64>
+  }
+
+  variant get-marketdata-exchange-components-error {
+    bad-request(string),
+    unauthorized(string),
+    forbidden(string),
+    request-timeout(string),
+    other(string)
+  }
+
+  variant get-marketdata-snapshot-error {
+    bad-request(string),
+    unauthorized(string),
+    forbidden(string),
+    request-timeout(string),
+    other(string)
+  }
+
   /// Exchange Components
-  get-marketdata-exchange-components: func() -> result<string, string>;
+  get-marketdata-exchange-components: func() -> result<list<get-marketdata-exchange-components-response-item>, get-marketdata-exchange-components-error>;
 
   /// Market Data Snapshot
   record get-marketdata-snapshot-params {
     body: list<get-marketdata-snapshot-body-item>
   }
-  get-marketdata-snapshot: func(params: get-marketdata-snapshot-params) -> result<string, string>;
+  get-marketdata-snapshot: func(params: get-marketdata-snapshot-params) -> result<list<get-marketdata-snapshot-response-item>, get-marketdata-snapshot-error>;
 
 }
 
 interface o-auth {
+  record post-oauth-access-token-response {
+    oauth-token: option<string>,
+    oauth-token-secret: option<string>
+  }
+
+  record post-oauth-live-session-token-response {
+    diffie-hellman-response: option<string>,
+    live-session-token-signature: option<string>
+  }
+
+  record post-oauth-request-token-response {
+    oauth-token: option<string>
+  }
+
+  variant post-oauth-access-token-error {
+    bad-request(string),
+    unauthorized(string),
+    forbidden(string),
+    request-timeout(string),
+    other(string)
+  }
+
+  variant post-oauth-live-session-token-error {
+    bad-request(string),
+    unauthorized(string),
+    forbidden(string),
+    request-timeout(string),
+    other(string)
+  }
+
+  variant post-oauth-request-token-error {
+    bad-request(string),
+    unauthorized(string),
+    forbidden(string),
+    request-timeout(string),
+    other(string)
+  }
+
   /// Obtain a access token
   record post-oauth-access-token-params {
     /// The 25-character hexadecimal string that was obtained from Interactive Brokers during the OAuth consumer registration process.
@@ -240,7 +688,7 @@ interface o-auth {
     /// The verification code received from IB after the user has granted authorization.
     oauth-verifier: option<string>
   }
-  post-oauth-access-token: func(params: post-oauth-access-token-params) -> result<string, string>;
+  post-oauth-access-token: func(params: post-oauth-access-token-params) -> result<post-oauth-access-token-response, post-oauth-access-token-error>;
 
   /// Obtain a live session token
   record post-oauth-live-session-token-params {
@@ -259,7 +707,7 @@ interface o-auth {
     /// The request token obtained from IB via /request_token.
     oauth-token: option<string>
   }
-  post-oauth-live-session-token: func(params: post-oauth-live-session-token-params) -> result<string, string>;
+  post-oauth-live-session-token: func(params: post-oauth-live-session-token-params) -> result<post-oauth-live-session-token-response, post-oauth-live-session-token-error>;
 
   /// Obtain a request token
   record post-oauth-request-token-params {
@@ -276,11 +724,28 @@ interface o-auth {
     /// Timestamp expressed in seconds since 1/1/1970 00:00:00 GMT. Must be a positive integer and greater than or equal to any timestamp used in previous requests.
     oauth-timestamp: option<string>
   }
-  post-oauth-request-token: func(params: post-oauth-request-token-params) -> result<string, string>;
+  post-oauth-request-token: func(params: post-oauth-request-token-params) -> result<post-oauth-request-token-response, post-oauth-request-token-error>;
 
 }
 
 interface financial-instrument-definitions {
+  record get-secdef-response-item {
+    company-name: option<string>,
+    contract-id: option<f64>,
+    currency: option<string>,
+    exchange: option<string>,
+    security-type: option<string>,
+    ticker: option<string>
+  }
+
+  variant get-secdef-error {
+    bad-request(string),
+    unauthorized(string),
+    forbidden(string),
+    request-timeout(string),
+    other(string)
+  }
+
   /// Get security definition
   record get-secdef-params {
     /// The internal IB identifier for the trading product specified as an integer.
@@ -294,7 +759,7 @@ interface financial-instrument-definitions {
     /// The instrument type of the contract (CASH).
     type-op: option<string>
   }
-  get-secdef: func(params: get-secdef-params) -> result<string, string>;
+  get-secdef: func(params: get-secdef-params) -> result<list<get-secdef-response-item>, get-secdef-error>;
 
 }
 /// The component world: imports the secrets host capability

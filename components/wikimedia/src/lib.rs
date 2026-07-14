@@ -44,10 +44,15 @@ pub(crate) enum FieldLocation {
     Body,
 }
 
-/// A single operation parameter: the snake-case key it carries in the params JSON and where
-/// it belongs in the request.
+/// A single operation parameter. `snake` keys the field in the internal params JSON (and, for a
+/// path field, matches the `{snake}` placeholder in the path template); `wire` is the verbatim name
+/// the field takes on the HTTP wire (query key, header name, or body property). The two differ
+/// whenever the source name isn't already snake_case (e.g. `dryRun` → snake `dry_run`, wire
+/// `dryRun`), and let distinct inputs that share a snake key (`DateCreated`, `DateCreated<`) still
+/// travel under their true names.
 pub(crate) struct FieldSpec {
     pub(crate) snake: &'static str,
+    pub(crate) wire: &'static str,
     pub(crate) location: FieldLocation,
 }
 
@@ -71,6 +76,16 @@ pub(crate) struct AuthApply {
     pub(crate) kind: AuthKind,
 }
 
+/// The failure modes of [`dispatch`], kept structured so each generated operation can map them
+/// onto its own typed error: an `Http` failure carries the response status and body (routed to
+/// the matching error-variant case), while a `Transport` failure carries a message for the
+/// catch-all case (a secret lookup, connection, or decode failure that never produced an HTTP
+/// status).
+pub(crate) enum DispatchError {
+    Http { status: u16, body: String },
+    Transport(String),
+}
+
 /// A single API operation: HTTP method, path template (with `{snake}` placeholders), the
 /// parameter fields, and the security schemes to apply.
 pub(crate) struct OpSpec {
@@ -81,8 +96,9 @@ pub(crate) struct OpSpec {
 }
 
 /// Execute `op` with the supplied `params` (a JSON object keyed by snake-case field names)
-/// and return the response body as a string, or an error message.
-pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, String> {
+/// and return the raw 2xx response body, or a structured [`DispatchError`] the caller maps
+/// onto the operation's typed error.
+pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, DispatchError> {
     let obj = match &params {
         Value::Object(map) => Some(map),
         _ => None,
@@ -105,10 +121,10 @@ pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, String> {
                 let placeholder = format!("{{{}}}", field.snake);
                 path = path.replace(&placeholder, &percent_encode(&scalar(value)));
             }
-            FieldLocation::Query => query.push((field.snake.to_string(), scalar(value))),
-            FieldLocation::Header => headers.push((field.snake.to_string(), scalar(value))),
+            FieldLocation::Query => query.push((field.wire.to_string(), scalar(value))),
+            FieldLocation::Header => headers.push((field.wire.to_string(), scalar(value))),
             FieldLocation::Body => {
-                body.insert(field.snake.to_string(), value.clone());
+                body.insert(field.wire.to_string(), value.clone());
             }
         }
     }
@@ -116,7 +132,7 @@ pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, String> {
     // Apply each resolved security scheme, sourcing its value from wasmcloud:secrets.
     let mut cookies: Vec<String> = Vec::new();
     for apply in op.auth {
-        let secret = fetch_secret(apply.secret_key)?;
+        let secret = fetch_secret(apply.secret_key).map_err(DispatchError::Transport)?;
         match &apply.kind {
             AuthKind::Bearer => headers.push(("authorization".into(), format!("Bearer {secret}"))),
             AuthKind::Basic => {
@@ -177,17 +193,18 @@ fn fetch_secret(key: &str) -> Result<String, String> {
 }
 
 /// Build and send the outgoing request with `wstd`, returning the response body on a 2xx
-/// status. The generated guest exports are synchronous, so the async `wstd` client is driven
-/// to completion on a local reactor via `wstd::runtime::block_on`.
+/// status and a structured [`DispatchError`] otherwise. The generated guest exports are
+/// synchronous, so the async `wstd` client is driven to completion on a local reactor via
+/// `wstd::runtime::block_on`.
 fn perform(
     method: &str,
     path_with_query: &str,
     headers: &[(String, String)],
     body: &[u8],
-) -> Result<String, String> {
+) -> Result<String, DispatchError> {
     let url = join_url(crate::BASE_URL, path_with_query);
     let method = Method::from_bytes(method.as_bytes())
-        .map_err(|err| format!("invalid HTTP method `{method}`: {err}"))?;
+        .map_err(|err| DispatchError::Transport(format!("invalid HTTP method `{method}`: {err}")))?;
 
     let mut builder = Request::builder().method(method).uri(url);
     for (name, value) in headers {
@@ -199,27 +216,29 @@ fn perform(
         } else {
             Body::from(body.to_vec())
         })
-        .map_err(|err| format!("failed to build request: {err}"))?;
+        .map_err(|err| DispatchError::Transport(format!("failed to build request: {err}")))?;
 
     wstd::runtime::block_on(async move {
         let client = Client::new();
         let response = client
             .send(request)
             .await
-            .map_err(|err| format!("request failed: {err:#}"))?;
+            .map_err(|err| DispatchError::Transport(format!("request failed: {err:#}")))?;
 
         let status = response.status().as_u16();
         let mut response_body = response.into_body();
-        let bytes = response_body
-            .contents()
-            .await
-            .map_err(|err| format!("failed to read response body: {err:#}"))?;
+        let bytes = response_body.contents().await.map_err(|err| {
+            DispatchError::Transport(format!("failed to read response body: {err:#}"))
+        })?;
         let body_text = String::from_utf8_lossy(bytes).into_owned();
 
         if (200..300).contains(&status) {
             Ok(body_text)
         } else {
-            Err(format!("HTTP {status}: {body_text}"))
+            Err(DispatchError::Http {
+                status,
+                body: body_text,
+            })
         }
     })
 }
@@ -279,980 +298,16 @@ fn base64(input: &[u8]) -> String {
 }
 }
 
-use crate::runtime::{dispatch, AuthApply, AuthKind, FieldLocation, FieldSpec, OpSpec};
-use serde_json::{Map, Value};
-
-use crate::exports::autostamp::wikimedia::feed_content_availability as iface_feed_content_availability;
-
-const OP_FEED_CONTENT_AVAILABILITY_GET_FEED_AVAILABILITY: OpSpec = OpSpec {
-    method: "GET",
-    path_template: "/feed/availability",
-    fields: &[
-    ],
-    auth: &[
-    ],
-};
-
-impl iface_feed_content_availability::Guest for crate::Component {
-    fn get_feed_availability() -> Result<String, String> {
-        dispatch(&OP_FEED_CONTENT_AVAILABILITY_GET_FEED_AVAILABILITY, Value::Object(Map::new()))
-    }
-}
-use crate::exports::autostamp::wikimedia::math as iface_math;
-
-const OP_MATH_POST_MEDIA_MATH_CHECK_TYPE: OpSpec = OpSpec {
-    method: "POST",
-    path_template: "/media/math/check/{type}",
-    fields: &[
-        FieldSpec { snake: "type", location: FieldLocation::Path },
-        FieldSpec { snake: "q", location: FieldLocation::Body },
-    ],
-    auth: &[
-    ],
-};
-
-const OP_MATH_GET_MEDIA_MATH_FORMULA_HASH: OpSpec = OpSpec {
-    method: "GET",
-    path_template: "/media/math/formula/{hash}",
-    fields: &[
-        FieldSpec { snake: "hash", location: FieldLocation::Path },
-    ],
-    auth: &[
-    ],
-};
-
-const OP_MATH_GET_MEDIA_MATH_RENDER_FORMAT_HASH: OpSpec = OpSpec {
-    method: "GET",
-    path_template: "/media/math/render/{format}/{hash}",
-    fields: &[
-        FieldSpec { snake: "format", location: FieldLocation::Path },
-        FieldSpec { snake: "hash", location: FieldLocation::Path },
-    ],
-    auth: &[
-    ],
-};
-
-fn iface_math__post_media_math_check_type_params__to_json(p: &iface_math::PostMediaMathCheckTypeParams) -> Value {
-    let mut m = Map::new();
-    m.insert("type".into(), Value::String((&p.type_op).clone()));
-    m.insert("q".into(), Value::String((&p.q).clone()));
-    Value::Object(m)
-}
-
-fn iface_math__get_media_math_formula_hash_params__to_json(p: &iface_math::GetMediaMathFormulaHashParams) -> Value {
-    let mut m = Map::new();
-    m.insert("hash".into(), Value::String((&p.hash).clone()));
-    Value::Object(m)
-}
-
-fn iface_math__get_media_math_render_format_hash_params__to_json(p: &iface_math::GetMediaMathRenderFormatHashParams) -> Value {
-    let mut m = Map::new();
-    m.insert("format".into(), Value::String((&p.format).clone()));
-    m.insert("hash".into(), Value::String((&p.hash).clone()));
-    Value::Object(m)
-}
-
-impl iface_math::Guest for crate::Component {
-    fn post_media_math_check_type(params: iface_math::PostMediaMathCheckTypeParams) -> Result<String, String> {
-        let json = iface_math__post_media_math_check_type_params__to_json(&params);
-        dispatch(&OP_MATH_POST_MEDIA_MATH_CHECK_TYPE, json)
-    }
-    fn get_media_math_formula_hash(params: iface_math::GetMediaMathFormulaHashParams) -> Result<String, String> {
-        let json = iface_math__get_media_math_formula_hash_params__to_json(&params);
-        dispatch(&OP_MATH_GET_MEDIA_MATH_FORMULA_HASH, json)
-    }
-    fn get_media_math_render_format_hash(params: iface_math::GetMediaMathRenderFormatHashParams) -> Result<String, String> {
-        let json = iface_math__get_media_math_render_format_hash_params__to_json(&params);
-        dispatch(&OP_MATH_GET_MEDIA_MATH_RENDER_FORMAT_HASH, json)
-    }
-}
-use crate::exports::autostamp::wikimedia::bytes_difference_data as iface_bytes_difference_data;
-
-const OP_BYTES_DIFFERENCE_DATA_GET_METRICS_BYTES_DIFFERENCE_ABSOLUTE_AGGREGATE_PROJECT_EDITOR_TYPE_PAGE_TYPE_GRANULARITY_START_END: OpSpec = OpSpec {
-    method: "GET",
-    path_template: "/metrics/bytes-difference/absolute/aggregate/{project}/{editor_type}/{page_type}/{granularity}/{start}/{end}",
-    fields: &[
-        FieldSpec { snake: "project", location: FieldLocation::Path },
-        FieldSpec { snake: "editor_type", location: FieldLocation::Path },
-        FieldSpec { snake: "page_type", location: FieldLocation::Path },
-        FieldSpec { snake: "granularity", location: FieldLocation::Path },
-        FieldSpec { snake: "start", location: FieldLocation::Path },
-        FieldSpec { snake: "end", location: FieldLocation::Path },
-    ],
-    auth: &[
-    ],
-};
-
-const OP_BYTES_DIFFERENCE_DATA_GET_METRICS_BYTES_DIFFERENCE_ABSOLUTE_PER_PAGE_PROJECT_PAGE_TITLE_EDITOR_TYPE_GRANULARITY_START_END: OpSpec = OpSpec {
-    method: "GET",
-    path_template: "/metrics/bytes-difference/absolute/per-page/{project}/{page_title}/{editor_type}/{granularity}/{start}/{end}",
-    fields: &[
-        FieldSpec { snake: "project", location: FieldLocation::Path },
-        FieldSpec { snake: "page_title", location: FieldLocation::Path },
-        FieldSpec { snake: "editor_type", location: FieldLocation::Path },
-        FieldSpec { snake: "granularity", location: FieldLocation::Path },
-        FieldSpec { snake: "start", location: FieldLocation::Path },
-        FieldSpec { snake: "end", location: FieldLocation::Path },
-    ],
-    auth: &[
-    ],
-};
-
-const OP_BYTES_DIFFERENCE_DATA_GET_METRICS_BYTES_DIFFERENCE_NET_AGGREGATE_PROJECT_EDITOR_TYPE_PAGE_TYPE_GRANULARITY_START_END: OpSpec = OpSpec {
-    method: "GET",
-    path_template: "/metrics/bytes-difference/net/aggregate/{project}/{editor_type}/{page_type}/{granularity}/{start}/{end}",
-    fields: &[
-        FieldSpec { snake: "project", location: FieldLocation::Path },
-        FieldSpec { snake: "editor_type", location: FieldLocation::Path },
-        FieldSpec { snake: "page_type", location: FieldLocation::Path },
-        FieldSpec { snake: "granularity", location: FieldLocation::Path },
-        FieldSpec { snake: "start", location: FieldLocation::Path },
-        FieldSpec { snake: "end", location: FieldLocation::Path },
-    ],
-    auth: &[
-    ],
-};
-
-const OP_BYTES_DIFFERENCE_DATA_GET_METRICS_BYTES_DIFFERENCE_NET_PER_PAGE_PROJECT_PAGE_TITLE_EDITOR_TYPE_GRANULARITY_START_END: OpSpec = OpSpec {
-    method: "GET",
-    path_template: "/metrics/bytes-difference/net/per-page/{project}/{page_title}/{editor_type}/{granularity}/{start}/{end}",
-    fields: &[
-        FieldSpec { snake: "project", location: FieldLocation::Path },
-        FieldSpec { snake: "page_title", location: FieldLocation::Path },
-        FieldSpec { snake: "editor_type", location: FieldLocation::Path },
-        FieldSpec { snake: "granularity", location: FieldLocation::Path },
-        FieldSpec { snake: "start", location: FieldLocation::Path },
-        FieldSpec { snake: "end", location: FieldLocation::Path },
-    ],
-    auth: &[
-    ],
-};
-
-fn iface_bytes_difference_data__get_metrics_bytes_difference_absolute_aggregate_project_editor_type_page_type_granularity_start_end_params__to_json(p: &iface_bytes_difference_data::GetMetricsBytesDifferenceAbsoluteAggregateProjectEditorTypePageTypeGranularityStartEndParams) -> Value {
-    let mut m = Map::new();
-    m.insert("project".into(), Value::String((&p.project).clone()));
-    m.insert("editor_type".into(), Value::String((&p.editor_type).clone()));
-    m.insert("page_type".into(), Value::String((&p.page_type).clone()));
-    m.insert("granularity".into(), Value::String((&p.granularity).clone()));
-    m.insert("start".into(), Value::String((&p.start).clone()));
-    m.insert("end".into(), Value::String((&p.end).clone()));
-    Value::Object(m)
-}
-
-fn iface_bytes_difference_data__get_metrics_bytes_difference_absolute_per_page_project_page_title_editor_type_granularity_start_end_params__to_json(p: &iface_bytes_difference_data::GetMetricsBytesDifferenceAbsolutePerPageProjectPageTitleEditorTypeGranularityStartEndParams) -> Value {
-    let mut m = Map::new();
-    m.insert("project".into(), Value::String((&p.project).clone()));
-    m.insert("page_title".into(), Value::String((&p.page_title).clone()));
-    m.insert("editor_type".into(), Value::String((&p.editor_type).clone()));
-    m.insert("granularity".into(), Value::String((&p.granularity).clone()));
-    m.insert("start".into(), Value::String((&p.start).clone()));
-    m.insert("end".into(), Value::String((&p.end).clone()));
-    Value::Object(m)
-}
-
-fn iface_bytes_difference_data__get_metrics_bytes_difference_net_aggregate_project_editor_type_page_type_granularity_start_end_params__to_json(p: &iface_bytes_difference_data::GetMetricsBytesDifferenceNetAggregateProjectEditorTypePageTypeGranularityStartEndParams) -> Value {
-    let mut m = Map::new();
-    m.insert("project".into(), Value::String((&p.project).clone()));
-    m.insert("editor_type".into(), Value::String((&p.editor_type).clone()));
-    m.insert("page_type".into(), Value::String((&p.page_type).clone()));
-    m.insert("granularity".into(), Value::String((&p.granularity).clone()));
-    m.insert("start".into(), Value::String((&p.start).clone()));
-    m.insert("end".into(), Value::String((&p.end).clone()));
-    Value::Object(m)
-}
-
-fn iface_bytes_difference_data__get_metrics_bytes_difference_net_per_page_project_page_title_editor_type_granularity_start_end_params__to_json(p: &iface_bytes_difference_data::GetMetricsBytesDifferenceNetPerPageProjectPageTitleEditorTypeGranularityStartEndParams) -> Value {
-    let mut m = Map::new();
-    m.insert("project".into(), Value::String((&p.project).clone()));
-    m.insert("page_title".into(), Value::String((&p.page_title).clone()));
-    m.insert("editor_type".into(), Value::String((&p.editor_type).clone()));
-    m.insert("granularity".into(), Value::String((&p.granularity).clone()));
-    m.insert("start".into(), Value::String((&p.start).clone()));
-    m.insert("end".into(), Value::String((&p.end).clone()));
-    Value::Object(m)
-}
-
-impl iface_bytes_difference_data::Guest for crate::Component {
-    fn get_metrics_bytes_difference_absolute_aggregate_project_editor_type_page_type_granularity_start_end(params: iface_bytes_difference_data::GetMetricsBytesDifferenceAbsoluteAggregateProjectEditorTypePageTypeGranularityStartEndParams) -> Result<String, String> {
-        let json = iface_bytes_difference_data__get_metrics_bytes_difference_absolute_aggregate_project_editor_type_page_type_granularity_start_end_params__to_json(&params);
-        dispatch(&OP_BYTES_DIFFERENCE_DATA_GET_METRICS_BYTES_DIFFERENCE_ABSOLUTE_AGGREGATE_PROJECT_EDITOR_TYPE_PAGE_TYPE_GRANULARITY_START_END, json)
-    }
-    fn get_metrics_bytes_difference_absolute_per_page_project_page_title_editor_type_granularity_start_end(params: iface_bytes_difference_data::GetMetricsBytesDifferenceAbsolutePerPageProjectPageTitleEditorTypeGranularityStartEndParams) -> Result<String, String> {
-        let json = iface_bytes_difference_data__get_metrics_bytes_difference_absolute_per_page_project_page_title_editor_type_granularity_start_end_params__to_json(&params);
-        dispatch(&OP_BYTES_DIFFERENCE_DATA_GET_METRICS_BYTES_DIFFERENCE_ABSOLUTE_PER_PAGE_PROJECT_PAGE_TITLE_EDITOR_TYPE_GRANULARITY_START_END, json)
-    }
-    fn get_metrics_bytes_difference_net_aggregate_project_editor_type_page_type_granularity_start_end(params: iface_bytes_difference_data::GetMetricsBytesDifferenceNetAggregateProjectEditorTypePageTypeGranularityStartEndParams) -> Result<String, String> {
-        let json = iface_bytes_difference_data__get_metrics_bytes_difference_net_aggregate_project_editor_type_page_type_granularity_start_end_params__to_json(&params);
-        dispatch(&OP_BYTES_DIFFERENCE_DATA_GET_METRICS_BYTES_DIFFERENCE_NET_AGGREGATE_PROJECT_EDITOR_TYPE_PAGE_TYPE_GRANULARITY_START_END, json)
-    }
-    fn get_metrics_bytes_difference_net_per_page_project_page_title_editor_type_granularity_start_end(params: iface_bytes_difference_data::GetMetricsBytesDifferenceNetPerPageProjectPageTitleEditorTypeGranularityStartEndParams) -> Result<String, String> {
-        let json = iface_bytes_difference_data__get_metrics_bytes_difference_net_per_page_project_page_title_editor_type_granularity_start_end_params__to_json(&params);
-        dispatch(&OP_BYTES_DIFFERENCE_DATA_GET_METRICS_BYTES_DIFFERENCE_NET_PER_PAGE_PROJECT_PAGE_TITLE_EDITOR_TYPE_GRANULARITY_START_END, json)
-    }
-}
-use crate::exports::autostamp::wikimedia::edited_pages_data as iface_edited_pages_data;
-
-const OP_EDITED_PAGES_DATA_GET_METRICS_EDITED_PAGES_AGGREGATE_PROJECT_EDITOR_TYPE_PAGE_TYPE_ACTIVITY_LEVEL_GRANULARITY_START_END: OpSpec = OpSpec {
-    method: "GET",
-    path_template: "/metrics/edited-pages/aggregate/{project}/{editor_type}/{page_type}/{activity_level}/{granularity}/{start}/{end}",
-    fields: &[
-        FieldSpec { snake: "project", location: FieldLocation::Path },
-        FieldSpec { snake: "editor_type", location: FieldLocation::Path },
-        FieldSpec { snake: "page_type", location: FieldLocation::Path },
-        FieldSpec { snake: "activity_level", location: FieldLocation::Path },
-        FieldSpec { snake: "granularity", location: FieldLocation::Path },
-        FieldSpec { snake: "start", location: FieldLocation::Path },
-        FieldSpec { snake: "end", location: FieldLocation::Path },
-    ],
-    auth: &[
-    ],
-};
-
-const OP_EDITED_PAGES_DATA_GET_METRICS_EDITED_PAGES_NEW_PROJECT_EDITOR_TYPE_PAGE_TYPE_GRANULARITY_START_END: OpSpec = OpSpec {
-    method: "GET",
-    path_template: "/metrics/edited-pages/new/{project}/{editor_type}/{page_type}/{granularity}/{start}/{end}",
-    fields: &[
-        FieldSpec { snake: "project", location: FieldLocation::Path },
-        FieldSpec { snake: "editor_type", location: FieldLocation::Path },
-        FieldSpec { snake: "page_type", location: FieldLocation::Path },
-        FieldSpec { snake: "granularity", location: FieldLocation::Path },
-        FieldSpec { snake: "start", location: FieldLocation::Path },
-        FieldSpec { snake: "end", location: FieldLocation::Path },
-    ],
-    auth: &[
-    ],
-};
-
-const OP_EDITED_PAGES_DATA_GET_METRICS_EDITED_PAGES_TOP_BY_ABSOLUTE_BYTES_DIFFERENCE_PROJECT_EDITOR_TYPE_PAGE_TYPE_YEAR_MONTH_DAY: OpSpec = OpSpec {
-    method: "GET",
-    path_template: "/metrics/edited-pages/top-by-absolute-bytes-difference/{project}/{editor_type}/{page_type}/{year}/{month}/{day}",
-    fields: &[
-        FieldSpec { snake: "project", location: FieldLocation::Path },
-        FieldSpec { snake: "editor_type", location: FieldLocation::Path },
-        FieldSpec { snake: "page_type", location: FieldLocation::Path },
-        FieldSpec { snake: "year", location: FieldLocation::Path },
-        FieldSpec { snake: "month", location: FieldLocation::Path },
-        FieldSpec { snake: "day", location: FieldLocation::Path },
-    ],
-    auth: &[
-    ],
-};
-
-const OP_EDITED_PAGES_DATA_GET_METRICS_EDITED_PAGES_TOP_BY_EDITS_PROJECT_EDITOR_TYPE_PAGE_TYPE_YEAR_MONTH_DAY: OpSpec = OpSpec {
-    method: "GET",
-    path_template: "/metrics/edited-pages/top-by-edits/{project}/{editor_type}/{page_type}/{year}/{month}/{day}",
-    fields: &[
-        FieldSpec { snake: "project", location: FieldLocation::Path },
-        FieldSpec { snake: "editor_type", location: FieldLocation::Path },
-        FieldSpec { snake: "page_type", location: FieldLocation::Path },
-        FieldSpec { snake: "year", location: FieldLocation::Path },
-        FieldSpec { snake: "month", location: FieldLocation::Path },
-        FieldSpec { snake: "day", location: FieldLocation::Path },
-    ],
-    auth: &[
-    ],
-};
-
-const OP_EDITED_PAGES_DATA_GET_METRICS_EDITED_PAGES_TOP_BY_NET_BYTES_DIFFERENCE_PROJECT_EDITOR_TYPE_PAGE_TYPE_YEAR_MONTH_DAY: OpSpec = OpSpec {
-    method: "GET",
-    path_template: "/metrics/edited-pages/top-by-net-bytes-difference/{project}/{editor_type}/{page_type}/{year}/{month}/{day}",
-    fields: &[
-        FieldSpec { snake: "project", location: FieldLocation::Path },
-        FieldSpec { snake: "editor_type", location: FieldLocation::Path },
-        FieldSpec { snake: "page_type", location: FieldLocation::Path },
-        FieldSpec { snake: "year", location: FieldLocation::Path },
-        FieldSpec { snake: "month", location: FieldLocation::Path },
-        FieldSpec { snake: "day", location: FieldLocation::Path },
-    ],
-    auth: &[
-    ],
-};
-
-fn iface_edited_pages_data__get_metrics_edited_pages_aggregate_project_editor_type_page_type_activity_level_granularity_start_end_params__to_json(p: &iface_edited_pages_data::GetMetricsEditedPagesAggregateProjectEditorTypePageTypeActivityLevelGranularityStartEndParams) -> Value {
-    let mut m = Map::new();
-    m.insert("project".into(), Value::String((&p.project).clone()));
-    m.insert("editor_type".into(), Value::String((&p.editor_type).clone()));
-    m.insert("page_type".into(), Value::String((&p.page_type).clone()));
-    m.insert("activity_level".into(), Value::String((&p.activity_level).clone()));
-    m.insert("granularity".into(), Value::String((&p.granularity).clone()));
-    m.insert("start".into(), Value::String((&p.start).clone()));
-    m.insert("end".into(), Value::String((&p.end).clone()));
-    Value::Object(m)
-}
-
-fn iface_edited_pages_data__get_metrics_edited_pages_new_project_editor_type_page_type_granularity_start_end_params__to_json(p: &iface_edited_pages_data::GetMetricsEditedPagesNewProjectEditorTypePageTypeGranularityStartEndParams) -> Value {
-    let mut m = Map::new();
-    m.insert("project".into(), Value::String((&p.project).clone()));
-    m.insert("editor_type".into(), Value::String((&p.editor_type).clone()));
-    m.insert("page_type".into(), Value::String((&p.page_type).clone()));
-    m.insert("granularity".into(), Value::String((&p.granularity).clone()));
-    m.insert("start".into(), Value::String((&p.start).clone()));
-    m.insert("end".into(), Value::String((&p.end).clone()));
-    Value::Object(m)
-}
-
-fn iface_edited_pages_data__get_metrics_edited_pages_top_by_absolute_bytes_difference_project_editor_type_page_type_year_month_day_params__to_json(p: &iface_edited_pages_data::GetMetricsEditedPagesTopByAbsoluteBytesDifferenceProjectEditorTypePageTypeYearMonthDayParams) -> Value {
-    let mut m = Map::new();
-    m.insert("project".into(), Value::String((&p.project).clone()));
-    m.insert("editor_type".into(), Value::String((&p.editor_type).clone()));
-    m.insert("page_type".into(), Value::String((&p.page_type).clone()));
-    m.insert("year".into(), Value::String((&p.year).clone()));
-    m.insert("month".into(), Value::String((&p.month).clone()));
-    m.insert("day".into(), Value::String((&p.day).clone()));
-    Value::Object(m)
-}
-
-fn iface_edited_pages_data__get_metrics_edited_pages_top_by_edits_project_editor_type_page_type_year_month_day_params__to_json(p: &iface_edited_pages_data::GetMetricsEditedPagesTopByEditsProjectEditorTypePageTypeYearMonthDayParams) -> Value {
-    let mut m = Map::new();
-    m.insert("project".into(), Value::String((&p.project).clone()));
-    m.insert("editor_type".into(), Value::String((&p.editor_type).clone()));
-    m.insert("page_type".into(), Value::String((&p.page_type).clone()));
-    m.insert("year".into(), Value::String((&p.year).clone()));
-    m.insert("month".into(), Value::String((&p.month).clone()));
-    m.insert("day".into(), Value::String((&p.day).clone()));
-    Value::Object(m)
-}
-
-fn iface_edited_pages_data__get_metrics_edited_pages_top_by_net_bytes_difference_project_editor_type_page_type_year_month_day_params__to_json(p: &iface_edited_pages_data::GetMetricsEditedPagesTopByNetBytesDifferenceProjectEditorTypePageTypeYearMonthDayParams) -> Value {
-    let mut m = Map::new();
-    m.insert("project".into(), Value::String((&p.project).clone()));
-    m.insert("editor_type".into(), Value::String((&p.editor_type).clone()));
-    m.insert("page_type".into(), Value::String((&p.page_type).clone()));
-    m.insert("year".into(), Value::String((&p.year).clone()));
-    m.insert("month".into(), Value::String((&p.month).clone()));
-    m.insert("day".into(), Value::String((&p.day).clone()));
-    Value::Object(m)
-}
-
-impl iface_edited_pages_data::Guest for crate::Component {
-    fn get_metrics_edited_pages_aggregate_project_editor_type_page_type_activity_level_granularity_start_end(params: iface_edited_pages_data::GetMetricsEditedPagesAggregateProjectEditorTypePageTypeActivityLevelGranularityStartEndParams) -> Result<String, String> {
-        let json = iface_edited_pages_data__get_metrics_edited_pages_aggregate_project_editor_type_page_type_activity_level_granularity_start_end_params__to_json(&params);
-        dispatch(&OP_EDITED_PAGES_DATA_GET_METRICS_EDITED_PAGES_AGGREGATE_PROJECT_EDITOR_TYPE_PAGE_TYPE_ACTIVITY_LEVEL_GRANULARITY_START_END, json)
-    }
-    fn get_metrics_edited_pages_new_project_editor_type_page_type_granularity_start_end(params: iface_edited_pages_data::GetMetricsEditedPagesNewProjectEditorTypePageTypeGranularityStartEndParams) -> Result<String, String> {
-        let json = iface_edited_pages_data__get_metrics_edited_pages_new_project_editor_type_page_type_granularity_start_end_params__to_json(&params);
-        dispatch(&OP_EDITED_PAGES_DATA_GET_METRICS_EDITED_PAGES_NEW_PROJECT_EDITOR_TYPE_PAGE_TYPE_GRANULARITY_START_END, json)
-    }
-    fn get_metrics_edited_pages_top_by_absolute_bytes_difference_project_editor_type_page_type_year_month_day(params: iface_edited_pages_data::GetMetricsEditedPagesTopByAbsoluteBytesDifferenceProjectEditorTypePageTypeYearMonthDayParams) -> Result<String, String> {
-        let json = iface_edited_pages_data__get_metrics_edited_pages_top_by_absolute_bytes_difference_project_editor_type_page_type_year_month_day_params__to_json(&params);
-        dispatch(&OP_EDITED_PAGES_DATA_GET_METRICS_EDITED_PAGES_TOP_BY_ABSOLUTE_BYTES_DIFFERENCE_PROJECT_EDITOR_TYPE_PAGE_TYPE_YEAR_MONTH_DAY, json)
-    }
-    fn get_metrics_edited_pages_top_by_edits_project_editor_type_page_type_year_month_day(params: iface_edited_pages_data::GetMetricsEditedPagesTopByEditsProjectEditorTypePageTypeYearMonthDayParams) -> Result<String, String> {
-        let json = iface_edited_pages_data__get_metrics_edited_pages_top_by_edits_project_editor_type_page_type_year_month_day_params__to_json(&params);
-        dispatch(&OP_EDITED_PAGES_DATA_GET_METRICS_EDITED_PAGES_TOP_BY_EDITS_PROJECT_EDITOR_TYPE_PAGE_TYPE_YEAR_MONTH_DAY, json)
-    }
-    fn get_metrics_edited_pages_top_by_net_bytes_difference_project_editor_type_page_type_year_month_day(params: iface_edited_pages_data::GetMetricsEditedPagesTopByNetBytesDifferenceProjectEditorTypePageTypeYearMonthDayParams) -> Result<String, String> {
-        let json = iface_edited_pages_data__get_metrics_edited_pages_top_by_net_bytes_difference_project_editor_type_page_type_year_month_day_params__to_json(&params);
-        dispatch(&OP_EDITED_PAGES_DATA_GET_METRICS_EDITED_PAGES_TOP_BY_NET_BYTES_DIFFERENCE_PROJECT_EDITOR_TYPE_PAGE_TYPE_YEAR_MONTH_DAY, json)
-    }
-}
-use crate::exports::autostamp::wikimedia::editors_data as iface_editors_data;
-
-const OP_EDITORS_DATA_GET_METRICS_EDITORS_AGGREGATE_PROJECT_EDITOR_TYPE_PAGE_TYPE_ACTIVITY_LEVEL_GRANULARITY_START_END: OpSpec = OpSpec {
-    method: "GET",
-    path_template: "/metrics/editors/aggregate/{project}/{editor_type}/{page_type}/{activity_level}/{granularity}/{start}/{end}",
-    fields: &[
-        FieldSpec { snake: "project", location: FieldLocation::Path },
-        FieldSpec { snake: "editor_type", location: FieldLocation::Path },
-        FieldSpec { snake: "page_type", location: FieldLocation::Path },
-        FieldSpec { snake: "activity_level", location: FieldLocation::Path },
-        FieldSpec { snake: "granularity", location: FieldLocation::Path },
-        FieldSpec { snake: "start", location: FieldLocation::Path },
-        FieldSpec { snake: "end", location: FieldLocation::Path },
-    ],
-    auth: &[
-    ],
-};
-
-const OP_EDITORS_DATA_GET_METRICS_EDITORS_TOP_BY_ABSOLUTE_BYTES_DIFFERENCE_PROJECT_EDITOR_TYPE_PAGE_TYPE_YEAR_MONTH_DAY: OpSpec = OpSpec {
-    method: "GET",
-    path_template: "/metrics/editors/top-by-absolute-bytes-difference/{project}/{editor_type}/{page_type}/{year}/{month}/{day}",
-    fields: &[
-        FieldSpec { snake: "project", location: FieldLocation::Path },
-        FieldSpec { snake: "editor_type", location: FieldLocation::Path },
-        FieldSpec { snake: "page_type", location: FieldLocation::Path },
-        FieldSpec { snake: "year", location: FieldLocation::Path },
-        FieldSpec { snake: "month", location: FieldLocation::Path },
-        FieldSpec { snake: "day", location: FieldLocation::Path },
-    ],
-    auth: &[
-    ],
-};
-
-const OP_EDITORS_DATA_GET_METRICS_EDITORS_TOP_BY_EDITS_PROJECT_EDITOR_TYPE_PAGE_TYPE_YEAR_MONTH_DAY: OpSpec = OpSpec {
-    method: "GET",
-    path_template: "/metrics/editors/top-by-edits/{project}/{editor_type}/{page_type}/{year}/{month}/{day}",
-    fields: &[
-        FieldSpec { snake: "project", location: FieldLocation::Path },
-        FieldSpec { snake: "editor_type", location: FieldLocation::Path },
-        FieldSpec { snake: "page_type", location: FieldLocation::Path },
-        FieldSpec { snake: "year", location: FieldLocation::Path },
-        FieldSpec { snake: "month", location: FieldLocation::Path },
-        FieldSpec { snake: "day", location: FieldLocation::Path },
-    ],
-    auth: &[
-    ],
-};
-
-const OP_EDITORS_DATA_GET_METRICS_EDITORS_TOP_BY_NET_BYTES_DIFFERENCE_PROJECT_EDITOR_TYPE_PAGE_TYPE_YEAR_MONTH_DAY: OpSpec = OpSpec {
-    method: "GET",
-    path_template: "/metrics/editors/top-by-net-bytes-difference/{project}/{editor_type}/{page_type}/{year}/{month}/{day}",
-    fields: &[
-        FieldSpec { snake: "project", location: FieldLocation::Path },
-        FieldSpec { snake: "editor_type", location: FieldLocation::Path },
-        FieldSpec { snake: "page_type", location: FieldLocation::Path },
-        FieldSpec { snake: "year", location: FieldLocation::Path },
-        FieldSpec { snake: "month", location: FieldLocation::Path },
-        FieldSpec { snake: "day", location: FieldLocation::Path },
-    ],
-    auth: &[
-    ],
-};
-
-fn iface_editors_data__get_metrics_editors_aggregate_project_editor_type_page_type_activity_level_granularity_start_end_params__to_json(p: &iface_editors_data::GetMetricsEditorsAggregateProjectEditorTypePageTypeActivityLevelGranularityStartEndParams) -> Value {
-    let mut m = Map::new();
-    m.insert("project".into(), Value::String((&p.project).clone()));
-    m.insert("editor_type".into(), Value::String((&p.editor_type).clone()));
-    m.insert("page_type".into(), Value::String((&p.page_type).clone()));
-    m.insert("activity_level".into(), Value::String((&p.activity_level).clone()));
-    m.insert("granularity".into(), Value::String((&p.granularity).clone()));
-    m.insert("start".into(), Value::String((&p.start).clone()));
-    m.insert("end".into(), Value::String((&p.end).clone()));
-    Value::Object(m)
-}
-
-fn iface_editors_data__get_metrics_editors_top_by_absolute_bytes_difference_project_editor_type_page_type_year_month_day_params__to_json(p: &iface_editors_data::GetMetricsEditorsTopByAbsoluteBytesDifferenceProjectEditorTypePageTypeYearMonthDayParams) -> Value {
-    let mut m = Map::new();
-    m.insert("project".into(), Value::String((&p.project).clone()));
-    m.insert("editor_type".into(), Value::String((&p.editor_type).clone()));
-    m.insert("page_type".into(), Value::String((&p.page_type).clone()));
-    m.insert("year".into(), Value::String((&p.year).clone()));
-    m.insert("month".into(), Value::String((&p.month).clone()));
-    m.insert("day".into(), Value::String((&p.day).clone()));
-    Value::Object(m)
-}
-
-fn iface_editors_data__get_metrics_editors_top_by_edits_project_editor_type_page_type_year_month_day_params__to_json(p: &iface_editors_data::GetMetricsEditorsTopByEditsProjectEditorTypePageTypeYearMonthDayParams) -> Value {
-    let mut m = Map::new();
-    m.insert("project".into(), Value::String((&p.project).clone()));
-    m.insert("editor_type".into(), Value::String((&p.editor_type).clone()));
-    m.insert("page_type".into(), Value::String((&p.page_type).clone()));
-    m.insert("year".into(), Value::String((&p.year).clone()));
-    m.insert("month".into(), Value::String((&p.month).clone()));
-    m.insert("day".into(), Value::String((&p.day).clone()));
-    Value::Object(m)
-}
-
-fn iface_editors_data__get_metrics_editors_top_by_net_bytes_difference_project_editor_type_page_type_year_month_day_params__to_json(p: &iface_editors_data::GetMetricsEditorsTopByNetBytesDifferenceProjectEditorTypePageTypeYearMonthDayParams) -> Value {
-    let mut m = Map::new();
-    m.insert("project".into(), Value::String((&p.project).clone()));
-    m.insert("editor_type".into(), Value::String((&p.editor_type).clone()));
-    m.insert("page_type".into(), Value::String((&p.page_type).clone()));
-    m.insert("year".into(), Value::String((&p.year).clone()));
-    m.insert("month".into(), Value::String((&p.month).clone()));
-    m.insert("day".into(), Value::String((&p.day).clone()));
-    Value::Object(m)
-}
-
-impl iface_editors_data::Guest for crate::Component {
-    fn get_metrics_editors_aggregate_project_editor_type_page_type_activity_level_granularity_start_end(params: iface_editors_data::GetMetricsEditorsAggregateProjectEditorTypePageTypeActivityLevelGranularityStartEndParams) -> Result<String, String> {
-        let json = iface_editors_data__get_metrics_editors_aggregate_project_editor_type_page_type_activity_level_granularity_start_end_params__to_json(&params);
-        dispatch(&OP_EDITORS_DATA_GET_METRICS_EDITORS_AGGREGATE_PROJECT_EDITOR_TYPE_PAGE_TYPE_ACTIVITY_LEVEL_GRANULARITY_START_END, json)
-    }
-    fn get_metrics_editors_top_by_absolute_bytes_difference_project_editor_type_page_type_year_month_day(params: iface_editors_data::GetMetricsEditorsTopByAbsoluteBytesDifferenceProjectEditorTypePageTypeYearMonthDayParams) -> Result<String, String> {
-        let json = iface_editors_data__get_metrics_editors_top_by_absolute_bytes_difference_project_editor_type_page_type_year_month_day_params__to_json(&params);
-        dispatch(&OP_EDITORS_DATA_GET_METRICS_EDITORS_TOP_BY_ABSOLUTE_BYTES_DIFFERENCE_PROJECT_EDITOR_TYPE_PAGE_TYPE_YEAR_MONTH_DAY, json)
-    }
-    fn get_metrics_editors_top_by_edits_project_editor_type_page_type_year_month_day(params: iface_editors_data::GetMetricsEditorsTopByEditsProjectEditorTypePageTypeYearMonthDayParams) -> Result<String, String> {
-        let json = iface_editors_data__get_metrics_editors_top_by_edits_project_editor_type_page_type_year_month_day_params__to_json(&params);
-        dispatch(&OP_EDITORS_DATA_GET_METRICS_EDITORS_TOP_BY_EDITS_PROJECT_EDITOR_TYPE_PAGE_TYPE_YEAR_MONTH_DAY, json)
-    }
-    fn get_metrics_editors_top_by_net_bytes_difference_project_editor_type_page_type_year_month_day(params: iface_editors_data::GetMetricsEditorsTopByNetBytesDifferenceProjectEditorTypePageTypeYearMonthDayParams) -> Result<String, String> {
-        let json = iface_editors_data__get_metrics_editors_top_by_net_bytes_difference_project_editor_type_page_type_year_month_day_params__to_json(&params);
-        dispatch(&OP_EDITORS_DATA_GET_METRICS_EDITORS_TOP_BY_NET_BYTES_DIFFERENCE_PROJECT_EDITOR_TYPE_PAGE_TYPE_YEAR_MONTH_DAY, json)
-    }
-}
-use crate::exports::autostamp::wikimedia::edits_data as iface_edits_data;
-
-const OP_EDITS_DATA_GET_METRICS_EDITS_AGGREGATE_PROJECT_EDITOR_TYPE_PAGE_TYPE_GRANULARITY_START_END: OpSpec = OpSpec {
-    method: "GET",
-    path_template: "/metrics/edits/aggregate/{project}/{editor_type}/{page_type}/{granularity}/{start}/{end}",
-    fields: &[
-        FieldSpec { snake: "project", location: FieldLocation::Path },
-        FieldSpec { snake: "editor_type", location: FieldLocation::Path },
-        FieldSpec { snake: "page_type", location: FieldLocation::Path },
-        FieldSpec { snake: "granularity", location: FieldLocation::Path },
-        FieldSpec { snake: "start", location: FieldLocation::Path },
-        FieldSpec { snake: "end", location: FieldLocation::Path },
-    ],
-    auth: &[
-    ],
-};
-
-const OP_EDITS_DATA_GET_METRICS_EDITS_PER_PAGE_PROJECT_PAGE_TITLE_EDITOR_TYPE_GRANULARITY_START_END: OpSpec = OpSpec {
-    method: "GET",
-    path_template: "/metrics/edits/per-page/{project}/{page_title}/{editor_type}/{granularity}/{start}/{end}",
-    fields: &[
-        FieldSpec { snake: "project", location: FieldLocation::Path },
-        FieldSpec { snake: "page_title", location: FieldLocation::Path },
-        FieldSpec { snake: "editor_type", location: FieldLocation::Path },
-        FieldSpec { snake: "granularity", location: FieldLocation::Path },
-        FieldSpec { snake: "start", location: FieldLocation::Path },
-        FieldSpec { snake: "end", location: FieldLocation::Path },
-    ],
-    auth: &[
-    ],
-};
-
-fn iface_edits_data__get_metrics_edits_aggregate_project_editor_type_page_type_granularity_start_end_params__to_json(p: &iface_edits_data::GetMetricsEditsAggregateProjectEditorTypePageTypeGranularityStartEndParams) -> Value {
-    let mut m = Map::new();
-    m.insert("project".into(), Value::String((&p.project).clone()));
-    m.insert("editor_type".into(), Value::String((&p.editor_type).clone()));
-    m.insert("page_type".into(), Value::String((&p.page_type).clone()));
-    m.insert("granularity".into(), Value::String((&p.granularity).clone()));
-    m.insert("start".into(), Value::String((&p.start).clone()));
-    m.insert("end".into(), Value::String((&p.end).clone()));
-    Value::Object(m)
-}
-
-fn iface_edits_data__get_metrics_edits_per_page_project_page_title_editor_type_granularity_start_end_params__to_json(p: &iface_edits_data::GetMetricsEditsPerPageProjectPageTitleEditorTypeGranularityStartEndParams) -> Value {
-    let mut m = Map::new();
-    m.insert("project".into(), Value::String((&p.project).clone()));
-    m.insert("page_title".into(), Value::String((&p.page_title).clone()));
-    m.insert("editor_type".into(), Value::String((&p.editor_type).clone()));
-    m.insert("granularity".into(), Value::String((&p.granularity).clone()));
-    m.insert("start".into(), Value::String((&p.start).clone()));
-    m.insert("end".into(), Value::String((&p.end).clone()));
-    Value::Object(m)
-}
-
-impl iface_edits_data::Guest for crate::Component {
-    fn get_metrics_edits_aggregate_project_editor_type_page_type_granularity_start_end(params: iface_edits_data::GetMetricsEditsAggregateProjectEditorTypePageTypeGranularityStartEndParams) -> Result<String, String> {
-        let json = iface_edits_data__get_metrics_edits_aggregate_project_editor_type_page_type_granularity_start_end_params__to_json(&params);
-        dispatch(&OP_EDITS_DATA_GET_METRICS_EDITS_AGGREGATE_PROJECT_EDITOR_TYPE_PAGE_TYPE_GRANULARITY_START_END, json)
-    }
-    fn get_metrics_edits_per_page_project_page_title_editor_type_granularity_start_end(params: iface_edits_data::GetMetricsEditsPerPageProjectPageTitleEditorTypeGranularityStartEndParams) -> Result<String, String> {
-        let json = iface_edits_data__get_metrics_edits_per_page_project_page_title_editor_type_granularity_start_end_params__to_json(&params);
-        dispatch(&OP_EDITS_DATA_GET_METRICS_EDITS_PER_PAGE_PROJECT_PAGE_TITLE_EDITOR_TYPE_GRANULARITY_START_END, json)
-    }
-}
-use crate::exports::autostamp::wikimedia::legacy_data as iface_legacy_data;
-
-const OP_LEGACY_DATA_GET_METRICS_LEGACY_PAGECOUNTS_AGGREGATE_PROJECT_ACCESS_SITE_GRANULARITY_START_END: OpSpec = OpSpec {
-    method: "GET",
-    path_template: "/metrics/legacy/pagecounts/aggregate/{project}/{access_site}/{granularity}/{start}/{end}",
-    fields: &[
-        FieldSpec { snake: "project", location: FieldLocation::Path },
-        FieldSpec { snake: "access_site", location: FieldLocation::Path },
-        FieldSpec { snake: "granularity", location: FieldLocation::Path },
-        FieldSpec { snake: "start", location: FieldLocation::Path },
-        FieldSpec { snake: "end", location: FieldLocation::Path },
-    ],
-    auth: &[
-    ],
-};
-
-fn iface_legacy_data__get_metrics_legacy_pagecounts_aggregate_project_access_site_granularity_start_end_params__to_json(p: &iface_legacy_data::GetMetricsLegacyPagecountsAggregateProjectAccessSiteGranularityStartEndParams) -> Value {
-    let mut m = Map::new();
-    m.insert("project".into(), Value::String((&p.project).clone()));
-    m.insert("access_site".into(), Value::String((&p.access_site).clone()));
-    m.insert("granularity".into(), Value::String((&p.granularity).clone()));
-    m.insert("start".into(), Value::String((&p.start).clone()));
-    m.insert("end".into(), Value::String((&p.end).clone()));
-    Value::Object(m)
-}
-
-impl iface_legacy_data::Guest for crate::Component {
-    fn get_metrics_legacy_pagecounts_aggregate_project_access_site_granularity_start_end(params: iface_legacy_data::GetMetricsLegacyPagecountsAggregateProjectAccessSiteGranularityStartEndParams) -> Result<String, String> {
-        let json = iface_legacy_data__get_metrics_legacy_pagecounts_aggregate_project_access_site_granularity_start_end_params__to_json(&params);
-        dispatch(&OP_LEGACY_DATA_GET_METRICS_LEGACY_PAGECOUNTS_AGGREGATE_PROJECT_ACCESS_SITE_GRANULARITY_START_END, json)
-    }
-}
-use crate::exports::autostamp::wikimedia::pageviews_data as iface_pageviews_data;
-
-const OP_PAGEVIEWS_DATA_GET_METRICS_PAGEVIEWS_AGGREGATE_PROJECT_ACCESS_AGENT_GRANULARITY_START_END: OpSpec = OpSpec {
-    method: "GET",
-    path_template: "/metrics/pageviews/aggregate/{project}/{access}/{agent}/{granularity}/{start}/{end}",
-    fields: &[
-        FieldSpec { snake: "project", location: FieldLocation::Path },
-        FieldSpec { snake: "access", location: FieldLocation::Path },
-        FieldSpec { snake: "agent", location: FieldLocation::Path },
-        FieldSpec { snake: "granularity", location: FieldLocation::Path },
-        FieldSpec { snake: "start", location: FieldLocation::Path },
-        FieldSpec { snake: "end", location: FieldLocation::Path },
-    ],
-    auth: &[
-    ],
-};
-
-const OP_PAGEVIEWS_DATA_GET_METRICS_PAGEVIEWS_PER_ARTICLE_PROJECT_ACCESS_AGENT_ARTICLE_GRANULARITY_START_END: OpSpec = OpSpec {
-    method: "GET",
-    path_template: "/metrics/pageviews/per-article/{project}/{access}/{agent}/{article}/{granularity}/{start}/{end}",
-    fields: &[
-        FieldSpec { snake: "project", location: FieldLocation::Path },
-        FieldSpec { snake: "access", location: FieldLocation::Path },
-        FieldSpec { snake: "agent", location: FieldLocation::Path },
-        FieldSpec { snake: "article", location: FieldLocation::Path },
-        FieldSpec { snake: "granularity", location: FieldLocation::Path },
-        FieldSpec { snake: "start", location: FieldLocation::Path },
-        FieldSpec { snake: "end", location: FieldLocation::Path },
-    ],
-    auth: &[
-    ],
-};
-
-const OP_PAGEVIEWS_DATA_GET_METRICS_PAGEVIEWS_TOP_BY_COUNTRY_PROJECT_ACCESS_YEAR_MONTH: OpSpec = OpSpec {
-    method: "GET",
-    path_template: "/metrics/pageviews/top-by-country/{project}/{access}/{year}/{month}",
-    fields: &[
-        FieldSpec { snake: "project", location: FieldLocation::Path },
-        FieldSpec { snake: "access", location: FieldLocation::Path },
-        FieldSpec { snake: "year", location: FieldLocation::Path },
-        FieldSpec { snake: "month", location: FieldLocation::Path },
-    ],
-    auth: &[
-    ],
-};
-
-const OP_PAGEVIEWS_DATA_GET_METRICS_PAGEVIEWS_TOP_PROJECT_ACCESS_YEAR_MONTH_DAY: OpSpec = OpSpec {
-    method: "GET",
-    path_template: "/metrics/pageviews/top/{project}/{access}/{year}/{month}/{day}",
-    fields: &[
-        FieldSpec { snake: "project", location: FieldLocation::Path },
-        FieldSpec { snake: "access", location: FieldLocation::Path },
-        FieldSpec { snake: "year", location: FieldLocation::Path },
-        FieldSpec { snake: "month", location: FieldLocation::Path },
-        FieldSpec { snake: "day", location: FieldLocation::Path },
-    ],
-    auth: &[
-    ],
-};
-
-fn iface_pageviews_data__get_metrics_pageviews_aggregate_project_access_agent_granularity_start_end_params__to_json(p: &iface_pageviews_data::GetMetricsPageviewsAggregateProjectAccessAgentGranularityStartEndParams) -> Value {
-    let mut m = Map::new();
-    m.insert("project".into(), Value::String((&p.project).clone()));
-    m.insert("access".into(), Value::String((&p.access).clone()));
-    m.insert("agent".into(), Value::String((&p.agent).clone()));
-    m.insert("granularity".into(), Value::String((&p.granularity).clone()));
-    m.insert("start".into(), Value::String((&p.start).clone()));
-    m.insert("end".into(), Value::String((&p.end).clone()));
-    Value::Object(m)
-}
-
-fn iface_pageviews_data__get_metrics_pageviews_per_article_project_access_agent_article_granularity_start_end_params__to_json(p: &iface_pageviews_data::GetMetricsPageviewsPerArticleProjectAccessAgentArticleGranularityStartEndParams) -> Value {
-    let mut m = Map::new();
-    m.insert("project".into(), Value::String((&p.project).clone()));
-    m.insert("access".into(), Value::String((&p.access).clone()));
-    m.insert("agent".into(), Value::String((&p.agent).clone()));
-    m.insert("article".into(), Value::String((&p.article).clone()));
-    m.insert("granularity".into(), Value::String((&p.granularity).clone()));
-    m.insert("start".into(), Value::String((&p.start).clone()));
-    m.insert("end".into(), Value::String((&p.end).clone()));
-    Value::Object(m)
-}
-
-fn iface_pageviews_data__get_metrics_pageviews_top_by_country_project_access_year_month_params__to_json(p: &iface_pageviews_data::GetMetricsPageviewsTopByCountryProjectAccessYearMonthParams) -> Value {
-    let mut m = Map::new();
-    m.insert("project".into(), Value::String((&p.project).clone()));
-    m.insert("access".into(), Value::String((&p.access).clone()));
-    m.insert("year".into(), Value::String((&p.year).clone()));
-    m.insert("month".into(), Value::String((&p.month).clone()));
-    Value::Object(m)
-}
-
-fn iface_pageviews_data__get_metrics_pageviews_top_project_access_year_month_day_params__to_json(p: &iface_pageviews_data::GetMetricsPageviewsTopProjectAccessYearMonthDayParams) -> Value {
-    let mut m = Map::new();
-    m.insert("project".into(), Value::String((&p.project).clone()));
-    m.insert("access".into(), Value::String((&p.access).clone()));
-    m.insert("year".into(), Value::String((&p.year).clone()));
-    m.insert("month".into(), Value::String((&p.month).clone()));
-    m.insert("day".into(), Value::String((&p.day).clone()));
-    Value::Object(m)
-}
-
-impl iface_pageviews_data::Guest for crate::Component {
-    fn get_metrics_pageviews_aggregate_project_access_agent_granularity_start_end(params: iface_pageviews_data::GetMetricsPageviewsAggregateProjectAccessAgentGranularityStartEndParams) -> Result<String, String> {
-        let json = iface_pageviews_data__get_metrics_pageviews_aggregate_project_access_agent_granularity_start_end_params__to_json(&params);
-        dispatch(&OP_PAGEVIEWS_DATA_GET_METRICS_PAGEVIEWS_AGGREGATE_PROJECT_ACCESS_AGENT_GRANULARITY_START_END, json)
-    }
-    fn get_metrics_pageviews_per_article_project_access_agent_article_granularity_start_end(params: iface_pageviews_data::GetMetricsPageviewsPerArticleProjectAccessAgentArticleGranularityStartEndParams) -> Result<String, String> {
-        let json = iface_pageviews_data__get_metrics_pageviews_per_article_project_access_agent_article_granularity_start_end_params__to_json(&params);
-        dispatch(&OP_PAGEVIEWS_DATA_GET_METRICS_PAGEVIEWS_PER_ARTICLE_PROJECT_ACCESS_AGENT_ARTICLE_GRANULARITY_START_END, json)
-    }
-    fn get_metrics_pageviews_top_by_country_project_access_year_month(params: iface_pageviews_data::GetMetricsPageviewsTopByCountryProjectAccessYearMonthParams) -> Result<String, String> {
-        let json = iface_pageviews_data__get_metrics_pageviews_top_by_country_project_access_year_month_params__to_json(&params);
-        dispatch(&OP_PAGEVIEWS_DATA_GET_METRICS_PAGEVIEWS_TOP_BY_COUNTRY_PROJECT_ACCESS_YEAR_MONTH, json)
-    }
-    fn get_metrics_pageviews_top_project_access_year_month_day(params: iface_pageviews_data::GetMetricsPageviewsTopProjectAccessYearMonthDayParams) -> Result<String, String> {
-        let json = iface_pageviews_data__get_metrics_pageviews_top_project_access_year_month_day_params__to_json(&params);
-        dispatch(&OP_PAGEVIEWS_DATA_GET_METRICS_PAGEVIEWS_TOP_PROJECT_ACCESS_YEAR_MONTH_DAY, json)
-    }
-}
-use crate::exports::autostamp::wikimedia::registered_users_data as iface_registered_users_data;
-
-const OP_REGISTERED_USERS_DATA_GET_METRICS_REGISTERED_USERS_NEW_PROJECT_GRANULARITY_START_END: OpSpec = OpSpec {
-    method: "GET",
-    path_template: "/metrics/registered-users/new/{project}/{granularity}/{start}/{end}",
-    fields: &[
-        FieldSpec { snake: "project", location: FieldLocation::Path },
-        FieldSpec { snake: "granularity", location: FieldLocation::Path },
-        FieldSpec { snake: "start", location: FieldLocation::Path },
-        FieldSpec { snake: "end", location: FieldLocation::Path },
-    ],
-    auth: &[
-    ],
-};
-
-fn iface_registered_users_data__get_metrics_registered_users_new_project_granularity_start_end_params__to_json(p: &iface_registered_users_data::GetMetricsRegisteredUsersNewProjectGranularityStartEndParams) -> Value {
-    let mut m = Map::new();
-    m.insert("project".into(), Value::String((&p.project).clone()));
-    m.insert("granularity".into(), Value::String((&p.granularity).clone()));
-    m.insert("start".into(), Value::String((&p.start).clone()));
-    m.insert("end".into(), Value::String((&p.end).clone()));
-    Value::Object(m)
-}
-
-impl iface_registered_users_data::Guest for crate::Component {
-    fn get_metrics_registered_users_new_project_granularity_start_end(params: iface_registered_users_data::GetMetricsRegisteredUsersNewProjectGranularityStartEndParams) -> Result<String, String> {
-        let json = iface_registered_users_data__get_metrics_registered_users_new_project_granularity_start_end_params__to_json(&params);
-        dispatch(&OP_REGISTERED_USERS_DATA_GET_METRICS_REGISTERED_USERS_NEW_PROJECT_GRANULARITY_START_END, json)
-    }
-}
-use crate::exports::autostamp::wikimedia::unique_devices_data as iface_unique_devices_data;
-
-const OP_UNIQUE_DEVICES_DATA_GET_METRICS_UNIQUE_DEVICES_PROJECT_ACCESS_SITE_GRANULARITY_START_END: OpSpec = OpSpec {
-    method: "GET",
-    path_template: "/metrics/unique-devices/{project}/{access_site}/{granularity}/{start}/{end}",
-    fields: &[
-        FieldSpec { snake: "project", location: FieldLocation::Path },
-        FieldSpec { snake: "access_site", location: FieldLocation::Path },
-        FieldSpec { snake: "granularity", location: FieldLocation::Path },
-        FieldSpec { snake: "start", location: FieldLocation::Path },
-        FieldSpec { snake: "end", location: FieldLocation::Path },
-    ],
-    auth: &[
-    ],
-};
-
-fn iface_unique_devices_data__get_metrics_unique_devices_project_access_site_granularity_start_end_params__to_json(p: &iface_unique_devices_data::GetMetricsUniqueDevicesProjectAccessSiteGranularityStartEndParams) -> Value {
-    let mut m = Map::new();
-    m.insert("project".into(), Value::String((&p.project).clone()));
-    m.insert("access_site".into(), Value::String((&p.access_site).clone()));
-    m.insert("granularity".into(), Value::String((&p.granularity).clone()));
-    m.insert("start".into(), Value::String((&p.start).clone()));
-    m.insert("end".into(), Value::String((&p.end).clone()));
-    Value::Object(m)
-}
-
-impl iface_unique_devices_data::Guest for crate::Component {
-    fn get_metrics_unique_devices_project_access_site_granularity_start_end(params: iface_unique_devices_data::GetMetricsUniqueDevicesProjectAccessSiteGranularityStartEndParams) -> Result<String, String> {
-        let json = iface_unique_devices_data__get_metrics_unique_devices_project_access_site_granularity_start_end_params__to_json(&params);
-        dispatch(&OP_UNIQUE_DEVICES_DATA_GET_METRICS_UNIQUE_DEVICES_PROJECT_ACCESS_SITE_GRANULARITY_START_END, json)
-    }
-}
-use crate::exports::autostamp::wikimedia::transform as iface_transform;
-
-const OP_TRANSFORM_POST_TRANSFORM_HTML_FROM_FROM_LANG_TO_TO_LANG: OpSpec = OpSpec {
-    method: "POST",
-    path_template: "/transform/html/from/{from_lang}/to/{to_lang}",
-    fields: &[
-        FieldSpec { snake: "from_lang", location: FieldLocation::Path },
-        FieldSpec { snake: "to_lang", location: FieldLocation::Path },
-        FieldSpec { snake: "html", location: FieldLocation::Body },
-    ],
-    auth: &[
-    ],
-};
-
-const OP_TRANSFORM_POST_TRANSFORM_HTML_FROM_FROM_LANG_TO_TO_LANG_PROVIDER: OpSpec = OpSpec {
-    method: "POST",
-    path_template: "/transform/html/from/{from_lang}/to/{to_lang}/{provider}",
-    fields: &[
-        FieldSpec { snake: "from_lang", location: FieldLocation::Path },
-        FieldSpec { snake: "to_lang", location: FieldLocation::Path },
-        FieldSpec { snake: "provider", location: FieldLocation::Path },
-        FieldSpec { snake: "html", location: FieldLocation::Body },
-    ],
-    auth: &[
-    ],
-};
-
-const OP_TRANSFORM_GET_TRANSFORM_LIST_LANGUAGEPAIRS: OpSpec = OpSpec {
-    method: "GET",
-    path_template: "/transform/list/languagepairs/",
-    fields: &[
-    ],
-    auth: &[
-    ],
-};
-
-const OP_TRANSFORM_GET_TRANSFORM_LIST_PAIR_FROM_TO: OpSpec = OpSpec {
-    method: "GET",
-    path_template: "/transform/list/pair/{from}/{to}/",
-    fields: &[
-        FieldSpec { snake: "from", location: FieldLocation::Path },
-        FieldSpec { snake: "to", location: FieldLocation::Path },
-    ],
-    auth: &[
-    ],
-};
-
-const OP_TRANSFORM_GET_TRANSFORM_LIST_TOOL_TOOL: OpSpec = OpSpec {
-    method: "GET",
-    path_template: "/transform/list/tool/{tool}",
-    fields: &[
-        FieldSpec { snake: "tool", location: FieldLocation::Path },
-    ],
-    auth: &[
-    ],
-};
-
-const OP_TRANSFORM_GET_TRANSFORM_LIST_TOOL_TOOL_FROM: OpSpec = OpSpec {
-    method: "GET",
-    path_template: "/transform/list/tool/{tool}/{from}",
-    fields: &[
-        FieldSpec { snake: "tool", location: FieldLocation::Path },
-        FieldSpec { snake: "from", location: FieldLocation::Path },
-    ],
-    auth: &[
-    ],
-};
-
-const OP_TRANSFORM_GET_TRANSFORM_LIST_TOOL_TOOL_FROM_TO: OpSpec = OpSpec {
-    method: "GET",
-    path_template: "/transform/list/tool/{tool}/{from}/{to}",
-    fields: &[
-        FieldSpec { snake: "tool", location: FieldLocation::Path },
-        FieldSpec { snake: "from", location: FieldLocation::Path },
-        FieldSpec { snake: "to", location: FieldLocation::Path },
-    ],
-    auth: &[
-    ],
-};
-
-const OP_TRANSFORM_GET_TRANSFORM_WORD_FROM_FROM_LANG_TO_TO_LANG_WORD: OpSpec = OpSpec {
-    method: "GET",
-    path_template: "/transform/word/from/{from_lang}/to/{to_lang}/{word}",
-    fields: &[
-        FieldSpec { snake: "from_lang", location: FieldLocation::Path },
-        FieldSpec { snake: "to_lang", location: FieldLocation::Path },
-        FieldSpec { snake: "word", location: FieldLocation::Path },
-    ],
-    auth: &[
-    ],
-};
-
-const OP_TRANSFORM_GET_TRANSFORM_WORD_FROM_FROM_LANG_TO_TO_LANG_WORD_PROVIDER: OpSpec = OpSpec {
-    method: "GET",
-    path_template: "/transform/word/from/{from_lang}/to/{to_lang}/{word}/{provider}",
-    fields: &[
-        FieldSpec { snake: "from_lang", location: FieldLocation::Path },
-        FieldSpec { snake: "to_lang", location: FieldLocation::Path },
-        FieldSpec { snake: "word", location: FieldLocation::Path },
-        FieldSpec { snake: "provider", location: FieldLocation::Path },
-    ],
-    auth: &[
-    ],
-};
-
-fn iface_transform__post_transform_html_from_from_lang_to_to_lang_params__to_json(p: &iface_transform::PostTransformHtmlFromFromLangToToLangParams) -> Value {
-    let mut m = Map::new();
-    m.insert("from_lang".into(), Value::String((&p.from_lang).clone()));
-    m.insert("to_lang".into(), Value::String((&p.to_lang).clone()));
-    m.insert("html".into(), Value::String((&p.html).clone()));
-    Value::Object(m)
-}
-
-fn iface_transform__post_transform_html_from_from_lang_to_to_lang_provider_params__to_json(p: &iface_transform::PostTransformHtmlFromFromLangToToLangProviderParams) -> Value {
-    let mut m = Map::new();
-    m.insert("from_lang".into(), Value::String((&p.from_lang).clone()));
-    m.insert("to_lang".into(), Value::String((&p.to_lang).clone()));
-    m.insert("provider".into(), Value::String((&p.provider).clone()));
-    m.insert("html".into(), Value::String((&p.html).clone()));
-    Value::Object(m)
-}
-
-fn iface_transform__get_transform_list_pair_from_to_params__to_json(p: &iface_transform::GetTransformListPairFromToParams) -> Value {
-    let mut m = Map::new();
-    m.insert("from".into(), Value::String((&p.from_op).clone()));
-    m.insert("to".into(), Value::String((&p.to).clone()));
-    Value::Object(m)
-}
-
-fn iface_transform__get_transform_list_tool_tool_params__to_json(p: &iface_transform::GetTransformListToolToolParams) -> Value {
-    let mut m = Map::new();
-    m.insert("tool".into(), Value::String((&p.tool).clone()));
-    Value::Object(m)
-}
-
-fn iface_transform__get_transform_list_tool_tool_from_params__to_json(p: &iface_transform::GetTransformListToolToolFromParams) -> Value {
-    let mut m = Map::new();
-    m.insert("tool".into(), Value::String((&p.tool).clone()));
-    m.insert("from".into(), Value::String((&p.from_op).clone()));
-    Value::Object(m)
-}
-
-fn iface_transform__get_transform_list_tool_tool_from_to_params__to_json(p: &iface_transform::GetTransformListToolToolFromToParams) -> Value {
-    let mut m = Map::new();
-    m.insert("tool".into(), Value::String((&p.tool).clone()));
-    m.insert("from".into(), Value::String((&p.from_op).clone()));
-    m.insert("to".into(), Value::String((&p.to).clone()));
-    Value::Object(m)
-}
-
-fn iface_transform__get_transform_word_from_from_lang_to_to_lang_word_params__to_json(p: &iface_transform::GetTransformWordFromFromLangToToLangWordParams) -> Value {
-    let mut m = Map::new();
-    m.insert("from_lang".into(), Value::String((&p.from_lang).clone()));
-    m.insert("to_lang".into(), Value::String((&p.to_lang).clone()));
-    m.insert("word".into(), Value::String((&p.word).clone()));
-    Value::Object(m)
-}
-
-fn iface_transform__get_transform_word_from_from_lang_to_to_lang_word_provider_params__to_json(p: &iface_transform::GetTransformWordFromFromLangToToLangWordProviderParams) -> Value {
-    let mut m = Map::new();
-    m.insert("from_lang".into(), Value::String((&p.from_lang).clone()));
-    m.insert("to_lang".into(), Value::String((&p.to_lang).clone()));
-    m.insert("word".into(), Value::String((&p.word).clone()));
-    m.insert("provider".into(), Value::String((&p.provider).clone()));
-    Value::Object(m)
-}
-
-impl iface_transform::Guest for crate::Component {
-    fn post_transform_html_from_from_lang_to_to_lang(params: iface_transform::PostTransformHtmlFromFromLangToToLangParams) -> Result<String, String> {
-        let json = iface_transform__post_transform_html_from_from_lang_to_to_lang_params__to_json(&params);
-        dispatch(&OP_TRANSFORM_POST_TRANSFORM_HTML_FROM_FROM_LANG_TO_TO_LANG, json)
-    }
-    fn post_transform_html_from_from_lang_to_to_lang_provider(params: iface_transform::PostTransformHtmlFromFromLangToToLangProviderParams) -> Result<String, String> {
-        let json = iface_transform__post_transform_html_from_from_lang_to_to_lang_provider_params__to_json(&params);
-        dispatch(&OP_TRANSFORM_POST_TRANSFORM_HTML_FROM_FROM_LANG_TO_TO_LANG_PROVIDER, json)
-    }
-    fn get_transform_list_languagepairs() -> Result<String, String> {
-        dispatch(&OP_TRANSFORM_GET_TRANSFORM_LIST_LANGUAGEPAIRS, Value::Object(Map::new()))
-    }
-    fn get_transform_list_pair_from_to(params: iface_transform::GetTransformListPairFromToParams) -> Result<String, String> {
-        let json = iface_transform__get_transform_list_pair_from_to_params__to_json(&params);
-        dispatch(&OP_TRANSFORM_GET_TRANSFORM_LIST_PAIR_FROM_TO, json)
-    }
-    fn get_transform_list_tool_tool(params: iface_transform::GetTransformListToolToolParams) -> Result<String, String> {
-        let json = iface_transform__get_transform_list_tool_tool_params__to_json(&params);
-        dispatch(&OP_TRANSFORM_GET_TRANSFORM_LIST_TOOL_TOOL, json)
-    }
-    fn get_transform_list_tool_tool_from(params: iface_transform::GetTransformListToolToolFromParams) -> Result<String, String> {
-        let json = iface_transform__get_transform_list_tool_tool_from_params__to_json(&params);
-        dispatch(&OP_TRANSFORM_GET_TRANSFORM_LIST_TOOL_TOOL_FROM, json)
-    }
-    fn get_transform_list_tool_tool_from_to(params: iface_transform::GetTransformListToolToolFromToParams) -> Result<String, String> {
-        let json = iface_transform__get_transform_list_tool_tool_from_to_params__to_json(&params);
-        dispatch(&OP_TRANSFORM_GET_TRANSFORM_LIST_TOOL_TOOL_FROM_TO, json)
-    }
-    fn get_transform_word_from_from_lang_to_to_lang_word(params: iface_transform::GetTransformWordFromFromLangToToLangWordParams) -> Result<String, String> {
-        let json = iface_transform__get_transform_word_from_from_lang_to_to_lang_word_params__to_json(&params);
-        dispatch(&OP_TRANSFORM_GET_TRANSFORM_WORD_FROM_FROM_LANG_TO_TO_LANG_WORD, json)
-    }
-    fn get_transform_word_from_from_lang_to_to_lang_word_provider(params: iface_transform::GetTransformWordFromFromLangToToLangWordProviderParams) -> Result<String, String> {
-        let json = iface_transform__get_transform_word_from_from_lang_to_to_lang_word_provider_params__to_json(&params);
-        dispatch(&OP_TRANSFORM_GET_TRANSFORM_WORD_FROM_FROM_LANG_TO_TO_LANG_WORD_PROVIDER, json)
-    }
-}
+mod iface_feed_content_availability;
+mod iface_math;
+mod iface_bytes_difference_data;
+mod iface_edited_pages_data;
+mod iface_editors_data;
+mod iface_edits_data;
+mod iface_legacy_data;
+mod iface_pageviews_data;
+mod iface_registered_users_data;
+mod iface_unique_devices_data;
+mod iface_transform;
 
 export!(Component);

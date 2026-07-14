@@ -11,8 +11,8 @@ triggered.
 
 | Setting | Value |
 | --- | --- |
-| Package | `autostamp:tfl@0.3.0` |
-| Published version | `0.3.0+tfl-v1` |
+| Package | `autostamp:tfl@0.5.0` |
+| Published version | `0.5.0+tfl-v1` |
 | Tag filter | all tags |
 | Operations generated | 84 |
 | Infer API-key credentials | enabled — not triggered |

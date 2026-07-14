@@ -1,71 +1,151 @@
-package autostamp:medium@0.3.0;
+package autostamp:medium@0.5.0;
 
 interface welcome {
+  record get-response {
+    /// Full name of the API's developer
+    developer: option<string>,
+    /// Link to the Medium API's documentation
+    documentation: option<string>,
+    /// Email ID of the developer
+    email: option<string>,
+    /// LinkedIn Page URL
+    linkedin: option<string>,
+    /// Full name of the API
+    name: option<string>,
+    /// Twitter Profile URL
+    twitter: option<string>,
+    /// Link to the Medium API's website
+    website: option<string>
+  }
+
   /// Get Welcome
-  get: func() -> result<string, string>;
+  get: func() -> result<get-response, string>;
 
 }
 
 
 interface article {
+  record get-article-article-id-response {
+    author: option<string>,
+    claps: option<s32>,
+    id: option<string>,
+    image-url: option<string>,
+    is-locked: option<bool>,
+    is-series: option<bool>,
+    lang: option<string>,
+    last-modified-at: option<string>,
+    publication-id: option<string>,
+    published-at: option<string>,
+    reading-time: option<f64>,
+    responses-count: option<s32>,
+    subtitle: option<string>,
+    tags: option<list<string>>,
+    title: option<string>,
+    topics: option<list<string>>,
+    url: option<string>,
+    voters: option<s32>,
+    word-count: option<s32>
+  }
+
+  record get-article-article-id-content-response {
+    content: option<string>
+  }
+
+  record get-article-article-id-fans-response {
+    article-id: option<string>,
+    count: option<s32>,
+    voters: option<list<string>>
+  }
+
+  record get-article-article-id-markdown-response {
+    markdown: option<string>
+  }
+
+  record get-article-article-id-related-response {
+    id: option<string>,
+    related-articles: option<list<string>>
+  }
+
+  record get-article-article-id-responses-response {
+    id: option<string>,
+    responses: option<list<string>>
+  }
+
   /// Get Article Info
   record get-article-article-id-params {
     /// It's a unique hash id assigned to every Medium Article.
     article-id: string
   }
-  get-article-article-id: func(params: get-article-article-id-params) -> result<string, string>;
+  get-article-article-id: func(params: get-article-article-id-params) -> result<get-article-article-id-response, string>;
 
   /// Get Article's Content
   record get-article-article-id-content-params {
     /// It's a unique hash id assigned to every Medium Article.
     article-id: string
   }
-  get-article-article-id-content: func(params: get-article-article-id-content-params) -> result<string, string>;
+  get-article-article-id-content: func(params: get-article-article-id-content-params) -> result<get-article-article-id-content-response, string>;
 
   /// Get Article Fans
   record get-article-article-id-fans-params {
     /// It's a unique hash id assigned to every Medium Article.
     article-id: string
   }
-  get-article-article-id-fans: func(params: get-article-article-id-fans-params) -> result<string, string>;
+  get-article-article-id-fans: func(params: get-article-article-id-fans-params) -> result<get-article-article-id-fans-response, string>;
 
   /// Get Article's Markdown
   record get-article-article-id-markdown-params {
     /// It's a unique hash id assigned to every Medium Article.
     article-id: string
   }
-  get-article-article-id-markdown: func(params: get-article-article-id-markdown-params) -> result<string, string>;
+  get-article-article-id-markdown: func(params: get-article-article-id-markdown-params) -> result<get-article-article-id-markdown-response, string>;
 
   /// Get Related Articles
   record get-article-article-id-related-params {
     /// It's a unique hash id assigned to every Medium Article.
     article-id: string
   }
-  get-article-article-id-related: func(params: get-article-article-id-related-params) -> result<string, string>;
+  get-article-article-id-related: func(params: get-article-article-id-related-params) -> result<get-article-article-id-related-response, string>;
 
   /// Get Article Responses
   record get-article-article-id-responses-params {
     /// It's a unique hash id assigned to every Medium Article.
     article-id: string
   }
-  get-article-article-id-responses: func(params: get-article-article-id-responses-params) -> result<string, string>;
+  get-article-article-id-responses: func(params: get-article-article-id-responses-params) -> result<get-article-article-id-responses-response, string>;
 
 }
 
 interface misc {
+  record get-latestposts-topic-slug-response {
+    latestposts: option<list<string>>
+  }
+
+  record get-related-tags-tag-response {
+    given-tag: option<string>,
+    related-tags: option<list<string>>
+  }
+
+  record get-top-writer-topic-slug-response {
+    top-writers: option<list<string>>
+  }
+
+  record get-topfeeds-tag-mode-response {
+    topfeeds: option<list<string>>
+  }
+
   /// Get Latest Posts
   record get-latestposts-topic-slug-params {
     /// It's a unique string, usually hyphen-separated, representing a topic/niche, as classified by Medium.
     topic-slug: string
   }
-  get-latestposts-topic-slug: func(params: get-latestposts-topic-slug-params) -> result<string, string>;
+  get-latestposts-topic-slug: func(params: get-latestposts-topic-slug-params) -> result<get-latestposts-topic-slug-response, string>;
 
   /// Get Related Tags
   record get-related-tags-tag-params {
     /// It's a unique string, usually hyphen-separated, representing a class of content.
     tag: string
   }
-  get-related-tags-tag: func(params: get-related-tags-tag-params) -> result<string, string>;
+  get-related-tags-tag: func(params: get-related-tags-tag-params) -> result<get-related-tags-tag-response, string>;
 
   /// Get Top Writers
   record get-top-writer-topic-slug-params {
@@ -74,7 +154,7 @@ interface misc {
     /// Limits the number of `article_ids` in the result.
     count: option<s32>
   }
-  get-top-writer-topic-slug: func(params: get-top-writer-topic-slug-params) -> result<string, string>;
+  get-top-writer-topic-slug: func(params: get-top-writer-topic-slug-params) -> result<get-top-writer-topic-slug-response, string>;
 
   /// Get Topfeeds
   record get-topfeeds-tag-mode-params {
@@ -88,48 +168,112 @@ interface misc {
     /// To limit the number of top feeds. (`count` &lt; 25)
     count: option<s32>
   }
-  get-topfeeds-tag-mode: func(params: get-topfeeds-tag-mode-params) -> result<string, string>;
+  get-topfeeds-tag-mode: func(params: get-topfeeds-tag-mode-params) -> result<get-topfeeds-tag-mode-response, string>;
 
 }
 
 interface list-op {
+  record get-list-list-id-response {
+    /// `user_id` of the author
+    author: option<string>,
+    claps: option<s32>,
+    /// Number of articles in the list
+    count: option<s32>,
+    created-at: option<string>,
+    description: option<string>,
+    id: option<string>,
+    last-item-inserted-at: option<string>,
+    name: option<string>,
+    responses-count: option<s32>,
+    /// Image URL
+    thumbnail: option<string>,
+    voters: option<s32>
+  }
+
+  record get-list-list-id-articles-response {
+    id: option<string>,
+    list-articles: option<list<string>>
+  }
+
+  record get-list-list-id-responses-response {
+    id: option<string>,
+    responses: option<list<string>>
+  }
+
   /// Get List Info
   record get-list-list-id-params {
     /// It's a unique hash id assigned to every Medium List.
     list-id: string
   }
-  get-list-list-id: func(params: get-list-list-id-params) -> result<string, string>;
+  get-list-list-id: func(params: get-list-list-id-params) -> result<get-list-list-id-response, string>;
 
   /// Get List Articles
   record get-list-list-id-articles-params {
     /// It's a unique hash id assigned to every Medium List.
     list-id: string
   }
-  get-list-list-id-articles: func(params: get-list-list-id-articles-params) -> result<string, string>;
+  get-list-list-id-articles: func(params: get-list-list-id-articles-params) -> result<get-list-list-id-articles-response, string>;
 
   /// Get List Responses
   record get-list-list-id-responses-params {
     /// It's a unique hash id assigned to every Medium List.
     list-id: string
   }
-  get-list-list-id-responses: func(params: get-list-list-id-responses-params) -> result<string, string>;
+  get-list-list-id-responses: func(params: get-list-list-id-responses-params) -> result<get-list-list-id-responses-response, string>;
 
 }
 
 interface publication {
+  record get-publication-id-for-publication-slug-response {
+    /// Unique hash id of the publication.
+    publication-id: option<string>,
+    /// Same publication slug that you passed in the path parameters.
+    publication-slug: option<string>
+  }
+
+  record get-publication-publication-id-response {
+    creator: option<string>,
+    description: option<string>,
+    editors: option<list<string>>,
+    facebook-pagename: option<string>,
+    followers: option<s32>,
+    id: option<string>,
+    instagram-username: option<string>,
+    name: option<string>,
+    slug: option<string>,
+    tagline: option<string>,
+    tags: option<list<string>>,
+    twitter-username: option<string>,
+    url: option<string>
+  }
+
+  record get-publication-publication-id-articles-response {
+    publication-articles: option<list<string>>
+  }
+
+  record get-publication-publication-id-newsletter-response {
+    creator-id: option<string>,
+    description: option<string>,
+    id: option<string>,
+    image: option<string>,
+    name: option<string>,
+    slug: option<string>,
+    subscribers: option<s32>
+  }
+
   /// Get Publication ID
   record get-publication-id-for-publication-slug-params {
     /// It's a lowercased hyphen-separated unique string alloted to each Medium Publication.
     publication-slug: string
   }
-  get-publication-id-for-publication-slug: func(params: get-publication-id-for-publication-slug-params) -> result<string, string>;
+  get-publication-id-for-publication-slug: func(params: get-publication-id-for-publication-slug-params) -> result<get-publication-id-for-publication-slug-response, string>;
 
   /// Get Publication Info
   record get-publication-publication-id-params {
     /// It's a unique hash id assigned to every Medium Publication.
     publication-id: string
   }
-  get-publication-publication-id: func(params: get-publication-publication-id-params) -> result<string, string>;
+  get-publication-publication-id: func(params: get-publication-publication-id-params) -> result<get-publication-publication-id-response, string>;
 
   /// Get Publication Articles
   record get-publication-publication-id-articles-params {
@@ -138,76 +282,156 @@ interface publication {
     /// To get the articles before specified date and time.
     from-op: option<string>
   }
-  get-publication-publication-id-articles: func(params: get-publication-publication-id-articles-params) -> result<string, string>;
+  get-publication-publication-id-articles: func(params: get-publication-publication-id-articles-params) -> result<get-publication-publication-id-articles-response, string>;
 
   /// Get Publication Newsletter
   record get-publication-publication-id-newsletter-params {
     /// It's a unique hash id assigned to every Medium Publication.
     publication-id: string
   }
-  get-publication-publication-id-newsletter: func(params: get-publication-publication-id-newsletter-params) -> result<string, string>;
+  get-publication-publication-id-newsletter: func(params: get-publication-publication-id-newsletter-params) -> result<get-publication-publication-id-newsletter-response, string>;
 
 }
 
 interface search {
+  record get-search-articles-query-query-response {
+    articles: option<list<string>>,
+    search-query: option<string>
+  }
+
+  record get-search-lists-query-query-response {
+    lists: option<list<string>>,
+    search-query: option<string>
+  }
+
+  record get-search-publications-query-query-response {
+    publications: option<list<string>>,
+    search-query: option<string>
+  }
+
+  record get-search-tags-query-query-response {
+    search-query: option<string>,
+    tags: option<list<string>>
+  }
+
+  record get-search-users-query-query-response {
+    search-query: option<string>,
+    users: option<list<string>>
+  }
+
   /// Search Articles
   record get-search-articles-query-query-params {
     /// Search query
     query: string
   }
-  get-search-articles-query-query: func(params: get-search-articles-query-query-params) -> result<string, string>;
+  get-search-articles-query-query: func(params: get-search-articles-query-query-params) -> result<get-search-articles-query-query-response, string>;
 
   /// Search Lists
   record get-search-lists-query-query-params {
     /// Search query
     query: string
   }
-  get-search-lists-query-query: func(params: get-search-lists-query-query-params) -> result<string, string>;
+  get-search-lists-query-query: func(params: get-search-lists-query-query-params) -> result<get-search-lists-query-query-response, string>;
 
   /// Search Publications
   record get-search-publications-query-query-params {
     /// Search query
     query: string
   }
-  get-search-publications-query-query: func(params: get-search-publications-query-query-params) -> result<string, string>;
+  get-search-publications-query-query: func(params: get-search-publications-query-query-params) -> result<get-search-publications-query-query-response, string>;
 
   /// Search Tags
   record get-search-tags-query-query-params {
     /// Search query
     query: string
   }
-  get-search-tags-query-query: func(params: get-search-tags-query-query-params) -> result<string, string>;
+  get-search-tags-query-query: func(params: get-search-tags-query-query-params) -> result<get-search-tags-query-query-response, string>;
 
   /// Search Users
   record get-search-users-query-query-params {
     /// Search query
     query: string
   }
-  get-search-users-query-query: func(params: get-search-users-query-query-params) -> result<string, string>;
+  get-search-users-query-query: func(params: get-search-users-query-query-params) -> result<get-search-users-query-query-response, string>;
 
 }
 
 interface user {
+  record get-user-id-for-username-response {
+    /// Unique hash id of the user.
+    id: option<string>
+  }
+
+  record get-user-user-id-response {
+    allow-notes: option<bool>,
+    bio: option<string>,
+    followers-count: option<s32>,
+    following-count: option<s32>,
+    fullname: option<string>,
+    has-list: option<bool>,
+    id: option<string>,
+    image-url: option<string>,
+    is-book-author: option<bool>,
+    is-suspended: option<bool>,
+    is-writer-program-enrolled: option<bool>,
+    medium-member-at: option<string>,
+    top-writer-in: option<list<string>>,
+    twitter-username: option<string>,
+    username: option<string>
+  }
+
+  record get-user-user-id-articles-response {
+    associated-articles: option<list<string>>
+  }
+
+  record get-user-user-id-followers-response {
+    followers: option<list<string>>,
+    id: option<string>
+  }
+
+  record get-user-user-id-following-response {
+    following: option<list<string>>,
+    id: option<string>
+  }
+
+  record get-user-user-id-interests-response {
+    tags-followed: option<list<string>>
+  }
+
+  record get-user-user-id-lists-response {
+    lists: option<list<string>>,
+    user-id: option<string>
+  }
+
+  record get-user-user-id-publications-response {
+    publications: option<list<string>>,
+    user-id: option<string>
+  }
+
+  record get-user-user-id-top-articles-response {
+    associated-articles: option<list<string>>
+  }
+
   /// Get User ID
   record get-user-id-for-username-params {
     /// It's a unique string chosen by every single Medium user.
     username: string
   }
-  get-user-id-for-username: func(params: get-user-id-for-username-params) -> result<string, string>;
+  get-user-id-for-username: func(params: get-user-id-for-username-params) -> result<get-user-id-for-username-response, string>;
 
   /// Get User Info
   record get-user-user-id-params {
     /// It's a unique hash id assigned to every single Medium user.
     user-id: string
   }
-  get-user-user-id: func(params: get-user-user-id-params) -> result<string, string>;
+  get-user-user-id: func(params: get-user-user-id-params) -> result<get-user-user-id-response, string>;
 
   /// Get User's Articles
   record get-user-user-id-articles-params {
     /// Unique hash id assigned to every single Medium user.
     user-id: string
   }
-  get-user-user-id-articles: func(params: get-user-user-id-articles-params) -> result<string, string>;
+  get-user-user-id-articles: func(params: get-user-user-id-articles-params) -> result<get-user-user-id-articles-response, string>;
 
   /// Get User Followers
   record get-user-user-id-followers-params {
@@ -216,7 +440,7 @@ interface user {
     /// To limit the number of results. (count &lt; 1500)
     count: option<s32>
   }
-  get-user-user-id-followers: func(params: get-user-user-id-followers-params) -> result<string, string>;
+  get-user-user-id-followers: func(params: get-user-user-id-followers-params) -> result<get-user-user-id-followers-response, string>;
 
   /// Get User Following
   record get-user-user-id-following-params {
@@ -225,35 +449,35 @@ interface user {
     /// To limit the number of results. (count &lt; 1500)
     count: option<s32>
   }
-  get-user-user-id-following: func(params: get-user-user-id-following-params) -> result<string, string>;
+  get-user-user-id-following: func(params: get-user-user-id-following-params) -> result<get-user-user-id-following-response, string>;
 
   /// Get User's Interests
   record get-user-user-id-interests-params {
     /// Unique hash id assigned to every single Medium user.
     user-id: string
   }
-  get-user-user-id-interests: func(params: get-user-user-id-interests-params) -> result<string, string>;
+  get-user-user-id-interests: func(params: get-user-user-id-interests-params) -> result<get-user-user-id-interests-response, string>;
 
   /// Get User's Lists
   record get-user-user-id-lists-params {
     /// Unique hash id assigned to every single Medium user.
     user-id: string
   }
-  get-user-user-id-lists: func(params: get-user-user-id-lists-params) -> result<string, string>;
+  get-user-user-id-lists: func(params: get-user-user-id-lists-params) -> result<get-user-user-id-lists-response, string>;
 
   /// Get User's Publications
   record get-user-user-id-publications-params {
     /// Unique hash id assigned to every single Medium user.
     user-id: string
   }
-  get-user-user-id-publications: func(params: get-user-user-id-publications-params) -> result<string, string>;
+  get-user-user-id-publications: func(params: get-user-user-id-publications-params) -> result<get-user-user-id-publications-response, string>;
 
   /// Get User's Top Articles
   record get-user-user-id-top-articles-params {
     /// Unique hash id assigned to every single Medium user.
     user-id: string
   }
-  get-user-user-id-top-articles: func(params: get-user-user-id-top-articles-params) -> result<string, string>;
+  get-user-user-id-top-articles: func(params: get-user-user-id-top-articles-params) -> result<get-user-user-id-top-articles-response, string>;
 
 }
 /// The component world: imports the secrets host capability

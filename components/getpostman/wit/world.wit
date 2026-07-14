@@ -1,4 +1,4 @@
-package autostamp:getpostman@0.3.0;
+package autostamp:getpostman@0.5.0;
 
 interface api {
   record create-api-body-api {
@@ -7,9 +7,73 @@ interface api {
     summary: option<string>
   }
 
+  record create-api-response {
+    api: option<create-api-response-api>
+  }
+
+  record create-api-response-api {
+    created-at: option<string>,
+    created-by: option<string>,
+    description: option<string>,
+    id: option<string>,
+    name: option<string>,
+    summary: option<string>,
+    updated-at: option<string>
+  }
+
+  record single-api-response {
+    api: option<single-api-response-api>
+  }
+
+  record single-api-response-api {
+    created-at: option<string>,
+    created-by: option<string>,
+    description: option<string>,
+    id: option<string>,
+    name: option<string>,
+    summary: option<string>,
+    updated-at: option<string>
+  }
+
   record update-an-api-body-api {
     description: option<string>,
     name: option<string>
+  }
+
+  record update-an-api-response {
+    api: option<update-an-api-response-api>
+  }
+
+  record update-an-api-response-api {
+    created-at: option<string>,
+    created-by: option<string>,
+    description: option<string>,
+    id: option<string>,
+    name: option<string>,
+    summary: option<string>,
+    updated-at: option<string>
+  }
+
+  record delete-an-api-response {
+    api: option<delete-an-api-response-api>
+  }
+
+  record delete-an-api-response-api {
+    id: option<string>
+  }
+
+  record get-all-api-versions-response {
+    versions: option<list<get-all-api-versions-response-versions-item>>
+  }
+
+  record get-all-api-versions-response-versions-item {
+    created-at: option<string>,
+    created-by: option<string>,
+    description: option<string>,
+    id: option<string>,
+    name: option<string>,
+    summary: option<string>,
+    updated-at: option<string>
   }
 
   record create-api-version-body-version {
@@ -29,8 +93,163 @@ interface api {
     monitor: option<bool>
   }
 
+  record create-api-version-response {
+    version: option<create-api-version-response-version>
+  }
+
+  record create-api-version-response-version {
+    api: option<string>,
+    id: option<string>,
+    name: option<string>
+  }
+
+  record get-an-api-version-response {
+    version: option<get-an-api-version-response-version>
+  }
+
+  record get-an-api-version-response-version {
+    api: option<string>,
+    created-at: option<string>,
+    created-by: option<string>,
+    id: option<string>,
+    name: option<string>,
+    schema: option<list<string>>,
+    updated-at: option<string>,
+    updated-by: option<string>
+  }
+
   record update-an-api-version-body-version {
     name: option<string>
+  }
+
+  record update-an-api-version-response {
+    version: option<update-an-api-version-response-version>
+  }
+
+  record update-an-api-version-response-version {
+    api: option<string>,
+    created-at: option<string>,
+    created-by: option<string>,
+    id: option<string>,
+    name: option<string>,
+    updated-at: option<string>,
+    updated-by: option<string>
+  }
+
+  record delete-an-api-version-response {
+    version: option<delete-an-api-version-response-version>
+  }
+
+  record delete-an-api-version-response-version {
+    id: option<string>
+  }
+
+  record get-contract-test-relations-response {
+    contracttest: option<list<get-contract-test-relations-response-contracttest-item>>
+  }
+
+  record get-contract-test-relations-response-contracttest-item {
+    collection-id: option<string>,
+    id: option<string>,
+    name: option<string>,
+    updated-at: option<string>
+  }
+
+  record get-documentation-relations-response {
+    documentation: option<list<get-documentation-relations-response-documentation-item>>
+  }
+
+  record get-documentation-relations-response-documentation-item {
+    collection-id: option<string>,
+    id: option<string>,
+    name: option<string>,
+    updated-at: option<string>
+  }
+
+  record get-environment-relations-response {
+    environment: option<list<get-environment-relations-response-environment-item>>
+  }
+
+  record get-environment-relations-response-environment-item {
+    id: option<string>,
+    name: option<string>,
+    updated-at: option<string>
+  }
+
+  record get-integration-test-relations-response {
+    integrationtest: option<list<get-integration-test-relations-response-integrationtest-item>>
+  }
+
+  record get-integration-test-relations-response-integrationtest-item {
+    collection-id: option<string>,
+    id: option<string>,
+    name: option<string>,
+    updated-at: option<string>
+  }
+
+  record get-monitor-relations-response {
+    monitor: option<list<get-monitor-relations-response-monitor-item>>
+  }
+
+  record get-monitor-relations-response-monitor-item {
+    id: option<string>,
+    monitor-id: option<string>,
+    name: option<string>,
+    updated-at: option<string>
+  }
+
+  record get-linked-relations-response {
+    relations: option<get-linked-relations-response-relations>
+  }
+
+  record get-linked-relations-response-relations {
+    contracttest: option<get-linked-relations-response-relations-contracttest>,
+    integrationtest: option<get-linked-relations-response-relations-integrationtest>,
+    mock: option<get-linked-relations-response-relations-mock>
+  }
+
+  record get-linked-relations-response-relations-contracttest {
+    v2a9b8fa8-v88b7-v4b86-v8372-v8e3f6f6e07f2: option<get-linked-relations-response-relations-contracttest-v2a9b8fa8-v88b7-v4b86-v8372-v8e3f6f6e07f2>
+  }
+
+  record get-linked-relations-response-relations-contracttest-v2a9b8fa8-v88b7-v4b86-v8372-v8e3f6f6e07f2 {
+    id: option<string>,
+    name: option<string>,
+    updated-at: option<string>
+  }
+
+  record get-linked-relations-response-relations-integrationtest {
+    v521b0486-ab91-v4d3a-v9189-v43c9380a0533: option<get-linked-relations-response-relations-integrationtest-v521b0486-ab91-v4d3a-v9189-v43c9380a0533>,
+    a236b715-e682-v460b-v97b6-c1db24f7612e: option<get-linked-relations-response-relations-integrationtest-a236b715-e682-v460b-v97b6-c1db24f7612e>
+  }
+
+  record get-linked-relations-response-relations-integrationtest-v521b0486-ab91-v4d3a-v9189-v43c9380a0533 {
+    id: option<string>,
+    name: option<string>,
+    updated-at: option<string>
+  }
+
+  record get-linked-relations-response-relations-integrationtest-a236b715-e682-v460b-v97b6-c1db24f7612e {
+    id: option<string>,
+    name: option<string>,
+    updated-at: option<string>
+  }
+
+  record get-linked-relations-response-relations-mock {
+    v4ccd755f-v2c80-v481b-a262-v49b55e12f5e1: option<get-linked-relations-response-relations-mock-v4ccd755f-v2c80-v481b-a262-v49b55e12f5e1>
+  }
+
+  record get-linked-relations-response-relations-mock-v4ccd755f-v2c80-v481b-a262-v49b55e12f5e1 {
+    id: option<string>,
+    name: option<string>,
+    updated-at: option<string>,
+    url: option<string>
+  }
+
+  record create-relations-response {
+    contracttest: option<list<string>>,
+    documentation: option<list<string>>,
+    testsuite: option<list<string>>
   }
 
   record create-schema-body-schema {
@@ -39,14 +258,94 @@ interface api {
     type-op: option<string>
   }
 
+  record create-schema-response {
+    schema: option<create-schema-response-schema>
+  }
+
+  record create-schema-response-schema {
+    api-version: option<string>,
+    created-at: option<string>,
+    created-by: option<string>,
+    id: option<string>,
+    language: option<string>,
+    type-op: option<string>,
+    update-by: option<string>,
+    updated-at: option<string>
+  }
+
+  record get-schema-response {
+    schema: option<get-schema-response-schema>
+  }
+
+  record get-schema-response-schema {
+    api-version: option<string>,
+    created-at: option<string>,
+    created-by: option<string>,
+    id: option<string>,
+    language: option<string>,
+    type-op: option<string>,
+    update-by: option<string>,
+    updated-at: option<string>
+  }
+
   record update-schema-body-schema {
     language: option<string>,
     schema: option<string>,
     type-op: option<string>
   }
 
+  record update-schema-response {
+    schema: option<update-schema-response-schema>
+  }
+
+  record update-schema-response-schema {
+    api-version: option<string>,
+    created-at: option<string>,
+    created-by: option<string>,
+    id: option<string>,
+    language: option<string>,
+    type-op: option<string>,
+    update-by: option<string>,
+    updated-at: option<string>
+  }
+
   record create-collection-from-schema-body-relations-item {
     type-op: option<string>
+  }
+
+  record create-collection-from-schema-response {
+    collection: option<create-collection-from-schema-response-collection>,
+    relations: option<list<create-collection-from-schema-response-relations-item>>
+  }
+
+  record create-collection-from-schema-response-collection {
+    id: option<string>,
+    uid: option<string>
+  }
+
+  record create-collection-from-schema-response-relations-item {
+    id: option<string>,
+    type-op: option<string>
+  }
+
+  record get-test-suite-relations-response {
+    testsuite: option<list<get-test-suite-relations-response-testsuite-item>>
+  }
+
+  record get-test-suite-relations-response-testsuite-item {
+    collection-id: option<string>,
+    id: option<string>,
+    name: option<string>,
+    updated-at: option<string>
+  }
+
+  record sync-relations-with-schema-response {
+    success: option<bool>
+  }
+
+  variant sync-relations-with-schema-error {
+    bad-request(string),
+    other(string)
   }
 
   /// Get all APIs
@@ -81,101 +380,186 @@ interface api {
     workspace: option<string>,
     api: option<create-api-body-api>
   }
-  create-api: func(params: create-api-params) -> result<string, string>;
+  create-api: func(params: create-api-params) -> result<create-api-response, string>;
 
   /// Single API
-  single-api: func() -> result<string, string>;
+  record single-api-params {
+    api-id: string
+  }
+  single-api: func(params: single-api-params) -> result<single-api-response, string>;
 
   /// Update an API
   record update-an-api-params {
+    api-id: string,
     api: option<update-an-api-body-api>
   }
-  update-an-api: func(params: update-an-api-params) -> result<string, string>;
+  update-an-api: func(params: update-an-api-params) -> result<update-an-api-response, string>;
 
   /// Delete an API
-  delete-an-api: func() -> result<string, string>;
+  record delete-an-api-params {
+    api-id: string
+  }
+  delete-an-api: func(params: delete-an-api-params) -> result<delete-an-api-response, string>;
 
   /// Get All API Versions
-  get-all-api-versions: func() -> result<string, string>;
+  record get-all-api-versions-params {
+    api-id: string
+  }
+  get-all-api-versions: func(params: get-all-api-versions-params) -> result<get-all-api-versions-response, string>;
 
   /// Create API Version
   record create-api-version-params {
+    api-id: string,
     version: option<create-api-version-body-version>
   }
-  create-api-version: func(params: create-api-version-params) -> result<string, string>;
+  create-api-version: func(params: create-api-version-params) -> result<create-api-version-response, string>;
 
   /// Get an API Version
-  get-an-api-version: func() -> result<string, string>;
+  record get-an-api-version-params {
+    api-id: string,
+    api-version-id: string
+  }
+  get-an-api-version: func(params: get-an-api-version-params) -> result<get-an-api-version-response, string>;
 
   /// Update an API Version
   record update-an-api-version-params {
+    api-id: string,
+    api-version-id: string,
     version: option<update-an-api-version-body-version>
   }
-  update-an-api-version: func(params: update-an-api-version-params) -> result<string, string>;
+  update-an-api-version: func(params: update-an-api-version-params) -> result<update-an-api-version-response, string>;
 
   /// Delete an API Version
-  delete-an-api-version: func() -> result<string, string>;
+  record delete-an-api-version-params {
+    api-id: string,
+    api-version-id: string
+  }
+  delete-an-api-version: func(params: delete-an-api-version-params) -> result<delete-an-api-version-response, string>;
 
   /// Get contract test relations
-  get-contract-test-relations: func() -> result<string, string>;
+  record get-contract-test-relations-params {
+    api-id: string,
+    api-version-id: string
+  }
+  get-contract-test-relations: func(params: get-contract-test-relations-params) -> result<get-contract-test-relations-response, string>;
 
   /// Get  documentation relations
-  get-documentation-relations: func() -> result<string, string>;
+  record get-documentation-relations-params {
+    api-id: string,
+    api-version-id: string
+  }
+  get-documentation-relations: func(params: get-documentation-relations-params) -> result<get-documentation-relations-response, string>;
 
   /// Get environment relations
-  get-environment-relations: func() -> result<string, string>;
+  record get-environment-relations-params {
+    api-id: string,
+    api-version-id: string
+  }
+  get-environment-relations: func(params: get-environment-relations-params) -> result<get-environment-relations-response, string>;
 
   /// Get integration test relations
-  get-integration-test-relations: func() -> result<string, string>;
+  record get-integration-test-relations-params {
+    api-id: string,
+    api-version-id: string
+  }
+  get-integration-test-relations: func(params: get-integration-test-relations-params) -> result<get-integration-test-relations-response, string>;
 
   /// Get monitor relations
-  get-monitor-relations: func() -> result<string, string>;
+  record get-monitor-relations-params {
+    api-id: string,
+    api-version-id: string
+  }
+  get-monitor-relations: func(params: get-monitor-relations-params) -> result<get-monitor-relations-response, string>;
 
   /// Get linked relations
-  get-linked-relations: func() -> result<string, string>;
+  record get-linked-relations-params {
+    api-id: string,
+    api-version-id: string
+  }
+  get-linked-relations: func(params: get-linked-relations-params) -> result<get-linked-relations-response, string>;
 
   /// Create relations
   record create-relations-params {
+    api-id: string,
+    api-version-id: string,
     contracttest: option<list<string>>,
     documentation: option<list<string>>,
     mock: option<list<string>>,
     testsuite: option<list<string>>
   }
-  create-relations: func(params: create-relations-params) -> result<string, string>;
+  create-relations: func(params: create-relations-params) -> result<create-relations-response, string>;
 
   /// Create Schema
   record create-schema-params {
+    api-id: string,
+    api-version-id: string,
     schema: option<create-schema-body-schema>
   }
-  create-schema: func(params: create-schema-params) -> result<string, string>;
+  create-schema: func(params: create-schema-params) -> result<create-schema-response, string>;
 
   /// Get Schema
-  get-schema: func() -> result<string, string>;
+  record get-schema-params {
+    api-id: string,
+    api-version-id: string,
+    schema-id: string
+  }
+  get-schema: func(params: get-schema-params) -> result<get-schema-response, string>;
 
   /// Update Schema
   record update-schema-params {
+    api-id: string,
+    api-version-id: string,
+    schema-id: string,
     schema: option<update-schema-body-schema>
   }
-  update-schema: func(params: update-schema-params) -> result<string, string>;
+  update-schema: func(params: update-schema-params) -> result<update-schema-response, string>;
 
   /// Create collection from schema
   record create-collection-from-schema-params {
+    api-id: string,
+    api-version-id: string,
+    schema-id: string,
     workspace: option<string>,
     name: option<string>,
     relations: option<list<create-collection-from-schema-body-relations-item>>
   }
-  create-collection-from-schema: func(params: create-collection-from-schema-params) -> result<string, string>;
+  create-collection-from-schema: func(params: create-collection-from-schema-params) -> result<create-collection-from-schema-response, string>;
 
   /// Get test suite relations
-  get-test-suite-relations: func() -> result<string, string>;
+  record get-test-suite-relations-params {
+    api-id: string,
+    api-version-id: string
+  }
+  get-test-suite-relations: func(params: get-test-suite-relations-params) -> result<get-test-suite-relations-response, string>;
 
   /// Sync relations with schema
-  sync-relations-with-schema: func() -> result<string, string>;
+  record sync-relations-with-schema-params {
+    /// Id of the API
+    api-id: string,
+    /// Id of the API version
+    api-version-id: string,
+    /// Relation type (e.g documentation, contracttest, integrationtest, testsuite, mock, monitor)
+    entity-type: string,
+    /// Relation id
+    entity-id: string
+  }
+  sync-relations-with-schema: func(params: sync-relations-with-schema-params) -> result<sync-relations-with-schema-response, sync-relations-with-schema-error>;
 
 }
 
 
 interface collections {
+  record all-collections-response {
+    collections: option<list<all-collections-response-collections-item>>
+  }
+
+  record all-collections-response-collections-item {
+    id: option<string>,
+    name: option<string>,
+    owner: option<string>,
+    uid: option<string>
+  }
+
   record create-collection-body-collection {
     info: option<create-collection-body-collection-info>,
     item: option<list<create-collection-body-collection-item-item>>
@@ -211,6 +595,70 @@ interface collections {
   }
 
   record create-collection-body-collection-item-item-item-item-request-header-item {
+    key: option<string>,
+    value: option<string>
+  }
+
+  record create-collection-response {
+    collection: option<create-collection-response-collection>
+  }
+
+  record create-collection-response-collection {
+    id: option<string>,
+    name: option<string>,
+    uid: option<string>
+  }
+
+  record single-collection-response {
+    collection: option<single-collection-response-collection>
+  }
+
+  record single-collection-response-collection {
+    info: option<single-collection-response-collection-info>,
+    item: option<list<single-collection-response-collection-item-item>>,
+    variables: option<list<string>>
+  }
+
+  record single-collection-response-collection-info {
+    postman-id: option<string>,
+    description: option<string>,
+    name: option<string>,
+    schema: option<string>
+  }
+
+  record single-collection-response-collection-item-item {
+    event: option<list<single-collection-response-collection-item-item-event-item>>,
+    id: option<string>,
+    name: option<string>,
+    request: option<single-collection-response-collection-item-item-request>,
+    response: option<list<string>>
+  }
+
+  record single-collection-response-collection-item-item-event-item {
+    listen: option<string>,
+    script: option<single-collection-response-collection-item-item-event-item-script>
+  }
+
+  record single-collection-response-collection-item-item-event-item-script {
+    exec: option<string>,
+    type-op: option<string>
+  }
+
+  record single-collection-response-collection-item-item-request {
+    body: option<single-collection-response-collection-item-item-request-body>,
+    description: option<string>,
+    header: option<list<single-collection-response-collection-item-item-request-header-item>>,
+    method: option<string>,
+    url: option<string>
+  }
+
+  record single-collection-response-collection-item-item-request-body {
+    formdata: option<list<string>>,
+    mode: option<string>
+  }
+
+  record single-collection-response-collection-item-item-request-header-item {
+    description: option<string>,
     key: option<string>,
     value: option<string>
   }
@@ -255,17 +703,54 @@ interface collections {
     value: option<string>
   }
 
+  record update-collection-response {
+    collection: option<update-collection-response-collection>
+  }
+
+  record update-collection-response-collection {
+    id: option<string>,
+    name: option<string>,
+    uid: option<string>
+  }
+
+  record delete-collection-response {
+    collection: option<delete-collection-response-collection>
+  }
+
+  record delete-collection-response-collection {
+    id: option<string>,
+    uid: option<string>
+  }
+
+  variant create-collection-error {
+    bad-request(string),
+    other(string)
+  }
+
+  variant update-collection-error {
+    bad-request(string),
+    forbidden(string),
+    not-found(string),
+    other(string)
+  }
+
+  variant delete-collection-error {
+    not-found(string),
+    other(string)
+  }
+
   /// All Collections
-  all-collections: func() -> result<string, string>;
+  all-collections: func() -> result<all-collections-response, string>;
 
   /// Create Collection
   record create-collection-params {
     collection: option<create-collection-body-collection>
   }
-  create-collection: func(params: create-collection-params) -> result<string, string>;
+  create-collection: func(params: create-collection-params) -> result<create-collection-response, create-collection-error>;
 
   /// Create a Fork
   record create-a-fork-params {
+    collection-uid: string,
     /// Workspace ID is required to create a fork
     workspace: option<string>,
     name: option<string>
@@ -281,20 +766,38 @@ interface collections {
   merge-a-fork: func(params: merge-a-fork-params) -> result<string, string>;
 
   /// Single Collection 
-  single-collection: func() -> result<string, string>;
+  record single-collection-params {
+    collection-uid: string
+  }
+  single-collection: func(params: single-collection-params) -> result<single-collection-response, string>;
 
   /// Update Collection
   record update-collection-params {
+    collection-uid: string,
     collection: option<update-collection-body-collection>
   }
-  update-collection: func(params: update-collection-params) -> result<string, string>;
+  update-collection: func(params: update-collection-params) -> result<update-collection-response, update-collection-error>;
 
   /// Delete Collection
-  delete-collection: func() -> result<string, string>;
+  record delete-collection-params {
+    collection-uid: string
+  }
+  delete-collection: func(params: delete-collection-params) -> result<delete-collection-response, delete-collection-error>;
 
 }
 
 interface environments {
+  record all-environments-response {
+    environments: option<list<all-environments-response-environments-item>>
+  }
+
+  record all-environments-response-environments-item {
+    id: option<string>,
+    name: option<string>,
+    owner: option<string>,
+    uid: option<string>
+  }
+
   record create-environment-body-environment {
     name: option<string>,
     values: option<list<create-environment-body-environment-values-item>>
@@ -302,6 +805,34 @@ interface environments {
 
   record create-environment-body-environment-values-item {
     key: option<string>,
+    value: option<string>
+  }
+
+  record create-environment-response {
+    environment: option<create-environment-response-environment>
+  }
+
+  record create-environment-response-environment {
+    id: option<string>,
+    name: option<string>,
+    uid: option<string>
+  }
+
+  record single-environment-response {
+    environment: option<single-environment-response-environment>
+  }
+
+  record single-environment-response-environment {
+    id: option<string>,
+    name: option<string>,
+    values: option<list<single-environment-response-environment-values-item>>
+  }
+
+  record single-environment-response-environment-values-item {
+    enabled: option<bool>,
+    hovered: option<bool>,
+    key: option<string>,
+    type-op: option<string>,
     value: option<string>
   }
 
@@ -315,30 +846,81 @@ interface environments {
     value: option<string>
   }
 
+  record update-environment-response {
+    environment: option<update-environment-response-environment>
+  }
+
+  record update-environment-response-environment {
+    id: option<string>,
+    name: option<string>,
+    uid: option<string>
+  }
+
+  record delete-environment-response {
+    environment: option<delete-environment-response-environment>
+  }
+
+  record delete-environment-response-environment {
+    id: option<string>,
+    uid: option<string>
+  }
+
+  variant create-environment-error {
+    bad-request(string),
+    other(string)
+  }
+
+  variant update-environment-error {
+    bad-request(string),
+    other(string)
+  }
+
+  variant delete-environment-error {
+    not-found(string),
+    other(string)
+  }
+
   /// All Environments
-  all-environments: func() -> result<string, string>;
+  all-environments: func() -> result<all-environments-response, string>;
 
   /// Create Environment
   record create-environment-params {
     environment: option<create-environment-body-environment>
   }
-  create-environment: func(params: create-environment-params) -> result<string, string>;
+  create-environment: func(params: create-environment-params) -> result<create-environment-response, create-environment-error>;
 
   /// Single Environment
-  single-environment: func() -> result<string, string>;
+  record single-environment-params {
+    environment-uid: string
+  }
+  single-environment: func(params: single-environment-params) -> result<single-environment-response, string>;
 
   /// Update Environment
   record update-environment-params {
+    environment-uid: string,
     environment: option<update-environment-body-environment>
   }
-  update-environment: func(params: update-environment-params) -> result<string, string>;
+  update-environment: func(params: update-environment-params) -> result<update-environment-response, update-environment-error>;
 
   /// Delete Environment
-  delete-environment: func() -> result<string, string>;
+  record delete-environment-params {
+    environment-uid: string
+  }
+  delete-environment: func(params: delete-environment-params) -> result<delete-environment-response, delete-environment-error>;
 
 }
 
 interface import-op {
+  record import-exported-data-response {
+    collections: option<list<import-exported-data-response-collections-item>>
+  }
+
+  record import-exported-data-response-collections-item {
+    id: option<string>,
+    name: option<string>,
+    uid: option<string>
+  }
+
   record import-external-api-specification-body-input {
     info: option<import-external-api-specification-body-input-info>,
     openapi: option<string>,
@@ -424,28 +1006,108 @@ interface import-op {
     url: option<string>
   }
 
+  record import-external-api-specification-response {
+    collections: option<list<import-external-api-specification-response-collections-item>>
+  }
+
+  record import-external-api-specification-response-collections-item {
+    id: option<string>,
+    name: option<string>,
+    uid: option<string>
+  }
+
+  variant import-exported-data-error {
+    bad-request(string),
+    other(string)
+  }
+
+  variant import-external-api-specification-error {
+    bad-request(string),
+    other(string)
+  }
+
   /// Import exported data
-  import-exported-data: func() -> result<string, string>;
+  import-exported-data: func() -> result<import-exported-data-response, import-exported-data-error>;
 
   /// Import external API specification
   record import-external-api-specification-params {
     input: option<import-external-api-specification-body-input>,
     type-op: option<string>
   }
-  import-external-api-specification: func(params: import-external-api-specification-params) -> result<string, string>;
+  import-external-api-specification: func(params: import-external-api-specification-params) -> result<import-external-api-specification-response, import-external-api-specification-error>;
 
 }
 
 interface user {
+  record api-key-owner-response {
+    operations: option<list<api-key-owner-response-operations-item>>,
+    user: option<api-key-owner-response-user>
+  }
+
+  record api-key-owner-response-operations-item {
+    limit: option<f64>,
+    name: option<string>,
+    overage: option<f64>,
+    usage: option<f64>
+  }
+
+  record api-key-owner-response-user {
+    avatar: option<string>,
+    email: option<string>,
+    full-name: option<string>,
+    id: option<string>,
+    is-public: option<bool>,
+    username: option<string>
+  }
+
   /// API Key Owner
-  api-key-owner: func() -> result<string, string>;
+  api-key-owner: func() -> result<api-key-owner-response, string>;
 
 }
 
 interface mocks {
+  record all-mocks-response {
+    mocks: option<list<all-mocks-response-mocks-item>>
+  }
+
+  record all-mocks-response-mocks-item {
+    collection: option<string>,
+    environment: option<string>,
+    id: option<string>,
+    mock-url: option<string>,
+    owner: option<string>,
+    uid: option<string>
+  }
+
   record create-mock-body-mock {
     collection: option<string>,
     environment: option<string>
+  }
+
+  record create-mock-response {
+    mock: option<create-mock-response-mock>
+  }
+
+  record create-mock-response-mock {
+    collection: option<string>,
+    environment: option<string>,
+    id: option<string>,
+    mock-url: option<string>,
+    owner: option<string>,
+    uid: option<string>
+  }
+
+  record single-mock-response {
+    mock: option<single-mock-response-mock>
+  }
+
+  record single-mock-response-mock {
+    collection: option<string>,
+    environment: option<string>,
+    id: option<string>,
+    mock-url: option<string>,
+    owner: option<string>,
+    uid: option<string>
   }
 
   record update-mock-body-mock {
@@ -456,36 +1118,107 @@ interface mocks {
     version-tag: option<string>
   }
 
+  record update-mock-response {
+    mock: option<update-mock-response-mock>
+  }
+
+  record update-mock-response-mock {
+    collection: option<string>,
+    config: option<update-mock-response-mock-config>,
+    environment: option<string>,
+    id: option<string>,
+    mock-url: option<string>,
+    name: option<string>,
+    owner: option<string>,
+    uid: option<string>
+  }
+
+  record update-mock-response-mock-config {
+    headers: option<list<string>>,
+    match-body: option<bool>,
+    match-query-params: option<bool>,
+    match-wildcards: option<bool>
+  }
+
+  record delete-mock-response {
+    mock: option<delete-mock-response-mock>
+  }
+
+  record delete-mock-response-mock {
+    id: option<string>,
+    uid: option<string>
+  }
+
+  record publish-mock-response {
+    mock: option<publish-mock-response-mock>
+  }
+
+  record publish-mock-response-mock {
+    id: option<string>
+  }
+
+  record unpublish-mock-response {
+    mock: option<unpublish-mock-response-mock>
+  }
+
+  record unpublish-mock-response-mock {
+    id: option<string>
+  }
+
   /// All Mocks
-  all-mocks: func() -> result<string, string>;
+  all-mocks: func() -> result<all-mocks-response, string>;
 
   /// Create Mock
   record create-mock-params {
     mock: option<create-mock-body-mock>
   }
-  create-mock: func(params: create-mock-params) -> result<string, string>;
+  create-mock: func(params: create-mock-params) -> result<create-mock-response, string>;
 
   /// Single Mock
-  single-mock: func() -> result<string, string>;
+  record single-mock-params {
+    mock-uid: string
+  }
+  single-mock: func(params: single-mock-params) -> result<single-mock-response, string>;
 
   /// Update Mock
   record update-mock-params {
+    mock-uid: string,
     mock: option<update-mock-body-mock>
   }
-  update-mock: func(params: update-mock-params) -> result<string, string>;
+  update-mock: func(params: update-mock-params) -> result<update-mock-response, string>;
 
   /// Delete Mock
-  delete-mock: func() -> result<string, string>;
+  record delete-mock-params {
+    mock-uid: string
+  }
+  delete-mock: func(params: delete-mock-params) -> result<delete-mock-response, string>;
 
   /// Publish Mock
-  publish-mock: func() -> result<string, string>;
+  record publish-mock-params {
+    mock-uid: string
+  }
+  publish-mock: func(params: publish-mock-params) -> result<publish-mock-response, string>;
 
   /// Unpublish Mock
-  unpublish-mock: func() -> result<string, string>;
+  record unpublish-mock-params {
+    mock-uid: string
+  }
+  unpublish-mock: func(params: unpublish-mock-params) -> result<unpublish-mock-response, string>;
 
 }
 
 interface monitors {
+  record all-monitors-response {
+    monitors: option<list<all-monitors-response-monitors-item>>
+  }
+
+  record all-monitors-response-monitors-item {
+    id: option<string>,
+    name: option<string>,
+    owner: option<string>,
+    uid: option<string>
+  }
+
   record create-monitor-body-monitor {
     collection: option<string>,
     environment: option<string>,
@@ -495,6 +1228,81 @@ interface monitors {
 
   record create-monitor-body-monitor-schedule {
     cron: option<string>,
+    timezone: option<string>
+  }
+
+  record create-monitor-response {
+    monitor: option<create-monitor-response-monitor>
+  }
+
+  record create-monitor-response-monitor {
+    id: option<string>,
+    name: option<string>,
+    uid: option<string>
+  }
+
+  record single-monitor-response {
+    monitor: option<single-monitor-response-monitor>
+  }
+
+  record single-monitor-response-monitor {
+    collection-uid: option<string>,
+    distribution: option<list<string>>,
+    environment-uid: option<string>,
+    id: option<string>,
+    last-run: option<single-monitor-response-monitor-last-run>,
+    name: option<string>,
+    notifications: option<single-monitor-response-monitor-notifications>,
+    options: option<single-monitor-response-monitor-options>,
+    owner: option<string>,
+    schedule: option<single-monitor-response-monitor-schedule>,
+    uid: option<string>
+  }
+
+  record single-monitor-response-monitor-last-run {
+    finished-at: option<string>,
+    started-at: option<string>,
+    stats: option<single-monitor-response-monitor-last-run-stats>,
+    status: option<string>
+  }
+
+  record single-monitor-response-monitor-last-run-stats {
+    assertions: option<single-monitor-response-monitor-last-run-stats-assertions>,
+    requests: option<single-monitor-response-monitor-last-run-stats-requests>
+  }
+
+  record single-monitor-response-monitor-last-run-stats-assertions {
+    failed: option<f64>,
+    total: option<f64>
+  }
+
+  record single-monitor-response-monitor-last-run-stats-requests {
+    total: option<f64>
+  }
+
+  record single-monitor-response-monitor-notifications {
+    on-error: option<list<single-monitor-response-monitor-notifications-on-error-item>>,
+    on-failure: option<list<single-monitor-response-monitor-notifications-on-failure-item>>
+  }
+
+  record single-monitor-response-monitor-notifications-on-error-item {
+    email: option<string>
+  }
+
+  record single-monitor-response-monitor-notifications-on-failure-item {
+    email: option<string>
+  }
+
+  record single-monitor-response-monitor-options {
+    follow-redirects: option<bool>,
+    request-delay: option<f64>,
+    request-timeout: option<f64>,
+    strict-ssl: option<bool>
+  }
+
+  record single-monitor-response-monitor-schedule {
+    cron: option<string>,
+    next-run: option<string>,
     timezone: option<string>
   }
 
@@ -508,29 +1316,172 @@ interface monitors {
     timezone: option<string>
   }
 
+  record update-monitor-response {
+    monitor: option<update-monitor-response-monitor>
+  }
+
+  record update-monitor-response-monitor {
+    id: option<string>,
+    name: option<string>,
+    uid: option<string>
+  }
+
+  record delete-monitor-response {
+    monitor: option<delete-monitor-response-monitor>
+  }
+
+  record delete-monitor-response-monitor {
+    id: option<string>,
+    uid: option<string>
+  }
+
+  record run-a-monitor-response {
+    run: option<run-a-monitor-response-run>
+  }
+
+  record run-a-monitor-response-run {
+    executions: option<list<run-a-monitor-response-run-executions-item>>,
+    failures: option<list<run-a-monitor-response-run-failures-item>>,
+    info: option<run-a-monitor-response-run-info>,
+    stats: option<run-a-monitor-response-run-stats>
+  }
+
+  record run-a-monitor-response-run-executions-item {
+    id: option<f64>,
+    item: option<run-a-monitor-response-run-executions-item-item>,
+    request: option<run-a-monitor-response-run-executions-item-request>,
+    response: option<run-a-monitor-response-run-executions-item-response>
+  }
+
+  record run-a-monitor-response-run-executions-item-item {
+    id: option<string>,
+    name: option<string>
+  }
+
+  record run-a-monitor-response-run-executions-item-request {
+    body: option<run-a-monitor-response-run-executions-item-request-body>,
+    headers: option<run-a-monitor-response-run-executions-item-request-headers>,
+    method: option<string>,
+    timestamp: option<string>,
+    url: option<string>
+  }
+
+  record run-a-monitor-response-run-executions-item-request-body {
+    content-length: option<f64>,
+    mode: option<string>
+  }
+
+  record run-a-monitor-response-run-executions-item-request-headers {
+    accept: option<string>,
+    accept-encoding: option<string>,
+    content-length: option<f64>,
+    content-type: option<string>
+  }
+
+  record run-a-monitor-response-run-executions-item-response {
+    body: option<run-a-monitor-response-run-executions-item-response-body>,
+    code: option<f64>,
+    headers: option<run-a-monitor-response-run-executions-item-response-headers>,
+    response-size: option<f64>,
+    response-time: option<f64>
+  }
+
+  record run-a-monitor-response-run-executions-item-response-body {
+    content-length: option<f64>
+  }
+
+  record run-a-monitor-response-run-executions-item-response-headers {
+    connection: option<string>,
+    content-encoding: option<string>,
+    content-type: option<string>,
+    date: option<string>,
+    transfer-encoding: option<string>
+  }
+
+  record run-a-monitor-response-run-failures-item {
+    assertion: option<run-a-monitor-response-run-failures-item-assertion>,
+    execution-id: option<f64>,
+    message: option<string>,
+    name: option<string>
+  }
+
+  record run-a-monitor-response-run-failures-item-assertion {
+    status-code-is-v400: option<bool>
+  }
+
+  record run-a-monitor-response-run-info {
+    collection-uid: option<string>,
+    finished-at: option<string>,
+    job-id: option<string>,
+    monitor-id: option<string>,
+    name: option<string>,
+    started-at: option<string>,
+    status: option<string>
+  }
+
+  record run-a-monitor-response-run-stats {
+    assertions: option<run-a-monitor-response-run-stats-assertions>,
+    requests: option<run-a-monitor-response-run-stats-requests>
+  }
+
+  record run-a-monitor-response-run-stats-assertions {
+    failed: option<f64>,
+    total: option<f64>
+  }
+
+  record run-a-monitor-response-run-stats-requests {
+    failed: option<f64>,
+    total: option<f64>
+  }
+
+  variant create-monitor-error {
+    bad-request(string),
+    other(string)
+  }
+
+  variant single-monitor-error {
+    not-found(string),
+    other(string)
+  }
+
+  variant delete-monitor-error {
+    not-found(string),
+    other(string)
+  }
+
   /// All Monitors
-  all-monitors: func() -> result<string, string>;
+  all-monitors: func() -> result<all-monitors-response, string>;
 
   /// Create Monitor
   record create-monitor-params {
     monitor: option<create-monitor-body-monitor>
   }
-  create-monitor: func(params: create-monitor-params) -> result<string, string>;
+  create-monitor: func(params: create-monitor-params) -> result<create-monitor-response, create-monitor-error>;
 
   /// Single Monitor
-  single-monitor: func() -> result<string, string>;
+  record single-monitor-params {
+    monitor-uid: string
+  }
+  single-monitor: func(params: single-monitor-params) -> result<single-monitor-response, single-monitor-error>;
 
   /// Update Monitor
   record update-monitor-params {
+    monitor-uid: string,
     monitor: option<update-monitor-body-monitor>
   }
-  update-monitor: func(params: update-monitor-params) -> result<string, string>;
+  update-monitor: func(params: update-monitor-params) -> result<update-monitor-response, string>;
 
   /// Delete Monitor
-  delete-monitor: func() -> result<string, string>;
+  record delete-monitor-params {
+    monitor-uid: string
+  }
+  delete-monitor: func(params: delete-monitor-params) -> result<delete-monitor-response, delete-monitor-error>;
 
   /// Run a Monitor
-  run-a-monitor: func() -> result<string, string>;
+  record run-a-monitor-params {
+    monitor-uid: string
+  }
+  run-a-monitor: func(params: run-a-monitor-params) -> result<run-a-monitor-response, string>;
 
 }
 
@@ -550,6 +1501,16 @@ interface webhooks {
 }
 
 interface workspaces {
+  record all-workspaces-response {
+    workspaces: option<list<all-workspaces-response-workspaces-item>>
+  }
+
+  record all-workspaces-response-workspaces-item {
+    id: option<string>,
+    name: option<string>,
+    type-op: option<string>
+  }
+
   record create-workspace-body-workspace {
     collections: option<list<create-workspace-body-workspace-collections-item>>,
     description: option<string>,
@@ -578,6 +1539,40 @@ interface workspaces {
 
   record create-workspace-body-workspace-monitors-item {
     id: option<string>
+  }
+
+  record create-workspace-response {
+    workspace: option<create-workspace-response-workspace>
+  }
+
+  record create-workspace-response-workspace {
+    id: option<string>,
+    name: option<string>
+  }
+
+  record single-workspace-response {
+    workspace: option<single-workspace-response-workspace>
+  }
+
+  record single-workspace-response-workspace {
+    collections: option<list<single-workspace-response-workspace-collections-item>>,
+    description: option<string>,
+    environments: option<list<single-workspace-response-workspace-environments-item>>,
+    id: option<string>,
+    name: option<string>,
+    type-op: option<string>
+  }
+
+  record single-workspace-response-workspace-collections-item {
+    id: option<string>,
+    name: option<string>,
+    uid: option<string>
+  }
+
+  record single-workspace-response-workspace-environments-item {
+    id: option<string>,
+    name: option<string>,
+    uid: option<string>
   }
 
   record update-workspace-body-workspace {
@@ -609,26 +1604,66 @@ interface workspaces {
     id: option<string>
   }
 
+  record update-workspace-response {
+    workspace: option<update-workspace-response-workspace>
+  }
+
+  record update-workspace-response-workspace {
+    id: option<string>,
+    name: option<string>
+  }
+
+  record delete-workspace-response {
+    workspace: option<delete-workspace-response-workspace>
+  }
+
+  record delete-workspace-response-workspace {
+    id: option<string>
+  }
+
+  variant create-workspace-error {
+    bad-request(string),
+    other(string)
+  }
+
+  variant single-workspace-error {
+    not-found(string),
+    other(string)
+  }
+
+  variant update-workspace-error {
+    forbidden(string),
+    not-found(string),
+    other(string)
+  }
+
   /// All workspaces
-  all-workspaces: func() -> result<string, string>;
+  all-workspaces: func() -> result<all-workspaces-response, string>;
 
   /// Create Workspace
   record create-workspace-params {
     workspace: option<create-workspace-body-workspace>
   }
-  create-workspace: func(params: create-workspace-params) -> result<string, string>;
+  create-workspace: func(params: create-workspace-params) -> result<create-workspace-response, create-workspace-error>;
 
   /// Single workspace
-  single-workspace: func() -> result<string, string>;
+  record single-workspace-params {
+    workspace-id: string
+  }
+  single-workspace: func(params: single-workspace-params) -> result<single-workspace-response, single-workspace-error>;
 
   /// Update Workspace
   record update-workspace-params {
+    workspace-id: string,
     workspace: option<update-workspace-body-workspace>
   }
-  update-workspace: func(params: update-workspace-params) -> result<string, string>;
+  update-workspace: func(params: update-workspace-params) -> result<update-workspace-response, update-workspace-error>;
 
   /// Delete Workspace
-  delete-workspace: func() -> result<string, string>;
+  record delete-workspace-params {
+    workspace-id: string
+  }
+  delete-workspace: func(params: delete-workspace-params) -> result<delete-workspace-response, string>;
 
 }
 /// The component world: imports the secrets host capability

@@ -1,6 +1,104 @@
-package autostamp:stormglass@0.3.0;
+package autostamp:stormglass@0.5.0;
 
 interface forecast {
+  record forecast {
+    /// Every hour with forecast data is represented with an object in this array
+    hours: option<list<forecast-hours-item>>,
+    meta: option<forecast-meta>
+  }
+
+  /// Hourly forecast information
+  record forecast-hours-item {
+    air-temperature: option<list<forecast-hours-item-air-temperature-item>>,
+    swell-direction: option<list<forecast-hours-item-swell-direction-item>>,
+    swell-height: option<list<forecast-hours-item-swell-height-item>>,
+    swell-period: option<list<forecast-hours-item-swell-period-item>>,
+    /// Timestamp in utc for the hour represented
+    time: option<string>,
+    water-temperature: option<list<forecast-hours-item-water-temperature-item>>,
+    wave-direction: option<list<forecast-hours-item-wave-direction-item>>,
+    wave-height: option<list<forecast-hours-item-wave-height-item>>,
+    wave-period: option<list<forecast-hours-item-wave-period-item>>,
+    wind-direction: option<list<forecast-hours-item-wind-direction-item>>,
+    wind-speed: option<list<forecast-hours-item-wind-speed-item>>
+  }
+
+  /// Air temperature given in celsius
+  record forecast-hours-item-air-temperature-item {
+    source: option<string>,
+    value: option<string>
+  }
+
+  /// Direction given in degrees where 0 goes from North to South
+  record forecast-hours-item-swell-direction-item {
+    source: option<string>,
+    value: option<string>
+  }
+
+  /// Swell height given in meters
+  record forecast-hours-item-swell-height-item {
+    source: option<string>,
+    value: option<string>
+  }
+
+  /// Swell period given in seconds
+  record forecast-hours-item-swell-period-item {
+    source: option<string>,
+    value: option<string>
+  }
+
+  /// Water temperature given in celsius
+  record forecast-hours-item-water-temperature-item {
+    source: option<string>,
+    value: option<string>
+  }
+
+  /// Direction given in degrees where 0 goes from North to South
+  record forecast-hours-item-wave-direction-item {
+    source: option<string>,
+    value: option<f64>
+  }
+
+  /// Wave height given in metres
+  record forecast-hours-item-wave-height-item {
+    source: option<string>,
+    value: option<string>
+  }
+
+  record forecast-hours-item-wave-period-item {
+    source: option<string>,
+    value: option<string>
+  }
+
+  /// Wind direction given in degrees where 0 goes from North to South
+  record forecast-hours-item-wind-direction-item {
+    source: option<string>,
+    value: option<string>
+  }
+
+  /// Wind speed given in meters per second
+  record forecast-hours-item-wind-speed-item {
+    source: option<string>,
+    value: option<string>
+  }
+
+  record forecast-meta {
+    /// The number of successful requests you can do on one day
+    daily-quota: option<s32>,
+    /// The latitude the response is showing forecast data for
+    lat: option<f64>,
+    /// The longitude the response is showing forecast data for
+    lng: option<f64>,
+    /// The number of successful requests made this day.
+    request-count: option<s32>
+  }
+
+  variant get-forecast-error {
+    forbidden(string),
+    unprocessable-entity(string),
+    other(string)
+  }
+
   /// Get hourly forecasts by coordinates
   record get-forecast-params {
     /// The latitude for a location. Valid input is a number between -90 and 90.
@@ -8,7 +106,7 @@ interface forecast {
     /// The longitude for a location. Valid input is a number between -180 and 180.
     lng: f64
   }
-  get-forecast: func(params: get-forecast-params) -> result<string, string>;
+  get-forecast: func(params: get-forecast-params) -> result<forecast, get-forecast-error>;
 
 }
 

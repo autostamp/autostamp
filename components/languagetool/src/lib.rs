@@ -44,10 +44,15 @@ pub(crate) enum FieldLocation {
     Body,
 }
 
-/// A single operation parameter: the snake-case key it carries in the params JSON and where
-/// it belongs in the request.
+/// A single operation parameter. `snake` keys the field in the internal params JSON (and, for a
+/// path field, matches the `{snake}` placeholder in the path template); `wire` is the verbatim name
+/// the field takes on the HTTP wire (query key, header name, or body property). The two differ
+/// whenever the source name isn't already snake_case (e.g. `dryRun` → snake `dry_run`, wire
+/// `dryRun`), and let distinct inputs that share a snake key (`DateCreated`, `DateCreated<`) still
+/// travel under their true names.
 pub(crate) struct FieldSpec {
     pub(crate) snake: &'static str,
+    pub(crate) wire: &'static str,
     pub(crate) location: FieldLocation,
 }
 
@@ -71,6 +76,16 @@ pub(crate) struct AuthApply {
     pub(crate) kind: AuthKind,
 }
 
+/// The failure modes of [`dispatch`], kept structured so each generated operation can map them
+/// onto its own typed error: an `Http` failure carries the response status and body (routed to
+/// the matching error-variant case), while a `Transport` failure carries a message for the
+/// catch-all case (a secret lookup, connection, or decode failure that never produced an HTTP
+/// status).
+pub(crate) enum DispatchError {
+    Http { status: u16, body: String },
+    Transport(String),
+}
+
 /// A single API operation: HTTP method, path template (with `{snake}` placeholders), the
 /// parameter fields, and the security schemes to apply.
 pub(crate) struct OpSpec {
@@ -81,8 +96,9 @@ pub(crate) struct OpSpec {
 }
 
 /// Execute `op` with the supplied `params` (a JSON object keyed by snake-case field names)
-/// and return the response body as a string, or an error message.
-pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, String> {
+/// and return the raw 2xx response body, or a structured [`DispatchError`] the caller maps
+/// onto the operation's typed error.
+pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, DispatchError> {
     let obj = match &params {
         Value::Object(map) => Some(map),
         _ => None,
@@ -105,10 +121,10 @@ pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, String> {
                 let placeholder = format!("{{{}}}", field.snake);
                 path = path.replace(&placeholder, &percent_encode(&scalar(value)));
             }
-            FieldLocation::Query => query.push((field.snake.to_string(), scalar(value))),
-            FieldLocation::Header => headers.push((field.snake.to_string(), scalar(value))),
+            FieldLocation::Query => query.push((field.wire.to_string(), scalar(value))),
+            FieldLocation::Header => headers.push((field.wire.to_string(), scalar(value))),
             FieldLocation::Body => {
-                body.insert(field.snake.to_string(), value.clone());
+                body.insert(field.wire.to_string(), value.clone());
             }
         }
     }
@@ -116,7 +132,7 @@ pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, String> {
     // Apply each resolved security scheme, sourcing its value from wasmcloud:secrets.
     let mut cookies: Vec<String> = Vec::new();
     for apply in op.auth {
-        let secret = fetch_secret(apply.secret_key)?;
+        let secret = fetch_secret(apply.secret_key).map_err(DispatchError::Transport)?;
         match &apply.kind {
             AuthKind::Bearer => headers.push(("authorization".into(), format!("Bearer {secret}"))),
             AuthKind::Basic => {
@@ -177,17 +193,18 @@ fn fetch_secret(key: &str) -> Result<String, String> {
 }
 
 /// Build and send the outgoing request with `wstd`, returning the response body on a 2xx
-/// status. The generated guest exports are synchronous, so the async `wstd` client is driven
-/// to completion on a local reactor via `wstd::runtime::block_on`.
+/// status and a structured [`DispatchError`] otherwise. The generated guest exports are
+/// synchronous, so the async `wstd` client is driven to completion on a local reactor via
+/// `wstd::runtime::block_on`.
 fn perform(
     method: &str,
     path_with_query: &str,
     headers: &[(String, String)],
     body: &[u8],
-) -> Result<String, String> {
+) -> Result<String, DispatchError> {
     let url = join_url(crate::BASE_URL, path_with_query);
     let method = Method::from_bytes(method.as_bytes())
-        .map_err(|err| format!("invalid HTTP method `{method}`: {err}"))?;
+        .map_err(|err| DispatchError::Transport(format!("invalid HTTP method `{method}`: {err}")))?;
 
     let mut builder = Request::builder().method(method).uri(url);
     for (name, value) in headers {
@@ -199,27 +216,29 @@ fn perform(
         } else {
             Body::from(body.to_vec())
         })
-        .map_err(|err| format!("failed to build request: {err}"))?;
+        .map_err(|err| DispatchError::Transport(format!("failed to build request: {err}")))?;
 
     wstd::runtime::block_on(async move {
         let client = Client::new();
         let response = client
             .send(request)
             .await
-            .map_err(|err| format!("request failed: {err:#}"))?;
+            .map_err(|err| DispatchError::Transport(format!("request failed: {err:#}")))?;
 
         let status = response.status().as_u16();
         let mut response_body = response.into_body();
-        let bytes = response_body
-            .contents()
-            .await
-            .map_err(|err| format!("failed to read response body: {err:#}"))?;
+        let bytes = response_body.contents().await.map_err(|err| {
+            DispatchError::Transport(format!("failed to read response body: {err:#}"))
+        })?;
         let body_text = String::from_utf8_lossy(bytes).into_owned();
 
         if (200..300).contains(&status) {
             Ok(body_text)
         } else {
-            Err(format!("HTTP {status}: {body_text}"))
+            Err(DispatchError::Http {
+                status,
+                body: body_text,
+            })
         }
     })
 }
@@ -279,164 +298,8 @@ fn base64(input: &[u8]) -> String {
 }
 }
 
-use crate::runtime::{dispatch, AuthApply, AuthKind, FieldLocation, FieldSpec, OpSpec};
-use serde_json::{Map, Value};
-
-use crate::exports::autostamp::languagetool::check as iface_check;
-
-const OP_CHECK_POST_CHECK: OpSpec = OpSpec {
-    method: "POST",
-    path_template: "/check",
-    fields: &[
-        FieldSpec { snake: "text", location: FieldLocation::Body },
-        FieldSpec { snake: "data", location: FieldLocation::Body },
-        FieldSpec { snake: "language", location: FieldLocation::Body },
-        FieldSpec { snake: "username", location: FieldLocation::Body },
-        FieldSpec { snake: "api_key", location: FieldLocation::Body },
-        FieldSpec { snake: "dicts", location: FieldLocation::Body },
-        FieldSpec { snake: "mother_tongue", location: FieldLocation::Body },
-        FieldSpec { snake: "preferred_variants", location: FieldLocation::Body },
-        FieldSpec { snake: "enabled_rules", location: FieldLocation::Body },
-        FieldSpec { snake: "disabled_rules", location: FieldLocation::Body },
-        FieldSpec { snake: "enabled_categories", location: FieldLocation::Body },
-        FieldSpec { snake: "disabled_categories", location: FieldLocation::Body },
-        FieldSpec { snake: "enabled_only", location: FieldLocation::Body },
-        FieldSpec { snake: "level", location: FieldLocation::Body },
-    ],
-    auth: &[
-    ],
-};
-
-fn iface_check__post_check_body_level_enum__to_str(e: &iface_check::PostCheckBodyLevelEnum) -> &'static str {
-    match e {
-        iface_check::PostCheckBodyLevelEnum::Default => "default",
-        iface_check::PostCheckBodyLevelEnum::Picky => "picky",
-    }
-}
-
-fn iface_check__post_check_params__to_json(p: &iface_check::PostCheckParams) -> Value {
-    let mut m = Map::new();
-    m.insert("text".into(), match (&p.text) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("language".into(), Value::String((&p.language).clone()));
-    m.insert("username".into(), match (&p.username) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("api_key".into(), match (&p.api_key) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("dicts".into(), match (&p.dicts) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("mother_tongue".into(), match (&p.mother_tongue) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("preferred_variants".into(), match (&p.preferred_variants) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("enabled_rules".into(), match (&p.enabled_rules) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("disabled_rules".into(), match (&p.disabled_rules) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("enabled_categories".into(), match (&p.enabled_categories) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("disabled_categories".into(), match (&p.disabled_categories) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("enabled_only".into(), match (&p.enabled_only) { Some(v) => Value::Bool(*(v)), None => Value::Null });
-    m.insert("level".into(), match (&p.level) { Some(v) => Value::String(iface_check__post_check_body_level_enum__to_str(v).into()), None => Value::Null });
-    Value::Object(m)
-}
-
-impl iface_check::Guest for crate::Component {
-    fn post_check(params: iface_check::PostCheckParams) -> Result<String, String> {
-        let json = iface_check__post_check_params__to_json(&params);
-        dispatch(&OP_CHECK_POST_CHECK, json)
-    }
-}
-use crate::exports::autostamp::languagetool::languages as iface_languages;
-
-const OP_LANGUAGES_GET_LANGUAGES: OpSpec = OpSpec {
-    method: "GET",
-    path_template: "/languages",
-    fields: &[
-    ],
-    auth: &[
-    ],
-};
-
-impl iface_languages::Guest for crate::Component {
-    fn get_languages() -> Result<String, String> {
-        dispatch(&OP_LANGUAGES_GET_LANGUAGES, Value::Object(Map::new()))
-    }
-}
-use crate::exports::autostamp::languagetool::words as iface_words;
-
-const OP_WORDS_GET_WORDS: OpSpec = OpSpec {
-    method: "GET",
-    path_template: "/words",
-    fields: &[
-        FieldSpec { snake: "offset", location: FieldLocation::Query },
-        FieldSpec { snake: "limit", location: FieldLocation::Query },
-        FieldSpec { snake: "username", location: FieldLocation::Query },
-        FieldSpec { snake: "dicts", location: FieldLocation::Query },
-    ],
-    auth: &[
-        AuthApply { secret_key: "api-key", kind: AuthKind::ApiKeyQuery("apiKey") },
-    ],
-};
-
-const OP_WORDS_POST_WORDS_ADD: OpSpec = OpSpec {
-    method: "POST",
-    path_template: "/words/add",
-    fields: &[
-        FieldSpec { snake: "word", location: FieldLocation::Body },
-        FieldSpec { snake: "username", location: FieldLocation::Body },
-        FieldSpec { snake: "api_key", location: FieldLocation::Body },
-        FieldSpec { snake: "dict", location: FieldLocation::Body },
-    ],
-    auth: &[
-    ],
-};
-
-const OP_WORDS_POST_WORDS_DELETE: OpSpec = OpSpec {
-    method: "POST",
-    path_template: "/words/delete",
-    fields: &[
-        FieldSpec { snake: "word", location: FieldLocation::Body },
-        FieldSpec { snake: "username", location: FieldLocation::Body },
-        FieldSpec { snake: "api_key", location: FieldLocation::Body },
-        FieldSpec { snake: "dict", location: FieldLocation::Body },
-    ],
-    auth: &[
-    ],
-};
-
-fn iface_words__get_words_params__to_json(p: &iface_words::GetWordsParams) -> Value {
-    let mut m = Map::new();
-    m.insert("offset".into(), match (&p.offset) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    m.insert("limit".into(), match (&p.limit) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    m.insert("username".into(), Value::String((&p.username).clone()));
-    m.insert("dicts".into(), match (&p.dicts) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_words__post_words_add_params__to_json(p: &iface_words::PostWordsAddParams) -> Value {
-    let mut m = Map::new();
-    m.insert("word".into(), Value::String((&p.word).clone()));
-    m.insert("username".into(), Value::String((&p.username).clone()));
-    m.insert("api_key".into(), Value::String((&p.api_key).clone()));
-    m.insert("dict".into(), match (&p.dict) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_words__post_words_delete_params__to_json(p: &iface_words::PostWordsDeleteParams) -> Value {
-    let mut m = Map::new();
-    m.insert("word".into(), Value::String((&p.word).clone()));
-    m.insert("username".into(), Value::String((&p.username).clone()));
-    m.insert("api_key".into(), Value::String((&p.api_key).clone()));
-    m.insert("dict".into(), match (&p.dict) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    Value::Object(m)
-}
-
-impl iface_words::Guest for crate::Component {
-    fn get_words(params: iface_words::GetWordsParams) -> Result<String, String> {
-        let json = iface_words__get_words_params__to_json(&params);
-        dispatch(&OP_WORDS_GET_WORDS, json)
-    }
-    fn post_words_add(params: iface_words::PostWordsAddParams) -> Result<String, String> {
-        let json = iface_words__post_words_add_params__to_json(&params);
-        dispatch(&OP_WORDS_POST_WORDS_ADD, json)
-    }
-    fn post_words_delete(params: iface_words::PostWordsDeleteParams) -> Result<String, String> {
-        let json = iface_words__post_words_delete_params__to_json(&params);
-        dispatch(&OP_WORDS_POST_WORDS_DELETE, json)
-    }
-}
+mod iface_check;
+mod iface_languages;
+mod iface_words;
 
 export!(Component);

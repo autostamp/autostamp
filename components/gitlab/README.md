@@ -11,8 +11,8 @@ triggered.
 
 | Setting | Value |
 | --- | --- |
-| Package | `autostamp:gitlab@0.3.0` |
-| Published version | `0.3.0+gitlab-v3` |
+| Package | `autostamp:gitlab@0.5.0` |
+| Published version | `0.5.0+gitlab-v3` |
 | Tag filter | all tags |
 | Operations generated | 358 |
 | Infer API-key credentials | enabled — not triggered |

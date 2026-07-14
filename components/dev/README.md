@@ -20,8 +20,8 @@ triggered.
 
 | Setting | Value |
 | --- | --- |
-| Package | `autostamp:dev@0.3.0` |
-| Published version | `0.3.0+dev-1.0.0` |
+| Package | `autostamp:dev@0.5.0` |
+| Published version | `0.5.0+dev-1.0.0` |
 | Tag filter | all tags |
 | Operations generated | 40 |
 | Infer API-key credentials | enabled — not triggered |

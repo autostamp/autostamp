@@ -44,10 +44,15 @@ pub(crate) enum FieldLocation {
     Body,
 }
 
-/// A single operation parameter: the snake-case key it carries in the params JSON and where
-/// it belongs in the request.
+/// A single operation parameter. `snake` keys the field in the internal params JSON (and, for a
+/// path field, matches the `{snake}` placeholder in the path template); `wire` is the verbatim name
+/// the field takes on the HTTP wire (query key, header name, or body property). The two differ
+/// whenever the source name isn't already snake_case (e.g. `dryRun` → snake `dry_run`, wire
+/// `dryRun`), and let distinct inputs that share a snake key (`DateCreated`, `DateCreated<`) still
+/// travel under their true names.
 pub(crate) struct FieldSpec {
     pub(crate) snake: &'static str,
+    pub(crate) wire: &'static str,
     pub(crate) location: FieldLocation,
 }
 
@@ -71,6 +76,16 @@ pub(crate) struct AuthApply {
     pub(crate) kind: AuthKind,
 }
 
+/// The failure modes of [`dispatch`], kept structured so each generated operation can map them
+/// onto its own typed error: an `Http` failure carries the response status and body (routed to
+/// the matching error-variant case), while a `Transport` failure carries a message for the
+/// catch-all case (a secret lookup, connection, or decode failure that never produced an HTTP
+/// status).
+pub(crate) enum DispatchError {
+    Http { status: u16, body: String },
+    Transport(String),
+}
+
 /// A single API operation: HTTP method, path template (with `{snake}` placeholders), the
 /// parameter fields, and the security schemes to apply.
 pub(crate) struct OpSpec {
@@ -81,8 +96,9 @@ pub(crate) struct OpSpec {
 }
 
 /// Execute `op` with the supplied `params` (a JSON object keyed by snake-case field names)
-/// and return the response body as a string, or an error message.
-pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, String> {
+/// and return the raw 2xx response body, or a structured [`DispatchError`] the caller maps
+/// onto the operation's typed error.
+pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, DispatchError> {
     let obj = match &params {
         Value::Object(map) => Some(map),
         _ => None,
@@ -105,10 +121,10 @@ pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, String> {
                 let placeholder = format!("{{{}}}", field.snake);
                 path = path.replace(&placeholder, &percent_encode(&scalar(value)));
             }
-            FieldLocation::Query => query.push((field.snake.to_string(), scalar(value))),
-            FieldLocation::Header => headers.push((field.snake.to_string(), scalar(value))),
+            FieldLocation::Query => query.push((field.wire.to_string(), scalar(value))),
+            FieldLocation::Header => headers.push((field.wire.to_string(), scalar(value))),
             FieldLocation::Body => {
-                body.insert(field.snake.to_string(), value.clone());
+                body.insert(field.wire.to_string(), value.clone());
             }
         }
     }
@@ -116,7 +132,7 @@ pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, String> {
     // Apply each resolved security scheme, sourcing its value from wasmcloud:secrets.
     let mut cookies: Vec<String> = Vec::new();
     for apply in op.auth {
-        let secret = fetch_secret(apply.secret_key)?;
+        let secret = fetch_secret(apply.secret_key).map_err(DispatchError::Transport)?;
         match &apply.kind {
             AuthKind::Bearer => headers.push(("authorization".into(), format!("Bearer {secret}"))),
             AuthKind::Basic => {
@@ -177,17 +193,18 @@ fn fetch_secret(key: &str) -> Result<String, String> {
 }
 
 /// Build and send the outgoing request with `wstd`, returning the response body on a 2xx
-/// status. The generated guest exports are synchronous, so the async `wstd` client is driven
-/// to completion on a local reactor via `wstd::runtime::block_on`.
+/// status and a structured [`DispatchError`] otherwise. The generated guest exports are
+/// synchronous, so the async `wstd` client is driven to completion on a local reactor via
+/// `wstd::runtime::block_on`.
 fn perform(
     method: &str,
     path_with_query: &str,
     headers: &[(String, String)],
     body: &[u8],
-) -> Result<String, String> {
+) -> Result<String, DispatchError> {
     let url = join_url(crate::BASE_URL, path_with_query);
     let method = Method::from_bytes(method.as_bytes())
-        .map_err(|err| format!("invalid HTTP method `{method}`: {err}"))?;
+        .map_err(|err| DispatchError::Transport(format!("invalid HTTP method `{method}`: {err}")))?;
 
     let mut builder = Request::builder().method(method).uri(url);
     for (name, value) in headers {
@@ -199,27 +216,29 @@ fn perform(
         } else {
             Body::from(body.to_vec())
         })
-        .map_err(|err| format!("failed to build request: {err}"))?;
+        .map_err(|err| DispatchError::Transport(format!("failed to build request: {err}")))?;
 
     wstd::runtime::block_on(async move {
         let client = Client::new();
         let response = client
             .send(request)
             .await
-            .map_err(|err| format!("request failed: {err:#}"))?;
+            .map_err(|err| DispatchError::Transport(format!("request failed: {err:#}")))?;
 
         let status = response.status().as_u16();
         let mut response_body = response.into_body();
-        let bytes = response_body
-            .contents()
-            .await
-            .map_err(|err| format!("failed to read response body: {err:#}"))?;
+        let bytes = response_body.contents().await.map_err(|err| {
+            DispatchError::Transport(format!("failed to read response body: {err:#}"))
+        })?;
         let body_text = String::from_utf8_lossy(bytes).into_owned();
 
         if (200..300).contains(&status) {
             Ok(body_text)
         } else {
-            Err(format!("HTTP {status}: {body_text}"))
+            Err(DispatchError::Http {
+                status,
+                body: body_text,
+            })
         }
     })
 }
@@ -279,884 +298,15 @@ fn base64(input: &[u8]) -> String {
 }
 }
 
-use crate::runtime::{dispatch, AuthApply, AuthKind, FieldLocation, FieldSpec, OpSpec};
-use serde_json::{Map, Value};
-
-use crate::exports::autostamp::tvmaze::auth as iface_auth;
-
-const OP_AUTH_POST_AUTH_POLL: OpSpec = OpSpec {
-    method: "POST",
-    path_template: "/auth/poll",
-    fields: &[
-        FieldSpec { snake: "token", location: FieldLocation::Body },
-    ],
-    auth: &[
-        AuthApply { secret_key: "usertoken", kind: AuthKind::Basic },
-    ],
-};
-
-const OP_AUTH_POST_AUTH_START: OpSpec = OpSpec {
-    method: "POST",
-    path_template: "/auth/start",
-    fields: &[
-        FieldSpec { snake: "email", location: FieldLocation::Body },
-        FieldSpec { snake: "email_confirmation", location: FieldLocation::Body },
-    ],
-    auth: &[
-        AuthApply { secret_key: "usertoken", kind: AuthKind::Basic },
-    ],
-};
-
-const OP_AUTH_GET_AUTH_VALIDATE: OpSpec = OpSpec {
-    method: "GET",
-    path_template: "/auth/validate",
-    fields: &[
-    ],
-    auth: &[
-        AuthApply { secret_key: "usertoken", kind: AuthKind::Basic },
-    ],
-};
-
-fn iface_auth__post_auth_poll_params__to_json(p: &iface_auth::PostAuthPollParams) -> Value {
-    let mut m = Map::new();
-    m.insert("token".into(), match (&p.token) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_auth__post_auth_start_params__to_json(p: &iface_auth::PostAuthStartParams) -> Value {
-    let mut m = Map::new();
-    m.insert("email".into(), match (&p.email) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("email_confirmation".into(), match (&p.email_confirmation) { Some(v) => Value::Bool(*(v)), None => Value::Null });
-    Value::Object(m)
-}
-
-impl iface_auth::Guest for crate::Component {
-    fn post_auth_poll(params: iface_auth::PostAuthPollParams) -> Result<String, String> {
-        let json = iface_auth__post_auth_poll_params__to_json(&params);
-        dispatch(&OP_AUTH_POST_AUTH_POLL, json)
-    }
-    fn post_auth_start(params: iface_auth::PostAuthStartParams) -> Result<String, String> {
-        let json = iface_auth__post_auth_start_params__to_json(&params);
-        dispatch(&OP_AUTH_POST_AUTH_START, json)
-    }
-    fn get_auth_validate() -> Result<String, String> {
-        dispatch(&OP_AUTH_GET_AUTH_VALIDATE, Value::Object(Map::new()))
-    }
-}
-use crate::exports::autostamp::tvmaze::scrobbling as iface_scrobbling;
-
-const OP_SCROBBLING_POST_SCROBBLE_EPISODES: OpSpec = OpSpec {
-    method: "POST",
-    path_template: "/scrobble/episodes",
-    fields: &[
-        FieldSpec { snake: "body", location: FieldLocation::Body },
-    ],
-    auth: &[
-        AuthApply { secret_key: "usertoken", kind: AuthKind::Basic },
-    ],
-};
-
-const OP_SCROBBLING_PUT_SCROBBLE_EPISODES_EPISODE_ID: OpSpec = OpSpec {
-    method: "PUT",
-    path_template: "/scrobble/episodes/{episode_id}",
-    fields: &[
-        FieldSpec { snake: "embedded", location: FieldLocation::Body },
-        FieldSpec { snake: "episode_id", location: FieldLocation::Body },
-        FieldSpec { snake: "marked_at", location: FieldLocation::Body },
-        FieldSpec { snake: "type", location: FieldLocation::Body },
-    ],
-    auth: &[
-        AuthApply { secret_key: "usertoken", kind: AuthKind::Basic },
-    ],
-};
-
-const OP_SCROBBLING_POST_SCROBBLE_SHOWS: OpSpec = OpSpec {
-    method: "POST",
-    path_template: "/scrobble/shows",
-    fields: &[
-        FieldSpec { snake: "tvmaze_id", location: FieldLocation::Query },
-        FieldSpec { snake: "thetvdb_id", location: FieldLocation::Query },
-        FieldSpec { snake: "imdb_id", location: FieldLocation::Query },
-        FieldSpec { snake: "body", location: FieldLocation::Body },
-    ],
-    auth: &[
-        AuthApply { secret_key: "usertoken", kind: AuthKind::Basic },
-    ],
-};
-
-const OP_SCROBBLING_GET_SCROBBLE_SHOWS_SHOW_ID: OpSpec = OpSpec {
-    method: "GET",
-    path_template: "/scrobble/shows/{show_id}",
-    fields: &[
-    ],
-    auth: &[
-        AuthApply { secret_key: "usertoken", kind: AuthKind::Basic },
-    ],
-};
-
-fn iface_scrobbling__post_scrobble_episodes_body_item__to_json(p: &iface_scrobbling::PostScrobbleEpisodesBodyItem) -> Value {
-    let mut m = Map::new();
-    m.insert("episode_id".into(), match (&p.episode_id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    m.insert("marked_at".into(), match (&p.marked_at) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    m.insert("type".into(), match (&p.type_op) { Some(v) => iface_scrobbling__mark_type__to_json(v), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_scrobbling__mark_type__to_json(p: &iface_scrobbling::MarkType) -> Value {
-    let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_scrobbling__marked_episode_embedded__to_json(p: &iface_scrobbling::MarkedEpisodeEmbedded) -> Value {
-    let mut m = Map::new();
-    m.insert("episode".into(), match (&p.episode) { Some(v) => iface_scrobbling__episode__to_json(v), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_scrobbling__episode__to_json(p: &iface_scrobbling::Episode) -> Value {
-    let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_scrobbling__post_scrobble_shows_body_item__to_json(p: &iface_scrobbling::PostScrobbleShowsBodyItem) -> Value {
-    let mut m = Map::new();
-    m.insert("airdate".into(), match (&p.airdate) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("episode".into(), match (&p.episode) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    m.insert("marked_at".into(), match (&p.marked_at) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    m.insert("season".into(), match (&p.season) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    m.insert("type".into(), match (&p.type_op) { Some(v) => iface_scrobbling__mark_type__to_json(v), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_scrobbling__post_scrobble_episodes_params__to_json(p: &iface_scrobbling::PostScrobbleEpisodesParams) -> Value {
-    let mut m = Map::new();
-    m.insert("body".into(), match (&p.body) { Some(v) => Value::Array((v).iter().map(|v| iface_scrobbling__post_scrobble_episodes_body_item__to_json(v)).collect()), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_scrobbling__put_scrobble_episodes_episode_id_params__to_json(p: &iface_scrobbling::PutScrobbleEpisodesEpisodeIdParams) -> Value {
-    let mut m = Map::new();
-    m.insert("embedded".into(), match (&p.embedded) { Some(v) => iface_scrobbling__marked_episode_embedded__to_json(v), None => Value::Null });
-    m.insert("episode_id".into(), match (&p.episode_id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    m.insert("marked_at".into(), match (&p.marked_at) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    m.insert("type".into(), match (&p.type_op) { Some(v) => iface_scrobbling__mark_type__to_json(v), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_scrobbling__post_scrobble_shows_params__to_json(p: &iface_scrobbling::PostScrobbleShowsParams) -> Value {
-    let mut m = Map::new();
-    m.insert("tvmaze_id".into(), match (&p.tvmaze_id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    m.insert("thetvdb_id".into(), match (&p.thetvdb_id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    m.insert("imdb_id".into(), match (&p.imdb_id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    m.insert("body".into(), match (&p.body) { Some(v) => Value::Array((v).iter().map(|v| iface_scrobbling__post_scrobble_shows_body_item__to_json(v)).collect()), None => Value::Null });
-    Value::Object(m)
-}
-
-impl iface_scrobbling::Guest for crate::Component {
-    fn post_scrobble_episodes(params: iface_scrobbling::PostScrobbleEpisodesParams) -> Result<String, String> {
-        let json = iface_scrobbling__post_scrobble_episodes_params__to_json(&params);
-        dispatch(&OP_SCROBBLING_POST_SCROBBLE_EPISODES, json)
-    }
-    fn put_scrobble_episodes_episode_id(params: iface_scrobbling::PutScrobbleEpisodesEpisodeIdParams) -> Result<String, String> {
-        let json = iface_scrobbling__put_scrobble_episodes_episode_id_params__to_json(&params);
-        dispatch(&OP_SCROBBLING_PUT_SCROBBLE_EPISODES_EPISODE_ID, json)
-    }
-    fn post_scrobble_shows(params: iface_scrobbling::PostScrobbleShowsParams) -> Result<String, String> {
-        let json = iface_scrobbling__post_scrobble_shows_params__to_json(&params);
-        dispatch(&OP_SCROBBLING_POST_SCROBBLE_SHOWS, json)
-    }
-    fn get_scrobble_shows_show_id() -> Result<String, String> {
-        dispatch(&OP_SCROBBLING_GET_SCROBBLE_SHOWS_SHOW_ID, Value::Object(Map::new()))
-    }
-}
-use crate::exports::autostamp::tvmaze::marked_episodes as iface_marked_episodes;
-
-const OP_MARKED_EPISODES_GET_USER_EPISODES: OpSpec = OpSpec {
-    method: "GET",
-    path_template: "/user/episodes",
-    fields: &[
-        FieldSpec { snake: "show_id", location: FieldLocation::Query },
-    ],
-    auth: &[
-        AuthApply { secret_key: "usertoken", kind: AuthKind::Basic },
-    ],
-};
-
-const OP_MARKED_EPISODES_GET_USER_EPISODES_EPISODE_ID: OpSpec = OpSpec {
-    method: "GET",
-    path_template: "/user/episodes/{episode_id}",
-    fields: &[
-    ],
-    auth: &[
-        AuthApply { secret_key: "usertoken", kind: AuthKind::Basic },
-    ],
-};
-
-const OP_MARKED_EPISODES_PUT_USER_EPISODES_EPISODE_ID: OpSpec = OpSpec {
-    method: "PUT",
-    path_template: "/user/episodes/{episode_id}",
-    fields: &[
-        FieldSpec { snake: "embedded", location: FieldLocation::Body },
-        FieldSpec { snake: "episode_id", location: FieldLocation::Body },
-        FieldSpec { snake: "marked_at", location: FieldLocation::Body },
-        FieldSpec { snake: "type", location: FieldLocation::Body },
-    ],
-    auth: &[
-        AuthApply { secret_key: "usertoken", kind: AuthKind::Basic },
-    ],
-};
-
-const OP_MARKED_EPISODES_DELETE_USER_EPISODES_EPISODE_ID: OpSpec = OpSpec {
-    method: "DELETE",
-    path_template: "/user/episodes/{episode_id}",
-    fields: &[
-    ],
-    auth: &[
-        AuthApply { secret_key: "usertoken", kind: AuthKind::Basic },
-    ],
-};
-
-fn iface_marked_episodes__marked_episode_embedded__to_json(p: &iface_marked_episodes::MarkedEpisodeEmbedded) -> Value {
-    let mut m = Map::new();
-    m.insert("episode".into(), match (&p.episode) { Some(v) => iface_marked_episodes__episode__to_json(v), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_marked_episodes__episode__to_json(p: &iface_marked_episodes::Episode) -> Value {
-    let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_marked_episodes__mark_type__to_json(p: &iface_marked_episodes::MarkType) -> Value {
-    let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_marked_episodes__get_user_episodes_params__to_json(p: &iface_marked_episodes::GetUserEpisodesParams) -> Value {
-    let mut m = Map::new();
-    m.insert("show_id".into(), match (&p.show_id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_marked_episodes__put_user_episodes_episode_id_params__to_json(p: &iface_marked_episodes::PutUserEpisodesEpisodeIdParams) -> Value {
-    let mut m = Map::new();
-    m.insert("embedded".into(), match (&p.embedded) { Some(v) => iface_marked_episodes__marked_episode_embedded__to_json(v), None => Value::Null });
-    m.insert("episode_id".into(), match (&p.episode_id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    m.insert("marked_at".into(), match (&p.marked_at) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    m.insert("type".into(), match (&p.type_op) { Some(v) => iface_marked_episodes__mark_type__to_json(v), None => Value::Null });
-    Value::Object(m)
-}
-
-impl iface_marked_episodes::Guest for crate::Component {
-    fn get_user_episodes(params: iface_marked_episodes::GetUserEpisodesParams) -> Result<String, String> {
-        let json = iface_marked_episodes__get_user_episodes_params__to_json(&params);
-        dispatch(&OP_MARKED_EPISODES_GET_USER_EPISODES, json)
-    }
-    fn get_user_episodes_episode_id() -> Result<String, String> {
-        dispatch(&OP_MARKED_EPISODES_GET_USER_EPISODES_EPISODE_ID, Value::Object(Map::new()))
-    }
-    fn put_user_episodes_episode_id(params: iface_marked_episodes::PutUserEpisodesEpisodeIdParams) -> Result<String, String> {
-        let json = iface_marked_episodes__put_user_episodes_episode_id_params__to_json(&params);
-        dispatch(&OP_MARKED_EPISODES_PUT_USER_EPISODES_EPISODE_ID, json)
-    }
-    fn delete_user_episodes_episode_id() -> Result<String, String> {
-        dispatch(&OP_MARKED_EPISODES_DELETE_USER_EPISODES_EPISODE_ID, Value::Object(Map::new()))
-    }
-}
-use crate::exports::autostamp::tvmaze::followed_networks as iface_followed_networks;
-
-const OP_FOLLOWED_NETWORKS_GET_USER_FOLLOWS_NETWORKS: OpSpec = OpSpec {
-    method: "GET",
-    path_template: "/user/follows/networks",
-    fields: &[
-        FieldSpec { snake: "embed", location: FieldLocation::Query },
-    ],
-    auth: &[
-        AuthApply { secret_key: "usertoken", kind: AuthKind::Basic },
-    ],
-};
-
-const OP_FOLLOWED_NETWORKS_GET_USER_FOLLOWS_NETWORKS_NETWORK_ID: OpSpec = OpSpec {
-    method: "GET",
-    path_template: "/user/follows/networks/{network_id}",
-    fields: &[
-    ],
-    auth: &[
-        AuthApply { secret_key: "usertoken", kind: AuthKind::Basic },
-    ],
-};
-
-const OP_FOLLOWED_NETWORKS_PUT_USER_FOLLOWS_NETWORKS_NETWORK_ID: OpSpec = OpSpec {
-    method: "PUT",
-    path_template: "/user/follows/networks/{network_id}",
-    fields: &[
-    ],
-    auth: &[
-        AuthApply { secret_key: "usertoken", kind: AuthKind::Basic },
-    ],
-};
-
-const OP_FOLLOWED_NETWORKS_DELETE_USER_FOLLOWS_NETWORKS_NETWORK_ID: OpSpec = OpSpec {
-    method: "DELETE",
-    path_template: "/user/follows/networks/{network_id}",
-    fields: &[
-    ],
-    auth: &[
-        AuthApply { secret_key: "usertoken", kind: AuthKind::Basic },
-    ],
-};
-
-fn iface_followed_networks__get_user_follows_networks_embed_enum__to_str(e: &iface_followed_networks::GetUserFollowsNetworksEmbedEnum) -> &'static str {
-    match e {
-        iface_followed_networks::GetUserFollowsNetworksEmbedEnum::Network => "network",
-    }
-}
-
-fn iface_followed_networks__get_user_follows_networks_params__to_json(p: &iface_followed_networks::GetUserFollowsNetworksParams) -> Value {
-    let mut m = Map::new();
-    m.insert("embed".into(), match (&p.embed) { Some(v) => Value::String(iface_followed_networks__get_user_follows_networks_embed_enum__to_str(v).into()), None => Value::Null });
-    Value::Object(m)
-}
-
-impl iface_followed_networks::Guest for crate::Component {
-    fn get_user_follows_networks(params: iface_followed_networks::GetUserFollowsNetworksParams) -> Result<String, String> {
-        let json = iface_followed_networks__get_user_follows_networks_params__to_json(&params);
-        dispatch(&OP_FOLLOWED_NETWORKS_GET_USER_FOLLOWS_NETWORKS, json)
-    }
-    fn get_user_follows_networks_network_id() -> Result<String, String> {
-        dispatch(&OP_FOLLOWED_NETWORKS_GET_USER_FOLLOWS_NETWORKS_NETWORK_ID, Value::Object(Map::new()))
-    }
-    fn put_user_follows_networks_network_id() -> Result<String, String> {
-        dispatch(&OP_FOLLOWED_NETWORKS_PUT_USER_FOLLOWS_NETWORKS_NETWORK_ID, Value::Object(Map::new()))
-    }
-    fn delete_user_follows_networks_network_id() -> Result<String, String> {
-        dispatch(&OP_FOLLOWED_NETWORKS_DELETE_USER_FOLLOWS_NETWORKS_NETWORK_ID, Value::Object(Map::new()))
-    }
-}
-use crate::exports::autostamp::tvmaze::followed_people as iface_followed_people;
-
-const OP_FOLLOWED_PEOPLE_GET_USER_FOLLOWS_PEOPLE: OpSpec = OpSpec {
-    method: "GET",
-    path_template: "/user/follows/people",
-    fields: &[
-        FieldSpec { snake: "embed", location: FieldLocation::Query },
-    ],
-    auth: &[
-        AuthApply { secret_key: "usertoken", kind: AuthKind::Basic },
-    ],
-};
-
-const OP_FOLLOWED_PEOPLE_GET_USER_FOLLOWS_PEOPLE_PERSON_ID: OpSpec = OpSpec {
-    method: "GET",
-    path_template: "/user/follows/people/{person_id}",
-    fields: &[
-    ],
-    auth: &[
-        AuthApply { secret_key: "usertoken", kind: AuthKind::Basic },
-    ],
-};
-
-const OP_FOLLOWED_PEOPLE_PUT_USER_FOLLOWS_PEOPLE_PERSON_ID: OpSpec = OpSpec {
-    method: "PUT",
-    path_template: "/user/follows/people/{person_id}",
-    fields: &[
-    ],
-    auth: &[
-        AuthApply { secret_key: "usertoken", kind: AuthKind::Basic },
-    ],
-};
-
-const OP_FOLLOWED_PEOPLE_DELETE_USER_FOLLOWS_PEOPLE_PERSON_ID: OpSpec = OpSpec {
-    method: "DELETE",
-    path_template: "/user/follows/people/{person_id}",
-    fields: &[
-    ],
-    auth: &[
-        AuthApply { secret_key: "usertoken", kind: AuthKind::Basic },
-    ],
-};
-
-fn iface_followed_people__get_user_follows_people_embed_enum__to_str(e: &iface_followed_people::GetUserFollowsPeopleEmbedEnum) -> &'static str {
-    match e {
-        iface_followed_people::GetUserFollowsPeopleEmbedEnum::Person => "person",
-    }
-}
-
-fn iface_followed_people__get_user_follows_people_params__to_json(p: &iface_followed_people::GetUserFollowsPeopleParams) -> Value {
-    let mut m = Map::new();
-    m.insert("embed".into(), match (&p.embed) { Some(v) => Value::String(iface_followed_people__get_user_follows_people_embed_enum__to_str(v).into()), None => Value::Null });
-    Value::Object(m)
-}
-
-impl iface_followed_people::Guest for crate::Component {
-    fn get_user_follows_people(params: iface_followed_people::GetUserFollowsPeopleParams) -> Result<String, String> {
-        let json = iface_followed_people__get_user_follows_people_params__to_json(&params);
-        dispatch(&OP_FOLLOWED_PEOPLE_GET_USER_FOLLOWS_PEOPLE, json)
-    }
-    fn get_user_follows_people_person_id() -> Result<String, String> {
-        dispatch(&OP_FOLLOWED_PEOPLE_GET_USER_FOLLOWS_PEOPLE_PERSON_ID, Value::Object(Map::new()))
-    }
-    fn put_user_follows_people_person_id() -> Result<String, String> {
-        dispatch(&OP_FOLLOWED_PEOPLE_PUT_USER_FOLLOWS_PEOPLE_PERSON_ID, Value::Object(Map::new()))
-    }
-    fn delete_user_follows_people_person_id() -> Result<String, String> {
-        dispatch(&OP_FOLLOWED_PEOPLE_DELETE_USER_FOLLOWS_PEOPLE_PERSON_ID, Value::Object(Map::new()))
-    }
-}
-use crate::exports::autostamp::tvmaze::followed_shows as iface_followed_shows;
-
-const OP_FOLLOWED_SHOWS_GET_USER_FOLLOWS_SHOWS: OpSpec = OpSpec {
-    method: "GET",
-    path_template: "/user/follows/shows",
-    fields: &[
-        FieldSpec { snake: "embed", location: FieldLocation::Query },
-    ],
-    auth: &[
-        AuthApply { secret_key: "usertoken", kind: AuthKind::Basic },
-    ],
-};
-
-const OP_FOLLOWED_SHOWS_GET_USER_FOLLOWS_SHOWS_SHOW_ID: OpSpec = OpSpec {
-    method: "GET",
-    path_template: "/user/follows/shows/{show_id}",
-    fields: &[
-    ],
-    auth: &[
-        AuthApply { secret_key: "usertoken", kind: AuthKind::Basic },
-    ],
-};
-
-const OP_FOLLOWED_SHOWS_PUT_USER_FOLLOWS_SHOWS_SHOW_ID: OpSpec = OpSpec {
-    method: "PUT",
-    path_template: "/user/follows/shows/{show_id}",
-    fields: &[
-    ],
-    auth: &[
-        AuthApply { secret_key: "usertoken", kind: AuthKind::Basic },
-    ],
-};
-
-const OP_FOLLOWED_SHOWS_DELETE_USER_FOLLOWS_SHOWS_SHOW_ID: OpSpec = OpSpec {
-    method: "DELETE",
-    path_template: "/user/follows/shows/{show_id}",
-    fields: &[
-    ],
-    auth: &[
-        AuthApply { secret_key: "usertoken", kind: AuthKind::Basic },
-    ],
-};
-
-fn iface_followed_shows__get_user_follows_shows_embed_enum__to_str(e: &iface_followed_shows::GetUserFollowsShowsEmbedEnum) -> &'static str {
-    match e {
-        iface_followed_shows::GetUserFollowsShowsEmbedEnum::Show => "show",
-    }
-}
-
-fn iface_followed_shows__get_user_follows_shows_params__to_json(p: &iface_followed_shows::GetUserFollowsShowsParams) -> Value {
-    let mut m = Map::new();
-    m.insert("embed".into(), match (&p.embed) { Some(v) => Value::String(iface_followed_shows__get_user_follows_shows_embed_enum__to_str(v).into()), None => Value::Null });
-    Value::Object(m)
-}
-
-impl iface_followed_shows::Guest for crate::Component {
-    fn get_user_follows_shows(params: iface_followed_shows::GetUserFollowsShowsParams) -> Result<String, String> {
-        let json = iface_followed_shows__get_user_follows_shows_params__to_json(&params);
-        dispatch(&OP_FOLLOWED_SHOWS_GET_USER_FOLLOWS_SHOWS, json)
-    }
-    fn get_user_follows_shows_show_id() -> Result<String, String> {
-        dispatch(&OP_FOLLOWED_SHOWS_GET_USER_FOLLOWS_SHOWS_SHOW_ID, Value::Object(Map::new()))
-    }
-    fn put_user_follows_shows_show_id() -> Result<String, String> {
-        dispatch(&OP_FOLLOWED_SHOWS_PUT_USER_FOLLOWS_SHOWS_SHOW_ID, Value::Object(Map::new()))
-    }
-    fn delete_user_follows_shows_show_id() -> Result<String, String> {
-        dispatch(&OP_FOLLOWED_SHOWS_DELETE_USER_FOLLOWS_SHOWS_SHOW_ID, Value::Object(Map::new()))
-    }
-}
-use crate::exports::autostamp::tvmaze::followed_webchannels as iface_followed_webchannels;
-
-const OP_FOLLOWED_WEBCHANNELS_GET_USER_FOLLOWS_WEBCHANNELS: OpSpec = OpSpec {
-    method: "GET",
-    path_template: "/user/follows/webchannels",
-    fields: &[
-        FieldSpec { snake: "embed", location: FieldLocation::Query },
-    ],
-    auth: &[
-        AuthApply { secret_key: "usertoken", kind: AuthKind::Basic },
-    ],
-};
-
-const OP_FOLLOWED_WEBCHANNELS_GET_USER_FOLLOWS_WEBCHANNELS_WEBCHANNEL_ID: OpSpec = OpSpec {
-    method: "GET",
-    path_template: "/user/follows/webchannels/{webchannel_id}",
-    fields: &[
-    ],
-    auth: &[
-        AuthApply { secret_key: "usertoken", kind: AuthKind::Basic },
-    ],
-};
-
-const OP_FOLLOWED_WEBCHANNELS_PUT_USER_FOLLOWS_WEBCHANNELS_WEBCHANNEL_ID: OpSpec = OpSpec {
-    method: "PUT",
-    path_template: "/user/follows/webchannels/{webchannel_id}",
-    fields: &[
-    ],
-    auth: &[
-        AuthApply { secret_key: "usertoken", kind: AuthKind::Basic },
-    ],
-};
-
-const OP_FOLLOWED_WEBCHANNELS_DELETE_USER_FOLLOWS_WEBCHANNELS_WEBCHANNEL_ID: OpSpec = OpSpec {
-    method: "DELETE",
-    path_template: "/user/follows/webchannels/{webchannel_id}",
-    fields: &[
-    ],
-    auth: &[
-        AuthApply { secret_key: "usertoken", kind: AuthKind::Basic },
-    ],
-};
-
-fn iface_followed_webchannels__get_user_follows_webchannels_embed_enum__to_str(e: &iface_followed_webchannels::GetUserFollowsWebchannelsEmbedEnum) -> &'static str {
-    match e {
-        iface_followed_webchannels::GetUserFollowsWebchannelsEmbedEnum::Webchannel => "webchannel",
-    }
-}
-
-fn iface_followed_webchannels__get_user_follows_webchannels_params__to_json(p: &iface_followed_webchannels::GetUserFollowsWebchannelsParams) -> Value {
-    let mut m = Map::new();
-    m.insert("embed".into(), match (&p.embed) { Some(v) => Value::String(iface_followed_webchannels__get_user_follows_webchannels_embed_enum__to_str(v).into()), None => Value::Null });
-    Value::Object(m)
-}
-
-impl iface_followed_webchannels::Guest for crate::Component {
-    fn get_user_follows_webchannels(params: iface_followed_webchannels::GetUserFollowsWebchannelsParams) -> Result<String, String> {
-        let json = iface_followed_webchannels__get_user_follows_webchannels_params__to_json(&params);
-        dispatch(&OP_FOLLOWED_WEBCHANNELS_GET_USER_FOLLOWS_WEBCHANNELS, json)
-    }
-    fn get_user_follows_webchannels_webchannel_id() -> Result<String, String> {
-        dispatch(&OP_FOLLOWED_WEBCHANNELS_GET_USER_FOLLOWS_WEBCHANNELS_WEBCHANNEL_ID, Value::Object(Map::new()))
-    }
-    fn put_user_follows_webchannels_webchannel_id() -> Result<String, String> {
-        dispatch(&OP_FOLLOWED_WEBCHANNELS_PUT_USER_FOLLOWS_WEBCHANNELS_WEBCHANNEL_ID, Value::Object(Map::new()))
-    }
-    fn delete_user_follows_webchannels_webchannel_id() -> Result<String, String> {
-        dispatch(&OP_FOLLOWED_WEBCHANNELS_DELETE_USER_FOLLOWS_WEBCHANNELS_WEBCHANNEL_ID, Value::Object(Map::new()))
-    }
-}
-use crate::exports::autostamp::tvmaze::tagged_shows as iface_tagged_shows;
-
-const OP_TAGGED_SHOWS_GET_USER_TAGS: OpSpec = OpSpec {
-    method: "GET",
-    path_template: "/user/tags",
-    fields: &[
-    ],
-    auth: &[
-        AuthApply { secret_key: "usertoken", kind: AuthKind::Basic },
-    ],
-};
-
-const OP_TAGGED_SHOWS_POST_USER_TAGS: OpSpec = OpSpec {
-    method: "POST",
-    path_template: "/user/tags",
-    fields: &[
-        FieldSpec { snake: "id", location: FieldLocation::Body },
-        FieldSpec { snake: "name", location: FieldLocation::Body },
-    ],
-    auth: &[
-        AuthApply { secret_key: "usertoken", kind: AuthKind::Basic },
-    ],
-};
-
-const OP_TAGGED_SHOWS_PATCH_USER_TAGS_TAG_ID: OpSpec = OpSpec {
-    method: "PATCH",
-    path_template: "/user/tags/{tag_id}",
-    fields: &[
-        FieldSpec { snake: "tag_id", location: FieldLocation::Path },
-        FieldSpec { snake: "id", location: FieldLocation::Body },
-        FieldSpec { snake: "name", location: FieldLocation::Body },
-    ],
-    auth: &[
-        AuthApply { secret_key: "usertoken", kind: AuthKind::Basic },
-    ],
-};
-
-const OP_TAGGED_SHOWS_DELETE_USER_TAGS_TAG_ID: OpSpec = OpSpec {
-    method: "DELETE",
-    path_template: "/user/tags/{tag_id}",
-    fields: &[
-        FieldSpec { snake: "tag_id", location: FieldLocation::Path },
-    ],
-    auth: &[
-        AuthApply { secret_key: "usertoken", kind: AuthKind::Basic },
-    ],
-};
-
-const OP_TAGGED_SHOWS_GET_USER_TAGS_TAG_ID_SHOWS: OpSpec = OpSpec {
-    method: "GET",
-    path_template: "/user/tags/{tag_id}/shows",
-    fields: &[
-        FieldSpec { snake: "tag_id", location: FieldLocation::Path },
-        FieldSpec { snake: "embed", location: FieldLocation::Query },
-    ],
-    auth: &[
-        AuthApply { secret_key: "usertoken", kind: AuthKind::Basic },
-    ],
-};
-
-const OP_TAGGED_SHOWS_PUT_USER_TAGS_TAG_ID_SHOWS_SHOW_ID: OpSpec = OpSpec {
-    method: "PUT",
-    path_template: "/user/tags/{tag_id}/shows/{show_id}",
-    fields: &[
-        FieldSpec { snake: "tag_id", location: FieldLocation::Path },
-        FieldSpec { snake: "show_id", location: FieldLocation::Path },
-    ],
-    auth: &[
-        AuthApply { secret_key: "usertoken", kind: AuthKind::Basic },
-    ],
-};
-
-const OP_TAGGED_SHOWS_DELETE_USER_TAGS_TAG_ID_SHOWS_SHOW_ID: OpSpec = OpSpec {
-    method: "DELETE",
-    path_template: "/user/tags/{tag_id}/shows/{show_id}",
-    fields: &[
-        FieldSpec { snake: "tag_id", location: FieldLocation::Path },
-        FieldSpec { snake: "show_id", location: FieldLocation::Path },
-    ],
-    auth: &[
-        AuthApply { secret_key: "usertoken", kind: AuthKind::Basic },
-    ],
-};
-
-fn iface_tagged_shows__get_user_tags_tag_id_shows_embed_enum__to_str(e: &iface_tagged_shows::GetUserTagsTagIdShowsEmbedEnum) -> &'static str {
-    match e {
-        iface_tagged_shows::GetUserTagsTagIdShowsEmbedEnum::Show => "show",
-    }
-}
-
-fn iface_tagged_shows__post_user_tags_params__to_json(p: &iface_tagged_shows::PostUserTagsParams) -> Value {
-    let mut m = Map::new();
-    m.insert("id".into(), match (&p.id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_tagged_shows__patch_user_tags_tag_id_params__to_json(p: &iface_tagged_shows::PatchUserTagsTagIdParams) -> Value {
-    let mut m = Map::new();
-    m.insert("tag_id".into(), Value::String((&p.tag_id).clone()));
-    m.insert("id".into(), match (&p.id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_tagged_shows__delete_user_tags_tag_id_params__to_json(p: &iface_tagged_shows::DeleteUserTagsTagIdParams) -> Value {
-    let mut m = Map::new();
-    m.insert("tag_id".into(), Value::String((&p.tag_id).clone()));
-    Value::Object(m)
-}
-
-fn iface_tagged_shows__get_user_tags_tag_id_shows_params__to_json(p: &iface_tagged_shows::GetUserTagsTagIdShowsParams) -> Value {
-    let mut m = Map::new();
-    m.insert("tag_id".into(), Value::String((&p.tag_id).clone()));
-    m.insert("embed".into(), match (&p.embed) { Some(v) => Value::String(iface_tagged_shows__get_user_tags_tag_id_shows_embed_enum__to_str(v).into()), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_tagged_shows__put_user_tags_tag_id_shows_show_id_params__to_json(p: &iface_tagged_shows::PutUserTagsTagIdShowsShowIdParams) -> Value {
-    let mut m = Map::new();
-    m.insert("tag_id".into(), Value::String((&p.tag_id).clone()));
-    m.insert("show_id".into(), Value::String((&p.show_id).clone()));
-    Value::Object(m)
-}
-
-fn iface_tagged_shows__delete_user_tags_tag_id_shows_show_id_params__to_json(p: &iface_tagged_shows::DeleteUserTagsTagIdShowsShowIdParams) -> Value {
-    let mut m = Map::new();
-    m.insert("tag_id".into(), Value::String((&p.tag_id).clone()));
-    m.insert("show_id".into(), Value::String((&p.show_id).clone()));
-    Value::Object(m)
-}
-
-impl iface_tagged_shows::Guest for crate::Component {
-    fn get_user_tags() -> Result<String, String> {
-        dispatch(&OP_TAGGED_SHOWS_GET_USER_TAGS, Value::Object(Map::new()))
-    }
-    fn post_user_tags(params: iface_tagged_shows::PostUserTagsParams) -> Result<String, String> {
-        let json = iface_tagged_shows__post_user_tags_params__to_json(&params);
-        dispatch(&OP_TAGGED_SHOWS_POST_USER_TAGS, json)
-    }
-    fn patch_user_tags_tag_id(params: iface_tagged_shows::PatchUserTagsTagIdParams) -> Result<String, String> {
-        let json = iface_tagged_shows__patch_user_tags_tag_id_params__to_json(&params);
-        dispatch(&OP_TAGGED_SHOWS_PATCH_USER_TAGS_TAG_ID, json)
-    }
-    fn delete_user_tags_tag_id(params: iface_tagged_shows::DeleteUserTagsTagIdParams) -> Result<String, String> {
-        let json = iface_tagged_shows__delete_user_tags_tag_id_params__to_json(&params);
-        dispatch(&OP_TAGGED_SHOWS_DELETE_USER_TAGS_TAG_ID, json)
-    }
-    fn get_user_tags_tag_id_shows(params: iface_tagged_shows::GetUserTagsTagIdShowsParams) -> Result<String, String> {
-        let json = iface_tagged_shows__get_user_tags_tag_id_shows_params__to_json(&params);
-        dispatch(&OP_TAGGED_SHOWS_GET_USER_TAGS_TAG_ID_SHOWS, json)
-    }
-    fn put_user_tags_tag_id_shows_show_id(params: iface_tagged_shows::PutUserTagsTagIdShowsShowIdParams) -> Result<String, String> {
-        let json = iface_tagged_shows__put_user_tags_tag_id_shows_show_id_params__to_json(&params);
-        dispatch(&OP_TAGGED_SHOWS_PUT_USER_TAGS_TAG_ID_SHOWS_SHOW_ID, json)
-    }
-    fn delete_user_tags_tag_id_shows_show_id(params: iface_tagged_shows::DeleteUserTagsTagIdShowsShowIdParams) -> Result<String, String> {
-        let json = iface_tagged_shows__delete_user_tags_tag_id_shows_show_id_params__to_json(&params);
-        dispatch(&OP_TAGGED_SHOWS_DELETE_USER_TAGS_TAG_ID_SHOWS_SHOW_ID, json)
-    }
-}
-use crate::exports::autostamp::tvmaze::voted_episodes as iface_voted_episodes;
-
-const OP_VOTED_EPISODES_GET_USER_VOTES_EPISODES: OpSpec = OpSpec {
-    method: "GET",
-    path_template: "/user/votes/episodes",
-    fields: &[
-    ],
-    auth: &[
-        AuthApply { secret_key: "usertoken", kind: AuthKind::Basic },
-    ],
-};
-
-const OP_VOTED_EPISODES_GET_USER_VOTES_EPISODES_EPISODE_ID: OpSpec = OpSpec {
-    method: "GET",
-    path_template: "/user/votes/episodes/{episode_id}",
-    fields: &[
-    ],
-    auth: &[
-        AuthApply { secret_key: "usertoken", kind: AuthKind::Basic },
-    ],
-};
-
-const OP_VOTED_EPISODES_PUT_USER_VOTES_EPISODES_EPISODE_ID: OpSpec = OpSpec {
-    method: "PUT",
-    path_template: "/user/votes/episodes/{episode_id}",
-    fields: &[
-        FieldSpec { snake: "episode_id", location: FieldLocation::Body },
-        FieldSpec { snake: "vote", location: FieldLocation::Body },
-        FieldSpec { snake: "voted_at", location: FieldLocation::Body },
-    ],
-    auth: &[
-        AuthApply { secret_key: "usertoken", kind: AuthKind::Basic },
-    ],
-};
-
-const OP_VOTED_EPISODES_DELETE_USER_VOTES_EPISODES_EPISODE_ID: OpSpec = OpSpec {
-    method: "DELETE",
-    path_template: "/user/votes/episodes/{episode_id}",
-    fields: &[
-    ],
-    auth: &[
-        AuthApply { secret_key: "usertoken", kind: AuthKind::Basic },
-    ],
-};
-
-fn iface_voted_episodes__put_user_votes_episodes_episode_id_params__to_json(p: &iface_voted_episodes::PutUserVotesEpisodesEpisodeIdParams) -> Value {
-    let mut m = Map::new();
-    m.insert("episode_id".into(), match (&p.episode_id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    m.insert("vote".into(), match (&p.vote) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    m.insert("voted_at".into(), match (&p.voted_at) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    Value::Object(m)
-}
-
-impl iface_voted_episodes::Guest for crate::Component {
-    fn get_user_votes_episodes() -> Result<String, String> {
-        dispatch(&OP_VOTED_EPISODES_GET_USER_VOTES_EPISODES, Value::Object(Map::new()))
-    }
-    fn get_user_votes_episodes_episode_id() -> Result<String, String> {
-        dispatch(&OP_VOTED_EPISODES_GET_USER_VOTES_EPISODES_EPISODE_ID, Value::Object(Map::new()))
-    }
-    fn put_user_votes_episodes_episode_id(params: iface_voted_episodes::PutUserVotesEpisodesEpisodeIdParams) -> Result<String, String> {
-        let json = iface_voted_episodes__put_user_votes_episodes_episode_id_params__to_json(&params);
-        dispatch(&OP_VOTED_EPISODES_PUT_USER_VOTES_EPISODES_EPISODE_ID, json)
-    }
-    fn delete_user_votes_episodes_episode_id() -> Result<String, String> {
-        dispatch(&OP_VOTED_EPISODES_DELETE_USER_VOTES_EPISODES_EPISODE_ID, Value::Object(Map::new()))
-    }
-}
-use crate::exports::autostamp::tvmaze::voted_shows as iface_voted_shows;
-
-const OP_VOTED_SHOWS_GET_USER_VOTES_SHOWS: OpSpec = OpSpec {
-    method: "GET",
-    path_template: "/user/votes/shows",
-    fields: &[
-        FieldSpec { snake: "embed", location: FieldLocation::Query },
-    ],
-    auth: &[
-        AuthApply { secret_key: "usertoken", kind: AuthKind::Basic },
-    ],
-};
-
-const OP_VOTED_SHOWS_GET_USER_VOTES_SHOWS_SHOW_ID: OpSpec = OpSpec {
-    method: "GET",
-    path_template: "/user/votes/shows/{show_id}",
-    fields: &[
-    ],
-    auth: &[
-        AuthApply { secret_key: "usertoken", kind: AuthKind::Basic },
-    ],
-};
-
-const OP_VOTED_SHOWS_PUT_USER_VOTES_SHOWS_SHOW_ID: OpSpec = OpSpec {
-    method: "PUT",
-    path_template: "/user/votes/shows/{show_id}",
-    fields: &[
-        FieldSpec { snake: "show_id", location: FieldLocation::Body },
-        FieldSpec { snake: "vote", location: FieldLocation::Body },
-        FieldSpec { snake: "voted_at", location: FieldLocation::Body },
-    ],
-    auth: &[
-        AuthApply { secret_key: "usertoken", kind: AuthKind::Basic },
-    ],
-};
-
-const OP_VOTED_SHOWS_DELETE_USER_VOTES_SHOWS_SHOW_ID: OpSpec = OpSpec {
-    method: "DELETE",
-    path_template: "/user/votes/shows/{show_id}",
-    fields: &[
-    ],
-    auth: &[
-        AuthApply { secret_key: "usertoken", kind: AuthKind::Basic },
-    ],
-};
-
-fn iface_voted_shows__get_user_votes_shows_embed_enum__to_str(e: &iface_voted_shows::GetUserVotesShowsEmbedEnum) -> &'static str {
-    match e {
-        iface_voted_shows::GetUserVotesShowsEmbedEnum::Show => "show",
-    }
-}
-
-fn iface_voted_shows__get_user_votes_shows_params__to_json(p: &iface_voted_shows::GetUserVotesShowsParams) -> Value {
-    let mut m = Map::new();
-    m.insert("embed".into(), match (&p.embed) { Some(v) => Value::String(iface_voted_shows__get_user_votes_shows_embed_enum__to_str(v).into()), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_voted_shows__put_user_votes_shows_show_id_params__to_json(p: &iface_voted_shows::PutUserVotesShowsShowIdParams) -> Value {
-    let mut m = Map::new();
-    m.insert("show_id".into(), match (&p.show_id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    m.insert("vote".into(), match (&p.vote) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    m.insert("voted_at".into(), match (&p.voted_at) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    Value::Object(m)
-}
-
-impl iface_voted_shows::Guest for crate::Component {
-    fn get_user_votes_shows(params: iface_voted_shows::GetUserVotesShowsParams) -> Result<String, String> {
-        let json = iface_voted_shows__get_user_votes_shows_params__to_json(&params);
-        dispatch(&OP_VOTED_SHOWS_GET_USER_VOTES_SHOWS, json)
-    }
-    fn get_user_votes_shows_show_id() -> Result<String, String> {
-        dispatch(&OP_VOTED_SHOWS_GET_USER_VOTES_SHOWS_SHOW_ID, Value::Object(Map::new()))
-    }
-    fn put_user_votes_shows_show_id(params: iface_voted_shows::PutUserVotesShowsShowIdParams) -> Result<String, String> {
-        let json = iface_voted_shows__put_user_votes_shows_show_id_params__to_json(&params);
-        dispatch(&OP_VOTED_SHOWS_PUT_USER_VOTES_SHOWS_SHOW_ID, json)
-    }
-    fn delete_user_votes_shows_show_id() -> Result<String, String> {
-        dispatch(&OP_VOTED_SHOWS_DELETE_USER_VOTES_SHOWS_SHOW_ID, Value::Object(Map::new()))
-    }
-}
+mod iface_auth;
+mod iface_scrobbling;
+mod iface_marked_episodes;
+mod iface_followed_networks;
+mod iface_followed_people;
+mod iface_followed_shows;
+mod iface_followed_webchannels;
+mod iface_tagged_shows;
+mod iface_voted_episodes;
+mod iface_voted_shows;
 
 export!(Component);

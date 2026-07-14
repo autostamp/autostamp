@@ -6,12 +6,108 @@
 /// | Secret name | Applied to each request as |
 /// | --- | --- |
 /// | `api-key` | query `apiKey` |
-package autostamp:languagetool@0.3.0;
+package autostamp:languagetool@0.5.0;
 
 interface check {
   enum post-check-body-level-enum {
     default,
     picky,
+  }
+
+  record post-check-response {
+    /// The language used for checking the text.
+    language: option<post-check-response-language>,
+    matches: option<list<post-check-response-matches-item>>,
+    software: option<post-check-response-software>
+  }
+
+  /// The language used for checking the text.
+  record post-check-response-language {
+    /// ISO 639-1 code like 'en', 'en-US', or 'ca-ES-valencia'
+    code: string,
+    /// The automatically detected text language (might be different from the language actually used for checking).
+    detected-language: post-check-response-language-detected-language,
+    /// Language name like 'French' or 'English (US)'.
+    name: string
+  }
+
+  /// The automatically detected text language (might be different from the language actually used for checking).
+  record post-check-response-language-detected-language {
+    /// ISO 639-1 code like 'en', 'en-US', or 'ca-ES-valencia'.
+    code: string,
+    /// Language name like 'French' or 'English (US)'.
+    name: string
+  }
+
+  record post-check-response-matches-item {
+    context: post-check-response-matches-item-context,
+    /// The length of the error in characters.
+    length: s32,
+    /// Message about the error displayed to the user.
+    message: string,
+    /// The 0-based character offset of the error in the text.
+    offset: s32,
+    /// Replacements that might correct the error. The array can be empty, in this case there is no suggested replacement.
+    replacements: list<post-check-response-matches-item-replacements-item>,
+    rule: option<post-check-response-matches-item-rule>,
+    /// The sentence the error occurred in (since LanguageTool 4.0 or later)
+    sentence: string,
+    /// An optional shorter version of 'message'.
+    short-message: option<string>
+  }
+
+  record post-check-response-matches-item-context {
+    /// The length of the error in characters in the context.
+    length: s32,
+    /// The 0-based character offset of the error in the context text.
+    offset: s32,
+    /// Context of the error, i.e. the error and some text to the left and to the left.
+    text: string
+  }
+
+  record post-check-response-matches-item-replacements-item {
+    /// the replacement string
+    value: option<string>
+  }
+
+  record post-check-response-matches-item-rule {
+    category: post-check-response-matches-item-rule-category,
+    description: string,
+    /// An rule's identifier that's unique for this language.
+    id: string,
+    /// The <a href="http://www.w3.org/International/multilingualweb/lt/drafts/its20/its20.html#lqissue-typevalues">Localization Quality Issue Type</a>. This is not defined for all languages, in which case it will always be 'Uncategorized'.
+    issue-type: option<string>,
+    /// An optional sub identifier of the rule, used when several rules are grouped.
+    sub-id: option<string>,
+    /// An optional array of URLs with a more detailed description of the error.
+    urls: option<list<post-check-response-matches-item-rule-urls-item>>
+  }
+
+  record post-check-response-matches-item-rule-category {
+    /// A category's identifier that's unique for this language.
+    id: option<string>,
+    /// A short description of the category.
+    name: option<string>
+  }
+
+  record post-check-response-matches-item-rule-urls-item {
+    /// the URL
+    value: option<string>
+  }
+
+  record post-check-response-software {
+    /// Version of this API response. We don't expect to make incompatible changes, so this can also be increased for newly added fields.
+    api-version: s32,
+    /// Date when the software was built, e.g. '2016-05-25'.
+    build-date: string,
+    /// Usually 'LanguageTool'.
+    name: string,
+    /// true if you're using a Premium account with all the premium text checks (since LanguageTool 4.2)
+    premium: option<bool>,
+    /// An optional warning, e.g. when the API format is not stable.
+    status: option<string>,
+    /// A version string like '3.3' or '3.4-SNAPSHOT'.
+    version: string
   }
 
   /// Check a text
@@ -46,18 +142,42 @@ interface check {
     /// If set to `picky`, additional rules will be activated, i.e. rules that you might only find useful when checking formal text.
     level: option<post-check-body-level-enum>
   }
-  post-check: func(params: post-check-params) -> result<string, string>;
+  post-check: func(params: post-check-params) -> result<post-check-response, string>;
 
 }
 
 
 interface languages {
+  record get-languages-response-item {
+    /// a language code like 'en'
+    code: string,
+    /// a language code like 'en-US' or 'ca-ES-valencia'
+    long-code: string,
+    /// a language name like 'French' or 'English (Australia)'
+    name: string
+  }
+
   /// Get a list of supported languages.
-  get-languages: func() -> result<string, string>;
+  get-languages: func() -> result<list<get-languages-response-item>, string>;
 
 }
 
 interface words {
+  record get-words-response {
+    /// array of words
+    words: option<list<string>>
+  }
+
+  record post-words-add-response {
+    /// true if the word has been added. false means the word hasn't been added because it had been added before.
+    added: option<bool>
+  }
+
+  record post-words-delete-response {
+    /// true if the word has been removed. false means the word hasn't been removed because it was not in the dictionary.
+    deleted: option<bool>
+  }
+
   /// List words in dictionaries
   record get-words-params {
     /// Offset of where to start in the list of words. Defaults to 0.
@@ -69,7 +189,7 @@ interface words {
     /// Comma-separated list of dictionaries to include words from; uses special default dictionary if this is unset
     dicts: option<string>
   }
-  get-words: func(params: get-words-params) -> result<string, string>;
+  get-words: func(params: get-words-params) -> result<get-words-response, string>;
 
   /// Add word to a dictionary
   record post-words-add-params {
@@ -82,7 +202,7 @@ interface words {
     /// Name of the dictionary to add the word to; non-existent dictionaries are created after calling this; if unset, adds to special default dictionary
     dict: option<string>
   }
-  post-words-add: func(params: post-words-add-params) -> result<string, string>;
+  post-words-add: func(params: post-words-add-params) -> result<post-words-add-response, string>;
 
   /// Remove word from a dictionary
   record post-words-delete-params {
@@ -95,7 +215,7 @@ interface words {
     /// Name of the dictionary to remove the word from; if the dictionary is empty upon calling this, it is deleted; if unset, removes from special default dictionary
     dict: option<string>
   }
-  post-words-delete: func(params: post-words-delete-params) -> result<string, string>;
+  post-words-delete: func(params: post-words-delete-params) -> result<post-words-delete-response, string>;
 
 }
 /// The component world: imports the secrets host capability

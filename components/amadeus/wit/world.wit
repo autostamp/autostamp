@@ -1,4 +1,4 @@
-package autostamp:amadeus@0.3.0;
+package autostamp:amadeus@0.5.0;
 
 interface shopping {
   enum get-flight-offers-travel-class-enum {
@@ -6,6 +6,475 @@ interface shopping {
     premium-economy,
     business,
     first,
+  }
+
+  record get-flight-offers-response {
+    data: list<flight-offer>,
+    dictionaries: option<dictionaries>,
+    meta: option<collection-meta-link>,
+    warnings: option<list<issue>>
+  }
+
+  record flight-offer {
+    /// BOOK step ONLY - If true, allows to book a PNR without pricing. Only for the source "GDS"
+    disable-pricing: option<bool>,
+    /// Id of the flight offer
+    id: string,
+    /// If true, inform that a ticketing will be required at booking step.
+    instant-ticketing-required: option<bool>,
+    itineraries: option<list<flight-offer-itineraries-item>>,
+    /// If booked on the same day as the search (with respect to timezone), this flight offer is guaranteed to be thereafter valid for ticketing until this date (included). Unspecified when it does not make sense for this flight offer (e.g. no control over ticketing once booked). YYYY-MM-DD format, e.g. 2019-06-07
+    last-ticketing-date: option<string>,
+    /// If true, upon completion of the booking, this pricing solution is expected to yield multiple records (a record contains booking information confirmed and stored, typically a Passenger Name Record (PNR), in the provider GDS or system)
+    non-homogeneous: option<bool>,
+    /// Number of seats bookable in a single request. Can not be higher than 9.
+    number-of-bookable-seats: option<f64>,
+    /// If true, the flight offer fulfills only one originDestination and has to be combined with other oneWays to complete the whole journey.
+    one-way: option<bool>,
+    /// If true, a payment card is mandatory to book this flight offer
+    payment-card-required: option<bool>,
+    price: option<extended-price>,
+    pricing-options: option<flight-offer-pricing-options>,
+    source: option<flight-offer-source>,
+    /// Fare information for each traveler/segment
+    traveler-pricings: option<list<flight-offer-traveler-pricings-item>>,
+    /// the resource name
+    type-op: string,
+    /// This option ensures that the system will only consider these airlines.
+    validating-airline-codes: option<list<string>>
+  }
+
+  record flight-offer-itineraries-item {
+    /// duration in [ISO8601](https://en.wikipedia.org/wiki/ISO_8601) PnYnMnDTnHnMnS format, e.g. PT2H10M for a duration of 2h10m
+    duration: option<string>,
+    segments: list<segment>
+  }
+
+  record segment {
+    /// When the flight has a marketing or/and operating airline that is identified as blacklisted by the European Commission. 
+    /// 
+    blacklisted-in-eu: option<bool>,
+    /// Co2 informations
+    co2-emissions: option<list<co2-emission>>,
+    /// Id of the segment
+    id: option<string>,
+    /// Number of stops
+    number-of-stops: option<s32>,
+    aircraft: option<aircraft-equipment>,
+    arrival: option<flight-end-point>,
+    /// providing the airline / carrier code
+    carrier-code: option<string>,
+    departure: option<flight-end-point>,
+    /// stop duration in [ISO8601](https://en.wikipedia.org/wiki/ISO_8601) PnYnMnDTnHnMnS format, e.g. PT2H10M
+    duration: option<string>,
+    /// the flight number as assigned by the carrier
+    number: option<string>,
+    operating: option<operating-flight>,
+    /// information regarding the different stops composing the flight segment. E.g. technical stop, change of gauge...
+    stops: option<list<flight-stop>>
+  }
+
+  record co2-emission {
+    cabin: option<travel-class>,
+    /// Weight of Co2 emitted for the concerned segment
+    weight: option<s32>,
+    /// Code to qualify unit as pounds or kilos
+    weight-unit: option<string>
+  }
+
+  /// quality of service offered in the cabin where the seat is located in this flight. Economy, premium economy, business or first class
+  record travel-class {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  /// information related to the aircraft
+  record aircraft-equipment {
+    /// IATA aircraft code (http://www.flugzeuginfo.net/table_accodes_iata_en.php)
+    code: option<string>
+  }
+
+  /// departure or arrival information
+  record flight-end-point {
+    /// [IATA airline codes](http://www.iata.org/publications/Pages/code-search.aspx)
+    iata-code: option<string>,
+    /// terminal name / number
+    terminal: option<string>,
+    /// local date and time in [ISO8601](https://en.wikipedia.org/wiki/ISO_8601) YYYY-MM-ddThh:mm:ss format, e.g. 2017-02-10T20:40:00
+    at: option<string>
+  }
+
+  /// information about the operating flight
+  record operating-flight {
+    /// providing the airline / carrier code
+    carrier-code: option<string>
+  }
+
+  /// details of stops for direct or change of gauge flights
+  record flight-stop {
+    /// stop duration in [ISO8601](https://en.wikipedia.org/wiki/ISO_8601) PnYnMnDTnHnMnS format, e.g. PT2H10M
+    duration: option<string>,
+    /// [IATA airline codes](http://www.iata.org/publications/Pages/code-search.aspx)
+    iata-code: option<string>,
+    /// arrival at the stop in [ISO8601](https://en.wikipedia.org/wiki/ISO_8601) YYYY-MM-ddThh:mm:ss format, e.g. 2017-02-10T20:40:00
+    arrival-at: option<string>,
+    /// departure from the stop in [ISO8601](https://en.wikipedia.org/wiki/ISO_8601) YYYY-MM-ddThh:mm:ss format, e.g. 2017-02-10T20:40:00
+    departure-at: option<string>
+  }
+
+  /// price information
+  record extended-price {
+    /// JSON-encoded free-form object payload
+    data: option<string>
+  }
+
+  record flight-offer-pricing-options {
+    fare-type: option<pricing-options-fare-type>,
+    /// If true, returns the flight-offers with included checked bags only
+    included-checked-bags-only: option<bool>,
+    /// If true, returns the flight-offers with no penalty fares only
+    no-penalty-fare: option<bool>,
+    /// If true, returns the flight-offers with no restriction fares only
+    no-restriction-fare: option<bool>,
+    /// If true, returns the flight-offers with refundable fares only
+    refundable-fare: option<bool>
+  }
+
+  /// type of fare of the flight-offer
+  record pricing-options-fare-type {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  /// source of the flight offer
+  record flight-offer-source {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  record flight-offer-traveler-pricings-item {
+    /// if type="HELD_INFANT", corresponds to the adult traveler's id who will share the seat
+    associated-adult-id: option<string>,
+    fare-details-by-segment: list<flight-offer-traveler-pricings-item-fare-details-by-segment-item>,
+    fare-option: traveler-pricing-fare-option,
+    price: option<price>,
+    /// Id of the traveler
+    traveler-id: string,
+    traveler-type: traveler-type
+  }
+
+  record flight-offer-traveler-pricings-item-fare-details-by-segment-item {
+    additional-services: option<flight-offer-traveler-pricings-item-fare-details-by-segment-item-additional-services>,
+    allotment-details: option<flight-offer-traveler-pricings-item-fare-details-by-segment-item-allotment-details>,
+    /// The name of the Fare Family corresponding to the fares. Only for the GDS provider and if the airline has fare families filled
+    branded-fare: option<string>,
+    cabin: option<travel-class>,
+    /// The code of the booking class, a.k.a. class of service or Reservations/Booking Designator (RBD)
+    class: option<string>,
+    /// Fare basis specifying the rules of a fare. Usually, though not always, is composed of the booking class code followed by a set of letters and digits representing other characteristics of the ticket, such as refundability, minimum stay requirements, discounts or special promotional elements.
+    fare-basis: option<string>,
+    included-checked-bags: option<baggage-allowance>,
+    /// True if the corresponding booking class is in an allotment
+    is-allotment: option<bool>,
+    /// Id of the segment
+    segment-id: string,
+    slice-dice-indicator: option<slice-dice-indicator>
+  }
+
+  record flight-offer-traveler-pricings-item-fare-details-by-segment-item-additional-services {
+    chargeable-checked-bags: option<baggage-allowance>,
+    /// seat number
+    chargeable-seat-number: option<string>,
+    /// Other services to add
+    other-services: option<list<service-name>>
+  }
+
+  /// baggageAllowance
+  record baggage-allowance {
+    /// Total number of units
+    quantity: option<s32>,
+    /// Weight of the baggage allowance
+    weight: option<s32>,
+    /// Code to qualify unit as pounds or kilos
+    weight-unit: option<string>
+  }
+
+  /// type of service
+  record service-name {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  record flight-offer-traveler-pricings-item-fare-details-by-segment-item-allotment-details {
+    tour-name: option<string>,
+    tour-reference: option<string>
+  }
+
+  /// slice and Dice indicator, such as Local Availability, Sub OnD(Origin and Destination) 1 Availability and Sub OnD 2 Availability
+  record slice-dice-indicator {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  /// option specifying a group of fares, which may be valid under certain conditons
+  /// Can be used to specify special fare discount for a passenger
+  record traveler-pricing-fare-option {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  record price {
+    /// Amount without taxes
+    base: option<string>,
+    currency: option<string>,
+    /// List of applicable fees
+    fees: option<list<fee>>,
+    /// The amount of taxes which are refundable
+    refundable-taxes: option<string>,
+    taxes: option<list<tax>>,
+    /// Total amount paid by the user
+    total: option<string>
+  }
+
+  /// a fee
+  record fee {
+    amount: option<string>,
+    type-op: option<fee-type>
+  }
+
+  /// type of fee
+  record fee-type {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  /// a tax
+  record tax {
+    amount: option<string>,
+    code: option<string>
+  }
+
+  /// traveler type
+  /// age restrictions : CHILD < 12y, HELD_INFANT < 2y, SEATED_INFANT < 2y, SENIOR >=60y
+  record traveler-type {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  record dictionaries {
+    aircraft: option<aircraft-entry>,
+    carriers: option<carrier-entry>,
+    currencies: option<currency-entry>,
+    locations: option<location-entry>
+  }
+
+  record aircraft-entry {
+    key: option<string>
+  }
+
+  record carrier-entry {
+    key: option<string>
+  }
+
+  record currency-entry {
+    key: string
+  }
+
+  record location-entry {
+    key: string
+  }
+
+  record collection-meta-link {
+    count: option<s32>,
+    links: option<collection-meta-link-links>
+  }
+
+  record collection-meta-link-links {
+    first: option<string>,
+    last: option<string>,
+    next: option<string>,
+    previous: option<string>,
+    self: option<string>,
+    up: option<string>
+  }
+
+  record issue {
+    /// an application-specific error code
+    code: option<s64>,
+    /// explanation of the error
+    detail: option<string>,
+    /// an object containing references to the source of the error
+    source: option<issue-source>,
+    /// the HTTP status code applicable to this error
+    status: option<s32>,
+    /// a short summary of the error
+    title: option<string>
+  }
+
+  /// an object containing references to the source of the error
+  record issue-source {
+    /// a string indicating an example of the right value
+    example: option<string>,
+    /// a string indicating which URI query parameter caused the issue
+    parameter: option<string>,
+    /// a JSON Pointer [RFC6901] to the associated entity in the request document
+    pointer: option<string>
+  }
+
+  record origin-destination {
+    /// Set of alternative destination location, such as a city or an airport. Currently, only the locations defined in [IATA](http://www.iata.org/publications/Pages/code-search.aspx) are supported.
+    alternative-destinations-codes: option<list<string>>,
+    /// Set of alternative origin location, such as a city or an airport. Currently, only the locations defined in [IATA](http://www.iata.org/publications/Pages/code-search.aspx) are supported.
+    alternative-origins-codes: option<list<string>>,
+    arrival-date-time-range: option<date-time-range>,
+    departure-date-time-range: option<date-time-range>,
+    /// Destination location, such as a city or an airport. Currently, only the locations defined in [IATA](http://www.iata.org/publications/Pages/code-search.aspx) are supported.
+    destination-location-code: option<string>,
+    /// Include other possible locations around the point, located less than this distance in kilometers away. Max:300
+    /// 
+    destination-radius: option<f64>,
+    /// List of excluded connections points. Any FlightOffer with these connections points will be present in response. Currently, only the locations defined in IATA are supported. Used only by the AMADEUS provider
+    excluded-connection-points: option<list<string>>,
+    id: option<string>,
+    /// List of included connections points. When an includedViaPoints option is specified, all FlightOffer returned must at least go via this Connecting Point. Currently, only the locations defined in IATA are supported. Used only by the AMADEUS provider
+    included-connection-points: option<list<string>>,
+    /// Origin location, such as a city or an airport. Currently, only the locations defined in [IATA](http://www.iata.org/publications/Pages/code-search.aspx) are supported.
+    origin-location-code: option<string>,
+    /// Include other possible locations around the point, located less than this distance in kilometers away. Max:300
+    /// 
+    origin-radius: option<f64>
+  }
+
+  record date-time-range {
+    /// Dates are specified in the [ISO 8601](https://en.wikipedia.org/wiki/ISO_8601) YYYY-MM-DD format, e.g. 2018-12-25
+    date: string,
+    /// Either 1, 2 or 3 extra days around the local date (IxD for +/- x days - Ex: I3D), Either 1 to 3 days after the local date (PxD for +x days - Ex: P3D), or 1 to 3 days before the local date (MxD for -x days - Ex: M3D)
+    /// 
+    date-window: option<string>,
+    /// Local time. hh:mm:ss format, e.g 10:30:00
+    time: option<string>,
+    /// 1 to 12 hours around (both +and -) the local time. Possibly limited by the number of extra days when specified, i.e.  in some situations, it may not be used to exceed the maximum date range. [1-12]H format, e.g. 6H
+    /// 
+    time-window: option<string>
+  }
+
+  record search-criteria {
+    /// This option allows activate the one-way combinable feature
+    add-one-way-offers: option<bool>,
+    additional-information: option<search-criteria-additional-information>,
+    /// This option allows to default to a standard fareOption if no offers are found for the selected fareOption.
+    allow-alternative-fare-options: option<bool>,
+    /// This option allows to exclude the isAllotment flag associated to a booking class in the search response when it exist.
+    exclude-allotments: option<bool>,
+    flight-filters: option<search-criteria-flight-filters>,
+    /// Maximum number of flight offers returned (Max 250)
+    max-flight-offers: option<f64>,
+    /// maximum price per traveler. By default, no limit is applied. If specified, the value should be a positive number with no decimals
+    max-price: option<s32>,
+    /// Requests the system to find at least one flight-offer per day, if possible, when a range of dates is specified. Default is false.
+    one-flight-offer-per-day: option<bool>,
+    pricing-options: option<extended-pricing-options>
+  }
+
+  record search-criteria-additional-information {
+    /// If true, returns the fare family name for each flight-offer which supports fare family
+    branded-fares: option<bool>,
+    /// If true, returns the price of the first additional bag when the airline is an "Amadeus Ancillary Services" member.
+    chargeable-checked-bags: option<bool>
+  }
+
+  record search-criteria-flight-filters {
+    /// This flag enable/disable filtering of bus segment
+    bus-segment-allowed: option<bool>,
+    /// Restriction towards cabins.
+    cabin-restrictions: option<list<search-criteria-flight-filters-cabin-restrictions-item>>,
+    /// Restriction towards carriers.
+    carrier-restrictions: option<search-criteria-flight-filters-carrier-restrictions>,
+    /// Restriction towards number of connections.
+    connection-restriction: option<search-criteria-flight-filters-connection-restriction>,
+    /// Allows to search a location outside the borders when a radius around a location is specified. Default is false.
+    cross-border-allowed: option<bool>,
+    /// This option allows to modify the value for the Elapsed Flying Time (EFT) masterPricer option
+    max-flight-time: option<f64>,
+    /// This flag enables/disables the possibility to have more overnight flights in Low Fare Search
+    more-overnights-allowed: option<bool>,
+    /// This flag enable/disable filtering of rail segment (TGV AIR, RAIL ...)
+    rail-segment-allowed: option<bool>,
+    /// This option force to retrieve flight-offer with a departure and a return in the same airport
+    return-to-departure-airport: option<bool>
+  }
+
+  record search-criteria-flight-filters-cabin-restrictions-item {
+    cabin: option<travel-class>,
+    coverage: option<coverage>,
+    /// The list of originDestination identifiers for which the cabinRestriction applies
+    origin-destination-ids: option<list<string>>
+  }
+
+  /// part of the trip covered by the travel class restriction (ALL_SEGMENTS if ommited)
+  record coverage {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  /// Restriction towards carriers.
+  record search-criteria-flight-filters-carrier-restrictions {
+    /// This flag enable/disable filtering of blacklisted airline by EU. The list of the banned airlines is published in the Official Journal of the European Union, where they are included as annexes A and B to the Commission Regulation. The blacklist of an airline can concern all its flights or some specific aircraft types pertaining to the airline
+    blacklisted-in-eu-allowed: option<bool>,
+    /// This option ensures that the system will only consider these airlines.
+    excluded-carrier-codes: option<list<string>>,
+    /// This option ensures that the system will only consider these airlines.
+    included-carrier-codes: option<list<string>>
+  }
+
+  /// Restriction towards number of connections.
+  record search-criteria-flight-filters-connection-restriction {
+    /// Allow to change airport during connection
+    airport-change-allowed: option<bool>,
+    /// The maximal number of connections for each itinerary. Value can be 0, 1 or 2.
+    max-number-of-connections: option<f64>,
+    /// This option allows the single segment to have one or more intermediate stops (technical stops).
+    technical-stops-allowed: option<bool>
+  }
+
+  /// fare filter options
+  record extended-pricing-options {
+    /// If true, returns the flight-offers with included checked bags only
+    included-checked-bags-only: option<bool>
+  }
+
+  record traveler {
+    /// if type="HELD_INFANT", corresponds to the adult travelers's id who will share the seat
+    associated-adult-id: option<string>,
+    id: string,
+    traveler-type: traveler-type
+  }
+
+  record search-flight-offers-response {
+    data: list<flight-offer>,
+    dictionaries: option<dictionaries>,
+    meta: option<collection-meta>,
+    warnings: option<list<issue>>
+  }
+
+  record collection-meta {
+    count: option<s32>,
+    one-way-combinations: option<list<collection-meta-one-way-combinations-item>>
+  }
+
+  record collection-meta-one-way-combinations-item {
+    flight-offer-ids: option<list<string>>,
+    origin-destination-id: option<string>
+  }
+
+  variant get-flight-offers-error {
+    bad-request(string),
+    other(string)
+  }
+
+  variant search-flight-offers-error {
+    bad-request(string),
+    other(string)
   }
 
   /// Return list of Flight Offers based on searching criteria.
@@ -41,14 +510,22 @@ interface shopping {
     /// maximum number of flight offers to return. If specified, the value should be greater than or equal to 1
     max: option<s32>
   }
-  get-flight-offers: func(params: get-flight-offers-params) -> result<string, string>;
+  get-flight-offers: func(params: get-flight-offers-params) -> result<get-flight-offers-response, get-flight-offers-error>;
 
   /// Return list of Flight Offers based on posted searching criteria.
   record search-flight-offers-params {
     /// the HTTP method to apply
-    x-http-method-override: string
+    x-http-method-override: string,
+    /// The currency code, as defined in [ISO 4217](https://en.wikipedia.org/wiki/ISO_4217), to reflect the currency in which this amount is expressed.
+    currency-code: option<string>,
+    /// Origins and Destinations must be properly ordered in time (chronological order in accordance with the timezone of each location) to describe the journey consistently. Dates and times must not be past nor more than 365 days in the future, according to provider settings.Number of Origins and Destinations must not exceed the limit defined in provider settings.
+    origin-destinations: list<origin-destination>,
+    search-criteria: option<search-criteria>,
+    /// Allows enable one or more sources. If present in the list, these sources will be called by the system.
+    sources: list<flight-offer-source>,
+    travelers: list<traveler>
   }
-  search-flight-offers: func(params: search-flight-offers-params) -> result<string, string>;
+  search-flight-offers: func(params: search-flight-offers-params) -> result<search-flight-offers-response, search-flight-offers-error>;
 
 }
 

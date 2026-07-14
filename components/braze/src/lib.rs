@@ -44,10 +44,15 @@ pub(crate) enum FieldLocation {
     Body,
 }
 
-/// A single operation parameter: the snake-case key it carries in the params JSON and where
-/// it belongs in the request.
+/// A single operation parameter. `snake` keys the field in the internal params JSON (and, for a
+/// path field, matches the `{snake}` placeholder in the path template); `wire` is the verbatim name
+/// the field takes on the HTTP wire (query key, header name, or body property). The two differ
+/// whenever the source name isn't already snake_case (e.g. `dryRun` → snake `dry_run`, wire
+/// `dryRun`), and let distinct inputs that share a snake key (`DateCreated`, `DateCreated<`) still
+/// travel under their true names.
 pub(crate) struct FieldSpec {
     pub(crate) snake: &'static str,
+    pub(crate) wire: &'static str,
     pub(crate) location: FieldLocation,
 }
 
@@ -71,6 +76,16 @@ pub(crate) struct AuthApply {
     pub(crate) kind: AuthKind,
 }
 
+/// The failure modes of [`dispatch`], kept structured so each generated operation can map them
+/// onto its own typed error: an `Http` failure carries the response status and body (routed to
+/// the matching error-variant case), while a `Transport` failure carries a message for the
+/// catch-all case (a secret lookup, connection, or decode failure that never produced an HTTP
+/// status).
+pub(crate) enum DispatchError {
+    Http { status: u16, body: String },
+    Transport(String),
+}
+
 /// A single API operation: HTTP method, path template (with `{snake}` placeholders), the
 /// parameter fields, and the security schemes to apply.
 pub(crate) struct OpSpec {
@@ -81,8 +96,9 @@ pub(crate) struct OpSpec {
 }
 
 /// Execute `op` with the supplied `params` (a JSON object keyed by snake-case field names)
-/// and return the response body as a string, or an error message.
-pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, String> {
+/// and return the raw 2xx response body, or a structured [`DispatchError`] the caller maps
+/// onto the operation's typed error.
+pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, DispatchError> {
     let obj = match &params {
         Value::Object(map) => Some(map),
         _ => None,
@@ -105,10 +121,10 @@ pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, String> {
                 let placeholder = format!("{{{}}}", field.snake);
                 path = path.replace(&placeholder, &percent_encode(&scalar(value)));
             }
-            FieldLocation::Query => query.push((field.snake.to_string(), scalar(value))),
-            FieldLocation::Header => headers.push((field.snake.to_string(), scalar(value))),
+            FieldLocation::Query => query.push((field.wire.to_string(), scalar(value))),
+            FieldLocation::Header => headers.push((field.wire.to_string(), scalar(value))),
             FieldLocation::Body => {
-                body.insert(field.snake.to_string(), value.clone());
+                body.insert(field.wire.to_string(), value.clone());
             }
         }
     }
@@ -116,7 +132,7 @@ pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, String> {
     // Apply each resolved security scheme, sourcing its value from wasmcloud:secrets.
     let mut cookies: Vec<String> = Vec::new();
     for apply in op.auth {
-        let secret = fetch_secret(apply.secret_key)?;
+        let secret = fetch_secret(apply.secret_key).map_err(DispatchError::Transport)?;
         match &apply.kind {
             AuthKind::Bearer => headers.push(("authorization".into(), format!("Bearer {secret}"))),
             AuthKind::Basic => {
@@ -177,17 +193,18 @@ fn fetch_secret(key: &str) -> Result<String, String> {
 }
 
 /// Build and send the outgoing request with `wstd`, returning the response body on a 2xx
-/// status. The generated guest exports are synchronous, so the async `wstd` client is driven
-/// to completion on a local reactor via `wstd::runtime::block_on`.
+/// status and a structured [`DispatchError`] otherwise. The generated guest exports are
+/// synchronous, so the async `wstd` client is driven to completion on a local reactor via
+/// `wstd::runtime::block_on`.
 fn perform(
     method: &str,
     path_with_query: &str,
     headers: &[(String, String)],
     body: &[u8],
-) -> Result<String, String> {
+) -> Result<String, DispatchError> {
     let url = join_url(crate::BASE_URL, path_with_query);
     let method = Method::from_bytes(method.as_bytes())
-        .map_err(|err| format!("invalid HTTP method `{method}`: {err}"))?;
+        .map_err(|err| DispatchError::Transport(format!("invalid HTTP method `{method}`: {err}")))?;
 
     let mut builder = Request::builder().method(method).uri(url);
     for (name, value) in headers {
@@ -199,27 +216,29 @@ fn perform(
         } else {
             Body::from(body.to_vec())
         })
-        .map_err(|err| format!("failed to build request: {err}"))?;
+        .map_err(|err| DispatchError::Transport(format!("failed to build request: {err}")))?;
 
     wstd::runtime::block_on(async move {
         let client = Client::new();
         let response = client
             .send(request)
             .await
-            .map_err(|err| format!("request failed: {err:#}"))?;
+            .map_err(|err| DispatchError::Transport(format!("request failed: {err:#}")))?;
 
         let status = response.status().as_u16();
         let mut response_body = response.into_body();
-        let bytes = response_body
-            .contents()
-            .await
-            .map_err(|err| format!("failed to read response body: {err:#}"))?;
+        let bytes = response_body.contents().await.map_err(|err| {
+            DispatchError::Transport(format!("failed to read response body: {err:#}"))
+        })?;
         let body_text = String::from_utf8_lossy(bytes).into_owned();
 
         if (200..300).contains(&status) {
             Ok(body_text)
         } else {
-            Err(format!("HTTP {status}: {body_text}"))
+            Err(DispatchError::Http {
+                status,
+                body: body_text,
+            })
         }
     })
 }
@@ -279,845 +298,10 @@ fn base64(input: &[u8]) -> String {
 }
 }
 
-use crate::runtime::{dispatch, AuthApply, AuthKind, FieldLocation, FieldSpec, OpSpec};
-use serde_json::{Map, Value};
-
-use crate::exports::autostamp::braze::export_op as iface_export_op;
-
-const OP_EXPORT_OP_CAMPAIGN_ANALYTICS: OpSpec = OpSpec {
-    method: "GET",
-    path_template: "/campaigns/data_series",
-    fields: &[
-        FieldSpec { snake: "campaign_id", location: FieldLocation::Query },
-        FieldSpec { snake: "length", location: FieldLocation::Query },
-        FieldSpec { snake: "ending_at", location: FieldLocation::Query },
-    ],
-    auth: &[
-    ],
-};
-
-const OP_EXPORT_OP_CAMPAIGN_DETAILS: OpSpec = OpSpec {
-    method: "GET",
-    path_template: "/campaigns/details",
-    fields: &[
-        FieldSpec { snake: "campaign_id", location: FieldLocation::Query },
-    ],
-    auth: &[
-    ],
-};
-
-const OP_EXPORT_OP_CAMPAIGN_LIST: OpSpec = OpSpec {
-    method: "GET",
-    path_template: "/campaigns/list",
-    fields: &[
-        FieldSpec { snake: "page", location: FieldLocation::Query },
-        FieldSpec { snake: "include_archived", location: FieldLocation::Query },
-        FieldSpec { snake: "sort_direction", location: FieldLocation::Query },
-        FieldSpec { snake: "last_edit_time_gt", location: FieldLocation::Query },
-    ],
-    auth: &[
-    ],
-};
-
-const OP_EXPORT_OP_CANVAS_DATA_SERIES_ANALYTICS: OpSpec = OpSpec {
-    method: "GET",
-    path_template: "/canvas/data_series",
-    fields: &[
-        FieldSpec { snake: "canvas_id", location: FieldLocation::Query },
-        FieldSpec { snake: "ending_at", location: FieldLocation::Query },
-        FieldSpec { snake: "starting_at", location: FieldLocation::Query },
-        FieldSpec { snake: "length", location: FieldLocation::Query },
-        FieldSpec { snake: "include_variant_breakdown", location: FieldLocation::Query },
-        FieldSpec { snake: "include_step_breakdown", location: FieldLocation::Query },
-        FieldSpec { snake: "include_deleted_step_data", location: FieldLocation::Query },
-    ],
-    auth: &[
-    ],
-};
-
-const OP_EXPORT_OP_CANVAS_DATA_ANALYTICS_SUMMARY: OpSpec = OpSpec {
-    method: "GET",
-    path_template: "/canvas/data_summary",
-    fields: &[
-        FieldSpec { snake: "canvas_id", location: FieldLocation::Query },
-        FieldSpec { snake: "ending_at", location: FieldLocation::Query },
-        FieldSpec { snake: "starting_at", location: FieldLocation::Query },
-        FieldSpec { snake: "length", location: FieldLocation::Query },
-        FieldSpec { snake: "include_variant_breakdown", location: FieldLocation::Query },
-        FieldSpec { snake: "include_step_breakdown", location: FieldLocation::Query },
-        FieldSpec { snake: "include_deleted_step_data", location: FieldLocation::Query },
-    ],
-    auth: &[
-    ],
-};
-
-const OP_EXPORT_OP_CANVAS_DETAILS: OpSpec = OpSpec {
-    method: "GET",
-    path_template: "/canvas/details",
-    fields: &[
-        FieldSpec { snake: "canvas_id", location: FieldLocation::Query },
-    ],
-    auth: &[
-    ],
-};
-
-const OP_EXPORT_OP_CANVAS_LIST: OpSpec = OpSpec {
-    method: "GET",
-    path_template: "/canvas/list",
-    fields: &[
-        FieldSpec { snake: "page", location: FieldLocation::Query },
-        FieldSpec { snake: "include_archived", location: FieldLocation::Query },
-        FieldSpec { snake: "sort_direction", location: FieldLocation::Query },
-        FieldSpec { snake: "last_edit_time_gt", location: FieldLocation::Query },
-    ],
-    auth: &[
-    ],
-};
-
-const OP_EXPORT_OP_CUSTOM_EVENTS_ANALYTICS: OpSpec = OpSpec {
-    method: "GET",
-    path_template: "/events/data_series",
-    fields: &[
-        FieldSpec { snake: "event", location: FieldLocation::Query },
-        FieldSpec { snake: "length", location: FieldLocation::Query },
-        FieldSpec { snake: "unit", location: FieldLocation::Query },
-        FieldSpec { snake: "ending_at", location: FieldLocation::Query },
-        FieldSpec { snake: "app_id", location: FieldLocation::Query },
-        FieldSpec { snake: "segment_id", location: FieldLocation::Query },
-    ],
-    auth: &[
-    ],
-};
-
-const OP_EXPORT_OP_CUSTOM_EVENTS_LIST: OpSpec = OpSpec {
-    method: "GET",
-    path_template: "/events/list",
-    fields: &[
-        FieldSpec { snake: "page", location: FieldLocation::Query },
-    ],
-    auth: &[
-    ],
-};
-
-const OP_EXPORT_OP_NEWS_FEED_CARD_ANALYTICS: OpSpec = OpSpec {
-    method: "GET",
-    path_template: "/feed/data_series",
-    fields: &[
-        FieldSpec { snake: "card_id", location: FieldLocation::Query },
-        FieldSpec { snake: "length", location: FieldLocation::Query },
-        FieldSpec { snake: "unit", location: FieldLocation::Query },
-        FieldSpec { snake: "ending_at", location: FieldLocation::Query },
-    ],
-    auth: &[
-    ],
-};
-
-const OP_EXPORT_OP_NEWS_FEED_CARDS_DETAILS: OpSpec = OpSpec {
-    method: "GET",
-    path_template: "/feed/details",
-    fields: &[
-        FieldSpec { snake: "card_id", location: FieldLocation::Query },
-    ],
-    auth: &[
-    ],
-};
-
-const OP_EXPORT_OP_NEWS_FEED_CARDS_LIST: OpSpec = OpSpec {
-    method: "GET",
-    path_template: "/feed/list",
-    fields: &[
-        FieldSpec { snake: "page", location: FieldLocation::Query },
-        FieldSpec { snake: "include_archived", location: FieldLocation::Query },
-        FieldSpec { snake: "sort_direction", location: FieldLocation::Query },
-    ],
-    auth: &[
-    ],
-};
-
-const OP_EXPORT_OP_DAILY_ACTIVE_USERS_BY_DATE: OpSpec = OpSpec {
-    method: "GET",
-    path_template: "/kpi/dau/data_series",
-    fields: &[
-        FieldSpec { snake: "length", location: FieldLocation::Query },
-        FieldSpec { snake: "ending_at", location: FieldLocation::Query },
-        FieldSpec { snake: "app_id", location: FieldLocation::Query },
-    ],
-    auth: &[
-    ],
-};
-
-const OP_EXPORT_OP_MONTHLY_ACTIVE_USERS_FOR_LAST30_DAYS: OpSpec = OpSpec {
-    method: "GET",
-    path_template: "/kpi/mau/data_series",
-    fields: &[
-        FieldSpec { snake: "length", location: FieldLocation::Query },
-        FieldSpec { snake: "ending_at", location: FieldLocation::Query },
-        FieldSpec { snake: "app_id", location: FieldLocation::Query },
-    ],
-    auth: &[
-    ],
-};
-
-const OP_EXPORT_OP_DAILY_NEW_USERS_BY_DATE: OpSpec = OpSpec {
-    method: "GET",
-    path_template: "/kpi/new_users/data_series",
-    fields: &[
-        FieldSpec { snake: "length", location: FieldLocation::Query },
-        FieldSpec { snake: "ending_at", location: FieldLocation::Query },
-        FieldSpec { snake: "app_id", location: FieldLocation::Query },
-    ],
-    auth: &[
-    ],
-};
-
-const OP_EXPORT_OP_KP_IS_FOR_DAILY_APP_UNINSTALLS_BY_DATE: OpSpec = OpSpec {
-    method: "GET",
-    path_template: "/kpi/uninstalls/data_series",
-    fields: &[
-        FieldSpec { snake: "length", location: FieldLocation::Query },
-        FieldSpec { snake: "ending_at", location: FieldLocation::Query },
-        FieldSpec { snake: "app_id", location: FieldLocation::Query },
-    ],
-    auth: &[
-    ],
-};
-
-const OP_EXPORT_OP_SEGMENT_ANALYTICS: OpSpec = OpSpec {
-    method: "GET",
-    path_template: "/segments/data_series",
-    fields: &[
-        FieldSpec { snake: "segment_id", location: FieldLocation::Query },
-        FieldSpec { snake: "length", location: FieldLocation::Query },
-        FieldSpec { snake: "ending_at", location: FieldLocation::Query },
-    ],
-    auth: &[
-    ],
-};
-
-const OP_EXPORT_OP_SEGMENT_DETAILS: OpSpec = OpSpec {
-    method: "GET",
-    path_template: "/segments/details",
-    fields: &[
-        FieldSpec { snake: "segment_id", location: FieldLocation::Query },
-    ],
-    auth: &[
-    ],
-};
-
-const OP_EXPORT_OP_SEGMENT_LIST: OpSpec = OpSpec {
-    method: "GET",
-    path_template: "/segments/list",
-    fields: &[
-        FieldSpec { snake: "page", location: FieldLocation::Query },
-        FieldSpec { snake: "sort_direction", location: FieldLocation::Query },
-    ],
-    auth: &[
-    ],
-};
-
-const OP_EXPORT_OP_SEND_ANALYTICS: OpSpec = OpSpec {
-    method: "GET",
-    path_template: "/sends/data_series",
-    fields: &[
-        FieldSpec { snake: "campaign_id", location: FieldLocation::Query },
-        FieldSpec { snake: "send_id", location: FieldLocation::Query },
-        FieldSpec { snake: "length", location: FieldLocation::Query },
-        FieldSpec { snake: "ending_at", location: FieldLocation::Query },
-    ],
-    auth: &[
-    ],
-};
-
-const OP_EXPORT_OP_APP_SESSIONS_BY_TIME: OpSpec = OpSpec {
-    method: "GET",
-    path_template: "/sessions/data_series",
-    fields: &[
-        FieldSpec { snake: "length", location: FieldLocation::Query },
-        FieldSpec { snake: "unit", location: FieldLocation::Query },
-        FieldSpec { snake: "ending_at", location: FieldLocation::Query },
-        FieldSpec { snake: "app_id", location: FieldLocation::Query },
-        FieldSpec { snake: "segment_id", location: FieldLocation::Query },
-    ],
-    auth: &[
-    ],
-};
-
-fn iface_export_op__campaign_analytics_params__to_json(p: &iface_export_op::CampaignAnalyticsParams) -> Value {
-    let mut m = Map::new();
-    m.insert("campaign_id".into(), match (&p.campaign_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("length".into(), match (&p.length) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("ending_at".into(), match (&p.ending_at) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_export_op__campaign_details_params__to_json(p: &iface_export_op::CampaignDetailsParams) -> Value {
-    let mut m = Map::new();
-    m.insert("campaign_id".into(), match (&p.campaign_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_export_op__campaign_list_params__to_json(p: &iface_export_op::CampaignListParams) -> Value {
-    let mut m = Map::new();
-    m.insert("page".into(), match (&p.page) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("include_archived".into(), match (&p.include_archived) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("sort_direction".into(), match (&p.sort_direction) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("last_edit_time_gt".into(), match (&p.last_edit_time_gt) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_export_op__canvas_data_series_analytics_params__to_json(p: &iface_export_op::CanvasDataSeriesAnalyticsParams) -> Value {
-    let mut m = Map::new();
-    m.insert("canvas_id".into(), match (&p.canvas_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("ending_at".into(), match (&p.ending_at) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("starting_at".into(), match (&p.starting_at) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("length".into(), match (&p.length) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("include_variant_breakdown".into(), match (&p.include_variant_breakdown) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("include_step_breakdown".into(), match (&p.include_step_breakdown) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("include_deleted_step_data".into(), match (&p.include_deleted_step_data) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_export_op__canvas_data_analytics_summary_params__to_json(p: &iface_export_op::CanvasDataAnalyticsSummaryParams) -> Value {
-    let mut m = Map::new();
-    m.insert("canvas_id".into(), match (&p.canvas_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("ending_at".into(), match (&p.ending_at) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("starting_at".into(), match (&p.starting_at) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("length".into(), match (&p.length) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("include_variant_breakdown".into(), match (&p.include_variant_breakdown) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("include_step_breakdown".into(), match (&p.include_step_breakdown) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("include_deleted_step_data".into(), match (&p.include_deleted_step_data) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_export_op__canvas_details_params__to_json(p: &iface_export_op::CanvasDetailsParams) -> Value {
-    let mut m = Map::new();
-    m.insert("canvas_id".into(), match (&p.canvas_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_export_op__canvas_list_params__to_json(p: &iface_export_op::CanvasListParams) -> Value {
-    let mut m = Map::new();
-    m.insert("page".into(), match (&p.page) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("include_archived".into(), match (&p.include_archived) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("sort_direction".into(), match (&p.sort_direction) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("last_edit_time_gt".into(), match (&p.last_edit_time_gt) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_export_op__custom_events_analytics_params__to_json(p: &iface_export_op::CustomEventsAnalyticsParams) -> Value {
-    let mut m = Map::new();
-    m.insert("event".into(), match (&p.event) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("length".into(), match (&p.length) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("unit".into(), match (&p.unit) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("ending_at".into(), match (&p.ending_at) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("app_id".into(), match (&p.app_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("segment_id".into(), match (&p.segment_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_export_op__custom_events_list_params__to_json(p: &iface_export_op::CustomEventsListParams) -> Value {
-    let mut m = Map::new();
-    m.insert("page".into(), match (&p.page) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_export_op__news_feed_card_analytics_params__to_json(p: &iface_export_op::NewsFeedCardAnalyticsParams) -> Value {
-    let mut m = Map::new();
-    m.insert("card_id".into(), match (&p.card_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("length".into(), match (&p.length) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("unit".into(), match (&p.unit) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("ending_at".into(), match (&p.ending_at) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_export_op__news_feed_cards_details_params__to_json(p: &iface_export_op::NewsFeedCardsDetailsParams) -> Value {
-    let mut m = Map::new();
-    m.insert("card_id".into(), match (&p.card_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_export_op__news_feed_cards_list_params__to_json(p: &iface_export_op::NewsFeedCardsListParams) -> Value {
-    let mut m = Map::new();
-    m.insert("page".into(), match (&p.page) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("include_archived".into(), match (&p.include_archived) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("sort_direction".into(), match (&p.sort_direction) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_export_op__daily_active_users_by_date_params__to_json(p: &iface_export_op::DailyActiveUsersByDateParams) -> Value {
-    let mut m = Map::new();
-    m.insert("length".into(), match (&p.length) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("ending_at".into(), match (&p.ending_at) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("app_id".into(), match (&p.app_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_export_op__monthly_active_users_for_last30_days_params__to_json(p: &iface_export_op::MonthlyActiveUsersForLast30DaysParams) -> Value {
-    let mut m = Map::new();
-    m.insert("length".into(), match (&p.length) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("ending_at".into(), match (&p.ending_at) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("app_id".into(), match (&p.app_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_export_op__daily_new_users_by_date_params__to_json(p: &iface_export_op::DailyNewUsersByDateParams) -> Value {
-    let mut m = Map::new();
-    m.insert("length".into(), match (&p.length) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("ending_at".into(), match (&p.ending_at) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("app_id".into(), match (&p.app_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_export_op__kp_is_for_daily_app_uninstalls_by_date_params__to_json(p: &iface_export_op::KpIsForDailyAppUninstallsByDateParams) -> Value {
-    let mut m = Map::new();
-    m.insert("length".into(), match (&p.length) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("ending_at".into(), match (&p.ending_at) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("app_id".into(), match (&p.app_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_export_op__segment_analytics_params__to_json(p: &iface_export_op::SegmentAnalyticsParams) -> Value {
-    let mut m = Map::new();
-    m.insert("segment_id".into(), match (&p.segment_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("length".into(), match (&p.length) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("ending_at".into(), match (&p.ending_at) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_export_op__segment_details_params__to_json(p: &iface_export_op::SegmentDetailsParams) -> Value {
-    let mut m = Map::new();
-    m.insert("segment_id".into(), match (&p.segment_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_export_op__segment_list_params__to_json(p: &iface_export_op::SegmentListParams) -> Value {
-    let mut m = Map::new();
-    m.insert("page".into(), match (&p.page) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("sort_direction".into(), match (&p.sort_direction) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_export_op__send_analytics_params__to_json(p: &iface_export_op::SendAnalyticsParams) -> Value {
-    let mut m = Map::new();
-    m.insert("campaign_id".into(), match (&p.campaign_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("send_id".into(), match (&p.send_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("length".into(), match (&p.length) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("ending_at".into(), match (&p.ending_at) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_export_op__app_sessions_by_time_params__to_json(p: &iface_export_op::AppSessionsByTimeParams) -> Value {
-    let mut m = Map::new();
-    m.insert("length".into(), match (&p.length) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("unit".into(), match (&p.unit) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("ending_at".into(), match (&p.ending_at) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("app_id".into(), match (&p.app_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("segment_id".into(), match (&p.segment_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    Value::Object(m)
-}
-
-impl iface_export_op::Guest for crate::Component {
-    fn campaign_analytics(params: iface_export_op::CampaignAnalyticsParams) -> Result<String, String> {
-        let json = iface_export_op__campaign_analytics_params__to_json(&params);
-        dispatch(&OP_EXPORT_OP_CAMPAIGN_ANALYTICS, json)
-    }
-    fn campaign_details(params: iface_export_op::CampaignDetailsParams) -> Result<String, String> {
-        let json = iface_export_op__campaign_details_params__to_json(&params);
-        dispatch(&OP_EXPORT_OP_CAMPAIGN_DETAILS, json)
-    }
-    fn campaign_list(params: iface_export_op::CampaignListParams) -> Result<String, String> {
-        let json = iface_export_op__campaign_list_params__to_json(&params);
-        dispatch(&OP_EXPORT_OP_CAMPAIGN_LIST, json)
-    }
-    fn canvas_data_series_analytics(params: iface_export_op::CanvasDataSeriesAnalyticsParams) -> Result<String, String> {
-        let json = iface_export_op__canvas_data_series_analytics_params__to_json(&params);
-        dispatch(&OP_EXPORT_OP_CANVAS_DATA_SERIES_ANALYTICS, json)
-    }
-    fn canvas_data_analytics_summary(params: iface_export_op::CanvasDataAnalyticsSummaryParams) -> Result<String, String> {
-        let json = iface_export_op__canvas_data_analytics_summary_params__to_json(&params);
-        dispatch(&OP_EXPORT_OP_CANVAS_DATA_ANALYTICS_SUMMARY, json)
-    }
-    fn canvas_details(params: iface_export_op::CanvasDetailsParams) -> Result<String, String> {
-        let json = iface_export_op__canvas_details_params__to_json(&params);
-        dispatch(&OP_EXPORT_OP_CANVAS_DETAILS, json)
-    }
-    fn canvas_list(params: iface_export_op::CanvasListParams) -> Result<String, String> {
-        let json = iface_export_op__canvas_list_params__to_json(&params);
-        dispatch(&OP_EXPORT_OP_CANVAS_LIST, json)
-    }
-    fn custom_events_analytics(params: iface_export_op::CustomEventsAnalyticsParams) -> Result<String, String> {
-        let json = iface_export_op__custom_events_analytics_params__to_json(&params);
-        dispatch(&OP_EXPORT_OP_CUSTOM_EVENTS_ANALYTICS, json)
-    }
-    fn custom_events_list(params: iface_export_op::CustomEventsListParams) -> Result<String, String> {
-        let json = iface_export_op__custom_events_list_params__to_json(&params);
-        dispatch(&OP_EXPORT_OP_CUSTOM_EVENTS_LIST, json)
-    }
-    fn news_feed_card_analytics(params: iface_export_op::NewsFeedCardAnalyticsParams) -> Result<String, String> {
-        let json = iface_export_op__news_feed_card_analytics_params__to_json(&params);
-        dispatch(&OP_EXPORT_OP_NEWS_FEED_CARD_ANALYTICS, json)
-    }
-    fn news_feed_cards_details(params: iface_export_op::NewsFeedCardsDetailsParams) -> Result<String, String> {
-        let json = iface_export_op__news_feed_cards_details_params__to_json(&params);
-        dispatch(&OP_EXPORT_OP_NEWS_FEED_CARDS_DETAILS, json)
-    }
-    fn news_feed_cards_list(params: iface_export_op::NewsFeedCardsListParams) -> Result<String, String> {
-        let json = iface_export_op__news_feed_cards_list_params__to_json(&params);
-        dispatch(&OP_EXPORT_OP_NEWS_FEED_CARDS_LIST, json)
-    }
-    fn daily_active_users_by_date(params: iface_export_op::DailyActiveUsersByDateParams) -> Result<String, String> {
-        let json = iface_export_op__daily_active_users_by_date_params__to_json(&params);
-        dispatch(&OP_EXPORT_OP_DAILY_ACTIVE_USERS_BY_DATE, json)
-    }
-    fn monthly_active_users_for_last30_days(params: iface_export_op::MonthlyActiveUsersForLast30DaysParams) -> Result<String, String> {
-        let json = iface_export_op__monthly_active_users_for_last30_days_params__to_json(&params);
-        dispatch(&OP_EXPORT_OP_MONTHLY_ACTIVE_USERS_FOR_LAST30_DAYS, json)
-    }
-    fn daily_new_users_by_date(params: iface_export_op::DailyNewUsersByDateParams) -> Result<String, String> {
-        let json = iface_export_op__daily_new_users_by_date_params__to_json(&params);
-        dispatch(&OP_EXPORT_OP_DAILY_NEW_USERS_BY_DATE, json)
-    }
-    fn kp_is_for_daily_app_uninstalls_by_date(params: iface_export_op::KpIsForDailyAppUninstallsByDateParams) -> Result<String, String> {
-        let json = iface_export_op__kp_is_for_daily_app_uninstalls_by_date_params__to_json(&params);
-        dispatch(&OP_EXPORT_OP_KP_IS_FOR_DAILY_APP_UNINSTALLS_BY_DATE, json)
-    }
-    fn segment_analytics(params: iface_export_op::SegmentAnalyticsParams) -> Result<String, String> {
-        let json = iface_export_op__segment_analytics_params__to_json(&params);
-        dispatch(&OP_EXPORT_OP_SEGMENT_ANALYTICS, json)
-    }
-    fn segment_details(params: iface_export_op::SegmentDetailsParams) -> Result<String, String> {
-        let json = iface_export_op__segment_details_params__to_json(&params);
-        dispatch(&OP_EXPORT_OP_SEGMENT_DETAILS, json)
-    }
-    fn segment_list(params: iface_export_op::SegmentListParams) -> Result<String, String> {
-        let json = iface_export_op__segment_list_params__to_json(&params);
-        dispatch(&OP_EXPORT_OP_SEGMENT_LIST, json)
-    }
-    fn send_analytics(params: iface_export_op::SendAnalyticsParams) -> Result<String, String> {
-        let json = iface_export_op__send_analytics_params__to_json(&params);
-        dispatch(&OP_EXPORT_OP_SEND_ANALYTICS, json)
-    }
-    fn app_sessions_by_time(params: iface_export_op::AppSessionsByTimeParams) -> Result<String, String> {
-        let json = iface_export_op__app_sessions_by_time_params__to_json(&params);
-        dispatch(&OP_EXPORT_OP_APP_SESSIONS_BY_TIME, json)
-    }
-}
-use crate::exports::autostamp::braze::messaging as iface_messaging;
-
-const OP_MESSAGING_SCHEDULE_API_TRIGGERED_CANVASES: OpSpec = OpSpec {
-    method: "POST",
-    path_template: "/canvas/trigger/schedule/create",
-    fields: &[
-        FieldSpec { snake: "audience", location: FieldLocation::Body },
-        FieldSpec { snake: "broadcast", location: FieldLocation::Body },
-        FieldSpec { snake: "canvas_entry_properties", location: FieldLocation::Body },
-        FieldSpec { snake: "canvas_id", location: FieldLocation::Body },
-        FieldSpec { snake: "recipients", location: FieldLocation::Body },
-        FieldSpec { snake: "schedule", location: FieldLocation::Body },
-    ],
-    auth: &[
-    ],
-};
-
-const OP_MESSAGING_GET_UPCOMING_SCHEDULED_CAMPAIGNS_AND_CANVASES: OpSpec = OpSpec {
-    method: "GET",
-    path_template: "/messages/scheduled_broadcasts",
-    fields: &[
-        FieldSpec { snake: "end_time", location: FieldLocation::Query },
-    ],
-    auth: &[
-    ],
-};
-
-fn iface_messaging__schedule_api_triggered_canvases_body_audience__to_json(p: &iface_messaging::ScheduleApiTriggeredCanvasesBodyAudience) -> Value {
-    let mut m = Map::new();
-    m.insert("and".into(), match (&p.and) { Some(v) => Value::Array((v).iter().map(|v| iface_messaging__schedule_api_triggered_canvases_body_audience_and_item__to_json(v)).collect()), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_messaging__schedule_api_triggered_canvases_body_audience_and_item__to_json(p: &iface_messaging::ScheduleApiTriggeredCanvasesBodyAudienceAndItem) -> Value {
-    let mut m = Map::new();
-    m.insert("custom_attribute".into(), match (&p.custom_attribute) { Some(v) => iface_messaging__schedule_api_triggered_canvases_body_audience_and_item_custom_attribute__to_json(v), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_messaging__schedule_api_triggered_canvases_body_audience_and_item_custom_attribute__to_json(p: &iface_messaging::ScheduleApiTriggeredCanvasesBodyAudienceAndItemCustomAttribute) -> Value {
-    let mut m = Map::new();
-    m.insert("comparison".into(), match (&p.comparison) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("custom_attribute_name".into(), match (&p.custom_attribute_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("value".into(), match (&p.value) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_messaging__schedule_api_triggered_canvases_body_canvas_entry_properties__to_json(p: &iface_messaging::ScheduleApiTriggeredCanvasesBodyCanvasEntryProperties) -> Value {
-    let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_messaging__schedule_api_triggered_canvases_body_recipients_item__to_json(p: &iface_messaging::ScheduleApiTriggeredCanvasesBodyRecipientsItem) -> Value {
-    let mut m = Map::new();
-    m.insert("canvas_entry_properties".into(), match (&p.canvas_entry_properties) { Some(v) => iface_messaging__schedule_api_triggered_canvases_body_recipients_item_canvas_entry_properties__to_json(v), None => Value::Null });
-    m.insert("external_user_id".into(), match (&p.external_user_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("trigger_properties".into(), match (&p.trigger_properties) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("user_alias".into(), match (&p.user_alias) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_messaging__schedule_api_triggered_canvases_body_recipients_item_canvas_entry_properties__to_json(p: &iface_messaging::ScheduleApiTriggeredCanvasesBodyRecipientsItemCanvasEntryProperties) -> Value {
-    let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_messaging__schedule_api_triggered_canvases_body_schedule__to_json(p: &iface_messaging::ScheduleApiTriggeredCanvasesBodySchedule) -> Value {
-    let mut m = Map::new();
-    m.insert("at_optimal_time".into(), match (&p.at_optimal_time) { Some(v) => Value::Bool(*(v)), None => Value::Null });
-    m.insert("in_local_time".into(), match (&p.in_local_time) { Some(v) => Value::Bool(*(v)), None => Value::Null });
-    m.insert("time".into(), match (&p.time) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_messaging__schedule_api_triggered_canvases_params__to_json(p: &iface_messaging::ScheduleApiTriggeredCanvasesParams) -> Value {
-    let mut m = Map::new();
-    m.insert("audience".into(), match (&p.audience) { Some(v) => iface_messaging__schedule_api_triggered_canvases_body_audience__to_json(v), None => Value::Null });
-    m.insert("broadcast".into(), match (&p.broadcast) { Some(v) => Value::Bool(*(v)), None => Value::Null });
-    m.insert("canvas_entry_properties".into(), match (&p.canvas_entry_properties) { Some(v) => iface_messaging__schedule_api_triggered_canvases_body_canvas_entry_properties__to_json(v), None => Value::Null });
-    m.insert("canvas_id".into(), match (&p.canvas_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("recipients".into(), match (&p.recipients) { Some(v) => Value::Array((v).iter().map(|v| iface_messaging__schedule_api_triggered_canvases_body_recipients_item__to_json(v)).collect()), None => Value::Null });
-    m.insert("schedule".into(), match (&p.schedule) { Some(v) => iface_messaging__schedule_api_triggered_canvases_body_schedule__to_json(v), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_messaging__get_upcoming_scheduled_campaigns_and_canvases_params__to_json(p: &iface_messaging::GetUpcomingScheduledCampaignsAndCanvasesParams) -> Value {
-    let mut m = Map::new();
-    m.insert("end_time".into(), match (&p.end_time) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    Value::Object(m)
-}
-
-impl iface_messaging::Guest for crate::Component {
-    fn schedule_api_triggered_canvases(params: iface_messaging::ScheduleApiTriggeredCanvasesParams) -> Result<String, String> {
-        let json = iface_messaging__schedule_api_triggered_canvases_params__to_json(&params);
-        dispatch(&OP_MESSAGING_SCHEDULE_API_TRIGGERED_CANVASES, json)
-    }
-    fn get_upcoming_scheduled_campaigns_and_canvases(params: iface_messaging::GetUpcomingScheduledCampaignsAndCanvasesParams) -> Result<String, String> {
-        let json = iface_messaging__get_upcoming_scheduled_campaigns_and_canvases_params__to_json(&params);
-        dispatch(&OP_MESSAGING_GET_UPCOMING_SCHEDULED_CAMPAIGNS_AND_CANVASES, json)
-    }
-}
-use crate::exports::autostamp::braze::templates as iface_templates;
-
-const OP_TEMPLATES_SEE_CONTENT_BLOCK_INFORMATION: OpSpec = OpSpec {
-    method: "GET",
-    path_template: "/content_blocks/info",
-    fields: &[
-        FieldSpec { snake: "content_block_id", location: FieldLocation::Query },
-        FieldSpec { snake: "include_inclusion_data", location: FieldLocation::Query },
-    ],
-    auth: &[
-    ],
-};
-
-const OP_TEMPLATES_LIST_AVAILABLE_CONTENT_BLOCKS: OpSpec = OpSpec {
-    method: "GET",
-    path_template: "/content_blocks/list",
-    fields: &[
-        FieldSpec { snake: "modified_after", location: FieldLocation::Query },
-        FieldSpec { snake: "modified_before", location: FieldLocation::Query },
-        FieldSpec { snake: "limit", location: FieldLocation::Query },
-        FieldSpec { snake: "offset", location: FieldLocation::Query },
-    ],
-    auth: &[
-    ],
-};
-
-const OP_TEMPLATES_SEE_EMAIL_TEMPLATE_INFORMATION: OpSpec = OpSpec {
-    method: "GET",
-    path_template: "/templates/email/info",
-    fields: &[
-        FieldSpec { snake: "email_template_id", location: FieldLocation::Query },
-    ],
-    auth: &[
-    ],
-};
-
-const OP_TEMPLATES_LIST_AVAILABLE_EMAIL_TEMPLATES: OpSpec = OpSpec {
-    method: "GET",
-    path_template: "/templates/email/list",
-    fields: &[
-        FieldSpec { snake: "modified_after", location: FieldLocation::Query },
-        FieldSpec { snake: "modified_before", location: FieldLocation::Query },
-        FieldSpec { snake: "limit", location: FieldLocation::Query },
-        FieldSpec { snake: "offset", location: FieldLocation::Query },
-    ],
-    auth: &[
-    ],
-};
-
-fn iface_templates__see_content_block_information_params__to_json(p: &iface_templates::SeeContentBlockInformationParams) -> Value {
-    let mut m = Map::new();
-    m.insert("content_block_id".into(), match (&p.content_block_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("include_inclusion_data".into(), match (&p.include_inclusion_data) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_templates__list_available_content_blocks_params__to_json(p: &iface_templates::ListAvailableContentBlocksParams) -> Value {
-    let mut m = Map::new();
-    m.insert("modified_after".into(), match (&p.modified_after) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("modified_before".into(), match (&p.modified_before) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("limit".into(), match (&p.limit) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("offset".into(), match (&p.offset) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_templates__see_email_template_information_params__to_json(p: &iface_templates::SeeEmailTemplateInformationParams) -> Value {
-    let mut m = Map::new();
-    m.insert("email_template_id".into(), match (&p.email_template_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_templates__list_available_email_templates_params__to_json(p: &iface_templates::ListAvailableEmailTemplatesParams) -> Value {
-    let mut m = Map::new();
-    m.insert("modified_after".into(), match (&p.modified_after) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("modified_before".into(), match (&p.modified_before) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("limit".into(), match (&p.limit) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("offset".into(), match (&p.offset) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    Value::Object(m)
-}
-
-impl iface_templates::Guest for crate::Component {
-    fn see_content_block_information(params: iface_templates::SeeContentBlockInformationParams) -> Result<String, String> {
-        let json = iface_templates__see_content_block_information_params__to_json(&params);
-        dispatch(&OP_TEMPLATES_SEE_CONTENT_BLOCK_INFORMATION, json)
-    }
-    fn list_available_content_blocks(params: iface_templates::ListAvailableContentBlocksParams) -> Result<String, String> {
-        let json = iface_templates__list_available_content_blocks_params__to_json(&params);
-        dispatch(&OP_TEMPLATES_LIST_AVAILABLE_CONTENT_BLOCKS, json)
-    }
-    fn see_email_template_information(params: iface_templates::SeeEmailTemplateInformationParams) -> Result<String, String> {
-        let json = iface_templates__see_email_template_information_params__to_json(&params);
-        dispatch(&OP_TEMPLATES_SEE_EMAIL_TEMPLATE_INFORMATION, json)
-    }
-    fn list_available_email_templates(params: iface_templates::ListAvailableEmailTemplatesParams) -> Result<String, String> {
-        let json = iface_templates__list_available_email_templates_params__to_json(&params);
-        dispatch(&OP_TEMPLATES_LIST_AVAILABLE_EMAIL_TEMPLATES, json)
-    }
-}
-use crate::exports::autostamp::braze::email_lists_addresses as iface_email_lists_addresses;
-
-const OP_EMAIL_LISTS_ADDRESSES_QUERY_HARD_BOUNCED_EMAILS: OpSpec = OpSpec {
-    method: "GET",
-    path_template: "/email/hard_bounces",
-    fields: &[
-        FieldSpec { snake: "start_date", location: FieldLocation::Query },
-        FieldSpec { snake: "end_date", location: FieldLocation::Query },
-        FieldSpec { snake: "limit", location: FieldLocation::Query },
-        FieldSpec { snake: "offset", location: FieldLocation::Query },
-        FieldSpec { snake: "email", location: FieldLocation::Query },
-    ],
-    auth: &[
-    ],
-};
-
-const OP_EMAIL_LISTS_ADDRESSES_QUERY_LIST_OF_UNSUBSCRIBED_EMAIL_ADDRESSES: OpSpec = OpSpec {
-    method: "GET",
-    path_template: "/email/unsubscribes",
-    fields: &[
-        FieldSpec { snake: "start_date", location: FieldLocation::Query },
-        FieldSpec { snake: "end_date", location: FieldLocation::Query },
-        FieldSpec { snake: "limit", location: FieldLocation::Query },
-        FieldSpec { snake: "offset", location: FieldLocation::Query },
-        FieldSpec { snake: "sort_direction", location: FieldLocation::Query },
-        FieldSpec { snake: "email", location: FieldLocation::Query },
-    ],
-    auth: &[
-    ],
-};
-
-fn iface_email_lists_addresses__query_hard_bounced_emails_params__to_json(p: &iface_email_lists_addresses::QueryHardBouncedEmailsParams) -> Value {
-    let mut m = Map::new();
-    m.insert("start_date".into(), match (&p.start_date) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("end_date".into(), match (&p.end_date) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("limit".into(), match (&p.limit) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("offset".into(), match (&p.offset) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("email".into(), match (&p.email) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_email_lists_addresses__query_list_of_unsubscribed_email_addresses_params__to_json(p: &iface_email_lists_addresses::QueryListOfUnsubscribedEmailAddressesParams) -> Value {
-    let mut m = Map::new();
-    m.insert("start_date".into(), match (&p.start_date) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("end_date".into(), match (&p.end_date) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("limit".into(), match (&p.limit) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("offset".into(), match (&p.offset) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("sort_direction".into(), match (&p.sort_direction) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("email".into(), match (&p.email) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    Value::Object(m)
-}
-
-impl iface_email_lists_addresses::Guest for crate::Component {
-    fn query_hard_bounced_emails(params: iface_email_lists_addresses::QueryHardBouncedEmailsParams) -> Result<String, String> {
-        let json = iface_email_lists_addresses__query_hard_bounced_emails_params__to_json(&params);
-        dispatch(&OP_EMAIL_LISTS_ADDRESSES_QUERY_HARD_BOUNCED_EMAILS, json)
-    }
-    fn query_list_of_unsubscribed_email_addresses(params: iface_email_lists_addresses::QueryListOfUnsubscribedEmailAddressesParams) -> Result<String, String> {
-        let json = iface_email_lists_addresses__query_list_of_unsubscribed_email_addresses_params__to_json(&params);
-        dispatch(&OP_EMAIL_LISTS_ADDRESSES_QUERY_LIST_OF_UNSUBSCRIBED_EMAIL_ADDRESSES, json)
-    }
-}
-use crate::exports::autostamp::braze::subscription_groups as iface_subscription_groups;
-
-const OP_SUBSCRIPTION_GROUPS_LIST_USER_S_SUBSCRIPTION_GROUP_STATUS_SMS: OpSpec = OpSpec {
-    method: "GET",
-    path_template: "/subscription/status/get",
-    fields: &[
-        FieldSpec { snake: "subscription_group_id", location: FieldLocation::Query },
-        FieldSpec { snake: "external_id", location: FieldLocation::Query },
-        FieldSpec { snake: "phone", location: FieldLocation::Query },
-    ],
-    auth: &[
-    ],
-};
-
-const OP_SUBSCRIPTION_GROUPS_LIST_USER_S_SUBSCRIPTION_GROUP_SMS: OpSpec = OpSpec {
-    method: "GET",
-    path_template: "/subscription/user/status",
-    fields: &[
-        FieldSpec { snake: "external_id", location: FieldLocation::Query },
-        FieldSpec { snake: "limit", location: FieldLocation::Query },
-        FieldSpec { snake: "offset", location: FieldLocation::Query },
-        FieldSpec { snake: "phone", location: FieldLocation::Query },
-    ],
-    auth: &[
-    ],
-};
-
-fn iface_subscription_groups__list_user_s_subscription_group_status_sms_params__to_json(p: &iface_subscription_groups::ListUserSSubscriptionGroupStatusSmsParams) -> Value {
-    let mut m = Map::new();
-    m.insert("subscription_group_id".into(), match (&p.subscription_group_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("external_id".into(), match (&p.external_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("phone".into(), match (&p.phone) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_subscription_groups__list_user_s_subscription_group_sms_params__to_json(p: &iface_subscription_groups::ListUserSSubscriptionGroupSmsParams) -> Value {
-    let mut m = Map::new();
-    m.insert("external_id".into(), match (&p.external_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("limit".into(), match (&p.limit) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("offset".into(), match (&p.offset) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("phone".into(), match (&p.phone) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    Value::Object(m)
-}
-
-impl iface_subscription_groups::Guest for crate::Component {
-    fn list_user_s_subscription_group_status_sms(params: iface_subscription_groups::ListUserSSubscriptionGroupStatusSmsParams) -> Result<String, String> {
-        let json = iface_subscription_groups__list_user_s_subscription_group_status_sms_params__to_json(&params);
-        dispatch(&OP_SUBSCRIPTION_GROUPS_LIST_USER_S_SUBSCRIPTION_GROUP_STATUS_SMS, json)
-    }
-    fn list_user_s_subscription_group_sms(params: iface_subscription_groups::ListUserSSubscriptionGroupSmsParams) -> Result<String, String> {
-        let json = iface_subscription_groups__list_user_s_subscription_group_sms_params__to_json(&params);
-        dispatch(&OP_SUBSCRIPTION_GROUPS_LIST_USER_S_SUBSCRIPTION_GROUP_SMS, json)
-    }
-}
+mod iface_export_op;
+mod iface_messaging;
+mod iface_templates;
+mod iface_email_lists_addresses;
+mod iface_subscription_groups;
 
 export!(Component);

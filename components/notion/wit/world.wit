@@ -1,6 +1,42 @@
-package autostamp:notion@0.3.0;
+package autostamp:notion@0.5.0;
 
 interface blocks {
+  record retrieve-a-block-response {
+    created-time: option<string>,
+    has-children: option<bool>,
+    id: option<string>,
+    last-edited-time: option<string>,
+    object: option<string>,
+    paragraph: option<retrieve-a-block-response-paragraph>,
+    type-op: option<string>
+  }
+
+  record retrieve-a-block-response-paragraph {
+    text: option<list<retrieve-a-block-response-paragraph-text-item>>
+  }
+
+  record retrieve-a-block-response-paragraph-text-item {
+    annotations: option<retrieve-a-block-response-paragraph-text-item-annotations>,
+    href: option<string>,
+    plain-text: option<string>,
+    text: option<retrieve-a-block-response-paragraph-text-item-text>,
+    type-op: option<string>
+  }
+
+  record retrieve-a-block-response-paragraph-text-item-annotations {
+    bold: option<bool>,
+    code: option<bool>,
+    color: option<string>,
+    italic: option<bool>,
+    strikethrough: option<bool>,
+    underline: option<bool>
+  }
+
+  record retrieve-a-block-response-paragraph-text-item-text {
+    content: option<string>,
+    link: option<string>
+  }
+
   record update-a-block-body-paragraph {
     rich-text: option<list<update-a-block-body-paragraph-rich-text-item>>
   }
@@ -12,6 +48,140 @@ interface blocks {
 
   record update-a-block-body-paragraph-rich-text-item-text {
     content: option<string>
+  }
+
+  record update-a-block-response {
+    created-time: option<string>,
+    has-children: option<bool>,
+    id: option<string>,
+    last-edited-time: option<string>,
+    object: option<string>,
+    paragraph: option<update-a-block-response-paragraph>,
+    type-op: option<string>
+  }
+
+  record update-a-block-response-paragraph {
+    text: option<list<update-a-block-response-paragraph-text-item>>
+  }
+
+  record update-a-block-response-paragraph-text-item {
+    annotations: option<update-a-block-response-paragraph-text-item-annotations>,
+    href: option<string>,
+    plain-text: option<string>,
+    text: option<update-a-block-response-paragraph-text-item-text>,
+    type-op: option<string>
+  }
+
+  record update-a-block-response-paragraph-text-item-annotations {
+    bold: option<bool>,
+    code: option<bool>,
+    color: option<string>,
+    italic: option<bool>,
+    strikethrough: option<bool>,
+    underline: option<bool>
+  }
+
+  record update-a-block-response-paragraph-text-item-text {
+    content: option<string>,
+    link: option<string>
+  }
+
+  record delete-a-block-response {
+    archived: option<bool>,
+    created-by: option<delete-a-block-response-created-by>,
+    created-time: option<string>,
+    has-children: option<bool>,
+    id: option<string>,
+    last-edited-by: option<delete-a-block-response-last-edited-by>,
+    last-edited-time: option<string>,
+    object: option<string>,
+    paragraph: option<delete-a-block-response-paragraph>,
+    type-op: option<string>
+  }
+
+  record delete-a-block-response-created-by {
+    id: option<string>,
+    object: option<string>
+  }
+
+  record delete-a-block-response-last-edited-by {
+    id: option<string>,
+    object: option<string>
+  }
+
+  record delete-a-block-response-paragraph {
+    text: option<list<delete-a-block-response-paragraph-text-item>>
+  }
+
+  record delete-a-block-response-paragraph-text-item {
+    annotations: option<delete-a-block-response-paragraph-text-item-annotations>,
+    href: option<string>,
+    plain-text: option<string>,
+    text: option<delete-a-block-response-paragraph-text-item-text>,
+    type-op: option<string>
+  }
+
+  record delete-a-block-response-paragraph-text-item-annotations {
+    bold: option<bool>,
+    code: option<bool>,
+    color: option<string>,
+    italic: option<bool>,
+    strikethrough: option<bool>,
+    underline: option<bool>
+  }
+
+  record delete-a-block-response-paragraph-text-item-text {
+    content: option<string>,
+    link: option<string>
+  }
+
+  record retrieve-block-children-response {
+    has-more: option<bool>,
+    next-cursor: option<string>,
+    object: option<string>,
+    results: option<list<retrieve-block-children-response-results-item>>
+  }
+
+  record retrieve-block-children-response-results-item {
+    created-time: option<string>,
+    has-children: option<bool>,
+    id: option<string>,
+    last-edited-time: option<string>,
+    object: option<string>,
+    paragraph: option<retrieve-block-children-response-results-item-paragraph>,
+    type-op: option<string>,
+    unsupported: option<retrieve-block-children-response-results-item-unsupported>
+  }
+
+  record retrieve-block-children-response-results-item-paragraph {
+    text: option<list<retrieve-block-children-response-results-item-paragraph-text-item>>
+  }
+
+  record retrieve-block-children-response-results-item-paragraph-text-item {
+    annotations: option<retrieve-block-children-response-results-item-paragraph-text-item-annotations>,
+    href: option<string>,
+    plain-text: option<string>,
+    text: option<retrieve-block-children-response-results-item-paragraph-text-item-text>,
+    type-op: option<string>
+  }
+
+  record retrieve-block-children-response-results-item-paragraph-text-item-annotations {
+    bold: option<bool>,
+    code: option<bool>,
+    color: option<string>,
+    italic: option<bool>,
+    strikethrough: option<bool>,
+    underline: option<bool>
+  }
+
+  record retrieve-block-children-response-results-item-paragraph-text-item-text {
+    content: option<string>,
+    link: option<string>
+  }
+
+  record retrieve-block-children-response-results-item-unsupported {
+    /// JSON-encoded free-form object payload
+    data: option<string>
   }
 
   record append-block-children-body-children-item {
@@ -52,54 +222,343 @@ interface blocks {
     url: option<string>
   }
 
+  record append-block-children-response {
+    child-page: option<append-block-children-response-child-page>,
+    created-time: option<string>,
+    has-children: option<bool>,
+    id: option<string>,
+    last-edited-time: option<string>,
+    object: option<string>,
+    type-op: option<string>
+  }
+
+  record append-block-children-response-child-page {
+    title: option<string>
+  }
+
   /// Retrieve a block
   record retrieve-a-block-params {
+    id: string,
     notion-version: option<string>
   }
-  retrieve-a-block: func(params: retrieve-a-block-params) -> result<string, string>;
+  retrieve-a-block: func(params: retrieve-a-block-params) -> result<retrieve-a-block-response, string>;
 
   /// Update a block
   record update-a-block-params {
+    id: string,
     notion-version: option<string>,
     paragraph: option<update-a-block-body-paragraph>
   }
-  update-a-block: func(params: update-a-block-params) -> result<string, string>;
+  update-a-block: func(params: update-a-block-params) -> result<update-a-block-response, string>;
 
   /// Delete a block
   record delete-a-block-params {
+    id: string,
     notion-version: option<string>
   }
-  delete-a-block: func(params: delete-a-block-params) -> result<string, string>;
+  delete-a-block: func(params: delete-a-block-params) -> result<delete-a-block-response, string>;
 
   /// Retrieve block children
   record retrieve-block-children-params {
+    id: string,
     page-size: option<string>,
     notion-version: option<string>
   }
-  retrieve-block-children: func(params: retrieve-block-children-params) -> result<string, string>;
+  retrieve-block-children: func(params: retrieve-block-children-params) -> result<retrieve-block-children-response, string>;
 
   /// Append block children
   record append-block-children-params {
+    id: string,
     notion-version: option<string>,
     children: option<list<append-block-children-body-children-item>>
   }
-  append-block-children: func(params: append-block-children-params) -> result<string, string>;
+  append-block-children: func(params: append-block-children-params) -> result<append-block-children-response, string>;
 
 }
 
 
 interface comments {
+  record retrieve-comments-response {
+    comment: option<retrieve-comments-response-comment>,
+    has-more: option<bool>,
+    next-cursor: option<string>,
+    object: option<string>,
+    results: option<list<retrieve-comments-response-results-item>>,
+    type-op: option<string>
+  }
+
+  record retrieve-comments-response-comment {
+    /// JSON-encoded free-form object payload
+    data: option<string>
+  }
+
+  record retrieve-comments-response-results-item {
+    created-by: option<retrieve-comments-response-results-item-created-by>,
+    created-time: option<string>,
+    discussion-id: option<string>,
+    id: option<string>,
+    last-edited-time: option<string>,
+    object: option<string>,
+    parent: option<retrieve-comments-response-results-item-parent>,
+    rich-text: option<list<retrieve-comments-response-results-item-rich-text-item>>
+  }
+
+  record retrieve-comments-response-results-item-created-by {
+    id: option<string>,
+    object: option<string>
+  }
+
+  record retrieve-comments-response-results-item-parent {
+    block-id: option<string>,
+    type-op: option<string>
+  }
+
+  record retrieve-comments-response-results-item-rich-text-item {
+    annotations: option<retrieve-comments-response-results-item-rich-text-item-annotations>,
+    href: option<string>,
+    plain-text: option<string>,
+    text: option<retrieve-comments-response-results-item-rich-text-item-text>,
+    type-op: option<string>
+  }
+
+  record retrieve-comments-response-results-item-rich-text-item-annotations {
+    bold: option<bool>,
+    code: option<bool>,
+    color: option<string>,
+    italic: option<bool>,
+    strikethrough: option<bool>,
+    underline: option<bool>
+  }
+
+  record retrieve-comments-response-results-item-rich-text-item-text {
+    content: option<string>,
+    link: option<string>
+  }
+
   /// Retrieve comments
   record retrieve-comments-params {
     block-id: option<string>,
     page-size: option<string>,
-    notion-version: option<string>
+    notion-version: option<string>,
+    /// JSON-encoded free-form object payload
+    data: option<string>
   }
-  retrieve-comments: func(params: retrieve-comments-params) -> result<string, string>;
+  retrieve-comments: func(params: retrieve-comments-params) -> result<retrieve-comments-response, string>;
 
 }
 
 interface databases {
+  record retrieve-a-database-response {
+    archived: option<bool>,
+    cover: option<string>,
+    created-by: option<retrieve-a-database-response-created-by>,
+    created-time: option<string>,
+    icon: option<string>,
+    id: option<string>,
+    last-edited-by: option<retrieve-a-database-response-last-edited-by>,
+    last-edited-time: option<string>,
+    object: option<string>,
+    parent: option<retrieve-a-database-response-parent>,
+    properties: option<retrieve-a-database-response-properties>,
+    title: option<list<retrieve-a-database-response-title-item>>,
+    url: option<string>
+  }
+
+  record retrieve-a-database-response-created-by {
+    id: option<string>,
+    object: option<string>
+  }
+
+  record retrieve-a-database-response-last-edited-by {
+    id: option<string>,
+    object: option<string>
+  }
+
+  record retrieve-a-database-response-parent {
+    page-id: option<string>,
+    type-op: option<string>
+  }
+
+  record retrieve-a-database-response-properties {
+    author: option<retrieve-a-database-response-properties-author>,
+    link: option<retrieve-a-database-response-properties-link>,
+    name: option<retrieve-a-database-response-properties-name>,
+    publisher: option<retrieve-a-database-response-properties-publisher>,
+    publishing-release-date: option<retrieve-a-database-response-properties-publishing-release-date>,
+    read: option<retrieve-a-database-response-properties-read>,
+    score-v5: option<retrieve-a-database-response-properties-score-v5>,
+    status: option<retrieve-a-database-response-properties-status>,
+    summary: option<retrieve-a-database-response-properties-summary>,
+    type-op: option<retrieve-a-database-response-properties-type-op>
+  }
+
+  record retrieve-a-database-response-properties-author {
+    id: option<string>,
+    multi-select: option<retrieve-a-database-response-properties-author-multi-select>,
+    name: option<string>,
+    type-op: option<string>
+  }
+
+  record retrieve-a-database-response-properties-author-multi-select {
+    options: option<list<retrieve-a-database-response-properties-author-multi-select-options-item>>
+  }
+
+  record retrieve-a-database-response-properties-author-multi-select-options-item {
+    color: option<string>,
+    id: option<string>,
+    name: option<string>
+  }
+
+  record retrieve-a-database-response-properties-link {
+    id: option<string>,
+    name: option<string>,
+    type-op: option<string>,
+    url: option<retrieve-a-database-response-properties-link-url>
+  }
+
+  record retrieve-a-database-response-properties-link-url {
+    /// JSON-encoded free-form object payload
+    data: option<string>
+  }
+
+  record retrieve-a-database-response-properties-name {
+    id: option<string>,
+    name: option<string>,
+    title: option<retrieve-a-database-response-properties-name-title>,
+    type-op: option<string>
+  }
+
+  record retrieve-a-database-response-properties-name-title {
+    /// JSON-encoded free-form object payload
+    data: option<string>
+  }
+
+  record retrieve-a-database-response-properties-publisher {
+    id: option<string>,
+    name: option<string>,
+    select: option<retrieve-a-database-response-properties-publisher-select>,
+    type-op: option<string>
+  }
+
+  record retrieve-a-database-response-properties-publisher-select {
+    options: option<list<retrieve-a-database-response-properties-publisher-select-options-item>>
+  }
+
+  record retrieve-a-database-response-properties-publisher-select-options-item {
+    color: option<string>,
+    id: option<string>,
+    name: option<string>
+  }
+
+  record retrieve-a-database-response-properties-publishing-release-date {
+    date: option<retrieve-a-database-response-properties-publishing-release-date-date>,
+    id: option<string>,
+    name: option<string>,
+    type-op: option<string>
+  }
+
+  record retrieve-a-database-response-properties-publishing-release-date-date {
+    /// JSON-encoded free-form object payload
+    data: option<string>
+  }
+
+  record retrieve-a-database-response-properties-read {
+    checkbox: option<retrieve-a-database-response-properties-read-checkbox>,
+    id: option<string>,
+    name: option<string>,
+    type-op: option<string>
+  }
+
+  record retrieve-a-database-response-properties-read-checkbox {
+    /// JSON-encoded free-form object payload
+    data: option<string>
+  }
+
+  record retrieve-a-database-response-properties-score-v5 {
+    id: option<string>,
+    name: option<string>,
+    select: option<retrieve-a-database-response-properties-score-v5-select>,
+    type-op: option<string>
+  }
+
+  record retrieve-a-database-response-properties-score-v5-select {
+    options: option<list<retrieve-a-database-response-properties-score-v5-select-options-item>>
+  }
+
+  record retrieve-a-database-response-properties-score-v5-select-options-item {
+    color: option<string>,
+    id: option<string>,
+    name: option<string>
+  }
+
+  record retrieve-a-database-response-properties-status {
+    id: option<string>,
+    name: option<string>,
+    select: option<retrieve-a-database-response-properties-status-select>,
+    type-op: option<string>
+  }
+
+  record retrieve-a-database-response-properties-status-select {
+    options: option<list<retrieve-a-database-response-properties-status-select-options-item>>
+  }
+
+  record retrieve-a-database-response-properties-status-select-options-item {
+    color: option<string>,
+    id: option<string>,
+    name: option<string>
+  }
+
+  record retrieve-a-database-response-properties-summary {
+    id: option<string>,
+    name: option<string>,
+    rich-text: option<retrieve-a-database-response-properties-summary-rich-text>,
+    type-op: option<string>
+  }
+
+  record retrieve-a-database-response-properties-summary-rich-text {
+    /// JSON-encoded free-form object payload
+    data: option<string>
+  }
+
+  record retrieve-a-database-response-properties-type-op {
+    id: option<string>,
+    name: option<string>,
+    select: option<retrieve-a-database-response-properties-type-op-select>,
+    type-op: option<string>
+  }
+
+  record retrieve-a-database-response-properties-type-op-select {
+    options: option<list<retrieve-a-database-response-properties-type-op-select-options-item>>
+  }
+
+  record retrieve-a-database-response-properties-type-op-select-options-item {
+    color: option<string>,
+    id: option<string>,
+    name: option<string>
+  }
+
+  record retrieve-a-database-response-title-item {
+    annotations: option<retrieve-a-database-response-title-item-annotations>,
+    href: option<string>,
+    plain-text: option<string>,
+    text: option<retrieve-a-database-response-title-item-text>,
+    type-op: option<string>
+  }
+
+  record retrieve-a-database-response-title-item-annotations {
+    bold: option<bool>,
+    code: option<bool>,
+    color: option<string>,
+    italic: option<bool>,
+    strikethrough: option<bool>,
+    underline: option<bool>
+  }
+
+  record retrieve-a-database-response-title-item-text {
+    content: option<string>,
+    link: option<string>
+  }
+
   record update-a-database-body-properties {
     wine-pairing: option<update-a-database-body-properties-wine-pairing>
   }
@@ -121,6 +580,230 @@ interface databases {
     content: option<string>
   }
 
+  record update-a-database-response {
+    archived: option<bool>,
+    cover: option<string>,
+    created-by: option<update-a-database-response-created-by>,
+    created-time: option<string>,
+    icon: option<string>,
+    id: option<string>,
+    last-edited-by: option<update-a-database-response-last-edited-by>,
+    last-edited-time: option<string>,
+    object: option<string>,
+    parent: option<update-a-database-response-parent>,
+    properties: option<update-a-database-response-properties>,
+    title: option<list<update-a-database-response-title-item>>,
+    url: option<string>
+  }
+
+  record update-a-database-response-created-by {
+    id: option<string>,
+    object: option<string>
+  }
+
+  record update-a-database-response-last-edited-by {
+    id: option<string>,
+    object: option<string>
+  }
+
+  record update-a-database-response-parent {
+    page-id: option<string>,
+    type-op: option<string>
+  }
+
+  record update-a-database-response-properties {
+    author: option<update-a-database-response-properties-author>,
+    link: option<update-a-database-response-properties-link>,
+    name: option<update-a-database-response-properties-name>,
+    publisher: option<update-a-database-response-properties-publisher>,
+    publishing-release-date: option<update-a-database-response-properties-publishing-release-date>,
+    read: option<update-a-database-response-properties-read>,
+    score-v5: option<update-a-database-response-properties-score-v5>,
+    status: option<update-a-database-response-properties-status>,
+    summary: option<update-a-database-response-properties-summary>,
+    type-op: option<update-a-database-response-properties-type-op>,
+    wine-pairing: option<update-a-database-response-properties-wine-pairing>
+  }
+
+  record update-a-database-response-properties-author {
+    id: option<string>,
+    multi-select: option<update-a-database-response-properties-author-multi-select>,
+    name: option<string>,
+    type-op: option<string>
+  }
+
+  record update-a-database-response-properties-author-multi-select {
+    options: option<list<update-a-database-response-properties-author-multi-select-options-item>>
+  }
+
+  record update-a-database-response-properties-author-multi-select-options-item {
+    color: option<string>,
+    id: option<string>,
+    name: option<string>
+  }
+
+  record update-a-database-response-properties-link {
+    id: option<string>,
+    name: option<string>,
+    type-op: option<string>,
+    url: option<update-a-database-response-properties-link-url>
+  }
+
+  record update-a-database-response-properties-link-url {
+    /// JSON-encoded free-form object payload
+    data: option<string>
+  }
+
+  record update-a-database-response-properties-name {
+    id: option<string>,
+    name: option<string>,
+    title: option<update-a-database-response-properties-name-title>,
+    type-op: option<string>
+  }
+
+  record update-a-database-response-properties-name-title {
+    /// JSON-encoded free-form object payload
+    data: option<string>
+  }
+
+  record update-a-database-response-properties-publisher {
+    id: option<string>,
+    name: option<string>,
+    select: option<update-a-database-response-properties-publisher-select>,
+    type-op: option<string>
+  }
+
+  record update-a-database-response-properties-publisher-select {
+    options: option<list<update-a-database-response-properties-publisher-select-options-item>>
+  }
+
+  record update-a-database-response-properties-publisher-select-options-item {
+    color: option<string>,
+    id: option<string>,
+    name: option<string>
+  }
+
+  record update-a-database-response-properties-publishing-release-date {
+    date: option<update-a-database-response-properties-publishing-release-date-date>,
+    id: option<string>,
+    name: option<string>,
+    type-op: option<string>
+  }
+
+  record update-a-database-response-properties-publishing-release-date-date {
+    /// JSON-encoded free-form object payload
+    data: option<string>
+  }
+
+  record update-a-database-response-properties-read {
+    checkbox: option<update-a-database-response-properties-read-checkbox>,
+    id: option<string>,
+    name: option<string>,
+    type-op: option<string>
+  }
+
+  record update-a-database-response-properties-read-checkbox {
+    /// JSON-encoded free-form object payload
+    data: option<string>
+  }
+
+  record update-a-database-response-properties-score-v5 {
+    id: option<string>,
+    name: option<string>,
+    select: option<update-a-database-response-properties-score-v5-select>,
+    type-op: option<string>
+  }
+
+  record update-a-database-response-properties-score-v5-select {
+    options: option<list<update-a-database-response-properties-score-v5-select-options-item>>
+  }
+
+  record update-a-database-response-properties-score-v5-select-options-item {
+    color: option<string>,
+    id: option<string>,
+    name: option<string>
+  }
+
+  record update-a-database-response-properties-status {
+    id: option<string>,
+    name: option<string>,
+    select: option<update-a-database-response-properties-status-select>,
+    type-op: option<string>
+  }
+
+  record update-a-database-response-properties-status-select {
+    options: option<list<update-a-database-response-properties-status-select-options-item>>
+  }
+
+  record update-a-database-response-properties-status-select-options-item {
+    color: option<string>,
+    id: option<string>,
+    name: option<string>
+  }
+
+  record update-a-database-response-properties-summary {
+    id: option<string>,
+    name: option<string>,
+    rich-text: option<update-a-database-response-properties-summary-rich-text>,
+    type-op: option<string>
+  }
+
+  record update-a-database-response-properties-summary-rich-text {
+    /// JSON-encoded free-form object payload
+    data: option<string>
+  }
+
+  record update-a-database-response-properties-type-op {
+    id: option<string>,
+    name: option<string>,
+    select: option<update-a-database-response-properties-type-op-select>,
+    type-op: option<string>
+  }
+
+  record update-a-database-response-properties-type-op-select {
+    options: option<list<update-a-database-response-properties-type-op-select-options-item>>
+  }
+
+  record update-a-database-response-properties-type-op-select-options-item {
+    color: option<string>,
+    id: option<string>,
+    name: option<string>
+  }
+
+  record update-a-database-response-properties-wine-pairing {
+    id: option<string>,
+    name: option<string>,
+    rich-text: option<update-a-database-response-properties-wine-pairing-rich-text>,
+    type-op: option<string>
+  }
+
+  record update-a-database-response-properties-wine-pairing-rich-text {
+    /// JSON-encoded free-form object payload
+    data: option<string>
+  }
+
+  record update-a-database-response-title-item {
+    annotations: option<update-a-database-response-title-item-annotations>,
+    href: option<string>,
+    plain-text: option<string>,
+    text: option<update-a-database-response-title-item-text>,
+    type-op: option<string>
+  }
+
+  record update-a-database-response-title-item-annotations {
+    bold: option<bool>,
+    code: option<bool>,
+    color: option<string>,
+    italic: option<bool>,
+    strikethrough: option<bool>,
+    underline: option<bool>
+  }
+
+  record update-a-database-response-title-item-text {
+    content: option<string>,
+    link: option<string>
+  }
+
   record query-a-database-body-filter {
     property: option<string>,
     select: option<query-a-database-body-filter-select>
@@ -130,30 +813,268 @@ interface databases {
     equals: option<string>
   }
 
+  record query-a-database-response {
+    has-more: option<bool>,
+    next-cursor: option<string>,
+    object: option<string>,
+    results: option<list<query-a-database-response-results-item>>
+  }
+
+  record query-a-database-response-results-item {
+    archived: option<bool>,
+    cover: option<string>,
+    created-by: option<query-a-database-response-results-item-created-by>,
+    created-time: option<string>,
+    icon: option<string>,
+    id: option<string>,
+    last-edited-by: option<query-a-database-response-results-item-last-edited-by>,
+    last-edited-time: option<string>,
+    object: option<string>,
+    parent: option<query-a-database-response-results-item-parent>,
+    properties: option<query-a-database-response-results-item-properties>,
+    url: option<string>
+  }
+
+  record query-a-database-response-results-item-created-by {
+    id: option<string>,
+    object: option<string>
+  }
+
+  record query-a-database-response-results-item-last-edited-by {
+    id: option<string>,
+    object: option<string>
+  }
+
+  record query-a-database-response-results-item-parent {
+    database-id: option<string>,
+    type-op: option<string>
+  }
+
+  record query-a-database-response-results-item-properties {
+    author: option<query-a-database-response-results-item-properties-author>,
+    link: option<query-a-database-response-results-item-properties-link>,
+    name: option<query-a-database-response-results-item-properties-name>,
+    publisher: option<query-a-database-response-results-item-properties-publisher>,
+    publishing-release-date: option<query-a-database-response-results-item-properties-publishing-release-date>,
+    read: option<query-a-database-response-results-item-properties-read>,
+    score-v5: option<query-a-database-response-results-item-properties-score-v5>,
+    status: option<query-a-database-response-results-item-properties-status>,
+    summary: option<query-a-database-response-results-item-properties-summary>,
+    type-op: option<query-a-database-response-results-item-properties-type-op>
+  }
+
+  record query-a-database-response-results-item-properties-author {
+    id: option<string>,
+    multi-select: option<list<query-a-database-response-results-item-properties-author-multi-select-item>>,
+    type-op: option<string>
+  }
+
+  record query-a-database-response-results-item-properties-author-multi-select-item {
+    color: option<string>,
+    id: option<string>,
+    name: option<string>
+  }
+
+  record query-a-database-response-results-item-properties-link {
+    id: option<string>,
+    type-op: option<string>,
+    url: option<string>
+  }
+
+  record query-a-database-response-results-item-properties-name {
+    id: option<string>,
+    title: option<list<query-a-database-response-results-item-properties-name-title-item>>,
+    type-op: option<string>
+  }
+
+  record query-a-database-response-results-item-properties-name-title-item {
+    annotations: option<query-a-database-response-results-item-properties-name-title-item-annotations>,
+    href: option<string>,
+    plain-text: option<string>,
+    text: option<query-a-database-response-results-item-properties-name-title-item-text>,
+    type-op: option<string>
+  }
+
+  record query-a-database-response-results-item-properties-name-title-item-annotations {
+    bold: option<bool>,
+    code: option<bool>,
+    color: option<string>,
+    italic: option<bool>,
+    strikethrough: option<bool>,
+    underline: option<bool>
+  }
+
+  record query-a-database-response-results-item-properties-name-title-item-text {
+    content: option<string>,
+    link: option<string>
+  }
+
+  record query-a-database-response-results-item-properties-publisher {
+    id: option<string>,
+    select: option<query-a-database-response-results-item-properties-publisher-select>,
+    type-op: option<string>
+  }
+
+  record query-a-database-response-results-item-properties-publisher-select {
+    color: option<string>,
+    id: option<string>,
+    name: option<string>
+  }
+
+  record query-a-database-response-results-item-properties-publishing-release-date {
+    date: option<query-a-database-response-results-item-properties-publishing-release-date-date>,
+    id: option<string>,
+    type-op: option<string>
+  }
+
+  record query-a-database-response-results-item-properties-publishing-release-date-date {
+    end: option<string>,
+    start: option<string>,
+    time-zone: option<string>
+  }
+
+  record query-a-database-response-results-item-properties-read {
+    checkbox: option<bool>,
+    id: option<string>,
+    type-op: option<string>
+  }
+
+  record query-a-database-response-results-item-properties-score-v5 {
+    id: option<string>,
+    select: option<query-a-database-response-results-item-properties-score-v5-select>,
+    type-op: option<string>
+  }
+
+  record query-a-database-response-results-item-properties-score-v5-select {
+    color: option<string>,
+    id: option<string>,
+    name: option<string>
+  }
+
+  record query-a-database-response-results-item-properties-status {
+    id: option<string>,
+    select: option<query-a-database-response-results-item-properties-status-select>,
+    type-op: option<string>
+  }
+
+  record query-a-database-response-results-item-properties-status-select {
+    color: option<string>,
+    id: option<string>,
+    name: option<string>
+  }
+
+  record query-a-database-response-results-item-properties-summary {
+    id: option<string>,
+    rich-text: option<list<string>>,
+    type-op: option<string>
+  }
+
+  record query-a-database-response-results-item-properties-type-op {
+    id: option<string>,
+    select: option<query-a-database-response-results-item-properties-type-op-select>,
+    type-op: option<string>
+  }
+
+  record query-a-database-response-results-item-properties-type-op-select {
+    color: option<string>,
+    id: option<string>,
+    name: option<string>
+  }
+
   /// Retrieve a database
   record retrieve-a-database-params {
+    id: string,
     notion-version: option<string>
   }
-  retrieve-a-database: func(params: retrieve-a-database-params) -> result<string, string>;
+  retrieve-a-database: func(params: retrieve-a-database-params) -> result<retrieve-a-database-response, string>;
 
   /// Update a database
   record update-a-database-params {
+    id: string,
     notion-version: option<string>,
     properties: option<update-a-database-body-properties>,
     title: option<list<update-a-database-body-title-item>>
   }
-  update-a-database: func(params: update-a-database-params) -> result<string, string>;
+  update-a-database: func(params: update-a-database-params) -> result<update-a-database-response, string>;
 
   /// Query a database
   record query-a-database-params {
+    id: string,
     notion-version: option<string>,
     filter: option<query-a-database-body-filter>
   }
-  query-a-database: func(params: query-a-database-params) -> result<string, string>;
+  query-a-database: func(params: query-a-database-params) -> result<query-a-database-response, string>;
 
 }
 
 interface pages {
+  record retrieve-a-page-response {
+    archived: option<bool>,
+    cover: option<string>,
+    created-by: option<retrieve-a-page-response-created-by>,
+    created-time: option<string>,
+    icon: option<retrieve-a-page-response-icon>,
+    id: option<string>,
+    last-edited-by: option<retrieve-a-page-response-last-edited-by>,
+    last-edited-time: option<string>,
+    object: option<string>,
+    parent: option<retrieve-a-page-response-parent>,
+    properties: option<retrieve-a-page-response-properties>,
+    url: option<string>
+  }
+
+  record retrieve-a-page-response-created-by {
+    id: option<string>,
+    object: option<string>
+  }
+
+  record retrieve-a-page-response-icon {
+    emoji: option<string>,
+    type-op: option<string>
+  }
+
+  record retrieve-a-page-response-last-edited-by {
+    id: option<string>,
+    object: option<string>
+  }
+
+  record retrieve-a-page-response-parent {
+    page-id: option<string>,
+    type-op: option<string>
+  }
+
+  record retrieve-a-page-response-properties {
+    title: option<retrieve-a-page-response-properties-title>
+  }
+
+  record retrieve-a-page-response-properties-title {
+    id: option<string>,
+    title: option<list<retrieve-a-page-response-properties-title-title-item>>,
+    type-op: option<string>
+  }
+
+  record retrieve-a-page-response-properties-title-title-item {
+    annotations: option<retrieve-a-page-response-properties-title-title-item-annotations>,
+    href: option<string>,
+    plain-text: option<string>,
+    text: option<retrieve-a-page-response-properties-title-title-item-text>,
+    type-op: option<string>
+  }
+
+  record retrieve-a-page-response-properties-title-title-item-annotations {
+    bold: option<bool>,
+    code: option<bool>,
+    color: option<string>,
+    italic: option<bool>,
+    strikethrough: option<bool>,
+    underline: option<bool>
+  }
+
+  record retrieve-a-page-response-properties-title-title-item-text {
+    content: option<string>,
+    link: option<string>
+  }
+
   record update-page-properties-body-properties {
     status: option<update-page-properties-body-properties-status>
   }
@@ -166,31 +1087,232 @@ interface pages {
     name: option<string>
   }
 
+  record update-page-properties-response {
+    archived: option<bool>,
+    created-time: option<string>,
+    id: option<string>,
+    last-edited-time: option<string>,
+    object: option<string>,
+    parent: option<update-page-properties-response-parent>,
+    properties: option<update-page-properties-response-properties>
+  }
+
+  record update-page-properties-response-parent {
+    database-id: option<string>,
+    type-op: option<string>
+  }
+
+  record update-page-properties-response-properties {
+    author: option<update-page-properties-response-properties-author>,
+    link: option<update-page-properties-response-properties-link>,
+    name: option<update-page-properties-response-properties-name>,
+    publisher: option<update-page-properties-response-properties-publisher>,
+    publishing-release-date: option<update-page-properties-response-properties-publishing-release-date>,
+    read: option<update-page-properties-response-properties-read>,
+    score-v5: option<update-page-properties-response-properties-score-v5>,
+    status: option<update-page-properties-response-properties-status>,
+    summary: option<update-page-properties-response-properties-summary>,
+    type-op: option<update-page-properties-response-properties-type-op>
+  }
+
+  record update-page-properties-response-properties-author {
+    id: option<string>,
+    multi-select: option<list<update-page-properties-response-properties-author-multi-select-item>>,
+    type-op: option<string>
+  }
+
+  record update-page-properties-response-properties-author-multi-select-item {
+    color: option<string>,
+    id: option<string>,
+    name: option<string>
+  }
+
+  record update-page-properties-response-properties-link {
+    id: option<string>,
+    type-op: option<string>,
+    url: option<string>
+  }
+
+  record update-page-properties-response-properties-name {
+    id: option<string>,
+    title: option<list<update-page-properties-response-properties-name-title-item>>,
+    type-op: option<string>
+  }
+
+  record update-page-properties-response-properties-name-title-item {
+    annotations: option<update-page-properties-response-properties-name-title-item-annotations>,
+    href: option<string>,
+    plain-text: option<string>,
+    text: option<update-page-properties-response-properties-name-title-item-text>,
+    type-op: option<string>
+  }
+
+  record update-page-properties-response-properties-name-title-item-annotations {
+    bold: option<bool>,
+    code: option<bool>,
+    color: option<string>,
+    italic: option<bool>,
+    strikethrough: option<bool>,
+    underline: option<bool>
+  }
+
+  record update-page-properties-response-properties-name-title-item-text {
+    content: option<string>,
+    link: option<string>
+  }
+
+  record update-page-properties-response-properties-publisher {
+    id: option<string>,
+    select: option<update-page-properties-response-properties-publisher-select>,
+    type-op: option<string>
+  }
+
+  record update-page-properties-response-properties-publisher-select {
+    color: option<string>,
+    id: option<string>,
+    name: option<string>
+  }
+
+  record update-page-properties-response-properties-publishing-release-date {
+    date: option<update-page-properties-response-properties-publishing-release-date-date>,
+    id: option<string>,
+    type-op: option<string>
+  }
+
+  record update-page-properties-response-properties-publishing-release-date-date {
+    end: option<string>,
+    start: option<string>
+  }
+
+  record update-page-properties-response-properties-read {
+    checkbox: option<bool>,
+    id: option<string>,
+    type-op: option<string>
+  }
+
+  record update-page-properties-response-properties-score-v5 {
+    id: option<string>,
+    select: option<update-page-properties-response-properties-score-v5-select>,
+    type-op: option<string>
+  }
+
+  record update-page-properties-response-properties-score-v5-select {
+    color: option<string>,
+    id: option<string>,
+    name: option<string>
+  }
+
+  record update-page-properties-response-properties-status {
+    id: option<string>,
+    select: option<update-page-properties-response-properties-status-select>,
+    type-op: option<string>
+  }
+
+  record update-page-properties-response-properties-status-select {
+    color: option<string>,
+    id: option<string>,
+    name: option<string>
+  }
+
+  record update-page-properties-response-properties-summary {
+    id: option<string>,
+    rich-text: option<list<update-page-properties-response-properties-summary-rich-text-item>>,
+    type-op: option<string>
+  }
+
+  record update-page-properties-response-properties-summary-rich-text-item {
+    annotations: option<update-page-properties-response-properties-summary-rich-text-item-annotations>,
+    href: option<string>,
+    plain-text: option<string>,
+    text: option<update-page-properties-response-properties-summary-rich-text-item-text>,
+    type-op: option<string>
+  }
+
+  record update-page-properties-response-properties-summary-rich-text-item-annotations {
+    bold: option<bool>,
+    code: option<bool>,
+    color: option<string>,
+    italic: option<bool>,
+    strikethrough: option<bool>,
+    underline: option<bool>
+  }
+
+  record update-page-properties-response-properties-summary-rich-text-item-text {
+    content: option<string>,
+    link: option<string>
+  }
+
+  record update-page-properties-response-properties-type-op {
+    id: option<string>,
+    select: option<update-page-properties-response-properties-type-op-select>,
+    type-op: option<string>
+  }
+
+  record update-page-properties-response-properties-type-op-select {
+    color: option<string>,
+    id: option<string>,
+    name: option<string>
+  }
+
+  record retrieve-a-page-property-item-response {
+    object: option<string>,
+    select: option<retrieve-a-page-property-item-response-select>,
+    type-op: option<string>
+  }
+
+  record retrieve-a-page-property-item-response-select {
+    color: option<string>,
+    id: option<string>,
+    name: option<string>
+  }
+
   /// Retrieve a Page
   record retrieve-a-page-params {
+    id: string,
     notion-version: option<string>,
     x: option<string>
   }
-  retrieve-a-page: func(params: retrieve-a-page-params) -> result<string, string>;
+  retrieve-a-page: func(params: retrieve-a-page-params) -> result<retrieve-a-page-response, string>;
 
   /// Update Page properties 
   record update-page-properties-params {
+    id: string,
     notion-version: option<string>,
     properties: option<update-page-properties-body-properties>
   }
-  update-page-properties: func(params: update-page-properties-params) -> result<string, string>;
+  update-page-properties: func(params: update-page-properties-params) -> result<update-page-properties-response, string>;
 
   /// Retrieve a Page Property Item
-  retrieve-a-page-property-item: func() -> result<string, string>;
+  record retrieve-a-page-property-item-params {
+    page-id: string,
+    property-id: string
+  }
+  retrieve-a-page-property-item: func(params: retrieve-a-page-property-item-params) -> result<retrieve-a-page-property-item-response, string>;
 
 }
 
 interface users {
+  record retrieve-a-user-response {
+    avatar-url: option<string>,
+    id: option<string>,
+    name: option<string>,
+    object: option<string>,
+    person: option<retrieve-a-user-response-person>,
+    type-op: option<string>
+  }
+
+  record retrieve-a-user-response-person {
+    email: option<string>
+  }
+
   /// Retrieve a user
   record retrieve-a-user-params {
-    notion-version: option<string>
+    id: string,
+    notion-version: option<string>,
+    /// JSON-encoded free-form object payload
+    data: option<string>
   }
-  retrieve-a-user: func(params: retrieve-a-user-params) -> result<string, string>;
+  retrieve-a-user: func(params: retrieve-a-user-params) -> result<retrieve-a-user-response, string>;
 
 }
 /// The component world: imports the secrets host capability

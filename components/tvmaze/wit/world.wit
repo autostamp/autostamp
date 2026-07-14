@@ -6,14 +6,52 @@
 /// | Secret name | Applied to each request as |
 /// | --- | --- |
 /// | `usertoken` | `Authorization: Basic base64(<secret>)` |
-package autostamp:tvmaze@0.3.0;
+package autostamp:tvmaze@0.5.0;
 
 interface auth {
+  record post-auth-poll-response {
+    /// The user's API key
+    apikey: option<string>,
+    /// The user's username
+    username: option<string>
+  }
+
+  record post-auth-start-response {
+    /// URL where the user can confirm the authentication request
+    confirm-url: option<string>,
+    /// Authentication token to use in the `poll` endpoint
+    token: option<string>
+  }
+
+  record get-auth-validate-response {
+    /// The user's premium level; 1 for Bronze, 2 for Silver, 3 for Gold; or 0 for none
+    premium: option<s32>
+  }
+
+  variant post-auth-poll-error {
+    forbidden(string),
+    not-found(string),
+    too-many-requests(string),
+    other(string)
+  }
+
+  variant post-auth-start-error {
+    unauthorized(string),
+    not-found(string),
+    too-many-requests(string),
+    other(string)
+  }
+
+  variant get-auth-validate-error {
+    unauthorized(string),
+    other(string)
+  }
+
   /// Poll whether an authentication request was confirmed
   record post-auth-poll-params {
     token: option<string>
   }
-  post-auth-poll: func(params: post-auth-poll-params) -> result<string, string>;
+  post-auth-poll: func(params: post-auth-poll-params) -> result<post-auth-poll-response, post-auth-poll-error>;
 
   /// Start an authentication request
   record post-auth-start-params {
@@ -22,15 +60,19 @@ interface auth {
     /// Whether to email the user a confirmation link
     email-confirmation: option<bool>
   }
-  post-auth-start: func(params: post-auth-start-params) -> result<string, string>;
+  post-auth-start: func(params: post-auth-start-params) -> result<post-auth-start-response, post-auth-start-error>;
 
   /// Validate your authentication credentials
-  get-auth-validate: func() -> result<string, string>;
+  get-auth-validate: func() -> result<get-auth-validate-response, get-auth-validate-error>;
 
 }
 
 
 interface scrobbling {
+  enum get-scrobble-shows-show-id-embed-enum {
+    episode,
+  }
+
   record post-scrobble-episodes-body-item {
     /// The TVmaze episode ID
     episode-id: option<s32>,
@@ -43,6 +85,20 @@ interface scrobbling {
   record mark-type {
     /// JSON-encoded free-form object payload
     data: option<string>
+  }
+
+  /// A list of responses to your bulk input, ordered the same as your input
+  record bulk-response {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  record marked-episode {
+    embedded: option<marked-episode-embedded>,
+    episode-id: option<s32>,
+    /// Epoch timestamp for when the user watched the episode, or 0 for unknown.
+    marked-at: option<s32>,
+    type-op: option<mark-type>
   }
 
   record marked-episode-embedded {
@@ -66,21 +122,38 @@ interface scrobbling {
     type-op: option<mark-type>
   }
 
+  variant post-scrobble-episodes-error {
+    unprocessable-entity(string),
+    other(string)
+  }
+
+  variant put-scrobble-episodes-episode-id-error {
+    not-found(string),
+    unprocessable-entity(string),
+    other(string)
+  }
+
+  variant post-scrobble-shows-error {
+    unprocessable-entity(string),
+    other(string)
+  }
+
   /// Mark episodes as acquired or watched based on their IDs
   record post-scrobble-episodes-params {
     body: option<list<post-scrobble-episodes-body-item>>
   }
-  post-scrobble-episodes: func(params: post-scrobble-episodes-params) -> result<string, string>;
+  post-scrobble-episodes: func(params: post-scrobble-episodes-params) -> result<bulk-response, post-scrobble-episodes-error>;
 
   /// Mark an episode as acquired or watched based on its ID
   record put-scrobble-episodes-episode-id-params {
+    episode-id: string,
     embedded: option<marked-episode-embedded>,
-    episode-id: option<s32>,
+    episode-id-v2: option<s32>,
     /// Epoch timestamp for when the user watched the episode, or 0 for unknown.
     marked-at: option<s32>,
     type-op: option<mark-type>
   }
-  put-scrobble-episodes-episode-id: func(params: put-scrobble-episodes-episode-id-params) -> result<string, string>;
+  put-scrobble-episodes-episode-id: func(params: put-scrobble-episodes-episode-id-params) -> result<marked-episode, put-scrobble-episodes-episode-id-error>;
 
   /// Mark episodes within a show as acquired or watched based on their attributes
   record post-scrobble-shows-params {
@@ -92,14 +165,28 @@ interface scrobbling {
     imdb-id: option<s32>,
     body: option<list<post-scrobble-shows-body-item>>
   }
-  post-scrobble-shows: func(params: post-scrobble-shows-params) -> result<string, string>;
+  post-scrobble-shows: func(params: post-scrobble-shows-params) -> result<bulk-response, post-scrobble-shows-error>;
 
   /// List watched and acquired episodes for a show
-  get-scrobble-shows-show-id: func() -> result<string, string>;
+  record get-scrobble-shows-show-id-params {
+    /// ID of the target show
+    show-id: string,
+    /// Embed full episode info
+    embed: option<get-scrobble-shows-show-id-embed-enum>
+  }
+  get-scrobble-shows-show-id: func(params: get-scrobble-shows-show-id-params) -> result<list<marked-episode>, string>;
 
 }
 
 interface marked-episodes {
+  record marked-episode {
+    embedded: option<marked-episode-embedded>,
+    episode-id: option<s32>,
+    /// Epoch timestamp for when the user watched the episode, or 0 for unknown.
+    marked-at: option<s32>,
+    type-op: option<mark-type>
+  }
+
   record marked-episode-embedded {
     episode: option<episode>
   }
@@ -115,28 +202,51 @@ interface marked-episodes {
     data: option<string>
   }
 
+  variant get-user-episodes-episode-id-error {
+    not-found(string),
+    other(string)
+  }
+
+  variant put-user-episodes-episode-id-error {
+    not-found(string),
+    unprocessable-entity(string),
+    other(string)
+  }
+
+  variant delete-user-episodes-episode-id-error {
+    not-found(string),
+    other(string)
+  }
+
   /// List the marked episodes
   record get-user-episodes-params {
     /// Only return episodes from this specific show
     show-id: option<s32>
   }
-  get-user-episodes: func(params: get-user-episodes-params) -> result<string, string>;
+  get-user-episodes: func(params: get-user-episodes-params) -> result<list<marked-episode>, string>;
 
   /// Check if an episode is marked
-  get-user-episodes-episode-id: func() -> result<string, string>;
+  record get-user-episodes-episode-id-params {
+    episode-id: string
+  }
+  get-user-episodes-episode-id: func(params: get-user-episodes-episode-id-params) -> result<marked-episode, get-user-episodes-episode-id-error>;
 
   /// Mark an episode
   record put-user-episodes-episode-id-params {
+    episode-id: string,
     embedded: option<marked-episode-embedded>,
-    episode-id: option<s32>,
+    episode-id-v2: option<s32>,
     /// Epoch timestamp for when the user watched the episode, or 0 for unknown.
     marked-at: option<s32>,
     type-op: option<mark-type>
   }
-  put-user-episodes-episode-id: func(params: put-user-episodes-episode-id-params) -> result<string, string>;
+  put-user-episodes-episode-id: func(params: put-user-episodes-episode-id-params) -> result<marked-episode, put-user-episodes-episode-id-error>;
 
   /// Unmark an episode
-  delete-user-episodes-episode-id: func() -> result<string, string>;
+  record delete-user-episodes-episode-id-params {
+    episode-id: string
+  }
+  delete-user-episodes-episode-id: func(params: delete-user-episodes-episode-id-params) -> result<string, delete-user-episodes-episode-id-error>;
 
 }
 
@@ -145,21 +255,59 @@ interface followed-networks {
     network,
   }
 
+  record network-follow {
+    embedded: option<network-follow-embedded>,
+    network-id: option<s32>
+  }
+
+  record network-follow-embedded {
+    network: option<network>
+  }
+
+  record network {
+    /// JSON-encoded free-form object payload
+    data: option<string>
+  }
+
+  variant get-user-follows-networks-network-id-error {
+    not-found(string),
+    other(string)
+  }
+
+  variant put-user-follows-networks-network-id-error {
+    not-found(string),
+    other(string)
+  }
+
+  variant delete-user-follows-networks-network-id-error {
+    not-found(string),
+    other(string)
+  }
+
   /// List the followed networks
   record get-user-follows-networks-params {
     /// Embed full network info
     embed: option<get-user-follows-networks-embed-enum>
   }
-  get-user-follows-networks: func(params: get-user-follows-networks-params) -> result<string, string>;
+  get-user-follows-networks: func(params: get-user-follows-networks-params) -> result<list<network-follow>, string>;
 
   /// Check if a network is followed
-  get-user-follows-networks-network-id: func() -> result<string, string>;
+  record get-user-follows-networks-network-id-params {
+    network-id: string
+  }
+  get-user-follows-networks-network-id: func(params: get-user-follows-networks-network-id-params) -> result<network-follow, get-user-follows-networks-network-id-error>;
 
   /// Follow a network
-  put-user-follows-networks-network-id: func() -> result<string, string>;
+  record put-user-follows-networks-network-id-params {
+    network-id: string
+  }
+  put-user-follows-networks-network-id: func(params: put-user-follows-networks-network-id-params) -> result<network-follow, put-user-follows-networks-network-id-error>;
 
   /// Unfollow a network
-  delete-user-follows-networks-network-id: func() -> result<string, string>;
+  record delete-user-follows-networks-network-id-params {
+    network-id: string
+  }
+  delete-user-follows-networks-network-id: func(params: delete-user-follows-networks-network-id-params) -> result<string, delete-user-follows-networks-network-id-error>;
 
 }
 
@@ -168,21 +316,59 @@ interface followed-people {
     person,
   }
 
+  record person-follow {
+    embedded: option<person-follow-embedded>,
+    person-id: option<s32>
+  }
+
+  record person-follow-embedded {
+    person: option<person>
+  }
+
+  record person {
+    /// JSON-encoded free-form object payload
+    data: option<string>
+  }
+
+  variant get-user-follows-people-person-id-error {
+    not-found(string),
+    other(string)
+  }
+
+  variant put-user-follows-people-person-id-error {
+    not-found(string),
+    other(string)
+  }
+
+  variant delete-user-follows-people-person-id-error {
+    not-found(string),
+    other(string)
+  }
+
   /// List the followed people
   record get-user-follows-people-params {
     /// Embed full person info
     embed: option<get-user-follows-people-embed-enum>
   }
-  get-user-follows-people: func(params: get-user-follows-people-params) -> result<string, string>;
+  get-user-follows-people: func(params: get-user-follows-people-params) -> result<list<person-follow>, string>;
 
   /// Check if a person is followed
-  get-user-follows-people-person-id: func() -> result<string, string>;
+  record get-user-follows-people-person-id-params {
+    person-id: string
+  }
+  get-user-follows-people-person-id: func(params: get-user-follows-people-person-id-params) -> result<person-follow, get-user-follows-people-person-id-error>;
 
   /// Follow a person
-  put-user-follows-people-person-id: func() -> result<string, string>;
+  record put-user-follows-people-person-id-params {
+    person-id: string
+  }
+  put-user-follows-people-person-id: func(params: put-user-follows-people-person-id-params) -> result<person-follow, put-user-follows-people-person-id-error>;
 
   /// Unfollow a person
-  delete-user-follows-people-person-id: func() -> result<string, string>;
+  record delete-user-follows-people-person-id-params {
+    person-id: string
+  }
+  delete-user-follows-people-person-id: func(params: delete-user-follows-people-person-id-params) -> result<string, delete-user-follows-people-person-id-error>;
 
 }
 
@@ -191,21 +377,59 @@ interface followed-shows {
     show,
   }
 
+  record show-follow {
+    embedded: option<show-follow-embedded>,
+    show-id: option<s32>
+  }
+
+  record show-follow-embedded {
+    show: option<show>
+  }
+
+  record show {
+    /// JSON-encoded free-form object payload
+    data: option<string>
+  }
+
+  variant get-user-follows-shows-show-id-error {
+    not-found(string),
+    other(string)
+  }
+
+  variant put-user-follows-shows-show-id-error {
+    not-found(string),
+    other(string)
+  }
+
+  variant delete-user-follows-shows-show-id-error {
+    not-found(string),
+    other(string)
+  }
+
   /// List the followed shows
   record get-user-follows-shows-params {
     /// Embed full show info
     embed: option<get-user-follows-shows-embed-enum>
   }
-  get-user-follows-shows: func(params: get-user-follows-shows-params) -> result<string, string>;
+  get-user-follows-shows: func(params: get-user-follows-shows-params) -> result<list<show-follow>, string>;
 
   /// Check if a show is followed
-  get-user-follows-shows-show-id: func() -> result<string, string>;
+  record get-user-follows-shows-show-id-params {
+    show-id: string
+  }
+  get-user-follows-shows-show-id: func(params: get-user-follows-shows-show-id-params) -> result<show-follow, get-user-follows-shows-show-id-error>;
 
   /// Follow a show
-  put-user-follows-shows-show-id: func() -> result<string, string>;
+  record put-user-follows-shows-show-id-params {
+    show-id: string
+  }
+  put-user-follows-shows-show-id: func(params: put-user-follows-shows-show-id-params) -> result<show-follow, put-user-follows-shows-show-id-error>;
 
   /// Unfollow a show
-  delete-user-follows-shows-show-id: func() -> result<string, string>;
+  record delete-user-follows-shows-show-id-params {
+    show-id: string
+  }
+  delete-user-follows-shows-show-id: func(params: delete-user-follows-shows-show-id-params) -> result<string, delete-user-follows-shows-show-id-error>;
 
 }
 
@@ -214,21 +438,59 @@ interface followed-webchannels {
     webchannel,
   }
 
+  record webchannel-follow {
+    embedded: option<webchannel-follow-embedded>,
+    webchannel-id: option<s32>
+  }
+
+  record webchannel-follow-embedded {
+    webchannel: option<webchannel>
+  }
+
+  record webchannel {
+    /// JSON-encoded free-form object payload
+    data: option<string>
+  }
+
+  variant get-user-follows-webchannels-webchannel-id-error {
+    not-found(string),
+    other(string)
+  }
+
+  variant put-user-follows-webchannels-webchannel-id-error {
+    not-found(string),
+    other(string)
+  }
+
+  variant delete-user-follows-webchannels-webchannel-id-error {
+    not-found(string),
+    other(string)
+  }
+
   /// List the followed webchannels
   record get-user-follows-webchannels-params {
     /// Embed full webchannel info
     embed: option<get-user-follows-webchannels-embed-enum>
   }
-  get-user-follows-webchannels: func(params: get-user-follows-webchannels-params) -> result<string, string>;
+  get-user-follows-webchannels: func(params: get-user-follows-webchannels-params) -> result<list<webchannel-follow>, string>;
 
   /// Check if a webchannel is followed
-  get-user-follows-webchannels-webchannel-id: func() -> result<string, string>;
+  record get-user-follows-webchannels-webchannel-id-params {
+    webchannel-id: string
+  }
+  get-user-follows-webchannels-webchannel-id: func(params: get-user-follows-webchannels-webchannel-id-params) -> result<webchannel-follow, get-user-follows-webchannels-webchannel-id-error>;
 
   /// Follow a webchannel
-  put-user-follows-webchannels-webchannel-id: func() -> result<string, string>;
+  record put-user-follows-webchannels-webchannel-id-params {
+    webchannel-id: string
+  }
+  put-user-follows-webchannels-webchannel-id: func(params: put-user-follows-webchannels-webchannel-id-params) -> result<webchannel-follow, put-user-follows-webchannels-webchannel-id-error>;
 
   /// Unfollow a webchannel
-  delete-user-follows-webchannels-webchannel-id: func() -> result<string, string>;
+  record delete-user-follows-webchannels-webchannel-id-params {
+    webchannel-id: string
+  }
+  delete-user-follows-webchannels-webchannel-id: func(params: delete-user-follows-webchannels-webchannel-id-params) -> result<string, delete-user-follows-webchannels-webchannel-id-error>;
 
 }
 
@@ -237,15 +499,65 @@ interface tagged-shows {
     show,
   }
 
+  record tag {
+    id: option<s32>,
+    name: option<string>
+  }
+
+  record tag-instance {
+    embedded: option<tag-instance-embedded>,
+    show-id: option<s32>
+  }
+
+  record tag-instance-embedded {
+    show: option<show>
+  }
+
+  record show {
+    /// JSON-encoded free-form object payload
+    data: option<string>
+  }
+
+  variant post-user-tags-error {
+    unprocessable-entity(string),
+    other(string)
+  }
+
+  variant patch-user-tags-tag-id-error {
+    not-found(string),
+    unprocessable-entity(string),
+    other(string)
+  }
+
+  variant delete-user-tags-tag-id-error {
+    not-found(string),
+    other(string)
+  }
+
+  variant get-user-tags-tag-id-shows-error {
+    not-found(string),
+    other(string)
+  }
+
+  variant put-user-tags-tag-id-shows-show-id-error {
+    not-found(string),
+    other(string)
+  }
+
+  variant delete-user-tags-tag-id-shows-show-id-error {
+    not-found(string),
+    other(string)
+  }
+
   /// List all tags
-  get-user-tags: func() -> result<string, string>;
+  get-user-tags: func() -> result<list<tag>, string>;
 
   /// Create a new tag
   record post-user-tags-params {
     id: option<s32>,
     name: option<string>
   }
-  post-user-tags: func(params: post-user-tags-params) -> result<string, string>;
+  post-user-tags: func(params: post-user-tags-params) -> result<tag, post-user-tags-error>;
 
   /// Update a specific tag
   record patch-user-tags-tag-id-params {
@@ -253,13 +565,13 @@ interface tagged-shows {
     id: option<s32>,
     name: option<string>
   }
-  patch-user-tags-tag-id: func(params: patch-user-tags-tag-id-params) -> result<string, string>;
+  patch-user-tags-tag-id: func(params: patch-user-tags-tag-id-params) -> result<tag, patch-user-tags-tag-id-error>;
 
   /// Delete a specific tag
   record delete-user-tags-tag-id-params {
     tag-id: string
   }
-  delete-user-tags-tag-id: func(params: delete-user-tags-tag-id-params) -> result<string, string>;
+  delete-user-tags-tag-id: func(params: delete-user-tags-tag-id-params) -> result<string, delete-user-tags-tag-id-error>;
 
   /// List all shows under this tag
   record get-user-tags-tag-id-shows-params {
@@ -267,43 +579,74 @@ interface tagged-shows {
     /// Embed full show info
     embed: option<get-user-tags-tag-id-shows-embed-enum>
   }
-  get-user-tags-tag-id-shows: func(params: get-user-tags-tag-id-shows-params) -> result<string, string>;
+  get-user-tags-tag-id-shows: func(params: get-user-tags-tag-id-shows-params) -> result<list<tag-instance>, get-user-tags-tag-id-shows-error>;
 
   /// Tag a show
   record put-user-tags-tag-id-shows-show-id-params {
     tag-id: string,
     show-id: string
   }
-  put-user-tags-tag-id-shows-show-id: func(params: put-user-tags-tag-id-shows-show-id-params) -> result<string, string>;
+  put-user-tags-tag-id-shows-show-id: func(params: put-user-tags-tag-id-shows-show-id-params) -> result<tag-instance, put-user-tags-tag-id-shows-show-id-error>;
 
   /// Untag a show
   record delete-user-tags-tag-id-shows-show-id-params {
     tag-id: string,
     show-id: string
   }
-  delete-user-tags-tag-id-shows-show-id: func(params: delete-user-tags-tag-id-shows-show-id-params) -> result<string, string>;
+  delete-user-tags-tag-id-shows-show-id: func(params: delete-user-tags-tag-id-shows-show-id-params) -> result<string, delete-user-tags-tag-id-shows-show-id-error>;
 
 }
 
 interface voted-episodes {
-  /// List the episodes voted for
-  get-user-votes-episodes: func() -> result<string, string>;
-
-  /// Check if an episode is voted for
-  get-user-votes-episodes-episode-id: func() -> result<string, string>;
-
-  /// Vote for an episode
-  record put-user-votes-episodes-episode-id-params {
+  record episode-vote {
     episode-id: option<s32>,
     /// The vote number
     vote: option<s32>,
     /// Epoch timestamp for when the user voted for the episode
     voted-at: option<s32>
   }
-  put-user-votes-episodes-episode-id: func(params: put-user-votes-episodes-episode-id-params) -> result<string, string>;
+
+  variant get-user-votes-episodes-episode-id-error {
+    not-found(string),
+    other(string)
+  }
+
+  variant put-user-votes-episodes-episode-id-error {
+    not-found(string),
+    unprocessable-entity(string),
+    other(string)
+  }
+
+  variant delete-user-votes-episodes-episode-id-error {
+    not-found(string),
+    other(string)
+  }
+
+  /// List the episodes voted for
+  get-user-votes-episodes: func() -> result<list<episode-vote>, string>;
+
+  /// Check if an episode is voted for
+  record get-user-votes-episodes-episode-id-params {
+    episode-id: string
+  }
+  get-user-votes-episodes-episode-id: func(params: get-user-votes-episodes-episode-id-params) -> result<episode-vote, get-user-votes-episodes-episode-id-error>;
+
+  /// Vote for an episode
+  record put-user-votes-episodes-episode-id-params {
+    episode-id: string,
+    episode-id-v2: option<s32>,
+    /// The vote number
+    vote: option<s32>,
+    /// Epoch timestamp for when the user voted for the episode
+    voted-at: option<s32>
+  }
+  put-user-votes-episodes-episode-id: func(params: put-user-votes-episodes-episode-id-params) -> result<episode-vote, put-user-votes-episodes-episode-id-error>;
 
   /// Remove an episode vote
-  delete-user-votes-episodes-episode-id: func() -> result<string, string>;
+  record delete-user-votes-episodes-episode-id-params {
+    episode-id: string
+  }
+  delete-user-votes-episodes-episode-id: func(params: delete-user-votes-episodes-episode-id-params) -> result<string, delete-user-votes-episodes-episode-id-error>;
 
 }
 
@@ -312,28 +655,59 @@ interface voted-shows {
     show,
   }
 
-  /// List the shows voted for
-  record get-user-votes-shows-params {
-    /// Embed full show info
-    embed: option<get-user-votes-shows-embed-enum>
-  }
-  get-user-votes-shows: func(params: get-user-votes-shows-params) -> result<string, string>;
-
-  /// Check if a show is voted for
-  get-user-votes-shows-show-id: func() -> result<string, string>;
-
-  /// Vote for a show
-  record put-user-votes-shows-show-id-params {
+  record show-vote {
     show-id: option<s32>,
     /// The vote number
     vote: option<s32>,
     /// Epoch timestamp for when the user voted for the episode
     voted-at: option<s32>
   }
-  put-user-votes-shows-show-id: func(params: put-user-votes-shows-show-id-params) -> result<string, string>;
+
+  variant get-user-votes-shows-show-id-error {
+    not-found(string),
+    other(string)
+  }
+
+  variant put-user-votes-shows-show-id-error {
+    not-found(string),
+    unprocessable-entity(string),
+    other(string)
+  }
+
+  variant delete-user-votes-shows-show-id-error {
+    not-found(string),
+    other(string)
+  }
+
+  /// List the shows voted for
+  record get-user-votes-shows-params {
+    /// Embed full show info
+    embed: option<get-user-votes-shows-embed-enum>
+  }
+  get-user-votes-shows: func(params: get-user-votes-shows-params) -> result<list<show-vote>, string>;
+
+  /// Check if a show is voted for
+  record get-user-votes-shows-show-id-params {
+    show-id: string
+  }
+  get-user-votes-shows-show-id: func(params: get-user-votes-shows-show-id-params) -> result<show-vote, get-user-votes-shows-show-id-error>;
+
+  /// Vote for a show
+  record put-user-votes-shows-show-id-params {
+    show-id: string,
+    show-id-v2: option<s32>,
+    /// The vote number
+    vote: option<s32>,
+    /// Epoch timestamp for when the user voted for the episode
+    voted-at: option<s32>
+  }
+  put-user-votes-shows-show-id: func(params: put-user-votes-shows-show-id-params) -> result<show-vote, put-user-votes-shows-show-id-error>;
 
   /// Remove a show vote
-  delete-user-votes-shows-show-id: func() -> result<string, string>;
+  record delete-user-votes-shows-show-id-params {
+    show-id: string
+  }
+  delete-user-votes-shows-show-id: func(params: delete-user-votes-shows-show-id-params) -> result<string, delete-user-votes-shows-show-id-error>;
 
 }
 /// The component world: imports the secrets host capability

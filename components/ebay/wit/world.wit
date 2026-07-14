@@ -6,9 +6,117 @@
 /// | Secret name | Applied to each request as |
 /// | --- | --- |
 /// | `api_auth` | `Authorization: Bearer <secret>` |
-package autostamp:ebay@0.3.0;
+package autostamp:ebay@0.5.0;
 
 interface deal-item {
+  /// The result set for the deal item search.
+  record search-response {
+    /// A list of deal items that match the search criteria.
+    deal-items: option<list<deal-item>>,
+    /// The relative path to the current set of results.
+    href: option<string>,
+    /// The maximum number of items, from the current result set, returned on a single page. Default: 20
+    limit: option<s32>,
+    /// The relative path to the next set of results.
+    next: option<string>,
+    /// The number of items that will be skipped in the result set. This is used with the limit field to control the pagination of the output. For example, if the offset is set to 0 and the limit is set to 10, the method will retrieve items 1 through 10 from the list of items returned. If the offset is set to 10 and the limit is set to 10, the method will retrieve items 11 through 20 from the list of items returned. Default: 0
+    offset: option<s32>,
+    /// The relative path to the previous set of results.
+    prev: option<string>,
+    /// The total number of matches for the search criteria.
+    total: option<s32>
+  }
+
+  /// The detailed data returned for the deal item.
+  record deal-item {
+    /// The additional images for the deal item.
+    additional-images: option<list<image>>,
+    /// The IDs of the ancestors for the primary category.
+    category-ancestor-ids: option<list<string>>,
+    /// The ID of the leaf category for the deal item. A leaf category is the lowest level in a category and has no children.
+    category-id: option<string>,
+    /// A boolean value specifying whether the listing has commission.
+    commissionable: option<bool>,
+    /// The deal associated with the item with affiliate attribution.
+    deal-affiliate-web-url: option<string>,
+    /// The date after which the deal ends.
+    deal-end-date: option<string>,
+    /// The date on which the deal starts.
+    deal-start-date: option<string>,
+    /// The web URL for the deal associated with the item.
+    deal-web-url: option<string>,
+    /// A string value specifying the Energy Efficiency class.
+    energy-efficiency-class: option<string>,
+    image: option<image>,
+    /// The item web URL with affiliate attribution.
+    item-affiliate-web-url: option<string>,
+    /// The unique identifier for the deal item group. This is the parent item ID for the seller-defined variations. Note: This field is returned for multiple-SKU items.
+    item-group-id: option<string>,
+    /// An enumeration value that indicates the type of item group. An item group contains items that have various aspect differences, such as color, size, or storage capacity. For implementation help, refer to <a href='https://developer.ebay.com/api-docs/buy/deal/types/api:ItemGroupTypeEnum'>eBay API documentation</a>
+    item-group-type: option<string>,
+    /// The unique identifier for the deal item. Note: This field is only returned for single-SKU items.
+    item-id: option<string>,
+    /// The web URL for the deal item.
+    item-web-url: option<string>,
+    /// The legacy item ID associated with the deal item.
+    legacy-item-id: option<string>,
+    marketing-price: option<marketing-price>,
+    price: option<amount>,
+    /// A list of programs applicable to the item.
+    qualified-programs: option<list<string>>,
+    /// The cost required to ship the deal item.
+    shipping-options: option<list<shipping-option>>,
+    /// The title of the deal item.
+    title: option<string>,
+    unit-price: option<amount>,
+    /// The designation used to specify the quantity of the deal item, such as size, weight, volume, and count. This helps buyers compare prices. For example, the following tells the buyer that the item is 7.99 per 100 grams. &quot;unitPricingMeasure&quot;: &quot;100g&quot;, &quot;unitPrice&quot;: { &nbsp;&nbsp;&quot;value&quot;: &quot;7.99&quot;, &nbsp;&nbsp;&quot;currency&quot;: &quot;GBP&quot;
+    unit-pricing-measure: option<string>
+  }
+
+  /// The type that defines the details of an image, such as size and URL.
+  record image {
+    /// The height of the image.
+    height: option<string>,
+    /// The relative path to the image location.
+    image-url: option<string>,
+    /// The text associated with the image.
+    text: option<string>,
+    /// The width of the image.
+    width: option<string>
+  }
+
+  /// A type that describes the seller discount.
+  record marketing-price {
+    discount-amount: option<amount>,
+    /// The percentage of the seller discount based on the value returned in the originalPrice field.
+    discount-percentage: option<string>,
+    original-price: option<amount>,
+    /// The pricing treatment (discount) that was applied to the price of the item. Note: The pricing treatment affects how and where the discounted price can be displayed. For implementation help, refer to <a href='https://developer.ebay.com/api-docs/buy/deal/types/api:PriceTreatmentEnum'>eBay API documentation</a>
+    price-treatment: option<string>
+  }
+
+  /// The currency and value of the item.
+  record amount {
+    /// The three-letter ISO 4217 code representing the currency of the amount in the value field. Default: The currency of the authenticated user's country. For implementation help, refer to <a href='https://developer.ebay.com/api-docs/buy/deal/types/bas:CurrencyCodeEnum'>eBay API documentation</a>
+    currency: option<string>,
+    /// The monetary value, in the currency specified by the currency field.
+    value: option<string>
+  }
+
+  /// The details provided for the shipping provider, such as shipping cost and type.
+  record shipping-option {
+    shipping-cost: option<amount>,
+    /// The class of the shipping cost. Valid Values: FIXED or CALCULATED Code so that your app gracefully handles any future changes to this list.
+    shipping-cost-type: option<string>
+  }
+
+  variant get-deal-items-error {
+    bad-request(string),
+    forbidden(string),
+    internal-server-error(string),
+    other(string)
+  }
+
   record get-deal-items-params {
     /// The unique identifier of the eBay category for the search.
     category-ids: option<string>,
@@ -23,12 +131,95 @@ interface deal-item {
     /// A header used to specify the eBay marketplace ID.
     x-ebay-c-marketplace-id: string
   }
-  get-deal-items: func(params: get-deal-items-params) -> result<string, string>;
+  get-deal-items: func(params: get-deal-items-params) -> result<search-response, get-deal-items-error>;
 
 }
 
 
 interface event {
+  /// The result set for the specified event search criteria.
+  record search-response {
+    /// A list of results that match the search criteria.
+    events: option<list<event>>,
+    /// The relative path to the current set of results.
+    href: option<string>,
+    /// The maximum number of items, from the current result set, returned on a single page. Default: 20
+    limit: option<s32>,
+    /// The relative path to the next set of results.
+    next: option<string>,
+    /// The number of items that will be skipped in the result set. This is used with the limit field to control the pagination of the output. For example, if the offset is set to 0 and the limit is set to 10, the method will retrieve items 1 through 10 from the list of items returned. If the offset is set to 10 and the limit is set to 10, the method will retrieve items 11 through 20 from the list of items returned. Default: 0
+    offset: option<s32>,
+    /// The relative path to the previous set of results.
+    prev: option<string>,
+    /// The total number of matches for the specified search criteria.
+    total: option<s32>
+  }
+
+  /// The result set for the event search.
+  record event {
+    /// A list of coupons associated with the event.
+    applicable-coupons: option<list<coupon>>,
+    /// The event description.
+    description: option<string>,
+    /// The end date for the event.
+    end-date: option<string>,
+    /// The URL of the View Event page for the event, which includes the affiliate tracking ID.
+    event-affiliate-web-url: option<string>,
+    /// The unique identifier for the event.
+    event-id: option<string>,
+    /// The web URL for the event.
+    event-web-url: option<string>,
+    /// The images for the event.
+    images: option<list<image>>,
+    /// The start date for the event.
+    start-date: option<string>,
+    terms: option<terms>,
+    /// The title of the event.
+    title: option<string>
+  }
+
+  /// The details for the coupon available for the item.
+  record coupon {
+    /// The coupon code.
+    redemption-code: option<string>,
+    terms: option<terms>
+  }
+
+  /// The terms for the event, provided in a full-text description and summary.
+  record terms {
+    /// A full-text description of the terms.
+    full-text: option<string>,
+    /// A summarized description of the terms.
+    summary: option<string>
+  }
+
+  /// The type that defines the details of an image, such as size and URL.
+  record image {
+    /// The height of the image.
+    height: option<string>,
+    /// The relative path to the image location.
+    image-url: option<string>,
+    /// The text associated with the image.
+    text: option<string>,
+    /// The width of the image.
+    width: option<string>
+  }
+
+  variant get-events-error {
+    bad-request(string),
+    forbidden(string),
+    internal-server-error(string),
+    other(string)
+  }
+
+  variant get-event-error {
+    bad-request(string),
+    forbidden(string),
+    not-found(string),
+    internal-server-error(string),
+    other(string)
+  }
+
   record get-events-params {
     /// The maximum number of items, from the current result set, returned on a single page. Default: 20 Maximum Value: 100
     limit: option<string>,
@@ -37,7 +228,7 @@ interface event {
     /// A header used to specify the eBay marketplace ID.
     x-ebay-c-marketplace-id: string
   }
-  get-events: func(params: get-events-params) -> result<string, string>;
+  get-events: func(params: get-events-params) -> result<search-response, get-events-error>;
 
   record get-event-params {
     /// A header used to specify the eBay marketplace ID.
@@ -45,11 +236,111 @@ interface event {
     /// The unique identifier for the eBay event.
     event-id: string
   }
-  get-event: func(params: get-event-params) -> result<string, string>;
+  get-event: func(params: get-event-params) -> result<event, get-event-error>;
 
 }
 
 interface event-item {
+  /// The result set for the event item search.
+  record search-response {
+    /// A list of event items that match the search criteria.
+    event-items: option<list<event-item>>,
+    /// The relative path to the current set of results.
+    href: option<string>,
+    /// The maximum number of items, from the current result set, returned on a single page. Default: 20
+    limit: option<s32>,
+    /// The relative path to the next set of results.
+    next: option<string>,
+    /// The number of items that will be skipped in the result set. This is used with the limit field to control the pagination of the output. For example, if the offset is set to 0 and the limit is set to 10, the method will retrieve items 1 through 10 from the list of items returned. If the offset is set to 10 and the limit is set to 10, the method will retrieve items 11 through 20 from the list of items returned. Default: 0
+    offset: option<s32>,
+    /// The relative path to the previous set of results.
+    prev: option<string>,
+    /// The total number of matches for the specified search criteria.
+    total: option<s32>
+  }
+
+  /// The detailed data returned for the event item.
+  record event-item {
+    /// The additional images for the event item.
+    additional-images: option<list<image>>,
+    /// The IDs of the ancestors for the primary category.
+    category-ancestor-ids: option<list<string>>,
+    /// The ID of the leaf category for the event item. A leaf category is the lowest level in a category and has no children.
+    category-id: option<string>,
+    /// A string value specifying the Energy Efficiency class.
+    energy-efficiency-class: option<string>,
+    /// The unique event identifier associated with the item.
+    event-id: option<string>,
+    image: option<image>,
+    /// The item web URL with affiliate attribution.
+    item-affiliate-web-url: option<string>,
+    /// The unique identifier for the event item group. This is the parent item ID for the seller-defined variations. Note: This field is returned for multiple-SKU items.
+    item-group-id: option<string>,
+    /// An enumeration value that indicates the type of item group. An item group contains items that have various aspect differences, such as color, size, or storage capacity. For implementation help, refer to <a href='https://developer.ebay.com/api-docs/buy/deal/types/api:ItemGroupTypeEnum'>eBay API documentation</a>
+    item-group-type: option<string>,
+    /// The unique identifier for the event item. Note: This field is only returned for single-SKU items.
+    item-id: option<string>,
+    /// The web URL for the event item.
+    item-web-url: option<string>,
+    /// The legacy item ID associated with the event item.
+    legacy-item-id: option<string>,
+    marketing-price: option<marketing-price>,
+    price: option<amount>,
+    /// A list of programs applicable to the event item.
+    qualified-programs: option<list<string>>,
+    /// The cost required to ship the event item.
+    shipping-options: option<list<shipping-option>>,
+    /// The title of the event item.
+    title: option<string>,
+    unit-price: option<amount>,
+    /// The designation used to specify the quantity of the event item, such as size, weight, volume, and count. This helps buyers compare prices. For example, the following tells the buyer that the item is 7.99 per 100 grams. &quot;unitPricingMeasure&quot;: &quot;100g&quot;, &quot;unitPrice&quot;: { &nbsp;&nbsp;&quot;value&quot;: &quot;7.99&quot;, &nbsp;&nbsp;&quot;currency&quot;: &quot;GBP&quot;
+    unit-pricing-measure: option<string>
+  }
+
+  /// The type that defines the details of an image, such as size and URL.
+  record image {
+    /// The height of the image.
+    height: option<string>,
+    /// The relative path to the image location.
+    image-url: option<string>,
+    /// The text associated with the image.
+    text: option<string>,
+    /// The width of the image.
+    width: option<string>
+  }
+
+  /// A type that describes the seller discount.
+  record marketing-price {
+    discount-amount: option<amount>,
+    /// The percentage of the seller discount based on the value returned in the originalPrice field.
+    discount-percentage: option<string>,
+    original-price: option<amount>,
+    /// The pricing treatment (discount) that was applied to the price of the item. Note: The pricing treatment affects how and where the discounted price can be displayed. For implementation help, refer to <a href='https://developer.ebay.com/api-docs/buy/deal/types/api:PriceTreatmentEnum'>eBay API documentation</a>
+    price-treatment: option<string>
+  }
+
+  /// The currency and value of the item.
+  record amount {
+    /// The three-letter ISO 4217 code representing the currency of the amount in the value field. Default: The currency of the authenticated user's country. For implementation help, refer to <a href='https://developer.ebay.com/api-docs/buy/deal/types/bas:CurrencyCodeEnum'>eBay API documentation</a>
+    currency: option<string>,
+    /// The monetary value, in the currency specified by the currency field.
+    value: option<string>
+  }
+
+  /// The details provided for the shipping provider, such as shipping cost and type.
+  record shipping-option {
+    shipping-cost: option<amount>,
+    /// The class of the shipping cost. Valid Values: FIXED or CALCULATED Code so that your app gracefully handles any future changes to this list.
+    shipping-cost-type: option<string>
+  }
+
+  variant get-event-items-error {
+    bad-request(string),
+    forbidden(string),
+    internal-server-error(string),
+    other(string)
+  }
+
   record get-event-items-params {
     /// The unique identifier of the eBay category for the search. Maximum Value: 1
     category-ids: option<string>,
@@ -64,7 +355,7 @@ interface event-item {
     /// A header used to specify the eBay marketplace ID.
     x-ebay-c-marketplace-id: string
   }
-  get-event-items: func(params: get-event-items-params) -> result<string, string>;
+  get-event-items: func(params: get-event-items-params) -> result<search-response, get-event-items-error>;
 
 }
 /// The component world: imports the secrets host capability

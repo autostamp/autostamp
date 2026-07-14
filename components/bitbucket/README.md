@@ -20,8 +20,8 @@ triggered.
 
 | Setting | Value |
 | --- | --- |
-| Package | `autostamp:bitbucket@0.3.0` |
-| Published version | `0.3.0+bitbucket-2.0` |
+| Package | `autostamp:bitbucket@0.5.0` |
+| Published version | `0.5.0+bitbucket-2.0` |
 | Tag filter | all tags |
 | Operations generated | 305 |
 | Infer API-key credentials | enabled — not triggered |
