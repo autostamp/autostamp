@@ -10,6 +10,14 @@ pub(crate) enum WitType {
     F64,
     Option(Box<WitType>),
     List(Box<WitType>),
+    /// A string-keyed open map (free-form `object`). WIT has no native map type, so it is
+    /// rendered as `list<{entry}>` where `entry` is a named `record { key: string, value: V }`
+    /// emitted alongside it. The wire form remains a JSON object; the list-of-entries is only the
+    /// in-language shape. `value` is retained for the hand-rolled JSON (de)serialization of `V`.
+    Map {
+        entry: String,
+        value: Box<WitType>,
+    },
     Named(String),
 }
 
@@ -24,6 +32,7 @@ impl WitType {
             WitType::F64 => "f64".into(),
             WitType::Option(inner) => format!("option<{}>", inner.render()),
             WitType::List(inner) => format!("list<{}>", inner.render()),
+            WitType::Map { entry, .. } => format!("list<{entry}>"),
             WitType::Named(name) => name.clone(),
         }
     }

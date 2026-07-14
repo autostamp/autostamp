@@ -316,6 +316,13 @@ fn field_to_json_expr(expr: &str, ty: &WitType, iface: &InterfaceModel, mod_snak
             let inner_expr = field_to_json_expr("v", inner, iface, mod_snake);
             format!("Value::Array(({expr}).iter().map(|v| {inner_expr}).collect())")
         }
+        WitType::Map { value, .. } => {
+            // `Vec<Entry>` -> a JSON object `{key: value}`. serde's default would encode the list
+            // as an array of `{key, value}` objects; because this serializer is hand-rolled we
+            // emit the real map object the wire expects.
+            let val_expr = field_to_json_expr("&e.value", value, iface, mod_snake);
+            format!("Value::Object(({expr}).iter().map(|e| (e.key.clone(), {val_expr})).collect())")
+        }
         WitType::Named(name) => {
             if iface.is_enum(name) {
                 let fn_name = helper_name(mod_snake, name, "to_str");
@@ -342,6 +349,7 @@ fn rust_type_of(ty: &WitType, mod_snake: &str) -> String {
         WitType::F64 => "f64".into(),
         WitType::Option(inner) => format!("Option<{}>", rust_type_of(inner, mod_snake)),
         WitType::List(inner) => format!("Vec<{}>", rust_type_of(inner, mod_snake)),
+        WitType::Map { entry, .. } => format!("Vec<{mod_snake}::{}>", to_rust_type_name(entry)),
         WitType::Named(name) => format!("{mod_snake}::{}", to_rust_type_name(name)),
     }
 }
@@ -378,6 +386,11 @@ fn named_of(ty: &WitType) -> Vec<String> {
     match ty {
         WitType::Named(n) => vec![n.clone()],
         WitType::Option(inner) | WitType::List(inner) => named_of(inner),
+        WitType::Map { entry, value } => {
+            let mut names = vec![entry.clone()];
+            names.extend(named_of(value));
+            names
+        }
         _ => vec![],
     }
 }
@@ -447,6 +460,15 @@ fn from_value_expr(v: &str, ty: &WitType, iface: &InterfaceModel, mod_snake: &st
         WitType::List(inner) => {
             let inner_expr = from_value_expr("x", inner, iface, mod_snake);
             format!("({v}).as_array().map(|a| a.iter().filter_map(|x| {inner_expr}).collect())")
+        }
+        WitType::Map { entry, value } => {
+            // A JSON object `{key: value}` -> `Vec<Entry>`, dropping entries whose value fails to
+            // decode (mirrors the list arm's `filter_map`).
+            let inner_expr = from_value_expr("x", value, iface, mod_snake);
+            let entry_pascal = to_rust_type_name(entry);
+            format!(
+                "({v}).as_object().map(|o| o.iter().filter_map(|(k, x)| ({inner_expr}).map(|val| {mod_snake}::{entry_pascal} {{ key: k.clone(), value: val }})).collect())"
+            )
         }
         WitType::Named(name) => {
             if iface.is_enum(name) {

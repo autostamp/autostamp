@@ -7,8 +7,9 @@
 use anyhow::Result;
 use heck::{ToKebabCase, ToSnakeCase};
 use openapiv3::{
-    AnySchema, MediaType, Operation, Parameter, ParameterSchemaOrContent, ReferenceOr, RequestBody,
-    Response, Responses, Schema, SchemaKind, StatusCode, Type,
+    AdditionalProperties, AnySchema, MediaType, ObjectType, Operation, Parameter,
+    ParameterSchemaOrContent, ReferenceOr, RequestBody, Response, Responses, Schema, SchemaKind,
+    StatusCode, Type,
 };
 use std::collections::BTreeSet;
 
@@ -148,14 +149,11 @@ impl InterfaceModel {
             if self.emitting.contains(&record_name) {
                 return Ok(WitType::String);
             }
-            if self.is_record(&record_name) {
+            if self.is_record(&record_name) || self.is_enum(&record_name) {
                 return Ok(WitType::Named(record_name));
             }
-            self.emitting.insert(record_name.clone());
             let schema = ctx.resolve_schema_boxed(schema_ref)?;
-            self.emit_record_from_schema(ctx, schema, &record_name)?;
-            self.emitting.remove(&record_name);
-            return Ok(WitType::Named(record_name));
+            return self.lower_named_schema(ctx, schema, &record_name);
         }
         let schema = ctx.resolve_schema_boxed(schema_ref)?;
         self.map_schema_kind(ctx, schema, name_hint)
@@ -177,17 +175,151 @@ impl InterfaceModel {
             if self.emitting.contains(&record_name) {
                 return Ok(WitType::String);
             }
-            if self.is_record(&record_name) {
+            if self.is_record(&record_name) || self.is_enum(&record_name) {
                 return Ok(WitType::Named(record_name));
             }
-            self.emitting.insert(record_name.clone());
             let schema = ctx.resolve_schema(schema_ref)?;
-            self.emit_record_from_schema(ctx, schema, &record_name)?;
-            self.emitting.remove(&record_name);
-            return Ok(WitType::Named(record_name));
+            return self.lower_named_schema(ctx, schema, &record_name);
         }
         let schema = ctx.resolve_schema(schema_ref)?;
         self.map_schema_kind(ctx, schema, name_hint)
+    }
+
+    /// Lower the resolved target of a `#/components/schemas/*` reference, naming the emitted WIT
+    /// type after the schema.
+    ///
+    /// A `$ref` whose target is itself a container — an array (e.g. CircleCI's
+    /// `Builds: { type: array, items: $ref Build }`) or a free-form `object` map
+    /// (`BuildParameters: { type: object }`) — resolves inline to `list<...>` rather than minting
+    /// an opaque wrapper record. A named string schema with an `enum` list (CircleCI's `Status`,
+    /// `Scope`, …) becomes a WIT enum carrying the schema's name. Other scalar shapes (`Sha1:
+    /// type: string`) lower structurally like inline schemas — a bare scalar matches what is on
+    /// the wire, where the old `{ value: string }` wrapper record never could. Only object-shaped
+    /// schemas become records.
+    fn lower_named_schema(
+        &mut self,
+        ctx: &SchemaCtx,
+        schema: &Schema,
+        record_name: &str,
+    ) -> Result<WitType> {
+        self.emitting.insert(record_name.to_string());
+        let ty = self.lower_named_schema_inner(ctx, schema, record_name);
+        self.emitting.remove(record_name);
+        ty
+    }
+
+    fn lower_named_schema_inner(
+        &mut self,
+        ctx: &SchemaCtx,
+        schema: &Schema,
+        record_name: &str,
+    ) -> Result<WitType> {
+        if let Some(direct) = self.direct_container_type(ctx, schema, record_name)? {
+            return Ok(direct);
+        }
+        if let SchemaKind::Type(Type::String(s)) = &schema.schema_kind
+            && !s.enumeration.is_empty()
+        {
+            self.enums.push(EnumModel {
+                name_kebab: record_name.to_string(),
+                cases: string_enum_cases(s),
+            });
+            return Ok(WitType::Named(record_name.to_string()));
+        }
+        if !matches!(
+            &schema.schema_kind,
+            SchemaKind::Type(Type::Object(_)) | SchemaKind::Any(_) | SchemaKind::AllOf { .. }
+        ) {
+            return self.map_schema_kind(ctx, schema, record_name);
+        }
+        self.emit_record_from_schema(ctx, schema, record_name)?;
+        Ok(WitType::Named(record_name.to_string()))
+    }
+
+    /// If `schema` is a *container* shape that lowers to an inline (unnamed) WIT type rather
+    /// than a named record, return that type; otherwise `None`. Containers are arrays
+    /// (`list<item>`) and free-form `object` maps (`list<tuple<string, value>>`). Callers use
+    /// this so a `$ref` to such a schema resolves to the container type directly instead of
+    /// minting an opaque wrapper record around it.
+    ///
+    /// The caller is responsible for the `emitting` cycle guard; this method recurses into the
+    /// item / value schema, which may reference the container's own name.
+    fn direct_container_type(
+        &mut self,
+        ctx: &SchemaCtx,
+        schema: &Schema,
+        name_hint: &str,
+    ) -> Result<Option<WitType>> {
+        match &schema.schema_kind {
+            SchemaKind::Type(Type::Array(a)) => {
+                let item_type = match &a.items {
+                    Some(items) => {
+                        self.map_schema_to_wit_type(ctx, items, &format!("{name_hint}-item"))?
+                    }
+                    None => WitType::String,
+                };
+                Ok(Some(WitType::List(Box::new(item_type))))
+            }
+            SchemaKind::Type(Type::Object(o)) if o.properties.is_empty() => {
+                self.free_form_map_type(ctx, o, name_hint)
+            }
+            _ => Ok(None),
+        }
+    }
+
+    /// Lower an `object` schema that declares no `properties` — an open map / free-form object,
+    /// e.g. CircleCI's `BuildParameters: { type: object }` — to `list<{hint}-entry>`, emitting a
+    /// `record {hint}-entry { key: string, value: V }` alongside it.
+    ///
+    /// The value type `V` comes from `additionalProperties` when it carries a schema; a bare
+    /// `type: object` (or `additionalProperties: true`) has an unknown value type and defaults to
+    /// `string` (raw JSON-encoded values). A *closed* empty object (`additionalProperties: false`)
+    /// is not a map — it returns `None` so the caller keeps the opaque escape-hatch record.
+    fn free_form_map_type(
+        &mut self,
+        ctx: &SchemaCtx,
+        obj: &ObjectType,
+        name_hint: &str,
+    ) -> Result<Option<WitType>> {
+        let value_ty = match &obj.additional_properties {
+            Some(AdditionalProperties::Any(false)) => return Ok(None),
+            Some(AdditionalProperties::Schema(value_schema)) => self
+                .map_schema_to_wit_type_unboxed(ctx, value_schema, &format!("{name_hint}-value"))?,
+            _ => WitType::String,
+        };
+        // Name the map's `key`/`value` pair after the containing type. The record is a normal
+        // member of `self.records` so WIT rendering, name-uniquing, and prune-liveness all treat
+        // it like any other record; only the map field's JSON (de)serialization is special-cased
+        // (it stays a JSON object on the wire, never a list of `{key, value}` objects).
+        let entry_name = unique_name(&format!("{name_hint}-entry").to_kebab_case(), |n| {
+            self.name_in_use(n)
+        });
+        self.records.push(RecordModel {
+            name_kebab: entry_name.clone(),
+            description: Some("one entry of a string-keyed map (free-form object)".into()),
+            fields: vec![
+                Field {
+                    name_kebab: "key".into(),
+                    name_snake: "key".into(),
+                    wire_name: "key".into(),
+                    description: None,
+                    ty: WitType::String,
+                    location: Location::Body,
+                },
+                Field {
+                    name_kebab: "value".into(),
+                    name_snake: "value".into(),
+                    wire_name: "value".into(),
+                    description: None,
+                    ty: value_ty.clone(),
+                    location: Location::Body,
+                },
+            ],
+        });
+        Ok(Some(WitType::Map {
+            entry: entry_name,
+            value: Box::new(value_ty),
+        }))
     }
 
     fn map_schema_kind(
@@ -202,22 +334,7 @@ impl InterfaceModel {
                     if s.enumeration.is_empty() {
                         Ok(WitType::String)
                     } else {
-                        // Enum case names must be valid, non-empty, and unique within the
-                        // enum. A value like `/` kebab-collapses to empty and distinct
-                        // values can collide after sanitizing, so route each through
-                        // `sanitize_wit_name` (non-empty) and `unique_name` (deduped).
-                        let mut cases: Vec<(String, String)> = Vec::new();
-                        let mut seen: BTreeSet<String> = BTreeSet::new();
-                        for v in s.enumeration.iter().flatten() {
-                            let base = if v.is_empty() {
-                                "empty".to_string()
-                            } else {
-                                sanitize_wit_name(&v.to_kebab_case())
-                            };
-                            let name = unique_name(&base, |n| seen.contains(n));
-                            seen.insert(name.clone());
-                            cases.push((name, v.clone()));
-                        }
+                        let cases = string_enum_cases(s);
                         // Dedupe by kebab case set
                         if let Some(existing) = self
                             .enums
@@ -260,7 +377,13 @@ impl InterfaceModel {
                     };
                     Ok(WitType::List(Box::new(item_type)))
                 }
-                Type::Object(_) => {
+                Type::Object(o) => {
+                    // A `type: object` with no declared properties is an open map, not a record.
+                    if o.properties.is_empty()
+                        && let Some(map_ty) = self.free_form_map_type(ctx, o, name_hint)?
+                    {
+                        return Ok(map_ty);
+                    }
                     let record_name =
                         unique_name(&name_hint.to_kebab_case(), |n| self.name_in_use(n));
                     self.emit_record_from_schema(ctx, schema, &record_name)?;
@@ -936,6 +1059,27 @@ impl InterfaceModel {
 /// `#/components/parameters/*` `$ref`s. Returns `None` — after printing a diagnostic — when a
 /// reference can't be resolved, so a bad `$ref` skips just that parameter instead of the whole
 /// operation, and never vanishes silently.
+/// Build a WIT enum's `(case-name, wire-value)` pairs from a string schema's `enum` list.
+///
+/// Enum case names must be valid, non-empty, and unique within the enum. A value like `/`
+/// kebab-collapses to empty and distinct values can collide after sanitizing, so route each
+/// through `sanitize_wit_name` (non-empty) and `unique_name` (deduped).
+fn string_enum_cases(s: &openapiv3::StringType) -> Vec<(String, String)> {
+    let mut cases: Vec<(String, String)> = Vec::new();
+    let mut seen: BTreeSet<String> = BTreeSet::new();
+    for v in s.enumeration.iter().flatten() {
+        let base = if v.is_empty() {
+            "empty".to_string()
+        } else {
+            sanitize_wit_name(&v.to_kebab_case())
+        };
+        let name = unique_name(&base, |n| seen.contains(n));
+        seen.insert(name.clone());
+        cases.push((name, v.clone()));
+    }
+    cases
+}
+
 fn resolve_param_ref<'a>(
     ctx: &SchemaCtx<'a>,
     p: &'a ReferenceOr<Parameter>,
@@ -1421,6 +1565,11 @@ fn collect_named(ty: &WitType, out: &mut BTreeSet<String>) {
             out.insert(name.clone());
         }
         WitType::Option(inner) | WitType::List(inner) => collect_named(inner, out),
+        // Keep the map's entry record alive through the prune, and follow its value type.
+        WitType::Map { entry, value } => {
+            out.insert(entry.clone());
+            collect_named(value, out);
+        }
         _ => {}
     }
 }
