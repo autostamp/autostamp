@@ -2143,12 +2143,13 @@ fn types_free_form_object_as_string_map() {
         generated.wit
     );
     // The map serializes to a JSON *object*, not serde's default array-of-`{key, value}` objects.
+    let rust = rust_src(&generated);
     assert!(
-        generated.rust.contains(
+        rust.contains(
             ".iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()"
         ),
         "the map must serialize into a JSON object:\n{}",
-        generated.rust
+        rust
     );
 }
 
