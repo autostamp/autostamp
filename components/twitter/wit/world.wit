@@ -7,7 +7,7 @@
 /// | --- | --- |
 /// | `BearerToken` | `Authorization: Bearer <secret>` |
 /// | `OAuth2UserToken` | `Authorization: Bearer <secret>` |
-package autostamp:twitter@0.5.0;
+package autostamp:twitter@0.6.0;
 
 interface compliance {
   enum list-batch-compliance-jobs-type-op-enum {
@@ -35,6 +35,19 @@ interface compliance {
     upload-url,
   }
 
+  enum job-status {
+    created,
+    in-progress,
+    failed,
+    complete,
+    expired,
+  }
+
+  enum job-type {
+    tweets,
+    users,
+  }
+
   record get2-compliance-jobs-response {
     data: option<list<job>>,
     errors: option<list<problem>>,
@@ -42,69 +55,15 @@ interface compliance {
   }
 
   record job {
-    created-at: created-at,
-    download-expires-at: download-expiration,
-    download-url: download-url,
-    id: job-id,
-    name: option<job-name>,
+    created-at: string,
+    download-expires-at: string,
+    download-url: string,
+    id: string,
+    name: option<string>,
     status: job-status,
     type-op: job-type,
-    upload-expires-at: upload-expiration,
-    upload-url: upload-url
-  }
-
-  /// Creation time of the compliance job.
-  record created-at {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
-  /// Expiration time of the download URL.
-  record download-expiration {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
-  /// URL from which the user will retrieve their compliance results.
-  record download-url {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
-  /// Compliance Job ID.
-  record job-id {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
-  /// User-provided name for a compliance job.
-  record job-name {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
-  /// Status of a compliance job.
-  record job-status {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
-  /// Type of compliance job to list.
-  record job-type {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
-  /// Expiration time of the upload URL.
-  record upload-expiration {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
-  /// URL to which the user will upload their Tweet or user IDs.
-  record upload-url {
-    /// opaque schema; raw JSON
-    value: string
+    upload-expires-at: string,
+    upload-url: string
   }
 
   /// An HTTP Problem Details object, as defined in IETF RFC 7807 (https://tools.ietf.org/html/rfc7807).
@@ -116,13 +75,7 @@ interface compliance {
   }
 
   record get2-compliance-jobs-response-meta {
-    result-count: option<result-count>
-  }
-
-  /// The number of results returned in this response.
-  record result-count {
-    /// opaque schema; raw JSON
-    value: string
+    result-count: option<s32>
   }
 
   record create-compliance-job-response {
@@ -133,24 +86,6 @@ interface compliance {
   record get2-compliance-jobs-id-response {
     data: option<job>,
     errors: option<list<problem>>
-  }
-
-  /// Tweet compliance stream events.
-  record tweet-compliance-stream-response {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
-  /// Tweet label stream events.
-  record tweet-label-stream-response {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
-  /// User compliance stream events.
-  record user-compliance-stream-response {
-    /// opaque schema; raw JSON
-    value: string
   }
 
   /// List Compliance Jobs
@@ -166,7 +101,7 @@ interface compliance {
 
   /// Create compliance job
   record create-batch-compliance-job-params {
-    name: option<job-name>,
+    name: option<string>,
     /// If true, this endpoint will return a pre-signed URL with resumable uploads enabled.
     resumable: option<bool>,
     /// Type of compliance job to list.
@@ -194,7 +129,7 @@ interface compliance {
     /// YYYY-MM-DDTHH:mm:ssZ. The latest UTC timestamp to which the Tweet Compliance events will be provided.
     end-time: option<string>
   }
-  get-tweets-compliance-stream: func(params: get-tweets-compliance-stream-params) -> result<tweet-compliance-stream-response, string>;
+  get-tweets-compliance-stream: func(params: get-tweets-compliance-stream-params) -> result<string, string>;
 
   /// Tweets Label stream
   record get-tweets-label-stream-params {
@@ -205,7 +140,7 @@ interface compliance {
     /// YYYY-MM-DDTHH:mm:ssZ. The latest UTC timestamp from which the Tweet labels will be provided.
     end-time: option<string>
   }
-  get-tweets-label-stream: func(params: get-tweets-label-stream-params) -> result<tweet-label-stream-response, string>;
+  get-tweets-label-stream: func(params: get-tweets-label-stream-params) -> result<string, string>;
 
   /// Users Compliance stream
   record get-users-compliance-stream-params {
@@ -218,7 +153,7 @@ interface compliance {
     /// YYYY-MM-DDTHH:mm:ssZ. The latest UTC timestamp from which the User Compliance events will be provided.
     end-time: option<string>
   }
-  get-users-compliance-stream: func(params: get-users-compliance-stream-params) -> result<user-compliance-stream-response, string>;
+  get-users-compliance-stream: func(params: get-users-compliance-stream-params) -> result<string, string>;
 
 }
 
@@ -320,6 +255,15 @@ interface direct-messages {
     feature,
   }
 
+  enum place-type {
+    poi,
+    neighborhood,
+    city,
+    admin,
+    country,
+    unknown,
+  }
+
   enum poll-voting-status-enum {
     open,
     closed,
@@ -331,6 +275,13 @@ interface direct-messages {
     replied-to,
   }
 
+  enum reply-settings {
+    everyone,
+    mentioned-users,
+    following,
+    other,
+  }
+
   enum tweet-withheld-scope-enum {
     tweet,
     user,
@@ -340,37 +291,14 @@ interface direct-messages {
     user,
   }
 
-  record create-message-request {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
-  /// Participants for the DM Conversation.
-  record dm-participants {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
   record create-dm-event-response {
     data: option<create-dm-event-response-data>,
     errors: option<list<problem>>
   }
 
   record create-dm-event-response-data {
-    dm-conversation-id: dm-conversation-id,
-    dm-event-id: dm-event-id
-  }
-
-  /// Unique identifier of a DM conversation. This can either be a numeric string, or a pair of numeric strings separated by a '-' character in the case of one-on-one DM Conversations.
-  record dm-conversation-id {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
-  /// Unique identifier of a DM Event.
-  record dm-event-id {
-    /// opaque schema; raw JSON
-    value: string
+    dm-conversation-id: string,
+    dm-event-id: string
   }
 
   /// An HTTP Problem Details object, as defined in IETF RFC 7807 (https://tools.ietf.org/html/rfc7807).
@@ -379,12 +307,6 @@ interface direct-messages {
     status: option<s32>,
     title: string,
     type-op: string
-  }
-
-  /// A base32 pagination token.
-  record pagination-token32 {
-    /// opaque schema; raw JSON
-    value: string
   }
 
   record get2-dm-conversations-with-participant-id-dm-events-response {
@@ -398,14 +320,14 @@ interface direct-messages {
     /// Specifies the type of attachments (if any) present in this DM.
     attachments: option<dm-event-attachments>,
     created-at: option<string>,
-    dm-conversation-id: option<dm-conversation-id>,
+    dm-conversation-id: option<string>,
     event-type: string,
-    id: dm-event-id,
+    id: string,
     /// A list of participants for a ParticipantsJoin or ParticipantsLeave event_type.
-    participant-ids: option<list<user-id>>,
+    participant-ids: option<list<string>>,
     /// A list of Tweets this DM refers to.
     referenced-tweets: option<list<dm-event-referenced-tweets-item>>,
-    sender-id: option<user-id>,
+    sender-id: option<string>,
     text: option<string>
   }
 
@@ -414,29 +336,11 @@ interface direct-messages {
     /// A list of card IDs (if cards are attached).
     card-ids: option<list<string>>,
     /// A list of Media Keys for each one of the media attachments (if media are attached).
-    media-keys: option<list<media-key>>
-  }
-
-  /// The Media Key identifier for this attachment.
-  record media-key {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
-  /// Unique identifier of this User. This is returned as a string in order to avoid complications with languages and tools that cannot handle large integers.
-  record user-id {
-    /// opaque schema; raw JSON
-    value: string
+    media-keys: option<list<string>>
   }
 
   record dm-event-referenced-tweets-item {
-    id: tweet-id
-  }
-
-  /// Unique identifier of this Tweet. This is returned as a string in order to avoid complications with languages and tools that cannot handle large integers.
-  record tweet-id {
-    /// opaque schema; raw JSON
-    value: string
+    id: string
   }
 
   record expansions {
@@ -449,76 +353,42 @@ interface direct-messages {
   }
 
   record media {
-    height: option<media-height>,
-    media-key: option<media-key>,
+    height: option<s32>,
+    media-key: option<string>,
     type-op: string,
-    width: option<media-width>
-  }
-
-  /// The height of the media in pixels.
-  record media-height {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
-  /// The width of the media in pixels.
-  record media-width {
-    /// opaque schema; raw JSON
-    value: string
+    width: option<s32>
   }
 
   record place {
-    contained-within: option<list<place-id>>,
+    contained-within: option<list<string>>,
     /// The full name of the county in which this place exists.
     country: option<string>,
-    country-code: option<country-code>,
+    country-code: option<string>,
     /// The full name of this place.
     full-name: string,
     geo: option<geo>,
-    id: place-id,
+    id: string,
     /// The human readable name of this place.
     name: option<string>,
     place-type: option<place-type>
   }
 
-  /// The identifier for this place.
-  record place-id {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
-  /// A two-letter ISO 3166-1 alpha-2 country code.
-  record country-code {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
   record geo {
     bbox: list<f64>,
     geometry: option<point>,
-    properties: geo-properties,
+    properties: list<geo-properties-entry>,
     type-op: geo-type-op-enum
   }
 
   /// A [GeoJson Point](https://tools.ietf.org/html/rfc7946#section-3.1.2) geometry object.
   record point {
-    coordinates: position,
+    coordinates: list<f64>,
     type-op: point-type-op-enum
   }
 
-  /// A [GeoJson Position](https://tools.ietf.org/html/rfc7946#section-3.1.1) in the format `[longitude,latitude]`.
-  record position {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
-  record geo-properties {
-    /// JSON-encoded free-form object payload
-    data: option<string>
-  }
-
-  record place-type {
-    /// opaque schema; raw JSON
+  /// one entry of a string-keyed map (free-form object)
+  record geo-properties-entry {
+    key: string,
     value: string
   }
 
@@ -526,63 +396,45 @@ interface direct-messages {
   record poll {
     duration-minutes: option<s32>,
     end-datetime: option<string>,
-    id: poll-id,
+    id: string,
     options: list<poll-option>,
     voting-status: option<poll-voting-status-enum>
   }
 
-  /// Unique identifier of this poll.
-  record poll-id {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
   /// Describes a choice in a Poll object.
   record poll-option {
-    label: poll-option-label,
+    label: string,
     /// Position of this choice in the poll.
     position: s32,
     /// Number of users who voted for this choice.
     votes: s32
   }
 
-  /// The text of a poll choice.
-  record poll-option-label {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
   /// The topic of a Space, as selected by its creator.
   record topic {
     /// The description of the given topic.
     description: option<string>,
-    id: topic-id,
+    id: string,
     /// The name of the given topic.
     name: string
-  }
-
-  /// Unique identifier of this Topic.
-  record topic-id {
-    /// opaque schema; raw JSON
-    value: string
   }
 
   record tweet {
     /// Specifies the type of attachments (if any) present in this Tweet.
     attachments: option<tweet-attachments>,
-    author-id: option<user-id>,
+    author-id: option<string>,
     context-annotations: option<list<context-annotation>>,
-    conversation-id: option<tweet-id>,
+    conversation-id: option<string>,
     /// Creation time of the Tweet.
     created-at: option<string>,
     edit-controls: option<tweet-edit-controls>,
     /// A list of Tweet Ids in this Tweet chain.
-    edit-history-tweet-ids: list<tweet-id>,
+    edit-history-tweet-ids: list<string>,
     entities: option<full-text-entities>,
     /// The location tagged on the Tweet, if the user provided one.
     geo: option<tweet-geo>,
-    id: tweet-id,
-    in-reply-to-user-id: option<user-id>,
+    id: string,
+    in-reply-to-user-id: option<string>,
     /// Language of the Tweet, if detected by Twitter. Returned as a BCP47 language tag.
     lang: option<string>,
     /// Nonpublic engagement metrics for the Tweet at the time of the request.
@@ -600,16 +452,16 @@ interface direct-messages {
     reply-settings: option<reply-settings>,
     /// This is deprecated.
     source: option<string>,
-    text: tweet-text,
+    text: string,
     withheld: option<tweet-withheld>
   }
 
   /// Specifies the type of attachments (if any) present in this Tweet.
   record tweet-attachments {
     /// A list of Media Keys for each one of the media attachments (if media are attached).
-    media-keys: option<list<media-key>>,
+    media-keys: option<list<string>>,
     /// A list of poll IDs (if polls are attached).
-    poll-ids: option<list<poll-id>>
+    poll-ids: option<list<string>>
   }
 
   /// Annotation inferred from the Tweet text.
@@ -691,14 +543,8 @@ interface direct-messages {
     end: s32,
     /// Index (zero-based) at which position this entity starts.  The index is inclusive.
     start: s32,
-    id: option<user-id>,
-    username: user-name
-  }
-
-  /// The Twitter handle (screen name) of this user.
-  record user-name {
-    /// opaque schema; raw JSON
-    value: string
+    id: option<string>,
+    username: string
   }
 
   /// Represent the portion of text recognized as a URL, and its start and end position within the text.
@@ -711,40 +557,28 @@ interface direct-messages {
     description: option<string>,
     /// The URL as displayed in the Twitter client.
     display-url: option<string>,
-    expanded-url: option<url>,
+    expanded-url: option<string>,
     images: option<list<url-image>>,
-    media-key: option<media-key>,
-    status: option<http-status-code>,
+    media-key: option<string>,
+    status: option<s32>,
     /// Title of the page the URL points to.
     title: option<string>,
     /// Fully resolved url.
     unwound-url: option<string>,
-    url: url
-  }
-
-  /// A validly formatted URL.
-  record url {
-    /// opaque schema; raw JSON
-    value: string
+    url: string
   }
 
   /// Represent the information for the URL image.
   record url-image {
-    height: option<media-height>,
-    url: option<url>,
-    width: option<media-width>
-  }
-
-  /// HTTP Status Code.
-  record http-status-code {
-    /// opaque schema; raw JSON
-    value: string
+    height: option<s32>,
+    url: option<string>,
+    width: option<s32>
   }
 
   /// The location tagged on the Tweet, if the user provided one.
   record tweet-geo {
     coordinates: option<point>,
-    place-id: option<place-id>
+    place-id: option<string>
   }
 
   /// Nonpublic engagement metrics for the Tweet at the time of the request.
@@ -792,20 +626,8 @@ interface direct-messages {
   }
 
   record tweet-referenced-tweets-item {
-    id: tweet-id,
+    id: string,
     type-op: tweet-referenced-tweets-item-type-op-enum
-  }
-
-  /// Shows who can reply a Tweet. Fields returned are everyone, mentioned_users, and following.
-  record reply-settings {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
-  /// The content of the Tweet.
-  record tweet-text {
-    /// opaque schema; raw JSON
-    value: string
   }
 
   /// Indicates withholding details for [withheld content](https://help.twitter.com/en/rules-and-policies/tweet-withheld-by-country).
@@ -813,7 +635,7 @@ interface direct-messages {
     /// Indicates if the content is being withheld for on the basis of copyright infringement.
     copyright: bool,
     /// Provides a list of countries where this content is not available.
-    country-codes: list<country-code>,
+    country-codes: list<string>,
     /// Indicates whether the content being withheld is the `tweet` or a `user`.
     scope: option<tweet-withheld-scope-enum>
   }
@@ -826,12 +648,12 @@ interface direct-messages {
     description: option<string>,
     /// A list of metadata found in the User's profile description.
     entities: option<user-entities>,
-    id: user-id,
+    id: string,
     /// The location specified in the User's profile, if the User provided one. As this is a freeform value, it may not indicate a valid location, but it may be fuzzily evaluated when performing searches with location queries.
     location: option<string>,
     /// The friendly name of this User, as shown on their profile.
     name: string,
-    pinned-tweet-id: option<tweet-id>,
+    pinned-tweet-id: option<string>,
     /// The URL to the profile image for this User.
     profile-image-url: option<string>,
     /// Indicates if this User has chosen to protect their Tweets (in other words, if this User's Tweets are private).
@@ -840,7 +662,7 @@ interface direct-messages {
     public-metrics: option<user-public-metrics>,
     /// The URL specified in the User's profile.
     url: option<string>,
-    username: user-name,
+    username: string,
     /// Indicate if this User is a verified Twitter User.
     verified: option<bool>,
     /// The Twitter Blue verified type of the user, eg: blue, government, business or none.
@@ -875,33 +697,15 @@ interface direct-messages {
   /// Indicates withholding details for [withheld content](https://help.twitter.com/en/rules-and-policies/tweet-withheld-by-country).
   record user-withheld {
     /// Provides a list of countries where this content is not available.
-    country-codes: list<country-code>,
+    country-codes: list<string>,
     /// Indicates that the content being withheld is a `user`.
     scope: option<user-withheld-scope-enum>
   }
 
   record get2-dm-conversations-with-participant-id-dm-events-response-meta {
-    next-token: option<next-token>,
-    previous-token: option<previous-token>,
-    result-count: option<result-count>
-  }
-
-  /// The next token.
-  record next-token {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
-  /// The previous token.
-  record previous-token {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
-  /// The number of results returned in this response.
-  record result-count {
-    /// opaque schema; raw JSON
-    value: string
+    next-token: option<string>,
+    previous-token: option<string>,
+    result-count: option<s32>
   }
 
   record get2-dm-conversations-id-dm-events-response {
@@ -912,9 +716,9 @@ interface direct-messages {
   }
 
   record get2-dm-conversations-id-dm-events-response-meta {
-    next-token: option<next-token>,
-    previous-token: option<previous-token>,
-    result-count: option<result-count>
+    next-token: option<string>,
+    previous-token: option<string>,
+    result-count: option<s32>
   }
 
   record get2-dm-events-response {
@@ -925,17 +729,17 @@ interface direct-messages {
   }
 
   record get2-dm-events-response-meta {
-    next-token: option<next-token>,
-    previous-token: option<previous-token>,
-    result-count: option<result-count>
+    next-token: option<string>,
+    previous-token: option<string>,
+    result-count: option<s32>
   }
 
   /// Create a new DM Conversation
   record dm-conversation-id-create-params {
     /// The conversation type that is being created.
     conversation-type: create-dm-conversation-request-conversation-type-enum,
-    message: create-message-request,
-    participant-ids: dm-participants
+    message: string,
+    participant-ids: list<string>
   }
   dm-conversation-id-create: func(params: dm-conversation-id-create-params) -> result<create-dm-event-response, string>;
 
@@ -946,7 +750,7 @@ interface direct-messages {
     /// The maximum number of results.
     max-results: option<s32>,
     /// This parameter is used to get a specified 'page' of results.
-    pagination-token: option<pagination-token32>,
+    pagination-token: option<string>,
     /// The set of event_types to include in the results.
     event-types: option<list<get-dm-conversations-with-participant-id-dm-events-event-types-item-enum>>,
     /// A comma separated list of DmEvent fields to display.
@@ -966,8 +770,7 @@ interface direct-messages {
   record dm-conversation-with-user-event-id-create-params {
     /// The ID of the recipient user that will receive the DM.
     participant-id: string,
-    /// opaque schema; raw JSON
-    value: string
+    body: option<string>
   }
   dm-conversation-with-user-event-id-create: func(params: dm-conversation-with-user-event-id-create-params) -> result<create-dm-event-response, string>;
 
@@ -975,8 +778,7 @@ interface direct-messages {
   record dm-conversation-by-id-event-id-create-params {
     /// The DM Conversation ID.
     dm-conversation-id: string,
-    /// opaque schema; raw JSON
-    value: string
+    body: option<string>
   }
   dm-conversation-by-id-event-id-create: func(params: dm-conversation-by-id-event-id-create-params) -> result<create-dm-event-response, string>;
 
@@ -987,7 +789,7 @@ interface direct-messages {
     /// The maximum number of results.
     max-results: option<s32>,
     /// This parameter is used to get a specified 'page' of results.
-    pagination-token: option<pagination-token32>,
+    pagination-token: option<string>,
     /// The set of event_types to include in the results.
     event-types: option<list<get-dm-conversations-with-participant-id-dm-events-event-types-item-enum>>,
     /// A comma separated list of DmEvent fields to display.
@@ -1008,7 +810,7 @@ interface direct-messages {
     /// The maximum number of results.
     max-results: option<s32>,
     /// This parameter is used to get a specified 'page' of results.
-    pagination-token: option<pagination-token32>,
+    pagination-token: option<string>,
     /// The set of event_types to include in the results.
     event-types: option<list<get-dm-conversations-with-participant-id-dm-events-event-types-item-enum>>,
     /// A comma separated list of DmEvent fields to display.
@@ -1068,6 +870,15 @@ interface lists {
     feature,
   }
 
+  enum place-type {
+    poi,
+    neighborhood,
+    city,
+    admin,
+    country,
+    unknown,
+  }
+
   enum poll-voting-status-enum {
     open,
     closed,
@@ -1077,6 +888,13 @@ interface lists {
     retweeted,
     quoted,
     replied-to,
+  }
+
+  enum reply-settings {
+    everyone,
+    mentioned-users,
+    following,
+    other,
   }
 
   enum tweet-withheld-scope-enum {
@@ -1096,15 +914,9 @@ interface lists {
 
   /// A Twitter List is a curated group of accounts.
   record list-create-response-data {
-    id: list-id,
+    id: string,
     /// The name of this List.
     name: string
-  }
-
-  /// The unique identifier of this List.
-  record list-id {
-    /// opaque schema; raw JSON
-    value: string
   }
 
   /// An HTTP Problem Details object, as defined in IETF RFC 7807 (https://tools.ietf.org/html/rfc7807).
@@ -1126,18 +938,12 @@ interface lists {
     created-at: option<string>,
     description: option<string>,
     follower-count: option<s32>,
-    id: list-id,
+    id: string,
     member-count: option<s32>,
     /// The name of this List.
     name: string,
-    owner-id: option<user-id>,
+    owner-id: option<string>,
     private: option<bool>
-  }
-
-  /// Unique identifier of this User. This is returned as a string in order to avoid complications with languages and tools that cannot handle large integers.
-  record user-id {
-    /// opaque schema; raw JSON
-    value: string
   }
 
   record expansions {
@@ -1150,82 +956,42 @@ interface lists {
   }
 
   record media {
-    height: option<media-height>,
-    media-key: option<media-key>,
+    height: option<s32>,
+    media-key: option<string>,
     type-op: string,
-    width: option<media-width>
-  }
-
-  /// The height of the media in pixels.
-  record media-height {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
-  /// The Media Key identifier for this attachment.
-  record media-key {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
-  /// The width of the media in pixels.
-  record media-width {
-    /// opaque schema; raw JSON
-    value: string
+    width: option<s32>
   }
 
   record place {
-    contained-within: option<list<place-id>>,
+    contained-within: option<list<string>>,
     /// The full name of the county in which this place exists.
     country: option<string>,
-    country-code: option<country-code>,
+    country-code: option<string>,
     /// The full name of this place.
     full-name: string,
     geo: option<geo>,
-    id: place-id,
+    id: string,
     /// The human readable name of this place.
     name: option<string>,
     place-type: option<place-type>
   }
 
-  /// The identifier for this place.
-  record place-id {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
-  /// A two-letter ISO 3166-1 alpha-2 country code.
-  record country-code {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
   record geo {
     bbox: list<f64>,
     geometry: option<point>,
-    properties: geo-properties,
+    properties: list<geo-properties-entry>,
     type-op: geo-type-op-enum
   }
 
   /// A [GeoJson Point](https://tools.ietf.org/html/rfc7946#section-3.1.2) geometry object.
   record point {
-    coordinates: position,
+    coordinates: list<f64>,
     type-op: point-type-op-enum
   }
 
-  /// A [GeoJson Position](https://tools.ietf.org/html/rfc7946#section-3.1.1) in the format `[longitude,latitude]`.
-  record position {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
-  record geo-properties {
-    /// JSON-encoded free-form object payload
-    data: option<string>
-  }
-
-  record place-type {
-    /// opaque schema; raw JSON
+  /// one entry of a string-keyed map (free-form object)
+  record geo-properties-entry {
+    key: string,
     value: string
   }
 
@@ -1233,63 +999,45 @@ interface lists {
   record poll {
     duration-minutes: option<s32>,
     end-datetime: option<string>,
-    id: poll-id,
+    id: string,
     options: list<poll-option>,
     voting-status: option<poll-voting-status-enum>
   }
 
-  /// Unique identifier of this poll.
-  record poll-id {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
   /// Describes a choice in a Poll object.
   record poll-option {
-    label: poll-option-label,
+    label: string,
     /// Position of this choice in the poll.
     position: s32,
     /// Number of users who voted for this choice.
     votes: s32
   }
 
-  /// The text of a poll choice.
-  record poll-option-label {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
   /// The topic of a Space, as selected by its creator.
   record topic {
     /// The description of the given topic.
     description: option<string>,
-    id: topic-id,
+    id: string,
     /// The name of the given topic.
     name: string
-  }
-
-  /// Unique identifier of this Topic.
-  record topic-id {
-    /// opaque schema; raw JSON
-    value: string
   }
 
   record tweet {
     /// Specifies the type of attachments (if any) present in this Tweet.
     attachments: option<tweet-attachments>,
-    author-id: option<user-id>,
+    author-id: option<string>,
     context-annotations: option<list<context-annotation>>,
-    conversation-id: option<tweet-id>,
+    conversation-id: option<string>,
     /// Creation time of the Tweet.
     created-at: option<string>,
     edit-controls: option<tweet-edit-controls>,
     /// A list of Tweet Ids in this Tweet chain.
-    edit-history-tweet-ids: list<tweet-id>,
+    edit-history-tweet-ids: list<string>,
     entities: option<full-text-entities>,
     /// The location tagged on the Tweet, if the user provided one.
     geo: option<tweet-geo>,
-    id: tweet-id,
-    in-reply-to-user-id: option<user-id>,
+    id: string,
+    in-reply-to-user-id: option<string>,
     /// Language of the Tweet, if detected by Twitter. Returned as a BCP47 language tag.
     lang: option<string>,
     /// Nonpublic engagement metrics for the Tweet at the time of the request.
@@ -1307,16 +1055,16 @@ interface lists {
     reply-settings: option<reply-settings>,
     /// This is deprecated.
     source: option<string>,
-    text: tweet-text,
+    text: string,
     withheld: option<tweet-withheld>
   }
 
   /// Specifies the type of attachments (if any) present in this Tweet.
   record tweet-attachments {
     /// A list of Media Keys for each one of the media attachments (if media are attached).
-    media-keys: option<list<media-key>>,
+    media-keys: option<list<string>>,
     /// A list of poll IDs (if polls are attached).
-    poll-ids: option<list<poll-id>>
+    poll-ids: option<list<string>>
   }
 
   /// Annotation inferred from the Tweet text.
@@ -1343,12 +1091,6 @@ interface lists {
     id: string,
     /// Name of the context annotation entity.
     name: option<string>
-  }
-
-  /// Unique identifier of this Tweet. This is returned as a string in order to avoid complications with languages and tools that cannot handle large integers.
-  record tweet-id {
-    /// opaque schema; raw JSON
-    value: string
   }
 
   record tweet-edit-controls {
@@ -1404,14 +1146,8 @@ interface lists {
     end: s32,
     /// Index (zero-based) at which position this entity starts.  The index is inclusive.
     start: s32,
-    id: option<user-id>,
-    username: user-name
-  }
-
-  /// The Twitter handle (screen name) of this user.
-  record user-name {
-    /// opaque schema; raw JSON
-    value: string
+    id: option<string>,
+    username: string
   }
 
   /// Represent the portion of text recognized as a URL, and its start and end position within the text.
@@ -1424,40 +1160,28 @@ interface lists {
     description: option<string>,
     /// The URL as displayed in the Twitter client.
     display-url: option<string>,
-    expanded-url: option<url>,
+    expanded-url: option<string>,
     images: option<list<url-image>>,
-    media-key: option<media-key>,
-    status: option<http-status-code>,
+    media-key: option<string>,
+    status: option<s32>,
     /// Title of the page the URL points to.
     title: option<string>,
     /// Fully resolved url.
     unwound-url: option<string>,
-    url: url
-  }
-
-  /// A validly formatted URL.
-  record url {
-    /// opaque schema; raw JSON
-    value: string
+    url: string
   }
 
   /// Represent the information for the URL image.
   record url-image {
-    height: option<media-height>,
-    url: option<url>,
-    width: option<media-width>
-  }
-
-  /// HTTP Status Code.
-  record http-status-code {
-    /// opaque schema; raw JSON
-    value: string
+    height: option<s32>,
+    url: option<string>,
+    width: option<s32>
   }
 
   /// The location tagged on the Tweet, if the user provided one.
   record tweet-geo {
     coordinates: option<point>,
-    place-id: option<place-id>
+    place-id: option<string>
   }
 
   /// Nonpublic engagement metrics for the Tweet at the time of the request.
@@ -1505,20 +1229,8 @@ interface lists {
   }
 
   record tweet-referenced-tweets-item {
-    id: tweet-id,
+    id: string,
     type-op: tweet-referenced-tweets-item-type-op-enum
-  }
-
-  /// Shows who can reply a Tweet. Fields returned are everyone, mentioned_users, and following.
-  record reply-settings {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
-  /// The content of the Tweet.
-  record tweet-text {
-    /// opaque schema; raw JSON
-    value: string
   }
 
   /// Indicates withholding details for [withheld content](https://help.twitter.com/en/rules-and-policies/tweet-withheld-by-country).
@@ -1526,7 +1238,7 @@ interface lists {
     /// Indicates if the content is being withheld for on the basis of copyright infringement.
     copyright: bool,
     /// Provides a list of countries where this content is not available.
-    country-codes: list<country-code>,
+    country-codes: list<string>,
     /// Indicates whether the content being withheld is the `tweet` or a `user`.
     scope: option<tweet-withheld-scope-enum>
   }
@@ -1539,12 +1251,12 @@ interface lists {
     description: option<string>,
     /// A list of metadata found in the User's profile description.
     entities: option<user-entities>,
-    id: user-id,
+    id: string,
     /// The location specified in the User's profile, if the User provided one. As this is a freeform value, it may not indicate a valid location, but it may be fuzzily evaluated when performing searches with location queries.
     location: option<string>,
     /// The friendly name of this User, as shown on their profile.
     name: string,
-    pinned-tweet-id: option<tweet-id>,
+    pinned-tweet-id: option<string>,
     /// The URL to the profile image for this User.
     profile-image-url: option<string>,
     /// Indicates if this User has chosen to protect their Tweets (in other words, if this User's Tweets are private).
@@ -1553,7 +1265,7 @@ interface lists {
     public-metrics: option<user-public-metrics>,
     /// The URL specified in the User's profile.
     url: option<string>,
-    username: user-name,
+    username: string,
     /// Indicate if this User is a verified Twitter User.
     verified: option<bool>,
     /// The Twitter Blue verified type of the user, eg: blue, government, business or none.
@@ -1588,7 +1300,7 @@ interface lists {
   /// Indicates withholding details for [withheld content](https://help.twitter.com/en/rules-and-policies/tweet-withheld-by-country).
   record user-withheld {
     /// Provides a list of countries where this content is not available.
-    country-codes: list<country-code>,
+    country-codes: list<string>,
     /// Indicates that the content being withheld is a `user`.
     scope: option<user-withheld-scope-enum>
   }
@@ -1620,12 +1332,6 @@ interface lists {
     is-member: option<bool>
   }
 
-  /// A 'long' pagination token.
-  record pagination-token-long {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
   record get2-users-id-followed-lists-response {
     data: option<list<list-op>>,
     errors: option<list<problem>>,
@@ -1634,27 +1340,9 @@ interface lists {
   }
 
   record get2-users-id-followed-lists-response-meta {
-    next-token: option<next-token>,
-    previous-token: option<previous-token>,
-    result-count: option<result-count>
-  }
-
-  /// The next token.
-  record next-token {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
-  /// The previous token.
-  record previous-token {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
-  /// The number of results returned in this response.
-  record result-count {
-    /// opaque schema; raw JSON
-    value: string
+    next-token: option<string>,
+    previous-token: option<string>,
+    result-count: option<s32>
   }
 
   record list-followed-response {
@@ -1674,9 +1362,9 @@ interface lists {
   }
 
   record get2-users-id-list-memberships-response-meta {
-    next-token: option<next-token>,
-    previous-token: option<previous-token>,
-    result-count: option<result-count>
+    next-token: option<string>,
+    previous-token: option<string>,
+    result-count: option<s32>
   }
 
   record get2-users-id-owned-lists-response {
@@ -1687,9 +1375,9 @@ interface lists {
   }
 
   record get2-users-id-owned-lists-response-meta {
-    next-token: option<next-token>,
-    previous-token: option<previous-token>,
-    result-count: option<result-count>
+    next-token: option<string>,
+    previous-token: option<string>,
+    result-count: option<s32>
   }
 
   record get2-users-id-pinned-lists-response {
@@ -1700,7 +1388,7 @@ interface lists {
   }
 
   record get2-users-id-pinned-lists-response-meta {
-    result-count: option<result-count>
+    result-count: option<s32>
   }
 
   record list-pinned-response {
@@ -1763,7 +1451,7 @@ interface lists {
   record list-add-member-params {
     /// The ID of the List for which to add a member.
     id: string,
-    user-id: user-id
+    user-id: string
   }
   list-add-member: func(params: list-add-member-params) -> result<list-mutate-response, string>;
 
@@ -1783,7 +1471,7 @@ interface lists {
     /// The maximum number of results.
     max-results: option<s32>,
     /// This parameter is used to get a specified 'page' of results.
-    pagination-token: option<pagination-token-long>,
+    pagination-token: option<string>,
     /// A comma separated list of List fields to display.
     list-fields: option<list<list-id-get-list-fields-item-enum>>,
     /// A comma separated list of fields to expand.
@@ -1797,7 +1485,7 @@ interface lists {
   record list-user-follow-params {
     /// The ID of the authenticated source User that will follow the List.
     id: string,
-    list-id: list-id
+    list-id: string
   }
   list-user-follow: func(params: list-user-follow-params) -> result<list-followed-response, string>;
 
@@ -1817,7 +1505,7 @@ interface lists {
     /// The maximum number of results.
     max-results: option<s32>,
     /// This parameter is used to get a specified 'page' of results.
-    pagination-token: option<pagination-token-long>,
+    pagination-token: option<string>,
     /// A comma separated list of List fields to display.
     list-fields: option<list<list-id-get-list-fields-item-enum>>,
     /// A comma separated list of fields to expand.
@@ -1834,7 +1522,7 @@ interface lists {
     /// The maximum number of results.
     max-results: option<s32>,
     /// This parameter is used to get a specified 'page' of results.
-    pagination-token: option<pagination-token-long>,
+    pagination-token: option<string>,
     /// A comma separated list of List fields to display.
     list-fields: option<list<list-id-get-list-fields-item-enum>>,
     /// A comma separated list of fields to expand.
@@ -1861,7 +1549,7 @@ interface lists {
   record list-user-pin-params {
     /// The ID of the authenticated source User that will pin the List.
     id: string,
-    list-id: list-id
+    list-id: string
   }
   list-user-pin: func(params: list-user-pin-params) -> result<list-pinned-response, string>;
 
@@ -1936,6 +1624,15 @@ interface users {
     feature,
   }
 
+  enum place-type {
+    poi,
+    neighborhood,
+    city,
+    admin,
+    country,
+    unknown,
+  }
+
   enum poll-voting-status-enum {
     open,
     closed,
@@ -1947,15 +1644,16 @@ interface users {
     replied-to,
   }
 
+  enum reply-settings {
+    everyone,
+    mentioned-users,
+    following,
+    other,
+  }
+
   enum tweet-withheld-scope-enum {
     tweet,
     user,
-  }
-
-  /// A 'long' pagination token.
-  record pagination-token-long {
-    /// opaque schema; raw JSON
-    value: string
   }
 
   record get2-lists-id-followers-response {
@@ -1973,12 +1671,12 @@ interface users {
     description: option<string>,
     /// A list of metadata found in the User's profile description.
     entities: option<user-entities>,
-    id: user-id,
+    id: string,
     /// The location specified in the User's profile, if the User provided one. As this is a freeform value, it may not indicate a valid location, but it may be fuzzily evaluated when performing searches with location queries.
     location: option<string>,
     /// The friendly name of this User, as shown on their profile.
     name: string,
-    pinned-tweet-id: option<tweet-id>,
+    pinned-tweet-id: option<string>,
     /// The URL to the profile image for this User.
     profile-image-url: option<string>,
     /// Indicates if this User has chosen to protect their Tweets (in other words, if this User's Tweets are private).
@@ -1987,7 +1685,7 @@ interface users {
     public-metrics: option<user-public-metrics>,
     /// The URL specified in the User's profile.
     url: option<string>,
-    username: user-name,
+    username: string,
     /// Indicate if this User is a verified Twitter User.
     verified: option<bool>,
     /// The Twitter Blue verified type of the user, eg: blue, government, business or none.
@@ -2046,20 +1744,8 @@ interface users {
     end: s32,
     /// Index (zero-based) at which position this entity starts.  The index is inclusive.
     start: s32,
-    id: option<user-id>,
-    username: user-name
-  }
-
-  /// Unique identifier of this User. This is returned as a string in order to avoid complications with languages and tools that cannot handle large integers.
-  record user-id {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
-  /// The Twitter handle (screen name) of this user.
-  record user-name {
-    /// opaque schema; raw JSON
-    value: string
+    id: option<string>,
+    username: string
   }
 
   /// Represent the portion of text recognized as a URL, and its start and end position within the text.
@@ -2072,63 +1758,27 @@ interface users {
     description: option<string>,
     /// The URL as displayed in the Twitter client.
     display-url: option<string>,
-    expanded-url: option<url>,
+    expanded-url: option<string>,
     images: option<list<url-image>>,
-    media-key: option<media-key>,
-    status: option<http-status-code>,
+    media-key: option<string>,
+    status: option<s32>,
     /// Title of the page the URL points to.
     title: option<string>,
     /// Fully resolved url.
     unwound-url: option<string>,
-    url: url
-  }
-
-  /// A validly formatted URL.
-  record url {
-    /// opaque schema; raw JSON
-    value: string
+    url: string
   }
 
   /// Represent the information for the URL image.
   record url-image {
-    height: option<media-height>,
-    url: option<url>,
-    width: option<media-width>
-  }
-
-  /// The height of the media in pixels.
-  record media-height {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
-  /// The width of the media in pixels.
-  record media-width {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
-  /// The Media Key identifier for this attachment.
-  record media-key {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
-  /// HTTP Status Code.
-  record http-status-code {
-    /// opaque schema; raw JSON
-    value: string
+    height: option<s32>,
+    url: option<string>,
+    width: option<s32>
   }
 
   /// Expanded details for the URL specified in the User's profile, with start and end indices.
   record user-entities-url {
     urls: option<list<url-entity>>
-  }
-
-  /// Unique identifier of this Tweet. This is returned as a string in order to avoid complications with languages and tools that cannot handle large integers.
-  record tweet-id {
-    /// opaque schema; raw JSON
-    value: string
   }
 
   /// A list of metrics for this User.
@@ -2146,15 +1796,9 @@ interface users {
   /// Indicates withholding details for [withheld content](https://help.twitter.com/en/rules-and-policies/tweet-withheld-by-country).
   record user-withheld {
     /// Provides a list of countries where this content is not available.
-    country-codes: list<country-code>,
+    country-codes: list<string>,
     /// Indicates that the content being withheld is a `user`.
     scope: option<user-withheld-scope-enum>
-  }
-
-  /// A two-letter ISO 3166-1 alpha-2 country code.
-  record country-code {
-    /// opaque schema; raw JSON
-    value: string
   }
 
   /// An HTTP Problem Details object, as defined in IETF RFC 7807 (https://tools.ietf.org/html/rfc7807).
@@ -2175,58 +1819,42 @@ interface users {
   }
 
   record media {
-    height: option<media-height>,
-    media-key: option<media-key>,
+    height: option<s32>,
+    media-key: option<string>,
     type-op: string,
-    width: option<media-width>
+    width: option<s32>
   }
 
   record place {
-    contained-within: option<list<place-id>>,
+    contained-within: option<list<string>>,
     /// The full name of the county in which this place exists.
     country: option<string>,
-    country-code: option<country-code>,
+    country-code: option<string>,
     /// The full name of this place.
     full-name: string,
     geo: option<geo>,
-    id: place-id,
+    id: string,
     /// The human readable name of this place.
     name: option<string>,
     place-type: option<place-type>
   }
 
-  /// The identifier for this place.
-  record place-id {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
   record geo {
     bbox: list<f64>,
     geometry: option<point>,
-    properties: geo-properties,
+    properties: list<geo-properties-entry>,
     type-op: geo-type-op-enum
   }
 
   /// A [GeoJson Point](https://tools.ietf.org/html/rfc7946#section-3.1.2) geometry object.
   record point {
-    coordinates: position,
+    coordinates: list<f64>,
     type-op: point-type-op-enum
   }
 
-  /// A [GeoJson Position](https://tools.ietf.org/html/rfc7946#section-3.1.1) in the format `[longitude,latitude]`.
-  record position {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
-  record geo-properties {
-    /// JSON-encoded free-form object payload
-    data: option<string>
-  }
-
-  record place-type {
-    /// opaque schema; raw JSON
+  /// one entry of a string-keyed map (free-form object)
+  record geo-properties-entry {
+    key: string,
     value: string
   }
 
@@ -2234,63 +1862,45 @@ interface users {
   record poll {
     duration-minutes: option<s32>,
     end-datetime: option<string>,
-    id: poll-id,
+    id: string,
     options: list<poll-option>,
     voting-status: option<poll-voting-status-enum>
   }
 
-  /// Unique identifier of this poll.
-  record poll-id {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
   /// Describes a choice in a Poll object.
   record poll-option {
-    label: poll-option-label,
+    label: string,
     /// Position of this choice in the poll.
     position: s32,
     /// Number of users who voted for this choice.
     votes: s32
   }
 
-  /// The text of a poll choice.
-  record poll-option-label {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
   /// The topic of a Space, as selected by its creator.
   record topic {
     /// The description of the given topic.
     description: option<string>,
-    id: topic-id,
+    id: string,
     /// The name of the given topic.
     name: string
-  }
-
-  /// Unique identifier of this Topic.
-  record topic-id {
-    /// opaque schema; raw JSON
-    value: string
   }
 
   record tweet {
     /// Specifies the type of attachments (if any) present in this Tweet.
     attachments: option<tweet-attachments>,
-    author-id: option<user-id>,
+    author-id: option<string>,
     context-annotations: option<list<context-annotation>>,
-    conversation-id: option<tweet-id>,
+    conversation-id: option<string>,
     /// Creation time of the Tweet.
     created-at: option<string>,
     edit-controls: option<tweet-edit-controls>,
     /// A list of Tweet Ids in this Tweet chain.
-    edit-history-tweet-ids: list<tweet-id>,
+    edit-history-tweet-ids: list<string>,
     entities: option<full-text-entities>,
     /// The location tagged on the Tweet, if the user provided one.
     geo: option<tweet-geo>,
-    id: tweet-id,
-    in-reply-to-user-id: option<user-id>,
+    id: string,
+    in-reply-to-user-id: option<string>,
     /// Language of the Tweet, if detected by Twitter. Returned as a BCP47 language tag.
     lang: option<string>,
     /// Nonpublic engagement metrics for the Tweet at the time of the request.
@@ -2308,16 +1918,16 @@ interface users {
     reply-settings: option<reply-settings>,
     /// This is deprecated.
     source: option<string>,
-    text: tweet-text,
+    text: string,
     withheld: option<tweet-withheld>
   }
 
   /// Specifies the type of attachments (if any) present in this Tweet.
   record tweet-attachments {
     /// A list of Media Keys for each one of the media attachments (if media are attached).
-    media-keys: option<list<media-key>>,
+    media-keys: option<list<string>>,
     /// A list of poll IDs (if polls are attached).
-    poll-ids: option<list<poll-id>>
+    poll-ids: option<list<string>>
   }
 
   /// Annotation inferred from the Tweet text.
@@ -2358,7 +1968,7 @@ interface users {
   /// The location tagged on the Tweet, if the user provided one.
   record tweet-geo {
     coordinates: option<point>,
-    place-id: option<place-id>
+    place-id: option<string>
   }
 
   /// Nonpublic engagement metrics for the Tweet at the time of the request.
@@ -2406,20 +2016,8 @@ interface users {
   }
 
   record tweet-referenced-tweets-item {
-    id: tweet-id,
+    id: string,
     type-op: tweet-referenced-tweets-item-type-op-enum
-  }
-
-  /// Shows who can reply a Tweet. Fields returned are everyone, mentioned_users, and following.
-  record reply-settings {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
-  /// The content of the Tweet.
-  record tweet-text {
-    /// opaque schema; raw JSON
-    value: string
   }
 
   /// Indicates withholding details for [withheld content](https://help.twitter.com/en/rules-and-policies/tweet-withheld-by-country).
@@ -2427,33 +2025,15 @@ interface users {
     /// Indicates if the content is being withheld for on the basis of copyright infringement.
     copyright: bool,
     /// Provides a list of countries where this content is not available.
-    country-codes: list<country-code>,
+    country-codes: list<string>,
     /// Indicates whether the content being withheld is the `tweet` or a `user`.
     scope: option<tweet-withheld-scope-enum>
   }
 
   record get2-lists-id-followers-response-meta {
-    next-token: option<next-token>,
-    previous-token: option<previous-token>,
-    result-count: option<result-count>
-  }
-
-  /// The next token.
-  record next-token {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
-  /// The previous token.
-  record previous-token {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
-  /// The number of results returned in this response.
-  record result-count {
-    /// opaque schema; raw JSON
-    value: string
+    next-token: option<string>,
+    previous-token: option<string>,
+    result-count: option<s32>
   }
 
   record get2-lists-id-members-response {
@@ -2464,15 +2044,9 @@ interface users {
   }
 
   record get2-lists-id-members-response-meta {
-    next-token: option<next-token>,
-    previous-token: option<previous-token>,
-    result-count: option<result-count>
-  }
-
-  /// A base36 pagination token.
-  record pagination-token36 {
-    /// opaque schema; raw JSON
-    value: string
+    next-token: option<string>,
+    previous-token: option<string>,
+    result-count: option<s32>
   }
 
   record get2-tweets-id-liking-users-response {
@@ -2483,9 +2057,9 @@ interface users {
   }
 
   record get2-tweets-id-liking-users-response-meta {
-    next-token: option<next-token>,
-    previous-token: option<previous-token>,
-    result-count: option<result-count>
+    next-token: option<string>,
+    previous-token: option<string>,
+    result-count: option<s32>
   }
 
   record get2-tweets-id-retweeted-by-response {
@@ -2496,9 +2070,9 @@ interface users {
   }
 
   record get2-tweets-id-retweeted-by-response-meta {
-    next-token: option<next-token>,
-    previous-token: option<previous-token>,
-    result-count: option<result-count>
+    next-token: option<string>,
+    previous-token: option<string>,
+    result-count: option<s32>
   }
 
   record get2-users-response {
@@ -2531,12 +2105,6 @@ interface users {
     includes: option<expansions>
   }
 
-  /// A base32 pagination token.
-  record pagination-token32 {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
   record get2-users-id-blocking-response {
     data: option<list<user>>,
     errors: option<list<problem>>,
@@ -2545,9 +2113,9 @@ interface users {
   }
 
   record get2-users-id-blocking-response-meta {
-    next-token: option<next-token>,
-    previous-token: option<previous-token>,
-    result-count: option<result-count>
+    next-token: option<string>,
+    previous-token: option<string>,
+    result-count: option<s32>
   }
 
   record block-user-mutation-response {
@@ -2567,9 +2135,9 @@ interface users {
   }
 
   record get2-users-id-followers-response-meta {
-    next-token: option<next-token>,
-    previous-token: option<previous-token>,
-    result-count: option<result-count>
+    next-token: option<string>,
+    previous-token: option<string>,
+    result-count: option<s32>
   }
 
   record get2-users-id-following-response {
@@ -2580,9 +2148,9 @@ interface users {
   }
 
   record get2-users-id-following-response-meta {
-    next-token: option<next-token>,
-    previous-token: option<previous-token>,
-    result-count: option<result-count>
+    next-token: option<string>,
+    previous-token: option<string>,
+    result-count: option<s32>
   }
 
   record following-create-response {
@@ -2603,9 +2171,9 @@ interface users {
   }
 
   record get2-users-id-muting-response-meta {
-    next-token: option<next-token>,
-    previous-token: option<previous-token>,
-    result-count: option<result-count>
+    next-token: option<string>,
+    previous-token: option<string>,
+    result-count: option<s32>
   }
 
   record mute-user-mutation-response {
@@ -2633,7 +2201,7 @@ interface users {
     /// The maximum number of results.
     max-results: option<s32>,
     /// This parameter is used to get a specified 'page' of results.
-    pagination-token: option<pagination-token-long>,
+    pagination-token: option<string>,
     /// A comma separated list of User fields to display.
     user-fields: option<list<list-get-followers-user-fields-item-enum>>,
     /// A comma separated list of fields to expand.
@@ -2650,7 +2218,7 @@ interface users {
     /// The maximum number of results.
     max-results: option<s32>,
     /// This parameter is used to get a specified 'page' of results.
-    pagination-token: option<pagination-token-long>,
+    pagination-token: option<string>,
     /// A comma separated list of User fields to display.
     user-fields: option<list<list-get-followers-user-fields-item-enum>>,
     /// A comma separated list of fields to expand.
@@ -2667,7 +2235,7 @@ interface users {
     /// The maximum number of results.
     max-results: option<s32>,
     /// This parameter is used to get the next 'page' of results.
-    pagination-token: option<pagination-token36>,
+    pagination-token: option<string>,
     /// A comma separated list of User fields to display.
     user-fields: option<list<list-get-followers-user-fields-item-enum>>,
     /// A comma separated list of fields to expand.
@@ -2684,7 +2252,7 @@ interface users {
     /// The maximum number of results.
     max-results: option<s32>,
     /// This parameter is used to get the next 'page' of results.
-    pagination-token: option<pagination-token36>,
+    pagination-token: option<string>,
     /// A comma separated list of User fields to display.
     user-fields: option<list<list-get-followers-user-fields-item-enum>>,
     /// A comma separated list of fields to expand.
@@ -2697,7 +2265,7 @@ interface users {
   /// User lookup by IDs
   record find-users-by-id-params {
     /// A list of User IDs, comma-separated. You can specify up to 100 IDs.
-    ids: list<user-id>,
+    ids: list<string>,
     /// A comma separated list of User fields to display.
     user-fields: option<list<list-get-followers-user-fields-item-enum>>,
     /// A comma separated list of fields to expand.
@@ -2764,7 +2332,7 @@ interface users {
     /// The maximum number of results.
     max-results: option<s32>,
     /// This parameter is used to get a specified 'page' of results.
-    pagination-token: option<pagination-token32>,
+    pagination-token: option<string>,
     /// A comma separated list of User fields to display.
     user-fields: option<list<list-get-followers-user-fields-item-enum>>,
     /// A comma separated list of fields to expand.
@@ -2778,7 +2346,7 @@ interface users {
   record id-block-params {
     /// The ID of the authenticated source User that is requesting to block the target User.
     id: string,
-    target-user-id: user-id
+    target-user-id: string
   }
   id-block: func(params: id-block-params) -> result<block-user-mutation-response, string>;
 
@@ -2789,7 +2357,7 @@ interface users {
     /// The maximum number of results.
     max-results: option<s32>,
     /// This parameter is used to get a specified 'page' of results.
-    pagination-token: option<pagination-token32>,
+    pagination-token: option<string>,
     /// A comma separated list of User fields to display.
     user-fields: option<list<list-get-followers-user-fields-item-enum>>,
     /// A comma separated list of fields to expand.
@@ -2806,7 +2374,7 @@ interface users {
     /// The maximum number of results.
     max-results: option<s32>,
     /// This parameter is used to get a specified 'page' of results.
-    pagination-token: option<pagination-token32>,
+    pagination-token: option<string>,
     /// A comma separated list of User fields to display.
     user-fields: option<list<list-get-followers-user-fields-item-enum>>,
     /// A comma separated list of fields to expand.
@@ -2820,7 +2388,7 @@ interface users {
   record id-follow-params {
     /// The ID of the authenticated source User that is requesting to follow the target User.
     id: string,
-    target-user-id: user-id
+    target-user-id: string
   }
   id-follow: func(params: id-follow-params) -> result<following-create-response, string>;
 
@@ -2831,7 +2399,7 @@ interface users {
     /// The maximum number of results.
     max-results: option<s32>,
     /// This parameter is used to get the next 'page' of results.
-    pagination-token: option<pagination-token-long>,
+    pagination-token: option<string>,
     /// A comma separated list of User fields to display.
     user-fields: option<list<list-get-followers-user-fields-item-enum>>,
     /// A comma separated list of fields to expand.
@@ -2845,7 +2413,7 @@ interface users {
   record id-mute-params {
     /// The ID of the authenticated source User that is requesting to mute the target User.
     id: string,
-    target-user-id: user-id
+    target-user-id: string
   }
   id-mute: func(params: id-mute-params) -> result<mute-user-mutation-response, string>;
 
@@ -2979,6 +2547,13 @@ interface tweets {
     replied-to,
   }
 
+  enum reply-settings {
+    everyone,
+    mentioned-users,
+    following,
+    other,
+  }
+
   enum tweet-withheld-scope-enum {
     tweet,
     user,
@@ -2986,6 +2561,15 @@ interface tweets {
 
   enum geo-type-op-enum {
     feature,
+  }
+
+  enum place-type {
+    poi,
+    neighborhood,
+    city,
+    admin,
+    country,
+    unknown,
   }
 
   enum poll-voting-status-enum {
@@ -3024,12 +2608,6 @@ interface tweets {
     retweets,
   }
 
-  /// A base36 pagination token.
-  record pagination-token36 {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
   record get2-lists-id-tweets-response {
     data: option<list<tweet>>,
     errors: option<list<problem>>,
@@ -3040,19 +2618,19 @@ interface tweets {
   record tweet {
     /// Specifies the type of attachments (if any) present in this Tweet.
     attachments: option<tweet-attachments>,
-    author-id: option<user-id>,
+    author-id: option<string>,
     context-annotations: option<list<context-annotation>>,
-    conversation-id: option<tweet-id>,
+    conversation-id: option<string>,
     /// Creation time of the Tweet.
     created-at: option<string>,
     edit-controls: option<tweet-edit-controls>,
     /// A list of Tweet Ids in this Tweet chain.
-    edit-history-tweet-ids: list<tweet-id>,
+    edit-history-tweet-ids: list<string>,
     entities: option<full-text-entities>,
     /// The location tagged on the Tweet, if the user provided one.
     geo: option<tweet-geo>,
-    id: tweet-id,
-    in-reply-to-user-id: option<user-id>,
+    id: string,
+    in-reply-to-user-id: option<string>,
     /// Language of the Tweet, if detected by Twitter. Returned as a BCP47 language tag.
     lang: option<string>,
     /// Nonpublic engagement metrics for the Tweet at the time of the request.
@@ -3070,34 +2648,16 @@ interface tweets {
     reply-settings: option<reply-settings>,
     /// This is deprecated.
     source: option<string>,
-    text: tweet-text,
+    text: string,
     withheld: option<tweet-withheld>
   }
 
   /// Specifies the type of attachments (if any) present in this Tweet.
   record tweet-attachments {
     /// A list of Media Keys for each one of the media attachments (if media are attached).
-    media-keys: option<list<media-key>>,
+    media-keys: option<list<string>>,
     /// A list of poll IDs (if polls are attached).
-    poll-ids: option<list<poll-id>>
-  }
-
-  /// The Media Key identifier for this attachment.
-  record media-key {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
-  /// Unique identifier of this poll.
-  record poll-id {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
-  /// Unique identifier of this User. This is returned as a string in order to avoid complications with languages and tools that cannot handle large integers.
-  record user-id {
-    /// opaque schema; raw JSON
-    value: string
+    poll-ids: option<list<string>>
   }
 
   /// Annotation inferred from the Tweet text.
@@ -3124,12 +2684,6 @@ interface tweets {
     id: string,
     /// Name of the context annotation entity.
     name: option<string>
-  }
-
-  /// Unique identifier of this Tweet. This is returned as a string in order to avoid complications with languages and tools that cannot handle large integers.
-  record tweet-id {
-    /// opaque schema; raw JSON
-    value: string
   }
 
   record tweet-edit-controls {
@@ -3185,14 +2739,8 @@ interface tweets {
     end: s32,
     /// Index (zero-based) at which position this entity starts.  The index is inclusive.
     start: s32,
-    id: option<user-id>,
-    username: user-name
-  }
-
-  /// The Twitter handle (screen name) of this user.
-  record user-name {
-    /// opaque schema; raw JSON
-    value: string
+    id: option<string>,
+    username: string
   }
 
   /// Represent the portion of text recognized as a URL, and its start and end position within the text.
@@ -3205,70 +2753,34 @@ interface tweets {
     description: option<string>,
     /// The URL as displayed in the Twitter client.
     display-url: option<string>,
-    expanded-url: option<url>,
+    expanded-url: option<string>,
     images: option<list<url-image>>,
-    media-key: option<media-key>,
-    status: option<http-status-code>,
+    media-key: option<string>,
+    status: option<s32>,
     /// Title of the page the URL points to.
     title: option<string>,
     /// Fully resolved url.
     unwound-url: option<string>,
-    url: url
-  }
-
-  /// A validly formatted URL.
-  record url {
-    /// opaque schema; raw JSON
-    value: string
+    url: string
   }
 
   /// Represent the information for the URL image.
   record url-image {
-    height: option<media-height>,
-    url: option<url>,
-    width: option<media-width>
-  }
-
-  /// The height of the media in pixels.
-  record media-height {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
-  /// The width of the media in pixels.
-  record media-width {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
-  /// HTTP Status Code.
-  record http-status-code {
-    /// opaque schema; raw JSON
-    value: string
+    height: option<s32>,
+    url: option<string>,
+    width: option<s32>
   }
 
   /// The location tagged on the Tweet, if the user provided one.
   record tweet-geo {
     coordinates: option<point>,
-    place-id: option<place-id>
+    place-id: option<string>
   }
 
   /// A [GeoJson Point](https://tools.ietf.org/html/rfc7946#section-3.1.2) geometry object.
   record point {
-    coordinates: position,
+    coordinates: list<f64>,
     type-op: point-type-op-enum
-  }
-
-  /// A [GeoJson Position](https://tools.ietf.org/html/rfc7946#section-3.1.1) in the format `[longitude,latitude]`.
-  record position {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
-  /// The identifier for this place.
-  record place-id {
-    /// opaque schema; raw JSON
-    value: string
   }
 
   /// Nonpublic engagement metrics for the Tweet at the time of the request.
@@ -3316,20 +2828,8 @@ interface tweets {
   }
 
   record tweet-referenced-tweets-item {
-    id: tweet-id,
+    id: string,
     type-op: tweet-referenced-tweets-item-type-op-enum
-  }
-
-  /// Shows who can reply a Tweet. Fields returned are everyone, mentioned_users, and following.
-  record reply-settings {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
-  /// The content of the Tweet.
-  record tweet-text {
-    /// opaque schema; raw JSON
-    value: string
   }
 
   /// Indicates withholding details for [withheld content](https://help.twitter.com/en/rules-and-policies/tweet-withheld-by-country).
@@ -3337,15 +2837,9 @@ interface tweets {
     /// Indicates if the content is being withheld for on the basis of copyright infringement.
     copyright: bool,
     /// Provides a list of countries where this content is not available.
-    country-codes: list<country-code>,
+    country-codes: list<string>,
     /// Indicates whether the content being withheld is the `tweet` or a `user`.
     scope: option<tweet-withheld-scope-enum>
-  }
-
-  /// A two-letter ISO 3166-1 alpha-2 country code.
-  record country-code {
-    /// opaque schema; raw JSON
-    value: string
   }
 
   /// An HTTP Problem Details object, as defined in IETF RFC 7807 (https://tools.ietf.org/html/rfc7807).
@@ -3366,21 +2860,21 @@ interface tweets {
   }
 
   record media {
-    height: option<media-height>,
-    media-key: option<media-key>,
+    height: option<s32>,
+    media-key: option<string>,
     type-op: string,
-    width: option<media-width>
+    width: option<s32>
   }
 
   record place {
-    contained-within: option<list<place-id>>,
+    contained-within: option<list<string>>,
     /// The full name of the county in which this place exists.
     country: option<string>,
-    country-code: option<country-code>,
+    country-code: option<string>,
     /// The full name of this place.
     full-name: string,
     geo: option<geo>,
-    id: place-id,
+    id: string,
     /// The human readable name of this place.
     name: option<string>,
     place-type: option<place-type>
@@ -3389,17 +2883,13 @@ interface tweets {
   record geo {
     bbox: list<f64>,
     geometry: option<point>,
-    properties: geo-properties,
+    properties: list<geo-properties-entry>,
     type-op: geo-type-op-enum
   }
 
-  record geo-properties {
-    /// JSON-encoded free-form object payload
-    data: option<string>
-  }
-
-  record place-type {
-    /// opaque schema; raw JSON
+  /// one entry of a string-keyed map (free-form object)
+  record geo-properties-entry {
+    key: string,
     value: string
   }
 
@@ -3407,39 +2897,27 @@ interface tweets {
   record poll {
     duration-minutes: option<s32>,
     end-datetime: option<string>,
-    id: poll-id,
+    id: string,
     options: list<poll-option>,
     voting-status: option<poll-voting-status-enum>
   }
 
   /// Describes a choice in a Poll object.
   record poll-option {
-    label: poll-option-label,
+    label: string,
     /// Position of this choice in the poll.
     position: s32,
     /// Number of users who voted for this choice.
     votes: s32
   }
 
-  /// The text of a poll choice.
-  record poll-option-label {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
   /// The topic of a Space, as selected by its creator.
   record topic {
     /// The description of the given topic.
     description: option<string>,
-    id: topic-id,
+    id: string,
     /// The name of the given topic.
     name: string
-  }
-
-  /// Unique identifier of this Topic.
-  record topic-id {
-    /// opaque schema; raw JSON
-    value: string
   }
 
   /// The Twitter User object.
@@ -3450,12 +2928,12 @@ interface tweets {
     description: option<string>,
     /// A list of metadata found in the User's profile description.
     entities: option<user-entities>,
-    id: user-id,
+    id: string,
     /// The location specified in the User's profile, if the User provided one. As this is a freeform value, it may not indicate a valid location, but it may be fuzzily evaluated when performing searches with location queries.
     location: option<string>,
     /// The friendly name of this User, as shown on their profile.
     name: string,
-    pinned-tweet-id: option<tweet-id>,
+    pinned-tweet-id: option<string>,
     /// The URL to the profile image for this User.
     profile-image-url: option<string>,
     /// Indicates if this User has chosen to protect their Tweets (in other words, if this User's Tweets are private).
@@ -3464,7 +2942,7 @@ interface tweets {
     public-metrics: option<user-public-metrics>,
     /// The URL specified in the User's profile.
     url: option<string>,
-    username: user-name,
+    username: string,
     /// Indicate if this User is a verified Twitter User.
     verified: option<bool>,
     /// The Twitter Blue verified type of the user, eg: blue, government, business or none.
@@ -3499,33 +2977,15 @@ interface tweets {
   /// Indicates withholding details for [withheld content](https://help.twitter.com/en/rules-and-policies/tweet-withheld-by-country).
   record user-withheld {
     /// Provides a list of countries where this content is not available.
-    country-codes: list<country-code>,
+    country-codes: list<string>,
     /// Indicates that the content being withheld is a `user`.
     scope: option<user-withheld-scope-enum>
   }
 
   record get2-lists-id-tweets-response-meta {
-    next-token: option<next-token>,
-    previous-token: option<previous-token>,
-    result-count: option<result-count>
-  }
-
-  /// The next token.
-  record next-token {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
-  /// The previous token.
-  record previous-token {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
-  /// The number of results returned in this response.
-  record result-count {
-    /// opaque schema; raw JSON
-    value: string
+    next-token: option<string>,
+    previous-token: option<string>,
+    result-count: option<s32>
   }
 
   record get2-tweets-response {
@@ -3542,15 +3002,9 @@ interface tweets {
   /// Media information being attached to created Tweet. This is mutually exclusive from Quote Tweet Id, Poll, and Card URI.
   record tweet-create-request-media {
     /// A list of Media Ids to be attached to a created Tweet.
-    media-ids: list<media-id>,
+    media-ids: list<string>,
     /// A list of User Ids to be tagged in the media for created Tweet.
-    tagged-user-ids: option<list<user-id>>
-  }
-
-  /// The unique identifier of this Media.
-  record media-id {
-    /// opaque schema; raw JSON
-    value: string
+    tagged-user-ids: option<list<string>>
   }
 
   /// Poll options for a Tweet with a poll. This is mutually exclusive from Media, Quote Tweet Id, and Card URI.
@@ -3565,8 +3019,8 @@ interface tweets {
   /// Tweet information of the Tweet being replied to.
   record tweet-create-request-reply {
     /// A list of User Ids to be excluded from the reply Tweet.
-    exclude-reply-user-ids: option<list<user-id>>,
-    in-reply-to-tweet-id: tweet-id
+    exclude-reply-user-ids: option<list<string>>,
+    in-reply-to-tweet-id: string
   }
 
   record tweet-create-response {
@@ -3575,8 +3029,8 @@ interface tweets {
   }
 
   record tweet-create-response-data {
-    id: tweet-id,
-    text: tweet-text
+    id: string,
+    text: string
   }
 
   record get2-tweets-counts-all-response {
@@ -3587,52 +3041,16 @@ interface tweets {
 
   /// Represent a Search Count Result.
   record search-count {
-    end: end,
-    start: start,
-    tweet-count: tweet-count
-  }
-
-  /// The end time of the bucket.
-  record end {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
-  /// The start time of the bucket.
-  record start {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
-  /// The count for the bucket.
-  record tweet-count {
-    /// opaque schema; raw JSON
-    value: string
+    end: string,
+    start: string,
+    tweet-count: s32
   }
 
   record get2-tweets-counts-all-response-meta {
-    newest-id: option<newest-id>,
-    next-token: option<next-token>,
-    oldest-id: option<oldest-id>,
-    total-tweet-count: option<aggregate>
-  }
-
-  /// The newest id in this response.
-  record newest-id {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
-  /// The oldest id in this response.
-  record oldest-id {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
-  /// The sum of results returned in this response.
-  record aggregate {
-    /// opaque schema; raw JSON
-    value: string
+    newest-id: option<string>,
+    next-token: option<string>,
+    oldest-id: option<string>,
+    total-tweet-count: option<s32>
   }
 
   record get2-tweets-counts-recent-response {
@@ -3642,10 +3060,10 @@ interface tweets {
   }
 
   record get2-tweets-counts-recent-response-meta {
-    newest-id: option<newest-id>,
-    next-token: option<next-token>,
-    oldest-id: option<oldest-id>,
-    total-tweet-count: option<aggregate>
+    newest-id: option<string>,
+    next-token: option<string>,
+    oldest-id: option<string>,
+    total-tweet-count: option<s32>
   }
 
   record streaming-tweet-response {
@@ -3668,10 +3086,10 @@ interface tweets {
   }
 
   record get2-tweets-search-all-response-meta {
-    newest-id: option<newest-id>,
-    next-token: option<next-token>,
-    oldest-id: option<oldest-id>,
-    result-count: option<result-count>
+    newest-id: option<string>,
+    next-token: option<string>,
+    oldest-id: option<string>,
+    result-count: option<s32>
   }
 
   record get2-tweets-search-recent-response {
@@ -3682,10 +3100,10 @@ interface tweets {
   }
 
   record get2-tweets-search-recent-response-meta {
-    newest-id: option<newest-id>,
-    next-token: option<next-token>,
-    oldest-id: option<oldest-id>,
-    result-count: option<result-count>
+    newest-id: option<string>,
+    next-token: option<string>,
+    oldest-id: option<string>,
+    result-count: option<s32>
   }
 
   /// A Tweet or error that can be returned by the streaming Tweet API. The values returned with a successful streamed Tweet includes the user provided rules that the Tweet matched.
@@ -3698,20 +3116,8 @@ interface tweets {
   }
 
   record filtered-streaming-tweet-response-matching-rules-item {
-    id: rule-id,
-    tag: option<rule-tag>
-  }
-
-  /// Unique identifier of this rule.
-  record rule-id {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
-  /// A tag meant for the labeling of user provided rules.
-  record rule-tag {
-    /// opaque schema; raw JSON
-    value: string
+    id: string,
+    tag: option<string>
   }
 
   record rules-lookup-response {
@@ -3721,28 +3127,17 @@ interface tweets {
 
   /// A user-provided stream filtering rule.
   record rule {
-    id: option<rule-id>,
-    tag: option<rule-tag>,
-    value: rule-value
-  }
-
-  /// The filterlang value of the rule.
-  record rule-value {
-    /// opaque schema; raw JSON
+    id: option<string>,
+    tag: option<string>,
     value: string
   }
 
   record rules-response-metadata {
-    next-token: option<next-token>,
+    next-token: option<string>,
     /// Number of Rules in result set.
     result-count: option<s32>,
     sent: string,
-    summary: option<rules-request-summary>
-  }
-
-  record rules-request-summary {
-    /// opaque schema; raw JSON
-    value: string
+    summary: option<string>
   }
 
   /// A response from modifying user-specified stream filtering rules.
@@ -3776,8 +3171,8 @@ interface tweets {
   }
 
   record get2-tweets-id-quote-tweets-response-meta {
-    next-token: option<next-token>,
-    result-count: option<result-count>
+    next-token: option<string>,
+    result-count: option<s32>
   }
 
   record tweet-hide-response {
@@ -3796,9 +3191,9 @@ interface tweets {
   }
 
   record get2-users-id-liked-tweets-response-meta {
-    next-token: option<next-token>,
-    previous-token: option<previous-token>,
-    result-count: option<result-count>
+    next-token: option<string>,
+    previous-token: option<string>,
+    result-count: option<s32>
   }
 
   record users-likes-create-response {
@@ -3827,11 +3222,11 @@ interface tweets {
   }
 
   record get2-users-id-mentions-response-meta {
-    newest-id: option<newest-id>,
-    next-token: option<next-token>,
-    oldest-id: option<oldest-id>,
-    previous-token: option<previous-token>,
-    result-count: option<result-count>
+    newest-id: option<string>,
+    next-token: option<string>,
+    oldest-id: option<string>,
+    previous-token: option<string>,
+    result-count: option<s32>
   }
 
   record users-retweets-create-response {
@@ -3860,11 +3255,11 @@ interface tweets {
   }
 
   record get2-users-id-timelines-reverse-chronological-response-meta {
-    newest-id: option<newest-id>,
-    next-token: option<next-token>,
-    oldest-id: option<oldest-id>,
-    previous-token: option<previous-token>,
-    result-count: option<result-count>
+    newest-id: option<string>,
+    next-token: option<string>,
+    oldest-id: option<string>,
+    previous-token: option<string>,
+    result-count: option<s32>
   }
 
   record get2-users-id-tweets-response {
@@ -3875,11 +3270,11 @@ interface tweets {
   }
 
   record get2-users-id-tweets-response-meta {
-    newest-id: option<newest-id>,
-    next-token: option<next-token>,
-    oldest-id: option<oldest-id>,
-    previous-token: option<previous-token>,
-    result-count: option<result-count>
+    newest-id: option<string>,
+    next-token: option<string>,
+    oldest-id: option<string>,
+    previous-token: option<string>,
+    result-count: option<s32>
   }
 
   /// List Tweets timeline by List ID.
@@ -3889,7 +3284,7 @@ interface tweets {
     /// The maximum number of results.
     max-results: option<s32>,
     /// This parameter is used to get the next 'page' of results.
-    pagination-token: option<pagination-token36>,
+    pagination-token: option<string>,
     /// A comma separated list of Tweet fields to display.
     tweet-fields: option<list<lists-id-tweets-tweet-fields-item-enum>>,
     /// A comma separated list of fields to expand.
@@ -3908,7 +3303,7 @@ interface tweets {
   /// Tweet lookup by Tweet IDs
   record find-tweets-by-id-params {
     /// A comma separated list of Tweet IDs. Up to 100 are allowed in a single request.
-    ids: list<tweet-id>,
+    ids: list<string>,
     /// A comma separated list of Tweet fields to display.
     tweet-fields: option<list<lists-id-tweets-tweet-fields-item-enum>>,
     /// A comma separated list of fields to expand.
@@ -3940,12 +3335,12 @@ interface tweets {
     nullcast: option<bool>,
     /// Poll options for a Tweet with a poll. This is mutually exclusive from Media, Quote Tweet Id, and Card URI.
     poll: option<tweet-create-request-poll>,
-    quote-tweet-id: option<tweet-id>,
+    quote-tweet-id: option<string>,
     /// Tweet information of the Tweet being replied to.
     reply: option<tweet-create-request-reply>,
     /// Settings to indicate who can reply to the Tweet.
     reply-settings: option<tweet-create-request-poll-reply-settings-enum>,
-    text: option<tweet-text>
+    text: option<string>
   }
   create-tweet: func(params: create-tweet-params) -> result<tweet-create-response, string>;
 
@@ -3958,13 +3353,13 @@ interface tweets {
     /// YYYY-MM-DDTHH:mm:ssZ. The newest, most recent UTC timestamp to which the Tweets will be provided. Timestamp is in second granularity and is exclusive (i.e. 12:00:01 excludes the first second of the minute).
     end-time: option<string>,
     /// Returns results with a Tweet ID greater than (that is, more recent than) the specified ID.
-    since-id: option<tweet-id>,
+    since-id: option<string>,
     /// Returns results with a Tweet ID less than (that is, older than) the specified ID.
-    until-id: option<tweet-id>,
+    until-id: option<string>,
     /// This parameter is used to get the next 'page' of results. The value used with the parameter is pulled directly from the response provided by the API, and should not be modified.
-    next-token: option<pagination-token36>,
+    next-token: option<string>,
     /// This parameter is used to get the next 'page' of results. The value used with the parameter is pulled directly from the response provided by the API, and should not be modified.
-    pagination-token: option<pagination-token36>,
+    pagination-token: option<string>,
     /// The granularity for the search counts results.
     granularity: option<tweet-counts-full-archive-search-granularity-enum>,
     /// A comma separated list of SearchCount fields to display.
@@ -3981,13 +3376,13 @@ interface tweets {
     /// YYYY-MM-DDTHH:mm:ssZ. The newest, most recent UTC timestamp to which the Tweets will be provided. Timestamp is in second granularity and is exclusive (i.e. 12:00:01 excludes the first second of the minute).
     end-time: option<string>,
     /// Returns results with a Tweet ID greater than (that is, more recent than) the specified ID.
-    since-id: option<tweet-id>,
+    since-id: option<string>,
     /// Returns results with a Tweet ID less than (that is, older than) the specified ID.
-    until-id: option<tweet-id>,
+    until-id: option<string>,
     /// This parameter is used to get the next 'page' of results. The value used with the parameter is pulled directly from the response provided by the API, and should not be modified.
-    next-token: option<pagination-token36>,
+    next-token: option<string>,
     /// This parameter is used to get the next 'page' of results. The value used with the parameter is pulled directly from the response provided by the API, and should not be modified.
-    pagination-token: option<pagination-token36>,
+    pagination-token: option<string>,
     /// The granularity for the search counts results.
     granularity: option<tweet-counts-full-archive-search-granularity-enum>,
     /// A comma separated list of SearchCount fields to display.
@@ -4073,15 +3468,15 @@ interface tweets {
     /// YYYY-MM-DDTHH:mm:ssZ. The newest, most recent UTC timestamp to which the Tweets will be provided. Timestamp is in second granularity and is exclusive (i.e. 12:00:01 excludes the first second of the minute).
     end-time: option<string>,
     /// Returns results with a Tweet ID greater than (that is, more recent than) the specified ID.
-    since-id: option<tweet-id>,
+    since-id: option<string>,
     /// Returns results with a Tweet ID less than (that is, older than) the specified ID.
-    until-id: option<tweet-id>,
+    until-id: option<string>,
     /// The maximum number of search results to be returned by a request.
     max-results: option<s32>,
     /// This parameter is used to get the next 'page' of results. The value used with the parameter is pulled directly from the response provided by the API, and should not be modified.
-    next-token: option<pagination-token36>,
+    next-token: option<string>,
     /// This parameter is used to get the next 'page' of results. The value used with the parameter is pulled directly from the response provided by the API, and should not be modified.
-    pagination-token: option<pagination-token36>,
+    pagination-token: option<string>,
     /// This order in which to return results.
     sort-order: option<fullarchive-search-sort-order-enum>,
     /// A comma separated list of Tweet fields to display.
@@ -4108,15 +3503,15 @@ interface tweets {
     /// YYYY-MM-DDTHH:mm:ssZ. The newest, most recent UTC timestamp to which the Tweets will be provided. Timestamp is in second granularity and is exclusive (i.e. 12:00:01 excludes the first second of the minute).
     end-time: option<string>,
     /// Returns results with a Tweet ID greater than (that is, more recent than) the specified ID.
-    since-id: option<tweet-id>,
+    since-id: option<string>,
     /// Returns results with a Tweet ID less than (that is, older than) the specified ID.
-    until-id: option<tweet-id>,
+    until-id: option<string>,
     /// The maximum number of search results to be returned by a request.
     max-results: option<s32>,
     /// This parameter is used to get the next 'page' of results. The value used with the parameter is pulled directly from the response provided by the API, and should not be modified.
-    next-token: option<pagination-token36>,
+    next-token: option<string>,
     /// This parameter is used to get the next 'page' of results. The value used with the parameter is pulled directly from the response provided by the API, and should not be modified.
-    pagination-token: option<pagination-token36>,
+    pagination-token: option<string>,
     /// This order in which to return results.
     sort-order: option<fullarchive-search-sort-order-enum>,
     /// A comma separated list of Tweet fields to display.
@@ -4160,7 +3555,7 @@ interface tweets {
   /// Rules lookup
   record get-rules-params {
     /// A comma-separated list of Rule IDs.
-    ids: option<list<rule-id>>,
+    ids: option<list<string>>,
     /// The maximum number of results.
     max-results: option<s32>,
     /// This value is populated by passing the 'next_token' returned in a request to paginate through results.
@@ -4172,8 +3567,7 @@ interface tweets {
   record add-or-delete-rules-params {
     /// Dry Run can be used with both the add and delete action, with the expected result given, but without actually taking any action in the system (meaning the end state will always be as it was when the request was submitted). This is particularly useful to validate rule changes.
     dry-run: option<bool>,
-    /// opaque schema; raw JSON
-    value: string
+    body: string
   }
   add-or-delete-rules: func(params: add-or-delete-rules-params) -> result<add-or-delete-rules-response, string>;
 
@@ -4210,7 +3604,7 @@ interface tweets {
     /// The maximum number of results to be returned.
     max-results: option<s32>,
     /// This parameter is used to get a specified 'page' of results.
-    pagination-token: option<pagination-token36>,
+    pagination-token: option<string>,
     /// The set of entities to exclude (e.g. 'replies' or 'retweets').
     exclude: option<list<find-tweets-that-quote-a-tweet-exclude-item-enum>>,
     /// A comma separated list of Tweet fields to display.
@@ -4243,7 +3637,7 @@ interface tweets {
     /// The maximum number of results.
     max-results: option<s32>,
     /// This parameter is used to get the next 'page' of results.
-    pagination-token: option<pagination-token36>,
+    pagination-token: option<string>,
     /// A comma separated list of Tweet fields to display.
     tweet-fields: option<list<lists-id-tweets-tweet-fields-item-enum>>,
     /// A comma separated list of fields to expand.
@@ -4263,7 +3657,7 @@ interface tweets {
   record users-id-like-params {
     /// The ID of the authenticated source User that is requesting to like the Tweet.
     id: string,
-    tweet-id: tweet-id
+    tweet-id: string
   }
   users-id-like: func(params: users-id-like-params) -> result<users-likes-create-response, string>;
 
@@ -4281,13 +3675,13 @@ interface tweets {
     /// The ID of the User to lookup.
     id: string,
     /// The minimum Tweet ID to be included in the result set. This parameter takes precedence over start_time if both are specified.
-    since-id: option<tweet-id>,
+    since-id: option<string>,
     /// The maximum Tweet ID to be included in the result set. This parameter takes precedence over end_time if both are specified.
-    until-id: option<tweet-id>,
+    until-id: option<string>,
     /// The maximum number of results.
     max-results: option<s32>,
     /// This parameter is used to get the next 'page' of results.
-    pagination-token: option<pagination-token36>,
+    pagination-token: option<string>,
     /// YYYY-MM-DDTHH:mm:ssZ. The earliest UTC timestamp from which the Tweets will be provided. The since_id parameter takes precedence if it is also specified.
     start-time: option<string>,
     /// YYYY-MM-DDTHH:mm:ssZ. The latest UTC timestamp to which the Tweets will be provided. The until_id parameter takes precedence if it is also specified.
@@ -4311,7 +3705,7 @@ interface tweets {
   record users-id-retweets-params {
     /// The ID of the authenticated source User that is requesting to retweet the Tweet.
     id: string,
-    tweet-id: tweet-id
+    tweet-id: string
   }
   users-id-retweets: func(params: users-id-retweets-params) -> result<users-retweets-create-response, string>;
 
@@ -4329,13 +3723,13 @@ interface tweets {
     /// The ID of the authenticated source User to list Reverse Chronological Timeline Tweets of.
     id: string,
     /// The minimum Tweet ID to be included in the result set. This parameter takes precedence over start_time if both are specified.
-    since-id: option<tweet-id>,
+    since-id: option<string>,
     /// The maximum Tweet ID to be included in the result set. This parameter takes precedence over end_time if both are specified.
-    until-id: option<tweet-id>,
+    until-id: option<string>,
     /// The maximum number of results.
     max-results: option<s32>,
     /// This parameter is used to get the next 'page' of results.
-    pagination-token: option<pagination-token36>,
+    pagination-token: option<string>,
     /// The set of entities to exclude (e.g. 'replies' or 'retweets').
     exclude: option<list<find-tweets-that-quote-a-tweet-exclude-item-enum>>,
     /// YYYY-MM-DDTHH:mm:ssZ. The earliest UTC timestamp from which the Tweets will be provided. The since_id parameter takes precedence if it is also specified.
@@ -4362,13 +3756,13 @@ interface tweets {
     /// The ID of the User to lookup.
     id: string,
     /// The minimum Tweet ID to be included in the result set. This parameter takes precedence over start_time if both are specified.
-    since-id: option<tweet-id>,
+    since-id: option<string>,
     /// The maximum Tweet ID to be included in the result set. This parameter takes precedence over end_time if both are specified.
-    until-id: option<tweet-id>,
+    until-id: option<string>,
     /// The maximum number of results.
     max-results: option<s32>,
     /// This parameter is used to get the next 'page' of results.
-    pagination-token: option<pagination-token36>,
+    pagination-token: option<string>,
     /// The set of entities to exclude (e.g. 'replies' or 'retweets').
     exclude: option<list<find-tweets-that-quote-a-tweet-exclude-item-enum>>,
     /// YYYY-MM-DDTHH:mm:ssZ. The earliest UTC timestamp from which the Tweets will be provided. The since_id parameter takes precedence if it is also specified.
@@ -4393,13 +3787,14 @@ interface tweets {
 }
 
 interface general {
-  record get-open-api-spec-response {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record get-open-api-spec-response-entry {
+    key: string,
+    value: string
   }
 
   /// Returns the OpenAPI Specification document.
-  get-open-api-spec: func() -> result<get-open-api-spec-response, string>;
+  get-open-api-spec: func() -> result<list<get-open-api-spec-response-entry>, string>;
 
 }
 
@@ -4470,6 +3865,15 @@ interface spaces {
     feature,
   }
 
+  enum place-type {
+    poi,
+    neighborhood,
+    city,
+    admin,
+    country,
+    unknown,
+  }
+
   enum poll-voting-status-enum {
     open,
     closed,
@@ -4479,6 +3883,13 @@ interface spaces {
     retweeted,
     quoted,
     replied-to,
+  }
+
+  enum reply-settings {
+    everyone,
+    mentioned-users,
+    following,
+    other,
   }
 
   enum tweet-withheld-scope-enum {
@@ -4581,14 +3992,14 @@ interface spaces {
   record space {
     /// Creation time of the Space.
     created-at: option<string>,
-    creator-id: option<user-id>,
+    creator-id: option<string>,
     /// End time of the Space.
     ended-at: option<string>,
     /// The user ids for the hosts of the Space.
-    host-ids: option<list<user-id>>,
-    id: space-id,
+    host-ids: option<list<string>>,
+    id: string,
     /// An array of user ids for people who were invited to a Space.
-    invited-user-ids: option<list<user-id>>,
+    invited-user-ids: option<list<string>>,
     /// Denotes if the Space is a ticketed Space.
     is-ticketed: option<bool>,
     /// The language of the Space.
@@ -4598,7 +4009,7 @@ interface spaces {
     /// A date time stamp for when a Space is scheduled to begin.
     scheduled-start: option<string>,
     /// An array of user ids for people who were speakers in a Space.
-    speaker-ids: option<list<user-id>>,
+    speaker-ids: option<list<string>>,
     /// When the Space was started as a date string.
     started-at: option<string>,
     /// The current state of the Space.
@@ -4611,18 +4022,6 @@ interface spaces {
     topics: option<list<space-topics-item>>,
     /// When the Space was last updated.
     updated-at: option<string>
-  }
-
-  /// Unique identifier of this User. This is returned as a string in order to avoid complications with languages and tools that cannot handle large integers.
-  record user-id {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
-  /// The unique identifier of this Space.
-  record space-id {
-    /// opaque schema; raw JSON
-    value: string
   }
 
   /// The Twitter Topic object.
@@ -4653,82 +4052,42 @@ interface spaces {
   }
 
   record media {
-    height: option<media-height>,
-    media-key: option<media-key>,
+    height: option<s32>,
+    media-key: option<string>,
     type-op: string,
-    width: option<media-width>
-  }
-
-  /// The height of the media in pixels.
-  record media-height {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
-  /// The Media Key identifier for this attachment.
-  record media-key {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
-  /// The width of the media in pixels.
-  record media-width {
-    /// opaque schema; raw JSON
-    value: string
+    width: option<s32>
   }
 
   record place {
-    contained-within: option<list<place-id>>,
+    contained-within: option<list<string>>,
     /// The full name of the county in which this place exists.
     country: option<string>,
-    country-code: option<country-code>,
+    country-code: option<string>,
     /// The full name of this place.
     full-name: string,
     geo: option<geo>,
-    id: place-id,
+    id: string,
     /// The human readable name of this place.
     name: option<string>,
     place-type: option<place-type>
   }
 
-  /// The identifier for this place.
-  record place-id {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
-  /// A two-letter ISO 3166-1 alpha-2 country code.
-  record country-code {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
   record geo {
     bbox: list<f64>,
     geometry: option<point>,
-    properties: geo-properties,
+    properties: list<geo-properties-entry>,
     type-op: geo-type-op-enum
   }
 
   /// A [GeoJson Point](https://tools.ietf.org/html/rfc7946#section-3.1.2) geometry object.
   record point {
-    coordinates: position,
+    coordinates: list<f64>,
     type-op: point-type-op-enum
   }
 
-  /// A [GeoJson Position](https://tools.ietf.org/html/rfc7946#section-3.1.1) in the format `[longitude,latitude]`.
-  record position {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
-  record geo-properties {
-    /// JSON-encoded free-form object payload
-    data: option<string>
-  }
-
-  record place-type {
-    /// opaque schema; raw JSON
+  /// one entry of a string-keyed map (free-form object)
+  record geo-properties-entry {
+    key: string,
     value: string
   }
 
@@ -4736,63 +4095,45 @@ interface spaces {
   record poll {
     duration-minutes: option<s32>,
     end-datetime: option<string>,
-    id: poll-id,
+    id: string,
     options: list<poll-option>,
     voting-status: option<poll-voting-status-enum>
   }
 
-  /// Unique identifier of this poll.
-  record poll-id {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
   /// Describes a choice in a Poll object.
   record poll-option {
-    label: poll-option-label,
+    label: string,
     /// Position of this choice in the poll.
     position: s32,
     /// Number of users who voted for this choice.
     votes: s32
   }
 
-  /// The text of a poll choice.
-  record poll-option-label {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
   /// The topic of a Space, as selected by its creator.
   record topic {
     /// The description of the given topic.
     description: option<string>,
-    id: topic-id,
+    id: string,
     /// The name of the given topic.
     name: string
-  }
-
-  /// Unique identifier of this Topic.
-  record topic-id {
-    /// opaque schema; raw JSON
-    value: string
   }
 
   record tweet {
     /// Specifies the type of attachments (if any) present in this Tweet.
     attachments: option<tweet-attachments>,
-    author-id: option<user-id>,
+    author-id: option<string>,
     context-annotations: option<list<context-annotation>>,
-    conversation-id: option<tweet-id>,
+    conversation-id: option<string>,
     /// Creation time of the Tweet.
     created-at: option<string>,
     edit-controls: option<tweet-edit-controls>,
     /// A list of Tweet Ids in this Tweet chain.
-    edit-history-tweet-ids: list<tweet-id>,
+    edit-history-tweet-ids: list<string>,
     entities: option<full-text-entities>,
     /// The location tagged on the Tweet, if the user provided one.
     geo: option<tweet-geo>,
-    id: tweet-id,
-    in-reply-to-user-id: option<user-id>,
+    id: string,
+    in-reply-to-user-id: option<string>,
     /// Language of the Tweet, if detected by Twitter. Returned as a BCP47 language tag.
     lang: option<string>,
     /// Nonpublic engagement metrics for the Tweet at the time of the request.
@@ -4810,16 +4151,16 @@ interface spaces {
     reply-settings: option<reply-settings>,
     /// This is deprecated.
     source: option<string>,
-    text: tweet-text,
+    text: string,
     withheld: option<tweet-withheld>
   }
 
   /// Specifies the type of attachments (if any) present in this Tweet.
   record tweet-attachments {
     /// A list of Media Keys for each one of the media attachments (if media are attached).
-    media-keys: option<list<media-key>>,
+    media-keys: option<list<string>>,
     /// A list of poll IDs (if polls are attached).
-    poll-ids: option<list<poll-id>>
+    poll-ids: option<list<string>>
   }
 
   /// Annotation inferred from the Tweet text.
@@ -4846,12 +4187,6 @@ interface spaces {
     id: string,
     /// Name of the context annotation entity.
     name: option<string>
-  }
-
-  /// Unique identifier of this Tweet. This is returned as a string in order to avoid complications with languages and tools that cannot handle large integers.
-  record tweet-id {
-    /// opaque schema; raw JSON
-    value: string
   }
 
   record tweet-edit-controls {
@@ -4907,14 +4242,8 @@ interface spaces {
     end: s32,
     /// Index (zero-based) at which position this entity starts.  The index is inclusive.
     start: s32,
-    id: option<user-id>,
-    username: user-name
-  }
-
-  /// The Twitter handle (screen name) of this user.
-  record user-name {
-    /// opaque schema; raw JSON
-    value: string
+    id: option<string>,
+    username: string
   }
 
   /// Represent the portion of text recognized as a URL, and its start and end position within the text.
@@ -4927,40 +4256,28 @@ interface spaces {
     description: option<string>,
     /// The URL as displayed in the Twitter client.
     display-url: option<string>,
-    expanded-url: option<url>,
+    expanded-url: option<string>,
     images: option<list<url-image>>,
-    media-key: option<media-key>,
-    status: option<http-status-code>,
+    media-key: option<string>,
+    status: option<s32>,
     /// Title of the page the URL points to.
     title: option<string>,
     /// Fully resolved url.
     unwound-url: option<string>,
-    url: url
-  }
-
-  /// A validly formatted URL.
-  record url {
-    /// opaque schema; raw JSON
-    value: string
+    url: string
   }
 
   /// Represent the information for the URL image.
   record url-image {
-    height: option<media-height>,
-    url: option<url>,
-    width: option<media-width>
-  }
-
-  /// HTTP Status Code.
-  record http-status-code {
-    /// opaque schema; raw JSON
-    value: string
+    height: option<s32>,
+    url: option<string>,
+    width: option<s32>
   }
 
   /// The location tagged on the Tweet, if the user provided one.
   record tweet-geo {
     coordinates: option<point>,
-    place-id: option<place-id>
+    place-id: option<string>
   }
 
   /// Nonpublic engagement metrics for the Tweet at the time of the request.
@@ -5008,20 +4325,8 @@ interface spaces {
   }
 
   record tweet-referenced-tweets-item {
-    id: tweet-id,
+    id: string,
     type-op: tweet-referenced-tweets-item-type-op-enum
-  }
-
-  /// Shows who can reply a Tweet. Fields returned are everyone, mentioned_users, and following.
-  record reply-settings {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
-  /// The content of the Tweet.
-  record tweet-text {
-    /// opaque schema; raw JSON
-    value: string
   }
 
   /// Indicates withholding details for [withheld content](https://help.twitter.com/en/rules-and-policies/tweet-withheld-by-country).
@@ -5029,7 +4334,7 @@ interface spaces {
     /// Indicates if the content is being withheld for on the basis of copyright infringement.
     copyright: bool,
     /// Provides a list of countries where this content is not available.
-    country-codes: list<country-code>,
+    country-codes: list<string>,
     /// Indicates whether the content being withheld is the `tweet` or a `user`.
     scope: option<tweet-withheld-scope-enum>
   }
@@ -5042,12 +4347,12 @@ interface spaces {
     description: option<string>,
     /// A list of metadata found in the User's profile description.
     entities: option<user-entities>,
-    id: user-id,
+    id: string,
     /// The location specified in the User's profile, if the User provided one. As this is a freeform value, it may not indicate a valid location, but it may be fuzzily evaluated when performing searches with location queries.
     location: option<string>,
     /// The friendly name of this User, as shown on their profile.
     name: string,
-    pinned-tweet-id: option<tweet-id>,
+    pinned-tweet-id: option<string>,
     /// The URL to the profile image for this User.
     profile-image-url: option<string>,
     /// Indicates if this User has chosen to protect their Tweets (in other words, if this User's Tweets are private).
@@ -5056,7 +4361,7 @@ interface spaces {
     public-metrics: option<user-public-metrics>,
     /// The URL specified in the User's profile.
     url: option<string>,
-    username: user-name,
+    username: string,
     /// Indicate if this User is a verified Twitter User.
     verified: option<bool>,
     /// The Twitter Blue verified type of the user, eg: blue, government, business or none.
@@ -5091,7 +4396,7 @@ interface spaces {
   /// Indicates withholding details for [withheld content](https://help.twitter.com/en/rules-and-policies/tweet-withheld-by-country).
   record user-withheld {
     /// Provides a list of countries where this content is not available.
-    country-codes: list<country-code>,
+    country-codes: list<string>,
     /// Indicates that the content being withheld is a `user`.
     scope: option<user-withheld-scope-enum>
   }
@@ -5104,13 +4409,7 @@ interface spaces {
   }
 
   record get2-spaces-by-creator-ids-response-meta {
-    result-count: option<result-count>
-  }
-
-  /// The number of results returned in this response.
-  record result-count {
-    /// opaque schema; raw JSON
-    value: string
+    result-count: option<s32>
   }
 
   record get2-spaces-search-response {
@@ -5121,19 +4420,13 @@ interface spaces {
   }
 
   record get2-spaces-search-response-meta {
-    result-count: option<result-count>
+    result-count: option<s32>
   }
 
   record get2-spaces-id-response {
     data: option<space>,
     errors: option<list<problem>>,
     includes: option<expansions>
-  }
-
-  /// A base32 pagination token.
-  record pagination-token32 {
-    /// opaque schema; raw JSON
-    value: string
   }
 
   record get2-spaces-id-buyers-response {
@@ -5144,21 +4437,9 @@ interface spaces {
   }
 
   record get2-spaces-id-buyers-response-meta {
-    next-token: option<next-token>,
-    previous-token: option<previous-token>,
-    result-count: option<result-count>
-  }
-
-  /// The next token.
-  record next-token {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
-  /// The previous token.
-  record previous-token {
-    /// opaque schema; raw JSON
-    value: string
+    next-token: option<string>,
+    previous-token: option<string>,
+    result-count: option<s32>
   }
 
   record get2-spaces-id-tweets-response {
@@ -5169,9 +4450,9 @@ interface spaces {
   }
 
   record get2-spaces-id-tweets-response-meta {
-    next-token: option<next-token>,
-    previous-token: option<previous-token>,
-    result-count: option<result-count>
+    next-token: option<string>,
+    previous-token: option<string>,
+    result-count: option<s32>
   }
 
   /// Space lookup up Space IDs
@@ -5192,7 +4473,7 @@ interface spaces {
   /// Space lookup by their creators
   record find-spaces-by-creator-ids-params {
     /// The IDs of Users to search through.
-    user-ids: list<user-id>,
+    user-ids: list<string>,
     /// A comma separated list of Space fields to display.
     space-fields: option<list<find-spaces-by-ids-space-fields-item-enum>>,
     /// A comma separated list of fields to expand.
@@ -5243,7 +4524,7 @@ interface spaces {
     /// The ID of the Space to be retrieved.
     id: string,
     /// This parameter is used to get a specified 'page' of results.
-    pagination-token: option<pagination-token32>,
+    pagination-token: option<string>,
     /// The maximum number of results.
     max-results: option<s32>,
     /// A comma separated list of User fields to display.
@@ -5379,6 +4660,13 @@ interface bookmarks {
     replied-to,
   }
 
+  enum reply-settings {
+    everyone,
+    mentioned-users,
+    following,
+    other,
+  }
+
   enum tweet-withheld-scope-enum {
     tweet,
     user,
@@ -5388,6 +4676,15 @@ interface bookmarks {
     feature,
   }
 
+  enum place-type {
+    poi,
+    neighborhood,
+    city,
+    admin,
+    country,
+    unknown,
+  }
+
   enum poll-voting-status-enum {
     open,
     closed,
@@ -5395,12 +4692,6 @@ interface bookmarks {
 
   enum user-withheld-scope-enum {
     user,
-  }
-
-  /// A base36 pagination token.
-  record pagination-token36 {
-    /// opaque schema; raw JSON
-    value: string
   }
 
   record get2-users-id-bookmarks-response {
@@ -5413,19 +4704,19 @@ interface bookmarks {
   record tweet {
     /// Specifies the type of attachments (if any) present in this Tweet.
     attachments: option<tweet-attachments>,
-    author-id: option<user-id>,
+    author-id: option<string>,
     context-annotations: option<list<context-annotation>>,
-    conversation-id: option<tweet-id>,
+    conversation-id: option<string>,
     /// Creation time of the Tweet.
     created-at: option<string>,
     edit-controls: option<tweet-edit-controls>,
     /// A list of Tweet Ids in this Tweet chain.
-    edit-history-tweet-ids: list<tweet-id>,
+    edit-history-tweet-ids: list<string>,
     entities: option<full-text-entities>,
     /// The location tagged on the Tweet, if the user provided one.
     geo: option<tweet-geo>,
-    id: tweet-id,
-    in-reply-to-user-id: option<user-id>,
+    id: string,
+    in-reply-to-user-id: option<string>,
     /// Language of the Tweet, if detected by Twitter. Returned as a BCP47 language tag.
     lang: option<string>,
     /// Nonpublic engagement metrics for the Tweet at the time of the request.
@@ -5443,34 +4734,16 @@ interface bookmarks {
     reply-settings: option<reply-settings>,
     /// This is deprecated.
     source: option<string>,
-    text: tweet-text,
+    text: string,
     withheld: option<tweet-withheld>
   }
 
   /// Specifies the type of attachments (if any) present in this Tweet.
   record tweet-attachments {
     /// A list of Media Keys for each one of the media attachments (if media are attached).
-    media-keys: option<list<media-key>>,
+    media-keys: option<list<string>>,
     /// A list of poll IDs (if polls are attached).
-    poll-ids: option<list<poll-id>>
-  }
-
-  /// The Media Key identifier for this attachment.
-  record media-key {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
-  /// Unique identifier of this poll.
-  record poll-id {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
-  /// Unique identifier of this User. This is returned as a string in order to avoid complications with languages and tools that cannot handle large integers.
-  record user-id {
-    /// opaque schema; raw JSON
-    value: string
+    poll-ids: option<list<string>>
   }
 
   /// Annotation inferred from the Tweet text.
@@ -5497,12 +4770,6 @@ interface bookmarks {
     id: string,
     /// Name of the context annotation entity.
     name: option<string>
-  }
-
-  /// Unique identifier of this Tweet. This is returned as a string in order to avoid complications with languages and tools that cannot handle large integers.
-  record tweet-id {
-    /// opaque schema; raw JSON
-    value: string
   }
 
   record tweet-edit-controls {
@@ -5558,14 +4825,8 @@ interface bookmarks {
     end: s32,
     /// Index (zero-based) at which position this entity starts.  The index is inclusive.
     start: s32,
-    id: option<user-id>,
-    username: user-name
-  }
-
-  /// The Twitter handle (screen name) of this user.
-  record user-name {
-    /// opaque schema; raw JSON
-    value: string
+    id: option<string>,
+    username: string
   }
 
   /// Represent the portion of text recognized as a URL, and its start and end position within the text.
@@ -5578,70 +4839,34 @@ interface bookmarks {
     description: option<string>,
     /// The URL as displayed in the Twitter client.
     display-url: option<string>,
-    expanded-url: option<url>,
+    expanded-url: option<string>,
     images: option<list<url-image>>,
-    media-key: option<media-key>,
-    status: option<http-status-code>,
+    media-key: option<string>,
+    status: option<s32>,
     /// Title of the page the URL points to.
     title: option<string>,
     /// Fully resolved url.
     unwound-url: option<string>,
-    url: url
-  }
-
-  /// A validly formatted URL.
-  record url {
-    /// opaque schema; raw JSON
-    value: string
+    url: string
   }
 
   /// Represent the information for the URL image.
   record url-image {
-    height: option<media-height>,
-    url: option<url>,
-    width: option<media-width>
-  }
-
-  /// The height of the media in pixels.
-  record media-height {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
-  /// The width of the media in pixels.
-  record media-width {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
-  /// HTTP Status Code.
-  record http-status-code {
-    /// opaque schema; raw JSON
-    value: string
+    height: option<s32>,
+    url: option<string>,
+    width: option<s32>
   }
 
   /// The location tagged on the Tweet, if the user provided one.
   record tweet-geo {
     coordinates: option<point>,
-    place-id: option<place-id>
+    place-id: option<string>
   }
 
   /// A [GeoJson Point](https://tools.ietf.org/html/rfc7946#section-3.1.2) geometry object.
   record point {
-    coordinates: position,
+    coordinates: list<f64>,
     type-op: point-type-op-enum
-  }
-
-  /// A [GeoJson Position](https://tools.ietf.org/html/rfc7946#section-3.1.1) in the format `[longitude,latitude]`.
-  record position {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
-  /// The identifier for this place.
-  record place-id {
-    /// opaque schema; raw JSON
-    value: string
   }
 
   /// Nonpublic engagement metrics for the Tweet at the time of the request.
@@ -5689,20 +4914,8 @@ interface bookmarks {
   }
 
   record tweet-referenced-tweets-item {
-    id: tweet-id,
+    id: string,
     type-op: tweet-referenced-tweets-item-type-op-enum
-  }
-
-  /// Shows who can reply a Tweet. Fields returned are everyone, mentioned_users, and following.
-  record reply-settings {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
-  /// The content of the Tweet.
-  record tweet-text {
-    /// opaque schema; raw JSON
-    value: string
   }
 
   /// Indicates withholding details for [withheld content](https://help.twitter.com/en/rules-and-policies/tweet-withheld-by-country).
@@ -5710,15 +4923,9 @@ interface bookmarks {
     /// Indicates if the content is being withheld for on the basis of copyright infringement.
     copyright: bool,
     /// Provides a list of countries where this content is not available.
-    country-codes: list<country-code>,
+    country-codes: list<string>,
     /// Indicates whether the content being withheld is the `tweet` or a `user`.
     scope: option<tweet-withheld-scope-enum>
-  }
-
-  /// A two-letter ISO 3166-1 alpha-2 country code.
-  record country-code {
-    /// opaque schema; raw JSON
-    value: string
   }
 
   /// An HTTP Problem Details object, as defined in IETF RFC 7807 (https://tools.ietf.org/html/rfc7807).
@@ -5739,21 +4946,21 @@ interface bookmarks {
   }
 
   record media {
-    height: option<media-height>,
-    media-key: option<media-key>,
+    height: option<s32>,
+    media-key: option<string>,
     type-op: string,
-    width: option<media-width>
+    width: option<s32>
   }
 
   record place {
-    contained-within: option<list<place-id>>,
+    contained-within: option<list<string>>,
     /// The full name of the county in which this place exists.
     country: option<string>,
-    country-code: option<country-code>,
+    country-code: option<string>,
     /// The full name of this place.
     full-name: string,
     geo: option<geo>,
-    id: place-id,
+    id: string,
     /// The human readable name of this place.
     name: option<string>,
     place-type: option<place-type>
@@ -5762,17 +4969,13 @@ interface bookmarks {
   record geo {
     bbox: list<f64>,
     geometry: option<point>,
-    properties: geo-properties,
+    properties: list<geo-properties-entry>,
     type-op: geo-type-op-enum
   }
 
-  record geo-properties {
-    /// JSON-encoded free-form object payload
-    data: option<string>
-  }
-
-  record place-type {
-    /// opaque schema; raw JSON
+  /// one entry of a string-keyed map (free-form object)
+  record geo-properties-entry {
+    key: string,
     value: string
   }
 
@@ -5780,39 +4983,27 @@ interface bookmarks {
   record poll {
     duration-minutes: option<s32>,
     end-datetime: option<string>,
-    id: poll-id,
+    id: string,
     options: list<poll-option>,
     voting-status: option<poll-voting-status-enum>
   }
 
   /// Describes a choice in a Poll object.
   record poll-option {
-    label: poll-option-label,
+    label: string,
     /// Position of this choice in the poll.
     position: s32,
     /// Number of users who voted for this choice.
     votes: s32
   }
 
-  /// The text of a poll choice.
-  record poll-option-label {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
   /// The topic of a Space, as selected by its creator.
   record topic {
     /// The description of the given topic.
     description: option<string>,
-    id: topic-id,
+    id: string,
     /// The name of the given topic.
     name: string
-  }
-
-  /// Unique identifier of this Topic.
-  record topic-id {
-    /// opaque schema; raw JSON
-    value: string
   }
 
   /// The Twitter User object.
@@ -5823,12 +5014,12 @@ interface bookmarks {
     description: option<string>,
     /// A list of metadata found in the User's profile description.
     entities: option<user-entities>,
-    id: user-id,
+    id: string,
     /// The location specified in the User's profile, if the User provided one. As this is a freeform value, it may not indicate a valid location, but it may be fuzzily evaluated when performing searches with location queries.
     location: option<string>,
     /// The friendly name of this User, as shown on their profile.
     name: string,
-    pinned-tweet-id: option<tweet-id>,
+    pinned-tweet-id: option<string>,
     /// The URL to the profile image for this User.
     profile-image-url: option<string>,
     /// Indicates if this User has chosen to protect their Tweets (in other words, if this User's Tweets are private).
@@ -5837,7 +5028,7 @@ interface bookmarks {
     public-metrics: option<user-public-metrics>,
     /// The URL specified in the User's profile.
     url: option<string>,
-    username: user-name,
+    username: string,
     /// Indicate if this User is a verified Twitter User.
     verified: option<bool>,
     /// The Twitter Blue verified type of the user, eg: blue, government, business or none.
@@ -5872,33 +5063,15 @@ interface bookmarks {
   /// Indicates withholding details for [withheld content](https://help.twitter.com/en/rules-and-policies/tweet-withheld-by-country).
   record user-withheld {
     /// Provides a list of countries where this content is not available.
-    country-codes: list<country-code>,
+    country-codes: list<string>,
     /// Indicates that the content being withheld is a `user`.
     scope: option<user-withheld-scope-enum>
   }
 
   record get2-users-id-bookmarks-response-meta {
-    next-token: option<next-token>,
-    previous-token: option<previous-token>,
-    result-count: option<result-count>
-  }
-
-  /// The next token.
-  record next-token {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
-  /// The previous token.
-  record previous-token {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
-  /// The number of results returned in this response.
-  record result-count {
-    /// opaque schema; raw JSON
-    value: string
+    next-token: option<string>,
+    previous-token: option<string>,
+    result-count: option<s32>
   }
 
   record bookmark-mutation-response {
@@ -5917,7 +5090,7 @@ interface bookmarks {
     /// The maximum number of results.
     max-results: option<s32>,
     /// This parameter is used to get the next 'page' of results.
-    pagination-token: option<pagination-token36>,
+    pagination-token: option<string>,
     /// A comma separated list of Tweet fields to display.
     tweet-fields: option<list<get-users-id-bookmarks-tweet-fields-item-enum>>,
     /// A comma separated list of fields to expand.
@@ -5937,7 +5110,7 @@ interface bookmarks {
   record post-users-id-bookmarks-params {
     /// The ID of the authenticated source User for whom to add bookmarks.
     id: string,
-    tweet-id: tweet-id
+    tweet-id: string
   }
   post-users-id-bookmarks: func(params: post-users-id-bookmarks-params) -> result<bookmark-mutation-response, string>;
 

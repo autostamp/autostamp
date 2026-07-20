@@ -6,7 +6,7 @@
 /// | Secret name | Applied to each request as |
 /// | --- | --- |
 /// | `cookieAuth` | header `portal` |
-package autostamp:interactivebrokers@0.5.0;
+package autostamp:interactivebrokers@0.6.0;
 
 interface account-portfolio {
   record get-accounts-response {
@@ -193,26 +193,6 @@ interface account-portfolio {
 
 
 interface order-margin-requirements {
-  /// Market = '1'
-  /// Limit = '2'
-  /// Stop = '3'
-  /// StopLimit = '4'
-  record order-type {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
-  /// Defines order's active lifetime.
-  /// Day = '0'
-  /// GTC (Good till Cancel) = '1'
-  /// IOC (Immediate or Cancel) = '3'
-  /// Open = '2'
-  /// Close = '7'
-  record time-in-force {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
   record post-accounts-account-order-impact-response {
     commission: option<f64>,
     commissions-currency: option<string>,
@@ -250,7 +230,7 @@ interface order-margin-requirements {
     instrument-type: option<string>,
     /// The exchange on which the trading product is listed (only for InstrumentType=STK)
     listing-exchange: option<string>,
-    order-type: option<order-type>,
+    order-type: option<f64>,
     /// The order price
     price: option<f64>,
     /// The number of units in the order; contracts or shares
@@ -259,77 +239,54 @@ interface order-margin-requirements {
     side: option<f64>,
     /// The symbol that identifies the trading product
     ticker: option<string>,
-    time-in-force: option<time-in-force>
+    time-in-force: option<f64>
   }
   post-accounts-account-order-impact: func(params: post-accounts-account-order-impact-params) -> result<post-accounts-account-order-impact-response, post-accounts-account-order-impact-error>;
 
 }
 
 interface orders {
+  enum order-status {
+    v1,
+    v0,
+    v1-v2,
+    v2,
+    v3,
+    v4,
+    v5,
+    v6,
+    v7,
+    v8,
+    v9,
+    a,
+    b,
+    c,
+    d,
+    e,
+  }
+
   /// An object containing all the properties defining an order
   record order-state {
     contract-id: option<f64>,
     customer-order-id: option<f64>,
     filled-quantity: option<f64>,
     listing-exchange: option<string>,
-    order-type: option<order-type>,
+    order-type: option<f64>,
     outside-rth: option<string>,
     price: option<f64>,
     remaining-quantity: option<f64>,
     side: option<string>,
     status: option<order-status>,
     ticker: option<string>,
-    time-in-force: option<time-in-force>,
+    time-in-force: option<f64>,
     transaction-time: option<string>,
     warning: option<string>
-  }
-
-  /// Market = '1'
-  /// Limit = '2'
-  /// Stop = '3'
-  /// StopLimit = '4'
-  record order-type {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
-  /// Status of the order
-  /// InvalidOrderStatus = '-1'
-  /// New = '0'
-  /// PartiallyFilled = '1'
-  /// Filled = '2'
-  /// DoneForTheDay = '3'
-  /// Canceled = '4'
-  /// Replaced = '5'
-  /// PendingCancelReplace = '6'
-  /// Stopped = '7'
-  /// Rejected = '8'
-  /// Suspended = '9'
-  /// PendingNew = 'A'
-  /// Calculated = 'B'
-  /// Expired = 'C'
-  /// AcceptedForBidding = 'D'
-  /// PendingReplace = 'E'
-  record order-status {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
-  /// Defines order's active lifetime.
-  /// Day = '0'
-  /// GTC (Good till Cancel) = '1'
-  /// IOC (Immediate or Cancel) = '3'
-  /// Open = '2'
-  /// Close = '7'
-  record time-in-force {
-    /// opaque schema; raw JSON
-    value: string
   }
 
   record put-accounts-account-orders-customer-order-id-response-item {
     customer-order-id: option<string>,
     order-qty: option<f64>,
-    order-type: option<order-type>,
+    order-type: option<f64>,
     price: option<string>,
     side: option<f64>,
     status: option<order-status>,
@@ -340,7 +297,7 @@ interface orders {
   record delete-accounts-account-orders-customer-order-id-response-item {
     customer-order-id: option<string>,
     order-qty: option<f64>,
-    order-type: option<order-type>,
+    order-type: option<f64>,
     price: option<string>,
     side: option<f64>,
     status: option<order-status>,
@@ -421,7 +378,7 @@ interface orders {
     mifid2-execution-algo: option<string>,
     /// This field permits specification of the user's preregistered (via account management) MiFID II person responsible for handling/routing of the order
     mifid2-execution-trader: option<string>,
-    order-type: option<order-type>,
+    order-type: option<f64>,
     /// MultiValueString representing the restrictions associated with
     /// an order. If more than one restriction is applicable to an
     order-restrictions: option<f64>,
@@ -435,7 +392,7 @@ interface orders {
     side: option<f64>,
     /// The symbol that identifies the trading product
     ticker: option<string>,
-    time-in-force: option<time-in-force>
+    time-in-force: option<f64>
   }
   post-accounts-account-orders: func(params: post-accounts-account-orders-params) -> result<list<order-state>, post-accounts-account-orders-error>;
 
@@ -468,7 +425,7 @@ interface orders {
     mifid2-execution-algo: option<string>,
     /// This field permits specification of the user's preregistered (via account management) MiFID II person responsible for handling/routing of the order
     mifid2-execution-trader: option<string>,
-    order-type: option<order-type>,
+    order-type: option<f64>,
     /// The order ID assigned by the customer
     orig-customer-order-id: option<string>,
     /// Indicates if order is active outside regular trading hours, where defined. 0 = no (default), 1 = yes
@@ -479,7 +436,7 @@ interface orders {
     quantity: option<f64>,
     /// Buy = '1', Sell = '2'
     side: option<f64>,
-    time-in-force: option<time-in-force>
+    time-in-force: option<f64>
   }
   put-accounts-account-orders-customer-order-id: func(params: put-accounts-account-orders-customer-order-id-params) -> result<list<put-accounts-account-orders-customer-order-id-response-item>, put-accounts-account-orders-customer-order-id-error>;
 
@@ -508,22 +465,13 @@ interface trades {
     last-market: option<string>,
     listing-exchange: option<string>,
     order-id: option<string>,
-    order-type: option<order-type>,
+    order-type: option<f64>,
     quantity: option<f64>,
     remaining-quantity: option<f64>,
     side: option<string>,
     ticker: option<string>,
     trade-price: option<f64>,
     trade-size: option<f64>
-  }
-
-  /// Market = '1'
-  /// Limit = '2'
-  /// Stop = '3'
-  /// StopLimit = '4'
-  record order-type {
-    /// opaque schema; raw JSON
-    value: string
   }
 
   variant get-accounts-account-trades-error {

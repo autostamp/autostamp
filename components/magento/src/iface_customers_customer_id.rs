@@ -73,7 +73,7 @@ fn iface_customers_customer_id__customer_data_address_interface__to_json(p: &ifa
     m.insert("customer_id".into(), match (&p.customer_id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("default_billing".into(), match (&p.default_billing) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     m.insert("default_shipping".into(), match (&p.default_shipping) { Some(v) => Value::Bool(*(v)), None => Value::Null });
-    m.insert("extension_attributes".into(), match (&p.extension_attributes) { Some(v) => iface_customers_customer_id__customer_data_address_extension_interface__to_json(v), None => Value::Null });
+    m.insert("extension_attributes".into(), match (&p.extension_attributes) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("fax".into(), match (&p.fax) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("firstname".into(), match (&p.firstname) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("id".into(), match (&p.id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
@@ -97,24 +97,26 @@ fn iface_customers_customer_id__framework_attribute_interface__to_json(p: &iface
     Value::Object(m)
 }
 
-fn iface_customers_customer_id__customer_data_address_extension_interface__to_json(p: &iface_customers_customer_id::CustomerDataAddressExtensionInterface) -> Value {
+fn iface_customers_customer_id__customer_data_address_extension_interface_entry__to_json(p: &iface_customers_customer_id::CustomerDataAddressExtensionInterfaceEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
 fn iface_customers_customer_id__customer_data_region_interface__to_json(p: &iface_customers_customer_id::CustomerDataRegionInterface) -> Value {
     let mut m = Map::new();
-    m.insert("extension_attributes".into(), match (&p.extension_attributes) { Some(v) => iface_customers_customer_id__customer_data_region_extension_interface__to_json(v), None => Value::Null });
+    m.insert("extension_attributes".into(), match (&p.extension_attributes) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("region".into(), Value::String((&p.region).clone()));
     m.insert("region_code".into(), Value::String((&p.region_code).clone()));
     m.insert("region_id".into(), Value::Number(serde_json::Number::from(*(&p.region_id))));
     Value::Object(m)
 }
 
-fn iface_customers_customer_id__customer_data_region_extension_interface__to_json(p: &iface_customers_customer_id::CustomerDataRegionExtensionInterface) -> Value {
+fn iface_customers_customer_id__customer_data_region_extension_interface_entry__to_json(p: &iface_customers_customer_id::CustomerDataRegionExtensionInterfaceEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -131,16 +133,17 @@ fn iface_customers_customer_id__company_data_company_customer_interface__to_json
     let mut m = Map::new();
     m.insert("company_id".into(), match (&p.company_id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("customer_id".into(), match (&p.customer_id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    m.insert("extension_attributes".into(), match (&p.extension_attributes) { Some(v) => iface_customers_customer_id__company_data_company_customer_extension_interface__to_json(v), None => Value::Null });
+    m.insert("extension_attributes".into(), match (&p.extension_attributes) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("job_title".into(), match (&p.job_title) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("status".into(), match (&p.status) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("telephone".into(), match (&p.telephone) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_customers_customer_id__company_data_company_customer_extension_interface__to_json(p: &iface_customers_customer_id::CompanyDataCompanyCustomerExtensionInterface) -> Value {
+fn iface_customers_customer_id__company_data_company_customer_extension_interface_entry__to_json(p: &iface_customers_customer_id::CompanyDataCompanyCustomerExtensionInterfaceEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -203,7 +206,7 @@ fn iface_customers_customer_id__customer_data_address_interface__from_json(v: &V
         customer_id: m.get("customer_id").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
         default_billing: m.get("default_billing").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
         default_shipping: m.get("default_shipping").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
-        extension_attributes: m.get("extension_attributes").filter(|v| !v.is_null()).and_then(|v| iface_customers_customer_id__customer_data_address_extension_interface__from_json(v)),
+        extension_attributes: m.get("extension_attributes").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_customers_customer_id::CustomerDataAddressExtensionInterfaceEntry { key: k.clone(), value: val })).collect())),
         fax: m.get("fax").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         firstname: m.get("firstname").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
@@ -228,27 +231,29 @@ fn iface_customers_customer_id__framework_attribute_interface__from_json(v: &Val
     })
 }
 
-fn iface_customers_customer_id__customer_data_address_extension_interface__from_json(v: &Value) -> Option<iface_customers_customer_id::CustomerDataAddressExtensionInterface> {
+fn iface_customers_customer_id__customer_data_address_extension_interface_entry__from_json(v: &Value) -> Option<iface_customers_customer_id::CustomerDataAddressExtensionInterfaceEntry> {
     let m = v.as_object()?;
-    Some(iface_customers_customer_id::CustomerDataAddressExtensionInterface {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_customers_customer_id::CustomerDataAddressExtensionInterfaceEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
 fn iface_customers_customer_id__customer_data_region_interface__from_json(v: &Value) -> Option<iface_customers_customer_id::CustomerDataRegionInterface> {
     let m = v.as_object()?;
     Some(iface_customers_customer_id::CustomerDataRegionInterface {
-        extension_attributes: m.get("extension_attributes").filter(|v| !v.is_null()).and_then(|v| iface_customers_customer_id__customer_data_region_extension_interface__from_json(v)),
+        extension_attributes: m.get("extension_attributes").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_customers_customer_id::CustomerDataRegionExtensionInterfaceEntry { key: k.clone(), value: val })).collect())),
         region: m.get("region").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         region_code: m.get("region_code").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         region_id: m.get("region_id").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
     })
 }
 
-fn iface_customers_customer_id__customer_data_region_extension_interface__from_json(v: &Value) -> Option<iface_customers_customer_id::CustomerDataRegionExtensionInterface> {
+fn iface_customers_customer_id__customer_data_region_extension_interface_entry__from_json(v: &Value) -> Option<iface_customers_customer_id::CustomerDataRegionExtensionInterfaceEntry> {
     let m = v.as_object()?;
-    Some(iface_customers_customer_id::CustomerDataRegionExtensionInterface {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_customers_customer_id::CustomerDataRegionExtensionInterfaceEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -267,17 +272,18 @@ fn iface_customers_customer_id__company_data_company_customer_interface__from_js
     Some(iface_customers_customer_id::CompanyDataCompanyCustomerInterface {
         company_id: m.get("company_id").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
         customer_id: m.get("customer_id").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
-        extension_attributes: m.get("extension_attributes").filter(|v| !v.is_null()).and_then(|v| iface_customers_customer_id__company_data_company_customer_extension_interface__from_json(v)),
+        extension_attributes: m.get("extension_attributes").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_customers_customer_id::CompanyDataCompanyCustomerExtensionInterfaceEntry { key: k.clone(), value: val })).collect())),
         job_title: m.get("job_title").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         status: m.get("status").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
         telephone: m.get("telephone").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
     })
 }
 
-fn iface_customers_customer_id__company_data_company_customer_extension_interface__from_json(v: &Value) -> Option<iface_customers_customer_id::CompanyDataCompanyCustomerExtensionInterface> {
+fn iface_customers_customer_id__company_data_company_customer_extension_interface_entry__from_json(v: &Value) -> Option<iface_customers_customer_id::CompanyDataCompanyCustomerExtensionInterfaceEntry> {
     let m = v.as_object()?;
-    Some(iface_customers_customer_id::CompanyDataCompanyCustomerExtensionInterface {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_customers_customer_id::CompanyDataCompanyCustomerExtensionInterfaceEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 

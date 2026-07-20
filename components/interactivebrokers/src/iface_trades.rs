@@ -30,19 +30,13 @@ fn iface_trades__get_accounts_account_trades_response_item__to_json(p: &iface_tr
     m.insert("LastMarket".into(), match (&p.last_market) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("ListingExchange".into(), match (&p.listing_exchange) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("OrderId".into(), match (&p.order_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("OrderType".into(), match (&p.order_type) { Some(v) => iface_trades__order_type__to_json(v), None => Value::Null });
+    m.insert("OrderType".into(), match (&p.order_type) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
     m.insert("Quantity".into(), match (&p.quantity) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
     m.insert("RemainingQuantity".into(), match (&p.remaining_quantity) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
     m.insert("Side".into(), match (&p.side) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("Ticker".into(), match (&p.ticker) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("TradePrice".into(), match (&p.trade_price) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
     m.insert("TradeSize".into(), match (&p.trade_size) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_trades__order_type__to_json(p: &iface_trades::OrderType) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -68,20 +62,13 @@ fn iface_trades__get_accounts_account_trades_response_item__from_json(v: &Value)
         last_market: m.get("LastMarket").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         listing_exchange: m.get("ListingExchange").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         order_id: m.get("OrderId").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        order_type: m.get("OrderType").filter(|v| !v.is_null()).and_then(|v| iface_trades__order_type__from_json(v)),
+        order_type: m.get("OrderType").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
         quantity: m.get("Quantity").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
         remaining_quantity: m.get("RemainingQuantity").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
         side: m.get("Side").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         ticker: m.get("Ticker").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         trade_price: m.get("TradePrice").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
         trade_size: m.get("TradeSize").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
-    })
-}
-
-fn iface_trades__order_type__from_json(v: &Value) -> Option<iface_trades::OrderType> {
-    let m = v.as_object()?;
-    Some(iface_trades::OrderType {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 

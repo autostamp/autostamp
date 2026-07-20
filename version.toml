@@ -10,4 +10,4 @@
 #     just bump minor      # 0.1.1 -> 0.2.0
 #     just bump 1.0.0      # set explicitly
 #     just gen             # regenerate every component with the new base
-version = "0.5.0"
+version = "0.6.0"

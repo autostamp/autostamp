@@ -123,6 +123,22 @@ fn iface_secret_scanning__list_alerts_for_enterprise_direction_enum__to_str(e: &
     }
 }
 
+fn iface_secret_scanning__alert_resolution__to_str(e: &iface_secret_scanning::AlertResolution) -> &'static str {
+    match e {
+        iface_secret_scanning::AlertResolution::FalsePositive => "false_positive",
+        iface_secret_scanning::AlertResolution::WontFix => "wont_fix",
+        iface_secret_scanning::AlertResolution::Revoked => "revoked",
+        iface_secret_scanning::AlertResolution::UsedInTests => "used_in_tests",
+    }
+}
+
+fn iface_secret_scanning__alert_state__to_str(e: &iface_secret_scanning::AlertState) -> &'static str {
+    match e {
+        iface_secret_scanning::AlertState::Open => "open",
+        iface_secret_scanning::AlertState::Resolved => "resolved",
+    }
+}
+
 fn iface_secret_scanning__location_type_op_enum__to_str(e: &iface_secret_scanning::LocationTypeOpEnum) -> &'static str {
     match e {
         iface_secret_scanning::LocationTypeOpEnum::Commit => "commit",
@@ -134,42 +150,24 @@ fn iface_secret_scanning__location_type_op_enum__to_str(e: &iface_secret_scannin
 
 fn iface_secret_scanning__organization_secret_scanning_alert__to_json(p: &iface_secret_scanning::OrganizationSecretScanningAlert) -> Value {
     let mut m = Map::new();
-    m.insert("created_at".into(), match (&p.created_at) { Some(v) => iface_secret_scanning__alert_created_at__to_json(v), None => Value::Null });
-    m.insert("html_url".into(), match (&p.html_url) { Some(v) => iface_secret_scanning__alert_html_url__to_json(v), None => Value::Null });
+    m.insert("created_at".into(), match (&p.created_at) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("html_url".into(), match (&p.html_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("locations_url".into(), match (&p.locations_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("number".into(), match (&p.number) { Some(v) => iface_secret_scanning__alert_number__to_json(v), None => Value::Null });
+    m.insert("number".into(), match (&p.number) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("push_protection_bypassed".into(), match (&p.push_protection_bypassed) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     m.insert("push_protection_bypassed_at".into(), match (&p.push_protection_bypassed_at) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("push_protection_bypassed_by".into(), match (&p.push_protection_bypassed_by) { Some(v) => iface_secret_scanning__nullable_simple_user__to_json(v), None => Value::Null });
     m.insert("repository".into(), match (&p.repository) { Some(v) => iface_secret_scanning__simple_repository__to_json(v), None => Value::Null });
-    m.insert("resolution".into(), match (&p.resolution) { Some(v) => iface_secret_scanning__alert_resolution__to_json(v), None => Value::Null });
+    m.insert("resolution".into(), match (&p.resolution) { Some(v) => Value::String(iface_secret_scanning__alert_resolution__to_str(v).into()), None => Value::Null });
     m.insert("resolution_comment".into(), match (&p.resolution_comment) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("resolved_at".into(), match (&p.resolved_at) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("resolved_by".into(), match (&p.resolved_by) { Some(v) => iface_secret_scanning__nullable_simple_user__to_json(v), None => Value::Null });
     m.insert("secret".into(), match (&p.secret) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("secret_type".into(), match (&p.secret_type) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("secret_type_display_name".into(), match (&p.secret_type_display_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("state".into(), match (&p.state) { Some(v) => iface_secret_scanning__alert_state__to_json(v), None => Value::Null });
-    m.insert("updated_at".into(), match (&p.updated_at) { Some(v) => iface_secret_scanning__nullable_alert_updated_at__to_json(v), None => Value::Null });
-    m.insert("url".into(), match (&p.url) { Some(v) => iface_secret_scanning__alert_url__to_json(v), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_secret_scanning__alert_created_at__to_json(p: &iface_secret_scanning::AlertCreatedAt) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_secret_scanning__alert_html_url__to_json(p: &iface_secret_scanning::AlertHtmlUrl) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_secret_scanning__alert_number__to_json(p: &iface_secret_scanning::AlertNumber) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
+    m.insert("state".into(), match (&p.state) { Some(v) => Value::String(iface_secret_scanning__alert_state__to_str(v).into()), None => Value::Null });
+    m.insert("updated_at".into(), match (&p.updated_at) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("url".into(), match (&p.url) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -276,55 +274,25 @@ fn iface_secret_scanning__simple_user__to_json(p: &iface_secret_scanning::Simple
     Value::Object(m)
 }
 
-fn iface_secret_scanning__alert_resolution__to_json(p: &iface_secret_scanning::AlertResolution) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_secret_scanning__alert_state__to_json(p: &iface_secret_scanning::AlertState) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_secret_scanning__nullable_alert_updated_at__to_json(p: &iface_secret_scanning::NullableAlertUpdatedAt) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_secret_scanning__alert_url__to_json(p: &iface_secret_scanning::AlertUrl) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
 fn iface_secret_scanning__alert__to_json(p: &iface_secret_scanning::Alert) -> Value {
     let mut m = Map::new();
-    m.insert("created_at".into(), match (&p.created_at) { Some(v) => iface_secret_scanning__alert_created_at__to_json(v), None => Value::Null });
-    m.insert("html_url".into(), match (&p.html_url) { Some(v) => iface_secret_scanning__alert_html_url__to_json(v), None => Value::Null });
+    m.insert("created_at".into(), match (&p.created_at) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("html_url".into(), match (&p.html_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("locations_url".into(), match (&p.locations_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("number".into(), match (&p.number) { Some(v) => iface_secret_scanning__alert_number__to_json(v), None => Value::Null });
+    m.insert("number".into(), match (&p.number) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("push_protection_bypassed".into(), match (&p.push_protection_bypassed) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     m.insert("push_protection_bypassed_at".into(), match (&p.push_protection_bypassed_at) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("push_protection_bypassed_by".into(), match (&p.push_protection_bypassed_by) { Some(v) => iface_secret_scanning__nullable_simple_user__to_json(v), None => Value::Null });
-    m.insert("resolution".into(), match (&p.resolution) { Some(v) => iface_secret_scanning__alert_resolution__to_json(v), None => Value::Null });
+    m.insert("resolution".into(), match (&p.resolution) { Some(v) => Value::String(iface_secret_scanning__alert_resolution__to_str(v).into()), None => Value::Null });
     m.insert("resolution_comment".into(), match (&p.resolution_comment) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("resolved_at".into(), match (&p.resolved_at) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("resolved_by".into(), match (&p.resolved_by) { Some(v) => iface_secret_scanning__nullable_simple_user__to_json(v), None => Value::Null });
     m.insert("secret".into(), match (&p.secret) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("secret_type".into(), match (&p.secret_type) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("secret_type_display_name".into(), match (&p.secret_type_display_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("state".into(), match (&p.state) { Some(v) => iface_secret_scanning__alert_state__to_json(v), None => Value::Null });
-    m.insert("updated_at".into(), match (&p.updated_at) { Some(v) => iface_secret_scanning__nullable_alert_updated_at__to_json(v), None => Value::Null });
-    m.insert("url".into(), match (&p.url) { Some(v) => iface_secret_scanning__alert_url__to_json(v), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_secret_scanning__alert_resolution_comment__to_json(p: &iface_secret_scanning::AlertResolutionComment) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
+    m.insert("state".into(), match (&p.state) { Some(v) => Value::String(iface_secret_scanning__alert_state__to_str(v).into()), None => Value::Null });
+    m.insert("updated_at".into(), match (&p.updated_at) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("url".into(), match (&p.url) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -393,9 +361,9 @@ fn iface_secret_scanning__update_alert_params__to_json(p: &iface_secret_scanning
     m.insert("owner".into(), Value::String((&p.owner).clone()));
     m.insert("repo".into(), Value::String((&p.repo).clone()));
     m.insert("alert_number".into(), Value::String((&p.alert_number).clone()));
-    m.insert("resolution".into(), match (&p.resolution) { Some(v) => iface_secret_scanning__alert_resolution__to_json(v), None => Value::Null });
-    m.insert("resolution_comment".into(), match (&p.resolution_comment) { Some(v) => iface_secret_scanning__alert_resolution_comment__to_json(v), None => Value::Null });
-    m.insert("state".into(), iface_secret_scanning__alert_state__to_json(&p.state));
+    m.insert("resolution".into(), match (&p.resolution) { Some(v) => Value::String(iface_secret_scanning__alert_resolution__to_str(v).into()), None => Value::Null });
+    m.insert("resolution_comment".into(), match (&p.resolution_comment) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("state".into(), Value::String(iface_secret_scanning__alert_state__to_str(&p.state).into()));
     Value::Object(m)
 }
 
@@ -412,45 +380,24 @@ fn iface_secret_scanning__list_locations_for_alert_params__to_json(p: &iface_sec
 fn iface_secret_scanning__organization_secret_scanning_alert__from_json(v: &Value) -> Option<iface_secret_scanning::OrganizationSecretScanningAlert> {
     let m = v.as_object()?;
     Some(iface_secret_scanning::OrganizationSecretScanningAlert {
-        created_at: m.get("created_at").filter(|v| !v.is_null()).and_then(|v| iface_secret_scanning__alert_created_at__from_json(v)),
-        html_url: m.get("html_url").filter(|v| !v.is_null()).and_then(|v| iface_secret_scanning__alert_html_url__from_json(v)),
+        created_at: m.get("created_at").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        html_url: m.get("html_url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         locations_url: m.get("locations_url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        number: m.get("number").filter(|v| !v.is_null()).and_then(|v| iface_secret_scanning__alert_number__from_json(v)),
+        number: m.get("number").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
         push_protection_bypassed: m.get("push_protection_bypassed").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
         push_protection_bypassed_at: m.get("push_protection_bypassed_at").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         push_protection_bypassed_by: m.get("push_protection_bypassed_by").filter(|v| !v.is_null()).and_then(|v| iface_secret_scanning__nullable_simple_user__from_json(v)),
         repository: m.get("repository").filter(|v| !v.is_null()).and_then(|v| iface_secret_scanning__simple_repository__from_json(v)),
-        resolution: m.get("resolution").filter(|v| !v.is_null()).and_then(|v| iface_secret_scanning__alert_resolution__from_json(v)),
+        resolution: m.get("resolution").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_secret_scanning__alert_resolution__from_str)),
         resolution_comment: m.get("resolution_comment").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         resolved_at: m.get("resolved_at").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         resolved_by: m.get("resolved_by").filter(|v| !v.is_null()).and_then(|v| iface_secret_scanning__nullable_simple_user__from_json(v)),
         secret: m.get("secret").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         secret_type: m.get("secret_type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         secret_type_display_name: m.get("secret_type_display_name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        state: m.get("state").filter(|v| !v.is_null()).and_then(|v| iface_secret_scanning__alert_state__from_json(v)),
-        updated_at: m.get("updated_at").filter(|v| !v.is_null()).and_then(|v| iface_secret_scanning__nullable_alert_updated_at__from_json(v)),
-        url: m.get("url").filter(|v| !v.is_null()).and_then(|v| iface_secret_scanning__alert_url__from_json(v)),
-    })
-}
-
-fn iface_secret_scanning__alert_created_at__from_json(v: &Value) -> Option<iface_secret_scanning::AlertCreatedAt> {
-    let m = v.as_object()?;
-    Some(iface_secret_scanning::AlertCreatedAt {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-    })
-}
-
-fn iface_secret_scanning__alert_html_url__from_json(v: &Value) -> Option<iface_secret_scanning::AlertHtmlUrl> {
-    let m = v.as_object()?;
-    Some(iface_secret_scanning::AlertHtmlUrl {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-    })
-}
-
-fn iface_secret_scanning__alert_number__from_json(v: &Value) -> Option<iface_secret_scanning::AlertNumber> {
-    let m = v.as_object()?;
-    Some(iface_secret_scanning::AlertNumber {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        state: m.get("state").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_secret_scanning__alert_state__from_str)),
+        updated_at: m.get("updated_at").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        url: m.get("url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
     })
 }
 
@@ -560,54 +507,26 @@ fn iface_secret_scanning__simple_user__from_json(v: &Value) -> Option<iface_secr
     })
 }
 
-fn iface_secret_scanning__alert_resolution__from_json(v: &Value) -> Option<iface_secret_scanning::AlertResolution> {
-    let m = v.as_object()?;
-    Some(iface_secret_scanning::AlertResolution {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-    })
-}
-
-fn iface_secret_scanning__alert_state__from_json(v: &Value) -> Option<iface_secret_scanning::AlertState> {
-    let m = v.as_object()?;
-    Some(iface_secret_scanning::AlertState {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-    })
-}
-
-fn iface_secret_scanning__nullable_alert_updated_at__from_json(v: &Value) -> Option<iface_secret_scanning::NullableAlertUpdatedAt> {
-    let m = v.as_object()?;
-    Some(iface_secret_scanning::NullableAlertUpdatedAt {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-    })
-}
-
-fn iface_secret_scanning__alert_url__from_json(v: &Value) -> Option<iface_secret_scanning::AlertUrl> {
-    let m = v.as_object()?;
-    Some(iface_secret_scanning::AlertUrl {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-    })
-}
-
 fn iface_secret_scanning__alert__from_json(v: &Value) -> Option<iface_secret_scanning::Alert> {
     let m = v.as_object()?;
     Some(iface_secret_scanning::Alert {
-        created_at: m.get("created_at").filter(|v| !v.is_null()).and_then(|v| iface_secret_scanning__alert_created_at__from_json(v)),
-        html_url: m.get("html_url").filter(|v| !v.is_null()).and_then(|v| iface_secret_scanning__alert_html_url__from_json(v)),
+        created_at: m.get("created_at").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        html_url: m.get("html_url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         locations_url: m.get("locations_url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        number: m.get("number").filter(|v| !v.is_null()).and_then(|v| iface_secret_scanning__alert_number__from_json(v)),
+        number: m.get("number").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
         push_protection_bypassed: m.get("push_protection_bypassed").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
         push_protection_bypassed_at: m.get("push_protection_bypassed_at").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         push_protection_bypassed_by: m.get("push_protection_bypassed_by").filter(|v| !v.is_null()).and_then(|v| iface_secret_scanning__nullable_simple_user__from_json(v)),
-        resolution: m.get("resolution").filter(|v| !v.is_null()).and_then(|v| iface_secret_scanning__alert_resolution__from_json(v)),
+        resolution: m.get("resolution").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_secret_scanning__alert_resolution__from_str)),
         resolution_comment: m.get("resolution_comment").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         resolved_at: m.get("resolved_at").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         resolved_by: m.get("resolved_by").filter(|v| !v.is_null()).and_then(|v| iface_secret_scanning__nullable_simple_user__from_json(v)),
         secret: m.get("secret").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         secret_type: m.get("secret_type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         secret_type_display_name: m.get("secret_type_display_name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        state: m.get("state").filter(|v| !v.is_null()).and_then(|v| iface_secret_scanning__alert_state__from_json(v)),
-        updated_at: m.get("updated_at").filter(|v| !v.is_null()).and_then(|v| iface_secret_scanning__nullable_alert_updated_at__from_json(v)),
-        url: m.get("url").filter(|v| !v.is_null()).and_then(|v| iface_secret_scanning__alert_url__from_json(v)),
+        state: m.get("state").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_secret_scanning__alert_state__from_str)),
+        updated_at: m.get("updated_at").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        url: m.get("url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
     })
 }
 
@@ -617,6 +536,24 @@ fn iface_secret_scanning__location__from_json(v: &Value) -> Option<iface_secret_
         details: m.get("details").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         type_op: match m.get("type").and_then(|v| (v).as_str().and_then(iface_secret_scanning__location_type_op_enum__from_str)) { Some(x) => x, None => return None },
     })
+}
+
+fn iface_secret_scanning__alert_resolution__from_str(s: &str) -> Option<iface_secret_scanning::AlertResolution> {
+    match s {
+        "false_positive" => Some(iface_secret_scanning::AlertResolution::FalsePositive),
+        "wont_fix" => Some(iface_secret_scanning::AlertResolution::WontFix),
+        "revoked" => Some(iface_secret_scanning::AlertResolution::Revoked),
+        "used_in_tests" => Some(iface_secret_scanning::AlertResolution::UsedInTests),
+        _ => None,
+    }
+}
+
+fn iface_secret_scanning__alert_state__from_str(s: &str) -> Option<iface_secret_scanning::AlertState> {
+    match s {
+        "open" => Some(iface_secret_scanning::AlertState::Open),
+        "resolved" => Some(iface_secret_scanning::AlertState::Resolved),
+        _ => None,
+    }
 }
 
 fn iface_secret_scanning__location_type_op_enum__from_str(s: &str) -> Option<iface_secret_scanning::LocationTypeOpEnum> {

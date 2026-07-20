@@ -6,7 +6,7 @@
 /// | Secret name | Applied to each request as |
 /// | --- | --- |
 /// | `Authorization` | header `Authorization` |
-package autostamp:sendgrid@0.5.0;
+package autostamp:sendgrid@0.6.0;
 
 interface ip-access-management {
   record get-access-settings-activity-response {
@@ -50,14 +50,16 @@ interface ip-access-management {
     ip: string
   }
 
-  record delete-access-settings-whitelist-response {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record delete-access-settings-whitelist-response-entry {
+    key: string,
+    value: string
   }
 
-  record delete-access-settings-whitelist-rule-id-response {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record delete-access-settings-whitelist-rule-id-response-entry {
+    key: string,
+    value: string
   }
 
   variant get-access-settings-activity-error {
@@ -120,7 +122,7 @@ interface ip-access-management {
     /// An array of the IDs of the IP address that you want to remove from your allow list.
     ids: option<list<s32>>
   }
-  delete-access-settings-whitelist: func(params: delete-access-settings-whitelist-params) -> result<delete-access-settings-whitelist-response, delete-access-settings-whitelist-error>;
+  delete-access-settings-whitelist: func(params: delete-access-settings-whitelist-params) -> result<list<delete-access-settings-whitelist-response-entry>, delete-access-settings-whitelist-error>;
 
   /// Retrieve a specific allowed IP
   record get-access-settings-whitelist-rule-id-params {
@@ -136,7 +138,7 @@ interface ip-access-management {
     rule-id: string,
     on-behalf-of: option<string>
   }
-  delete-access-settings-whitelist-rule-id: func(params: delete-access-settings-whitelist-rule-id-params) -> result<delete-access-settings-whitelist-rule-id-response, string>;
+  delete-access-settings-whitelist-rule-id: func(params: delete-access-settings-whitelist-rule-id-params) -> result<list<delete-access-settings-whitelist-rule-id-response-entry>, string>;
 
 }
 
@@ -225,9 +227,10 @@ interface alerts {
     updated-at: s32
   }
 
-  record delete-alerts-alert-id-response {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record delete-alerts-alert-id-response-entry {
+    key: string,
+    value: string
   }
 
   variant post-alerts-error {
@@ -290,7 +293,7 @@ interface alerts {
     alert-id: string,
     on-behalf-of: option<string>
   }
-  delete-alerts-alert-id: func(params: delete-alerts-alert-id-params) -> result<delete-alerts-alert-id-response, string>;
+  delete-alerts-alert-id: func(params: delete-alerts-alert-id-params) -> result<list<delete-alerts-alert-id-response-entry>, string>;
 
 }
 
@@ -470,9 +473,10 @@ interface suppressions-unsubscribe-groups {
     unsubscribes: option<s32>
   }
 
-  record delete-asm-groups-group-id-response {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record delete-asm-groups-group-id-response-entry {
+    key: string,
+    value: string
   }
 
   /// Retrieve all suppression groups associated with the user.
@@ -522,7 +526,7 @@ interface suppressions-unsubscribe-groups {
     group-id: string,
     on-behalf-of: option<string>
   }
-  delete-asm-groups-group-id: func(params: delete-asm-groups-group-id-params) -> result<delete-asm-groups-group-id-response, string>;
+  delete-asm-groups-group-id: func(params: delete-asm-groups-group-id-params) -> result<list<delete-asm-groups-group-id-response-entry>, string>;
 
 }
 
@@ -626,9 +630,10 @@ interface suppressions-global-suppressions {
     recipient-email: string
   }
 
-  record delete-asm-suppressions-global-email-response {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record delete-asm-suppressions-global-email-response-entry {
+    key: string,
+    value: string
   }
 
   record get-suppression-unsubscribes-response-item {
@@ -660,7 +665,7 @@ interface suppressions-global-suppressions {
     email: string,
     on-behalf-of: option<string>
   }
-  delete-asm-suppressions-global-email: func(params: delete-asm-suppressions-global-email-params) -> result<delete-asm-suppressions-global-email-response, string>;
+  delete-asm-suppressions-global-email: func(params: delete-asm-suppressions-global-email-params) -> result<list<delete-asm-suppressions-global-email-response-entry>, string>;
 
   /// Retrieve all global suppressions
   record get-suppression-unsubscribes-params {
@@ -1428,15 +1433,15 @@ interface contacts-api-custom-fields {
     /// the field that generated the error
     field: option<string>,
     /// helper text or docs for troubleshooting
-    help: option<global-error-response-schema-errors-item-help>,
+    help: option<list<global-error-response-schema-errors-item-help-entry>>,
     /// the error message
     message: string
   }
 
-  /// helper text or docs for troubleshooting
-  record global-error-response-schema-errors-item-help {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record global-error-response-schema-errors-item-help-entry {
+    key: string,
+    value: string
   }
 
   record get-contactdb-reserved-fields-response {
@@ -1753,12 +1758,13 @@ interface contacts-api-recipients {
   }
 
   record get-contactdb-recipients-response {
-    recipients: list<get-contactdb-recipients-response-recipients-item>
+    recipients: list<list<get-contactdb-recipients-response-recipients-item-entry>>
   }
 
-  record get-contactdb-recipients-response-recipients-item {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record get-contactdb-recipients-response-recipients-item-entry {
+    key: string,
+    value: string
   }
 
   record post-contactdb-recipients-body-item {
@@ -1798,9 +1804,10 @@ interface contacts-api-recipients {
     last-name: option<string>
   }
 
-  record delete-contactdb-recipients-response {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record delete-contactdb-recipients-response-entry {
+    key: string,
+    value: string
   }
 
   record contactdb-recipient-count {
@@ -1874,9 +1881,10 @@ interface contacts-api-recipients {
     value: option<string>
   }
 
-  record delete-contactdb-recipients-recipient-id-response {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record delete-contactdb-recipients-recipient-id-response-entry {
+    key: string,
+    value: string
   }
 
   record get-contactdb-recipients-recipient-id-lists-response {
@@ -1999,7 +2007,7 @@ interface contacts-api-recipients {
     on-behalf-of: option<string>,
     body: option<list<string>>
   }
-  delete-contactdb-recipients: func(params: delete-contactdb-recipients-params) -> result<delete-contactdb-recipients-response, delete-contactdb-recipients-error>;
+  delete-contactdb-recipients: func(params: delete-contactdb-recipients-params) -> result<list<delete-contactdb-recipients-response-entry>, delete-contactdb-recipients-error>;
 
   /// Retrieve the count of billable recipients
   record get-contactdb-recipients-billable-count-params {
@@ -2041,7 +2049,7 @@ interface contacts-api-recipients {
     recipient-id: string,
     on-behalf-of: option<string>
   }
-  delete-contactdb-recipients-recipient-id: func(params: delete-contactdb-recipients-recipient-id-params) -> result<delete-contactdb-recipients-recipient-id-response, delete-contactdb-recipients-recipient-id-error>;
+  delete-contactdb-recipients-recipient-id: func(params: delete-contactdb-recipients-recipient-id-params) -> result<list<delete-contactdb-recipients-recipient-id-response-entry>, delete-contactdb-recipients-recipient-id-error>;
 
   /// Retrieve the lists that a recipient is on
   record get-contactdb-recipients-recipient-id-lists-params {
@@ -2329,9 +2337,10 @@ interface designs-api {
     result-op: option<list<design-output-summary>>
   }
 
-  record delete-design-response {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record delete-design-response-entry {
+    key: string,
+    value: string
   }
 
   variant post-designs-error {
@@ -2476,7 +2485,7 @@ interface designs-api {
     /// The ID of the Design you want to duplicate.
     id: string
   }
-  delete-design: func(params: delete-design-params) -> result<delete-design-response, delete-design-error>;
+  delete-design: func(params: delete-design-params) -> result<list<delete-design-response-entry>, delete-design-error>;
 
 }
 
@@ -2623,9 +2632,10 @@ interface ip-pools {
     pool-name: option<string>
   }
 
-  record delete-ips-pools-pool-name-response {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record delete-ips-pools-pool-name-response-entry {
+    key: string,
+    value: string
   }
 
   record post-ips-pools-pool-name-ips-response {
@@ -2639,9 +2649,10 @@ interface ip-pools {
     warmup: bool
   }
 
-  record delete-ips-pools-pool-name-ips-ip-response {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record delete-ips-pools-pool-name-ips-ip-response-entry {
+    key: string,
+    value: string
   }
 
   variant get-ips-pools-pool-name-error {
@@ -2700,7 +2711,7 @@ interface ip-pools {
     /// The name of the IP pool that you want to retrieve the IP addresses for.
     pool-name: string
   }
-  delete-ips-pools-pool-name: func(params: delete-ips-pools-pool-name-params) -> result<delete-ips-pools-pool-name-response, delete-ips-pools-pool-name-error>;
+  delete-ips-pools-pool-name: func(params: delete-ips-pools-pool-name-params) -> result<list<delete-ips-pools-pool-name-response-entry>, delete-ips-pools-pool-name-error>;
 
   /// Add an IP address to a pool
   record post-ips-pools-pool-name-ips-params {
@@ -2718,19 +2729,36 @@ interface ip-pools {
     /// The IP address that you wish to remove.
     ip: string
   }
-  delete-ips-pools-pool-name-ips-ip: func(params: delete-ips-pools-pool-name-ips-ip-params) -> result<delete-ips-pools-pool-name-ips-ip-response, delete-ips-pools-pool-name-ips-ip-error>;
+  delete-ips-pools-pool-name-ips-ip: func(params: delete-ips-pools-pool-name-ips-ip-params) -> result<list<delete-ips-pools-pool-name-ips-ip-response-entry>, delete-ips-pools-pool-name-ips-ip-error>;
 
 }
 
 interface ip-warmup {
-  record response {
-    /// opaque schema; raw JSON
-    value: string
+  record response-item {
+    /// The IP address.
+    ip: string,
+    /// A Unix timestamp indicating when the IP address entered warmup mode.
+    start-date: s32
   }
 
-  record delete-ips-warmup-ip-address-response {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  record response-item-v2 {
+    /// The IP address.
+    ip: string,
+    /// A Unix timestamp indicating when the IP address entered warmup mode.
+    start-date: s32
+  }
+
+  record response-item-v3 {
+    /// The IP address.
+    ip: string,
+    /// A Unix timestamp indicating when the IP address entered warmup mode.
+    start-date: s32
+  }
+
+  /// one entry of a string-keyed map (free-form object)
+  record delete-ips-warmup-ip-address-response-entry {
+    key: string,
+    value: string
   }
 
   variant post-ips-warmup-error {
@@ -2749,28 +2777,28 @@ interface ip-warmup {
   }
 
   /// Retrieve all IPs currently in warmup
-  get-ips-warmup: func() -> result<response, string>;
+  get-ips-warmup: func() -> result<list<response-item>, string>;
 
   /// Start warming up an IP address
   record post-ips-warmup-params {
     /// The IP address that you want to begin warming up.
     ip: option<string>
   }
-  post-ips-warmup: func(params: post-ips-warmup-params) -> result<response, post-ips-warmup-error>;
+  post-ips-warmup: func(params: post-ips-warmup-params) -> result<list<response-item-v2>, post-ips-warmup-error>;
 
   /// Retrieve the warmup status for a specific IP address
   record get-ips-warmup-ip-address-params {
     /// The IP address that you want to retrieve the warmup status for.
     ip-address: string
   }
-  get-ips-warmup-ip-address: func(params: get-ips-warmup-ip-address-params) -> result<response, get-ips-warmup-ip-address-error>;
+  get-ips-warmup-ip-address: func(params: get-ips-warmup-ip-address-params) -> result<list<response-item-v3>, get-ips-warmup-ip-address-error>;
 
   /// Stop warming up an IP address
   record delete-ips-warmup-ip-address-params {
     /// The IP address that you want to retrieve the warmup status for.
     ip-address: string
   }
-  delete-ips-warmup-ip-address: func(params: delete-ips-warmup-ip-address-params) -> result<delete-ips-warmup-ip-address-response, delete-ips-warmup-ip-address-error>;
+  delete-ips-warmup-ip-address: func(params: delete-ips-warmup-ip-address-params) -> result<list<delete-ips-warmup-ip-address-response-entry>, delete-ips-warmup-ip-address-error>;
 
 }
 
@@ -2953,10 +2981,10 @@ interface mail-send {
     name: option<string>
   }
 
-  /// An object containing key/value pairs of header names and the value to substitute for them. The key/value pairs must be strings. You must ensure these are properly encoded if they contain unicode characters. These headers cannot be one of the reserved headers.
-  record post-mail-send-body-headers {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record post-mail-send-body-headers-entry {
+    key: string,
+    value: string
   }
 
   /// A collection of different mail settings that you can use to specify how you would like this email to be handled.
@@ -3021,19 +3049,19 @@ interface mail-send {
     /// An array of recipients who will receive a copy of your email. Each object in this array must contain the recipient's email address. Each object in the array may optionally contain the recipient's name.
     cc: option<list<cc-bcc-email-object>>,
     /// Values that are specific to this personalization that will be carried along with the email and its activity data. Substitutions will not be made on custom arguments, so any string that is entered into this parameter will be assumed to be the custom argument that you would like to be used. This field may not exceed 10,000 bytes.
-    custom-args: option<post-mail-send-body-personalizations-item-custom-args>,
+    custom-args: option<list<post-mail-send-body-personalizations-item-custom-args-entry>>,
     /// Dynamic template data is available using Handlebars syntax in Dynamic Transactional Templates. This field should be used in combination with a Dynamic Transactional Template, which can be identified by a `template_id` starting with `d-`. This field is a collection of key/value pairs following the pattern "variable_name":"value to insert".
-    dynamic-template-data: option<post-mail-send-body-personalizations-item-dynamic-template-data>,
+    dynamic-template-data: option<list<post-mail-send-body-personalizations-item-dynamic-template-data-entry>>,
     from-op: option<from-email-object>,
     /// A collection of JSON key/value pairs allowing you to specify handling instructions for your email. You may not overwrite the following headers: `x-sg-id`, `x-sg-eid`, `received`, `dkim-signature`, `Content-Type`, `Content-Transfer-Encoding`, `To`, `From`, `Subject`, `Reply-To`, `CC`, `BCC`
-    headers: option<post-mail-send-body-personalizations-item-headers>,
+    headers: option<list<post-mail-send-body-personalizations-item-headers-entry>>,
     /// A unix timestamp allowing you to specify when your email should be delivered. Scheduling delivery more than 72 hours in advance is forbidden.
     send-at: option<s32>,
     /// The subject of your email. See character length requirements according to [RFC 2822](http://stackoverflow.com/questions/1592291/what-is-the-email-subject-length-limit#answer-1592310).
     subject: option<string>,
     /// Substitutions allow you to insert data without using Dynamic Transactional Templates. This field should **not** be used in combination with a Dynamic Transactional Template, which can be identified by a `template_id` starting with `d-`. This field is a collection of key/value pairs following the pattern "substitution_tag":"value to substitute". The key/value pairs must be strings. These substitutions will apply to the text and html content of the body of your email, in addition to the `subject` and `reply-to` parameters. The total collective size of your substitutions may not exceed 10,000 bytes per personalization object.
-    substitutions: option<post-mail-send-body-personalizations-item-substitutions>,
-    to: to-email-array
+    substitutions: option<list<post-mail-send-body-personalizations-item-substitutions-entry>>,
+    to: list<to-email-array-item>
   }
 
   record cc-bcc-email-object {
@@ -3043,33 +3071,35 @@ interface mail-send {
     name: option<string>
   }
 
-  /// Values that are specific to this personalization that will be carried along with the email and its activity data. Substitutions will not be made on custom arguments, so any string that is entered into this parameter will be assumed to be the custom argument that you would like to be used. This field may not exceed 10,000 bytes.
-  record post-mail-send-body-personalizations-item-custom-args {
-    /// JSON-encoded free-form object payload
-    data: option<string>
-  }
-
-  /// Dynamic template data is available using Handlebars syntax in Dynamic Transactional Templates. This field should be used in combination with a Dynamic Transactional Template, which can be identified by a `template_id` starting with `d-`. This field is a collection of key/value pairs following the pattern "variable_name":"value to insert".
-  record post-mail-send-body-personalizations-item-dynamic-template-data {
-    /// JSON-encoded free-form object payload
-    data: option<string>
-  }
-
-  /// A collection of JSON key/value pairs allowing you to specify handling instructions for your email. You may not overwrite the following headers: `x-sg-id`, `x-sg-eid`, `received`, `dkim-signature`, `Content-Type`, `Content-Transfer-Encoding`, `To`, `From`, `Subject`, `Reply-To`, `CC`, `BCC`
-  record post-mail-send-body-personalizations-item-headers {
-    /// JSON-encoded free-form object payload
-    data: option<string>
-  }
-
-  /// Substitutions allow you to insert data without using Dynamic Transactional Templates. This field should **not** be used in combination with a Dynamic Transactional Template, which can be identified by a `template_id` starting with `d-`. This field is a collection of key/value pairs following the pattern "substitution_tag":"value to substitute". The key/value pairs must be strings. These substitutions will apply to the text and html content of the body of your email, in addition to the `subject` and `reply-to` parameters. The total collective size of your substitutions may not exceed 10,000 bytes per personalization object.
-  record post-mail-send-body-personalizations-item-substitutions {
-    /// JSON-encoded free-form object payload
-    data: option<string>
-  }
-
-  record to-email-array {
-    /// opaque schema; raw JSON
+  /// one entry of a string-keyed map (free-form object)
+  record post-mail-send-body-personalizations-item-custom-args-entry {
+    key: string,
     value: string
+  }
+
+  /// one entry of a string-keyed map (free-form object)
+  record post-mail-send-body-personalizations-item-dynamic-template-data-entry {
+    key: string,
+    value: string
+  }
+
+  /// one entry of a string-keyed map (free-form object)
+  record post-mail-send-body-personalizations-item-headers-entry {
+    key: string,
+    value: string
+  }
+
+  /// one entry of a string-keyed map (free-form object)
+  record post-mail-send-body-personalizations-item-substitutions-entry {
+    key: string,
+    value: string
+  }
+
+  record to-email-array-item {
+    /// The intended recipient's email address.
+    email: string,
+    /// The intended recipient's name.
+    name: option<string>
   }
 
   record reply-to-email-object {
@@ -3168,7 +3198,7 @@ interface mail-send {
     custom-args: option<string>,
     from-op: from-email-object,
     /// An object containing key/value pairs of header names and the value to substitute for them. The key/value pairs must be strings. You must ensure these are properly encoded if they contain unicode characters. These headers cannot be one of the reserved headers.
-    headers: option<post-mail-send-body-headers>,
+    headers: option<list<post-mail-send-body-headers-entry>>,
     /// The IP Pool that you would like to send this email from.
     ip-pool-name: option<string>,
     /// A collection of different mail settings that you can use to specify how you would like this email to be handled.
@@ -3525,7 +3555,7 @@ interface contacts {
     city: option<string>,
     country: option<string>,
     created-at: string,
-    custom-fields: option<contact-details3-custom-fields>,
+    custom-fields: option<list<contact-details3-custom-fields-entry>>,
     email: option<string>,
     facebook: option<string>,
     first-name: option<string>,
@@ -3542,9 +3572,10 @@ interface contacts {
     whatsapp: option<string>
   }
 
-  record contact-details3-custom-fields {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record contact-details3-custom-fields-entry {
+    key: string,
+    value: string
   }
 
   record contact-request {
@@ -3558,7 +3589,7 @@ interface contacts {
     city: option<string>,
     /// The contact's country. Can be a full name or an abbreviation.
     country: option<string>,
-    custom-fields: option<custom-fields-by-id>,
+    custom-fields: option<list<custom-fields-by-id-entry>>,
     /// The contact's primary email. This is required to be a valid email.
     email: string,
     /// The contact's personal name.
@@ -3571,9 +3602,10 @@ interface contacts {
     state-province-region: option<string>
   }
 
-  record custom-fields-by-id {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record custom-fields-by-id-entry {
+    key: string,
+    value: string
   }
 
   record put-mc-contacts-response {
@@ -3584,13 +3616,13 @@ interface contacts {
   /// The deletion job has been accepted and is being processed.
   record delete-mc-contacts-response {
     /// The deletion job ID.
-    job-id: delete-mc-contacts-response-job-id
+    job-id: list<delete-mc-contacts-response-job-id-entry>
   }
 
-  /// The deletion job ID.
-  record delete-mc-contacts-response-job-id {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record delete-mc-contacts-response-job-id-entry {
+    key: string,
+    value: string
   }
 
   record post-marketing-contacts-batch-response {
@@ -3609,15 +3641,15 @@ interface contacts {
   /// `billable_breakdown` will only appear to the parent user in an account with subusers.
   record get-mc-contacts-count-response-billable-breakdown {
     /// A map of each subuser's billable contact usage. Each key is the subuser's ID and each value is the usage thus far this month.
-    breakdown: option<get-mc-contacts-count-response-billable-breakdown-breakdown>,
+    breakdown: option<list<get-mc-contacts-count-response-billable-breakdown-breakdown-entry>>,
     /// The sum of all the subuser's billable contacts
     total: option<s32>
   }
 
-  /// A map of each subuser's billable contact usage. Each key is the subuser's ID and each value is the usage thus far this month.
-  record get-mc-contacts-count-response-billable-breakdown-breakdown {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record get-mc-contacts-count-response-billable-breakdown-breakdown-entry {
+    key: string,
+    value: string
   }
 
   record get-marketing-contacts-exports-response {
@@ -4117,7 +4149,7 @@ interface lists {
     city: option<string>,
     country: option<string>,
     created-at: string,
-    custom-fields: option<contact-details2-custom-fields>,
+    custom-fields: option<list<contact-details2-custom-fields-entry>>,
     email: option<string>,
     facebook: option<string>,
     first-name: option<string>,
@@ -4134,9 +4166,10 @@ interface lists {
     whatsapp: option<string>
   }
 
-  record contact-details2-custom-fields {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record contact-details2-custom-fields-entry {
+    key: string,
+    value: string
   }
 
   /// The delete has been accepted and is processing.
@@ -4280,7 +4313,7 @@ interface segmenting-contacts {
     updated-at: string,
     contacts-sample: list<contact-response>,
     /// AST representation of the query DSL
-    query-json: option<full-segment-query-json>,
+    query-json: option<list<full-segment-query-json-entry>>,
     /// The array of list ids to filter contacts on when building this segment. It allows only one such list id for now. We will support more in future
     parent-list-ids: option<list<string>>,
     /// SQL query which will filter contacts based on the conditions provided
@@ -4325,10 +4358,10 @@ interface segmenting-contacts {
     custom-field-name2: option<string>
   }
 
-  /// AST representation of the query DSL
-  record full-segment-query-json {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record full-segment-query-json-entry {
+    key: string,
+    value: string
   }
 
   record post-marketing-segments-delete-response {
@@ -4352,9 +4385,10 @@ interface segmenting-contacts {
     type-op: option<string>
   }
 
-  record delete-marketing-segments-segment-id-response {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record delete-marketing-segments-segment-id-response-entry {
+    key: string,
+    value: string
   }
 
   variant get-marketing-segments-error {
@@ -4459,7 +4493,7 @@ interface segmenting-contacts {
   record delete-marketing-segments-segment-id-params {
     segment-id: string
   }
-  delete-marketing-segments-segment-id: func(params: delete-marketing-segments-segment-id-params) -> result<delete-marketing-segments-segment-id-response, delete-marketing-segments-segment-id-error>;
+  delete-marketing-segments-segment-id: func(params: delete-marketing-segments-segment-id-params) -> result<list<delete-marketing-segments-segment-id-response-entry>, delete-marketing-segments-segment-id-error>;
 
 }
 
@@ -5373,9 +5407,10 @@ interface marketing-campaigns-stats {
 }
 
 interface send-test-email {
-  record post-marketing-test-send-email-response {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record post-marketing-test-send-email-response-entry {
+    key: string,
+    value: string
   }
 
   variant post-marketing-test-send-email-error {
@@ -5399,7 +5434,7 @@ interface send-test-email {
     ///  You can override the active template with an alternative template version by passing the version ID in this field. If this field is blank, the active template version will be used.
     version-id-override: option<string>
   }
-  post-marketing-test-send-email: func(params: post-marketing-test-send-email-params) -> result<post-marketing-test-send-email-response, post-marketing-test-send-email-error>;
+  post-marketing-test-send-email: func(params: post-marketing-test-send-email-params) -> result<list<post-marketing-test-send-email-response-entry>, post-marketing-test-send-email-error>;
 
 }
 
@@ -6046,14 +6081,16 @@ interface sender-identities-api {
     name: option<string>
   }
 
-  record delete-v3-senders-sender-id-response {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record delete-v3-senders-sender-id-response-entry {
+    key: string,
+    value: string
   }
 
-  record post-v3-senders-sender-id-resend-verification-response {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record post-v3-senders-sender-id-resend-verification-response-entry {
+    key: string,
+    value: string
   }
 
   variant post-senders-error {
@@ -6151,7 +6188,7 @@ interface sender-identities-api {
     sender-id: string,
     on-behalf-of: option<string>
   }
-  delete-v3-senders-sender-id: func(params: delete-v3-senders-sender-id-params) -> result<delete-v3-senders-sender-id-response, delete-v3-senders-sender-id-error>;
+  delete-v3-senders-sender-id: func(params: delete-v3-senders-sender-id-params) -> result<list<delete-v3-senders-sender-id-response-entry>, delete-v3-senders-sender-id-error>;
 
   /// Resend Sender Identity Verification
   record post-v3-senders-sender-id-resend-verification-params {
@@ -6159,7 +6196,7 @@ interface sender-identities-api {
     sender-id: string,
     on-behalf-of: option<string>
   }
-  post-v3-senders-sender-id-resend-verification: func(params: post-v3-senders-sender-id-resend-verification-params) -> result<post-v3-senders-sender-id-resend-verification-response, post-v3-senders-sender-id-resend-verification-error>;
+  post-v3-senders-sender-id-resend-verification: func(params: post-v3-senders-sender-id-resend-verification-params) -> result<list<post-v3-senders-sender-id-resend-verification-response-entry>, post-v3-senders-sender-id-resend-verification-error>;
 
 }
 
@@ -6541,14 +6578,16 @@ interface subusers-api {
     username: string
   }
 
-  record patch-subusers-subuser-name-response {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record patch-subusers-subuser-name-response-entry {
+    key: string,
+    value: string
   }
 
-  record delete-subusers-subuser-name-response {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record delete-subusers-subuser-name-response-entry {
+    key: string,
+    value: string
   }
 
   record put-subusers-subuser-name-ips-response {
@@ -6622,13 +6661,13 @@ interface subusers-api {
     /// Whether or not this subuser is disabled. True means disabled, False means enabled.
     disabled: option<bool>
   }
-  patch-subusers-subuser-name: func(params: patch-subusers-subuser-name-params) -> result<patch-subusers-subuser-name-response, patch-subusers-subuser-name-error>;
+  patch-subusers-subuser-name: func(params: patch-subusers-subuser-name-params) -> result<list<patch-subusers-subuser-name-response-entry>, patch-subusers-subuser-name-error>;
 
   /// Delete a subuser
   record delete-subusers-subuser-name-params {
     subuser-name: string
   }
-  delete-subusers-subuser-name: func(params: delete-subusers-subuser-name-params) -> result<delete-subusers-subuser-name-response, delete-subusers-subuser-name-error>;
+  delete-subusers-subuser-name: func(params: delete-subusers-subuser-name-params) -> result<list<delete-subusers-subuser-name-response-entry>, delete-subusers-subuser-name-error>;
 
   /// Update IPs assigned to a subuser
   record put-subusers-subuser-name-ips-params {
@@ -6845,9 +6884,10 @@ interface subuser-monitor-settings {
     frequency: f64
   }
 
-  record delete-subusers-subuser-name-monitor-response {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record delete-subusers-subuser-name-monitor-response-entry {
+    key: string,
+    value: string
   }
 
   variant get-subusers-subuser-name-monitor-error {
@@ -6908,24 +6948,43 @@ interface subuser-monitor-settings {
     /// The name of the subuser for which to retrieve monitor settings.
     subuser-name: string
   }
-  delete-subusers-subuser-name-monitor: func(params: delete-subusers-subuser-name-monitor-params) -> result<delete-subusers-subuser-name-monitor-response, delete-subusers-subuser-name-monitor-error>;
+  delete-subusers-subuser-name-monitor: func(params: delete-subusers-subuser-name-monitor-params) -> result<list<delete-subusers-subuser-name-monitor-response-entry>, delete-subusers-subuser-name-monitor-error>;
 
 }
 
 interface blocks-api {
-  record blocks-response {
-    /// opaque schema; raw JSON
+  record blocks-response-item {
+    /// A Unix timestamp indicating when the email address was added to the blocks list.
+    created: s32,
+    /// The email address that was added to the block list.
+    email: string,
+    /// An explanation for the reason of the block.
+    reason: string,
+    /// The status of the block.
+    status: string
+  }
+
+  /// one entry of a string-keyed map (free-form object)
+  record delete-suppression-blocks-response-entry {
+    key: string,
     value: string
   }
 
-  record delete-suppression-blocks-response {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  record blocks-response-item-v2 {
+    /// A Unix timestamp indicating when the email address was added to the blocks list.
+    created: s32,
+    /// The email address that was added to the block list.
+    email: string,
+    /// An explanation for the reason of the block.
+    reason: string,
+    /// The status of the block.
+    status: string
   }
 
-  record delete-suppression-blocks-email-response {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record delete-suppression-blocks-email-response-entry {
+    key: string,
+    value: string
   }
 
   /// Retrieve all blocks
@@ -6940,7 +6999,7 @@ interface blocks-api {
     offset: option<s32>,
     on-behalf-of: option<string>
   }
-  get-suppression-blocks: func(params: get-suppression-blocks-params) -> result<blocks-response, string>;
+  get-suppression-blocks: func(params: get-suppression-blocks-params) -> result<list<blocks-response-item>, string>;
 
   /// Delete blocks
   record delete-suppression-blocks-params {
@@ -6950,7 +7009,7 @@ interface blocks-api {
     /// The specific blocked email addresses that you want to delete.
     emails: option<list<string>>
   }
-  delete-suppression-blocks: func(params: delete-suppression-blocks-params) -> result<delete-suppression-blocks-response, string>;
+  delete-suppression-blocks: func(params: delete-suppression-blocks-params) -> result<list<delete-suppression-blocks-response-entry>, string>;
 
   /// Retrieve a specific block
   record get-suppression-blocks-email-params {
@@ -6958,7 +7017,7 @@ interface blocks-api {
     email: string,
     on-behalf-of: option<string>
   }
-  get-suppression-blocks-email: func(params: get-suppression-blocks-email-params) -> result<blocks-response, string>;
+  get-suppression-blocks-email: func(params: get-suppression-blocks-email-params) -> result<list<blocks-response-item-v2>, string>;
 
   /// Delete a specific block
   record delete-suppression-blocks-email-params {
@@ -6966,7 +7025,7 @@ interface blocks-api {
     email: string,
     on-behalf-of: option<string>
   }
-  delete-suppression-blocks-email: func(params: delete-suppression-blocks-email-params) -> result<delete-suppression-blocks-email-response, string>;
+  delete-suppression-blocks-email: func(params: delete-suppression-blocks-email-params) -> result<list<delete-suppression-blocks-email-response-entry>, string>;
 
 }
 
@@ -6982,9 +7041,10 @@ interface bounces-api {
     status: option<string>
   }
 
-  record delete-suppression-bounces-email-response {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record delete-suppression-bounces-email-response-entry {
+    key: string,
+    value: string
   }
 
   variant get-suppression-bounces-error {
@@ -7038,7 +7098,7 @@ interface bounces-api {
     on-behalf-of: option<string>,
     body: option<string>
   }
-  delete-suppression-bounces-email: func(params: delete-suppression-bounces-email-params) -> result<delete-suppression-bounces-email-response, delete-suppression-bounces-email-error>;
+  delete-suppression-bounces-email: func(params: delete-suppression-bounces-email-params) -> result<list<delete-suppression-bounces-email-response-entry>, delete-suppression-bounces-email-error>;
 
 }
 
@@ -7052,14 +7112,16 @@ interface invalid-emails-api {
     reason: option<string>
   }
 
-  record delete-suppression-invalid-emails-response {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record delete-suppression-invalid-emails-response-entry {
+    key: string,
+    value: string
   }
 
-  record delete-suppression-invalid-emails-email-response {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record delete-suppression-invalid-emails-email-response-entry {
+    key: string,
+    value: string
   }
 
   /// Retrieve all invalid emails
@@ -7084,7 +7146,7 @@ interface invalid-emails-api {
     /// The list of specific email addresses that you want to remove.
     emails: option<list<string>>
   }
-  delete-suppression-invalid-emails: func(params: delete-suppression-invalid-emails-params) -> result<delete-suppression-invalid-emails-response, string>;
+  delete-suppression-invalid-emails: func(params: delete-suppression-invalid-emails-params) -> result<list<delete-suppression-invalid-emails-response-entry>, string>;
 
   /// Retrieve a specific invalid email
   record get-suppression-invalid-emails-email-params {
@@ -7100,24 +7162,39 @@ interface invalid-emails-api {
     email: string,
     on-behalf-of: option<string>
   }
-  delete-suppression-invalid-emails-email: func(params: delete-suppression-invalid-emails-email-params) -> result<delete-suppression-invalid-emails-email-response, string>;
+  delete-suppression-invalid-emails-email: func(params: delete-suppression-invalid-emails-email-params) -> result<list<delete-suppression-invalid-emails-email-response-entry>, string>;
 
 }
 
 interface spam-reports-api {
-  record spam-reports-response {
-    /// opaque schema; raw JSON
+  record spam-reports-response-item {
+    /// A Unix timestamp that indicates when the recipient marked your message as spam.
+    created: s32,
+    /// The email address of the recipient that marked your message as spam.
+    email: string,
+    /// The IP address that the message was sent from.
+    ip: string
+  }
+
+  /// one entry of a string-keyed map (free-form object)
+  record delete-suppression-spam-reports-response-entry {
+    key: string,
     value: string
   }
 
-  record delete-suppression-spam-reports-response {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  record spam-reports-response-item-v2 {
+    /// A Unix timestamp that indicates when the recipient marked your message as spam.
+    created: s32,
+    /// The email address of the recipient that marked your message as spam.
+    email: string,
+    /// The IP address that the message was sent from.
+    ip: string
   }
 
-  record delete-suppression-spam-reports-email-response {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record delete-suppression-spam-reports-email-response-entry {
+    key: string,
+    value: string
   }
 
   /// Retrieve all spam reports
@@ -7132,7 +7209,7 @@ interface spam-reports-api {
     offset: option<s32>,
     on-behalf-of: option<string>
   }
-  get-suppression-spam-reports: func(params: get-suppression-spam-reports-params) -> result<spam-reports-response, string>;
+  get-suppression-spam-reports: func(params: get-suppression-spam-reports-params) -> result<list<spam-reports-response-item>, string>;
 
   /// Delete spam reports
   record delete-suppression-spam-reports-params {
@@ -7142,7 +7219,7 @@ interface spam-reports-api {
     /// A list of specific email addresses that you want to remove from the spam report list.
     emails: option<list<string>>
   }
-  delete-suppression-spam-reports: func(params: delete-suppression-spam-reports-params) -> result<delete-suppression-spam-reports-response, string>;
+  delete-suppression-spam-reports: func(params: delete-suppression-spam-reports-params) -> result<list<delete-suppression-spam-reports-response-entry>, string>;
 
   /// Retrieve a specific spam report
   record get-suppression-spam-reports-email-params {
@@ -7150,7 +7227,7 @@ interface spam-reports-api {
     email: string,
     on-behalf-of: option<string>
   }
-  get-suppression-spam-reports-email: func(params: get-suppression-spam-reports-email-params) -> result<spam-reports-response, string>;
+  get-suppression-spam-reports-email: func(params: get-suppression-spam-reports-email-params) -> result<list<spam-reports-response-item-v2>, string>;
 
   /// Delete a specific spam report
   record delete-suppression-spam-reports-email-params {
@@ -7158,7 +7235,7 @@ interface spam-reports-api {
     email: string,
     on-behalf-of: option<string>
   }
-  delete-suppression-spam-reports-email: func(params: delete-suppression-spam-reports-email-params) -> result<delete-suppression-spam-reports-email-response, string>;
+  delete-suppression-spam-reports-email: func(params: delete-suppression-spam-reports-email-params) -> result<list<delete-suppression-spam-reports-email-response-entry>, string>;
 
 }
 
@@ -7244,9 +7321,10 @@ interface transactional-templates {
     message: option<string>
   }
 
-  record delete-templates-template-id-response {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record delete-templates-template-id-response-entry {
+    key: string,
+    value: string
   }
 
   variant get-templates-error {
@@ -7306,7 +7384,7 @@ interface transactional-templates {
     template-id: string,
     on-behalf-of: option<string>
   }
-  delete-templates-template-id: func(params: delete-templates-template-id-params) -> result<delete-templates-template-id-response, string>;
+  delete-templates-template-id: func(params: delete-templates-template-id-params) -> result<list<delete-templates-template-id-response-entry>, string>;
 
 }
 
@@ -7618,9 +7696,10 @@ interface users-api {
     email: string
   }
 
-  record put-user-password-response {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record put-user-password-response-entry {
+    key: string,
+    value: string
   }
 
   record get-user-profile-response {
@@ -7724,7 +7803,7 @@ interface users-api {
     /// The old password for your account.
     old-password: string
   }
-  put-user-password: func(params: put-user-password-params) -> result<put-user-password-response, string>;
+  put-user-password: func(params: put-user-password-params) -> result<list<put-user-password-response-entry>, string>;
 
   /// Get a user's profile
   record get-user-profile-params {
@@ -8022,9 +8101,10 @@ interface settings-inbound-parse {
     url: option<string>
   }
 
-  record delete-user-webhooks-parse-settings-hostname-response {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record delete-user-webhooks-parse-settings-hostname-response-entry {
+    key: string,
+    value: string
   }
 
   variant post-user-webhooks-parse-settings-error {
@@ -8103,7 +8183,7 @@ interface settings-inbound-parse {
     hostname: string,
     on-behalf-of: option<string>
   }
-  delete-user-webhooks-parse-settings-hostname: func(params: delete-user-webhooks-parse-settings-hostname-params) -> result<delete-user-webhooks-parse-settings-hostname-response, delete-user-webhooks-parse-settings-hostname-error>;
+  delete-user-webhooks-parse-settings-hostname: func(params: delete-user-webhooks-parse-settings-hostname-params) -> result<list<delete-user-webhooks-parse-settings-hostname-response-entry>, delete-user-webhooks-parse-settings-hostname-error>;
 
 }
 
@@ -8215,9 +8295,10 @@ interface sender-verification {
     soft-failures: list<string>
   }
 
-  record post-verified-senders-resend-id-response {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record post-verified-senders-resend-id-response-entry {
+    key: string,
+    value: string
   }
 
   record get-verified-senders-steps-completed-response {
@@ -8229,9 +8310,10 @@ interface sender-verification {
     sender-verified: option<bool>
   }
 
-  record delete-verified-senders-id-response {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record delete-verified-senders-id-response-entry {
+    key: string,
+    value: string
   }
 
   variant get-verified-senders-error {
@@ -8332,7 +8414,7 @@ interface sender-verification {
   record post-verified-senders-resend-id-params {
     id: string
   }
-  post-verified-senders-resend-id: func(params: post-verified-senders-resend-id-params) -> result<post-verified-senders-resend-id-response, post-verified-senders-resend-id-error>;
+  post-verified-senders-resend-id: func(params: post-verified-senders-resend-id-params) -> result<list<post-verified-senders-resend-id-response-entry>, post-verified-senders-resend-id-error>;
 
   /// Completed Steps
   get-verified-senders-steps-completed: func() -> result<get-verified-senders-steps-completed-response, get-verified-senders-steps-completed-error>;
@@ -8364,7 +8446,7 @@ interface sender-verification {
   record delete-verified-senders-id-params {
     id: string
   }
-  delete-verified-senders-id: func(params: delete-verified-senders-id-params) -> result<delete-verified-senders-id-response, delete-verified-senders-id-error>;
+  delete-verified-senders-id: func(params: delete-verified-senders-id-params) -> result<list<delete-verified-senders-id-response-entry>, delete-verified-senders-id-error>;
 
 }
 
@@ -8389,9 +8471,87 @@ interface email-cname-records {
 }
 
 interface domain-authentication {
-  record v200-response {
-    /// opaque schema; raw JSON
-    value: string
+  record v200-response-item {
+    /// Indicates if this authenticated domain uses automated security.
+    automatic-security: bool,
+    /// Indicates whether this authenticated domain uses custom SPF.
+    custom-spf: bool,
+    /// Indicates if this is the default authenticated domain.
+    default: bool,
+    /// The DNS records used to authenticate the sending domain.
+    dns: v200-response-item-dns,
+    /// The domain to be authenticated.
+    domain: string,
+    /// The ID of the authenticated domain.
+    id: f64,
+    /// The IPs to be included in the custom SPF record for this authenticated domain.
+    ips: list<string>,
+    /// Indicates if this authenticated domain was created using the legacy whitelabel tool. If it is a legacy whitelabel, it will still function, but you'll need to create a new authenticated domain if you need to update it.
+    legacy: bool,
+    /// The subdomain to use for this authenticated domain.
+    subdomain: string,
+    /// The ID of the user that this domain is associated with.
+    user-id: f64,
+    /// The username that this domain will be associated with.
+    username: string,
+    /// Indicates if this is a valid authenticated domain.
+    valid: bool,
+    /// A Unix epoch timestamp representing the last time of a validation attempt.
+    last-validation-attempt-at: option<s32>,
+    subusers: option<list<v200-response-item-subusers-item>>
+  }
+
+  /// The DNS records used to authenticate the sending domain.
+  record v200-response-item-dns {
+    /// A DNS record.
+    dkim1: v200-response-item-dns-dkim1,
+    /// A DNS record.
+    dkim2: v200-response-item-dns-dkim2,
+    /// The CNAME for your sending domain that points to sendgrid.net.
+    mail-cname: v200-response-item-dns-mail-cname
+  }
+
+  /// A DNS record.
+  record v200-response-item-dns-dkim1 {
+    /// The DNS record.
+    data: string,
+    /// The domain that this DNS record was created for.
+    host: string,
+    /// The type of DNS record.
+    type-op: string,
+    /// Indicates if this is a valid DNS record.
+    valid: bool
+  }
+
+  /// A DNS record.
+  record v200-response-item-dns-dkim2 {
+    /// The DNS record.
+    data: string,
+    /// The domain that this DNS record was created for.
+    host: string,
+    /// The type of DNS record.
+    type-op: string,
+    /// Indicates if this is a valid DNS record.
+    valid: bool
+  }
+
+  /// The CNAME for your sending domain that points to sendgrid.net.
+  record v200-response-item-dns-mail-cname {
+    /// The CNAME record.
+    data: string,
+    /// The domain that this CNAME is created for.
+    host: string,
+    /// The type of DNS record.
+    type-op: string,
+    /// Indicates if this is a valid CNAME.
+    valid: bool
+  }
+
+  record v200-response-item-subusers-item {
+    /// The ID of the subuser that this authenticated domain will be associated with.
+    user-id: option<s32>,
+    /// The username of the subuser that this authenticated domain is associated with.
+    username: option<string>
   }
 
   record authentication-domain {
@@ -8465,6 +8625,89 @@ interface domain-authentication {
     type-op: string,
     /// Indicates if this is a valid CNAME.
     valid: bool
+  }
+
+  record v200-response-item-v2 {
+    /// Indicates if this authenticated domain uses automated security.
+    automatic-security: bool,
+    /// Indicates whether this authenticated domain uses custom SPF.
+    custom-spf: bool,
+    /// Indicates if this is the default authenticated domain.
+    default: bool,
+    /// The DNS records used to authenticate the sending domain.
+    dns: v200-response-item-v2-dns,
+    /// The domain to be authenticated.
+    domain: string,
+    /// The ID of the authenticated domain.
+    id: f64,
+    /// The IPs to be included in the custom SPF record for this authenticated domain.
+    ips: list<string>,
+    /// Indicates if this authenticated domain was created using the legacy whitelabel tool. If it is a legacy whitelabel, it will still function, but you'll need to create a new authenticated domain if you need to update it.
+    legacy: bool,
+    /// The subdomain to use for this authenticated domain.
+    subdomain: string,
+    /// The ID of the user that this domain is associated with.
+    user-id: f64,
+    /// The username that this domain will be associated with.
+    username: string,
+    /// Indicates if this is a valid authenticated domain.
+    valid: bool,
+    /// A Unix epoch timestamp representing the last time of a validation attempt.
+    last-validation-attempt-at: option<s32>,
+    subusers: option<list<v200-response-item-v2-subusers-item>>
+  }
+
+  /// The DNS records used to authenticate the sending domain.
+  record v200-response-item-v2-dns {
+    /// A DNS record.
+    dkim1: v200-response-item-v2-dns-dkim1,
+    /// A DNS record.
+    dkim2: v200-response-item-v2-dns-dkim2,
+    /// The CNAME for your sending domain that points to sendgrid.net.
+    mail-cname: v200-response-item-v2-dns-mail-cname
+  }
+
+  /// A DNS record.
+  record v200-response-item-v2-dns-dkim1 {
+    /// The DNS record.
+    data: string,
+    /// The domain that this DNS record was created for.
+    host: string,
+    /// The type of DNS record.
+    type-op: string,
+    /// Indicates if this is a valid DNS record.
+    valid: bool
+  }
+
+  /// A DNS record.
+  record v200-response-item-v2-dns-dkim2 {
+    /// The DNS record.
+    data: string,
+    /// The domain that this DNS record was created for.
+    host: string,
+    /// The type of DNS record.
+    type-op: string,
+    /// Indicates if this is a valid DNS record.
+    valid: bool
+  }
+
+  /// The CNAME for your sending domain that points to sendgrid.net.
+  record v200-response-item-v2-dns-mail-cname {
+    /// The CNAME record.
+    data: string,
+    /// The domain that this CNAME is created for.
+    host: string,
+    /// The type of DNS record.
+    type-op: string,
+    /// Indicates if this is a valid CNAME.
+    valid: bool
+  }
+
+  record v200-response-item-v2-subusers-item {
+    /// The ID of the subuser that this authenticated domain will be associated with.
+    user-id: option<s32>,
+    /// The username of the subuser that this authenticated domain is associated with.
+    username: option<string>
   }
 
   record domain-spf {
@@ -8554,14 +8797,99 @@ interface domain-authentication {
     valid: bool
   }
 
-  record delete-whitelabel-domains-subuser-response {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record delete-whitelabel-domains-subuser-response-entry {
+    key: string,
+    value: string
   }
 
-  record delete-whitelabel-domains-domain-id-response {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  record v200-response-item-v3 {
+    /// Indicates if this authenticated domain uses automated security.
+    automatic-security: bool,
+    /// Indicates whether this authenticated domain uses custom SPF.
+    custom-spf: bool,
+    /// Indicates if this is the default authenticated domain.
+    default: bool,
+    /// The DNS records used to authenticate the sending domain.
+    dns: v200-response-item-v3-dns,
+    /// The domain to be authenticated.
+    domain: string,
+    /// The ID of the authenticated domain.
+    id: f64,
+    /// The IPs to be included in the custom SPF record for this authenticated domain.
+    ips: list<string>,
+    /// Indicates if this authenticated domain was created using the legacy whitelabel tool. If it is a legacy whitelabel, it will still function, but you'll need to create a new authenticated domain if you need to update it.
+    legacy: bool,
+    /// The subdomain to use for this authenticated domain.
+    subdomain: string,
+    /// The ID of the user that this domain is associated with.
+    user-id: f64,
+    /// The username that this domain will be associated with.
+    username: string,
+    /// Indicates if this is a valid authenticated domain.
+    valid: bool,
+    /// A Unix epoch timestamp representing the last time of a validation attempt.
+    last-validation-attempt-at: option<s32>,
+    subusers: option<list<v200-response-item-v3-subusers-item>>
+  }
+
+  /// The DNS records used to authenticate the sending domain.
+  record v200-response-item-v3-dns {
+    /// A DNS record.
+    dkim1: v200-response-item-v3-dns-dkim1,
+    /// A DNS record.
+    dkim2: v200-response-item-v3-dns-dkim2,
+    /// The CNAME for your sending domain that points to sendgrid.net.
+    mail-cname: v200-response-item-v3-dns-mail-cname
+  }
+
+  /// A DNS record.
+  record v200-response-item-v3-dns-dkim1 {
+    /// The DNS record.
+    data: string,
+    /// The domain that this DNS record was created for.
+    host: string,
+    /// The type of DNS record.
+    type-op: string,
+    /// Indicates if this is a valid DNS record.
+    valid: bool
+  }
+
+  /// A DNS record.
+  record v200-response-item-v3-dns-dkim2 {
+    /// The DNS record.
+    data: string,
+    /// The domain that this DNS record was created for.
+    host: string,
+    /// The type of DNS record.
+    type-op: string,
+    /// Indicates if this is a valid DNS record.
+    valid: bool
+  }
+
+  /// The CNAME for your sending domain that points to sendgrid.net.
+  record v200-response-item-v3-dns-mail-cname {
+    /// The CNAME record.
+    data: string,
+    /// The domain that this CNAME is created for.
+    host: string,
+    /// The type of DNS record.
+    type-op: string,
+    /// Indicates if this is a valid CNAME.
+    valid: bool
+  }
+
+  record v200-response-item-v3-subusers-item {
+    /// The ID of the subuser that this authenticated domain will be associated with.
+    user-id: option<s32>,
+    /// The username of the subuser that this authenticated domain is associated with.
+    username: option<string>
+  }
+
+  /// one entry of a string-keyed map (free-form object)
+  record delete-whitelabel-domains-domain-id-response-entry {
+    key: string,
+    value: string
   }
 
   record post-whitelabel-domains-id-validate-response {
@@ -8633,7 +8961,7 @@ interface domain-authentication {
     domain: option<string>,
     on-behalf-of: option<string>
   }
-  get-whitelabel-domains: func(params: get-whitelabel-domains-params) -> result<v200-response, string>;
+  get-whitelabel-domains: func(params: get-whitelabel-domains-params) -> result<list<v200-response-item>, string>;
 
   /// Authenticate a domain
   record post-whitelabel-domains-params {
@@ -8663,7 +8991,7 @@ interface domain-authentication {
     domain: option<string>,
     on-behalf-of: option<string>
   }
-  get-whitelabel-domains-default: func(params: get-whitelabel-domains-default-params) -> result<v200-response, string>;
+  get-whitelabel-domains-default: func(params: get-whitelabel-domains-default-params) -> result<list<v200-response-item-v2>, string>;
 
   /// List the authenticated domain associated with the given user.
   record get-whitelabel-domains-subuser-params {
@@ -8677,7 +9005,7 @@ interface domain-authentication {
     /// Username for the subuser to find associated authenticated domain.
     username: option<string>
   }
-  delete-whitelabel-domains-subuser: func(params: delete-whitelabel-domains-subuser-params) -> result<delete-whitelabel-domains-subuser-response, string>;
+  delete-whitelabel-domains-subuser: func(params: delete-whitelabel-domains-subuser-params) -> result<list<delete-whitelabel-domains-subuser-response-entry>, string>;
 
   /// Retrieve an authenticated domain
   record get-whitelabel-domains-domain-id-params {
@@ -8695,14 +9023,14 @@ interface domain-authentication {
     /// Indicates whether this is the default authenticated domain.
     default: option<bool>
   }
-  patch-whitelabel-domains-domain-id: func(params: patch-whitelabel-domains-domain-id-params) -> result<v200-response, string>;
+  patch-whitelabel-domains-domain-id: func(params: patch-whitelabel-domains-domain-id-params) -> result<list<v200-response-item-v3>, string>;
 
   /// Delete an authenticated domain.
   record delete-whitelabel-domains-domain-id-params {
     domain-id: string,
     on-behalf-of: option<string>
   }
-  delete-whitelabel-domains-domain-id: func(params: delete-whitelabel-domains-domain-id-params) -> result<delete-whitelabel-domains-domain-id-response, string>;
+  delete-whitelabel-domains-domain-id: func(params: delete-whitelabel-domains-domain-id-params) -> result<list<delete-whitelabel-domains-domain-id-response-entry>, string>;
 
   /// Associate an authenticated domain with a given user.
   record post-whitelabel-domains-domain-id-subuser-params {
@@ -8784,9 +9112,10 @@ interface reverse-dns {
     username: string
   }
 
-  record delete-whitelabel-ips-id-response {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record delete-whitelabel-ips-id-response-entry {
+    key: string,
+    value: string
   }
 
   record post-whitelabel-ips-id-validate-response {
@@ -8854,7 +9183,7 @@ interface reverse-dns {
     id: string,
     on-behalf-of: option<string>
   }
-  delete-whitelabel-ips-id: func(params: delete-whitelabel-ips-id-params) -> result<delete-whitelabel-ips-id-response, string>;
+  delete-whitelabel-ips-id: func(params: delete-whitelabel-ips-id-params) -> result<list<delete-whitelabel-ips-id-response-entry>, string>;
 
   /// Validate a reverse DNS record
   record post-whitelabel-ips-id-validate-params {
@@ -8926,14 +9255,16 @@ interface link-branding {
     valid: bool
   }
 
-  record delete-whitelabel-links-subuser-response {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record delete-whitelabel-links-subuser-response-entry {
+    key: string,
+    value: string
   }
 
-  record delete-whitelabel-links-id-response {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record delete-whitelabel-links-id-response-entry {
+    key: string,
+    value: string
   }
 
   record post-whitelabel-links-id-validate-response {
@@ -9014,7 +9345,7 @@ interface link-branding {
     /// The username of the subuser account that you want to disassociate a branded link from.
     username: string
   }
-  delete-whitelabel-links-subuser: func(params: delete-whitelabel-links-subuser-params) -> result<delete-whitelabel-links-subuser-response, string>;
+  delete-whitelabel-links-subuser: func(params: delete-whitelabel-links-subuser-params) -> result<list<delete-whitelabel-links-subuser-response-entry>, string>;
 
   /// Retrieve a branded link
   record get-whitelabel-links-id-params {
@@ -9040,7 +9371,7 @@ interface link-branding {
     id: string,
     on-behalf-of: option<string>
   }
-  delete-whitelabel-links-id: func(params: delete-whitelabel-links-id-params) -> result<delete-whitelabel-links-id-response, string>;
+  delete-whitelabel-links-id: func(params: delete-whitelabel-links-id-params) -> result<list<delete-whitelabel-links-id-response-entry>, string>;
 
   /// Validate a branded link
   record post-whitelabel-links-id-validate-params {

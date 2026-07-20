@@ -212,7 +212,7 @@ fn iface_subscription_schedules__subscription_schedule__to_json(p: &iface_subscr
     m.insert("end_behavior".into(), Value::String(iface_subscription_schedules__subscription_schedule_end_behavior_enum__to_str(&p.end_behavior).into()));
     m.insert("id".into(), Value::String((&p.id).clone()));
     m.insert("livemode".into(), Value::Bool(*(&p.livemode)));
-    m.insert("metadata".into(), match (&p.metadata) { Some(v) => iface_subscription_schedules__subscription_schedule_metadata__to_json(v), None => Value::Null });
+    m.insert("metadata".into(), match (&p.metadata) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("object".into(), Value::String(iface_subscription_schedules__subscription_schedule_object_enum__to_str(&p.object).into()));
     m.insert("phases".into(), Value::Array((&p.phases).iter().map(|v| iface_subscription_schedules__subscription_schedule_phase_configuration__to_json(v)).collect()));
     m.insert("released_at".into(), match (&p.released_at) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
@@ -244,9 +244,10 @@ fn iface_subscription_schedules__resource_default_settings_automatic_tax__to_jso
     Value::Object(m)
 }
 
-fn iface_subscription_schedules__subscription_schedule_metadata__to_json(p: &iface_subscription_schedules::SubscriptionScheduleMetadata) -> Value {
+fn iface_subscription_schedules__subscription_schedule_metadata_entry__to_json(p: &iface_subscription_schedules::SubscriptionScheduleMetadataEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -266,7 +267,7 @@ fn iface_subscription_schedules__subscription_schedule_phase_configuration__to_j
     m.insert("end_date".into(), Value::Number(serde_json::Number::from(*(&p.end_date))));
     m.insert("invoice_settings".into(), match (&p.invoice_settings) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("items".into(), Value::Array((&p.items).iter().map(|v| iface_subscription_schedules__subscription_schedule_configuration_item__to_json(v)).collect()));
-    m.insert("metadata".into(), match (&p.metadata) { Some(v) => iface_subscription_schedules__subscription_schedule_phase_configuration_metadata__to_json(v), None => Value::Null });
+    m.insert("metadata".into(), match (&p.metadata) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("on_behalf_of".into(), match (&p.on_behalf_of) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("proration_behavior".into(), Value::String(iface_subscription_schedules__subscription_schedule_phase_configuration_proration_behavior_enum__to_str(&p.proration_behavior).into()));
     m.insert("start_date".into(), Value::Number(serde_json::Number::from(*(&p.start_date))));
@@ -294,7 +295,7 @@ fn iface_subscription_schedules__tax_rate__to_json(p: &iface_subscription_schedu
     m.insert("inclusive".into(), Value::Bool(*(&p.inclusive)));
     m.insert("jurisdiction".into(), match (&p.jurisdiction) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("livemode".into(), Value::Bool(*(&p.livemode)));
-    m.insert("metadata".into(), match (&p.metadata) { Some(v) => iface_subscription_schedules__tax_rate_metadata__to_json(v), None => Value::Null });
+    m.insert("metadata".into(), match (&p.metadata) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("object".into(), Value::String(iface_subscription_schedules__tax_rate_object_enum__to_str(&p.object).into()));
     m.insert("percentage".into(), serde_json::Number::from_f64(*(&p.percentage)).map(Value::Number).unwrap_or(Value::Null));
     m.insert("state".into(), match (&p.state) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -302,9 +303,10 @@ fn iface_subscription_schedules__tax_rate__to_json(p: &iface_subscription_schedu
     Value::Object(m)
 }
 
-fn iface_subscription_schedules__tax_rate_metadata__to_json(p: &iface_subscription_schedules::TaxRateMetadata) -> Value {
+fn iface_subscription_schedules__tax_rate_metadata_entry__to_json(p: &iface_subscription_schedules::TaxRateMetadataEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -317,22 +319,24 @@ fn iface_subscription_schedules__schedules_phase_automatic_tax__to_json(p: &ifac
 fn iface_subscription_schedules__subscription_schedule_configuration_item__to_json(p: &iface_subscription_schedules::SubscriptionScheduleConfigurationItem) -> Value {
     let mut m = Map::new();
     m.insert("billing_thresholds".into(), match (&p.billing_thresholds) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("metadata".into(), match (&p.metadata) { Some(v) => iface_subscription_schedules__subscription_schedule_configuration_item_metadata__to_json(v), None => Value::Null });
+    m.insert("metadata".into(), match (&p.metadata) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("price".into(), Value::String((&p.price).clone()));
     m.insert("quantity".into(), match (&p.quantity) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("tax_rates".into(), match (&p.tax_rates) { Some(v) => Value::Array((v).iter().map(|v| iface_subscription_schedules__tax_rate__to_json(v)).collect()), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_subscription_schedules__subscription_schedule_configuration_item_metadata__to_json(p: &iface_subscription_schedules::SubscriptionScheduleConfigurationItemMetadata) -> Value {
+fn iface_subscription_schedules__subscription_schedule_configuration_item_metadata_entry__to_json(p: &iface_subscription_schedules::SubscriptionScheduleConfigurationItemMetadataEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
-fn iface_subscription_schedules__subscription_schedule_phase_configuration_metadata__to_json(p: &iface_subscription_schedules::SubscriptionSchedulePhaseConfigurationMetadata) -> Value {
+fn iface_subscription_schedules__subscription_schedule_phase_configuration_metadata_entry__to_json(p: &iface_subscription_schedules::SubscriptionSchedulePhaseConfigurationMetadataEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -380,7 +384,7 @@ fn iface_subscription_schedules__post_subscription_schedules_body_phases_item__t
     m.insert("invoice_settings".into(), match (&p.invoice_settings) { Some(v) => iface_subscription_schedules__post_subscription_schedules_body_phases_item_invoice_settings__to_json(v), None => Value::Null });
     m.insert("items".into(), Value::Array((&p.items).iter().map(|v| iface_subscription_schedules__post_subscription_schedules_body_phases_item_items_item__to_json(v)).collect()));
     m.insert("iterations".into(), match (&p.iterations) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    m.insert("metadata".into(), match (&p.metadata) { Some(v) => iface_subscription_schedules__post_subscription_schedules_body_phases_item_metadata__to_json(v), None => Value::Null });
+    m.insert("metadata".into(), match (&p.metadata) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("on_behalf_of".into(), match (&p.on_behalf_of) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("proration_behavior".into(), match (&p.proration_behavior) { Some(v) => Value::String(iface_subscription_schedules__subscription_schedule_phase_configuration_proration_behavior_enum__to_str(v).into()), None => Value::Null });
     m.insert("transfer_data".into(), match (&p.transfer_data) { Some(v) => iface_subscription_schedules__post_subscription_schedules_body_phases_item_transfer_data__to_json(v), None => Value::Null });
@@ -423,7 +427,7 @@ fn iface_subscription_schedules__post_subscription_schedules_body_phases_item_in
 fn iface_subscription_schedules__post_subscription_schedules_body_phases_item_items_item__to_json(p: &iface_subscription_schedules::PostSubscriptionSchedulesBodyPhasesItemItemsItem) -> Value {
     let mut m = Map::new();
     m.insert("billing_thresholds".into(), match (&p.billing_thresholds) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("metadata".into(), match (&p.metadata) { Some(v) => iface_subscription_schedules__post_subscription_schedules_body_phases_item_items_item_metadata__to_json(v), None => Value::Null });
+    m.insert("metadata".into(), match (&p.metadata) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("price".into(), match (&p.price) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("price_data".into(), match (&p.price_data) { Some(v) => iface_subscription_schedules__post_subscription_schedules_body_phases_item_items_item_price_data__to_json(v), None => Value::Null });
     m.insert("quantity".into(), match (&p.quantity) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
@@ -431,9 +435,10 @@ fn iface_subscription_schedules__post_subscription_schedules_body_phases_item_it
     Value::Object(m)
 }
 
-fn iface_subscription_schedules__post_subscription_schedules_body_phases_item_items_item_metadata__to_json(p: &iface_subscription_schedules::PostSubscriptionSchedulesBodyPhasesItemItemsItemMetadata) -> Value {
+fn iface_subscription_schedules__post_subscription_schedules_body_phases_item_items_item_metadata_entry__to_json(p: &iface_subscription_schedules::PostSubscriptionSchedulesBodyPhasesItemItemsItemMetadataEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -455,9 +460,10 @@ fn iface_subscription_schedules__post_subscription_schedules_body_phases_item_it
     Value::Object(m)
 }
 
-fn iface_subscription_schedules__post_subscription_schedules_body_phases_item_metadata__to_json(p: &iface_subscription_schedules::PostSubscriptionSchedulesBodyPhasesItemMetadata) -> Value {
+fn iface_subscription_schedules__post_subscription_schedules_body_phases_item_metadata_entry__to_json(p: &iface_subscription_schedules::PostSubscriptionSchedulesBodyPhasesItemMetadataEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -511,7 +517,7 @@ fn iface_subscription_schedules__post_subscription_schedules_schedule_body_phase
     m.insert("invoice_settings".into(), match (&p.invoice_settings) { Some(v) => iface_subscription_schedules__post_subscription_schedules_schedule_body_phases_item_invoice_settings__to_json(v), None => Value::Null });
     m.insert("items".into(), Value::Array((&p.items).iter().map(|v| iface_subscription_schedules__post_subscription_schedules_schedule_body_phases_item_items_item__to_json(v)).collect()));
     m.insert("iterations".into(), match (&p.iterations) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    m.insert("metadata".into(), match (&p.metadata) { Some(v) => iface_subscription_schedules__post_subscription_schedules_schedule_body_phases_item_metadata__to_json(v), None => Value::Null });
+    m.insert("metadata".into(), match (&p.metadata) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("on_behalf_of".into(), match (&p.on_behalf_of) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("proration_behavior".into(), match (&p.proration_behavior) { Some(v) => Value::String(iface_subscription_schedules__subscription_schedule_phase_configuration_proration_behavior_enum__to_str(v).into()), None => Value::Null });
     m.insert("start_date".into(), match (&p.start_date) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -555,7 +561,7 @@ fn iface_subscription_schedules__post_subscription_schedules_schedule_body_phase
 fn iface_subscription_schedules__post_subscription_schedules_schedule_body_phases_item_items_item__to_json(p: &iface_subscription_schedules::PostSubscriptionSchedulesScheduleBodyPhasesItemItemsItem) -> Value {
     let mut m = Map::new();
     m.insert("billing_thresholds".into(), match (&p.billing_thresholds) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("metadata".into(), match (&p.metadata) { Some(v) => iface_subscription_schedules__post_subscription_schedules_schedule_body_phases_item_items_item_metadata__to_json(v), None => Value::Null });
+    m.insert("metadata".into(), match (&p.metadata) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("price".into(), match (&p.price) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("price_data".into(), match (&p.price_data) { Some(v) => iface_subscription_schedules__post_subscription_schedules_schedule_body_phases_item_items_item_price_data__to_json(v), None => Value::Null });
     m.insert("quantity".into(), match (&p.quantity) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
@@ -563,9 +569,10 @@ fn iface_subscription_schedules__post_subscription_schedules_schedule_body_phase
     Value::Object(m)
 }
 
-fn iface_subscription_schedules__post_subscription_schedules_schedule_body_phases_item_items_item_metadata__to_json(p: &iface_subscription_schedules::PostSubscriptionSchedulesScheduleBodyPhasesItemItemsItemMetadata) -> Value {
+fn iface_subscription_schedules__post_subscription_schedules_schedule_body_phases_item_items_item_metadata_entry__to_json(p: &iface_subscription_schedules::PostSubscriptionSchedulesScheduleBodyPhasesItemItemsItemMetadataEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -587,9 +594,10 @@ fn iface_subscription_schedules__post_subscription_schedules_schedule_body_phase
     Value::Object(m)
 }
 
-fn iface_subscription_schedules__post_subscription_schedules_schedule_body_phases_item_metadata__to_json(p: &iface_subscription_schedules::PostSubscriptionSchedulesScheduleBodyPhasesItemMetadata) -> Value {
+fn iface_subscription_schedules__post_subscription_schedules_schedule_body_phases_item_metadata_entry__to_json(p: &iface_subscription_schedules::PostSubscriptionSchedulesScheduleBodyPhasesItemMetadataEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -689,7 +697,7 @@ fn iface_subscription_schedules__subscription_schedule__from_json(v: &Value) -> 
         end_behavior: match m.get("end_behavior").and_then(|v| (v).as_str().and_then(iface_subscription_schedules__subscription_schedule_end_behavior_enum__from_str)) { Some(x) => x, None => return None },
         id: m.get("id").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         livemode: m.get("livemode").and_then(|v| (v).as_bool()).unwrap_or_default(),
-        metadata: m.get("metadata").filter(|v| !v.is_null()).and_then(|v| iface_subscription_schedules__subscription_schedule_metadata__from_json(v)),
+        metadata: m.get("metadata").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_subscription_schedules::SubscriptionScheduleMetadataEntry { key: k.clone(), value: val })).collect())),
         object: match m.get("object").and_then(|v| (v).as_str().and_then(iface_subscription_schedules__subscription_schedule_object_enum__from_str)) { Some(x) => x, None => return None },
         phases: m.get("phases").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_subscription_schedules__subscription_schedule_phase_configuration__from_json(x)).collect())).unwrap_or_default(),
         released_at: m.get("released_at").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
@@ -723,10 +731,11 @@ fn iface_subscription_schedules__resource_default_settings_automatic_tax__from_j
     })
 }
 
-fn iface_subscription_schedules__subscription_schedule_metadata__from_json(v: &Value) -> Option<iface_subscription_schedules::SubscriptionScheduleMetadata> {
+fn iface_subscription_schedules__subscription_schedule_metadata_entry__from_json(v: &Value) -> Option<iface_subscription_schedules::SubscriptionScheduleMetadataEntry> {
     let m = v.as_object()?;
-    Some(iface_subscription_schedules::SubscriptionScheduleMetadata {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_subscription_schedules::SubscriptionScheduleMetadataEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -747,7 +756,7 @@ fn iface_subscription_schedules__subscription_schedule_phase_configuration__from
         end_date: m.get("end_date").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
         invoice_settings: m.get("invoice_settings").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         items: m.get("items").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_subscription_schedules__subscription_schedule_configuration_item__from_json(x)).collect())).unwrap_or_default(),
-        metadata: m.get("metadata").filter(|v| !v.is_null()).and_then(|v| iface_subscription_schedules__subscription_schedule_phase_configuration_metadata__from_json(v)),
+        metadata: m.get("metadata").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_subscription_schedules::SubscriptionSchedulePhaseConfigurationMetadataEntry { key: k.clone(), value: val })).collect())),
         on_behalf_of: m.get("on_behalf_of").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         proration_behavior: match m.get("proration_behavior").and_then(|v| (v).as_str().and_then(iface_subscription_schedules__subscription_schedule_phase_configuration_proration_behavior_enum__from_str)) { Some(x) => x, None => return None },
         start_date: m.get("start_date").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
@@ -777,7 +786,7 @@ fn iface_subscription_schedules__tax_rate__from_json(v: &Value) -> Option<iface_
         inclusive: m.get("inclusive").and_then(|v| (v).as_bool()).unwrap_or_default(),
         jurisdiction: m.get("jurisdiction").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         livemode: m.get("livemode").and_then(|v| (v).as_bool()).unwrap_or_default(),
-        metadata: m.get("metadata").filter(|v| !v.is_null()).and_then(|v| iface_subscription_schedules__tax_rate_metadata__from_json(v)),
+        metadata: m.get("metadata").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_subscription_schedules::TaxRateMetadataEntry { key: k.clone(), value: val })).collect())),
         object: match m.get("object").and_then(|v| (v).as_str().and_then(iface_subscription_schedules__tax_rate_object_enum__from_str)) { Some(x) => x, None => return None },
         percentage: m.get("percentage").and_then(|v| (v).as_f64()).unwrap_or_default(),
         state: m.get("state").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
@@ -785,10 +794,11 @@ fn iface_subscription_schedules__tax_rate__from_json(v: &Value) -> Option<iface_
     })
 }
 
-fn iface_subscription_schedules__tax_rate_metadata__from_json(v: &Value) -> Option<iface_subscription_schedules::TaxRateMetadata> {
+fn iface_subscription_schedules__tax_rate_metadata_entry__from_json(v: &Value) -> Option<iface_subscription_schedules::TaxRateMetadataEntry> {
     let m = v.as_object()?;
-    Some(iface_subscription_schedules::TaxRateMetadata {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_subscription_schedules::TaxRateMetadataEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -803,24 +813,26 @@ fn iface_subscription_schedules__subscription_schedule_configuration_item__from_
     let m = v.as_object()?;
     Some(iface_subscription_schedules::SubscriptionScheduleConfigurationItem {
         billing_thresholds: m.get("billing_thresholds").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        metadata: m.get("metadata").filter(|v| !v.is_null()).and_then(|v| iface_subscription_schedules__subscription_schedule_configuration_item_metadata__from_json(v)),
+        metadata: m.get("metadata").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_subscription_schedules::SubscriptionScheduleConfigurationItemMetadataEntry { key: k.clone(), value: val })).collect())),
         price: m.get("price").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         quantity: m.get("quantity").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
         tax_rates: m.get("tax_rates").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_subscription_schedules__tax_rate__from_json(x)).collect())),
     })
 }
 
-fn iface_subscription_schedules__subscription_schedule_configuration_item_metadata__from_json(v: &Value) -> Option<iface_subscription_schedules::SubscriptionScheduleConfigurationItemMetadata> {
+fn iface_subscription_schedules__subscription_schedule_configuration_item_metadata_entry__from_json(v: &Value) -> Option<iface_subscription_schedules::SubscriptionScheduleConfigurationItemMetadataEntry> {
     let m = v.as_object()?;
-    Some(iface_subscription_schedules::SubscriptionScheduleConfigurationItemMetadata {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_subscription_schedules::SubscriptionScheduleConfigurationItemMetadataEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
-fn iface_subscription_schedules__subscription_schedule_phase_configuration_metadata__from_json(v: &Value) -> Option<iface_subscription_schedules::SubscriptionSchedulePhaseConfigurationMetadata> {
+fn iface_subscription_schedules__subscription_schedule_phase_configuration_metadata_entry__from_json(v: &Value) -> Option<iface_subscription_schedules::SubscriptionSchedulePhaseConfigurationMetadataEntry> {
     let m = v.as_object()?;
-    Some(iface_subscription_schedules::SubscriptionSchedulePhaseConfigurationMetadata {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_subscription_schedules::SubscriptionSchedulePhaseConfigurationMetadataEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 

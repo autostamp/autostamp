@@ -18,7 +18,7 @@ fn iface_bulk_bulk_uuid_detailed_status__asynchronous_operations_data_detailed_b
     let mut m = Map::new();
     m.insert("bulk_id".into(), Value::String((&p.bulk_id).clone()));
     m.insert("description".into(), Value::String((&p.description).clone()));
-    m.insert("extension_attributes".into(), match (&p.extension_attributes) { Some(v) => iface_bulk_bulk_uuid_detailed_status__asynchronous_operations_data_bulk_summary_extension_interface__to_json(v), None => Value::Null });
+    m.insert("extension_attributes".into(), match (&p.extension_attributes) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("operation_count".into(), Value::Number(serde_json::Number::from(*(&p.operation_count))));
     m.insert("operations_list".into(), Value::Array((&p.operations_list).iter().map(|v| iface_bulk_bulk_uuid_detailed_status__asynchronous_operations_data_detailed_operation_status_interface__to_json(v)).collect()));
     m.insert("start_time".into(), Value::String((&p.start_time).clone()));
@@ -26,9 +26,10 @@ fn iface_bulk_bulk_uuid_detailed_status__asynchronous_operations_data_detailed_b
     Value::Object(m)
 }
 
-fn iface_bulk_bulk_uuid_detailed_status__asynchronous_operations_data_bulk_summary_extension_interface__to_json(p: &iface_bulk_bulk_uuid_detailed_status::AsynchronousOperationsDataBulkSummaryExtensionInterface) -> Value {
+fn iface_bulk_bulk_uuid_detailed_status__asynchronous_operations_data_bulk_summary_extension_interface_entry__to_json(p: &iface_bulk_bulk_uuid_detailed_status::AsynchronousOperationsDataBulkSummaryExtensionInterfaceEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -36,7 +37,7 @@ fn iface_bulk_bulk_uuid_detailed_status__asynchronous_operations_data_detailed_o
     let mut m = Map::new();
     m.insert("bulk_uuid".into(), Value::String((&p.bulk_uuid).clone()));
     m.insert("error_code".into(), Value::Number(serde_json::Number::from(*(&p.error_code))));
-    m.insert("extension_attributes".into(), match (&p.extension_attributes) { Some(v) => iface_bulk_bulk_uuid_detailed_status__asynchronous_operations_data_operation_extension_interface__to_json(v), None => Value::Null });
+    m.insert("extension_attributes".into(), match (&p.extension_attributes) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("id".into(), Value::Number(serde_json::Number::from(*(&p.id))));
     m.insert("result_message".into(), Value::String((&p.result_message).clone()));
     m.insert("result_serialized_data".into(), Value::String((&p.result_serialized_data).clone()));
@@ -46,9 +47,10 @@ fn iface_bulk_bulk_uuid_detailed_status__asynchronous_operations_data_detailed_o
     Value::Object(m)
 }
 
-fn iface_bulk_bulk_uuid_detailed_status__asynchronous_operations_data_operation_extension_interface__to_json(p: &iface_bulk_bulk_uuid_detailed_status::AsynchronousOperationsDataOperationExtensionInterface) -> Value {
+fn iface_bulk_bulk_uuid_detailed_status__asynchronous_operations_data_operation_extension_interface_entry__to_json(p: &iface_bulk_bulk_uuid_detailed_status::AsynchronousOperationsDataOperationExtensionInterfaceEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -63,7 +65,7 @@ fn iface_bulk_bulk_uuid_detailed_status__asynchronous_operations_data_detailed_b
     Some(iface_bulk_bulk_uuid_detailed_status::AsynchronousOperationsDataDetailedBulkOperationsStatusInterface {
         bulk_id: m.get("bulk_id").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         description: m.get("description").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-        extension_attributes: m.get("extension_attributes").filter(|v| !v.is_null()).and_then(|v| iface_bulk_bulk_uuid_detailed_status__asynchronous_operations_data_bulk_summary_extension_interface__from_json(v)),
+        extension_attributes: m.get("extension_attributes").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_bulk_bulk_uuid_detailed_status::AsynchronousOperationsDataBulkSummaryExtensionInterfaceEntry { key: k.clone(), value: val })).collect())),
         operation_count: m.get("operation_count").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
         operations_list: m.get("operations_list").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_bulk_bulk_uuid_detailed_status__asynchronous_operations_data_detailed_operation_status_interface__from_json(x)).collect())).unwrap_or_default(),
         start_time: m.get("start_time").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
@@ -71,10 +73,11 @@ fn iface_bulk_bulk_uuid_detailed_status__asynchronous_operations_data_detailed_b
     })
 }
 
-fn iface_bulk_bulk_uuid_detailed_status__asynchronous_operations_data_bulk_summary_extension_interface__from_json(v: &Value) -> Option<iface_bulk_bulk_uuid_detailed_status::AsynchronousOperationsDataBulkSummaryExtensionInterface> {
+fn iface_bulk_bulk_uuid_detailed_status__asynchronous_operations_data_bulk_summary_extension_interface_entry__from_json(v: &Value) -> Option<iface_bulk_bulk_uuid_detailed_status::AsynchronousOperationsDataBulkSummaryExtensionInterfaceEntry> {
     let m = v.as_object()?;
-    Some(iface_bulk_bulk_uuid_detailed_status::AsynchronousOperationsDataBulkSummaryExtensionInterface {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_bulk_bulk_uuid_detailed_status::AsynchronousOperationsDataBulkSummaryExtensionInterfaceEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -83,7 +86,7 @@ fn iface_bulk_bulk_uuid_detailed_status__asynchronous_operations_data_detailed_o
     Some(iface_bulk_bulk_uuid_detailed_status::AsynchronousOperationsDataDetailedOperationStatusInterface {
         bulk_uuid: m.get("bulk_uuid").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         error_code: m.get("error_code").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
-        extension_attributes: m.get("extension_attributes").filter(|v| !v.is_null()).and_then(|v| iface_bulk_bulk_uuid_detailed_status__asynchronous_operations_data_operation_extension_interface__from_json(v)),
+        extension_attributes: m.get("extension_attributes").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_bulk_bulk_uuid_detailed_status::AsynchronousOperationsDataOperationExtensionInterfaceEntry { key: k.clone(), value: val })).collect())),
         id: m.get("id").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
         result_message: m.get("result_message").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         result_serialized_data: m.get("result_serialized_data").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
@@ -93,10 +96,11 @@ fn iface_bulk_bulk_uuid_detailed_status__asynchronous_operations_data_detailed_o
     })
 }
 
-fn iface_bulk_bulk_uuid_detailed_status__asynchronous_operations_data_operation_extension_interface__from_json(v: &Value) -> Option<iface_bulk_bulk_uuid_detailed_status::AsynchronousOperationsDataOperationExtensionInterface> {
+fn iface_bulk_bulk_uuid_detailed_status__asynchronous_operations_data_operation_extension_interface_entry__from_json(v: &Value) -> Option<iface_bulk_bulk_uuid_detailed_status::AsynchronousOperationsDataOperationExtensionInterfaceEntry> {
     let m = v.as_object()?;
-    Some(iface_bulk_bulk_uuid_detailed_status::AsynchronousOperationsDataOperationExtensionInterface {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_bulk_bulk_uuid_detailed_status::AsynchronousOperationsDataOperationExtensionInterfaceEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 

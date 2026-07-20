@@ -310,7 +310,7 @@ fn iface_quotes__quote__to_json(p: &iface_quotes::Quote) -> Value {
     m.insert("invoice_settings".into(), match (&p.invoice_settings) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("line_items".into(), match (&p.line_items) { Some(v) => iface_quotes__quote_line_items__to_json(v), None => Value::Null });
     m.insert("livemode".into(), Value::Bool(*(&p.livemode)));
-    m.insert("metadata".into(), iface_quotes__quote_metadata__to_json(&p.metadata));
+    m.insert("metadata".into(), Value::Object((&p.metadata).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()));
     m.insert("number".into(), match (&p.number) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("object".into(), Value::String(iface_quotes__quote_object_enum__to_str(&p.object).into()));
     m.insert("on_behalf_of".into(), match (&p.on_behalf_of) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -403,13 +403,13 @@ fn iface_quotes__coupon__to_json(p: &iface_quotes::Coupon) -> Value {
     m.insert("applies_to".into(), match (&p.applies_to) { Some(v) => iface_quotes__coupon_applies_to__to_json(v), None => Value::Null });
     m.insert("created".into(), Value::Number(serde_json::Number::from(*(&p.created))));
     m.insert("currency".into(), match (&p.currency) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("currency_options".into(), match (&p.currency_options) { Some(v) => iface_quotes__coupon_currency_options__to_json(v), None => Value::Null });
+    m.insert("currency_options".into(), match (&p.currency_options) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), iface_quotes__coupon_currency_option__to_json(&e.value))).collect()), None => Value::Null });
     m.insert("duration".into(), Value::String(iface_quotes__coupon_duration_enum__to_str(&p.duration).into()));
     m.insert("duration_in_months".into(), match (&p.duration_in_months) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("id".into(), Value::String((&p.id).clone()));
     m.insert("livemode".into(), Value::Bool(*(&p.livemode)));
     m.insert("max_redemptions".into(), match (&p.max_redemptions) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    m.insert("metadata".into(), match (&p.metadata) { Some(v) => iface_quotes__coupon_metadata__to_json(v), None => Value::Null });
+    m.insert("metadata".into(), match (&p.metadata) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("object".into(), Value::String(iface_quotes__coupon_object_enum__to_str(&p.object).into()));
     m.insert("percent_off".into(), match (&p.percent_off) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
@@ -425,15 +425,23 @@ fn iface_quotes__coupon_applies_to__to_json(p: &iface_quotes::CouponAppliesTo) -
     Value::Object(m)
 }
 
-fn iface_quotes__coupon_currency_options__to_json(p: &iface_quotes::CouponCurrencyOptions) -> Value {
+fn iface_quotes__coupon_currency_option__to_json(p: &iface_quotes::CouponCurrencyOption) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("amount_off".into(), Value::Number(serde_json::Number::from(*(&p.amount_off))));
     Value::Object(m)
 }
 
-fn iface_quotes__coupon_metadata__to_json(p: &iface_quotes::CouponMetadata) -> Value {
+fn iface_quotes__coupon_currency_options_entry__to_json(p: &iface_quotes::CouponCurrencyOptionsEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), iface_quotes__coupon_currency_option__to_json(&p.value));
+    Value::Object(m)
+}
+
+fn iface_quotes__coupon_metadata_entry__to_json(p: &iface_quotes::CouponMetadataEntry) -> Value {
+    let mut m = Map::new();
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -455,7 +463,7 @@ fn iface_quotes__tax_rate__to_json(p: &iface_quotes::TaxRate) -> Value {
     m.insert("inclusive".into(), Value::Bool(*(&p.inclusive)));
     m.insert("jurisdiction".into(), match (&p.jurisdiction) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("livemode".into(), Value::Bool(*(&p.livemode)));
-    m.insert("metadata".into(), match (&p.metadata) { Some(v) => iface_quotes__tax_rate_metadata__to_json(v), None => Value::Null });
+    m.insert("metadata".into(), match (&p.metadata) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("object".into(), Value::String(iface_quotes__tax_rate_object_enum__to_str(&p.object).into()));
     m.insert("percentage".into(), serde_json::Number::from_f64(*(&p.percentage)).map(Value::Number).unwrap_or(Value::Null));
     m.insert("state".into(), match (&p.state) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -463,9 +471,10 @@ fn iface_quotes__tax_rate__to_json(p: &iface_quotes::TaxRate) -> Value {
     Value::Object(m)
 }
 
-fn iface_quotes__tax_rate_metadata__to_json(p: &iface_quotes::TaxRateMetadata) -> Value {
+fn iface_quotes__tax_rate_metadata_entry__to_json(p: &iface_quotes::TaxRateMetadataEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -494,9 +503,10 @@ fn iface_quotes__quote_line_items__to_json(p: &iface_quotes::QuoteLineItems) -> 
     Value::Object(m)
 }
 
-fn iface_quotes__quote_metadata__to_json(p: &iface_quotes::QuoteMetadata) -> Value {
+fn iface_quotes__quote_metadata_entry__to_json(p: &iface_quotes::QuoteMetadataEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -562,9 +572,10 @@ fn iface_quotes__post_quotes_body_line_items_item_price_data_recurring__to_json(
     Value::Object(m)
 }
 
-fn iface_quotes__post_quotes_body_metadata__to_json(p: &iface_quotes::PostQuotesBodyMetadata) -> Value {
+fn iface_quotes__post_quotes_body_metadata_entry__to_json(p: &iface_quotes::PostQuotesBodyMetadataEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -616,9 +627,10 @@ fn iface_quotes__post_quotes_quote_body_line_items_item_price_data_recurring__to
     Value::Object(m)
 }
 
-fn iface_quotes__post_quotes_quote_body_metadata__to_json(p: &iface_quotes::PostQuotesQuoteBodyMetadata) -> Value {
+fn iface_quotes__post_quotes_quote_body_metadata_entry__to_json(p: &iface_quotes::PostQuotesQuoteBodyMetadataEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -678,7 +690,7 @@ fn iface_quotes__post_quotes_params__to_json(p: &iface_quotes::PostQuotesParams)
     m.insert("header".into(), match (&p.header) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("invoice_settings".into(), match (&p.invoice_settings) { Some(v) => iface_quotes__post_quotes_body_invoice_settings__to_json(v), None => Value::Null });
     m.insert("line_items".into(), match (&p.line_items) { Some(v) => Value::Array((v).iter().map(|v| iface_quotes__post_quotes_body_line_items_item__to_json(v)).collect()), None => Value::Null });
-    m.insert("metadata".into(), match (&p.metadata) { Some(v) => iface_quotes__post_quotes_body_metadata__to_json(v), None => Value::Null });
+    m.insert("metadata".into(), match (&p.metadata) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("on_behalf_of".into(), match (&p.on_behalf_of) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("subscription_data".into(), match (&p.subscription_data) { Some(v) => iface_quotes__post_quotes_body_subscription_data__to_json(v), None => Value::Null });
     m.insert("test_clock".into(), match (&p.test_clock) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -711,7 +723,7 @@ fn iface_quotes__post_quotes_quote_params__to_json(p: &iface_quotes::PostQuotesQ
     m.insert("header".into(), match (&p.header) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("invoice_settings".into(), match (&p.invoice_settings) { Some(v) => iface_quotes__post_quotes_quote_body_invoice_settings__to_json(v), None => Value::Null });
     m.insert("line_items".into(), match (&p.line_items) { Some(v) => Value::Array((v).iter().map(|v| iface_quotes__post_quotes_quote_body_line_items_item__to_json(v)).collect()), None => Value::Null });
-    m.insert("metadata".into(), match (&p.metadata) { Some(v) => iface_quotes__post_quotes_quote_body_metadata__to_json(v), None => Value::Null });
+    m.insert("metadata".into(), match (&p.metadata) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("on_behalf_of".into(), match (&p.on_behalf_of) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("subscription_data".into(), match (&p.subscription_data) { Some(v) => iface_quotes__post_quotes_quote_body_subscription_data__to_json(v), None => Value::Null });
     m.insert("transfer_data".into(), match (&p.transfer_data) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -806,7 +818,7 @@ fn iface_quotes__quote__from_json(v: &Value) -> Option<iface_quotes::Quote> {
         invoice_settings: m.get("invoice_settings").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         line_items: m.get("line_items").filter(|v| !v.is_null()).and_then(|v| iface_quotes__quote_line_items__from_json(v)),
         livemode: m.get("livemode").and_then(|v| (v).as_bool()).unwrap_or_default(),
-        metadata: match m.get("metadata").and_then(|v| iface_quotes__quote_metadata__from_json(v)) { Some(x) => x, None => return None },
+        metadata: m.get("metadata").and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_quotes::QuoteMetadataEntry { key: k.clone(), value: val })).collect())).unwrap_or_default(),
         number: m.get("number").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         object: match m.get("object").and_then(|v| (v).as_str().and_then(iface_quotes__quote_object_enum__from_str)) { Some(x) => x, None => return None },
         on_behalf_of: m.get("on_behalf_of").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
@@ -907,13 +919,13 @@ fn iface_quotes__coupon__from_json(v: &Value) -> Option<iface_quotes::Coupon> {
         applies_to: m.get("applies_to").filter(|v| !v.is_null()).and_then(|v| iface_quotes__coupon_applies_to__from_json(v)),
         created: m.get("created").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
         currency: m.get("currency").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        currency_options: m.get("currency_options").filter(|v| !v.is_null()).and_then(|v| iface_quotes__coupon_currency_options__from_json(v)),
+        currency_options: m.get("currency_options").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| (iface_quotes__coupon_currency_option__from_json(x)).map(|val| iface_quotes::CouponCurrencyOptionsEntry { key: k.clone(), value: val })).collect())),
         duration: match m.get("duration").and_then(|v| (v).as_str().and_then(iface_quotes__coupon_duration_enum__from_str)) { Some(x) => x, None => return None },
         duration_in_months: m.get("duration_in_months").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
         id: m.get("id").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         livemode: m.get("livemode").and_then(|v| (v).as_bool()).unwrap_or_default(),
         max_redemptions: m.get("max_redemptions").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
-        metadata: m.get("metadata").filter(|v| !v.is_null()).and_then(|v| iface_quotes__coupon_metadata__from_json(v)),
+        metadata: m.get("metadata").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_quotes::CouponMetadataEntry { key: k.clone(), value: val })).collect())),
         name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         object: match m.get("object").and_then(|v| (v).as_str().and_then(iface_quotes__coupon_object_enum__from_str)) { Some(x) => x, None => return None },
         percent_off: m.get("percent_off").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
@@ -930,17 +942,26 @@ fn iface_quotes__coupon_applies_to__from_json(v: &Value) -> Option<iface_quotes:
     })
 }
 
-fn iface_quotes__coupon_currency_options__from_json(v: &Value) -> Option<iface_quotes::CouponCurrencyOptions> {
+fn iface_quotes__coupon_currency_option__from_json(v: &Value) -> Option<iface_quotes::CouponCurrencyOption> {
     let m = v.as_object()?;
-    Some(iface_quotes::CouponCurrencyOptions {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_quotes::CouponCurrencyOption {
+        amount_off: m.get("amount_off").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
     })
 }
 
-fn iface_quotes__coupon_metadata__from_json(v: &Value) -> Option<iface_quotes::CouponMetadata> {
+fn iface_quotes__coupon_currency_options_entry__from_json(v: &Value) -> Option<iface_quotes::CouponCurrencyOptionsEntry> {
     let m = v.as_object()?;
-    Some(iface_quotes::CouponMetadata {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_quotes::CouponCurrencyOptionsEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: match m.get("value").and_then(|v| iface_quotes__coupon_currency_option__from_json(v)) { Some(x) => x, None => return None },
+    })
+}
+
+fn iface_quotes__coupon_metadata_entry__from_json(v: &Value) -> Option<iface_quotes::CouponMetadataEntry> {
+    let m = v.as_object()?;
+    Some(iface_quotes::CouponMetadataEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -964,7 +985,7 @@ fn iface_quotes__tax_rate__from_json(v: &Value) -> Option<iface_quotes::TaxRate>
         inclusive: m.get("inclusive").and_then(|v| (v).as_bool()).unwrap_or_default(),
         jurisdiction: m.get("jurisdiction").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         livemode: m.get("livemode").and_then(|v| (v).as_bool()).unwrap_or_default(),
-        metadata: m.get("metadata").filter(|v| !v.is_null()).and_then(|v| iface_quotes__tax_rate_metadata__from_json(v)),
+        metadata: m.get("metadata").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_quotes::TaxRateMetadataEntry { key: k.clone(), value: val })).collect())),
         object: match m.get("object").and_then(|v| (v).as_str().and_then(iface_quotes__tax_rate_object_enum__from_str)) { Some(x) => x, None => return None },
         percentage: m.get("percentage").and_then(|v| (v).as_f64()).unwrap_or_default(),
         state: m.get("state").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
@@ -972,10 +993,11 @@ fn iface_quotes__tax_rate__from_json(v: &Value) -> Option<iface_quotes::TaxRate>
     })
 }
 
-fn iface_quotes__tax_rate_metadata__from_json(v: &Value) -> Option<iface_quotes::TaxRateMetadata> {
+fn iface_quotes__tax_rate_metadata_entry__from_json(v: &Value) -> Option<iface_quotes::TaxRateMetadataEntry> {
     let m = v.as_object()?;
-    Some(iface_quotes::TaxRateMetadata {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_quotes::TaxRateMetadataEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -1007,10 +1029,11 @@ fn iface_quotes__quote_line_items__from_json(v: &Value) -> Option<iface_quotes::
     })
 }
 
-fn iface_quotes__quote_metadata__from_json(v: &Value) -> Option<iface_quotes::QuoteMetadata> {
+fn iface_quotes__quote_metadata_entry__from_json(v: &Value) -> Option<iface_quotes::QuoteMetadataEntry> {
     let m = v.as_object()?;
-    Some(iface_quotes::QuoteMetadata {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_quotes::QuoteMetadataEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 

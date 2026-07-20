@@ -11,8 +11,8 @@ triggered.
 
 | Setting | Value |
 | --- | --- |
-| Package | `autostamp:wolframalpha@0.5.0` |
-| Published version | `0.5.0+wolframalpha-v0.1` |
+| Package | `autostamp:wolframalpha@0.6.0` |
+| Published version | `0.6.0+wolframalpha-v0.1` |
 | Tag filter | all tags |
 | Operations generated | 2 |
 | Infer API-key credentials | enabled — not triggered |

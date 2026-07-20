@@ -46,25 +46,19 @@ const OP_ADMIN_INVITE_REQUESTS_LIST_OP: OpSpec = OpSpec {
 
 fn iface_admin_invite_requests__approve_response__to_json(p: &iface_admin_invite_requests::ApproveResponse) -> Value {
     let mut m = Map::new();
-    m.insert("ok".into(), iface_admin_invite_requests__defs_ok_true__to_json(&p.ok));
-    Value::Object(m)
-}
-
-fn iface_admin_invite_requests__defs_ok_true__to_json(p: &iface_admin_invite_requests::DefsOkTrue) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
+    m.insert("ok".into(), Value::Bool(*(&p.ok)));
     Value::Object(m)
 }
 
 fn iface_admin_invite_requests__deny_response__to_json(p: &iface_admin_invite_requests::DenyResponse) -> Value {
     let mut m = Map::new();
-    m.insert("ok".into(), iface_admin_invite_requests__defs_ok_true__to_json(&p.ok));
+    m.insert("ok".into(), Value::Bool(*(&p.ok)));
     Value::Object(m)
 }
 
 fn iface_admin_invite_requests__list_op_response__to_json(p: &iface_admin_invite_requests::ListOpResponse) -> Value {
     let mut m = Map::new();
-    m.insert("ok".into(), iface_admin_invite_requests__defs_ok_true__to_json(&p.ok));
+    m.insert("ok".into(), Value::Bool(*(&p.ok)));
     Value::Object(m)
 }
 
@@ -96,28 +90,21 @@ fn iface_admin_invite_requests__list_op_params__to_json(p: &iface_admin_invite_r
 fn iface_admin_invite_requests__approve_response__from_json(v: &Value) -> Option<iface_admin_invite_requests::ApproveResponse> {
     let m = v.as_object()?;
     Some(iface_admin_invite_requests::ApproveResponse {
-        ok: match m.get("ok").and_then(|v| iface_admin_invite_requests__defs_ok_true__from_json(v)) { Some(x) => x, None => return None },
-    })
-}
-
-fn iface_admin_invite_requests__defs_ok_true__from_json(v: &Value) -> Option<iface_admin_invite_requests::DefsOkTrue> {
-    let m = v.as_object()?;
-    Some(iface_admin_invite_requests::DefsOkTrue {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        ok: m.get("ok").and_then(|v| (v).as_bool()).unwrap_or_default(),
     })
 }
 
 fn iface_admin_invite_requests__deny_response__from_json(v: &Value) -> Option<iface_admin_invite_requests::DenyResponse> {
     let m = v.as_object()?;
     Some(iface_admin_invite_requests::DenyResponse {
-        ok: match m.get("ok").and_then(|v| iface_admin_invite_requests__defs_ok_true__from_json(v)) { Some(x) => x, None => return None },
+        ok: m.get("ok").and_then(|v| (v).as_bool()).unwrap_or_default(),
     })
 }
 
 fn iface_admin_invite_requests__list_op_response__from_json(v: &Value) -> Option<iface_admin_invite_requests::ListOpResponse> {
     let m = v.as_object()?;
     Some(iface_admin_invite_requests::ListOpResponse {
-        ok: match m.get("ok").and_then(|v| iface_admin_invite_requests__defs_ok_true__from_json(v)) { Some(x) => x, None => return None },
+        ok: m.get("ok").and_then(|v| (v).as_bool()).unwrap_or_default(),
     })
 }
 

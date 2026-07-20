@@ -19,13 +19,7 @@ const OP_APPS_UNINSTALL: OpSpec = OpSpec {
 
 fn iface_apps__uninstall_response__to_json(p: &iface_apps::UninstallResponse) -> Value {
     let mut m = Map::new();
-    m.insert("ok".into(), iface_apps__defs_ok_true__to_json(&p.ok));
-    Value::Object(m)
-}
-
-fn iface_apps__defs_ok_true__to_json(p: &iface_apps::DefsOkTrue) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
+    m.insert("ok".into(), Value::Bool(*(&p.ok)));
     Value::Object(m)
 }
 
@@ -40,14 +34,7 @@ fn iface_apps__uninstall_params__to_json(p: &iface_apps::UninstallParams) -> Val
 fn iface_apps__uninstall_response__from_json(v: &Value) -> Option<iface_apps::UninstallResponse> {
     let m = v.as_object()?;
     Some(iface_apps::UninstallResponse {
-        ok: match m.get("ok").and_then(|v| iface_apps__defs_ok_true__from_json(v)) { Some(x) => x, None => return None },
-    })
-}
-
-fn iface_apps__defs_ok_true__from_json(v: &Value) -> Option<iface_apps::DefsOkTrue> {
-    let m = v.as_object()?;
-    Some(iface_apps::DefsOkTrue {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        ok: m.get("ok").and_then(|v| (v).as_bool()).unwrap_or_default(),
     })
 }
 
