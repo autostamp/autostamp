@@ -17,15 +17,16 @@ const OP_PRODUCTS_COST_INFORMATION_CATALOG_COST_STORAGE_V1_GET_POST: OpSpec = Op
 fn iface_products_cost_information__catalog_data_cost_interface__to_json(p: &iface_products_cost_information::CatalogDataCostInterface) -> Value {
     let mut m = Map::new();
     m.insert("cost".into(), serde_json::Number::from_f64(*(&p.cost)).map(Value::Number).unwrap_or(Value::Null));
-    m.insert("extension_attributes".into(), match (&p.extension_attributes) { Some(v) => iface_products_cost_information__catalog_data_cost_extension_interface__to_json(v), None => Value::Null });
+    m.insert("extension_attributes".into(), match (&p.extension_attributes) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("sku".into(), Value::String((&p.sku).clone()));
     m.insert("store_id".into(), Value::Number(serde_json::Number::from(*(&p.store_id))));
     Value::Object(m)
 }
 
-fn iface_products_cost_information__catalog_data_cost_extension_interface__to_json(p: &iface_products_cost_information::CatalogDataCostExtensionInterface) -> Value {
+fn iface_products_cost_information__catalog_data_cost_extension_interface_entry__to_json(p: &iface_products_cost_information::CatalogDataCostExtensionInterfaceEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -39,16 +40,17 @@ fn iface_products_cost_information__catalog_data_cost_interface__from_json(v: &V
     let m = v.as_object()?;
     Some(iface_products_cost_information::CatalogDataCostInterface {
         cost: m.get("cost").and_then(|v| (v).as_f64()).unwrap_or_default(),
-        extension_attributes: m.get("extension_attributes").filter(|v| !v.is_null()).and_then(|v| iface_products_cost_information__catalog_data_cost_extension_interface__from_json(v)),
+        extension_attributes: m.get("extension_attributes").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_products_cost_information::CatalogDataCostExtensionInterfaceEntry { key: k.clone(), value: val })).collect())),
         sku: m.get("sku").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         store_id: m.get("store_id").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
     })
 }
 
-fn iface_products_cost_information__catalog_data_cost_extension_interface__from_json(v: &Value) -> Option<iface_products_cost_information::CatalogDataCostExtensionInterface> {
+fn iface_products_cost_information__catalog_data_cost_extension_interface_entry__from_json(v: &Value) -> Option<iface_products_cost_information::CatalogDataCostExtensionInterfaceEntry> {
     let m = v.as_object()?;
-    Some(iface_products_cost_information::CatalogDataCostExtensionInterface {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_products_cost_information::CatalogDataCostExtensionInterfaceEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 

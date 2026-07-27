@@ -1,4 +1,4 @@
-package autostamp:omdbapi@0.5.0;
+package autostamp:omdbapi@0.6.0;
 
 interface om-db {
   enum get-om-db-search-type-op-enum {

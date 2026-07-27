@@ -411,9 +411,17 @@ fn iface_actions__amend_request_preview_options__to_json(p: &iface_actions::Amen
     Value::Object(m)
 }
 
-fn iface_actions__z_object__to_json(p: &iface_actions::ZObject) -> Value {
+fn iface_actions__z_object_entry__to_json(p: &iface_actions::ZObjectEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
+}
+
+fn iface_actions__z_object_entry_v2__to_json(p: &iface_actions::ZObjectEntryV2) -> Value {
+    let mut m = Map::new();
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -427,8 +435,15 @@ fn iface_actions__proxy_actionquery_more_response__to_json(p: &iface_actions::Pr
     let mut m = Map::new();
     m.insert("done".into(), match (&p.done) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     m.insert("queryLocator".into(), match (&p.query_locator) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("records".into(), match (&p.records) { Some(v) => Value::Array((v).iter().map(|v| iface_actions__z_object__to_json(v)).collect()), None => Value::Null });
+    m.insert("records".into(), match (&p.records) { Some(v) => Value::Array((v).iter().map(|v| Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect())).collect()), None => Value::Null });
     m.insert("size".into(), match (&p.size) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_actions__z_object_entry_v3__to_json(p: &iface_actions::ZObjectEntryV3) -> Value {
+    let mut m = Map::new();
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -891,7 +906,7 @@ fn iface_actions__action_pos_tcreate_params__to_json(p: &iface_actions::ActionPo
     m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("x_zuora_wsdl_version".into(), match (&p.x_zuora_wsdl_version) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("objects".into(), Value::Array((&p.objects).iter().map(|v| iface_actions__z_object__to_json(v)).collect()));
+    m.insert("objects".into(), Value::Array((&p.objects).iter().map(|v| Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect())).collect()));
     m.insert("type".into(), Value::String((&p.type_op).clone()));
     Value::Object(m)
 }
@@ -925,7 +940,7 @@ fn iface_actions__action_pos_tgenerate_params__to_json(p: &iface_actions::Action
     m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("x_zuora_wsdl_version".into(), match (&p.x_zuora_wsdl_version) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("objects".into(), Value::Array((&p.objects).iter().map(|v| iface_actions__z_object__to_json(v)).collect()));
+    m.insert("objects".into(), Value::Array((&p.objects).iter().map(|v| Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect())).collect()));
     m.insert("type".into(), Value::String(iface_actions__proxy_actiongenerate_request_type_op_enum__to_str(&p.type_op).into()));
     Value::Object(m)
 }
@@ -972,20 +987,21 @@ fn iface_actions__action_pos_tupdate_params__to_json(p: &iface_actions::ActionPo
     Value::Object(m)
 }
 
-fn iface_actions__z_object__from_json(v: &Value) -> Option<iface_actions::ZObject> {
-    let m = v.as_object()?;
-    Some(iface_actions::ZObject {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-    })
-}
-
 fn iface_actions__proxy_actionquery_more_response__from_json(v: &Value) -> Option<iface_actions::ProxyActionqueryMoreResponse> {
     let m = v.as_object()?;
     Some(iface_actions::ProxyActionqueryMoreResponse {
         done: m.get("done").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
         query_locator: m.get("queryLocator").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        records: m.get("records").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_actions__z_object__from_json(x)).collect())),
+        records: m.get("records").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_actions::ZObjectEntryV3 { key: k.clone(), value: val })).collect())).collect())),
         size: m.get("size").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+    })
+}
+
+fn iface_actions__z_object_entry_v3__from_json(v: &Value) -> Option<iface_actions::ZObjectEntryV3> {
+    let m = v.as_object()?;
+    Some(iface_actions::ZObjectEntryV3 {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 

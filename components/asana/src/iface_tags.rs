@@ -220,13 +220,14 @@ fn iface_tags__update_tag_response__to_json(p: &iface_tags::UpdateTagResponse) -
 
 fn iface_tags__delete_tag_response__to_json(p: &iface_tags::DeleteTagResponse) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => iface_tags__empty_response__to_json(v), None => Value::Null });
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_tags__empty_response__to_json(p: &iface_tags::EmptyResponse) -> Value {
+fn iface_tags__empty_response_entry__to_json(p: &iface_tags::EmptyResponseEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -398,14 +399,15 @@ fn iface_tags__update_tag_response__from_json(v: &Value) -> Option<iface_tags::U
 fn iface_tags__delete_tag_response__from_json(v: &Value) -> Option<iface_tags::DeleteTagResponse> {
     let m = v.as_object()?;
     Some(iface_tags::DeleteTagResponse {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| iface_tags__empty_response__from_json(v)),
+        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_tags::EmptyResponseEntry { key: k.clone(), value: val })).collect())),
     })
 }
 
-fn iface_tags__empty_response__from_json(v: &Value) -> Option<iface_tags::EmptyResponse> {
+fn iface_tags__empty_response_entry__from_json(v: &Value) -> Option<iface_tags::EmptyResponseEntry> {
     let m = v.as_object()?;
-    Some(iface_tags::EmptyResponse {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_tags::EmptyResponseEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 

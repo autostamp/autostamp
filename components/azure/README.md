@@ -11,8 +11,8 @@ triggered.
 
 | Setting | Value |
 | --- | --- |
-| Package | `autostamp:azure@0.5.0` |
-| Published version | `0.5.0+azure-2018-12-03` |
+| Package | `autostamp:azure@0.6.0` |
+| Published version | `0.6.0+azure-2018-12-03` |
 | Tag filter | all tags |
 | Operations generated | 7 |
 | Infer API-key credentials | enabled — not triggered |

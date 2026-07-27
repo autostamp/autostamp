@@ -1,4 +1,4 @@
-package autostamp:qualtrics@0.5.0;
+package autostamp:qualtrics@0.6.0;
 
 interface directories {
   /// Create contact in mailing list
@@ -35,7 +35,7 @@ interface distributions {
 
   record response-result-op-elements-item {
     created-date: string,
-    custom-headers: response-result-op-elements-item-custom-headers,
+    custom-headers: list<response-result-op-elements-item-custom-headers-entry>,
     embedded-data: string,
     headers: response-result-op-elements-item-headers,
     id: string,
@@ -52,9 +52,10 @@ interface distributions {
     survey-link: response-result-op-elements-item-survey-link
   }
 
-  record response-result-op-elements-item-custom-headers {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record response-result-op-elements-item-custom-headers-entry {
+    key: string,
+    value: string
   }
 
   record response-result-op-elements-item-headers {
@@ -206,9 +207,10 @@ interface eventsubscriptions {
 }
 
 interface survey-definitions {
-  record survey-response {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record survey-response-entry {
+    key: string,
+    value: string
   }
 
   /// Get survey
@@ -216,7 +218,7 @@ interface survey-definitions {
     /// ID of survey (eg. SV_123)
     survey-id: string
   }
-  get-survey: func(params: get-survey-params) -> result<survey-response, string>;
+  get-survey: func(params: get-survey-params) -> result<list<survey-response-entry>, string>;
 
 }
 /// The component world: imports the secrets host capability

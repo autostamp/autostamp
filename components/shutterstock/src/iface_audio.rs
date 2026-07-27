@@ -380,15 +380,16 @@ fn iface_audio__error__to_json(p: &iface_audio::Error) -> Value {
     let mut m = Map::new();
     m.insert("code".into(), match (&p.code) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("items".into(), match (&p.items) { Some(v) => Value::Array((v).iter().map(|v| iface_audio__error_items_item__to_json(v)).collect()), None => Value::Null });
+    m.insert("items".into(), match (&p.items) { Some(v) => Value::Array((v).iter().map(|v| Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect())).collect()), None => Value::Null });
     m.insert("message".into(), Value::String((&p.message).clone()));
     m.insert("path".into(), match (&p.path) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_audio__error_items_item__to_json(p: &iface_audio::ErrorItemsItem) -> Value {
+fn iface_audio__error_items_item_entry__to_json(p: &iface_audio::ErrorItemsItemEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -473,7 +474,7 @@ fn iface_audio__download_history__to_json(p: &iface_audio::DownloadHistory) -> V
     m.insert("image".into(), match (&p.image) { Some(v) => iface_audio__download_history_media_details__to_json(v), None => Value::Null });
     m.insert("is_downloadable".into(), match (&p.is_downloadable) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     m.insert("license".into(), Value::String((&p.license).clone()));
-    m.insert("metadata".into(), match (&p.metadata) { Some(v) => iface_audio__download_history_metadata__to_json(v), None => Value::Null });
+    m.insert("metadata".into(), match (&p.metadata) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("revshare".into(), match (&p.revshare) { Some(v) => iface_audio__download_history_revshare_details__to_json(v), None => Value::Null });
     m.insert("subscription_id".into(), match (&p.subscription_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("user".into(), match (&p.user) { Some(v) => iface_audio__download_history_user_details__to_json(v), None => Value::Null });
@@ -495,9 +496,10 @@ fn iface_audio__download_history_format_details__to_json(p: &iface_audio::Downlo
     Value::Object(m)
 }
 
-fn iface_audio__download_history_metadata__to_json(p: &iface_audio::DownloadHistoryMetadata) -> Value {
+fn iface_audio__download_history_metadata_entry__to_json(p: &iface_audio::DownloadHistoryMetadataEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -828,16 +830,17 @@ fn iface_audio__error__from_json(v: &Value) -> Option<iface_audio::Error> {
     Some(iface_audio::Error {
         code: m.get("code").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        items: m.get("items").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_audio__error_items_item__from_json(x)).collect())),
+        items: m.get("items").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_audio::ErrorItemsItemEntry { key: k.clone(), value: val })).collect())).collect())),
         message: m.get("message").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         path: m.get("path").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
     })
 }
 
-fn iface_audio__error_items_item__from_json(v: &Value) -> Option<iface_audio::ErrorItemsItem> {
+fn iface_audio__error_items_item_entry__from_json(v: &Value) -> Option<iface_audio::ErrorItemsItemEntry> {
     let m = v.as_object()?;
-    Some(iface_audio::ErrorItemsItem {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_audio::ErrorItemsItemEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -931,7 +934,7 @@ fn iface_audio__download_history__from_json(v: &Value) -> Option<iface_audio::Do
         image: m.get("image").filter(|v| !v.is_null()).and_then(|v| iface_audio__download_history_media_details__from_json(v)),
         is_downloadable: m.get("is_downloadable").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
         license: m.get("license").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-        metadata: m.get("metadata").filter(|v| !v.is_null()).and_then(|v| iface_audio__download_history_metadata__from_json(v)),
+        metadata: m.get("metadata").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_audio::DownloadHistoryMetadataEntry { key: k.clone(), value: val })).collect())),
         revshare: m.get("revshare").filter(|v| !v.is_null()).and_then(|v| iface_audio__download_history_revshare_details__from_json(v)),
         subscription_id: m.get("subscription_id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         user: m.get("user").filter(|v| !v.is_null()).and_then(|v| iface_audio__download_history_user_details__from_json(v)),
@@ -955,10 +958,11 @@ fn iface_audio__download_history_format_details__from_json(v: &Value) -> Option<
     })
 }
 
-fn iface_audio__download_history_metadata__from_json(v: &Value) -> Option<iface_audio::DownloadHistoryMetadata> {
+fn iface_audio__download_history_metadata_entry__from_json(v: &Value) -> Option<iface_audio::DownloadHistoryMetadataEntry> {
     let m = v.as_object()?;
-    Some(iface_audio::DownloadHistoryMetadata {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_audio::DownloadHistoryMetadataEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 

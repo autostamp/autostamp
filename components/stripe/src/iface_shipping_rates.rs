@@ -69,17 +69,17 @@ const OP_SHIPPING_RATES_POST_SHIPPING_RATES_SHIPPING_RATE_TOKEN: OpSpec = OpSpec
     ],
 };
 
-fn iface_shipping_rates__shipping_rate_object_enum__to_str(e: &iface_shipping_rates::ShippingRateObjectEnum) -> &'static str {
+fn iface_shipping_rates__shipping_rate_currency_option_tax_behavior_enum__to_str(e: &iface_shipping_rates::ShippingRateCurrencyOptionTaxBehaviorEnum) -> &'static str {
     match e {
-        iface_shipping_rates::ShippingRateObjectEnum::ShippingRate => "shipping_rate",
+        iface_shipping_rates::ShippingRateCurrencyOptionTaxBehaviorEnum::Exclusive => "exclusive",
+        iface_shipping_rates::ShippingRateCurrencyOptionTaxBehaviorEnum::Inclusive => "inclusive",
+        iface_shipping_rates::ShippingRateCurrencyOptionTaxBehaviorEnum::Unspecified => "unspecified",
     }
 }
 
-fn iface_shipping_rates__shipping_rate_tax_behavior_enum__to_str(e: &iface_shipping_rates::ShippingRateTaxBehaviorEnum) -> &'static str {
+fn iface_shipping_rates__shipping_rate_object_enum__to_str(e: &iface_shipping_rates::ShippingRateObjectEnum) -> &'static str {
     match e {
-        iface_shipping_rates::ShippingRateTaxBehaviorEnum::Exclusive => "exclusive",
-        iface_shipping_rates::ShippingRateTaxBehaviorEnum::Inclusive => "inclusive",
-        iface_shipping_rates::ShippingRateTaxBehaviorEnum::Unspecified => "unspecified",
+        iface_shipping_rates::ShippingRateObjectEnum::ShippingRate => "shipping_rate",
     }
 }
 
@@ -123,9 +123,9 @@ fn iface_shipping_rates__shipping_rate__to_json(p: &iface_shipping_rates::Shippi
     m.insert("fixed_amount".into(), match (&p.fixed_amount) { Some(v) => iface_shipping_rates__shipping_rate_fixed_amount__to_json(v), None => Value::Null });
     m.insert("id".into(), Value::String((&p.id).clone()));
     m.insert("livemode".into(), Value::Bool(*(&p.livemode)));
-    m.insert("metadata".into(), iface_shipping_rates__shipping_rate_metadata__to_json(&p.metadata));
+    m.insert("metadata".into(), Value::Object((&p.metadata).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()));
     m.insert("object".into(), Value::String(iface_shipping_rates__shipping_rate_object_enum__to_str(&p.object).into()));
-    m.insert("tax_behavior".into(), match (&p.tax_behavior) { Some(v) => Value::String(iface_shipping_rates__shipping_rate_tax_behavior_enum__to_str(v).into()), None => Value::Null });
+    m.insert("tax_behavior".into(), match (&p.tax_behavior) { Some(v) => Value::String(iface_shipping_rates__shipping_rate_currency_option_tax_behavior_enum__to_str(v).into()), None => Value::Null });
     m.insert("tax_code".into(), match (&p.tax_code) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("type".into(), Value::String(iface_shipping_rates__shipping_rate_type_op_enum__to_str(&p.type_op).into()));
     Value::Object(m)
@@ -135,19 +135,28 @@ fn iface_shipping_rates__shipping_rate_fixed_amount__to_json(p: &iface_shipping_
     let mut m = Map::new();
     m.insert("amount".into(), Value::Number(serde_json::Number::from(*(&p.amount))));
     m.insert("currency".into(), Value::String((&p.currency).clone()));
-    m.insert("currency_options".into(), match (&p.currency_options) { Some(v) => iface_shipping_rates__shipping_rate_fixed_amount_currency_options__to_json(v), None => Value::Null });
+    m.insert("currency_options".into(), match (&p.currency_options) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), iface_shipping_rates__shipping_rate_currency_option__to_json(&e.value))).collect()), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_shipping_rates__shipping_rate_fixed_amount_currency_options__to_json(p: &iface_shipping_rates::ShippingRateFixedAmountCurrencyOptions) -> Value {
+fn iface_shipping_rates__shipping_rate_currency_option__to_json(p: &iface_shipping_rates::ShippingRateCurrencyOption) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("amount".into(), Value::Number(serde_json::Number::from(*(&p.amount))));
+    m.insert("tax_behavior".into(), Value::String(iface_shipping_rates__shipping_rate_currency_option_tax_behavior_enum__to_str(&p.tax_behavior).into()));
     Value::Object(m)
 }
 
-fn iface_shipping_rates__shipping_rate_metadata__to_json(p: &iface_shipping_rates::ShippingRateMetadata) -> Value {
+fn iface_shipping_rates__shipping_rate_fixed_amount_currency_options_entry__to_json(p: &iface_shipping_rates::ShippingRateFixedAmountCurrencyOptionsEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), iface_shipping_rates__shipping_rate_currency_option__to_json(&p.value));
+    Value::Object(m)
+}
+
+fn iface_shipping_rates__shipping_rate_metadata_entry__to_json(p: &iface_shipping_rates::ShippingRateMetadataEntry) -> Value {
+    let mut m = Map::new();
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -176,31 +185,48 @@ fn iface_shipping_rates__post_shipping_rates_body_fixed_amount__to_json(p: &ifac
     let mut m = Map::new();
     m.insert("amount".into(), Value::Number(serde_json::Number::from(*(&p.amount))));
     m.insert("currency".into(), Value::String((&p.currency).clone()));
-    m.insert("currency_options".into(), match (&p.currency_options) { Some(v) => iface_shipping_rates__post_shipping_rates_body_fixed_amount_currency_options__to_json(v), None => Value::Null });
+    m.insert("currency_options".into(), match (&p.currency_options) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), iface_shipping_rates__post_shipping_rates_body_fixed_amount_currency_options_value__to_json(&e.value))).collect()), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_shipping_rates__post_shipping_rates_body_fixed_amount_currency_options__to_json(p: &iface_shipping_rates::PostShippingRatesBodyFixedAmountCurrencyOptions) -> Value {
+fn iface_shipping_rates__post_shipping_rates_body_fixed_amount_currency_options_value__to_json(p: &iface_shipping_rates::PostShippingRatesBodyFixedAmountCurrencyOptionsValue) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("amount".into(), Value::Number(serde_json::Number::from(*(&p.amount))));
+    m.insert("tax_behavior".into(), match (&p.tax_behavior) { Some(v) => Value::String(iface_shipping_rates__shipping_rate_currency_option_tax_behavior_enum__to_str(v).into()), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_shipping_rates__post_shipping_rates_body_metadata__to_json(p: &iface_shipping_rates::PostShippingRatesBodyMetadata) -> Value {
+fn iface_shipping_rates__post_shipping_rates_body_fixed_amount_currency_options_entry__to_json(p: &iface_shipping_rates::PostShippingRatesBodyFixedAmountCurrencyOptionsEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), iface_shipping_rates__post_shipping_rates_body_fixed_amount_currency_options_value__to_json(&p.value));
+    Value::Object(m)
+}
+
+fn iface_shipping_rates__post_shipping_rates_body_metadata_entry__to_json(p: &iface_shipping_rates::PostShippingRatesBodyMetadataEntry) -> Value {
+    let mut m = Map::new();
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
 fn iface_shipping_rates__post_shipping_rates_shipping_rate_token_body_fixed_amount__to_json(p: &iface_shipping_rates::PostShippingRatesShippingRateTokenBodyFixedAmount) -> Value {
     let mut m = Map::new();
-    m.insert("currency_options".into(), match (&p.currency_options) { Some(v) => iface_shipping_rates__post_shipping_rates_shipping_rate_token_body_fixed_amount_currency_options__to_json(v), None => Value::Null });
+    m.insert("currency_options".into(), match (&p.currency_options) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), iface_shipping_rates__post_shipping_rates_shipping_rate_token_body_fixed_amount_currency_options_value__to_json(&e.value))).collect()), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_shipping_rates__post_shipping_rates_shipping_rate_token_body_fixed_amount_currency_options__to_json(p: &iface_shipping_rates::PostShippingRatesShippingRateTokenBodyFixedAmountCurrencyOptions) -> Value {
+fn iface_shipping_rates__post_shipping_rates_shipping_rate_token_body_fixed_amount_currency_options_value__to_json(p: &iface_shipping_rates::PostShippingRatesShippingRateTokenBodyFixedAmountCurrencyOptionsValue) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("amount".into(), match (&p.amount) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("tax_behavior".into(), match (&p.tax_behavior) { Some(v) => Value::String(iface_shipping_rates__shipping_rate_currency_option_tax_behavior_enum__to_str(v).into()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_shipping_rates__post_shipping_rates_shipping_rate_token_body_fixed_amount_currency_options_entry__to_json(p: &iface_shipping_rates::PostShippingRatesShippingRateTokenBodyFixedAmountCurrencyOptionsEntry) -> Value {
+    let mut m = Map::new();
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), iface_shipping_rates__post_shipping_rates_shipping_rate_token_body_fixed_amount_currency_options_value__to_json(&p.value));
     Value::Object(m)
 }
 
@@ -223,8 +249,8 @@ fn iface_shipping_rates__post_shipping_rates_params__to_json(p: &iface_shipping_
     m.insert("display_name".into(), Value::String((&p.display_name).clone()));
     m.insert("expand".into(), match (&p.expand) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
     m.insert("fixed_amount".into(), match (&p.fixed_amount) { Some(v) => iface_shipping_rates__post_shipping_rates_body_fixed_amount__to_json(v), None => Value::Null });
-    m.insert("metadata".into(), match (&p.metadata) { Some(v) => iface_shipping_rates__post_shipping_rates_body_metadata__to_json(v), None => Value::Null });
-    m.insert("tax_behavior".into(), match (&p.tax_behavior) { Some(v) => Value::String(iface_shipping_rates__shipping_rate_tax_behavior_enum__to_str(v).into()), None => Value::Null });
+    m.insert("metadata".into(), match (&p.metadata) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
+    m.insert("tax_behavior".into(), match (&p.tax_behavior) { Some(v) => Value::String(iface_shipping_rates__shipping_rate_currency_option_tax_behavior_enum__to_str(v).into()), None => Value::Null });
     m.insert("tax_code".into(), match (&p.tax_code) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("type".into(), match (&p.type_op) { Some(v) => Value::String(iface_shipping_rates__shipping_rate_type_op_enum__to_str(v).into()), None => Value::Null });
     Value::Object(m)
@@ -245,7 +271,7 @@ fn iface_shipping_rates__post_shipping_rates_shipping_rate_token_params__to_json
     m.insert("expand".into(), match (&p.expand) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
     m.insert("fixed_amount".into(), match (&p.fixed_amount) { Some(v) => iface_shipping_rates__post_shipping_rates_shipping_rate_token_body_fixed_amount__to_json(v), None => Value::Null });
     m.insert("metadata".into(), match (&p.metadata) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("tax_behavior".into(), match (&p.tax_behavior) { Some(v) => Value::String(iface_shipping_rates__shipping_rate_tax_behavior_enum__to_str(v).into()), None => Value::Null });
+    m.insert("tax_behavior".into(), match (&p.tax_behavior) { Some(v) => Value::String(iface_shipping_rates__shipping_rate_currency_option_tax_behavior_enum__to_str(v).into()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -269,9 +295,9 @@ fn iface_shipping_rates__shipping_rate__from_json(v: &Value) -> Option<iface_shi
         fixed_amount: m.get("fixed_amount").filter(|v| !v.is_null()).and_then(|v| iface_shipping_rates__shipping_rate_fixed_amount__from_json(v)),
         id: m.get("id").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         livemode: m.get("livemode").and_then(|v| (v).as_bool()).unwrap_or_default(),
-        metadata: match m.get("metadata").and_then(|v| iface_shipping_rates__shipping_rate_metadata__from_json(v)) { Some(x) => x, None => return None },
+        metadata: m.get("metadata").and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_shipping_rates::ShippingRateMetadataEntry { key: k.clone(), value: val })).collect())).unwrap_or_default(),
         object: match m.get("object").and_then(|v| (v).as_str().and_then(iface_shipping_rates__shipping_rate_object_enum__from_str)) { Some(x) => x, None => return None },
-        tax_behavior: m.get("tax_behavior").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_shipping_rates__shipping_rate_tax_behavior_enum__from_str)),
+        tax_behavior: m.get("tax_behavior").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_shipping_rates__shipping_rate_currency_option_tax_behavior_enum__from_str)),
         tax_code: m.get("tax_code").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         type_op: match m.get("type").and_then(|v| (v).as_str().and_then(iface_shipping_rates__shipping_rate_type_op_enum__from_str)) { Some(x) => x, None => return None },
     })
@@ -282,36 +308,46 @@ fn iface_shipping_rates__shipping_rate_fixed_amount__from_json(v: &Value) -> Opt
     Some(iface_shipping_rates::ShippingRateFixedAmount {
         amount: m.get("amount").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
         currency: m.get("currency").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-        currency_options: m.get("currency_options").filter(|v| !v.is_null()).and_then(|v| iface_shipping_rates__shipping_rate_fixed_amount_currency_options__from_json(v)),
+        currency_options: m.get("currency_options").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| (iface_shipping_rates__shipping_rate_currency_option__from_json(x)).map(|val| iface_shipping_rates::ShippingRateFixedAmountCurrencyOptionsEntry { key: k.clone(), value: val })).collect())),
     })
 }
 
-fn iface_shipping_rates__shipping_rate_fixed_amount_currency_options__from_json(v: &Value) -> Option<iface_shipping_rates::ShippingRateFixedAmountCurrencyOptions> {
+fn iface_shipping_rates__shipping_rate_currency_option__from_json(v: &Value) -> Option<iface_shipping_rates::ShippingRateCurrencyOption> {
     let m = v.as_object()?;
-    Some(iface_shipping_rates::ShippingRateFixedAmountCurrencyOptions {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_shipping_rates::ShippingRateCurrencyOption {
+        amount: m.get("amount").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
+        tax_behavior: match m.get("tax_behavior").and_then(|v| (v).as_str().and_then(iface_shipping_rates__shipping_rate_currency_option_tax_behavior_enum__from_str)) { Some(x) => x, None => return None },
     })
 }
 
-fn iface_shipping_rates__shipping_rate_metadata__from_json(v: &Value) -> Option<iface_shipping_rates::ShippingRateMetadata> {
+fn iface_shipping_rates__shipping_rate_fixed_amount_currency_options_entry__from_json(v: &Value) -> Option<iface_shipping_rates::ShippingRateFixedAmountCurrencyOptionsEntry> {
     let m = v.as_object()?;
-    Some(iface_shipping_rates::ShippingRateMetadata {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_shipping_rates::ShippingRateFixedAmountCurrencyOptionsEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: match m.get("value").and_then(|v| iface_shipping_rates__shipping_rate_currency_option__from_json(v)) { Some(x) => x, None => return None },
     })
+}
+
+fn iface_shipping_rates__shipping_rate_metadata_entry__from_json(v: &Value) -> Option<iface_shipping_rates::ShippingRateMetadataEntry> {
+    let m = v.as_object()?;
+    Some(iface_shipping_rates::ShippingRateMetadataEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_shipping_rates__shipping_rate_currency_option_tax_behavior_enum__from_str(s: &str) -> Option<iface_shipping_rates::ShippingRateCurrencyOptionTaxBehaviorEnum> {
+    match s {
+        "exclusive" => Some(iface_shipping_rates::ShippingRateCurrencyOptionTaxBehaviorEnum::Exclusive),
+        "inclusive" => Some(iface_shipping_rates::ShippingRateCurrencyOptionTaxBehaviorEnum::Inclusive),
+        "unspecified" => Some(iface_shipping_rates::ShippingRateCurrencyOptionTaxBehaviorEnum::Unspecified),
+        _ => None,
+    }
 }
 
 fn iface_shipping_rates__shipping_rate_object_enum__from_str(s: &str) -> Option<iface_shipping_rates::ShippingRateObjectEnum> {
     match s {
         "shipping_rate" => Some(iface_shipping_rates::ShippingRateObjectEnum::ShippingRate),
-        _ => None,
-    }
-}
-
-fn iface_shipping_rates__shipping_rate_tax_behavior_enum__from_str(s: &str) -> Option<iface_shipping_rates::ShippingRateTaxBehaviorEnum> {
-    match s {
-        "exclusive" => Some(iface_shipping_rates::ShippingRateTaxBehaviorEnum::Exclusive),
-        "inclusive" => Some(iface_shipping_rates::ShippingRateTaxBehaviorEnum::Inclusive),
-        "unspecified" => Some(iface_shipping_rates::ShippingRateTaxBehaviorEnum::Unspecified),
         _ => None,
     }
 }

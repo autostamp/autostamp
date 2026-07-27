@@ -19,7 +19,7 @@ const OP_PRODUCTS_SKU_DOWNLOADABLE_LINKS_SAMPLES_ID_DOWNLOADABLE_SAMPLE_REPOSITO
 
 fn iface_products_sku_downloadable_links_samples_id__downloadable_data_sample_interface__to_json(p: &iface_products_sku_downloadable_links_samples_id::DownloadableDataSampleInterface) -> Value {
     let mut m = Map::new();
-    m.insert("extension_attributes".into(), match (&p.extension_attributes) { Some(v) => iface_products_sku_downloadable_links_samples_id__downloadable_data_sample_extension_interface__to_json(v), None => Value::Null });
+    m.insert("extension_attributes".into(), match (&p.extension_attributes) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("id".into(), match (&p.id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("sample_file".into(), match (&p.sample_file) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("sample_file_content".into(), match (&p.sample_file_content) { Some(v) => iface_products_sku_downloadable_links_samples_id__downloadable_data_file_content_interface__to_json(v), None => Value::Null });
@@ -30,23 +30,25 @@ fn iface_products_sku_downloadable_links_samples_id__downloadable_data_sample_in
     Value::Object(m)
 }
 
-fn iface_products_sku_downloadable_links_samples_id__downloadable_data_sample_extension_interface__to_json(p: &iface_products_sku_downloadable_links_samples_id::DownloadableDataSampleExtensionInterface) -> Value {
+fn iface_products_sku_downloadable_links_samples_id__downloadable_data_sample_extension_interface_entry__to_json(p: &iface_products_sku_downloadable_links_samples_id::DownloadableDataSampleExtensionInterfaceEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
 fn iface_products_sku_downloadable_links_samples_id__downloadable_data_file_content_interface__to_json(p: &iface_products_sku_downloadable_links_samples_id::DownloadableDataFileContentInterface) -> Value {
     let mut m = Map::new();
-    m.insert("extension_attributes".into(), match (&p.extension_attributes) { Some(v) => iface_products_sku_downloadable_links_samples_id__downloadable_data_file_content_extension_interface__to_json(v), None => Value::Null });
+    m.insert("extension_attributes".into(), match (&p.extension_attributes) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("file_data".into(), Value::String((&p.file_data).clone()));
     m.insert("name".into(), Value::String((&p.name).clone()));
     Value::Object(m)
 }
 
-fn iface_products_sku_downloadable_links_samples_id__downloadable_data_file_content_extension_interface__to_json(p: &iface_products_sku_downloadable_links_samples_id::DownloadableDataFileContentExtensionInterface) -> Value {
+fn iface_products_sku_downloadable_links_samples_id__downloadable_data_file_content_extension_interface_entry__to_json(p: &iface_products_sku_downloadable_links_samples_id::DownloadableDataFileContentExtensionInterfaceEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 

@@ -75,34 +75,29 @@ fn iface_integrations__statement_effect_enum__to_str(e: &iface_integrations::Sta
 
 fn iface_integrations__integrations__to_json(p: &iface_integrations::Integrations) -> Value {
     let mut m = Map::new();
-    m.insert("_links".into(), match (&p.links) { Some(v) => iface_integrations__integrations_links__to_json(v), None => Value::Null });
+    m.insert("_links".into(), match (&p.links) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("items".into(), match (&p.items) { Some(v) => Value::Array((v).iter().map(|v| iface_integrations__integration_subscription__to_json(v)).collect()), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_integrations__integrations_links__to_json(p: &iface_integrations::IntegrationsLinks) -> Value {
+fn iface_integrations__integrations_links_entry__to_json(p: &iface_integrations::IntegrationsLinksEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
 fn iface_integrations__integration_subscription__to_json(p: &iface_integrations::IntegrationSubscription) -> Value {
     let mut m = Map::new();
-    m.insert("_id".into(), match (&p.id) { Some(v) => iface_integrations__id__to_json(v), None => Value::Null });
+    m.insert("_id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("_links".into(), match (&p.links) { Some(v) => iface_integrations__hierarchical_links__to_json(v), None => Value::Null });
     m.insert("_status".into(), match (&p.status) { Some(v) => iface_integrations__integration_subscription_status__to_json(v), None => Value::Null });
-    m.insert("config".into(), match (&p.config) { Some(v) => iface_integrations__integration_subscription_config__to_json(v), None => Value::Null });
+    m.insert("config".into(), match (&p.config) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("kind".into(), match (&p.kind) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("on".into(), match (&p.on) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     m.insert("statements".into(), match (&p.statements) { Some(v) => Value::Array((v).iter().map(|v| iface_integrations__statement__to_json(v)).collect()), None => Value::Null });
     m.insert("tags".into(), match (&p.tags) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_integrations__id__to_json(p: &iface_integrations::Id) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -128,9 +123,10 @@ fn iface_integrations__integration_subscription_status__to_json(p: &iface_integr
     Value::Object(m)
 }
 
-fn iface_integrations__integration_subscription_config__to_json(p: &iface_integrations::IntegrationSubscriptionConfig) -> Value {
+fn iface_integrations__integration_subscription_config_entry__to_json(p: &iface_integrations::IntegrationSubscriptionConfigEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -193,37 +189,31 @@ fn iface_integrations__delete_integration_subscription_params__to_json(p: &iface
 fn iface_integrations__integrations__from_json(v: &Value) -> Option<iface_integrations::Integrations> {
     let m = v.as_object()?;
     Some(iface_integrations::Integrations {
-        links: m.get("_links").filter(|v| !v.is_null()).and_then(|v| iface_integrations__integrations_links__from_json(v)),
+        links: m.get("_links").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_integrations::IntegrationsLinksEntry { key: k.clone(), value: val })).collect())),
         items: m.get("items").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_integrations__integration_subscription__from_json(x)).collect())),
     })
 }
 
-fn iface_integrations__integrations_links__from_json(v: &Value) -> Option<iface_integrations::IntegrationsLinks> {
+fn iface_integrations__integrations_links_entry__from_json(v: &Value) -> Option<iface_integrations::IntegrationsLinksEntry> {
     let m = v.as_object()?;
-    Some(iface_integrations::IntegrationsLinks {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_integrations::IntegrationsLinksEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
 fn iface_integrations__integration_subscription__from_json(v: &Value) -> Option<iface_integrations::IntegrationSubscription> {
     let m = v.as_object()?;
     Some(iface_integrations::IntegrationSubscription {
-        id: m.get("_id").filter(|v| !v.is_null()).and_then(|v| iface_integrations__id__from_json(v)),
+        id: m.get("_id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         links: m.get("_links").filter(|v| !v.is_null()).and_then(|v| iface_integrations__hierarchical_links__from_json(v)),
         status: m.get("_status").filter(|v| !v.is_null()).and_then(|v| iface_integrations__integration_subscription_status__from_json(v)),
-        config: m.get("config").filter(|v| !v.is_null()).and_then(|v| iface_integrations__integration_subscription_config__from_json(v)),
+        config: m.get("config").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_integrations::IntegrationSubscriptionConfigEntry { key: k.clone(), value: val })).collect())),
         kind: m.get("kind").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         on: m.get("on").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
         statements: m.get("statements").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_integrations__statement__from_json(x)).collect())),
         tags: m.get("tags").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
-    })
-}
-
-fn iface_integrations__id__from_json(v: &Value) -> Option<iface_integrations::Id> {
-    let m = v.as_object()?;
-    Some(iface_integrations::Id {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -252,10 +242,11 @@ fn iface_integrations__integration_subscription_status__from_json(v: &Value) -> 
     })
 }
 
-fn iface_integrations__integration_subscription_config__from_json(v: &Value) -> Option<iface_integrations::IntegrationSubscriptionConfig> {
+fn iface_integrations__integration_subscription_config_entry__from_json(v: &Value) -> Option<iface_integrations::IntegrationSubscriptionConfigEntry> {
     let m = v.as_object()?;
-    Some(iface_integrations::IntegrationSubscriptionConfig {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_integrations::IntegrationSubscriptionConfigEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 

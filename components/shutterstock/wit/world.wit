@@ -7,7 +7,7 @@
 /// | --- | --- |
 /// | `basic` | `Authorization: Basic base64(<secret>)` |
 /// | `customer_accessCode` | `Authorization: Bearer <secret>` |
-package autostamp:shutterstock@0.5.0;
+package autostamp:shutterstock@0.6.0;
 
 interface custom-music {
   enum preview-content-type-enum {
@@ -561,16 +561,17 @@ interface audio {
     /// Debugging information about the error
     data: option<string>,
     /// A list of items that produced the error
-    items: option<list<error-items-item>>,
+    items: option<list<list<error-items-item-entry>>>,
     /// Specific details about this error
     message: string,
     /// Internal code reference to the source of the error
     path: option<string>
   }
 
-  record error-items-item {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record error-items-item-entry {
+    key: string,
+    value: string
   }
 
   /// List of collections
@@ -683,7 +684,7 @@ interface audio {
     /// The name of the license of this download
     license: string,
     /// The metadata that was passed in the original licensing request
-    metadata: option<download-history-metadata>,
+    metadata: option<list<download-history-metadata-entry>>,
     revshare: option<download-history-revshare-details>,
     /// ID of the subscription used to perform this download
     subscription-id: option<string>,
@@ -706,10 +707,10 @@ interface audio {
     size: option<string>
   }
 
-  /// The metadata that was passed in the original licensing request
-  record download-history-metadata {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record download-history-metadata-entry {
+    key: string,
+    value: string
   }
 
   /// Pricing information for revenue-sharing transactions
@@ -1119,6 +1120,51 @@ interface images {
     vector,
   }
 
+  enum language {
+    ar,
+    bg,
+    bn,
+    cs,
+    da,
+    de,
+    el,
+    en,
+    es,
+    fi,
+    fr,
+    gu,
+    he,
+    hi,
+    hr,
+    hu,
+    id,
+    it,
+    ja,
+    kn,
+    ko,
+    ml,
+    mr,
+    nb,
+    nl,
+    or,
+    pl,
+    pt,
+    ro,
+    ru,
+    sk,
+    sl,
+    sv,
+    ta,
+    te,
+    th,
+    tr,
+    uk,
+    ur,
+    vi,
+    zh,
+    zh-hant,
+  }
+
   enum bulk-search-images-license-item-enum {
     commercial,
     editorial,
@@ -1266,10 +1312,81 @@ interface images {
     edit,
   }
 
-  /// Language code
-  record language {
-    /// opaque schema; raw JSON
-    value: string
+  /// Data required to search for an image
+  record search-image {
+    /// Show images added on the specified date
+    added-date: option<string>,
+    /// Show images added before the specified date
+    added-date-end: option<string>,
+    /// Show images added on or after the specified date
+    added-date-start: option<string>,
+    /// Show images with the specified aspect ratio, using a positive decimal of the width divided by the height, such as 1.7778 for a 16:9 image
+    aspect-ratio: option<f64>,
+    /// Show images with the specified aspect ratio or lower, using a positive decimal of the width divided by the height, such as 1.7778 for a 16:9 image
+    aspect-ratio-max: option<f64>,
+    /// Show images with the specified aspect ratio or higher, using a positive decimal of the width divided by the height, such as 1.7778 for a 16:9 image
+    aspect-ratio-min: option<f64>,
+    /// Show only authentic images
+    authentic: option<bool>,
+    /// Show images with the specified Shutterstock-defined category; specify a category name or ID
+    category: option<string>,
+    /// Specify either a hexadecimal color in the format '4F21EA' or 'grayscale'; the API returns images that use similar colors
+    color: option<string>,
+    /// Show images with the specified contributor names or IDs, allows multiple
+    contributor: option<list<string>>,
+    /// Show images from contributors in one or more specified countries, or start with NOT to exclude a country from the search
+    contributor-country: option<string>,
+    /// Fields to display in the response; see the documentation for the fields parameter in the overview section
+    fields: option<string>,
+    /// (Deprecated; use height_from and height_to instead) Show images with the specified height
+    height: option<s32>,
+    /// Show images with the specified height or larger, in pixels
+    height-from: option<s32>,
+    /// Show images with the specified height or smaller, in pixels
+    height-to: option<s32>,
+    /// Show images of the specified type
+    image-type: option<list<bulk-search-images-image-type-item-enum>>,
+    /// Hide results with potentially unsafe keywords
+    keyword-safe-search: option<bool>,
+    language: option<language>,
+    /// Show only images with the specified license
+    license: option<list<bulk-search-images-license-item-enum>>,
+    /// Show image results with the specified model IDs
+    model: option<list<string>>,
+    /// Show image results with horizontal or vertical orientation
+    orientation: option<bulk-search-images-orientation-enum>,
+    /// Page number
+    page: option<s32>,
+    /// Show images that feature people of the specified age category
+    people-age: option<bulk-search-images-people-age-enum>,
+    /// Show images with people of the specified ethnicities, or start with NOT to show images without those ethnicities
+    people-ethnicity: option<list<bulk-search-images-people-ethnicity-item-enum>>,
+    /// Show images with people of the specified gender
+    people-gender: option<bulk-search-images-people-gender-enum>,
+    /// Show images of people with a signed model release
+    people-model-released: option<bool>,
+    /// Show images with the specified number of people
+    people-number: option<s32>,
+    /// Number of results per page
+    per-page: option<s32>,
+    /// One or more search terms separated by spaces; you can use NOT to filter out images that match a term
+    query: option<string>,
+    /// Raise or lower search result rankings based on the result's relevance to a specified region; you can provide a country code or an IP address from which the API infers a country
+    region: option<string>,
+    /// Enable or disable safe search
+    safe: option<bool>,
+    /// Sort by
+    sort: option<bulk-search-images-sort-enum>,
+    /// Spellcheck the search query and return results on suggested spellings
+    spellcheck-query: option<bool>,
+    /// Amount of detail to render in the response
+    view: option<bulk-search-images-view-enum>,
+    /// (Deprecated; use width_from and width_to instead) Show images with the specified width
+    width: option<s32>,
+    /// Show images with the specified width or larger, in pixels
+    width-from: option<s32>,
+    /// Show images with the specified width or smaller, in pixels
+    width-to: option<s32>
   }
 
   /// List of search results for each given query
@@ -1294,7 +1411,7 @@ interface images {
     /// Unique identifier for the search request
     search-id: string,
     /// Returns information if search phrase has potentially been mistyped or another query would lead to better search results
-    spellcheck-info: option<image-search-results-spellcheck-info>,
+    spellcheck-info: option<list<image-search-results-spellcheck-info-entry>>,
     /// Total count of all results across all pages
     total-count: s32
   }
@@ -1427,10 +1544,10 @@ interface images {
     percentile-performance: option<f64>
   }
 
-  /// Returns information if search phrase has potentially been mistyped or another query would lead to better search results
-  record image-search-results-spellcheck-info {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record image-search-results-spellcheck-info-entry {
+    key: string,
+    value: string
   }
 
   /// List of images
@@ -1456,16 +1573,17 @@ interface images {
     /// Debugging information about the error
     data: option<string>,
     /// A list of items that produced the error
-    items: option<list<error-items-item>>,
+    items: option<list<list<error-items-item-entry>>>,
     /// Specific details about this error
     message: string,
     /// Internal code reference to the source of the error
     path: option<string>
   }
 
-  record error-items-item {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record error-items-item-entry {
+    key: string,
+    value: string
   }
 
   /// List of categories that images can belong to
@@ -1624,7 +1742,7 @@ interface images {
     /// The name of the license of this download
     license: string,
     /// The metadata that was passed in the original licensing request
-    metadata: option<download-history-metadata>,
+    metadata: option<list<download-history-metadata-entry>>,
     revshare: option<download-history-revshare-details>,
     /// ID of the subscription used to perform this download
     subscription-id: option<string>,
@@ -1647,10 +1765,10 @@ interface images {
     size: option<string>
   }
 
-  /// The metadata that was passed in the original licensing request
-  record download-history-metadata {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record download-history-metadata-entry {
+    key: string,
+    value: string
   }
 
   /// Pricing information for revenue-sharing transactions
@@ -2020,8 +2138,7 @@ interface images {
     width-from: option<s32>,
     /// Show images with the specified width or smaller, in pixels
     width-to: option<s32>,
-    /// opaque schema; raw JSON
-    value: string
+    body: list<search-image>
   }
   bulk-search-images: func(params: bulk-search-images-params) -> result<bulk-image-search-results, bulk-search-images-error>;
 
@@ -2648,16 +2765,17 @@ interface contributors {
     /// Debugging information about the error
     data: option<string>,
     /// A list of items that produced the error
-    items: option<list<error-items-item>>,
+    items: option<list<list<error-items-item-entry>>>,
     /// Specific details about this error
     message: string,
     /// Internal code reference to the source of the error
     path: option<string>
   }
 
-  record error-items-item {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record error-items-item-entry {
+    key: string,
+    value: string
   }
 
   /// List of collections
@@ -2816,6 +2934,51 @@ interface computer-vision {
     editorial,
   }
 
+  enum language {
+    ar,
+    bg,
+    bn,
+    cs,
+    da,
+    de,
+    el,
+    en,
+    es,
+    fi,
+    fr,
+    gu,
+    he,
+    hi,
+    hr,
+    hu,
+    id,
+    it,
+    ja,
+    kn,
+    ko,
+    ml,
+    mr,
+    nb,
+    nl,
+    or,
+    pl,
+    pt,
+    ro,
+    ru,
+    sk,
+    sl,
+    sv,
+    ta,
+    te,
+    th,
+    tr,
+    uk,
+    ur,
+    vi,
+    zh,
+    zh-hant,
+  }
+
   enum get-similar-images-view-enum {
     minimal,
     full,
@@ -2843,21 +3006,16 @@ interface computer-vision {
     /// Debugging information about the error
     data: option<string>,
     /// A list of items that produced the error
-    items: option<list<error-items-item>>,
+    items: option<list<list<error-items-item-entry>>>,
     /// Specific details about this error
     message: string,
     /// Internal code reference to the source of the error
     path: option<string>
   }
 
-  record error-items-item {
-    /// JSON-encoded free-form object payload
-    data: option<string>
-  }
-
-  /// Language code
-  record language {
-    /// opaque schema; raw JSON
+  /// one entry of a string-keyed map (free-form object)
+  record error-items-item-entry {
+    key: string,
     value: string
   }
 
@@ -2875,7 +3033,7 @@ interface computer-vision {
     /// Unique identifier for the search request
     search-id: string,
     /// Returns information if search phrase has potentially been mistyped or another query would lead to better search results
-    spellcheck-info: option<image-search-results-spellcheck-info>,
+    spellcheck-info: option<list<image-search-results-spellcheck-info-entry>>,
     /// Total count of all results across all pages
     total-count: s32
   }
@@ -3008,10 +3166,10 @@ interface computer-vision {
     percentile-performance: option<f64>
   }
 
-  /// Returns information if search phrase has potentially been mistyped or another query would lead to better search results
-  record image-search-results-spellcheck-info {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record image-search-results-spellcheck-info-entry {
+    key: string,
+    value: string
   }
 
   /// Video search results
@@ -3292,7 +3450,7 @@ interface editorial-images {
     /// The name of the license of this download
     license: string,
     /// The metadata that was passed in the original licensing request
-    metadata: option<download-history-metadata>,
+    metadata: option<list<download-history-metadata-entry>>,
     revshare: option<download-history-revshare-details>,
     /// ID of the subscription used to perform this download
     subscription-id: option<string>,
@@ -3315,10 +3473,10 @@ interface editorial-images {
     size: option<string>
   }
 
-  /// The metadata that was passed in the original licensing request
-  record download-history-metadata {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record download-history-metadata-entry {
+    key: string,
+    value: string
   }
 
   /// Pricing information for revenue-sharing transactions
@@ -3342,21 +3500,16 @@ interface editorial-images {
     /// Debugging information about the error
     data: option<string>,
     /// A list of items that produced the error
-    items: option<list<error-items-item>>,
+    items: option<list<list<error-items-item-entry>>>,
     /// Specific details about this error
     message: string,
     /// Internal code reference to the source of the error
     path: option<string>
   }
 
-  record error-items-item {
-    /// JSON-encoded free-form object payload
-    data: option<string>
-  }
-
-  /// A valid ISO 3166-1 Alpha-2 or ISO 3166-1 Alpha-3 code.
-  record iso-country-code {
-    /// opaque schema; raw JSON
+  /// one entry of a string-keyed map (free-form object)
+  record error-items-item-entry {
+    key: string,
     value: string
   }
 
@@ -3366,15 +3519,15 @@ interface editorial-images {
     editorial-id: string,
     /// License agreement to use for licensing
     license: string,
-    metadata: option<license-request-metadata>,
+    metadata: option<list<license-request-metadata-entry>>,
     /// Asset size to download
     size: option<license-editorial-content-size-enum>
   }
 
-  /// Additional information for license requests for enterprise accounts and API subscriptions, 4 fields maximum; which fields are required is set by the account holder
-  record license-request-metadata {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record license-request-metadata-entry {
+    key: string,
+    value: string
   }
 
   /// List of editorial license results
@@ -3788,7 +3941,7 @@ interface editorial-images {
 
   /// License editorial content
   record license-editorial-images-params {
-    country: iso-country-code,
+    country: string,
     /// Editorial content to license
     editorial: list<license-editorial-content>
   }
@@ -3882,7 +4035,7 @@ interface editorial-images {
 
   /// (Deprecated) License editorial content
   record license-editorial-image-params {
-    country: iso-country-code,
+    country: string,
     /// Editorial content to license
     editorial: list<license-editorial-content>
   }
@@ -4052,7 +4205,7 @@ interface editorial-video {
     /// The name of the license of this download
     license: string,
     /// The metadata that was passed in the original licensing request
-    metadata: option<download-history-metadata>,
+    metadata: option<list<download-history-metadata-entry>>,
     revshare: option<download-history-revshare-details>,
     /// ID of the subscription used to perform this download
     subscription-id: option<string>,
@@ -4075,10 +4228,10 @@ interface editorial-video {
     size: option<string>
   }
 
-  /// The metadata that was passed in the original licensing request
-  record download-history-metadata {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record download-history-metadata-entry {
+    key: string,
+    value: string
   }
 
   /// Pricing information for revenue-sharing transactions
@@ -4102,21 +4255,16 @@ interface editorial-video {
     /// Debugging information about the error
     data: option<string>,
     /// A list of items that produced the error
-    items: option<list<error-items-item>>,
+    items: option<list<list<error-items-item-entry>>>,
     /// Specific details about this error
     message: string,
     /// Internal code reference to the source of the error
     path: option<string>
   }
 
-  record error-items-item {
-    /// JSON-encoded free-form object payload
-    data: option<string>
-  }
-
-  /// A valid ISO 3166-1 Alpha-2 or ISO 3166-1 Alpha-3 code.
-  record iso-country-code {
-    /// opaque schema; raw JSON
+  /// one entry of a string-keyed map (free-form object)
+  record error-items-item-entry {
+    key: string,
     value: string
   }
 
@@ -4126,15 +4274,15 @@ interface editorial-video {
     editorial-id: string,
     /// License agreement to use for licensing
     license: license-editorial-video-content-license-enum,
-    metadata: option<license-request-metadata>,
+    metadata: option<list<license-request-metadata-entry>>,
     /// Asset size to download
     size: option<license-editorial-video-content-size-enum>
   }
 
-  /// Additional information for license requests for enterprise accounts and API subscriptions, 4 fields maximum; which fields are required is set by the account holder
-  record license-request-metadata {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record license-request-metadata-entry {
+    key: string,
+    value: string
   }
 
   /// List of editorial license results
@@ -4303,7 +4451,7 @@ interface editorial-video {
 
   /// License editorial video content
   record license-editorial-video-params {
-    country: iso-country-code,
+    country: string,
     /// Editorial content to license
     editorial: list<license-editorial-video-content>
   }
@@ -4438,6 +4586,51 @@ interface sound-effects {
     full,
   }
 
+  enum language {
+    ar,
+    bg,
+    bn,
+    cs,
+    da,
+    de,
+    el,
+    en,
+    es,
+    fi,
+    fr,
+    gu,
+    he,
+    hi,
+    hr,
+    hu,
+    id,
+    it,
+    ja,
+    kn,
+    ko,
+    ml,
+    mr,
+    nb,
+    nl,
+    or,
+    pl,
+    pt,
+    ro,
+    ru,
+    sk,
+    sl,
+    sv,
+    ta,
+    te,
+    th,
+    tr,
+    uk,
+    ur,
+    vi,
+    zh,
+    zh-hant,
+  }
+
   enum get-sfx-list-details-library-enum {
     shutterstock,
     premier,
@@ -4464,12 +4657,6 @@ interface sound-effects {
   enum license-sfx-format-enum {
     wav,
     mp3,
-  }
-
-  /// Language code
-  record language {
-    /// opaque schema; raw JSON
-    value: string
   }
 
   /// List of sound effects
@@ -4556,7 +4743,7 @@ interface sound-effects {
     /// The name of the license of this download
     license: string,
     /// The metadata that was passed in the original licensing request
-    metadata: option<download-history-metadata>,
+    metadata: option<list<download-history-metadata-entry>>,
     revshare: option<download-history-revshare-details>,
     /// ID of the subscription used to perform this download
     subscription-id: option<string>,
@@ -4579,10 +4766,10 @@ interface sound-effects {
     size: option<string>
   }
 
-  /// The metadata that was passed in the original licensing request
-  record download-history-metadata {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record download-history-metadata-entry {
+    key: string,
+    value: string
   }
 
   /// Pricing information for revenue-sharing transactions
@@ -4606,16 +4793,17 @@ interface sound-effects {
     /// Debugging information about the error
     data: option<string>,
     /// A list of items that produced the error
-    items: option<list<error-items-item>>,
+    items: option<list<list<error-items-item-entry>>>,
     /// Specific details about this error
     message: string,
     /// Internal code reference to the source of the error
     path: option<string>
   }
 
-  record error-items-item {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record error-items-item-entry {
+    key: string,
+    value: string
   }
 
   record license-sfx {
@@ -4988,7 +5176,7 @@ interface users {
     id: string,
     /// Internal identifier for the type of subscription
     license: option<string>,
-    metadata: option<subscription-metadata>,
+    metadata: option<list<subscription-metadata-entry>>,
     price-per-download: option<price>
   }
 
@@ -5018,10 +5206,10 @@ interface users {
     size: option<string>
   }
 
-  /// Subscription metadata; different for each customer
-  record subscription-metadata {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record subscription-metadata-entry {
+    key: string,
+    value: string
   }
 
   /// Price
@@ -5039,16 +5227,17 @@ interface users {
     /// Debugging information about the error
     data: option<string>,
     /// A list of items that produced the error
-    items: option<list<error-items-item>>,
+    items: option<list<list<error-items-item-entry>>>,
     /// Specific details about this error
     message: string,
     /// Internal code reference to the source of the error
     path: option<string>
   }
 
-  record error-items-item {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record error-items-item-entry {
+    key: string,
+    value: string
   }
 
   variant get-user-error {
@@ -5087,6 +5276,51 @@ interface videos {
   enum get-video-list-view-enum {
     minimal,
     full,
+  }
+
+  enum language {
+    ar,
+    bg,
+    bn,
+    cs,
+    da,
+    de,
+    el,
+    en,
+    es,
+    fi,
+    fr,
+    gu,
+    he,
+    hi,
+    hr,
+    hu,
+    id,
+    it,
+    ja,
+    kn,
+    ko,
+    ml,
+    mr,
+    nb,
+    nl,
+    or,
+    pl,
+    pt,
+    ro,
+    ru,
+    sk,
+    sl,
+    sv,
+    ta,
+    te,
+    th,
+    tr,
+    uk,
+    ur,
+    vi,
+    zh,
+    zh-hant,
   }
 
   enum get-video-collection-list-embed-item-enum {
@@ -5302,21 +5536,16 @@ interface videos {
     /// Debugging information about the error
     data: option<string>,
     /// A list of items that produced the error
-    items: option<list<error-items-item>>,
+    items: option<list<list<error-items-item-entry>>>,
     /// Specific details about this error
     message: string,
     /// Internal code reference to the source of the error
     path: option<string>
   }
 
-  record error-items-item {
-    /// JSON-encoded free-form object payload
-    data: option<string>
-  }
-
-  /// Language code
-  record language {
-    /// opaque schema; raw JSON
+  /// one entry of a string-keyed map (free-form object)
+  record error-items-item-entry {
+    key: string,
     value: string
   }
 
@@ -5492,7 +5721,7 @@ interface videos {
     /// The name of the license of this download
     license: string,
     /// The metadata that was passed in the original licensing request
-    metadata: option<download-history-metadata>,
+    metadata: option<list<download-history-metadata-entry>>,
     revshare: option<download-history-revshare-details>,
     /// ID of the subscription used to perform this download
     subscription-id: option<string>,
@@ -5515,10 +5744,10 @@ interface videos {
     size: option<string>
   }
 
-  /// The metadata that was passed in the original licensing request
-  record download-history-metadata {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record download-history-metadata-entry {
+    key: string,
+    value: string
   }
 
   /// Pricing information for revenue-sharing transactions
@@ -5540,7 +5769,7 @@ interface videos {
     auth-cookie: option<cookie>,
     /// Whether or not this item is editorial content
     editorial-acknowledgement: option<bool>,
-    metadata: option<license-request-metadata>,
+    metadata: option<list<license-request-metadata-entry>>,
     /// Retail price amount as a floating-point number in the transaction currency, such as 12.34; only for rev-share partners
     price: option<f64>,
     /// ID of the search that led to this licensing event
@@ -5563,10 +5792,10 @@ interface videos {
     value: string
   }
 
-  /// Additional information for license requests for enterprise accounts and API subscriptions, 4 fields maximum; which fields are required is set by the account holder
-  record license-request-metadata {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record license-request-metadata-entry {
+    key: string,
+    value: string
   }
 
   /// List of video license results

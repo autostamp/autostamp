@@ -156,13 +156,14 @@ fn iface_contacts_api_recipients__contactdb_custom_field_with_id_value_type_op_e
 
 fn iface_contacts_api_recipients__get_contactdb_recipients_response__to_json(p: &iface_contacts_api_recipients::GetContactdbRecipientsResponse) -> Value {
     let mut m = Map::new();
-    m.insert("recipients".into(), Value::Array((&p.recipients).iter().map(|v| iface_contacts_api_recipients__get_contactdb_recipients_response_recipients_item__to_json(v)).collect()));
+    m.insert("recipients".into(), Value::Array((&p.recipients).iter().map(|v| Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect())).collect()));
     Value::Object(m)
 }
 
-fn iface_contacts_api_recipients__get_contactdb_recipients_response_recipients_item__to_json(p: &iface_contacts_api_recipients::GetContactdbRecipientsResponseRecipientsItem) -> Value {
+fn iface_contacts_api_recipients__get_contactdb_recipients_response_recipients_item_entry__to_json(p: &iface_contacts_api_recipients::GetContactdbRecipientsResponseRecipientsItemEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -201,9 +202,10 @@ fn iface_contacts_api_recipients__patch_contactdb_recipients_body_item__to_json(
     Value::Object(m)
 }
 
-fn iface_contacts_api_recipients__delete_contactdb_recipients_response__to_json(p: &iface_contacts_api_recipients::DeleteContactdbRecipientsResponse) -> Value {
+fn iface_contacts_api_recipients__delete_contactdb_recipients_response_entry__to_json(p: &iface_contacts_api_recipients::DeleteContactdbRecipientsResponseEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -279,9 +281,10 @@ fn iface_contacts_api_recipients__post_contactdb_recipients_search_response_reci
     Value::Object(m)
 }
 
-fn iface_contacts_api_recipients__delete_contactdb_recipients_recipient_id_response__to_json(p: &iface_contacts_api_recipients::DeleteContactdbRecipientsRecipientIdResponse) -> Value {
+fn iface_contacts_api_recipients__delete_contactdb_recipients_recipient_id_response_entry__to_json(p: &iface_contacts_api_recipients::DeleteContactdbRecipientsRecipientIdResponseEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -398,14 +401,15 @@ fn iface_contacts_api_recipients__get_contactdb_status_params__to_json(p: &iface
 fn iface_contacts_api_recipients__get_contactdb_recipients_response__from_json(v: &Value) -> Option<iface_contacts_api_recipients::GetContactdbRecipientsResponse> {
     let m = v.as_object()?;
     Some(iface_contacts_api_recipients::GetContactdbRecipientsResponse {
-        recipients: m.get("recipients").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_contacts_api_recipients__get_contactdb_recipients_response_recipients_item__from_json(x)).collect())).unwrap_or_default(),
+        recipients: m.get("recipients").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_contacts_api_recipients::GetContactdbRecipientsResponseRecipientsItemEntry { key: k.clone(), value: val })).collect())).collect())).unwrap_or_default(),
     })
 }
 
-fn iface_contacts_api_recipients__get_contactdb_recipients_response_recipients_item__from_json(v: &Value) -> Option<iface_contacts_api_recipients::GetContactdbRecipientsResponseRecipientsItem> {
+fn iface_contacts_api_recipients__get_contactdb_recipients_response_recipients_item_entry__from_json(v: &Value) -> Option<iface_contacts_api_recipients::GetContactdbRecipientsResponseRecipientsItemEntry> {
     let m = v.as_object()?;
-    Some(iface_contacts_api_recipients::GetContactdbRecipientsResponseRecipientsItem {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_contacts_api_recipients::GetContactdbRecipientsResponseRecipientsItemEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -429,10 +433,11 @@ fn iface_contacts_api_recipients__contactdb_recipient_response_errors_item__from
     })
 }
 
-fn iface_contacts_api_recipients__delete_contactdb_recipients_response__from_json(v: &Value) -> Option<iface_contacts_api_recipients::DeleteContactdbRecipientsResponse> {
+fn iface_contacts_api_recipients__delete_contactdb_recipients_response_entry__from_json(v: &Value) -> Option<iface_contacts_api_recipients::DeleteContactdbRecipientsResponseEntry> {
     let m = v.as_object()?;
-    Some(iface_contacts_api_recipients::DeleteContactdbRecipientsResponse {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_contacts_api_recipients::DeleteContactdbRecipientsResponseEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -516,10 +521,11 @@ fn iface_contacts_api_recipients__post_contactdb_recipients_search_response_reci
     })
 }
 
-fn iface_contacts_api_recipients__delete_contactdb_recipients_recipient_id_response__from_json(v: &Value) -> Option<iface_contacts_api_recipients::DeleteContactdbRecipientsRecipientIdResponse> {
+fn iface_contacts_api_recipients__delete_contactdb_recipients_recipient_id_response_entry__from_json(v: &Value) -> Option<iface_contacts_api_recipients::DeleteContactdbRecipientsRecipientIdResponseEntry> {
     let m = v.as_object()?;
-    Some(iface_contacts_api_recipients::DeleteContactdbRecipientsRecipientIdResponse {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_contacts_api_recipients::DeleteContactdbRecipientsRecipientIdResponseEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -630,12 +636,12 @@ fn iface_contacts_api_recipients__patch_contactdb_recipients__err(e: crate::runt
     }
 }
 
-fn iface_contacts_api_recipients__delete_contactdb_recipients__ok(body: String) -> Result<iface_contacts_api_recipients::DeleteContactdbRecipientsResponse, crate::runtime::DispatchError> {
+fn iface_contacts_api_recipients__delete_contactdb_recipients__ok(body: String) -> Result<Vec<iface_contacts_api_recipients::DeleteContactdbRecipientsResponseEntry>, crate::runtime::DispatchError> {
     let v: Value = match serde_json::from_str(&body) {
         Ok(v) => v,
         Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
     };
-    match iface_contacts_api_recipients__delete_contactdb_recipients_response__from_json(&v) {
+    match (&v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_contacts_api_recipients::DeleteContactdbRecipientsResponseEntry { key: k.clone(), value: val })).collect()) {
         Some(x) => Ok(x),
         None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
@@ -760,12 +766,12 @@ fn iface_contacts_api_recipients__get_contactdb_recipients_recipient_id__err(e: 
     }
 }
 
-fn iface_contacts_api_recipients__delete_contactdb_recipients_recipient_id__ok(body: String) -> Result<iface_contacts_api_recipients::DeleteContactdbRecipientsRecipientIdResponse, crate::runtime::DispatchError> {
+fn iface_contacts_api_recipients__delete_contactdb_recipients_recipient_id__ok(body: String) -> Result<Vec<iface_contacts_api_recipients::DeleteContactdbRecipientsRecipientIdResponseEntry>, crate::runtime::DispatchError> {
     let v: Value = match serde_json::from_str(&body) {
         Ok(v) => v,
         Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
     };
-    match iface_contacts_api_recipients__delete_contactdb_recipients_recipient_id_response__from_json(&v) {
+    match (&v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_contacts_api_recipients::DeleteContactdbRecipientsRecipientIdResponseEntry { key: k.clone(), value: val })).collect()) {
         Some(x) => Ok(x),
         None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
@@ -846,7 +852,7 @@ impl iface_contacts_api_recipients::Guest for crate::Component {
             Err(e) => Err(iface_contacts_api_recipients__patch_contactdb_recipients__err(e)),
         }
     }
-    fn delete_contactdb_recipients(params: iface_contacts_api_recipients::DeleteContactdbRecipientsParams) -> Result<iface_contacts_api_recipients::DeleteContactdbRecipientsResponse, iface_contacts_api_recipients::DeleteContactdbRecipientsError> {
+    fn delete_contactdb_recipients(params: iface_contacts_api_recipients::DeleteContactdbRecipientsParams) -> Result<Vec<iface_contacts_api_recipients::DeleteContactdbRecipientsResponseEntry>, iface_contacts_api_recipients::DeleteContactdbRecipientsError> {
         let json = iface_contacts_api_recipients__delete_contactdb_recipients_params__to_json(&params);
         match dispatch(&OP_CONTACTS_API_RECIPIENTS_DELETE_CONTACTDB_RECIPIENTS, json).and_then(iface_contacts_api_recipients__delete_contactdb_recipients__ok) {
             Ok(v) => Ok(v),
@@ -888,7 +894,7 @@ impl iface_contacts_api_recipients::Guest for crate::Component {
             Err(e) => Err(iface_contacts_api_recipients__get_contactdb_recipients_recipient_id__err(e)),
         }
     }
-    fn delete_contactdb_recipients_recipient_id(params: iface_contacts_api_recipients::DeleteContactdbRecipientsRecipientIdParams) -> Result<iface_contacts_api_recipients::DeleteContactdbRecipientsRecipientIdResponse, iface_contacts_api_recipients::DeleteContactdbRecipientsRecipientIdError> {
+    fn delete_contactdb_recipients_recipient_id(params: iface_contacts_api_recipients::DeleteContactdbRecipientsRecipientIdParams) -> Result<Vec<iface_contacts_api_recipients::DeleteContactdbRecipientsRecipientIdResponseEntry>, iface_contacts_api_recipients::DeleteContactdbRecipientsRecipientIdError> {
         let json = iface_contacts_api_recipients__delete_contactdb_recipients_recipient_id_params__to_json(&params);
         match dispatch(&OP_CONTACTS_API_RECIPIENTS_DELETE_CONTACTDB_RECIPIENTS_RECIPIENT_ID, json).and_then(iface_contacts_api_recipients__delete_contactdb_recipients_recipient_id__ok) {
             Ok(v) => Ok(v),

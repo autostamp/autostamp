@@ -11,8 +11,8 @@ triggered.
 
 | Setting | Value |
 | --- | --- |
-| Package | `autostamp:openfigi@0.5.0` |
-| Published version | `0.5.0+openfigi-1.4.0` |
+| Package | `autostamp:openfigi@0.6.0` |
+| Published version | `0.6.0+openfigi-1.4.0` |
 | Tag filter | all tags |
 | Operations generated | 2 |
 | Infer API-key credentials | enabled — not triggered |

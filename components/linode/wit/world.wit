@@ -6,7 +6,7 @@
 /// | Secret name | Applied to each request as |
 /// | --- | --- |
 /// | `personalAccessToken` | `Authorization: Bearer <secret>` |
-package autostamp:linode@0.5.0;
+package autostamp:linode@0.6.0;
 
 interface account {
   enum promotion-service-type-enum {
@@ -360,9 +360,10 @@ interface account {
     expiry-year: string
   }
 
-  record create-credit-card-response {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record create-credit-card-response-entry {
+    key: string,
+    value: string
   }
 
   record get-entity-transfers-response {
@@ -406,21 +407,23 @@ interface account {
     linodes: option<list<s32>>
   }
 
-  record delete-entity-transfer-response {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record delete-entity-transfer-response-entry {
+    key: string,
+    value: string
   }
 
-  record accept-entity-transfer-response {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record accept-entity-transfer-response-entry {
+    key: string,
+    value: string
   }
 
   record get-events-response {
     data: option<list<event>>,
-    page: option<pagination-envelope-properties-page>,
-    pages: option<pagination-envelope-properties-pages>,
-    results: option<pagination-envelope-properties-results>
+    page: option<s32>,
+    pages: option<s32>,
+    results: option<s32>
   }
 
   /// A collection of Event objects. An Event is an action taken against an entity related to your Account. For example, booting a Linode would create an Event.
@@ -484,39 +487,23 @@ interface account {
     url: option<string>
   }
 
-  /// The current [page](/docs/api/#pagination).
-  record pagination-envelope-properties-page {
-    /// opaque schema; raw JSON
+  /// one entry of a string-keyed map (free-form object)
+  record event-read-response-entry {
+    key: string,
     value: string
   }
 
-  /// The total number of [pages](/docs/api/#pagination).
-  record pagination-envelope-properties-pages {
-    /// opaque schema; raw JSON
+  /// one entry of a string-keyed map (free-form object)
+  record event-seen-response-entry {
+    key: string,
     value: string
-  }
-
-  /// The total number of results.
-  record pagination-envelope-properties-results {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
-  record event-read-response {
-    /// JSON-encoded free-form object payload
-    data: option<string>
-  }
-
-  record event-seen-response {
-    /// JSON-encoded free-form object payload
-    data: option<string>
   }
 
   record get-invoices-response {
     data: option<list<invoice>>,
-    page: option<pagination-envelope-properties-page>,
-    pages: option<pagination-envelope-properties-pages>,
-    results: option<pagination-envelope-properties-results>
+    page: option<s32>,
+    pages: option<s32>,
+    results: option<s32>
   }
 
   /// Account Invoice object
@@ -546,9 +533,9 @@ interface account {
 
   record get-invoice-items-response {
     data: option<list<invoice-item>>,
-    page: option<pagination-envelope-properties-page>,
-    pages: option<pagination-envelope-properties-pages>,
-    results: option<pagination-envelope-properties-results>
+    page: option<s32>,
+    pages: option<s32>,
+    results: option<s32>
   }
 
   /// An InvoiceItem object.
@@ -575,9 +562,9 @@ interface account {
 
   record get-account-logins-response {
     data: option<list<login>>,
-    page: option<pagination-envelope-properties-page>,
-    pages: option<pagination-envelope-properties-pages>,
-    results: option<pagination-envelope-properties-results>
+    page: option<s32>,
+    pages: option<s32>,
+    results: option<s32>
   }
 
   /// An object representing a previous successful login for a User.
@@ -598,9 +585,9 @@ interface account {
 
   record get-maintenance-response {
     data: option<list<maintenance>>,
-    page: option<pagination-envelope-properties-page>,
-    pages: option<pagination-envelope-properties-pages>,
-    results: option<pagination-envelope-properties-results>
+    page: option<s32>,
+    pages: option<s32>,
+    results: option<s32>
   }
 
   /// Information about maintenance affecting an entity.
@@ -633,9 +620,9 @@ interface account {
 
   record get-notifications-response {
     data: option<list<notification>>,
-    page: option<pagination-envelope-properties-page>,
-    pages: option<pagination-envelope-properties-pages>,
-    results: option<pagination-envelope-properties-results>
+    page: option<s32>,
+    pages: option<s32>,
+    results: option<s32>
   }
 
   /// An important, often time-sensitive item related to your Account.
@@ -672,9 +659,9 @@ interface account {
 
   record get-clients-response {
     data: option<list<o-auth-client>>,
-    page: option<pagination-envelope-properties-page>,
-    pages: option<pagination-envelope-properties-pages>,
-    results: option<pagination-envelope-properties-results>
+    page: option<s32>,
+    pages: option<s32>,
+    results: option<s32>
   }
 
   /// A third-party application registered to Linode that users may log into with their Linode account through our authentication server at <a target="_top" href="https://login.linode.com">https://login.linode.com</a>.  Using an OAuth Client, a third-party developer may be given access to some, or all, of a User's account for the purposes of their application.
@@ -695,21 +682,23 @@ interface account {
     thumbnail-url: option<string>
   }
 
-  record delete-client-response {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record delete-client-response-entry {
+    key: string,
+    value: string
   }
 
-  record set-client-thumbnail-response {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record set-client-thumbnail-response-entry {
+    key: string,
+    value: string
   }
 
   record get-payment-methods-response {
     data: option<list<payment-method>>,
-    page: option<pagination-envelope-properties-page>,
-    pages: option<pagination-envelope-properties-pages>,
-    results: option<pagination-envelope-properties-results>
+    page: option<s32>,
+    pages: option<s32>,
+    results: option<s32>
   }
 
   /// Payment Method Response Object.
@@ -725,32 +714,29 @@ interface account {
     type-op: option<payment-method-type-op-enum>
   }
 
-  /// Whether this Payment Method is the default method for automatically processing service charges.
-  record payment-method-properties-is-default {
-    /// opaque schema; raw JSON
+  /// one entry of a string-keyed map (free-form object)
+  record create-payment-method-response-entry {
+    key: string,
     value: string
   }
 
-  record create-payment-method-response {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record delete-payment-method-response-entry {
+    key: string,
+    value: string
   }
 
-  record delete-payment-method-response {
-    /// JSON-encoded free-form object payload
-    data: option<string>
-  }
-
-  record make-payment-method-default-response {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record make-payment-method-default-response-entry {
+    key: string,
+    value: string
   }
 
   record get-payments-response {
     data: option<list<payment>>,
-    page: option<pagination-envelope-properties-page>,
-    pages: option<pagination-envelope-properties-pages>,
-    results: option<pagination-envelope-properties-results>
+    page: option<s32>,
+    pages: option<s32>,
+    results: option<s32>
   }
 
   /// Payment object response.
@@ -770,16 +756,17 @@ interface account {
     payment-id: option<string>
   }
 
-  record execute-pay-pal-payment-response {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record execute-pay-pal-payment-response-entry {
+    key: string,
+    value: string
   }
 
   record get-service-transfers-response {
     data: option<list<service-transfer>>,
-    page: option<pagination-envelope-properties-page>,
-    pages: option<pagination-envelope-properties-pages>,
-    results: option<pagination-envelope-properties-results>
+    page: option<s32>,
+    pages: option<s32>,
+    results: option<s32>
   }
 
   /// An object representing a Service Transfer.
@@ -813,14 +800,16 @@ interface account {
     linodes: option<list<s32>>
   }
 
-  record delete-service-transfer-response {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record delete-service-transfer-response-entry {
+    key: string,
+    value: string
   }
 
-  record accept-service-transfer-response {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record accept-service-transfer-response-entry {
+    key: string,
+    value: string
   }
 
   /// Account Settings object
@@ -837,9 +826,10 @@ interface account {
     object-storage: option<settings-object-storage-enum>
   }
 
-  record enable-account-managed-response {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record enable-account-managed-response-entry {
+    key: string,
+    value: string
   }
 
   /// An object representing your network utilization for the current month, in Gigabytes.
@@ -854,9 +844,9 @@ interface account {
 
   record get-users-response {
     data: option<list<user>>,
-    page: option<pagination-envelope-properties-page>,
-    pages: option<pagination-envelope-properties-pages>,
-    results: option<pagination-envelope-properties-results>
+    page: option<s32>,
+    pages: option<s32>,
+    results: option<s32>
   }
 
   /// A User on your Account. Unrestricted users can log in and access information about your Account, while restricted users may only access entities or perform actions they've been granted access to.
@@ -874,9 +864,10 @@ interface account {
     username: option<string>
   }
 
-  record delete-user-response {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record delete-user-response-entry {
+    key: string,
+    value: string
   }
 
   /// A structure representing all grants a restricted User has on the Account. Not available for unrestricted users, as they have access to everything without grants. If retrieved from the `/profile/grants` endpoint, entities to which a User has no access will be omitted.
@@ -1013,7 +1004,7 @@ interface account {
     /// your credit card.
     expiry-year: string
   }
-  create-credit-card: func(params: create-credit-card-params) -> result<create-credit-card-response, string>;
+  create-credit-card: func(params: create-credit-card-params) -> result<list<create-credit-card-response-entry>, string>;
 
   /// Entity Transfers List
   record get-entity-transfers-params {
@@ -1042,14 +1033,14 @@ interface account {
     /// The UUID of the Entity Transfer.
     token: string
   }
-  delete-entity-transfer: func(params: delete-entity-transfer-params) -> result<delete-entity-transfer-response, string>;
+  delete-entity-transfer: func(params: delete-entity-transfer-params) -> result<list<delete-entity-transfer-response-entry>, string>;
 
   /// Entity Transfer Accept
   record accept-entity-transfer-params {
     /// The UUID of the Entity Transfer.
     token: string
   }
-  accept-entity-transfer: func(params: accept-entity-transfer-params) -> result<accept-entity-transfer-response, string>;
+  accept-entity-transfer: func(params: accept-entity-transfer-params) -> result<list<accept-entity-transfer-response-entry>, string>;
 
   /// Events List
   record get-events-params {
@@ -1072,14 +1063,14 @@ interface account {
     /// The ID of the Event to designate as read.
     event-id: string
   }
-  event-read: func(params: event-read-params) -> result<event-read-response, string>;
+  event-read: func(params: event-read-params) -> result<list<event-read-response-entry>, string>;
 
   /// Event Mark as Seen
   record event-seen-params {
     /// The ID of the Event to designate as seen.
     event-id: string
   }
-  event-seen: func(params: event-seen-params) -> result<event-seen-response, string>;
+  event-seen: func(params: event-seen-params) -> result<list<event-seen-response-entry>, string>;
 
   /// Invoices List
   record get-invoices-params {
@@ -1172,7 +1163,7 @@ interface account {
     /// The OAuth Client ID to look up.
     client-id: string
   }
-  delete-client: func(params: delete-client-params) -> result<delete-client-response, string>;
+  delete-client: func(params: delete-client-params) -> result<list<delete-client-response-entry>, string>;
 
   /// OAuth Client Secret Reset
   record reset-client-secret-params {
@@ -1194,7 +1185,7 @@ interface account {
     client-id: string,
     body: string
   }
-  set-client-thumbnail: func(params: set-client-thumbnail-params) -> result<set-client-thumbnail-response, string>;
+  set-client-thumbnail: func(params: set-client-thumbnail-params) -> result<list<set-client-thumbnail-response-entry>, string>;
 
   /// Payment Methods List
   record get-payment-methods-params {
@@ -1208,12 +1199,12 @@ interface account {
   /// Payment Method Add
   record create-payment-method-params {
     data: credit-card,
-    is-default: payment-method-properties-is-default,
+    is-default: bool,
     /// The type of Payment Method.
     /// 
     type-op: create-payment-method-body-type-op-enum
   }
-  create-payment-method: func(params: create-payment-method-params) -> result<create-payment-method-response, string>;
+  create-payment-method: func(params: create-payment-method-params) -> result<list<create-payment-method-response-entry>, string>;
 
   /// Payment Method View
   record get-payment-method-params {
@@ -1227,14 +1218,14 @@ interface account {
     /// The ID of the Payment Method to look up.
     payment-method-id: string
   }
-  delete-payment-method: func(params: delete-payment-method-params) -> result<delete-payment-method-response, string>;
+  delete-payment-method: func(params: delete-payment-method-params) -> result<list<delete-payment-method-response-entry>, string>;
 
   /// Payment Method Make Default
   record make-payment-method-default-params {
     /// The ID of the Payment Method to make default.
     payment-method-id: string
   }
-  make-payment-method-default: func(params: make-payment-method-default-params) -> result<make-payment-method-default-response, string>;
+  make-payment-method-default: func(params: make-payment-method-default-params) -> result<list<make-payment-method-default-response-entry>, string>;
 
   /// Payments List
   record get-payments-params {
@@ -1275,7 +1266,7 @@ interface account {
     /// The PaymentID returned from [POST /account/payments/paypal](/docs/api/account/#paypal-payment-stage) that has been approved with PayPal.
     payment-id: string
   }
-  execute-pay-pal-payment: func(params: execute-pay-pal-payment-params) -> result<execute-pay-pal-payment-response, string>;
+  execute-pay-pal-payment: func(params: execute-pay-pal-payment-params) -> result<list<execute-pay-pal-payment-response-entry>, string>;
 
   /// Payment View
   record get-payment-params {
@@ -1318,14 +1309,14 @@ interface account {
     /// The UUID of the Service Transfer.
     token: string
   }
-  delete-service-transfer: func(params: delete-service-transfer-params) -> result<delete-service-transfer-response, string>;
+  delete-service-transfer: func(params: delete-service-transfer-params) -> result<list<delete-service-transfer-response-entry>, string>;
 
   /// Service Transfer Accept
   record accept-service-transfer-params {
     /// The UUID of the Service Transfer.
     token: string
   }
-  accept-service-transfer: func(params: accept-service-transfer-params) -> result<accept-service-transfer-response, string>;
+  accept-service-transfer: func(params: accept-service-transfer-params) -> result<list<accept-service-transfer-response-entry>, string>;
 
   /// Account Settings View
   get-account-settings: func() -> result<settings, string>;
@@ -1346,7 +1337,7 @@ interface account {
   update-account-settings: func(params: update-account-settings-params) -> result<settings, string>;
 
   /// Linode Managed Enable
-  enable-account-managed: func() -> result<enable-account-managed-response, string>;
+  enable-account-managed: func() -> result<list<enable-account-managed-response-entry>, string>;
 
   /// Network Utilization View
   get-transfer: func() -> result<transfer, string>;
@@ -1396,7 +1387,7 @@ interface account {
     /// The username to look up.
     username: string
   }
-  delete-user: func(params: delete-user-params) -> result<delete-user-response, string>;
+  delete-user: func(params: delete-user-params) -> result<list<delete-user-response-entry>, string>;
 
   /// User's Grants View
   record get-user-grants-params {
@@ -1464,6 +1455,19 @@ interface databases {
     zlip,
   }
 
+  enum database-properties-status {
+    provisioning,
+    active,
+    suspending,
+    suspended,
+    resuming,
+    restoring,
+    failed,
+    degraded,
+    updating,
+    backing-up,
+  }
+
   enum database-mongo-db-storage-engine-enum {
     mmapv1,
     wiredtiger,
@@ -1485,12 +1489,32 @@ interface databases {
     semi-synch,
   }
 
+  enum database-my-sql-properties-replication-type {
+    none,
+    asynch,
+    semi-synch,
+  }
+
   enum database-postgre-sql-replication-commit-type-enum {
     on,
     local,
     remote-write,
     remote-apply,
     off,
+  }
+
+  enum database-postgre-sql-properties-replication-commit-type {
+    on,
+    local,
+    remote-write,
+    remote-apply,
+    off,
+  }
+
+  enum database-postgre-sql-properties-replication-type {
+    none,
+    asynch,
+    semi-synch,
   }
 
   record get-databases-engines-response {
@@ -1595,24 +1619,24 @@ interface databases {
 
   /// Managed MongoDB Databases object.
   record database-mongo-db {
-    allow-list: option<database-properties-allow-list>,
-    cluster-size: option<database-properties-cluster-size>,
+    allow-list: option<list<string>>,
+    cluster-size: option<s32>,
     /// The type of data compression for this Database.
     /// 
     compression-type: option<database-mongo-db-compression-type-enum>,
-    created: option<database-properties-created>,
-    encrypted: option<database-properties-encrypted>,
+    created: option<string>,
+    encrypted: option<bool>,
     /// The Managed Database engine type.
     engine: option<string>,
     /// The primary and secondary hosts for the Managed Database. These are assigned after provisioning is complete.
     hosts: option<database-mongo-db-hosts>,
-    id: option<database-properties-id>,
-    label: option<database-properties-label>,
+    id: option<s32>,
+    label: option<string>,
     /// An array of peer addresses for this Database.
     peers: option<list<string>>,
     /// The access port for this Managed Database.
     port: option<s32>,
-    region: option<database-properties-region>,
+    region: option<string>,
     /// Label for configuring a MongoDB [replica set](https://www.mongodb.com/docs/manual/replication/). Choose the same label on multiple Databases to include them in the same replica set.
     /// 
     replica-set: option<string>,
@@ -1623,41 +1647,11 @@ interface databases {
     /// The type of storage engine for this Database.
     /// 
     storage-engine: option<database-mongo-db-storage-engine-enum>,
-    type-op: option<database-properties-type>,
-    updated: option<database-properties-updated>,
+    type-op: option<string>,
+    updated: option<string>,
     updates: option<database-properties-updates>,
     /// The Managed Database engine version.
     version: option<string>
-  }
-
-  /// A list of IP addresses that can access the Managed Database. Each item can be a single IP address or a range in CIDR format.
-  /// 
-  /// By default, this is an empty array (`[]`), which blocks all connections (both public and private) to the Managed Database.
-  /// 
-  /// If `0.0.0.0/0` is a value in this list, then all IP addresses can access the Managed Database.
-  record database-properties-allow-list {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
-  /// The number of Linode Instance nodes deployed to the Managed Database.
-  /// 
-  /// Choosing 3 nodes creates a high availability cluster consisting of 1 primary node and 2 replica nodes.
-  record database-properties-cluster-size {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
-  /// When this Managed Database was created.
-  record database-properties-created {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
-  /// Whether the Managed Databases is encrypted.
-  record database-properties-encrypted {
-    /// opaque schema; raw JSON
-    value: string
   }
 
   /// The primary and secondary hosts for the Managed Database. These are assigned after provisioning is complete.
@@ -1667,42 +1661,6 @@ interface databases {
     /// The secondary/private network host for the Managed Database.
     /// 
     secondary: option<string>
-  }
-
-  /// A unique ID that can be used to identify and reference the Managed Database.
-  record database-properties-id {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
-  /// A unique, user-defined string referring to the Managed Database.
-  record database-properties-label {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
-  /// The [Region](/docs/api/regions/) ID for the Managed Database.
-  record database-properties-region {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
-  /// The operating status of the Managed Database.
-  record database-properties-status {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
-  /// The Linode Instance type used by the Managed Database for its nodes.
-  record database-properties-type {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
-  /// When this Managed Database was last updated.
-  record database-properties-updated {
-    /// opaque schema; raw JSON
-    value: string
   }
 
   /// Configuration settings for automated patch update maintenance for the Managed Database.
@@ -1720,22 +1678,6 @@ interface databases {
     week-of-month: option<s32>
   }
 
-  /// A list of IP addresses that can access the Managed Database. Each item can be a single IP address or a range in CIDR format.
-  /// 
-  /// By default, this is an empty array (`[]`), which blocks all connections (both public and private) to the Managed Database.
-  /// 
-  /// If `0.0.0.0/0` is a value in this list, then all IP addresses can access the Managed Database.
-  record database-mongo-db-request-properties-allow-list {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
-  /// A unique, user-defined string referring to the Managed Database.
-  record database-mongo-db-request-properties-label {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
   /// Configuration settings for automated patch update maintenance for the Managed Database.
   record database-mongo-db-properties-updates {
     /// The day to perform maintenance. 1=Monday, 2=Tuesday, etc.
@@ -1751,9 +1693,10 @@ interface databases {
     week-of-month: option<s32>
   }
 
-  record delete-databases-mongo-db-instance-response {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record delete-databases-mongo-db-instance-response-entry {
+    key: string,
+    value: string
   }
 
   record get-databases-mongo-db-instance-backups-response {
@@ -1779,19 +1722,22 @@ interface databases {
     type-op: option<database-backup-type-op-enum>
   }
 
-  record post-databases-mongo-db-instance-backup-response {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record post-databases-mongo-db-instance-backup-response-entry {
+    key: string,
+    value: string
   }
 
-  record delete-database-mongo-db-instance-backup-response {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record delete-database-mongo-db-instance-backup-response-entry {
+    key: string,
+    value: string
   }
 
-  record post-databases-mongo-db-instance-backup-restore-response {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record post-databases-mongo-db-instance-backup-restore-response-entry {
+    key: string,
+    value: string
   }
 
   /// Managed Database object for database credentials.
@@ -1802,14 +1748,16 @@ interface databases {
     username: option<string>
   }
 
-  record post-databases-mongo-db-instance-credentials-reset-response {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record post-databases-mongo-db-instance-credentials-reset-response-entry {
+    key: string,
+    value: string
   }
 
-  record post-databases-mongo-db-instance-patch-response {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record post-databases-mongo-db-instance-patch-response-entry {
+    key: string,
+    value: string
   }
 
   /// Managed Database SSL object.
@@ -1830,18 +1778,18 @@ interface databases {
 
   /// Managed MySQL Databases object.
   record database-my-sql {
-    allow-list: option<database-properties-allow-list>,
-    cluster-size: option<database-properties-cluster-size>,
-    created: option<database-properties-created>,
-    encrypted: option<database-properties-encrypted>,
+    allow-list: option<list<string>>,
+    cluster-size: option<s32>,
+    created: option<string>,
+    encrypted: option<bool>,
     /// The Managed Database engine type.
     engine: option<string>,
     hosts: option<database-properties-hosts>,
-    id: option<database-properties-id>,
-    label: option<database-properties-label>,
+    id: option<s32>,
+    label: option<string>,
     /// The access port for this Managed Database.
     port: option<s32>,
-    region: option<database-properties-region>,
+    region: option<string>,
     /// The replication method used for the Managed Database.
     /// 
     replication-type: option<database-my-sql-replication-type-enum>,
@@ -1849,8 +1797,8 @@ interface databases {
     /// 
     ssl-connection: option<bool>,
     status: option<database-properties-status>,
-    type-op: option<database-properties-type>,
-    updated: option<database-properties-updated>,
+    type-op: option<string>,
+    updated: option<string>,
     updates: option<database-properties-updates>,
     /// The Managed Database engine version.
     version: option<string>
@@ -1863,84 +1811,6 @@ interface databases {
     /// The secondary/private network host for the Managed Database.
     /// 
     secondary: option<string>
-  }
-
-  /// A list of IP addresses that can access the Managed Database. Each item can be a single IP address or a range in CIDR format.
-  /// 
-  /// By default, this is an empty array (`[]`), which blocks all connections (both public and private) to the Managed Database.
-  /// 
-  /// If `0.0.0.0/0` is a value in this list, then all IP addresses can access the Managed Database.
-  record database-my-sql-properties-allow-list {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
-  /// The number of Linode Instance nodes deployed to the Managed Database.
-  /// 
-  /// Choosing 3 nodes creates a high availability cluster consisting of 1 primary node and 2 replica nodes.
-  record database-my-sql-properties-cluster-size {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
-  /// Whether the Managed Databases is encrypted.
-  record database-my-sql-properties-encrypted {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
-  /// A unique, user-defined string referring to the Managed Database.
-  record database-my-sql-properties-label {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
-  /// The [Region](/docs/api/regions/) ID for the Managed Database.
-  record database-my-sql-properties-region {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
-  /// The replication method used for the Managed Database.
-  /// 
-  /// Defaults to `none` for a single cluster and `semi_synch` for a high availability cluster.
-  /// 
-  /// Must be `none` for a single node cluster.
-  /// 
-  /// Must be `asynch` or `semi_synch` for a high availability cluster.
-  record database-my-sql-properties-replication-type {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
-  /// Whether to require SSL credentials to establish a connection to the Managed Database.
-  /// 
-  /// Use the **Managed MySQL Database Credentials View** ([GET /databases/mysql/instances/{instanceId}/credentials](/docs/api/databases/#managed-mysql-database-credentials-view)) command for access information.
-  record database-my-sql-properties-ssl-connection {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
-  /// The Linode Instance type used by the Managed Database for its nodes.
-  record database-my-sql-properties-type {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
-  /// A list of IP addresses that can access the Managed Database. Each item can be a single IP address or a range in CIDR format.
-  /// 
-  /// By default, this is an empty array (`[]`), which blocks all connections (both public and private) to the Managed Database.
-  /// 
-  /// If `0.0.0.0/0` is a value in this list, then all IP addresses can access the Managed Database.
-  record database-my-sql-request-properties-allow-list {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
-  /// A unique, user-defined string referring to the Managed Database.
-  record database-my-sql-request-properties-label {
-    /// opaque schema; raw JSON
-    value: string
   }
 
   /// Configuration settings for automated patch update maintenance for the Managed Database.
@@ -1958,9 +1828,10 @@ interface databases {
     week-of-month: option<s32>
   }
 
-  record delete-databases-my-sql-instance-response {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record delete-databases-my-sql-instance-response-entry {
+    key: string,
+    value: string
   }
 
   record get-databases-my-sql-instance-backups-response {
@@ -1973,29 +1844,34 @@ interface databases {
     data: option<list<database-backup>>
   }
 
-  record post-databases-my-sql-instance-backup-response {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record post-databases-my-sql-instance-backup-response-entry {
+    key: string,
+    value: string
   }
 
-  record delete-database-my-sql-instance-backup-response {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record delete-database-my-sql-instance-backup-response-entry {
+    key: string,
+    value: string
   }
 
-  record post-databases-my-sql-instance-backup-restore-response {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record post-databases-my-sql-instance-backup-restore-response-entry {
+    key: string,
+    value: string
   }
 
-  record post-databases-my-sql-instance-credentials-reset-response {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record post-databases-my-sql-instance-credentials-reset-response-entry {
+    key: string,
+    value: string
   }
 
-  record post-databases-my-sql-instance-patch-response {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record post-databases-my-sql-instance-patch-response-entry {
+    key: string,
+    value: string
   }
 
   record get-databases-postgre-sql-instances-response {
@@ -2010,19 +1886,19 @@ interface databases {
 
   /// Managed PostgreSQL Databases object.
   record database-postgre-sql {
-    allow-list: option<database-properties-allow-list>,
-    cluster-size: option<database-properties-cluster-size>,
-    created: option<database-properties-created>,
-    encrypted: option<database-properties-encrypted>,
+    allow-list: option<list<string>>,
+    cluster-size: option<s32>,
+    created: option<string>,
+    encrypted: option<bool>,
     /// The Managed Database engine type.
     engine: option<string>,
     /// The primary and secondary hosts for the Managed Database. These are assigned after provisioning is complete.
     hosts: option<database-postgre-sql-hosts>,
-    id: option<database-properties-id>,
-    label: option<database-properties-label>,
+    id: option<s32>,
+    label: option<string>,
     /// The access port for this Managed Database.
     port: option<s32>,
-    region: option<database-properties-region>,
+    region: option<string>,
     /// The synchronization level of the replicating server.
     /// 
     replication-commit-type: option<database-postgre-sql-replication-commit-type-enum>,
@@ -2033,8 +1909,8 @@ interface databases {
     /// 
     ssl-connection: option<bool>,
     status: option<database-properties-status>,
-    type-op: option<database-properties-type>,
-    updated: option<database-properties-updated>,
+    type-op: option<string>,
+    updated: option<string>,
     updates: option<database-properties-updates>,
     /// The Managed Database engine version.
     version: option<string>
@@ -2047,94 +1923,6 @@ interface databases {
     /// The secondary/private network host for the Managed Database.
     /// 
     secondary: option<string>
-  }
-
-  /// A list of IP addresses that can access the Managed Database. Each item can be a single IP address or a range in CIDR format.
-  /// 
-  /// By default, this is an empty array (`[]`), which blocks all connections (both public and private) to the Managed Database.
-  /// 
-  /// If `0.0.0.0/0` is a value in this list, then all IP addresses can access the Managed Database.
-  record database-postgre-sql-properties-allow-list {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
-  /// The number of Linode Instance nodes deployed to the Managed Database.
-  /// 
-  /// Choosing 3 nodes creates a high availability cluster consisting of 1 primary node and 2 replica nodes.
-  record database-postgre-sql-properties-cluster-size {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
-  /// Whether the Managed Databases is encrypted.
-  record database-postgre-sql-properties-encrypted {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
-  /// A unique, user-defined string referring to the Managed Database.
-  record database-postgre-sql-properties-label {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
-  /// The [Region](/docs/api/regions/) ID for the Managed Database.
-  record database-postgre-sql-properties-region {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
-  /// The synchronization level of the replicating server.
-  /// 
-  /// Must be `local` or `off` for the `asynch` replication type.
-  /// 
-  /// Must be `on`, `remote_write`, or `remote_apply` for the `semi_synch` replication type.
-  record database-postgre-sql-properties-replication-commit-type {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
-  /// The replication method used for the Managed Database.
-  /// 
-  /// Defaults to `none` for a single cluster and `semi_synch` for a high availability cluster.
-  /// 
-  /// Must be `none` for a single node cluster.
-  /// 
-  /// Must be `asynch` or `semi_synch` for a high availability cluster.
-  record database-postgre-sql-properties-replication-type {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
-  /// Whether to require SSL credentials to establish a connection to the Managed Database.
-  /// 
-  /// Use the **Managed PostgreSQL Database Credentials View** ([GET /databases/postgresql/instances/{instanceId}/credentials](/docs/api/databases/#managed-postgresql-database-credentials-view)) command for access information.
-  record database-postgre-sql-properties-ssl-connection {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
-  /// The Linode Instance type used by the Managed Database for its nodes.
-  record database-postgre-sql-properties-type {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
-  /// A list of IP addresses that can access the Managed Database. Each item can be a single IP address or a range in CIDR format.
-  /// 
-  /// By default, this is an empty array (`[]`), which blocks all connections (both public and private) to the Managed Database.
-  /// 
-  /// If `0.0.0.0/0` is a value in this list, then all IP addresses can access the Managed Database.
-  record database-postgre-sql-request-properties-allow-list {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
-  /// A unique, user-defined string referring to the Managed Database.
-  record database-postgre-sql-request-properties-label {
-    /// opaque schema; raw JSON
-    value: string
   }
 
   /// Configuration settings for automated patch update maintenance for the Managed Database.
@@ -2152,9 +1940,10 @@ interface databases {
     week-of-month: option<s32>
   }
 
-  record delete-databases-postgre-sql-instance-response {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record delete-databases-postgre-sql-instance-response-entry {
+    key: string,
+    value: string
   }
 
   record get-databases-postgre-sql-instance-backups-response {
@@ -2167,29 +1956,34 @@ interface databases {
     data: option<list<database-backup>>
   }
 
-  record post-databases-postgre-sql-instance-backup-response {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record post-databases-postgre-sql-instance-backup-response-entry {
+    key: string,
+    value: string
   }
 
-  record delete-database-postgre-sql-instance-backup-response {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record delete-database-postgre-sql-instance-backup-response-entry {
+    key: string,
+    value: string
   }
 
-  record post-databases-postgre-sql-instance-backup-restore-response {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record post-databases-postgre-sql-instance-backup-restore-response-entry {
+    key: string,
+    value: string
   }
 
-  record post-databases-postgre-sql-instance-credentials-reset-response {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record post-databases-postgre-sql-instance-credentials-reset-response-entry {
+    key: string,
+    value: string
   }
 
-  record post-databases-postgre-sql-instance-patch-response {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record post-databases-postgre-sql-instance-patch-response-entry {
+    key: string,
+    value: string
   }
 
   record get-databases-types-response {
@@ -2294,8 +2088,8 @@ interface databases {
   record put-databases-mongo-db-instance-params {
     /// The ID of the Managed MongoDB Database.
     instance-id: string,
-    allow-list: option<database-mongo-db-request-properties-allow-list>,
-    label: option<database-mongo-db-request-properties-label>,
+    allow-list: option<list<string>>,
+    label: option<string>,
     updates: option<database-mongo-db-properties-updates>
   }
   put-databases-mongo-db-instance: func(params: put-databases-mongo-db-instance-params) -> result<database-mongo-db, string>;
@@ -2305,7 +2099,7 @@ interface databases {
     /// The ID of the Managed MongoDB Database.
     instance-id: string
   }
-  delete-databases-mongo-db-instance: func(params: delete-databases-mongo-db-instance-params) -> result<delete-databases-mongo-db-instance-response, string>;
+  delete-databases-mongo-db-instance: func(params: delete-databases-mongo-db-instance-params) -> result<list<delete-databases-mongo-db-instance-response-entry>, string>;
 
   /// Managed MongoDB Database Backups List
   record get-databases-mongo-db-instance-backups-params {
@@ -2329,7 +2123,7 @@ interface databases {
     /// If the Database is a high availability cluster, choosing `secondary` creates a snapshot backup of a replica node.
     target: option<database-backup-snapshot-target-enum>
   }
-  post-databases-mongo-db-instance-backup: func(params: post-databases-mongo-db-instance-backup-params) -> result<post-databases-mongo-db-instance-backup-response, string>;
+  post-databases-mongo-db-instance-backup: func(params: post-databases-mongo-db-instance-backup-params) -> result<list<post-databases-mongo-db-instance-backup-response-entry>, string>;
 
   /// Managed MongoDB Database Backup View
   record get-databases-mongo-db-instance-backup-params {
@@ -2347,7 +2141,7 @@ interface databases {
     /// The ID of the Managed MongoDB Database backup.
     backup-id: string
   }
-  delete-database-mongo-db-instance-backup: func(params: delete-database-mongo-db-instance-backup-params) -> result<delete-database-mongo-db-instance-backup-response, string>;
+  delete-database-mongo-db-instance-backup: func(params: delete-database-mongo-db-instance-backup-params) -> result<list<delete-database-mongo-db-instance-backup-response-entry>, string>;
 
   /// Managed MongoDB Database Backup Restore
   record post-databases-mongo-db-instance-backup-restore-params {
@@ -2356,7 +2150,7 @@ interface databases {
     /// The ID of the Managed MongoDB Database backup.
     backup-id: string
   }
-  post-databases-mongo-db-instance-backup-restore: func(params: post-databases-mongo-db-instance-backup-restore-params) -> result<post-databases-mongo-db-instance-backup-restore-response, string>;
+  post-databases-mongo-db-instance-backup-restore: func(params: post-databases-mongo-db-instance-backup-restore-params) -> result<list<post-databases-mongo-db-instance-backup-restore-response-entry>, string>;
 
   /// Managed MongoDB Database Credentials View
   record get-databases-mongo-db-instance-credentials-params {
@@ -2370,14 +2164,14 @@ interface databases {
     /// The ID of the Managed MongoDB Database.
     instance-id: string
   }
-  post-databases-mongo-db-instance-credentials-reset: func(params: post-databases-mongo-db-instance-credentials-reset-params) -> result<post-databases-mongo-db-instance-credentials-reset-response, string>;
+  post-databases-mongo-db-instance-credentials-reset: func(params: post-databases-mongo-db-instance-credentials-reset-params) -> result<list<post-databases-mongo-db-instance-credentials-reset-response-entry>, string>;
 
   /// Managed MongoDB Database Patch
   record post-databases-mongo-db-instance-patch-params {
     /// The ID of the Managed MongoDB Database.
     instance-id: string
   }
-  post-databases-mongo-db-instance-patch: func(params: post-databases-mongo-db-instance-patch-params) -> result<post-databases-mongo-db-instance-patch-response, string>;
+  post-databases-mongo-db-instance-patch: func(params: post-databases-mongo-db-instance-patch-params) -> result<list<post-databases-mongo-db-instance-patch-response-entry>, string>;
 
   /// Managed MongoDB Database SSL Certificate View
   record get-databases-mongo-db-instance-ssl-params {
@@ -2397,16 +2191,16 @@ interface databases {
 
   /// Managed MySQL Database Create
   record post-databases-my-sql-instances-params {
-    allow-list: option<database-my-sql-properties-allow-list>,
-    cluster-size: option<database-my-sql-properties-cluster-size>,
-    encrypted: option<database-my-sql-properties-encrypted>,
+    allow-list: option<list<string>>,
+    cluster-size: option<s32>,
+    encrypted: option<bool>,
     /// The Managed Database engine in engine/version format.
     engine: string,
-    label: database-my-sql-properties-label,
-    region: database-my-sql-properties-region,
+    label: string,
+    region: string,
     replication-type: option<database-my-sql-properties-replication-type>,
-    ssl-connection: option<database-my-sql-properties-ssl-connection>,
-    type-op: database-my-sql-properties-type
+    ssl-connection: option<bool>,
+    type-op: string
   }
   post-databases-my-sql-instances: func(params: post-databases-my-sql-instances-params) -> result<database-my-sql, string>;
 
@@ -2421,8 +2215,8 @@ interface databases {
   record put-databases-my-sql-instance-params {
     /// The ID of the Managed MySQL Database.
     instance-id: string,
-    allow-list: option<database-my-sql-request-properties-allow-list>,
-    label: option<database-my-sql-request-properties-label>,
+    allow-list: option<list<string>>,
+    label: option<string>,
     updates: option<database-my-sql-properties-updates>
   }
   put-databases-my-sql-instance: func(params: put-databases-my-sql-instance-params) -> result<database-my-sql, string>;
@@ -2432,7 +2226,7 @@ interface databases {
     /// The ID of the Managed MySQL Database.
     instance-id: string
   }
-  delete-databases-my-sql-instance: func(params: delete-databases-my-sql-instance-params) -> result<delete-databases-my-sql-instance-response, string>;
+  delete-databases-my-sql-instance: func(params: delete-databases-my-sql-instance-params) -> result<list<delete-databases-my-sql-instance-response-entry>, string>;
 
   /// Managed MySQL Database Backups List
   record get-databases-my-sql-instance-backups-params {
@@ -2456,7 +2250,7 @@ interface databases {
     /// If the Database is a high availability cluster, choosing `secondary` creates a snapshot backup of a replica node.
     target: option<database-backup-snapshot-target-enum>
   }
-  post-databases-my-sql-instance-backup: func(params: post-databases-my-sql-instance-backup-params) -> result<post-databases-my-sql-instance-backup-response, string>;
+  post-databases-my-sql-instance-backup: func(params: post-databases-my-sql-instance-backup-params) -> result<list<post-databases-my-sql-instance-backup-response-entry>, string>;
 
   /// Managed MySQL Database Backup View
   record get-databases-my-sql-instance-backup-params {
@@ -2474,7 +2268,7 @@ interface databases {
     /// The ID of the Managed MySQL Database backup.
     backup-id: string
   }
-  delete-database-my-sql-instance-backup: func(params: delete-database-my-sql-instance-backup-params) -> result<delete-database-my-sql-instance-backup-response, string>;
+  delete-database-my-sql-instance-backup: func(params: delete-database-my-sql-instance-backup-params) -> result<list<delete-database-my-sql-instance-backup-response-entry>, string>;
 
   /// Managed MySQL Database Backup Restore
   record post-databases-my-sql-instance-backup-restore-params {
@@ -2483,7 +2277,7 @@ interface databases {
     /// The ID of the Managed MySQL Database backup.
     backup-id: string
   }
-  post-databases-my-sql-instance-backup-restore: func(params: post-databases-my-sql-instance-backup-restore-params) -> result<post-databases-my-sql-instance-backup-restore-response, string>;
+  post-databases-my-sql-instance-backup-restore: func(params: post-databases-my-sql-instance-backup-restore-params) -> result<list<post-databases-my-sql-instance-backup-restore-response-entry>, string>;
 
   /// Managed MySQL Database Credentials View
   record get-databases-my-sql-instance-credentials-params {
@@ -2497,14 +2291,14 @@ interface databases {
     /// The ID of the Managed MySQL Database.
     instance-id: string
   }
-  post-databases-my-sql-instance-credentials-reset: func(params: post-databases-my-sql-instance-credentials-reset-params) -> result<post-databases-my-sql-instance-credentials-reset-response, string>;
+  post-databases-my-sql-instance-credentials-reset: func(params: post-databases-my-sql-instance-credentials-reset-params) -> result<list<post-databases-my-sql-instance-credentials-reset-response-entry>, string>;
 
   /// Managed MySQL Database Patch
   record post-databases-my-sql-instance-patch-params {
     /// The ID of the Managed MySQL Database.
     instance-id: string
   }
-  post-databases-my-sql-instance-patch: func(params: post-databases-my-sql-instance-patch-params) -> result<post-databases-my-sql-instance-patch-response, string>;
+  post-databases-my-sql-instance-patch: func(params: post-databases-my-sql-instance-patch-params) -> result<list<post-databases-my-sql-instance-patch-response-entry>, string>;
 
   /// Managed MySQL Database SSL Certificate View
   record get-databases-my-sql-instance-ssl-params {
@@ -2524,17 +2318,17 @@ interface databases {
 
   /// Managed PostgreSQL Database Create
   record post-databases-postgre-sql-instances-params {
-    allow-list: option<database-postgre-sql-properties-allow-list>,
-    cluster-size: option<database-postgre-sql-properties-cluster-size>,
-    encrypted: option<database-postgre-sql-properties-encrypted>,
+    allow-list: option<list<string>>,
+    cluster-size: option<s32>,
+    encrypted: option<bool>,
     /// The Managed Database engine in engine/version format.
     engine: string,
-    label: database-postgre-sql-properties-label,
-    region: database-postgre-sql-properties-region,
+    label: string,
+    region: string,
     replication-commit-type: option<database-postgre-sql-properties-replication-commit-type>,
     replication-type: option<database-postgre-sql-properties-replication-type>,
-    ssl-connection: option<database-postgre-sql-properties-ssl-connection>,
-    type-op: database-postgre-sql-properties-type
+    ssl-connection: option<bool>,
+    type-op: string
   }
   post-databases-postgre-sql-instances: func(params: post-databases-postgre-sql-instances-params) -> result<database-postgre-sql, string>;
 
@@ -2549,8 +2343,8 @@ interface databases {
   record put-databases-postgre-sql-instance-params {
     /// The ID of the Managed PostgreSQL Database.
     instance-id: string,
-    allow-list: option<database-postgre-sql-request-properties-allow-list>,
-    label: option<database-postgre-sql-request-properties-label>,
+    allow-list: option<list<string>>,
+    label: option<string>,
     updates: option<database-postgre-sql-properties-updates>
   }
   put-databases-postgre-sql-instance: func(params: put-databases-postgre-sql-instance-params) -> result<database-postgre-sql, string>;
@@ -2560,7 +2354,7 @@ interface databases {
     /// The ID of the Managed PostgreSQL Database.
     instance-id: string
   }
-  delete-databases-postgre-sql-instance: func(params: delete-databases-postgre-sql-instance-params) -> result<delete-databases-postgre-sql-instance-response, string>;
+  delete-databases-postgre-sql-instance: func(params: delete-databases-postgre-sql-instance-params) -> result<list<delete-databases-postgre-sql-instance-response-entry>, string>;
 
   /// Managed PostgreSQL Database Backups List
   record get-databases-postgre-sql-instance-backups-params {
@@ -2584,7 +2378,7 @@ interface databases {
     /// If the Database is a high availability cluster, choosing `secondary` creates a snapshot backup of a replica node.
     target: option<database-backup-snapshot-target-enum>
   }
-  post-databases-postgre-sql-instance-backup: func(params: post-databases-postgre-sql-instance-backup-params) -> result<post-databases-postgre-sql-instance-backup-response, string>;
+  post-databases-postgre-sql-instance-backup: func(params: post-databases-postgre-sql-instance-backup-params) -> result<list<post-databases-postgre-sql-instance-backup-response-entry>, string>;
 
   /// Managed PostgreSQL Database Backup View
   record get-databases-postgre-sql-instance-backup-params {
@@ -2602,7 +2396,7 @@ interface databases {
     /// The ID of the Managed PostgreSQL Database backup.
     backup-id: string
   }
-  delete-database-postgre-sql-instance-backup: func(params: delete-database-postgre-sql-instance-backup-params) -> result<delete-database-postgre-sql-instance-backup-response, string>;
+  delete-database-postgre-sql-instance-backup: func(params: delete-database-postgre-sql-instance-backup-params) -> result<list<delete-database-postgre-sql-instance-backup-response-entry>, string>;
 
   /// Managed PostgreSQL Database Backup Restore
   record post-databases-postgre-sql-instance-backup-restore-params {
@@ -2611,7 +2405,7 @@ interface databases {
     /// The ID of the Managed PostgreSQL Database backup.
     backup-id: string
   }
-  post-databases-postgre-sql-instance-backup-restore: func(params: post-databases-postgre-sql-instance-backup-restore-params) -> result<post-databases-postgre-sql-instance-backup-restore-response, string>;
+  post-databases-postgre-sql-instance-backup-restore: func(params: post-databases-postgre-sql-instance-backup-restore-params) -> result<list<post-databases-postgre-sql-instance-backup-restore-response-entry>, string>;
 
   /// Managed PostgreSQL Database Credentials View
   record get-databases-postgre-sql-instance-credentials-params {
@@ -2625,14 +2419,14 @@ interface databases {
     /// The ID of the Managed PostgreSQL Database.
     instance-id: string
   }
-  post-databases-postgre-sql-instance-credentials-reset: func(params: post-databases-postgre-sql-instance-credentials-reset-params) -> result<post-databases-postgre-sql-instance-credentials-reset-response, string>;
+  post-databases-postgre-sql-instance-credentials-reset: func(params: post-databases-postgre-sql-instance-credentials-reset-params) -> result<list<post-databases-postgre-sql-instance-credentials-reset-response-entry>, string>;
 
   /// Managed PostgreSQL Database Patch
   record post-databases-postgre-sql-instance-patch-params {
     /// The ID of the Managed PostgreSQL Database.
     instance-id: string
   }
-  post-databases-postgre-sql-instance-patch: func(params: post-databases-postgre-sql-instance-patch-params) -> result<post-databases-postgre-sql-instance-patch-response, string>;
+  post-databases-postgre-sql-instance-patch: func(params: post-databases-postgre-sql-instance-patch-params) -> result<list<post-databases-postgre-sql-instance-patch-response-entry>, string>;
 
   /// Managed PostgreSQL Database SSL Certificate View
   record get-databases-postgre-sql-instance-ssl-params {
@@ -2692,11 +2486,17 @@ interface domains {
     caa,
   }
 
+  enum domain-record-properties-tag {
+    issue,
+    issuewild,
+    iodef,
+  }
+
   record get-domains-response {
     data: option<list<domain>>,
-    page: option<pagination-envelope-properties-page>,
-    pages: option<pagination-envelope-properties-pages>,
-    results: option<pagination-envelope-properties-results>
+    page: option<s32>,
+    pages: option<s32>,
+    results: option<s32>
   }
 
   /// A domain zonefile in our DNS system.  You must own the domain name and tell your registrar to use Linode's nameservers in order for a domain in our system to be treated as authoritative.
@@ -2736,34 +2536,17 @@ interface domains {
     type-op: option<domain-type-op-enum>
   }
 
-  /// The current [page](/docs/api/#pagination).
-  record pagination-envelope-properties-page {
-    /// opaque schema; raw JSON
+  /// one entry of a string-keyed map (free-form object)
+  record delete-domain-response-entry {
+    key: string,
     value: string
-  }
-
-  /// The total number of [pages](/docs/api/#pagination).
-  record pagination-envelope-properties-pages {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
-  /// The total number of results.
-  record pagination-envelope-properties-results {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
-  record delete-domain-response {
-    /// JSON-encoded free-form object payload
-    data: option<string>
   }
 
   record get-domain-records-response {
     data: option<list<domain-record>>,
-    page: option<pagination-envelope-properties-page>,
-    pages: option<pagination-envelope-properties-pages>,
-    results: option<pagination-envelope-properties-results>
+    page: option<s32>,
+    pages: option<s32>,
+    results: option<s32>
   }
 
   /// A single record on a Domain.
@@ -2799,115 +2582,10 @@ interface domains {
     weight: option<s32>
   }
 
-  /// The name of this Record. For requests, this property's actual usage and whether it is required depends
-  /// on the type of record this represents:
-  /// 
-  /// `A` and `AAAA`: The hostname or FQDN of the Record.
-  /// 
-  /// `NS`: The subdomain, if any, to use with the Domain of the Record. Wildcard NS records (`*`) are not supported.
-  /// 
-  /// `MX`: The mail subdomain. For example, `sub` for the address `user@sub.example.com` under the `example.com`
-  /// Domain. Must be an empty string (`""`) for a Null MX Record.
-  /// 
-  /// `CNAME`: The hostname. Must be unique. Required.
-  /// 
-  /// `TXT`: The hostname.
-  /// 
-  /// `SRV`: Unused. Use the `service` property to set the service name for this record.
-  /// 
-  /// `CAA`: The subdomain. Omit or enter an empty string (`""`) to apply to the entire Domain.
-  /// 
-  /// `PTR`: See our guide on how to [Configure Your Linode for Reverse DNS
-  /// (rDNS)](/docs/guides/configure-rdns/).
-  record domain-record-properties-name {
-    /// opaque schema; raw JSON
+  /// one entry of a string-keyed map (free-form object)
+  record delete-domain-record-response-entry {
+    key: string,
     value: string
-  }
-
-  /// The port this Record points to. Only valid and required for SRV record requests.
-  record domain-record-properties-port {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
-  /// The priority of the target host for this Record. Lower values are preferred. Only valid for
-  /// MX and SRV record requests. Required for SRV record requests.
-  /// 
-  /// Defaults to `0` for MX record requests. Must be `0` for Null MX records.
-  record domain-record-properties-priority {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
-  /// The protocol this Record's service communicates with. An underscore (`_`) is prepended automatically to the submitted value for this property. Only valid for SRV record requests.
-  record domain-record-properties-protocol {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
-  /// The name of the service. An underscore (`_`) is prepended and a period (`.`) is appended automatically to the submitted value for this property. Only valid and required for SRV record requests.
-  record domain-record-properties-service {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
-  /// The tag portion of a CAA record. Only valid and required for CAA record requests.
-  record domain-record-properties-tag {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
-  /// The target for this Record. For requests, this property's actual usage and whether it is required depends
-  /// on the type of record this represents:
-  /// 
-  /// `A` and `AAAA`: The IP address. Use `[remote_addr]` to submit the IPv4 address of the request. Required.
-  /// 
-  /// `NS`: The name server. Must be a valid domain. Required.
-  /// 
-  /// `MX`: The mail server. Must be a valid domain unless creating a Null MX Record. To create a
-  /// [Null MX Record](https://datatracker.ietf.org/doc/html/rfc7505), first
-  /// [remove](/docs/api/domains/#domain-record-delete) any additional MX records, create an MX record with empty strings
-  /// (`""`) for the `target` and `name`. If a Domain has a Null MX record, new MX records cannot be created. Required.
-  /// 
-  /// `CNAME`: The alias. Must be a valid domain. Required.
-  /// 
-  /// `TXT`: The value. Required.
-  /// 
-  /// `SRV`: The target domain or subdomain. If a subdomain is entered, it is automatically used with the Domain.
-  /// To configure for a different domain, enter a valid FQDN. For example, the value `www` with a Domain for
-  /// `example.com` results in a target set to `www.example.com`, whereas the value `sample.com` results in a
-  /// target set to `sample.com`. Required.
-  /// 
-  /// `CAA`: The value. For `issue` or `issuewild` tags, the domain of your certificate issuer. For the `iodef`
-  /// tag, a contact or submission URL (domain, http, https, or mailto). Requirements depend on the tag for this record:
-  ///   * `issue`: The domain of your certificate issuer. Must be a valid domain.
-  ///   * `issuewild`: The domain of your wildcard certificate issuer. Must be a valid domain and must not start with an asterisk (`*`).
-  ///   * `iodef`: Must be either (1) a valid domain, (2) a valid domain prepended with `http://` or `https://`, or (3) a valid email address prepended with `mailto:`.
-  /// 
-  /// `PTR`: Required. See our guide on how to [Configure Your Linode for Reverse DNS
-  /// (rDNS)](/docs/guides/configure-rdns/).
-  /// 
-  /// With the exception of A, AAAA, and CAA records, this field accepts a trailing period.
-  record domain-record-properties-target {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
-  /// "Time to Live" - the amount of time in seconds that this Domain's records may be cached by resolvers or other domain servers. Valid values are 300, 3600, 7200, 14400, 28800, 57600, 86400, 172800, 345600, 604800, 1209600, and 2419200 - any other value will be rounded to the nearest valid value.
-  record domain-record-properties-ttl-sec {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
-  /// The relative weight of this Record used in the case of identical priority. Higher values are preferred. Only valid and required for SRV record requests.
-  record domain-record-properties-weight {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
-  record delete-domain-record-response {
-    /// JSON-encoded free-form object payload
-    data: option<string>
   }
 
   record get-domain-zone-response {
@@ -2991,7 +2669,7 @@ interface domains {
     /// The ID of the Domain to access.
     domain-id: string
   }
-  delete-domain: func(params: delete-domain-params) -> result<delete-domain-response, string>;
+  delete-domain: func(params: delete-domain-params) -> result<list<delete-domain-response-entry>, string>;
 
   /// Domain Clone
   record clone-domain-params {
@@ -3036,15 +2714,15 @@ interface domains {
     domain-id: string,
     /// The ID of the Record you are accessing.
     record-id: string,
-    name: option<domain-record-properties-name>,
-    port: option<domain-record-properties-port>,
-    priority: option<domain-record-properties-priority>,
-    protocol: option<domain-record-properties-protocol>,
-    service: option<domain-record-properties-service>,
+    name: option<string>,
+    port: option<s32>,
+    priority: option<s32>,
+    protocol: option<string>,
+    service: option<string>,
     tag: option<domain-record-properties-tag>,
-    target: option<domain-record-properties-target>,
-    ttl-sec: option<domain-record-properties-ttl-sec>,
-    weight: option<domain-record-properties-weight>
+    target: option<string>,
+    ttl-sec: option<s32>,
+    weight: option<s32>
   }
   update-domain-record: func(params: update-domain-record-params) -> result<domain-record, string>;
 
@@ -3055,7 +2733,7 @@ interface domains {
     /// The ID of the Record you are accessing.
     record-id: string
   }
-  delete-domain-record: func(params: delete-domain-record-params) -> result<delete-domain-record-response, string>;
+  delete-domain-record: func(params: delete-domain-record-params) -> result<list<delete-domain-record-response-entry>, string>;
 
   /// Domain Zone File View
   record get-domain-zone-params {
@@ -3080,9 +2758,9 @@ interface images {
 
   record get-images-response {
     data: option<list<image>>,
-    page: option<pagination-envelope-properties-page>,
-    pages: option<pagination-envelope-properties-pages>,
-    results: option<pagination-envelope-properties-results>
+    page: option<s32>,
+    pages: option<s32>,
+    results: option<s32>
   }
 
   /// Image object
@@ -3119,33 +2797,16 @@ interface images {
     vendor: option<string>
   }
 
-  /// The current [page](/docs/api/#pagination).
-  record pagination-envelope-properties-page {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
-  /// The total number of [pages](/docs/api/#pagination).
-  record pagination-envelope-properties-pages {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
-  /// The total number of results.
-  record pagination-envelope-properties-results {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
   record post-images-upload-response {
     image: option<image>,
     /// The URL to upload the Image to.
     upload-to: option<string>
   }
 
-  record delete-image-response {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record delete-image-response-entry {
+    key: string,
+    value: string
   }
 
   /// Images List
@@ -3228,7 +2889,7 @@ interface images {
     /// ID of the Image to look up.
     image-id: string
   }
-  delete-image: func(params: delete-image-params) -> result<delete-image-response, string>;
+  delete-image: func(params: delete-image-params) -> result<list<delete-image-response-entry>, string>;
 
 }
 
@@ -3279,6 +2940,14 @@ interface linode-instances {
     stopped,
   }
 
+  enum disk-properties-filesystem {
+    raw,
+    swap,
+    ext3,
+    ext4,
+    initrd,
+  }
+
   enum get-backups-response-automatic-item-status-enum {
     paused,
     pending,
@@ -3303,14 +2972,6 @@ interface linode-instances {
   enum linode-config-virt-mode-enum {
     paravirt,
     fullvirt,
-  }
-
-  enum disk-filesystem-enum {
-    raw,
-    swap,
-    ext3,
-    ext4,
-    initrd,
   }
 
   enum disk-status-enum {
@@ -3366,9 +3027,9 @@ interface linode-instances {
 
   record get-linode-instances-response {
     data: option<list<linode>>,
-    page: option<pagination-envelope-properties-page>,
-    pages: option<pagination-envelope-properties-pages>,
-    results: option<pagination-envelope-properties-results>
+    page: option<s32>,
+    pages: option<s32>,
+    results: option<s32>
   }
 
   record linode {
@@ -3385,7 +3046,7 @@ interface linode-instances {
     hypervisor: option<linode-hypervisor-enum>,
     /// This Linode's ID which must be provided for all operations impacting this Linode.
     id: option<s32>,
-    image: option<disk-request-properties-image>,
+    image: option<string>,
     /// This Linode's IPv4 Addresses. Each Linode is assigned a single public IPv4 address
     /// upon creation, and may get a single private IPv4 address if needed. You may need to
     ipv4: option<list<string>>,
@@ -3447,18 +3108,6 @@ interface linode-instances {
     window: option<linode-backups-schedule-window-enum>
   }
 
-  /// An Image ID to deploy the Linode Disk from.
-  /// 
-  /// Access the Images List ([GET /images](/docs/api/images/#images-list)) endpoint with authentication to view
-  /// all available Images. Official Linode Images start with `linode/`, while your Account's Images start with `private/`. Creating
-  /// a disk from a Private Image requires `read_only` or `read_write` permissions for that Image. Access the User's
-  /// Grant Update ([PUT /account/users/{username}/grants](/docs/api/account/#users-grants-update)) endpoint to
-  /// adjust permissions for an Account Image.
-  record disk-request-properties-image {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
   /// Information about the resources available to this Linode.
   record linode-specs {
     /// The amount of storage space, in MB, this Linode has access to. A typical Linode will divide this space between a primary disk with an `image` deployed to it, and a swap disk, usually 512 MB. This is the default configuration created when deploying a Linode with an `image` through [POST /linode/instances](/docs/api/linode-instances/#linode-create). While this configuration is suitable for 99% of use cases, if you need finer control over your Linode's disks, see the [/linode/instances/{linodeId}/disks](/docs/api/linode-instances/#disks-list) endpoints.
@@ -3474,27 +3123,10 @@ interface linode-instances {
     vcpus: option<s32>
   }
 
-  /// The current [page](/docs/api/#pagination).
-  record pagination-envelope-properties-page {
-    /// opaque schema; raw JSON
+  /// one entry of a string-keyed map (free-form object)
+  record delete-linode-instance-response-entry {
+    key: string,
     value: string
-  }
-
-  /// The total number of [pages](/docs/api/#pagination).
-  record pagination-envelope-properties-pages {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
-  /// The total number of results.
-  record pagination-envelope-properties-results {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
-  record delete-linode-instance-response {
-    /// JSON-encoded free-form object payload
-    data: option<string>
   }
 
   record get-backups-response {
@@ -3530,18 +3162,6 @@ interface linode-instances {
     filesystem: option<disk-properties-filesystem>,
     label: option<string>,
     size: option<s32>
-  }
-
-  /// The Disk filesystem can be one of:
-  /// 
-  ///   * raw - No filesystem, just a raw binary stream.
-  ///   * swap - Linux swap area.
-  ///   * ext3 - The ext3 journaling filesystem for Linux.
-  ///   * ext4 - The ext4 journaling filesystem for Linux.
-  ///   * initrd - initrd (uncompressed initrd, ext2, max 32 MB).
-  record disk-properties-filesystem {
-    /// opaque schema; raw JSON
-    value: string
   }
 
   record get-backups-response-snapshot {
@@ -3580,31 +3200,35 @@ interface linode-instances {
     size: option<s32>
   }
 
-  record cancel-backups-response {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record cancel-backups-response-entry {
+    key: string,
+    value: string
   }
 
-  record enable-backups-response {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record enable-backups-response-entry {
+    key: string,
+    value: string
   }
 
-  record restore-backup-response {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record restore-backup-response-entry {
+    key: string,
+    value: string
   }
 
-  record boot-linode-instance-response {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record boot-linode-instance-response-entry {
+    key: string,
+    value: string
   }
 
   record get-linode-configs-response {
     data: option<list<linode-config>>,
-    page: option<pagination-envelope-properties-page>,
-    pages: option<pagination-envelope-properties-pages>,
-    results: option<pagination-envelope-properties-results>
+    page: option<s32>,
+    pages: option<s32>,
+    results: option<s32>
   }
 
   record linode-config {
@@ -3694,16 +3318,17 @@ interface linode-instances {
     data: option<string>
   }
 
-  record delete-linode-config-response {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record delete-linode-config-response-entry {
+    key: string,
+    value: string
   }
 
   record get-linode-disks-response {
     data: option<list<disk>>,
-    page: option<pagination-envelope-properties-page>,
-    pages: option<pagination-envelope-properties-pages>,
-    results: option<pagination-envelope-properties-results>
+    page: option<s32>,
+    pages: option<s32>,
+    results: option<s32>
   }
 
   record disk {
@@ -3711,7 +3336,7 @@ interface linode-instances {
     created: option<string>,
     /// The Disk filesystem can be one of:
     /// 
-    filesystem: option<disk-filesystem-enum>,
+    filesystem: option<disk-properties-filesystem>,
     /// This Disk's ID which must be provided for all operations impacting this Disk.
     id: option<s32>,
     /// The Disk's label is for display purposes only.
@@ -3724,26 +3349,29 @@ interface linode-instances {
     updated: option<string>
   }
 
-  record delete-disk-response {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record delete-disk-response-entry {
+    key: string,
+    value: string
   }
 
-  record reset-disk-password-response {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record reset-disk-password-response-entry {
+    key: string,
+    value: string
   }
 
-  record resize-disk-response {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record resize-disk-response-entry {
+    key: string,
+    value: string
   }
 
   record get-linode-firewalls-response {
     data: option<list<firewall>>,
-    page: option<pagination-envelope-properties-page>,
-    pages: option<pagination-envelope-properties-pages>,
-    results: option<pagination-envelope-properties-results>
+    page: option<s32>,
+    pages: option<s32>,
+    results: option<s32>
   }
 
   /// A resource that controls incoming and outgoing network traffic to a Linode service. Only one Firewall can be attached to a Linode at any given time. [Create a Firewall Device](/docs/api/networking/#firewall-create) to assign a Firewall to a Linode service. Currently, Firewalls can only be assigned to Linode instances.
@@ -3932,26 +3560,29 @@ interface linode-instances {
     type-op: option<string>
   }
 
-  record remove-linode-ip-response {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record remove-linode-ip-response-entry {
+    key: string,
+    value: string
   }
 
-  record migrate-linode-instance-response {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record migrate-linode-instance-response-entry {
+    key: string,
+    value: string
   }
 
-  record mutate-linode-instance-response {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record mutate-linode-instance-response-entry {
+    key: string,
+    value: string
   }
 
   record get-linode-node-balancers-response {
     data: option<list<node-balancer>>,
-    page: option<pagination-envelope-properties-page>,
-    pages: option<pagination-envelope-properties-pages>,
-    results: option<pagination-envelope-properties-results>
+    page: option<s32>,
+    pages: option<s32>,
+    results: option<s32>
   }
 
   /// Linode's load balancing solution.  Can handle multiple ports, SSL termination, and any number of backends.  NodeBalancer ports are configured with NodeBalancer Configs, and each config is given one or more NodeBalancer Node that accepts traffic.  The traffic should be routed to the  NodeBalancer's ip address, the NodeBalancer will handle routing individual requests to backends.
@@ -3990,14 +3621,16 @@ interface linode-instances {
     total: option<f64>
   }
 
-  record reset-linode-password-response {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record reset-linode-password-response-entry {
+    key: string,
+    value: string
   }
 
-  record reboot-linode-instance-response {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record reboot-linode-instance-response-entry {
+    key: string,
+    value: string
   }
 
   record rescue-devices {
@@ -4010,19 +3643,22 @@ interface linode-instances {
     sdg: option<device>
   }
 
-  record rescue-linode-instance-response {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record rescue-linode-instance-response-entry {
+    key: string,
+    value: string
   }
 
-  record resize-linode-instance-response {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record resize-linode-instance-response-entry {
+    key: string,
+    value: string
   }
 
-  record shutdown-linode-instance-response {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record shutdown-linode-instance-response-entry {
+    key: string,
+    value: string
   }
 
   /// CPU, IO, IPv4, and IPv6 statistics. Graph data, if available, is in "[timestamp, reading]" array format. Timestamp is a UNIX timestamp in EST.
@@ -4091,9 +3727,9 @@ interface linode-instances {
 
   record get-linode-volumes-response {
     data: option<list<volume>>,
-    page: option<pagination-envelope-properties-page>,
-    pages: option<pagination-envelope-properties-pages>,
-    results: option<pagination-envelope-properties-results>
+    page: option<s32>,
+    pages: option<s32>,
+    results: option<s32>
   }
 
   /// A Block Storage Volume associated with your Account.
@@ -4112,7 +3748,7 @@ interface linode-instances {
     linode-id: option<s32>,
     /// If a Volume is attached to a specific Linode, the label of that Linode will be displayed here.
     linode-label: option<string>,
-    region: option<region-properties-id>,
+    region: option<string>,
     /// The Volume's size, in GiB.
     size: option<s32>,
     /// The current status of the volume.  Can be one of:
@@ -4124,17 +3760,11 @@ interface linode-instances {
     updated: option<string>
   }
 
-  /// The unique ID of this Region.
-  record region-properties-id {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
   record get-kernels-response {
     data: option<list<kernel>>,
-    page: option<pagination-envelope-properties-page>,
-    pages: option<pagination-envelope-properties-pages>,
-    results: option<pagination-envelope-properties-results>
+    page: option<s32>,
+    pages: option<s32>,
+    results: option<s32>
   }
 
   /// Linux kernel object
@@ -4198,7 +3828,7 @@ interface linode-instances {
     hypervisor: option<linode-hypervisor-enum>,
     /// This Linode's ID which must be provided for all operations impacting this Linode.
     id: option<s32>,
-    image: option<disk-request-properties-image>,
+    image: option<string>,
     /// This Linode's IPv4 Addresses. Each Linode is assigned a single public IPv4 address
     /// upon creation, and may get a single private IPv4 address if needed. You may need to
     ipv4: option<list<string>>,
@@ -4231,7 +3861,7 @@ interface linode-instances {
     /// ID of the Linode to look up
     linode-id: string
   }
-  delete-linode-instance: func(params: delete-linode-instance-params) -> result<delete-linode-instance-response, string>;
+  delete-linode-instance: func(params: delete-linode-instance-params) -> result<list<delete-linode-instance-response-entry>, string>;
 
   /// Backups List
   record get-backups-params {
@@ -4254,14 +3884,14 @@ interface linode-instances {
     /// The ID of the Linode to cancel backup service for.
     linode-id: string
   }
-  cancel-backups: func(params: cancel-backups-params) -> result<cancel-backups-response, string>;
+  cancel-backups: func(params: cancel-backups-params) -> result<list<cancel-backups-response-entry>, string>;
 
   /// Backups Enable
   record enable-backups-params {
     /// The ID of the Linode to enable backup service for.
     linode-id: string
   }
-  enable-backups: func(params: enable-backups-params) -> result<enable-backups-response, string>;
+  enable-backups: func(params: enable-backups-params) -> result<list<enable-backups-response-entry>, string>;
 
   /// Backup View
   record get-backup-params {
@@ -4284,7 +3914,7 @@ interface linode-instances {
     /// before restoring.
     overwrite: option<bool>
   }
-  restore-backup: func(params: restore-backup-params) -> result<restore-backup-response, string>;
+  restore-backup: func(params: restore-backup-params) -> result<list<restore-backup-response-entry>, string>;
 
   /// Linode Boot
   record boot-linode-instance-params {
@@ -4293,7 +3923,7 @@ interface linode-instances {
     /// The Linode Config ID to boot into.
     config-id: option<s32>
   }
-  boot-linode-instance: func(params: boot-linode-instance-params) -> result<boot-linode-instance-response, string>;
+  boot-linode-instance: func(params: boot-linode-instance-params) -> result<list<boot-linode-instance-response-entry>, string>;
 
   /// Linode Clone
   record clone-linode-instance-params {
@@ -4393,7 +4023,7 @@ interface linode-instances {
     /// The ID of the Configuration profile to look up.
     config-id: string
   }
-  delete-linode-config: func(params: delete-linode-config-params) -> result<delete-linode-config-response, string>;
+  delete-linode-config: func(params: delete-linode-config-params) -> result<list<delete-linode-config-response-entry>, string>;
 
   /// Disks List
   record get-linode-disks-params {
@@ -4433,7 +4063,7 @@ interface linode-instances {
     created: option<string>,
     /// The Disk filesystem can be one of:
     /// 
-    filesystem: option<disk-filesystem-enum>,
+    filesystem: option<disk-properties-filesystem>,
     /// This Disk's ID which must be provided for all operations impacting this Disk.
     id: option<s32>,
     /// The Disk's label is for display purposes only.
@@ -4454,7 +4084,7 @@ interface linode-instances {
     /// ID of the Disk to look up.
     disk-id: string
   }
-  delete-disk: func(params: delete-disk-params) -> result<delete-disk-response, string>;
+  delete-disk: func(params: delete-disk-params) -> result<list<delete-disk-response-entry>, string>;
 
   /// Disk Clone
   record clone-linode-disk-params {
@@ -4475,7 +4105,7 @@ interface linode-instances {
     /// The password must meet the complexity strength validation requirements for a strong password.
     password: string
   }
-  reset-disk-password: func(params: reset-disk-password-params) -> result<reset-disk-password-response, string>;
+  reset-disk-password: func(params: reset-disk-password-params) -> result<list<reset-disk-password-response-entry>, string>;
 
   /// Disk Resize
   record resize-disk-params {
@@ -4486,7 +4116,7 @@ interface linode-instances {
     /// The desired size, in MB, of the disk.
     size: s32
   }
-  resize-disk: func(params: resize-disk-params) -> result<resize-disk-response, string>;
+  resize-disk: func(params: resize-disk-params) -> result<list<resize-disk-response-entry>, string>;
 
   /// Firewalls List
   record get-linode-firewalls-params {
@@ -4544,7 +4174,7 @@ interface linode-instances {
     /// The IP address to look up.
     address: string
   }
-  remove-linode-ip: func(params: remove-linode-ip-params) -> result<remove-linode-ip-response, string>;
+  remove-linode-ip: func(params: remove-linode-ip-params) -> result<list<remove-linode-ip-response-entry>, string>;
 
   /// DC Migration/Pending Host Migration Initiate
   record migrate-linode-instance-params {
@@ -4557,7 +4187,7 @@ interface linode-instances {
     /// If no free upgrades are available, and this value is set to true, then the endpoint will return a 400 error code and the migration will not be performed.
     upgrade: option<bool>
   }
-  migrate-linode-instance: func(params: migrate-linode-instance-params) -> result<migrate-linode-instance-response, string>;
+  migrate-linode-instance: func(params: migrate-linode-instance-params) -> result<list<migrate-linode-instance-response-entry>, string>;
 
   /// Linode Upgrade
   record mutate-linode-instance-params {
@@ -4566,7 +4196,7 @@ interface linode-instances {
     /// Automatically resize disks when resizing a Linode. When resizing down to a smaller plan your Linode's data must fit within the smaller disk size.
     allow-auto-disk-resize: option<bool>
   }
-  mutate-linode-instance: func(params: mutate-linode-instance-params) -> result<mutate-linode-instance-response, string>;
+  mutate-linode-instance: func(params: mutate-linode-instance-params) -> result<list<mutate-linode-instance-response-entry>, string>;
 
   /// Linode NodeBalancers View
   record get-linode-node-balancers-params {
@@ -4582,7 +4212,7 @@ interface linode-instances {
     /// The root user's password on this Linode. Linode passwords must meet a password strength score requirement that is calculated internally by the API. If the strength requirement is not met, you will receive a Password does not meet strength requirement error.
     root-pass: string
   }
-  reset-linode-password: func(params: reset-linode-password-params) -> result<reset-linode-password-response, string>;
+  reset-linode-password: func(params: reset-linode-password-params) -> result<list<reset-linode-password-response-entry>, string>;
 
   /// Linode Reboot
   record reboot-linode-instance-params {
@@ -4591,7 +4221,7 @@ interface linode-instances {
     /// The Linode Config ID to reboot into.  If null or omitted, the last booted config will be used.  If there was no last booted config and this Linode only has one config, it will be used.  If a config cannot be determined, an error will be returned.
     config-id: option<s32>
   }
-  reboot-linode-instance: func(params: reboot-linode-instance-params) -> result<reboot-linode-instance-response, string>;
+  reboot-linode-instance: func(params: reboot-linode-instance-params) -> result<list<reboot-linode-instance-response-entry>, string>;
 
   /// Linode Rebuild
   record rebuild-linode-instance-params {
@@ -4607,7 +4237,7 @@ interface linode-instances {
     linode-id: string,
     devices: option<rescue-devices>
   }
-  rescue-linode-instance: func(params: rescue-linode-instance-params) -> result<rescue-linode-instance-response, string>;
+  rescue-linode-instance: func(params: rescue-linode-instance-params) -> result<list<rescue-linode-instance-response-entry>, string>;
 
   /// Linode Resize
   record resize-linode-instance-params {
@@ -4618,14 +4248,14 @@ interface linode-instances {
     /// The ID representing the Linode Type.
     type-op: string
   }
-  resize-linode-instance: func(params: resize-linode-instance-params) -> result<resize-linode-instance-response, string>;
+  resize-linode-instance: func(params: resize-linode-instance-params) -> result<list<resize-linode-instance-response-entry>, string>;
 
   /// Linode Shut Down
   record shutdown-linode-instance-params {
     /// ID of the Linode to shutdown.
     linode-id: string
   }
-  shutdown-linode-instance: func(params: shutdown-linode-instance-params) -> result<shutdown-linode-instance-response, string>;
+  shutdown-linode-instance: func(params: shutdown-linode-instance-params) -> result<list<shutdown-linode-instance-response-entry>, string>;
 
   /// Linode Statistics View
   record get-linode-stats-params {
@@ -4695,9 +4325,9 @@ interface linode-instances {
 interface stack-scripts {
   record get-stack-scripts-response {
     data: option<list<stack-script>>,
-    page: option<pagination-envelope-properties-page>,
-    pages: option<pagination-envelope-properties-pages>,
-    results: option<pagination-envelope-properties-results>
+    page: option<s32>,
+    pages: option<s32>,
+    results: option<s32>
   }
 
   /// A StackScript enables you to quickly deploy a fully-configured application in an automated manner.
@@ -4752,27 +4382,10 @@ interface stack-scripts {
     one-of: option<string>
   }
 
-  /// The current [page](/docs/api/#pagination).
-  record pagination-envelope-properties-page {
-    /// opaque schema; raw JSON
+  /// one entry of a string-keyed map (free-form object)
+  record delete-stack-script-response-entry {
+    key: string,
     value: string
-  }
-
-  /// The total number of [pages](/docs/api/#pagination).
-  record pagination-envelope-properties-pages {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
-  /// The total number of results.
-  record pagination-envelope-properties-results {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
-  record delete-stack-script-response {
-    /// JSON-encoded free-form object payload
-    data: option<string>
   }
 
   /// StackScripts List
@@ -4841,7 +4454,7 @@ interface stack-scripts {
     /// The ID of the StackScript to look up.
     stackscript-id: string
   }
-  delete-stack-script: func(params: delete-stack-script-params) -> result<delete-stack-script-response, string>;
+  delete-stack-script: func(params: delete-stack-script-params) -> result<list<delete-stack-script-response-entry>, string>;
 
 }
 
@@ -4856,9 +4469,9 @@ interface linode-types {
 
   record get-linode-types-response {
     data: option<list<linode-type>>,
-    page: option<pagination-envelope-properties-page>,
-    pages: option<pagination-envelope-properties-pages>,
-    results: option<pagination-envelope-properties-results>
+    page: option<s32>,
+    pages: option<s32>,
+    results: option<s32>
   }
 
   /// Returns collection of Linode types, including pricing and specifications for each type. These are used when [creating](/docs/api/linode-instances/#linode-create) or [resizing](/docs/api/linode-instances/#linode-resize) Linodes.
@@ -4918,24 +4531,6 @@ interface linode-types {
     monthly: option<f64>
   }
 
-  /// The current [page](/docs/api/#pagination).
-  record pagination-envelope-properties-page {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
-  /// The total number of [pages](/docs/api/#pagination).
-  record pagination-envelope-properties-pages {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
-  /// The total number of results.
-  record pagination-envelope-properties-results {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
   /// Types List
   get-linode-types: func() -> result<get-linode-types-response, string>;
 
@@ -4961,9 +4556,9 @@ interface linode-kubernetes-engine-lke {
 
   record get-lke-clusters-response {
     data: option<list<lke-cluster>>,
-    page: option<pagination-envelope-properties-page>,
-    pages: option<pagination-envelope-properties-pages>,
-    results: option<pagination-envelope-properties-results>
+    page: option<s32>,
+    pages: option<s32>,
+    results: option<s32>
   }
 
   /// A Kubernetes cluster.
@@ -4993,65 +4588,10 @@ interface linode-kubernetes-engine-lke {
     high-availability: option<bool>
   }
 
-  /// The current [page](/docs/api/#pagination).
-  record pagination-envelope-properties-page {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
-  /// The total number of [pages](/docs/api/#pagination).
-  record pagination-envelope-properties-pages {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
-  /// The total number of results.
-  record pagination-envelope-properties-results {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
   /// Defines settings for the Kubernetes Control Plane. Allows for the enabling of High Availability (HA) for Control Plane Components. Enabling High Availability for LKE is an **irreversible** change.
   record create-lke-cluster-body-control-plane {
     /// Defines whether High Availability is enabled for the Control Plane Components of the cluster. Defaults to `false`.
     high-availability: option<bool>
-  }
-
-  /// The desired Kubernetes version for this Kubernetes cluster in the format of &lt;major&gt;.&lt;minor&gt;, and the latest supported patch version will be deployed.
-  record lke-cluster-properties-k8s-version {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
-  /// This Kubernetes cluster's unique label for display purposes only.
-  /// Labels have the following constraints:
-  /// 
-  ///   * UTF-8 characters will be returned by the API using escape
-  ///     sequences of their Unicode code points. For example, the
-  ///     Japanese character *か* is 3 bytes in UTF-8 (`0xE382AB`). Its
-  ///     Unicode code point is 2 bytes (`0x30AB`). APIv4 supports this
-  ///     character and the API will return it as the escape sequence
-  ///     using six 1 byte characters which represent 2 bytes of Unicode
-  ///     code point (`"\u30ab"`).
-  ///   * 4 byte UTF-8 characters are not supported.
-  ///   * If the label is entirely composed of UTF-8 characters, the API
-  ///     response will return the code points using up to 193 1 byte
-  ///     characters.
-  record lke-cluster-properties-label {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
-  /// This Kubernetes cluster's location.
-  record lke-cluster-properties-region {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
-  /// An array of tags applied to the Kubernetes cluster. Tags are for organizational purposes only.
-  record lke-cluster-properties-tags {
-    /// opaque schema; raw JSON
-    value: string
   }
 
   /// Defines settings for the Kubernetes Control Plane. Allows for the enabling of High Availability (HA) for Control Plane Components.
@@ -5071,37 +4611,26 @@ interface linode-kubernetes-engine-lke {
   }
 
   record put-lke-cluster-response {
-    created: option<lke-cluster-properties-created>,
-    k8s-version: option<lke-cluster-properties-k8s-version>,
-    label: option<lke-cluster-properties-label>,
-    region: option<lke-cluster-properties-region>,
+    created: option<string>,
+    k8s-version: option<string>,
+    label: option<string>,
+    region: option<string>,
     /// An array of tags applied to the Kubernetes cluster. Tags are for organizational purposes only. To delete a tag, exclude it from your `tags` array.
     tags: option<list<string>>,
-    updated: option<lke-cluster-properties-updated>
+    updated: option<string>
   }
 
-  /// When this Kubernetes cluster was created.
-  record lke-cluster-properties-created {
-    /// opaque schema; raw JSON
+  /// one entry of a string-keyed map (free-form object)
+  record delete-lke-cluster-response-entry {
+    key: string,
     value: string
-  }
-
-  /// When this Kubernetes cluster was updated.
-  record lke-cluster-properties-updated {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
-  record delete-lke-cluster-response {
-    /// JSON-encoded free-form object payload
-    data: option<string>
   }
 
   record get-lke-cluster-api-endpoints-response {
     data: option<list<get-lke-cluster-api-endpoints-response-data-item>>,
-    page: option<pagination-envelope-properties-page>,
-    pages: option<pagination-envelope-properties-pages>,
-    results: option<pagination-envelope-properties-results>
+    page: option<s32>,
+    pages: option<s32>,
+    results: option<s32>
   }
 
   /// The Kubernetes API server endpoints for this cluster.
@@ -5120,9 +4649,10 @@ interface linode-kubernetes-engine-lke {
     kubeconfig: option<string>
   }
 
-  record delete-lke-cluster-kubeconfig-response {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record delete-lke-cluster-kubeconfig-response-entry {
+    key: string,
+    value: string
   }
 
   record get-lke-cluster-node-response {
@@ -5135,21 +4665,23 @@ interface linode-kubernetes-engine-lke {
     status: option<get-lke-cluster-node-response-status-enum>
   }
 
-  record delete-lke-cluster-node-response {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record delete-lke-cluster-node-response-entry {
+    key: string,
+    value: string
   }
 
-  record post-lke-cluster-node-recycle-response {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record post-lke-cluster-node-recycle-response-entry {
+    key: string,
+    value: string
   }
 
   record get-lke-cluster-pools-response {
     data: option<list<lke-node-pool>>,
-    page: option<pagination-envelope-properties-page>,
-    pages: option<pagination-envelope-properties-pages>,
-    results: option<pagination-envelope-properties-results>
+    page: option<s32>,
+    pages: option<s32>,
+    results: option<s32>
   }
 
   /// The set of Node Pools which are members of the Kubernetes cluster. Node Pools consist of a Linode type, the number of Linodes to deploy of that type, and additional status information.
@@ -5211,42 +4743,41 @@ interface linode-kubernetes-engine-lke {
     min: option<s32>
   }
 
-  /// The number of nodes in the Node Pool.
-  record lke-node-pool-request-body-properties-count {
-    /// opaque schema; raw JSON
+  /// one entry of a string-keyed map (free-form object)
+  record delete-lke-node-pool-response-entry {
+    key: string,
     value: string
   }
 
-  record delete-lke-node-pool-response {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record post-lke-cluster-pool-recycle-response-entry {
+    key: string,
+    value: string
   }
 
-  record post-lke-cluster-pool-recycle-response {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record post-lke-cluster-recycle-response-entry {
+    key: string,
+    value: string
   }
 
-  record post-lke-cluster-recycle-response {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record post-lke-cluster-regenerate-response-entry {
+    key: string,
+    value: string
   }
 
-  record post-lke-cluster-regenerate-response {
-    /// JSON-encoded free-form object payload
-    data: option<string>
-  }
-
-  record post-lkec-service-token-delete-response {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record post-lkec-service-token-delete-response-entry {
+    key: string,
+    value: string
   }
 
   record get-lke-versions-response {
     data: option<list<lke-version>>,
-    page: option<pagination-envelope-properties-page>,
-    pages: option<pagination-envelope-properties-pages>,
-    results: option<pagination-envelope-properties-results>
+    page: option<s32>,
+    pages: option<s32>,
+    results: option<s32>
   }
 
   /// LKE versions
@@ -5262,11 +4793,11 @@ interface linode-kubernetes-engine-lke {
   record create-lke-cluster-params {
     /// Defines settings for the Kubernetes Control Plane. Allows for the enabling of High Availability (HA) for Control Plane Components. Enabling High Availability for LKE is an **irreversible** change.
     control-plane: option<create-lke-cluster-body-control-plane>,
-    k8s-version: lke-cluster-properties-k8s-version,
-    label: lke-cluster-properties-label,
+    k8s-version: string,
+    label: string,
     node-pools: string,
-    region: lke-cluster-properties-region,
-    tags: option<lke-cluster-properties-tags>
+    region: string,
+    tags: option<list<string>>
   }
   create-lke-cluster: func(params: create-lke-cluster-params) -> result<lke-cluster, string>;
 
@@ -5287,7 +4818,7 @@ interface linode-kubernetes-engine-lke {
     /// The desired Kubernetes version for this Kubernetes cluster in the format of &lt;major&gt;.&lt;minor&gt;. New and recycled Nodes in this cluster will be installed with the latest available patch for the Cluster's Kubernetes version.
     /// 
     k8s-version: option<string>,
-    label: option<lke-cluster-properties-label>,
+    label: option<string>,
     /// An array of tags applied to the Kubernetes cluster. Tags are for organizational purposes only. To delete a tag, exclude it from your `tags` array.
     tags: option<list<string>>
   }
@@ -5298,7 +4829,7 @@ interface linode-kubernetes-engine-lke {
     /// ID of the Kubernetes cluster to look up.
     cluster-id: string
   }
-  delete-lke-cluster: func(params: delete-lke-cluster-params) -> result<delete-lke-cluster-response, string>;
+  delete-lke-cluster: func(params: delete-lke-cluster-params) -> result<list<delete-lke-cluster-response-entry>, string>;
 
   /// Kubernetes API Endpoints List
   record get-lke-cluster-api-endpoints-params {
@@ -5326,7 +4857,7 @@ interface linode-kubernetes-engine-lke {
     /// ID of the Kubernetes cluster to look up.
     cluster-id: string
   }
-  delete-lke-cluster-kubeconfig: func(params: delete-lke-cluster-kubeconfig-params) -> result<delete-lke-cluster-kubeconfig-response, string>;
+  delete-lke-cluster-kubeconfig: func(params: delete-lke-cluster-kubeconfig-params) -> result<list<delete-lke-cluster-kubeconfig-response-entry>, string>;
 
   /// Node View
   record get-lke-cluster-node-params {
@@ -5344,7 +4875,7 @@ interface linode-kubernetes-engine-lke {
     /// ID of the Node to look up.
     node-id: string
   }
-  delete-lke-cluster-node: func(params: delete-lke-cluster-node-params) -> result<delete-lke-cluster-node-response, string>;
+  delete-lke-cluster-node: func(params: delete-lke-cluster-node-params) -> result<list<delete-lke-cluster-node-response-entry>, string>;
 
   /// Node Recycle
   record post-lke-cluster-node-recycle-params {
@@ -5353,7 +4884,7 @@ interface linode-kubernetes-engine-lke {
     /// ID of the Node to be recycled.
     node-id: string
   }
-  post-lke-cluster-node-recycle: func(params: post-lke-cluster-node-recycle-params) -> result<post-lke-cluster-node-recycle-response, string>;
+  post-lke-cluster-node-recycle: func(params: post-lke-cluster-node-recycle-params) -> result<list<post-lke-cluster-node-recycle-response-entry>, string>;
 
   /// Node Pools List
   record get-lke-cluster-pools-params {
@@ -5386,7 +4917,7 @@ interface linode-kubernetes-engine-lke {
     /// ID of the Pool to look up
     pool-id: string,
     autoscaler: option<lke-node-pool-request-body-properties-autoscaler>,
-    count: option<lke-node-pool-request-body-properties-count>
+    count: option<s32>
   }
   put-lke-node-pool: func(params: put-lke-node-pool-params) -> result<lke-node-pool, string>;
 
@@ -5397,7 +4928,7 @@ interface linode-kubernetes-engine-lke {
     /// ID of the Pool to look up
     pool-id: string
   }
-  delete-lke-node-pool: func(params: delete-lke-node-pool-params) -> result<delete-lke-node-pool-response, string>;
+  delete-lke-node-pool: func(params: delete-lke-node-pool-params) -> result<list<delete-lke-node-pool-response-entry>, string>;
 
   /// Node Pool Recycle
   record post-lke-cluster-pool-recycle-params {
@@ -5406,14 +4937,14 @@ interface linode-kubernetes-engine-lke {
     /// ID of the Node Pool to be recycled.
     pool-id: string
   }
-  post-lke-cluster-pool-recycle: func(params: post-lke-cluster-pool-recycle-params) -> result<post-lke-cluster-pool-recycle-response, string>;
+  post-lke-cluster-pool-recycle: func(params: post-lke-cluster-pool-recycle-params) -> result<list<post-lke-cluster-pool-recycle-response-entry>, string>;
 
   /// Cluster Nodes Recycle
   record post-lke-cluster-recycle-params {
     /// ID of the Kubernetes cluster which contains nodes to be recycled.
     cluster-id: string
   }
-  post-lke-cluster-recycle: func(params: post-lke-cluster-recycle-params) -> result<post-lke-cluster-recycle-response, string>;
+  post-lke-cluster-recycle: func(params: post-lke-cluster-recycle-params) -> result<list<post-lke-cluster-recycle-response-entry>, string>;
 
   /// Kubernetes Cluster Regenerate
   record post-lke-cluster-regenerate-params {
@@ -5424,14 +4955,14 @@ interface linode-kubernetes-engine-lke {
     /// Whether to delete and regenerate the service access token for this Cluster.
     servicetoken: option<bool>
   }
-  post-lke-cluster-regenerate: func(params: post-lke-cluster-regenerate-params) -> result<post-lke-cluster-regenerate-response, string>;
+  post-lke-cluster-regenerate: func(params: post-lke-cluster-regenerate-params) -> result<list<post-lke-cluster-regenerate-response-entry>, string>;
 
   /// Service Token Delete
   record post-lkec-service-token-delete-params {
     /// ID of the target Kubernetes cluster.
     cluster-id: string
   }
-  post-lkec-service-token-delete: func(params: post-lkec-service-token-delete-params) -> result<post-lkec-service-token-delete-response, string>;
+  post-lkec-service-token-delete: func(params: post-lkec-service-token-delete-params) -> result<list<post-lkec-service-token-delete-response-entry>, string>;
 
   /// Kubernetes Versions List
   get-lke-versions: func() -> result<get-lke-versions-response, string>;
@@ -5455,9 +4986,9 @@ interface longview {
 
   record get-longview-clients-response {
     data: option<list<client>>,
-    page: option<pagination-envelope-properties-page>,
-    pages: option<pagination-envelope-properties-pages>,
-    results: option<pagination-envelope-properties-results>
+    page: option<s32>,
+    pages: option<s32>,
+    results: option<s32>
   }
 
   /// A LongviewClient is a single monitor set up to track statistics about one of your servers.
@@ -5490,27 +5021,10 @@ interface longview {
     nginx: option<bool>
   }
 
-  /// The current [page](/docs/api/#pagination).
-  record pagination-envelope-properties-page {
-    /// opaque schema; raw JSON
+  /// one entry of a string-keyed map (free-form object)
+  record delete-longview-client-response-entry {
+    key: string,
     value: string
-  }
-
-  /// The total number of [pages](/docs/api/#pagination).
-  record pagination-envelope-properties-pages {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
-  /// The total number of results.
-  record pagination-envelope-properties-results {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
-  record delete-longview-client-response {
-    /// JSON-encoded free-form object payload
-    data: option<string>
   }
 
   /// A Longview Subscription represents a tier of Longview service you can subscribe to.
@@ -5535,9 +5049,9 @@ interface longview {
 
   record get-longview-subscriptions-response {
     data: option<list<subscription>>,
-    page: option<pagination-envelope-properties-page>,
-    pages: option<pagination-envelope-properties-pages>,
-    results: option<pagination-envelope-properties-results>
+    page: option<s32>,
+    pages: option<s32>,
+    results: option<s32>
   }
 
   /// Longview Clients List
@@ -5605,7 +5119,7 @@ interface longview {
     /// The Longview Client ID to access.
     client-id: string
   }
-  delete-longview-client: func(params: delete-longview-client-params) -> result<delete-longview-client-response, string>;
+  delete-longview-client: func(params: delete-longview-client-params) -> result<list<delete-longview-client-response-entry>, string>;
 
   /// Longview Plan View
   get-longview-plan: func() -> result<subscription, string>;
@@ -5655,9 +5169,9 @@ interface managed {
 
   record get-managed-contacts-response {
     data: option<list<contact>>,
-    page: option<pagination-envelope-properties-page>,
-    pages: option<pagination-envelope-properties-pages>,
-    results: option<pagination-envelope-properties-results>
+    page: option<s32>,
+    pages: option<s32>,
+    results: option<s32>
   }
 
   /// Information about someone Linode's special forces may contact in case an issue is detected with a manager service.
@@ -5684,34 +5198,17 @@ interface managed {
     secondary: option<string>
   }
 
-  /// The current [page](/docs/api/#pagination).
-  record pagination-envelope-properties-page {
-    /// opaque schema; raw JSON
+  /// one entry of a string-keyed map (free-form object)
+  record delete-managed-contact-response-entry {
+    key: string,
     value: string
-  }
-
-  /// The total number of [pages](/docs/api/#pagination).
-  record pagination-envelope-properties-pages {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
-  /// The total number of results.
-  record pagination-envelope-properties-results {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
-  record delete-managed-contact-response {
-    /// JSON-encoded free-form object payload
-    data: option<string>
   }
 
   record get-managed-credentials-response {
     data: option<list<credential>>,
-    page: option<pagination-envelope-properties-page>,
-    pages: option<pagination-envelope-properties-pages>,
-    results: option<pagination-envelope-properties-results>
+    page: option<s32>,
+    pages: option<s32>,
+    results: option<s32>
   }
 
   /// A securely-stored Credential that allows Linode's special forces to access a Managed server to respond to Issues.
@@ -5730,21 +5227,23 @@ interface managed {
     ssh-key: option<string>
   }
 
-  record delete-managed-credential-response {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record delete-managed-credential-response-entry {
+    key: string,
+    value: string
   }
 
-  record update-managed-credential-username-password-response {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record update-managed-credential-username-password-response-entry {
+    key: string,
+    value: string
   }
 
   record get-managed-issues-response {
     data: option<list<issue>>,
-    page: option<pagination-envelope-properties-page>,
-    pages: option<pagination-envelope-properties-pages>,
-    results: option<pagination-envelope-properties-results>
+    page: option<s32>,
+    pages: option<s32>,
+    results: option<s32>
   }
 
   /// An Issue that was detected with a service Linode is managing.
@@ -5773,9 +5272,9 @@ interface managed {
 
   record get-managed-linode-settings-response {
     data: option<list<linode-settings>>,
-    page: option<pagination-envelope-properties-page>,
-    pages: option<pagination-envelope-properties-pages>,
-    results: option<pagination-envelope-properties-results>
+    page: option<s32>,
+    pages: option<s32>,
+    results: option<s32>
   }
 
   /// Settings for a specific Linode related to Managed Services. There is one ManagedLinodeSettings object for each Linode on your Account.
@@ -5807,9 +5306,9 @@ interface managed {
 
   record get-managed-services-response {
     data: option<list<service>>,
-    page: option<pagination-envelope-properties-page>,
-    pages: option<pagination-envelope-properties-pages>,
-    results: option<pagination-envelope-properties-results>
+    page: option<s32>,
+    pages: option<s32>,
+    results: option<s32>
   }
 
   /// A service that Linode is monitoring as part of your Managed services. If issues are detected with this service, a ManagedIssue will be opened and, optionally, Linode special forces will attempt to resolve the Issue.
@@ -5843,9 +5342,10 @@ interface managed {
     updated: option<string>
   }
 
-  record delete-managed-service-response {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record delete-managed-service-response-entry {
+    key: string,
+    value: string
   }
 
   record get-managed-stats-response {
@@ -5909,7 +5409,7 @@ interface managed {
     /// The ID of the contact to access.
     contact-id: string
   }
-  delete-managed-contact: func(params: delete-managed-contact-params) -> result<delete-managed-contact-response, string>;
+  delete-managed-contact: func(params: delete-managed-contact-params) -> result<list<delete-managed-contact-response-entry>, string>;
 
   /// Managed Credentials List
   record get-managed-credentials-params {
@@ -5954,7 +5454,7 @@ interface managed {
     /// The ID of the Credential to access.
     credential-id: string
   }
-  delete-managed-credential: func(params: delete-managed-credential-params) -> result<delete-managed-credential-response, string>;
+  delete-managed-credential: func(params: delete-managed-credential-params) -> result<list<delete-managed-credential-response-entry>, string>;
 
   /// Managed Credential Username and Password Update
   record update-managed-credential-username-password-params {
@@ -5965,7 +5465,7 @@ interface managed {
     /// The username to use when accessing the Managed Service.
     username: option<string>
   }
-  update-managed-credential-username-password: func(params: update-managed-credential-username-password-params) -> result<update-managed-credential-username-password-response, string>;
+  update-managed-credential-username-password: func(params: update-managed-credential-username-password-params) -> result<list<update-managed-credential-username-password-response-entry>, string>;
 
   /// Managed Issues List
   record get-managed-issues-params {
@@ -6069,7 +5569,7 @@ interface managed {
     /// The ID of the Managed Service to access.
     service-id: string
   }
-  delete-managed-service: func(params: delete-managed-service-params) -> result<delete-managed-service-response, string>;
+  delete-managed-service: func(params: delete-managed-service-params) -> result<list<delete-managed-service-response-entry>, string>;
 
   /// Managed Service Disable
   record disable-managed-service-params {
@@ -6131,9 +5631,9 @@ interface networking {
 
   record get-firewalls-response {
     data: option<list<firewall>>,
-    page: option<pagination-envelope-properties-page>,
-    pages: option<pagination-envelope-properties-pages>,
-    results: option<pagination-envelope-properties-results>
+    page: option<s32>,
+    pages: option<s32>,
+    results: option<s32>
   }
 
   /// A resource that controls incoming and outgoing network traffic to a Linode service. Only one Firewall can be attached to a Linode at any given time. [Create a Firewall Device](/docs/api/networking/#firewall-create) to assign a Firewall to a Linode service. Currently, Firewalls can only be assigned to Linode instances.
@@ -6196,24 +5696,6 @@ interface networking {
     ipv6: option<list<string>>
   }
 
-  /// The current [page](/docs/api/#pagination).
-  record pagination-envelope-properties-page {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
-  /// The total number of [pages](/docs/api/#pagination).
-  record pagination-envelope-properties-pages {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
-  /// The total number of results.
-  record pagination-envelope-properties-results {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
   /// Devices to create for this Firewall.
   /// When a Device is created, the Firewall is assigned to its associated service.
   /// Currently, Devices can only be created for Linode instances.
@@ -6227,36 +5709,17 @@ interface networking {
     outbound: option<string>
   }
 
-  /// The Firewall's label, for display purposes only.
-  /// 
-  /// Firewall labels have the following constraints:
-  /// 
-  ///   * Must begin and end with an alphanumeric character.
-  ///   * May only consist of alphanumeric characters, dashes (`-`), underscores (`_`) or periods (`.`).
-  ///   * Cannot have two dashes (`--`), underscores (`__`) or periods (`..`) in a row.
-  ///   * Must be between 3 and 32 characters.
-  ///   * Must be unique.
-  record firewall-properties-label {
-    /// opaque schema; raw JSON
+  /// one entry of a string-keyed map (free-form object)
+  record delete-firewall-response-entry {
+    key: string,
     value: string
-  }
-
-  /// An array of tags applied to this object. Tags are for organizational purposes only.
-  record firewall-properties-tags {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
-  record delete-firewall-response {
-    /// JSON-encoded free-form object payload
-    data: option<string>
   }
 
   record get-firewall-devices-response {
     data: option<list<firewall-devices>>,
-    page: option<pagination-envelope-properties-page>,
-    pages: option<pagination-envelope-properties-pages>,
-    results: option<pagination-envelope-properties-results>
+    page: option<s32>,
+    pages: option<s32>,
+    results: option<s32>
   }
 
   /// Associates a Firewall with a Linode service. A Firewall can be assigned to a single Linode service at a time. Additional disabled Firewalls can be assigned to a service, but they cannot be enabled if another active Firewall is already assigned to the same service.
@@ -6283,9 +5746,10 @@ interface networking {
     url: option<string>
   }
 
-  record delete-firewall-device-response {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record delete-firewall-device-response-entry {
+    key: string,
+    value: string
   }
 
   /// The inbound and outbound access rules to apply to the Firewall.
@@ -6304,9 +5768,9 @@ interface networking {
 
   record get-i-ps-response {
     data: option<list<ip-address>>,
-    page: option<pagination-envelope-properties-page>,
-    pages: option<pagination-envelope-properties-pages>,
-    results: option<pagination-envelope-properties-results>
+    page: option<s32>,
+    pages: option<s32>,
+    results: option<s32>
   }
 
   /// An IP address that exists in Linode's system, either IPv4 or IPv6.
@@ -6331,31 +5795,35 @@ interface networking {
     type-op: option<ip-address-type-op-enum>
   }
 
-  record assign-i-ps-response {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record assign-i-ps-response-entry {
+    key: string,
+    value: string
   }
 
-  record share-i-ps-response {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record share-i-ps-response-entry {
+    key: string,
+    value: string
   }
 
-  record assign-i-pv4s-response {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record assign-i-pv4s-response-entry {
+    key: string,
+    value: string
   }
 
-  record share-i-pv4s-response {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record share-i-pv4s-response-entry {
+    key: string,
+    value: string
   }
 
   record get-i-pv6-pools-response {
     data: option<list<i-pv6-pool>>,
-    page: option<pagination-envelope-properties-page>,
-    pages: option<pagination-envelope-properties-pages>,
-    results: option<pagination-envelope-properties-results>
+    page: option<s32>,
+    pages: option<s32>,
+    results: option<s32>
   }
 
   /// An object representing an IPv6 pool.
@@ -6372,9 +5840,9 @@ interface networking {
 
   record get-i-pv6-ranges-response {
     data: option<list<i-pv6-range>>,
-    page: option<pagination-envelope-properties-page>,
-    pages: option<pagination-envelope-properties-pages>,
-    results: option<pagination-envelope-properties-results>
+    page: option<s32>,
+    pages: option<s32>,
+    results: option<s32>
   }
 
   /// An object representing an IPv6 range.
@@ -6410,16 +5878,17 @@ interface networking {
     region: option<string>
   }
 
-  record delete-i-pv6-range-response {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record delete-i-pv6-range-response-entry {
+    key: string,
+    value: string
   }
 
   record get-vla-ns-response {
     data: option<list<vlans>>,
-    page: option<pagination-envelope-properties-page>,
-    pages: option<pagination-envelope-properties-pages>,
-    results: option<pagination-envelope-properties-results>
+    page: option<s32>,
+    pages: option<s32>,
+    results: option<s32>
   }
 
   /// A virtual local area network (VLAN) associated with your Account.
@@ -6464,11 +5933,11 @@ interface networking {
   record update-firewall-params {
     /// ID of the Firewall to access.
     firewall-id: string,
-    label: option<firewall-properties-label>,
+    label: option<string>,
     /// The status to be applied to this Firewall.
     ///  
     status: option<update-firewall-body-status-enum>,
-    tags: option<firewall-properties-tags>
+    tags: option<list<string>>
   }
   update-firewall: func(params: update-firewall-params) -> result<firewall, string>;
 
@@ -6477,7 +5946,7 @@ interface networking {
     /// ID of the Firewall to access.
     firewall-id: string
   }
-  delete-firewall: func(params: delete-firewall-params) -> result<delete-firewall-response, string>;
+  delete-firewall: func(params: delete-firewall-params) -> result<list<delete-firewall-response-entry>, string>;
 
   /// Firewall Devices List
   record get-firewall-devices-params {
@@ -6514,7 +5983,7 @@ interface networking {
     /// ID of the Firewall Device to access.
     device-id: string
   }
-  delete-firewall-device: func(params: delete-firewall-device-params) -> result<delete-firewall-device-response, string>;
+  delete-firewall-device: func(params: delete-firewall-device-params) -> result<list<delete-firewall-device-response-entry>, string>;
 
   /// Firewall Rules List
   record get-firewall-rules-params {
@@ -6553,7 +6022,7 @@ interface networking {
     /// The ID of the Region in which these assignments are to take place. All IPs and Linodes must exist in this Region.
     region: string
   }
-  assign-i-ps: func(params: assign-i-ps-params) -> result<assign-i-ps-response, string>;
+  assign-i-ps: func(params: assign-i-ps-params) -> result<list<assign-i-ps-response-entry>, string>;
 
   /// IP Addresses Share
   record share-i-ps-params {
@@ -6563,7 +6032,7 @@ interface networking {
     /// The ID of the primary Linode that the addresses will be shared with.
     linode-id: s32
   }
-  share-i-ps: func(params: share-i-ps-params) -> result<share-i-ps-response, string>;
+  share-i-ps: func(params: share-i-ps-params) -> result<list<share-i-ps-response-entry>, string>;
 
   /// IP Address View
   record get-ip-params {
@@ -6588,7 +6057,7 @@ interface networking {
     /// The ID of the Region in which these assignments are to take place. All IPs and Linodes must exist in this Region.
     region: string
   }
-  assign-i-pv4s: func(params: assign-i-pv4s-params) -> result<assign-i-pv4s-response, string>;
+  assign-i-pv4s: func(params: assign-i-pv4s-params) -> result<list<assign-i-pv4s-response-entry>, string>;
 
   /// IPv4 Sharing Configure
   record share-i-pv4s-params {
@@ -6598,7 +6067,7 @@ interface networking {
     /// The ID of the primary Linode that the addresses will be shared with.
     linode-id: s32
   }
-  share-i-pv4s: func(params: share-i-pv4s-params) -> result<share-i-pv4s-response, string>;
+  share-i-pv4s: func(params: share-i-pv4s-params) -> result<list<share-i-pv4s-response-entry>, string>;
 
   /// IPv6 Pools List
   record get-i-pv6-pools-params {
@@ -6645,7 +6114,7 @@ interface networking {
     /// 
     range: string
   }
-  delete-i-pv6-range: func(params: delete-i-pv6-range-params) -> result<delete-i-pv6-range-response, string>;
+  delete-i-pv6-range: func(params: delete-i-pv6-range-params) -> result<list<delete-i-pv6-range-response-entry>, string>;
 
   /// VLANs List
   record get-vla-ns-params {
@@ -6708,11 +6177,18 @@ interface node-balancers {
     down,
   }
 
+  enum node-balancer-node-properties-mode {
+    accept,
+    reject,
+    drain,
+    backup,
+  }
+
   record get-node-balancers-response {
     data: option<list<node-balancer>>,
-    page: option<pagination-envelope-properties-page>,
-    pages: option<pagination-envelope-properties-pages>,
-    results: option<pagination-envelope-properties-results>
+    page: option<s32>,
+    pages: option<s32>,
+    results: option<s32>
   }
 
   /// Linode's load balancing solution.  Can handle multiple ports, SSL termination, and any number of backends.  NodeBalancer ports are configured with NodeBalancer Configs, and each config is given one or more NodeBalancer Node that accepts traffic.  The traffic should be routed to the  NodeBalancer's ip address, the NodeBalancer will handle routing individual requests to backends.
@@ -6751,46 +6227,17 @@ interface node-balancers {
     total: option<f64>
   }
 
-  /// The current [page](/docs/api/#pagination).
-  record pagination-envelope-properties-page {
-    /// opaque schema; raw JSON
+  /// one entry of a string-keyed map (free-form object)
+  record delete-node-balancer-response-entry {
+    key: string,
     value: string
-  }
-
-  /// The total number of [pages](/docs/api/#pagination).
-  record pagination-envelope-properties-pages {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
-  /// The total number of results.
-  record pagination-envelope-properties-results {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
-  /// Throttle connections per second.  Set to 0 (zero) to disable throttling.
-  record node-balancer-properties-client-conn-throttle {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
-  /// This NodeBalancer's label. These must be unique on your Account.
-  record node-balancer-properties-label {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
-  record delete-node-balancer-response {
-    /// JSON-encoded free-form object payload
-    data: option<string>
   }
 
   record get-node-balancer-configs-response {
     data: option<list<node-balancer-config>>,
-    page: option<pagination-envelope-properties-page>,
-    pages: option<pagination-envelope-properties-pages>,
-    results: option<pagination-envelope-properties-results>
+    page: option<s32>,
+    pages: option<s32>,
+    results: option<s32>
   }
 
   /// A NodeBalancer config represents the configuration of this NodeBalancer on a single port.  For example, a NodeBalancer Config on port 80 would typically represent how this NodeBalancer response to HTTP requests.
@@ -6856,16 +6303,17 @@ interface node-balancers {
     up: option<s32>
   }
 
-  record delete-node-balancer-config-response {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record delete-node-balancer-config-response-entry {
+    key: string,
+    value: string
   }
 
   record get-node-balancer-config-nodes-response {
     data: option<list<node-balancer-node>>,
-    page: option<pagination-envelope-properties-page>,
-    pages: option<pagination-envelope-properties-pages>,
-    results: option<pagination-envelope-properties-results>
+    page: option<s32>,
+    pages: option<s32>,
+    results: option<s32>
   }
 
   /// A NodeBalancerNode represents a single backend serving requests for a single port of a NodeBalancer.  Nodes are specific to NodeBalancer Configs, and serve traffic over their private IP.  If the same Linode is serving traffic for more than one port on the same NodeBalancer, one NodeBalancer Node is required for each config (port) it should serve requests on.  For example, if you have four backends, and each should response to both HTTP and HTTPS requests, you will need two NodeBalancerConfigs (port 80 and port 443) and four backends each - one for each of the Linodes serving requests for that port.
@@ -6889,9 +6337,10 @@ interface node-balancers {
     weight: option<s32>
   }
 
-  record delete-node-balancer-config-node-response {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record delete-node-balancer-config-node-response-entry {
+    key: string,
+    value: string
   }
 
   /// A structure containing information about the health of the backends for this port.  This information is updated periodically as checks are performed against backends.
@@ -6904,43 +6353,12 @@ interface node-balancers {
 
   /// NodeBalancer Node request object including ID.
   record rebuild-node-balancer-config-body-nodes-item {
-    address: option<node-balancer-node-properties-address>,
+    address: option<string>,
     /// The unique ID of the Node to update.
     id: option<s32>,
-    label: option<node-balancer-node-properties-label>,
+    label: option<string>,
     mode: option<node-balancer-node-properties-mode>,
-    weight: option<node-balancer-node-properties-weight>
-  }
-
-  /// The private IP Address where this backend can be reached. This _must_ be a private IP address.
-  record node-balancer-node-properties-address {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
-  /// The label for this node.  This is for display purposes only.
-  record node-balancer-node-properties-label {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
-  /// The mode this NodeBalancer should use when sending traffic to this backend.
-  /// * If set to `accept` this backend is accepting traffic.
-  /// * If set to `reject` this backend will not receive traffic.
-  /// * If set to `drain` this backend will not receive _new_ traffic, but connections already
-  ///   pinned to it will continue to be routed to it.
-  /// 
-  /// * If set to `backup`, this backend will only receive traffic if all `accept` nodes
-  ///   are down.
-  record node-balancer-node-properties-mode {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
-  /// Used when picking a backend to serve a request and is not pinned to a single backend yet.  Nodes with a higher weight will receive more traffic.
-  record node-balancer-node-properties-weight {
-    /// opaque schema; raw JSON
-    value: string
+    weight: option<s32>
   }
 
   /// Stats for this NodeBalancer.
@@ -6978,11 +6396,11 @@ interface node-balancers {
 
   /// NodeBalancer Create
   record create-node-balancer-params {
-    client-conn-throttle: option<node-balancer-properties-client-conn-throttle>,
+    client-conn-throttle: option<s32>,
     /// The port Config(s) to create for this NodeBalancer.
     /// 
     configs: option<string>,
-    label: option<node-balancer-properties-label>,
+    label: option<string>,
     /// The ID of the Region to create this NodeBalancer in.
     region: string
   }
@@ -7029,7 +6447,7 @@ interface node-balancers {
     /// The ID of the NodeBalancer to access.
     node-balancer-id: string
   }
-  delete-node-balancer: func(params: delete-node-balancer-params) -> result<delete-node-balancer-response, string>;
+  delete-node-balancer: func(params: delete-node-balancer-params) -> result<list<delete-node-balancer-response-entry>, string>;
 
   /// Configs List
   record get-node-balancer-configs-params {
@@ -7172,7 +6590,7 @@ interface node-balancers {
     /// The ID of the config to access.
     config-id: string
   }
-  delete-node-balancer-config: func(params: delete-node-balancer-config-params) -> result<delete-node-balancer-config-response, string>;
+  delete-node-balancer-config: func(params: delete-node-balancer-config-params) -> result<list<delete-node-balancer-config-response-entry>, string>;
 
   /// Nodes List
   record get-node-balancer-config-nodes-params {
@@ -7245,7 +6663,7 @@ interface node-balancers {
     /// The ID of the Node to access
     node-id: string
   }
-  delete-node-balancer-config-node: func(params: delete-node-balancer-config-node-params) -> result<delete-node-balancer-config-node-response, string>;
+  delete-node-balancer-config-node: func(params: delete-node-balancer-config-node-params) -> result<list<delete-node-balancer-config-node-response-entry>, string>;
 
   /// Config Rebuild
   record rebuild-node-balancer-config-params {
@@ -7345,9 +6763,9 @@ interface object-storage {
 
   record get-object-storage-buckets-response {
     data: option<list<bucket>>,
-    page: option<pagination-envelope-properties-page>,
-    pages: option<pagination-envelope-properties-pages>,
-    results: option<pagination-envelope-properties-results>
+    page: option<s32>,
+    pages: option<s32>,
+    results: option<s32>
   }
 
   /// An Object Storage Bucket. This should be accessed primarily through the S3 API; [click here for more information](https://docs.ceph.com/en/latest/radosgw/s3/#api).
@@ -7366,44 +6784,29 @@ interface object-storage {
     size: option<s32>
   }
 
-  /// The current [page](/docs/api/#pagination).
-  record pagination-envelope-properties-page {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
-  /// The total number of [pages](/docs/api/#pagination).
-  record pagination-envelope-properties-pages {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
-  /// The total number of results.
-  record pagination-envelope-properties-results {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
   record get-object-storage-bucketin-cluster-response {
     data: option<list<bucket>>,
-    page: option<pagination-envelope-properties-page>,
-    pages: option<pagination-envelope-properties-pages>,
-    results: option<pagination-envelope-properties-results>
+    page: option<s32>,
+    pages: option<s32>,
+    results: option<s32>
   }
 
-  record delete-object-storage-bucket-response {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record delete-object-storage-bucket-response-entry {
+    key: string,
+    value: string
   }
 
-  record modify-object-storage-bucket-access-response {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record modify-object-storage-bucket-access-response-entry {
+    key: string,
+    value: string
   }
 
-  record update-object-storage-bucket-access-response {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record update-object-storage-bucket-access-response-entry {
+    key: string,
+    value: string
   }
 
   record view-object-storage-bucket-acl-response {
@@ -7454,21 +6857,23 @@ interface object-storage {
     ssl: option<bool>
   }
 
-  record delete-object-storage-ssl-response {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record delete-object-storage-ssl-response-entry {
+    key: string,
+    value: string
   }
 
-  record cancel-object-storage-response {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record cancel-object-storage-response-entry {
+    key: string,
+    value: string
   }
 
   record get-object-storage-clusters-response {
     data: option<list<cluster>>,
-    page: option<pagination-envelope-properties-page>,
-    pages: option<pagination-envelope-properties-pages>,
-    results: option<pagination-envelope-properties-results>
+    page: option<s32>,
+    pages: option<s32>,
+    results: option<s32>
   }
 
   /// An Object Storage Cluster
@@ -7487,9 +6892,9 @@ interface object-storage {
 
   record get-object-storage-keys-response {
     data: option<list<key>>,
-    page: option<pagination-envelope-properties-page>,
-    pages: option<pagination-envelope-properties-pages>,
-    results: option<pagination-envelope-properties-results>
+    page: option<s32>,
+    pages: option<s32>,
+    results: option<s32>
   }
 
   /// A keypair used to communicate with the Object Storage S3 API.
@@ -7518,9 +6923,10 @@ interface object-storage {
     permissions: option<key-bucket-access-item-permissions-enum>
   }
 
-  record delete-object-storage-key-response {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record delete-object-storage-key-response-entry {
+    key: string,
+    value: string
   }
 
   record get-object-storage-transfer-response {
@@ -7567,7 +6973,7 @@ interface object-storage {
     /// The bucket name.
     bucket: string
   }
-  delete-object-storage-bucket: func(params: delete-object-storage-bucket-params) -> result<delete-object-storage-bucket-response, string>;
+  delete-object-storage-bucket: func(params: delete-object-storage-bucket-params) -> result<list<delete-object-storage-bucket-response-entry>, string>;
 
   /// Object Storage Bucket Access Modify
   record modify-object-storage-bucket-access-params {
@@ -7580,7 +6986,7 @@ interface object-storage {
     /// If true, the bucket will be created with CORS enabled for all origins. For more fine-grained controls of CORS, use the S3 API directly.
     cors-enabled: option<bool>
   }
-  modify-object-storage-bucket-access: func(params: modify-object-storage-bucket-access-params) -> result<modify-object-storage-bucket-access-response, string>;
+  modify-object-storage-bucket-access: func(params: modify-object-storage-bucket-access-params) -> result<list<modify-object-storage-bucket-access-response-entry>, string>;
 
   /// Object Storage Bucket Access Update
   record update-object-storage-bucket-access-params {
@@ -7593,7 +6999,7 @@ interface object-storage {
     /// If true, the bucket will be created with CORS enabled for all origins. For more fine-grained controls of CORS, use the S3 API directly.
     cors-enabled: option<bool>
   }
-  update-object-storage-bucket-access: func(params: update-object-storage-bucket-access-params) -> result<update-object-storage-bucket-access-response, string>;
+  update-object-storage-bucket-access: func(params: update-object-storage-bucket-access-params) -> result<list<update-object-storage-bucket-access-response-entry>, string>;
 
   /// Object Storage Object ACL Config View
   record view-object-storage-bucket-acl-params {
@@ -7684,10 +7090,10 @@ interface object-storage {
     /// The bucket name.
     bucket: string
   }
-  delete-object-storage-ssl: func(params: delete-object-storage-ssl-params) -> result<delete-object-storage-ssl-response, string>;
+  delete-object-storage-ssl: func(params: delete-object-storage-ssl-params) -> result<list<delete-object-storage-ssl-response-entry>, string>;
 
   /// Object Storage Cancel
-  cancel-object-storage: func() -> result<cancel-object-storage-response, string>;
+  cancel-object-storage: func() -> result<list<cancel-object-storage-response-entry>, string>;
 
   /// Clusters List
   get-object-storage-clusters: func() -> result<get-object-storage-clusters-response, string>;
@@ -7741,7 +7147,7 @@ interface object-storage {
     /// The key to look up.
     key-id: string
   }
-  delete-object-storage-key: func(params: delete-object-storage-key-params) -> result<delete-object-storage-key-response, string>;
+  delete-object-storage-key: func(params: delete-object-storage-key-params) -> result<list<delete-object-storage-key-response-entry>, string>;
 
   /// Object Storage Transfer View
   get-object-storage-transfer: func() -> result<get-object-storage-transfer-response, string>;
@@ -7825,9 +7231,9 @@ interface profile {
 
   record get-profile-apps-response {
     data: option<list<authorized-app>>,
-    page: option<pagination-envelope-properties-page>,
-    pages: option<pagination-envelope-properties-pages>,
-    results: option<pagination-envelope-properties-results>
+    page: option<s32>,
+    pages: option<s32>,
+    results: option<s32>
   }
 
   /// An application you have authorized access to your Account through OAuth.
@@ -7848,34 +7254,17 @@ interface profile {
     website: option<string>
   }
 
-  /// The current [page](/docs/api/#pagination).
-  record pagination-envelope-properties-page {
-    /// opaque schema; raw JSON
+  /// one entry of a string-keyed map (free-form object)
+  record delete-profile-app-response-entry {
+    key: string,
     value: string
-  }
-
-  /// The total number of [pages](/docs/api/#pagination).
-  record pagination-envelope-properties-pages {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
-  /// The total number of results.
-  record pagination-envelope-properties-results {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
-  record delete-profile-app-response {
-    /// JSON-encoded free-form object payload
-    data: option<string>
   }
 
   record get-devices-response {
     data: option<list<trusted-device>>,
-    page: option<pagination-envelope-properties-page>,
-    pages: option<pagination-envelope-properties-pages>,
-    results: option<pagination-envelope-properties-results>
+    page: option<s32>,
+    pages: option<s32>,
+    results: option<s32>
   }
 
   /// A trusted device object represents an active Remember Me session with <a target="_top" href="https://login.linode.com">login.linode.com</a>.
@@ -7894,9 +7283,10 @@ interface profile {
     user-agent: option<string>
   }
 
-  record revoke-trusted-device-response {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record revoke-trusted-device-response-entry {
+    key: string,
+    value: string
   }
 
   /// A structure representing all grants a restricted User has on the Account. Not available for unrestricted users, as they have access to everything without grants. If retrieved from the `/profile/grants` endpoint, entities to which a User has no access will be omitted.
@@ -7961,9 +7351,9 @@ interface profile {
 
   record get-profile-logins-response {
     data: option<list<login>>,
-    page: option<pagination-envelope-properties-page>,
-    pages: option<pagination-envelope-properties-pages>,
-    results: option<pagination-envelope-properties-results>
+    page: option<s32>,
+    pages: option<s32>,
+    results: option<s32>
   }
 
   /// An object representing a previous successful login for a User.
@@ -7982,31 +7372,34 @@ interface profile {
     username: option<string>
   }
 
-  record post-profile-phone-number-response {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record post-profile-phone-number-response-entry {
+    key: string,
+    value: string
   }
 
-  record delete-profile-phone-number-response {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record delete-profile-phone-number-response-entry {
+    key: string,
+    value: string
   }
 
-  record post-profile-phone-number-verify-response {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record post-profile-phone-number-verify-response-entry {
+    key: string,
+    value: string
   }
 
-  /// A dictionary of user preferences.
-  record get-user-preferences-response {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record get-user-preferences-response-entry {
+    key: string,
+    value: string
   }
 
-  /// An object of user preferences.
-  record update-user-preferences-response {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record update-user-preferences-response-entry {
+    key: string,
+    value: string
   }
 
   /// Security questions and responses object for GET operation.
@@ -8016,27 +7409,9 @@ interface profile {
 
   /// Single security question and response object for GET operation.
   record security-questions-get-security-questions-item {
-    id: option<security-question-properties-id>,
-    question: option<security-question-properties-question>,
-    response: option<security-question-properties-response>
-  }
-
-  /// The ID representing the security question.
-  record security-question-properties-id {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
-  /// The security question.
-  record security-question-properties-question {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
-  /// The security question response.
-  record security-question-properties-response {
-    /// opaque schema; raw JSON
-    value: string
+    id: option<s32>,
+    question: option<string>,
+    response: option<string>
   }
 
   /// Security questions and responses object for POST operation.
@@ -8046,16 +7421,16 @@ interface profile {
 
   /// Single security question and response object for POST operation.
   record security-questions-post-security-questions-item {
-    question-id: option<security-question-properties-id>,
-    response: option<security-question-properties-response>,
-    security-question: option<security-question-properties-question>
+    question-id: option<s32>,
+    response: option<string>,
+    security-question: option<string>
   }
 
   record get-ssh-keys-response {
     data: option<list<ssh-key>>,
-    page: option<pagination-envelope-properties-page>,
-    pages: option<pagination-envelope-properties-pages>,
-    results: option<pagination-envelope-properties-results>
+    page: option<s32>,
+    pages: option<s32>,
+    results: option<s32>
   }
 
   /// A credential object for authenticating a User's secure shell connection to a Linode.
@@ -8071,20 +7446,16 @@ interface profile {
     ssh-key: option<string>
   }
 
-  /// A label for the SSH Key.
-  record ssh-key-properties-label {
-    /// opaque schema; raw JSON
+  /// one entry of a string-keyed map (free-form object)
+  record delete-ssh-key-response-entry {
+    key: string,
     value: string
   }
 
-  record delete-ssh-key-response {
-    /// JSON-encoded free-form object payload
-    data: option<string>
-  }
-
-  record tfa-disable-response {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record tfa-disable-response-entry {
+    key: string,
+    value: string
   }
 
   record tfa-enable-response {
@@ -8101,9 +7472,9 @@ interface profile {
 
   record get-personal-access-tokens-response {
     data: option<list<personal-access-token>>,
-    page: option<pagination-envelope-properties-page>,
-    pages: option<pagination-envelope-properties-pages>,
-    results: option<pagination-envelope-properties-results>
+    page: option<s32>,
+    pages: option<s32>,
+    results: option<s32>
   }
 
   /// A Personal Access Token is a token generated manually to access the API without going through an OAuth login.  Personal Access Tokens can have scopes just like OAuth tokens do, and are commonly used to give access to command-line tools like the Linode CLI, or when writing your own integrations.
@@ -8122,15 +7493,10 @@ interface profile {
     token: option<string>
   }
 
-  /// This token's label.  This is for display purposes only, but can be used to more easily track what you're using each token for.
-  record personal-access-token-properties-label {
-    /// opaque schema; raw JSON
+  /// one entry of a string-keyed map (free-form object)
+  record delete-personal-access-token-response-entry {
+    key: string,
     value: string
-  }
-
-  record delete-personal-access-token-response {
-    /// JSON-encoded free-form object payload
-    data: option<string>
   }
 
   /// Profile View
@@ -8193,7 +7559,7 @@ interface profile {
     /// The authorized app ID to manage.
     app-id: string
   }
-  delete-profile-app: func(params: delete-profile-app-params) -> result<delete-profile-app-response, string>;
+  delete-profile-app: func(params: delete-profile-app-params) -> result<list<delete-profile-app-response-entry>, string>;
 
   /// Trusted Devices List
   get-devices: func() -> result<get-devices-response, string>;
@@ -8210,7 +7576,7 @@ interface profile {
     /// The ID of the TrustedDevice
     device-id: string
   }
-  revoke-trusted-device: func(params: revoke-trusted-device-params) -> result<revoke-trusted-device-response, string>;
+  revoke-trusted-device: func(params: revoke-trusted-device-params) -> result<list<revoke-trusted-device-response-entry>, string>;
 
   /// Grants List
   get-profile-grants: func() -> result<grants-response, string>;
@@ -8232,26 +7598,26 @@ interface profile {
     /// A valid phone number.
     phone-number: string
   }
-  post-profile-phone-number: func(params: post-profile-phone-number-params) -> result<post-profile-phone-number-response, string>;
+  post-profile-phone-number: func(params: post-profile-phone-number-params) -> result<list<post-profile-phone-number-response-entry>, string>;
 
   /// Phone Number Delete
-  delete-profile-phone-number: func() -> result<delete-profile-phone-number-response, string>;
+  delete-profile-phone-number: func() -> result<list<delete-profile-phone-number-response-entry>, string>;
 
   /// Phone Number Verify
   record post-profile-phone-number-verify-params {
     /// The one-time code received via SMS message after accessing the **Phone Verification Code Send** ([POST /profile/phone-number](/docs/api/profile/#phone-number-verification-code-send)) command.
     otp-code: string
   }
-  post-profile-phone-number-verify: func(params: post-profile-phone-number-verify-params) -> result<post-profile-phone-number-verify-response, string>;
+  post-profile-phone-number-verify: func(params: post-profile-phone-number-verify-params) -> result<list<post-profile-phone-number-verify-response-entry>, string>;
 
   /// User Preferences View
-  get-user-preferences: func() -> result<get-user-preferences-response, string>;
+  get-user-preferences: func() -> result<list<get-user-preferences-response-entry>, string>;
 
   /// User Preferences Update
   record update-user-preferences-params {
     body: string
   }
-  update-user-preferences: func(params: update-user-preferences-params) -> result<update-user-preferences-response, string>;
+  update-user-preferences: func(params: update-user-preferences-params) -> result<list<update-user-preferences-response-entry>, string>;
 
   /// Security Questions List
   get-security-questions: func() -> result<security-questions-get, string>;
@@ -8296,7 +7662,7 @@ interface profile {
   record update-ssh-key-params {
     /// The ID of the SSHKey
     ssh-key-id: string,
-    label: option<ssh-key-properties-label>
+    label: option<string>
   }
   update-ssh-key: func(params: update-ssh-key-params) -> result<ssh-key, string>;
 
@@ -8305,10 +7671,10 @@ interface profile {
     /// The ID of the SSHKey
     ssh-key-id: string
   }
-  delete-ssh-key: func(params: delete-ssh-key-params) -> result<delete-ssh-key-response, string>;
+  delete-ssh-key: func(params: delete-ssh-key-params) -> result<list<delete-ssh-key-response-entry>, string>;
 
   /// Two Factor Authentication Disable
-  tfa-disable: func() -> result<tfa-disable-response, string>;
+  tfa-disable: func() -> result<list<tfa-disable-response-entry>, string>;
 
   /// Two Factor Secret Create
   tfa-enable: func() -> result<tfa-enable-response, string>;
@@ -8327,7 +7693,7 @@ interface profile {
   record create-personal-access-token-params {
     /// When this token should be valid until.  If omitted, the new token will be valid until it is manually revoked.
     expiry: option<string>,
-    label: option<personal-access-token-properties-label>,
+    label: option<string>,
     /// The access [scopes](/docs/api#oauth-reference) to grant to the created token. These cannot be changed after creation, and may not exceed the scopes of the acting token.
     /// 
     scopes: option<string>
@@ -8365,7 +7731,7 @@ interface profile {
     /// The ID of the token to access.
     token-id: string
   }
-  delete-personal-access-token: func(params: delete-personal-access-token-params) -> result<delete-personal-access-token-response, string>;
+  delete-personal-access-token: func(params: delete-personal-access-token-params) -> result<list<delete-personal-access-token-response-entry>, string>;
 
 }
 
@@ -8377,9 +7743,9 @@ interface regions {
 
   record get-regions-response {
     data: option<list<region>>,
-    page: option<pagination-envelope-properties-page>,
-    pages: option<pagination-envelope-properties-pages>,
-    results: option<pagination-envelope-properties-results>
+    page: option<s32>,
+    pages: option<s32>,
+    results: option<s32>
   }
 
   /// An area where Linode services are available.
@@ -8404,24 +7770,6 @@ interface regions {
     ipv6: option<string>
   }
 
-  /// The current [page](/docs/api/#pagination).
-  record pagination-envelope-properties-page {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
-  /// The total number of [pages](/docs/api/#pagination).
-  record pagination-envelope-properties-pages {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
-  /// The total number of results.
-  record pagination-envelope-properties-results {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
   /// Regions List
   get-regions: func() -> result<get-regions-response, string>;
 
@@ -8443,9 +7791,9 @@ interface support {
 
   record get-tickets-response {
     data: option<list<ticket>>,
-    page: option<pagination-envelope-properties-page>,
-    pages: option<pagination-envelope-properties-pages>,
-    results: option<pagination-envelope-properties-results>
+    page: option<s32>,
+    pages: option<s32>,
+    results: option<s32>
   }
 
   /// A Support Ticket opened on your Account.
@@ -8490,39 +7838,23 @@ interface support {
     url: option<string>
   }
 
-  /// The current [page](/docs/api/#pagination).
-  record pagination-envelope-properties-page {
-    /// opaque schema; raw JSON
+  /// one entry of a string-keyed map (free-form object)
+  record create-ticket-attachment-response-entry {
+    key: string,
     value: string
   }
 
-  /// The total number of [pages](/docs/api/#pagination).
-  record pagination-envelope-properties-pages {
-    /// opaque schema; raw JSON
+  /// one entry of a string-keyed map (free-form object)
+  record close-ticket-response-entry {
+    key: string,
     value: string
-  }
-
-  /// The total number of results.
-  record pagination-envelope-properties-results {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
-  record create-ticket-attachment-response {
-    /// JSON-encoded free-form object payload
-    data: option<string>
-  }
-
-  record close-ticket-response {
-    /// JSON-encoded free-form object payload
-    data: option<string>
   }
 
   record get-ticket-replies-response {
     data: option<list<ticket-reply>>,
-    page: option<pagination-envelope-properties-page>,
-    pages: option<pagination-envelope-properties-pages>,
-    results: option<pagination-envelope-properties-results>
+    page: option<s32>,
+    pages: option<s32>,
+    results: option<s32>
   }
 
   /// An object representing a reply to a Support Ticket.
@@ -8598,14 +7930,14 @@ interface support {
     /// The local, absolute path to the file you want to attach to your Support Ticket.
     file: string
   }
-  create-ticket-attachment: func(params: create-ticket-attachment-params) -> result<create-ticket-attachment-response, string>;
+  create-ticket-attachment: func(params: create-ticket-attachment-params) -> result<list<create-ticket-attachment-response-entry>, string>;
 
   /// Support Ticket Close
   record close-ticket-params {
     /// The ID of the Support Ticket.
     ticket-id: string
   }
-  close-ticket: func(params: close-ticket-params) -> result<close-ticket-response, string>;
+  close-ticket: func(params: close-ticket-params) -> result<list<close-ticket-response-entry>, string>;
 
   /// Replies List
   record get-ticket-replies-params {
@@ -8632,9 +7964,9 @@ interface support {
 interface tags {
   record get-tags-response {
     data: option<list<tag>>,
-    page: option<pagination-envelope-properties-page>,
-    pages: option<pagination-envelope-properties-pages>,
-    results: option<pagination-envelope-properties-results>
+    page: option<s32>,
+    pages: option<s32>,
+    results: option<s32>
   }
 
   /// A tag that has been applied to an object on your Account. Tags are currently for organizational purposes only.
@@ -8643,29 +7975,11 @@ interface tags {
     label: option<string>
   }
 
-  /// The current [page](/docs/api/#pagination).
-  record pagination-envelope-properties-page {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
-  /// The total number of [pages](/docs/api/#pagination).
-  record pagination-envelope-properties-pages {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
-  /// The total number of results.
-  record pagination-envelope-properties-results {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
   record get-tagged-objects-response {
     data: option<list<get-tagged-objects-response-data-item>>,
-    page: option<pagination-envelope-properties-page>,
-    pages: option<pagination-envelope-properties-pages>,
-    results: option<pagination-envelope-properties-results>
+    page: option<s32>,
+    pages: option<s32>,
+    results: option<s32>
   }
 
   record get-tagged-objects-response-data-item {
@@ -8673,9 +7987,10 @@ interface tags {
     type-op: option<string>
   }
 
-  record delete-tag-response {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record delete-tag-response-entry {
+    key: string,
+    value: string
   }
 
   /// Tags List
@@ -8716,7 +8031,7 @@ interface tags {
   record delete-tag-params {
     label: string
   }
-  delete-tag: func(params: delete-tag-params) -> result<delete-tag-response, string>;
+  delete-tag: func(params: delete-tag-params) -> result<list<delete-tag-response-entry>, string>;
 
 }
 
@@ -8734,9 +8049,9 @@ interface volumes {
 
   record get-volumes-response {
     data: option<list<volume>>,
-    page: option<pagination-envelope-properties-page>,
-    pages: option<pagination-envelope-properties-pages>,
-    results: option<pagination-envelope-properties-results>
+    page: option<s32>,
+    pages: option<s32>,
+    results: option<s32>
   }
 
   /// A Block Storage Volume associated with your Account.
@@ -8755,7 +8070,7 @@ interface volumes {
     linode-id: option<s32>,
     /// If a Volume is attached to a specific Linode, the label of that Linode will be displayed here.
     linode-label: option<string>,
-    region: option<region-properties-id>,
+    region: option<string>,
     /// The Volume's size, in GiB.
     size: option<s32>,
     /// The current status of the volume.  Can be one of:
@@ -8767,49 +8082,15 @@ interface volumes {
     updated: option<string>
   }
 
-  /// The unique ID of this Region.
-  record region-properties-id {
-    /// opaque schema; raw JSON
+  /// one entry of a string-keyed map (free-form object)
+  record delete-volume-response-entry {
+    key: string,
     value: string
   }
 
-  /// The current [page](/docs/api/#pagination).
-  record pagination-envelope-properties-page {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
-  /// The total number of [pages](/docs/api/#pagination).
-  record pagination-envelope-properties-pages {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
-  /// The total number of results.
-  record pagination-envelope-properties-results {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
-  record delete-volume-response {
-    /// JSON-encoded free-form object payload
-    data: option<string>
-  }
-
-  /// The Volume's label is for display purposes only.
-  record volume-properties-label {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
-  record detach-volume-response {
-    /// JSON-encoded free-form object payload
-    data: option<string>
-  }
-
-  /// The Volume's size, in GiB.
-  record volume-properties-size {
-    /// opaque schema; raw JSON
+  /// one entry of a string-keyed map (free-form object)
+  record detach-volume-response-entry {
+    key: string,
     value: string
   }
 
@@ -8869,7 +8150,7 @@ interface volumes {
     linode-id: option<s32>,
     /// If a Volume is attached to a specific Linode, the label of that Linode will be displayed here.
     linode-label: option<string>,
-    region: option<region-properties-id>,
+    region: option<string>,
     /// The Volume's size, in GiB.
     size: option<s32>,
     /// The current status of the volume.  Can be one of:
@@ -8887,7 +8168,7 @@ interface volumes {
     /// ID of the Volume to look up.
     volume-id: string
   }
-  delete-volume: func(params: delete-volume-params) -> result<delete-volume-response, string>;
+  delete-volume: func(params: delete-volume-params) -> result<list<delete-volume-response-entry>, string>;
 
   /// Volume Attach
   record attach-volume-params {
@@ -8906,7 +8187,7 @@ interface volumes {
   record clone-volume-params {
     /// ID of the Volume to clone.
     volume-id: string,
-    label: volume-properties-label
+    label: string
   }
   clone-volume: func(params: clone-volume-params) -> result<volume, string>;
 
@@ -8915,13 +8196,13 @@ interface volumes {
     /// ID of the Volume to detach.
     volume-id: string
   }
-  detach-volume: func(params: detach-volume-params) -> result<detach-volume-response, string>;
+  detach-volume: func(params: detach-volume-params) -> result<list<detach-volume-response-entry>, string>;
 
   /// Volume Resize
   record resize-volume-params {
     /// ID of the Volume to resize.
     volume-id: string,
-    size: volume-properties-size
+    size: s32
   }
   resize-volume: func(params: resize-volume-params) -> result<volume, string>;
 
