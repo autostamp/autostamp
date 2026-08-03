@@ -44,7 +44,7 @@ fn iface_gift_wrappings__gift_wrapping_data_wrapping_interface__to_json(p: &ifac
     m.insert("base_currency_code".into(), match (&p.base_currency_code) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("base_price".into(), serde_json::Number::from_f64(*(&p.base_price)).map(Value::Number).unwrap_or(Value::Null));
     m.insert("design".into(), Value::String((&p.design).clone()));
-    m.insert("extension_attributes".into(), match (&p.extension_attributes) { Some(v) => iface_gift_wrappings__gift_wrapping_data_wrapping_extension_interface__to_json(v), None => Value::Null });
+    m.insert("extension_attributes".into(), match (&p.extension_attributes) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("image_base64_content".into(), match (&p.image_base64_content) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("image_name".into(), match (&p.image_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("image_url".into(), match (&p.image_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -54,9 +54,10 @@ fn iface_gift_wrappings__gift_wrapping_data_wrapping_interface__to_json(p: &ifac
     Value::Object(m)
 }
 
-fn iface_gift_wrappings__gift_wrapping_data_wrapping_extension_interface__to_json(p: &iface_gift_wrappings::GiftWrappingDataWrappingExtensionInterface) -> Value {
+fn iface_gift_wrappings__gift_wrapping_data_wrapping_extension_interface_entry__to_json(p: &iface_gift_wrappings::GiftWrappingDataWrappingExtensionInterfaceEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -124,7 +125,7 @@ fn iface_gift_wrappings__gift_wrapping_data_wrapping_interface__from_json(v: &Va
         base_currency_code: m.get("base_currency_code").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         base_price: m.get("base_price").and_then(|v| (v).as_f64()).unwrap_or_default(),
         design: m.get("design").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-        extension_attributes: m.get("extension_attributes").filter(|v| !v.is_null()).and_then(|v| iface_gift_wrappings__gift_wrapping_data_wrapping_extension_interface__from_json(v)),
+        extension_attributes: m.get("extension_attributes").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_gift_wrappings::GiftWrappingDataWrappingExtensionInterfaceEntry { key: k.clone(), value: val })).collect())),
         image_base64_content: m.get("image_base64_content").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         image_name: m.get("image_name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         image_url: m.get("image_url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
@@ -134,10 +135,11 @@ fn iface_gift_wrappings__gift_wrapping_data_wrapping_interface__from_json(v: &Va
     })
 }
 
-fn iface_gift_wrappings__gift_wrapping_data_wrapping_extension_interface__from_json(v: &Value) -> Option<iface_gift_wrappings::GiftWrappingDataWrappingExtensionInterface> {
+fn iface_gift_wrappings__gift_wrapping_data_wrapping_extension_interface_entry__from_json(v: &Value) -> Option<iface_gift_wrappings::GiftWrappingDataWrappingExtensionInterfaceEntry> {
     let m = v.as_object()?;
-    Some(iface_gift_wrappings::GiftWrappingDataWrappingExtensionInterface {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_gift_wrappings::GiftWrappingDataWrappingExtensionInterfaceEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 

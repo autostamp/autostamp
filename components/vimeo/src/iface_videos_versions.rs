@@ -177,7 +177,7 @@ fn iface_videos_versions__play_progressive_item__to_json(p: &iface_videos_versio
     m.insert("height".into(), serde_json::Number::from_f64(*(&p.height)).map(Value::Number).unwrap_or(Value::Null));
     m.insert("link".into(), Value::String((&p.link).clone()));
     m.insert("link_expiration_time".into(), Value::String((&p.link_expiration_time).clone()));
-    m.insert("log".into(), match (&p.log) { Some(v) => iface_videos_versions__play_progressive_item_log__to_json(v), None => Value::Null });
+    m.insert("log".into(), match (&p.log) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("md5".into(), Value::String((&p.md5).clone()));
     m.insert("size".into(), serde_json::Number::from_f64(*(&p.size)).map(Value::Number).unwrap_or(Value::Null));
     m.insert("type".into(), Value::String(iface_videos_versions__play_progressive_item_type_op_enum__to_str(&p.type_op).into()));
@@ -185,9 +185,10 @@ fn iface_videos_versions__play_progressive_item__to_json(p: &iface_videos_versio
     Value::Object(m)
 }
 
-fn iface_videos_versions__play_progressive_item_log__to_json(p: &iface_videos_versions::PlayProgressiveItemLog) -> Value {
+fn iface_videos_versions__play_progressive_item_log_entry__to_json(p: &iface_videos_versions::PlayProgressiveItemLogEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -614,7 +615,7 @@ fn iface_videos_versions__play_progressive_item__from_json(v: &Value) -> Option<
         height: m.get("height").and_then(|v| (v).as_f64()).unwrap_or_default(),
         link: m.get("link").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         link_expiration_time: m.get("link_expiration_time").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-        log: m.get("log").filter(|v| !v.is_null()).and_then(|v| iface_videos_versions__play_progressive_item_log__from_json(v)),
+        log: m.get("log").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_videos_versions::PlayProgressiveItemLogEntry { key: k.clone(), value: val })).collect())),
         md5: m.get("md5").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         size: m.get("size").and_then(|v| (v).as_f64()).unwrap_or_default(),
         type_op: match m.get("type").and_then(|v| (v).as_str().and_then(iface_videos_versions__play_progressive_item_type_op_enum__from_str)) { Some(x) => x, None => return None },
@@ -622,10 +623,11 @@ fn iface_videos_versions__play_progressive_item__from_json(v: &Value) -> Option<
     })
 }
 
-fn iface_videos_versions__play_progressive_item_log__from_json(v: &Value) -> Option<iface_videos_versions::PlayProgressiveItemLog> {
+fn iface_videos_versions__play_progressive_item_log_entry__from_json(v: &Value) -> Option<iface_videos_versions::PlayProgressiveItemLogEntry> {
     let m = v.as_object()?;
-    Some(iface_videos_versions::PlayProgressiveItemLog {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_videos_versions::PlayProgressiveItemLogEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 

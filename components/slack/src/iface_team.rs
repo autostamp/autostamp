@@ -72,7 +72,7 @@ fn iface_team__objs_team_plan_enum__to_str(e: &iface_team::ObjsTeamPlanEnum) -> 
 fn iface_team__access_logs_response__to_json(p: &iface_team::AccessLogsResponse) -> Value {
     let mut m = Map::new();
     m.insert("logins".into(), Value::Array((&p.logins).iter().map(|v| iface_team__access_logs_response_logins_item__to_json(v)).collect()));
-    m.insert("ok".into(), iface_team__defs_ok_true__to_json(&p.ok));
+    m.insert("ok".into(), Value::Bool(*(&p.ok)));
     m.insert("paging".into(), iface_team__objs_paging__to_json(&p.paging));
     Value::Object(m)
 }
@@ -87,20 +87,8 @@ fn iface_team__access_logs_response_logins_item__to_json(p: &iface_team::AccessL
     m.insert("isp".into(), Value::String((&p.isp).clone()));
     m.insert("region".into(), Value::String((&p.region).clone()));
     m.insert("user_agent".into(), Value::String((&p.user_agent).clone()));
-    m.insert("user_id".into(), iface_team__defs_user_id__to_json(&p.user_id));
+    m.insert("user_id".into(), Value::String((&p.user_id).clone()));
     m.insert("username".into(), Value::String((&p.username).clone()));
-    Value::Object(m)
-}
-
-fn iface_team__defs_user_id__to_json(p: &iface_team::DefsUserId) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_team__defs_ok_true__to_json(p: &iface_team::DefsOkTrue) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -117,13 +105,13 @@ fn iface_team__objs_paging__to_json(p: &iface_team::ObjsPaging) -> Value {
 
 fn iface_team__billable_info_response__to_json(p: &iface_team::BillableInfoResponse) -> Value {
     let mut m = Map::new();
-    m.insert("ok".into(), iface_team__defs_ok_true__to_json(&p.ok));
+    m.insert("ok".into(), Value::Bool(*(&p.ok)));
     Value::Object(m)
 }
 
 fn iface_team__info_response__to_json(p: &iface_team::InfoResponse) -> Value {
     let mut m = Map::new();
-    m.insert("ok".into(), iface_team__defs_ok_true__to_json(&p.ok));
+    m.insert("ok".into(), Value::Bool(*(&p.ok)));
     m.insert("team".into(), iface_team__objs_team__to_json(&p.team));
     Value::Object(m)
 }
@@ -139,12 +127,12 @@ fn iface_team__objs_team__to_json(p: &iface_team::ObjsTeam) -> Value {
     m.insert("discoverable".into(), match (&p.discoverable) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("domain".into(), Value::String((&p.domain).clone()));
     m.insert("email_domain".into(), Value::String((&p.email_domain).clone()));
-    m.insert("enterprise_id".into(), match (&p.enterprise_id) { Some(v) => iface_team__defs_enterprise_id__to_json(v), None => Value::Null });
-    m.insert("enterprise_name".into(), match (&p.enterprise_name) { Some(v) => iface_team__defs_enterprise_name__to_json(v), None => Value::Null });
+    m.insert("enterprise_id".into(), match (&p.enterprise_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("enterprise_name".into(), match (&p.enterprise_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("external_org_migrations".into(), match (&p.external_org_migrations) { Some(v) => iface_team__objs_external_org_migrations__to_json(v), None => Value::Null });
     m.insert("has_compliance_export".into(), match (&p.has_compliance_export) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     m.insert("icon".into(), iface_team__objs_icon__to_json(&p.icon));
-    m.insert("id".into(), iface_team__defs_workspace_id__to_json(&p.id));
+    m.insert("id".into(), Value::String((&p.id).clone()));
     m.insert("is_assigned".into(), match (&p.is_assigned) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     m.insert("is_enterprise".into(), match (&p.is_enterprise) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("is_over_storage_limit".into(), match (&p.is_over_storage_limit) { Some(v) => Value::Bool(*(v)), None => Value::Null });
@@ -159,18 +147,6 @@ fn iface_team__objs_team__to_json(p: &iface_team::ObjsTeam) -> Value {
     m.insert("plan".into(), match (&p.plan) { Some(v) => Value::String(iface_team__objs_team_plan_enum__to_str(v).into()), None => Value::Null });
     m.insert("primary_owner".into(), match (&p.primary_owner) { Some(v) => iface_team__objs_primary_owner__to_json(v), None => Value::Null });
     m.insert("sso_provider".into(), match (&p.sso_provider) { Some(v) => iface_team__objs_team_sso_provider__to_json(v), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_team__defs_enterprise_id__to_json(p: &iface_team::DefsEnterpriseId) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_team__defs_enterprise_name__to_json(p: &iface_team::DefsEnterpriseName) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -201,12 +177,6 @@ fn iface_team__objs_icon__to_json(p: &iface_team::ObjsIcon) -> Value {
     Value::Object(m)
 }
 
-fn iface_team__defs_workspace_id__to_json(p: &iface_team::DefsWorkspaceId) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
 fn iface_team__objs_primary_owner__to_json(p: &iface_team::ObjsPrimaryOwner) -> Value {
     let mut m = Map::new();
     m.insert("email".into(), Value::String((&p.email).clone()));
@@ -225,36 +195,24 @@ fn iface_team__objs_team_sso_provider__to_json(p: &iface_team::ObjsTeamSsoProvid
 fn iface_team__integration_logs_response__to_json(p: &iface_team::IntegrationLogsResponse) -> Value {
     let mut m = Map::new();
     m.insert("logs".into(), Value::Array((&p.logs).iter().map(|v| iface_team__integration_logs_response_logs_item__to_json(v)).collect()));
-    m.insert("ok".into(), iface_team__defs_ok_true__to_json(&p.ok));
+    m.insert("ok".into(), Value::Bool(*(&p.ok)));
     m.insert("paging".into(), iface_team__objs_paging__to_json(&p.paging));
     Value::Object(m)
 }
 
 fn iface_team__integration_logs_response_logs_item__to_json(p: &iface_team::IntegrationLogsResponseLogsItem) -> Value {
     let mut m = Map::new();
-    m.insert("admin_app_id".into(), match (&p.admin_app_id) { Some(v) => iface_team__defs_app_id__to_json(v), None => Value::Null });
-    m.insert("app_id".into(), iface_team__defs_app_id__to_json(&p.app_id));
+    m.insert("admin_app_id".into(), match (&p.admin_app_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("app_id".into(), Value::String((&p.app_id).clone()));
     m.insert("app_type".into(), Value::String((&p.app_type).clone()));
     m.insert("change_type".into(), Value::String((&p.change_type).clone()));
-    m.insert("channel".into(), match (&p.channel) { Some(v) => iface_team__defs_channel__to_json(v), None => Value::Null });
+    m.insert("channel".into(), match (&p.channel) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("date".into(), Value::String((&p.date).clone()));
     m.insert("scope".into(), Value::String((&p.scope).clone()));
     m.insert("service_id".into(), match (&p.service_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("service_type".into(), match (&p.service_type) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("user_id".into(), iface_team__defs_user_id__to_json(&p.user_id));
+    m.insert("user_id".into(), Value::String((&p.user_id).clone()));
     m.insert("user_name".into(), Value::String((&p.user_name).clone()));
-    Value::Object(m)
-}
-
-fn iface_team__defs_app_id__to_json(p: &iface_team::DefsAppId) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_team__defs_channel__to_json(p: &iface_team::DefsChannel) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -297,7 +255,7 @@ fn iface_team__access_logs_response__from_json(v: &Value) -> Option<iface_team::
     let m = v.as_object()?;
     Some(iface_team::AccessLogsResponse {
         logins: m.get("logins").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_team__access_logs_response_logins_item__from_json(x)).collect())).unwrap_or_default(),
-        ok: match m.get("ok").and_then(|v| iface_team__defs_ok_true__from_json(v)) { Some(x) => x, None => return None },
+        ok: m.get("ok").and_then(|v| (v).as_bool()).unwrap_or_default(),
         paging: match m.get("paging").and_then(|v| iface_team__objs_paging__from_json(v)) { Some(x) => x, None => return None },
     })
 }
@@ -313,22 +271,8 @@ fn iface_team__access_logs_response_logins_item__from_json(v: &Value) -> Option<
         isp: m.get("isp").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         region: m.get("region").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         user_agent: m.get("user_agent").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-        user_id: match m.get("user_id").and_then(|v| iface_team__defs_user_id__from_json(v)) { Some(x) => x, None => return None },
+        user_id: m.get("user_id").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         username: m.get("username").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-    })
-}
-
-fn iface_team__defs_user_id__from_json(v: &Value) -> Option<iface_team::DefsUserId> {
-    let m = v.as_object()?;
-    Some(iface_team::DefsUserId {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-    })
-}
-
-fn iface_team__defs_ok_true__from_json(v: &Value) -> Option<iface_team::DefsOkTrue> {
-    let m = v.as_object()?;
-    Some(iface_team::DefsOkTrue {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -347,14 +291,14 @@ fn iface_team__objs_paging__from_json(v: &Value) -> Option<iface_team::ObjsPagin
 fn iface_team__billable_info_response__from_json(v: &Value) -> Option<iface_team::BillableInfoResponse> {
     let m = v.as_object()?;
     Some(iface_team::BillableInfoResponse {
-        ok: match m.get("ok").and_then(|v| iface_team__defs_ok_true__from_json(v)) { Some(x) => x, None => return None },
+        ok: m.get("ok").and_then(|v| (v).as_bool()).unwrap_or_default(),
     })
 }
 
 fn iface_team__info_response__from_json(v: &Value) -> Option<iface_team::InfoResponse> {
     let m = v.as_object()?;
     Some(iface_team::InfoResponse {
-        ok: match m.get("ok").and_then(|v| iface_team__defs_ok_true__from_json(v)) { Some(x) => x, None => return None },
+        ok: m.get("ok").and_then(|v| (v).as_bool()).unwrap_or_default(),
         team: match m.get("team").and_then(|v| iface_team__objs_team__from_json(v)) { Some(x) => x, None => return None },
     })
 }
@@ -371,12 +315,12 @@ fn iface_team__objs_team__from_json(v: &Value) -> Option<iface_team::ObjsTeam> {
         discoverable: m.get("discoverable").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         domain: m.get("domain").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         email_domain: m.get("email_domain").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-        enterprise_id: m.get("enterprise_id").filter(|v| !v.is_null()).and_then(|v| iface_team__defs_enterprise_id__from_json(v)),
-        enterprise_name: m.get("enterprise_name").filter(|v| !v.is_null()).and_then(|v| iface_team__defs_enterprise_name__from_json(v)),
+        enterprise_id: m.get("enterprise_id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        enterprise_name: m.get("enterprise_name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         external_org_migrations: m.get("external_org_migrations").filter(|v| !v.is_null()).and_then(|v| iface_team__objs_external_org_migrations__from_json(v)),
         has_compliance_export: m.get("has_compliance_export").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
         icon: match m.get("icon").and_then(|v| iface_team__objs_icon__from_json(v)) { Some(x) => x, None => return None },
-        id: match m.get("id").and_then(|v| iface_team__defs_workspace_id__from_json(v)) { Some(x) => x, None => return None },
+        id: m.get("id").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         is_assigned: m.get("is_assigned").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
         is_enterprise: m.get("is_enterprise").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
         is_over_storage_limit: m.get("is_over_storage_limit").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
@@ -391,20 +335,6 @@ fn iface_team__objs_team__from_json(v: &Value) -> Option<iface_team::ObjsTeam> {
         plan: m.get("plan").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_team__objs_team_plan_enum__from_str)),
         primary_owner: m.get("primary_owner").filter(|v| !v.is_null()).and_then(|v| iface_team__objs_primary_owner__from_json(v)),
         sso_provider: m.get("sso_provider").filter(|v| !v.is_null()).and_then(|v| iface_team__objs_team_sso_provider__from_json(v)),
-    })
-}
-
-fn iface_team__defs_enterprise_id__from_json(v: &Value) -> Option<iface_team::DefsEnterpriseId> {
-    let m = v.as_object()?;
-    Some(iface_team::DefsEnterpriseId {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-    })
-}
-
-fn iface_team__defs_enterprise_name__from_json(v: &Value) -> Option<iface_team::DefsEnterpriseName> {
-    let m = v.as_object()?;
-    Some(iface_team::DefsEnterpriseName {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -438,13 +368,6 @@ fn iface_team__objs_icon__from_json(v: &Value) -> Option<iface_team::ObjsIcon> {
     })
 }
 
-fn iface_team__defs_workspace_id__from_json(v: &Value) -> Option<iface_team::DefsWorkspaceId> {
-    let m = v.as_object()?;
-    Some(iface_team::DefsWorkspaceId {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-    })
-}
-
 fn iface_team__objs_primary_owner__from_json(v: &Value) -> Option<iface_team::ObjsPrimaryOwner> {
     let m = v.as_object()?;
     Some(iface_team::ObjsPrimaryOwner {
@@ -466,7 +389,7 @@ fn iface_team__integration_logs_response__from_json(v: &Value) -> Option<iface_t
     let m = v.as_object()?;
     Some(iface_team::IntegrationLogsResponse {
         logs: m.get("logs").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_team__integration_logs_response_logs_item__from_json(x)).collect())).unwrap_or_default(),
-        ok: match m.get("ok").and_then(|v| iface_team__defs_ok_true__from_json(v)) { Some(x) => x, None => return None },
+        ok: m.get("ok").and_then(|v| (v).as_bool()).unwrap_or_default(),
         paging: match m.get("paging").and_then(|v| iface_team__objs_paging__from_json(v)) { Some(x) => x, None => return None },
     })
 }
@@ -474,31 +397,17 @@ fn iface_team__integration_logs_response__from_json(v: &Value) -> Option<iface_t
 fn iface_team__integration_logs_response_logs_item__from_json(v: &Value) -> Option<iface_team::IntegrationLogsResponseLogsItem> {
     let m = v.as_object()?;
     Some(iface_team::IntegrationLogsResponseLogsItem {
-        admin_app_id: m.get("admin_app_id").filter(|v| !v.is_null()).and_then(|v| iface_team__defs_app_id__from_json(v)),
-        app_id: match m.get("app_id").and_then(|v| iface_team__defs_app_id__from_json(v)) { Some(x) => x, None => return None },
+        admin_app_id: m.get("admin_app_id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        app_id: m.get("app_id").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         app_type: m.get("app_type").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         change_type: m.get("change_type").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-        channel: m.get("channel").filter(|v| !v.is_null()).and_then(|v| iface_team__defs_channel__from_json(v)),
+        channel: m.get("channel").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         date: m.get("date").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         scope: m.get("scope").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         service_id: m.get("service_id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         service_type: m.get("service_type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        user_id: match m.get("user_id").and_then(|v| iface_team__defs_user_id__from_json(v)) { Some(x) => x, None => return None },
+        user_id: m.get("user_id").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         user_name: m.get("user_name").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-    })
-}
-
-fn iface_team__defs_app_id__from_json(v: &Value) -> Option<iface_team::DefsAppId> {
-    let m = v.as_object()?;
-    Some(iface_team::DefsAppId {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-    })
-}
-
-fn iface_team__defs_channel__from_json(v: &Value) -> Option<iface_team::DefsChannel> {
-    let m = v.as_object()?;
-    Some(iface_team::DefsChannel {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 

@@ -159,7 +159,7 @@ fn iface_payouts__payout__to_json(p: &iface_payouts::Payout) -> Value {
     m.insert("failure_message".into(), match (&p.failure_message) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("id".into(), Value::String((&p.id).clone()));
     m.insert("livemode".into(), Value::Bool(*(&p.livemode)));
-    m.insert("metadata".into(), match (&p.metadata) { Some(v) => iface_payouts__payout_metadata__to_json(v), None => Value::Null });
+    m.insert("metadata".into(), match (&p.metadata) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("method".into(), Value::String((&p.method).clone()));
     m.insert("object".into(), Value::String(iface_payouts__payout_object_enum__to_str(&p.object).into()));
     m.insert("original_payout".into(), match (&p.original_payout) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -172,21 +172,24 @@ fn iface_payouts__payout__to_json(p: &iface_payouts::Payout) -> Value {
     Value::Object(m)
 }
 
-fn iface_payouts__payout_metadata__to_json(p: &iface_payouts::PayoutMetadata) -> Value {
+fn iface_payouts__payout_metadata_entry__to_json(p: &iface_payouts::PayoutMetadataEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
-fn iface_payouts__post_payouts_body_metadata__to_json(p: &iface_payouts::PostPayoutsBodyMetadata) -> Value {
+fn iface_payouts__post_payouts_body_metadata_entry__to_json(p: &iface_payouts::PostPayoutsBodyMetadataEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
-fn iface_payouts__post_payouts_payout_reverse_body_metadata__to_json(p: &iface_payouts::PostPayoutsPayoutReverseBodyMetadata) -> Value {
+fn iface_payouts__post_payouts_payout_reverse_body_metadata_entry__to_json(p: &iface_payouts::PostPayoutsPayoutReverseBodyMetadataEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -211,7 +214,7 @@ fn iface_payouts__post_payouts_params__to_json(p: &iface_payouts::PostPayoutsPar
     m.insert("description".into(), match (&p.description) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("destination".into(), match (&p.destination) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("expand".into(), match (&p.expand) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
-    m.insert("metadata".into(), match (&p.metadata) { Some(v) => iface_payouts__post_payouts_body_metadata__to_json(v), None => Value::Null });
+    m.insert("metadata".into(), match (&p.metadata) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("method".into(), match (&p.method) { Some(v) => Value::String(iface_payouts__post_payouts_body_method_enum__to_str(v).into()), None => Value::Null });
     m.insert("source_type".into(), match (&p.source_type) { Some(v) => Value::String(iface_payouts__post_payouts_body_source_type_enum__to_str(v).into()), None => Value::Null });
     m.insert("statement_descriptor".into(), match (&p.statement_descriptor) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -245,7 +248,7 @@ fn iface_payouts__post_payouts_payout_reverse_params__to_json(p: &iface_payouts:
     let mut m = Map::new();
     m.insert("payout".into(), Value::String((&p.payout).clone()));
     m.insert("expand".into(), match (&p.expand) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
-    m.insert("metadata".into(), match (&p.metadata) { Some(v) => iface_payouts__post_payouts_payout_reverse_body_metadata__to_json(v), None => Value::Null });
+    m.insert("metadata".into(), match (&p.metadata) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -275,7 +278,7 @@ fn iface_payouts__payout__from_json(v: &Value) -> Option<iface_payouts::Payout> 
         failure_message: m.get("failure_message").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         id: m.get("id").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         livemode: m.get("livemode").and_then(|v| (v).as_bool()).unwrap_or_default(),
-        metadata: m.get("metadata").filter(|v| !v.is_null()).and_then(|v| iface_payouts__payout_metadata__from_json(v)),
+        metadata: m.get("metadata").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_payouts::PayoutMetadataEntry { key: k.clone(), value: val })).collect())),
         method: m.get("method").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         object: match m.get("object").and_then(|v| (v).as_str().and_then(iface_payouts__payout_object_enum__from_str)) { Some(x) => x, None => return None },
         original_payout: m.get("original_payout").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
@@ -288,10 +291,11 @@ fn iface_payouts__payout__from_json(v: &Value) -> Option<iface_payouts::Payout> 
     })
 }
 
-fn iface_payouts__payout_metadata__from_json(v: &Value) -> Option<iface_payouts::PayoutMetadata> {
+fn iface_payouts__payout_metadata_entry__from_json(v: &Value) -> Option<iface_payouts::PayoutMetadataEntry> {
     let m = v.as_object()?;
-    Some(iface_payouts::PayoutMetadata {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_payouts::PayoutMetadataEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 

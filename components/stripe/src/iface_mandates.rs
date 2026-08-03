@@ -97,7 +97,7 @@ fn iface_mandates__mandate__to_json(p: &iface_mandates::Mandate) -> Value {
     m.insert("customer_acceptance".into(), iface_mandates__customer_acceptance__to_json(&p.customer_acceptance));
     m.insert("id".into(), Value::String((&p.id).clone()));
     m.insert("livemode".into(), Value::Bool(*(&p.livemode)));
-    m.insert("multi_use".into(), match (&p.multi_use) { Some(v) => iface_mandates__mandate_multi_use__to_json(v), None => Value::Null });
+    m.insert("multi_use".into(), match (&p.multi_use) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("object".into(), Value::String(iface_mandates__mandate_object_enum__to_str(&p.object).into()));
     m.insert("payment_method".into(), Value::String((&p.payment_method).clone()));
     m.insert("payment_method_details".into(), iface_mandates__mandate_payment_method_details__to_json(&p.payment_method_details));
@@ -110,15 +110,16 @@ fn iface_mandates__mandate__to_json(p: &iface_mandates::Mandate) -> Value {
 fn iface_mandates__customer_acceptance__to_json(p: &iface_mandates::CustomerAcceptance) -> Value {
     let mut m = Map::new();
     m.insert("accepted_at".into(), match (&p.accepted_at) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    m.insert("offline".into(), match (&p.offline) { Some(v) => iface_mandates__offline_acceptance__to_json(v), None => Value::Null });
+    m.insert("offline".into(), match (&p.offline) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("online".into(), match (&p.online) { Some(v) => iface_mandates__online_acceptance__to_json(v), None => Value::Null });
     m.insert("type".into(), Value::String(iface_mandates__customer_acceptance_type_op_enum__to_str(&p.type_op).into()));
     Value::Object(m)
 }
 
-fn iface_mandates__offline_acceptance__to_json(p: &iface_mandates::OfflineAcceptance) -> Value {
+fn iface_mandates__offline_acceptance_entry__to_json(p: &iface_mandates::OfflineAcceptanceEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -129,9 +130,10 @@ fn iface_mandates__online_acceptance__to_json(p: &iface_mandates::OnlineAcceptan
     Value::Object(m)
 }
 
-fn iface_mandates__mandate_multi_use__to_json(p: &iface_mandates::MandateMultiUse) -> Value {
+fn iface_mandates__mandate_multi_use_entry__to_json(p: &iface_mandates::MandateMultiUseEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -141,12 +143,12 @@ fn iface_mandates__mandate_payment_method_details__to_json(p: &iface_mandates::M
     m.insert("au_becs_debit".into(), match (&p.au_becs_debit) { Some(v) => iface_mandates__mandate_au_becs_debit__to_json(v), None => Value::Null });
     m.insert("bacs_debit".into(), match (&p.bacs_debit) { Some(v) => iface_mandates__mandate_bacs_debit__to_json(v), None => Value::Null });
     m.insert("blik".into(), match (&p.blik) { Some(v) => iface_mandates__mandate_blik__to_json(v), None => Value::Null });
-    m.insert("card".into(), match (&p.card) { Some(v) => iface_mandates__card_mandate_payment_method_details__to_json(v), None => Value::Null });
-    m.insert("cashapp".into(), match (&p.cashapp) { Some(v) => iface_mandates__mandate_cashapp__to_json(v), None => Value::Null });
-    m.insert("link".into(), match (&p.link) { Some(v) => iface_mandates__mandate_link__to_json(v), None => Value::Null });
+    m.insert("card".into(), match (&p.card) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
+    m.insert("cashapp".into(), match (&p.cashapp) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
+    m.insert("link".into(), match (&p.link) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("sepa_debit".into(), match (&p.sepa_debit) { Some(v) => iface_mandates__mandate_sepa_debit__to_json(v), None => Value::Null });
     m.insert("type".into(), Value::String((&p.type_op).clone()));
-    m.insert("us_bank_account".into(), match (&p.us_bank_account) { Some(v) => iface_mandates__mandate_us_bank_account__to_json(v), None => Value::Null });
+    m.insert("us_bank_account".into(), match (&p.us_bank_account) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -190,21 +192,24 @@ fn iface_mandates__mandate_options_off_session_details_blik__to_json(p: &iface_m
     Value::Object(m)
 }
 
-fn iface_mandates__card_mandate_payment_method_details__to_json(p: &iface_mandates::CardMandatePaymentMethodDetails) -> Value {
+fn iface_mandates__card_mandate_payment_method_details_entry__to_json(p: &iface_mandates::CardMandatePaymentMethodDetailsEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
-fn iface_mandates__mandate_cashapp__to_json(p: &iface_mandates::MandateCashapp) -> Value {
+fn iface_mandates__mandate_cashapp_entry__to_json(p: &iface_mandates::MandateCashappEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
-fn iface_mandates__mandate_link__to_json(p: &iface_mandates::MandateLink) -> Value {
+fn iface_mandates__mandate_link_entry__to_json(p: &iface_mandates::MandateLinkEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -215,9 +220,10 @@ fn iface_mandates__mandate_sepa_debit__to_json(p: &iface_mandates::MandateSepaDe
     Value::Object(m)
 }
 
-fn iface_mandates__mandate_us_bank_account__to_json(p: &iface_mandates::MandateUsBankAccount) -> Value {
+fn iface_mandates__mandate_us_bank_account_entry__to_json(p: &iface_mandates::MandateUsBankAccountEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -242,7 +248,7 @@ fn iface_mandates__mandate__from_json(v: &Value) -> Option<iface_mandates::Manda
         customer_acceptance: match m.get("customer_acceptance").and_then(|v| iface_mandates__customer_acceptance__from_json(v)) { Some(x) => x, None => return None },
         id: m.get("id").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         livemode: m.get("livemode").and_then(|v| (v).as_bool()).unwrap_or_default(),
-        multi_use: m.get("multi_use").filter(|v| !v.is_null()).and_then(|v| iface_mandates__mandate_multi_use__from_json(v)),
+        multi_use: m.get("multi_use").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_mandates::MandateMultiUseEntry { key: k.clone(), value: val })).collect())),
         object: match m.get("object").and_then(|v| (v).as_str().and_then(iface_mandates__mandate_object_enum__from_str)) { Some(x) => x, None => return None },
         payment_method: m.get("payment_method").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         payment_method_details: match m.get("payment_method_details").and_then(|v| iface_mandates__mandate_payment_method_details__from_json(v)) { Some(x) => x, None => return None },
@@ -256,16 +262,17 @@ fn iface_mandates__customer_acceptance__from_json(v: &Value) -> Option<iface_man
     let m = v.as_object()?;
     Some(iface_mandates::CustomerAcceptance {
         accepted_at: m.get("accepted_at").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
-        offline: m.get("offline").filter(|v| !v.is_null()).and_then(|v| iface_mandates__offline_acceptance__from_json(v)),
+        offline: m.get("offline").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_mandates::OfflineAcceptanceEntry { key: k.clone(), value: val })).collect())),
         online: m.get("online").filter(|v| !v.is_null()).and_then(|v| iface_mandates__online_acceptance__from_json(v)),
         type_op: match m.get("type").and_then(|v| (v).as_str().and_then(iface_mandates__customer_acceptance_type_op_enum__from_str)) { Some(x) => x, None => return None },
     })
 }
 
-fn iface_mandates__offline_acceptance__from_json(v: &Value) -> Option<iface_mandates::OfflineAcceptance> {
+fn iface_mandates__offline_acceptance_entry__from_json(v: &Value) -> Option<iface_mandates::OfflineAcceptanceEntry> {
     let m = v.as_object()?;
-    Some(iface_mandates::OfflineAcceptance {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_mandates::OfflineAcceptanceEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -277,10 +284,11 @@ fn iface_mandates__online_acceptance__from_json(v: &Value) -> Option<iface_manda
     })
 }
 
-fn iface_mandates__mandate_multi_use__from_json(v: &Value) -> Option<iface_mandates::MandateMultiUse> {
+fn iface_mandates__mandate_multi_use_entry__from_json(v: &Value) -> Option<iface_mandates::MandateMultiUseEntry> {
     let m = v.as_object()?;
-    Some(iface_mandates::MandateMultiUse {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_mandates::MandateMultiUseEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -291,12 +299,12 @@ fn iface_mandates__mandate_payment_method_details__from_json(v: &Value) -> Optio
         au_becs_debit: m.get("au_becs_debit").filter(|v| !v.is_null()).and_then(|v| iface_mandates__mandate_au_becs_debit__from_json(v)),
         bacs_debit: m.get("bacs_debit").filter(|v| !v.is_null()).and_then(|v| iface_mandates__mandate_bacs_debit__from_json(v)),
         blik: m.get("blik").filter(|v| !v.is_null()).and_then(|v| iface_mandates__mandate_blik__from_json(v)),
-        card: m.get("card").filter(|v| !v.is_null()).and_then(|v| iface_mandates__card_mandate_payment_method_details__from_json(v)),
-        cashapp: m.get("cashapp").filter(|v| !v.is_null()).and_then(|v| iface_mandates__mandate_cashapp__from_json(v)),
-        link: m.get("link").filter(|v| !v.is_null()).and_then(|v| iface_mandates__mandate_link__from_json(v)),
+        card: m.get("card").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_mandates::CardMandatePaymentMethodDetailsEntry { key: k.clone(), value: val })).collect())),
+        cashapp: m.get("cashapp").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_mandates::MandateCashappEntry { key: k.clone(), value: val })).collect())),
+        link: m.get("link").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_mandates::MandateLinkEntry { key: k.clone(), value: val })).collect())),
         sepa_debit: m.get("sepa_debit").filter(|v| !v.is_null()).and_then(|v| iface_mandates__mandate_sepa_debit__from_json(v)),
         type_op: m.get("type").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-        us_bank_account: m.get("us_bank_account").filter(|v| !v.is_null()).and_then(|v| iface_mandates__mandate_us_bank_account__from_json(v)),
+        us_bank_account: m.get("us_bank_account").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_mandates::MandateUsBankAccountEntry { key: k.clone(), value: val })).collect())),
     })
 }
 
@@ -345,24 +353,27 @@ fn iface_mandates__mandate_options_off_session_details_blik__from_json(v: &Value
     })
 }
 
-fn iface_mandates__card_mandate_payment_method_details__from_json(v: &Value) -> Option<iface_mandates::CardMandatePaymentMethodDetails> {
+fn iface_mandates__card_mandate_payment_method_details_entry__from_json(v: &Value) -> Option<iface_mandates::CardMandatePaymentMethodDetailsEntry> {
     let m = v.as_object()?;
-    Some(iface_mandates::CardMandatePaymentMethodDetails {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_mandates::CardMandatePaymentMethodDetailsEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
-fn iface_mandates__mandate_cashapp__from_json(v: &Value) -> Option<iface_mandates::MandateCashapp> {
+fn iface_mandates__mandate_cashapp_entry__from_json(v: &Value) -> Option<iface_mandates::MandateCashappEntry> {
     let m = v.as_object()?;
-    Some(iface_mandates::MandateCashapp {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_mandates::MandateCashappEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
-fn iface_mandates__mandate_link__from_json(v: &Value) -> Option<iface_mandates::MandateLink> {
+fn iface_mandates__mandate_link_entry__from_json(v: &Value) -> Option<iface_mandates::MandateLinkEntry> {
     let m = v.as_object()?;
-    Some(iface_mandates::MandateLink {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_mandates::MandateLinkEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -374,10 +385,11 @@ fn iface_mandates__mandate_sepa_debit__from_json(v: &Value) -> Option<iface_mand
     })
 }
 
-fn iface_mandates__mandate_us_bank_account__from_json(v: &Value) -> Option<iface_mandates::MandateUsBankAccount> {
+fn iface_mandates__mandate_us_bank_account_entry__from_json(v: &Value) -> Option<iface_mandates::MandateUsBankAccountEntry> {
     let m = v.as_object()?;
-    Some(iface_mandates::MandateUsBankAccount {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_mandates::MandateUsBankAccountEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 

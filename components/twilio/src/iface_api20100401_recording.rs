@@ -185,6 +185,29 @@ const OP_API20100401_RECORDING_DELETE_RECORDING: OpSpec = OpSpec {
     ],
 };
 
+fn iface_api20100401_recording__call_recording_enum_source__to_str(e: &iface_api20100401_recording::CallRecordingEnumSource) -> &'static str {
+    match e {
+        iface_api20100401_recording::CallRecordingEnumSource::DialVerb => "DialVerb",
+        iface_api20100401_recording::CallRecordingEnumSource::Conference => "Conference",
+        iface_api20100401_recording::CallRecordingEnumSource::OutboundApi => "OutboundAPI",
+        iface_api20100401_recording::CallRecordingEnumSource::Trunking => "Trunking",
+        iface_api20100401_recording::CallRecordingEnumSource::RecordVerb => "RecordVerb",
+        iface_api20100401_recording::CallRecordingEnumSource::StartCallRecordingApi => "StartCallRecordingAPI",
+        iface_api20100401_recording::CallRecordingEnumSource::StartConferenceRecordingApi => "StartConferenceRecordingAPI",
+    }
+}
+
+fn iface_api20100401_recording__call_recording_enum_status__to_str(e: &iface_api20100401_recording::CallRecordingEnumStatus) -> &'static str {
+    match e {
+        iface_api20100401_recording::CallRecordingEnumStatus::InProgress => "in-progress",
+        iface_api20100401_recording::CallRecordingEnumStatus::Paused => "paused",
+        iface_api20100401_recording::CallRecordingEnumStatus::Stopped => "stopped",
+        iface_api20100401_recording::CallRecordingEnumStatus::Processing => "processing",
+        iface_api20100401_recording::CallRecordingEnumStatus::Completed => "completed",
+        iface_api20100401_recording::CallRecordingEnumStatus::Absent => "absent",
+    }
+}
+
 fn iface_api20100401_recording__create_call_recording_body_recording_status_callback_method_enum__to_str(e: &iface_api20100401_recording::CreateCallRecordingBodyRecordingStatusCallbackMethodEnum) -> &'static str {
     match e {
         iface_api20100401_recording::CreateCallRecordingBodyRecordingStatusCallbackMethodEnum::Head => "HEAD",
@@ -193,6 +216,53 @@ fn iface_api20100401_recording__create_call_recording_body_recording_status_call
         iface_api20100401_recording::CreateCallRecordingBodyRecordingStatusCallbackMethodEnum::Patch => "PATCH",
         iface_api20100401_recording::CreateCallRecordingBodyRecordingStatusCallbackMethodEnum::Put => "PUT",
         iface_api20100401_recording::CreateCallRecordingBodyRecordingStatusCallbackMethodEnum::Delete => "DELETE",
+    }
+}
+
+fn iface_api20100401_recording__conference_recording_enum_source__to_str(e: &iface_api20100401_recording::ConferenceRecordingEnumSource) -> &'static str {
+    match e {
+        iface_api20100401_recording::ConferenceRecordingEnumSource::DialVerb => "DialVerb",
+        iface_api20100401_recording::ConferenceRecordingEnumSource::Conference => "Conference",
+        iface_api20100401_recording::ConferenceRecordingEnumSource::OutboundApi => "OutboundAPI",
+        iface_api20100401_recording::ConferenceRecordingEnumSource::Trunking => "Trunking",
+        iface_api20100401_recording::ConferenceRecordingEnumSource::RecordVerb => "RecordVerb",
+        iface_api20100401_recording::ConferenceRecordingEnumSource::StartCallRecordingApi => "StartCallRecordingAPI",
+        iface_api20100401_recording::ConferenceRecordingEnumSource::StartConferenceRecordingApi => "StartConferenceRecordingAPI",
+    }
+}
+
+fn iface_api20100401_recording__conference_recording_enum_status__to_str(e: &iface_api20100401_recording::ConferenceRecordingEnumStatus) -> &'static str {
+    match e {
+        iface_api20100401_recording::ConferenceRecordingEnumStatus::InProgress => "in-progress",
+        iface_api20100401_recording::ConferenceRecordingEnumStatus::Paused => "paused",
+        iface_api20100401_recording::ConferenceRecordingEnumStatus::Stopped => "stopped",
+        iface_api20100401_recording::ConferenceRecordingEnumStatus::Processing => "processing",
+        iface_api20100401_recording::ConferenceRecordingEnumStatus::Completed => "completed",
+        iface_api20100401_recording::ConferenceRecordingEnumStatus::Absent => "absent",
+    }
+}
+
+fn iface_api20100401_recording__recording_enum_source__to_str(e: &iface_api20100401_recording::RecordingEnumSource) -> &'static str {
+    match e {
+        iface_api20100401_recording::RecordingEnumSource::DialVerb => "DialVerb",
+        iface_api20100401_recording::RecordingEnumSource::Conference => "Conference",
+        iface_api20100401_recording::RecordingEnumSource::OutboundApi => "OutboundAPI",
+        iface_api20100401_recording::RecordingEnumSource::Trunking => "Trunking",
+        iface_api20100401_recording::RecordingEnumSource::RecordVerb => "RecordVerb",
+        iface_api20100401_recording::RecordingEnumSource::StartCallRecordingApi => "StartCallRecordingAPI",
+        iface_api20100401_recording::RecordingEnumSource::StartConferenceRecordingApi => "StartConferenceRecordingAPI",
+    }
+}
+
+fn iface_api20100401_recording__recording_enum_status__to_str(e: &iface_api20100401_recording::RecordingEnumStatus) -> &'static str {
+    match e {
+        iface_api20100401_recording::RecordingEnumStatus::InProgress => "in-progress",
+        iface_api20100401_recording::RecordingEnumStatus::Paused => "paused",
+        iface_api20100401_recording::RecordingEnumStatus::Stopped => "stopped",
+        iface_api20100401_recording::RecordingEnumStatus::Processing => "processing",
+        iface_api20100401_recording::RecordingEnumStatus::Completed => "completed",
+        iface_api20100401_recording::RecordingEnumStatus::Absent => "absent",
+        iface_api20100401_recording::RecordingEnumStatus::Deleted => "deleted",
     }
 }
 
@@ -225,23 +295,11 @@ fn iface_api20100401_recording__api_v2010_account_call_call_recording__to_json(p
     m.insert("price".into(), match (&p.price) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
     m.insert("price_unit".into(), match (&p.price_unit) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("sid".into(), match (&p.sid) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("source".into(), match (&p.source) { Some(v) => iface_api20100401_recording__call_recording_enum_source__to_json(v), None => Value::Null });
+    m.insert("source".into(), match (&p.source) { Some(v) => Value::String(iface_api20100401_recording__call_recording_enum_source__to_str(v).into()), None => Value::Null });
     m.insert("start_time".into(), match (&p.start_time) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("status".into(), match (&p.status) { Some(v) => iface_api20100401_recording__call_recording_enum_status__to_json(v), None => Value::Null });
+    m.insert("status".into(), match (&p.status) { Some(v) => Value::String(iface_api20100401_recording__call_recording_enum_status__to_str(v).into()), None => Value::Null });
     m.insert("track".into(), match (&p.track) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("uri".into(), match (&p.uri) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_api20100401_recording__call_recording_enum_source__to_json(p: &iface_api20100401_recording::CallRecordingEnumSource) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_api20100401_recording__call_recording_enum_status__to_json(p: &iface_api20100401_recording::CallRecordingEnumStatus) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -274,22 +332,10 @@ fn iface_api20100401_recording__api_v2010_account_conference_conference_recordin
     m.insert("price".into(), match (&p.price) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("price_unit".into(), match (&p.price_unit) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("sid".into(), match (&p.sid) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("source".into(), match (&p.source) { Some(v) => iface_api20100401_recording__conference_recording_enum_source__to_json(v), None => Value::Null });
+    m.insert("source".into(), match (&p.source) { Some(v) => Value::String(iface_api20100401_recording__conference_recording_enum_source__to_str(v).into()), None => Value::Null });
     m.insert("start_time".into(), match (&p.start_time) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("status".into(), match (&p.status) { Some(v) => iface_api20100401_recording__conference_recording_enum_status__to_json(v), None => Value::Null });
+    m.insert("status".into(), match (&p.status) { Some(v) => Value::String(iface_api20100401_recording__conference_recording_enum_status__to_str(v).into()), None => Value::Null });
     m.insert("uri".into(), match (&p.uri) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_api20100401_recording__conference_recording_enum_source__to_json(p: &iface_api20100401_recording::ConferenceRecordingEnumSource) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_api20100401_recording__conference_recording_enum_status__to_json(p: &iface_api20100401_recording::ConferenceRecordingEnumStatus) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -323,23 +369,11 @@ fn iface_api20100401_recording__api_v2010_account_recording__to_json(p: &iface_a
     m.insert("price".into(), match (&p.price) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("price_unit".into(), match (&p.price_unit) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("sid".into(), match (&p.sid) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("source".into(), match (&p.source) { Some(v) => iface_api20100401_recording__recording_enum_source__to_json(v), None => Value::Null });
+    m.insert("source".into(), match (&p.source) { Some(v) => Value::String(iface_api20100401_recording__recording_enum_source__to_str(v).into()), None => Value::Null });
     m.insert("start_time".into(), match (&p.start_time) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("status".into(), match (&p.status) { Some(v) => iface_api20100401_recording__recording_enum_status__to_json(v), None => Value::Null });
+    m.insert("status".into(), match (&p.status) { Some(v) => Value::String(iface_api20100401_recording__recording_enum_status__to_str(v).into()), None => Value::Null });
     m.insert("subresource_uris".into(), match (&p.subresource_uris) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("uri".into(), match (&p.uri) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_api20100401_recording__recording_enum_source__to_json(p: &iface_api20100401_recording::RecordingEnumSource) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_api20100401_recording__recording_enum_status__to_json(p: &iface_api20100401_recording::RecordingEnumStatus) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -383,7 +417,7 @@ fn iface_api20100401_recording__update_call_recording_params__to_json(p: &iface_
     m.insert("call_sid".into(), Value::String((&p.call_sid).clone()));
     m.insert("sid".into(), Value::String((&p.sid).clone()));
     m.insert("pause_behavior".into(), match (&p.pause_behavior) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("status".into(), iface_api20100401_recording__call_recording_enum_status__to_json(&p.status));
+    m.insert("status".into(), Value::String(iface_api20100401_recording__call_recording_enum_status__to_str(&p.status).into()));
     Value::Object(m)
 }
 
@@ -422,7 +456,7 @@ fn iface_api20100401_recording__update_conference_recording_params__to_json(p: &
     m.insert("conference_sid".into(), Value::String((&p.conference_sid).clone()));
     m.insert("sid".into(), Value::String((&p.sid).clone()));
     m.insert("pause_behavior".into(), match (&p.pause_behavior) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("status".into(), iface_api20100401_recording__conference_recording_enum_status__to_json(&p.status));
+    m.insert("status".into(), Value::String(iface_api20100401_recording__conference_recording_enum_status__to_str(&p.status).into()));
     Value::Object(m)
 }
 
@@ -495,25 +529,11 @@ fn iface_api20100401_recording__api_v2010_account_call_call_recording__from_json
         price: m.get("price").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
         price_unit: m.get("price_unit").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         sid: m.get("sid").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        source: m.get("source").filter(|v| !v.is_null()).and_then(|v| iface_api20100401_recording__call_recording_enum_source__from_json(v)),
+        source: m.get("source").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_api20100401_recording__call_recording_enum_source__from_str)),
         start_time: m.get("start_time").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        status: m.get("status").filter(|v| !v.is_null()).and_then(|v| iface_api20100401_recording__call_recording_enum_status__from_json(v)),
+        status: m.get("status").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_api20100401_recording__call_recording_enum_status__from_str)),
         track: m.get("track").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         uri: m.get("uri").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-    })
-}
-
-fn iface_api20100401_recording__call_recording_enum_source__from_json(v: &Value) -> Option<iface_api20100401_recording::CallRecordingEnumSource> {
-    let m = v.as_object()?;
-    Some(iface_api20100401_recording::CallRecordingEnumSource {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-    })
-}
-
-fn iface_api20100401_recording__call_recording_enum_status__from_json(v: &Value) -> Option<iface_api20100401_recording::CallRecordingEnumStatus> {
-    let m = v.as_object()?;
-    Some(iface_api20100401_recording::CallRecordingEnumStatus {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -548,24 +568,10 @@ fn iface_api20100401_recording__api_v2010_account_conference_conference_recordin
         price: m.get("price").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         price_unit: m.get("price_unit").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         sid: m.get("sid").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        source: m.get("source").filter(|v| !v.is_null()).and_then(|v| iface_api20100401_recording__conference_recording_enum_source__from_json(v)),
+        source: m.get("source").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_api20100401_recording__conference_recording_enum_source__from_str)),
         start_time: m.get("start_time").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        status: m.get("status").filter(|v| !v.is_null()).and_then(|v| iface_api20100401_recording__conference_recording_enum_status__from_json(v)),
+        status: m.get("status").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_api20100401_recording__conference_recording_enum_status__from_str)),
         uri: m.get("uri").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-    })
-}
-
-fn iface_api20100401_recording__conference_recording_enum_source__from_json(v: &Value) -> Option<iface_api20100401_recording::ConferenceRecordingEnumSource> {
-    let m = v.as_object()?;
-    Some(iface_api20100401_recording::ConferenceRecordingEnumSource {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-    })
-}
-
-fn iface_api20100401_recording__conference_recording_enum_status__from_json(v: &Value) -> Option<iface_api20100401_recording::ConferenceRecordingEnumStatus> {
-    let m = v.as_object()?;
-    Some(iface_api20100401_recording::ConferenceRecordingEnumStatus {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -601,26 +607,88 @@ fn iface_api20100401_recording__api_v2010_account_recording__from_json(v: &Value
         price: m.get("price").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         price_unit: m.get("price_unit").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         sid: m.get("sid").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        source: m.get("source").filter(|v| !v.is_null()).and_then(|v| iface_api20100401_recording__recording_enum_source__from_json(v)),
+        source: m.get("source").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_api20100401_recording__recording_enum_source__from_str)),
         start_time: m.get("start_time").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        status: m.get("status").filter(|v| !v.is_null()).and_then(|v| iface_api20100401_recording__recording_enum_status__from_json(v)),
+        status: m.get("status").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_api20100401_recording__recording_enum_status__from_str)),
         subresource_uris: m.get("subresource_uris").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         uri: m.get("uri").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
     })
 }
 
-fn iface_api20100401_recording__recording_enum_source__from_json(v: &Value) -> Option<iface_api20100401_recording::RecordingEnumSource> {
-    let m = v.as_object()?;
-    Some(iface_api20100401_recording::RecordingEnumSource {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-    })
+fn iface_api20100401_recording__call_recording_enum_source__from_str(s: &str) -> Option<iface_api20100401_recording::CallRecordingEnumSource> {
+    match s {
+        "DialVerb" => Some(iface_api20100401_recording::CallRecordingEnumSource::DialVerb),
+        "Conference" => Some(iface_api20100401_recording::CallRecordingEnumSource::Conference),
+        "OutboundAPI" => Some(iface_api20100401_recording::CallRecordingEnumSource::OutboundApi),
+        "Trunking" => Some(iface_api20100401_recording::CallRecordingEnumSource::Trunking),
+        "RecordVerb" => Some(iface_api20100401_recording::CallRecordingEnumSource::RecordVerb),
+        "StartCallRecordingAPI" => Some(iface_api20100401_recording::CallRecordingEnumSource::StartCallRecordingApi),
+        "StartConferenceRecordingAPI" => Some(iface_api20100401_recording::CallRecordingEnumSource::StartConferenceRecordingApi),
+        _ => None,
+    }
 }
 
-fn iface_api20100401_recording__recording_enum_status__from_json(v: &Value) -> Option<iface_api20100401_recording::RecordingEnumStatus> {
-    let m = v.as_object()?;
-    Some(iface_api20100401_recording::RecordingEnumStatus {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-    })
+fn iface_api20100401_recording__call_recording_enum_status__from_str(s: &str) -> Option<iface_api20100401_recording::CallRecordingEnumStatus> {
+    match s {
+        "in-progress" => Some(iface_api20100401_recording::CallRecordingEnumStatus::InProgress),
+        "paused" => Some(iface_api20100401_recording::CallRecordingEnumStatus::Paused),
+        "stopped" => Some(iface_api20100401_recording::CallRecordingEnumStatus::Stopped),
+        "processing" => Some(iface_api20100401_recording::CallRecordingEnumStatus::Processing),
+        "completed" => Some(iface_api20100401_recording::CallRecordingEnumStatus::Completed),
+        "absent" => Some(iface_api20100401_recording::CallRecordingEnumStatus::Absent),
+        _ => None,
+    }
+}
+
+fn iface_api20100401_recording__conference_recording_enum_source__from_str(s: &str) -> Option<iface_api20100401_recording::ConferenceRecordingEnumSource> {
+    match s {
+        "DialVerb" => Some(iface_api20100401_recording::ConferenceRecordingEnumSource::DialVerb),
+        "Conference" => Some(iface_api20100401_recording::ConferenceRecordingEnumSource::Conference),
+        "OutboundAPI" => Some(iface_api20100401_recording::ConferenceRecordingEnumSource::OutboundApi),
+        "Trunking" => Some(iface_api20100401_recording::ConferenceRecordingEnumSource::Trunking),
+        "RecordVerb" => Some(iface_api20100401_recording::ConferenceRecordingEnumSource::RecordVerb),
+        "StartCallRecordingAPI" => Some(iface_api20100401_recording::ConferenceRecordingEnumSource::StartCallRecordingApi),
+        "StartConferenceRecordingAPI" => Some(iface_api20100401_recording::ConferenceRecordingEnumSource::StartConferenceRecordingApi),
+        _ => None,
+    }
+}
+
+fn iface_api20100401_recording__conference_recording_enum_status__from_str(s: &str) -> Option<iface_api20100401_recording::ConferenceRecordingEnumStatus> {
+    match s {
+        "in-progress" => Some(iface_api20100401_recording::ConferenceRecordingEnumStatus::InProgress),
+        "paused" => Some(iface_api20100401_recording::ConferenceRecordingEnumStatus::Paused),
+        "stopped" => Some(iface_api20100401_recording::ConferenceRecordingEnumStatus::Stopped),
+        "processing" => Some(iface_api20100401_recording::ConferenceRecordingEnumStatus::Processing),
+        "completed" => Some(iface_api20100401_recording::ConferenceRecordingEnumStatus::Completed),
+        "absent" => Some(iface_api20100401_recording::ConferenceRecordingEnumStatus::Absent),
+        _ => None,
+    }
+}
+
+fn iface_api20100401_recording__recording_enum_source__from_str(s: &str) -> Option<iface_api20100401_recording::RecordingEnumSource> {
+    match s {
+        "DialVerb" => Some(iface_api20100401_recording::RecordingEnumSource::DialVerb),
+        "Conference" => Some(iface_api20100401_recording::RecordingEnumSource::Conference),
+        "OutboundAPI" => Some(iface_api20100401_recording::RecordingEnumSource::OutboundApi),
+        "Trunking" => Some(iface_api20100401_recording::RecordingEnumSource::Trunking),
+        "RecordVerb" => Some(iface_api20100401_recording::RecordingEnumSource::RecordVerb),
+        "StartCallRecordingAPI" => Some(iface_api20100401_recording::RecordingEnumSource::StartCallRecordingApi),
+        "StartConferenceRecordingAPI" => Some(iface_api20100401_recording::RecordingEnumSource::StartConferenceRecordingApi),
+        _ => None,
+    }
+}
+
+fn iface_api20100401_recording__recording_enum_status__from_str(s: &str) -> Option<iface_api20100401_recording::RecordingEnumStatus> {
+    match s {
+        "in-progress" => Some(iface_api20100401_recording::RecordingEnumStatus::InProgress),
+        "paused" => Some(iface_api20100401_recording::RecordingEnumStatus::Paused),
+        "stopped" => Some(iface_api20100401_recording::RecordingEnumStatus::Stopped),
+        "processing" => Some(iface_api20100401_recording::RecordingEnumStatus::Processing),
+        "completed" => Some(iface_api20100401_recording::RecordingEnumStatus::Completed),
+        "absent" => Some(iface_api20100401_recording::RecordingEnumStatus::Absent),
+        "deleted" => Some(iface_api20100401_recording::RecordingEnumStatus::Deleted),
+        _ => None,
+    }
 }
 
 fn iface_api20100401_recording__list_call_recording__ok(body: String) -> Result<iface_api20100401_recording::ListCallRecordingResponse, crate::runtime::DispatchError> {

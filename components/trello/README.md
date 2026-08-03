@@ -20,8 +20,8 @@ triggered.
 
 | Setting | Value |
 | --- | --- |
-| Package | `autostamp:trello@0.5.0` |
-| Published version | `0.5.0+trello-1.0` |
+| Package | `autostamp:trello@0.6.0` |
+| Published version | `0.6.0+trello-1.0` |
 | Tag filter | all tags |
 | Operations generated | 324 |
 | Infer API-key credentials | enabled — not triggered |

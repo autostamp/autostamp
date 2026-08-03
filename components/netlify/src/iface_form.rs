@@ -28,7 +28,7 @@ const OP_FORM_DELETE_SITE_FORM: OpSpec = OpSpec {
 fn iface_form__form__to_json(p: &iface_form::Form) -> Value {
     let mut m = Map::new();
     m.insert("created_at".into(), match (&p.created_at) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("fields".into(), match (&p.fields) { Some(v) => Value::Array((v).iter().map(|v| iface_form__form_fields_item__to_json(v)).collect()), None => Value::Null });
+    m.insert("fields".into(), match (&p.fields) { Some(v) => Value::Array((v).iter().map(|v| Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect())).collect()), None => Value::Null });
     m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("paths".into(), match (&p.paths) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
@@ -37,9 +37,10 @@ fn iface_form__form__to_json(p: &iface_form::Form) -> Value {
     Value::Object(m)
 }
 
-fn iface_form__form_fields_item__to_json(p: &iface_form::FormFieldsItem) -> Value {
+fn iface_form__form_fields_item_entry__to_json(p: &iface_form::FormFieldsItemEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -60,7 +61,7 @@ fn iface_form__form__from_json(v: &Value) -> Option<iface_form::Form> {
     let m = v.as_object()?;
     Some(iface_form::Form {
         created_at: m.get("created_at").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        fields: m.get("fields").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_form__form_fields_item__from_json(x)).collect())),
+        fields: m.get("fields").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_form::FormFieldsItemEntry { key: k.clone(), value: val })).collect())).collect())),
         id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         paths: m.get("paths").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
@@ -69,10 +70,11 @@ fn iface_form__form__from_json(v: &Value) -> Option<iface_form::Form> {
     })
 }
 
-fn iface_form__form_fields_item__from_json(v: &Value) -> Option<iface_form::FormFieldsItem> {
+fn iface_form__form_fields_item_entry__from_json(v: &Value) -> Option<iface_form::FormFieldsItemEntry> {
     let m = v.as_object()?;
-    Some(iface_form::FormFieldsItem {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_form::FormFieldsItemEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 

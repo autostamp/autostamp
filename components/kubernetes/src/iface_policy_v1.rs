@@ -126,7 +126,7 @@ const OP_POLICY_V1_PATCH_POLICY_V1_NAMESPACED_POD_DISRUPTION_BUDGET: OpSpec = Op
         FieldSpec { snake: "field_manager", wire: "fieldManager", location: FieldLocation::Query },
         FieldSpec { snake: "field_validation", wire: "fieldValidation", location: FieldLocation::Query },
         FieldSpec { snake: "force", wire: "force", location: FieldLocation::Query },
-        FieldSpec { snake: "data", wire: "data", location: FieldLocation::Body },
+        FieldSpec { snake: "body", wire: "body", location: FieldLocation::Body },
     ],
     auth: &[
     ],
@@ -198,7 +198,7 @@ const OP_POLICY_V1_PATCH_POLICY_V1_NAMESPACED_POD_DISRUPTION_BUDGET_STATUS: OpSp
         FieldSpec { snake: "field_manager", wire: "fieldManager", location: FieldLocation::Query },
         FieldSpec { snake: "field_validation", wire: "fieldValidation", location: FieldLocation::Query },
         FieldSpec { snake: "force", wire: "force", location: FieldLocation::Query },
-        FieldSpec { snake: "data", wire: "data", location: FieldLocation::Body },
+        FieldSpec { snake: "body", wire: "body", location: FieldLocation::Body },
     ],
     auth: &[
     ],
@@ -332,14 +332,14 @@ fn iface_policy_v1__io_k8s_api_policy_v1_pod_disruption_budget__to_json(p: &ifac
 
 fn iface_policy_v1__io_k8s_apimachinery_pkg_apis_meta_v1_object_meta__to_json(p: &iface_policy_v1::IoK8sApimachineryPkgApisMetaV1ObjectMeta) -> Value {
     let mut m = Map::new();
-    m.insert("annotations".into(), match (&p.annotations) { Some(v) => iface_policy_v1__io_k8s_apimachinery_pkg_apis_meta_v1_object_meta_annotations__to_json(v), None => Value::Null });
-    m.insert("creationTimestamp".into(), match (&p.creation_timestamp) { Some(v) => iface_policy_v1__io_k8s_apimachinery_pkg_apis_meta_v1_time__to_json(v), None => Value::Null });
+    m.insert("annotations".into(), match (&p.annotations) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
+    m.insert("creationTimestamp".into(), match (&p.creation_timestamp) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("deletionGracePeriodSeconds".into(), match (&p.deletion_grace_period_seconds) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    m.insert("deletionTimestamp".into(), match (&p.deletion_timestamp) { Some(v) => iface_policy_v1__io_k8s_apimachinery_pkg_apis_meta_v1_time__to_json(v), None => Value::Null });
+    m.insert("deletionTimestamp".into(), match (&p.deletion_timestamp) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("finalizers".into(), match (&p.finalizers) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
     m.insert("generateName".into(), match (&p.generate_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("generation".into(), match (&p.generation) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    m.insert("labels".into(), match (&p.labels) { Some(v) => iface_policy_v1__io_k8s_apimachinery_pkg_apis_meta_v1_object_meta_labels__to_json(v), None => Value::Null });
+    m.insert("labels".into(), match (&p.labels) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("managedFields".into(), match (&p.managed_fields) { Some(v) => Value::Array((v).iter().map(|v| iface_policy_v1__io_k8s_apimachinery_pkg_apis_meta_v1_managed_fields_entry__to_json(v)).collect()), None => Value::Null });
     m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("namespace".into(), match (&p.namespace) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -350,21 +350,17 @@ fn iface_policy_v1__io_k8s_apimachinery_pkg_apis_meta_v1_object_meta__to_json(p:
     Value::Object(m)
 }
 
-fn iface_policy_v1__io_k8s_apimachinery_pkg_apis_meta_v1_object_meta_annotations__to_json(p: &iface_policy_v1::IoK8sApimachineryPkgApisMetaV1ObjectMetaAnnotations) -> Value {
+fn iface_policy_v1__io_k8s_apimachinery_pkg_apis_meta_v1_object_meta_annotations_entry__to_json(p: &iface_policy_v1::IoK8sApimachineryPkgApisMetaV1ObjectMetaAnnotationsEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_policy_v1__io_k8s_apimachinery_pkg_apis_meta_v1_time__to_json(p: &iface_policy_v1::IoK8sApimachineryPkgApisMetaV1Time) -> Value {
-    let mut m = Map::new();
+    m.insert("key".into(), Value::String((&p.key).clone()));
     m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
-fn iface_policy_v1__io_k8s_apimachinery_pkg_apis_meta_v1_object_meta_labels__to_json(p: &iface_policy_v1::IoK8sApimachineryPkgApisMetaV1ObjectMetaLabels) -> Value {
+fn iface_policy_v1__io_k8s_apimachinery_pkg_apis_meta_v1_object_meta_labels_entry__to_json(p: &iface_policy_v1::IoK8sApimachineryPkgApisMetaV1ObjectMetaLabelsEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -372,17 +368,18 @@ fn iface_policy_v1__io_k8s_apimachinery_pkg_apis_meta_v1_managed_fields_entry__t
     let mut m = Map::new();
     m.insert("apiVersion".into(), match (&p.api_version) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("fieldsType".into(), match (&p.fields_type) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("fieldsV1".into(), match (&p.fields_v1) { Some(v) => iface_policy_v1__io_k8s_apimachinery_pkg_apis_meta_v1_fields_v1__to_json(v), None => Value::Null });
+    m.insert("fieldsV1".into(), match (&p.fields_v1) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("manager".into(), match (&p.manager) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("operation".into(), match (&p.operation) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("subresource".into(), match (&p.subresource) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("time".into(), match (&p.time) { Some(v) => iface_policy_v1__io_k8s_apimachinery_pkg_apis_meta_v1_time__to_json(v), None => Value::Null });
+    m.insert("time".into(), match (&p.time) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_policy_v1__io_k8s_apimachinery_pkg_apis_meta_v1_fields_v1__to_json(p: &iface_policy_v1::IoK8sApimachineryPkgApisMetaV1FieldsV1) -> Value {
+fn iface_policy_v1__io_k8s_apimachinery_pkg_apis_meta_v1_fields_v1_entry__to_json(p: &iface_policy_v1::IoK8sApimachineryPkgApisMetaV1FieldsV1Entry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -399,23 +396,17 @@ fn iface_policy_v1__io_k8s_apimachinery_pkg_apis_meta_v1_owner_reference__to_jso
 
 fn iface_policy_v1__io_k8s_api_policy_v1_pod_disruption_budget_spec__to_json(p: &iface_policy_v1::IoK8sApiPolicyV1PodDisruptionBudgetSpec) -> Value {
     let mut m = Map::new();
-    m.insert("maxUnavailable".into(), match (&p.max_unavailable) { Some(v) => iface_policy_v1__io_k8s_apimachinery_pkg_util_intstr_int_or_string__to_json(v), None => Value::Null });
-    m.insert("minAvailable".into(), match (&p.min_available) { Some(v) => iface_policy_v1__io_k8s_apimachinery_pkg_util_intstr_int_or_string__to_json(v), None => Value::Null });
+    m.insert("maxUnavailable".into(), match (&p.max_unavailable) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("minAvailable".into(), match (&p.min_available) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("selector".into(), match (&p.selector) { Some(v) => iface_policy_v1__io_k8s_apimachinery_pkg_apis_meta_v1_label_selector__to_json(v), None => Value::Null });
     m.insert("unhealthyPodEvictionPolicy".into(), match (&p.unhealthy_pod_eviction_policy) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_policy_v1__io_k8s_apimachinery_pkg_util_intstr_int_or_string__to_json(p: &iface_policy_v1::IoK8sApimachineryPkgUtilIntstrIntOrString) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
 fn iface_policy_v1__io_k8s_apimachinery_pkg_apis_meta_v1_label_selector__to_json(p: &iface_policy_v1::IoK8sApimachineryPkgApisMetaV1LabelSelector) -> Value {
     let mut m = Map::new();
     m.insert("matchExpressions".into(), match (&p.match_expressions) { Some(v) => Value::Array((v).iter().map(|v| iface_policy_v1__io_k8s_apimachinery_pkg_apis_meta_v1_label_selector_requirement__to_json(v)).collect()), None => Value::Null });
-    m.insert("matchLabels".into(), match (&p.match_labels) { Some(v) => iface_policy_v1__io_k8s_apimachinery_pkg_apis_meta_v1_label_selector_match_labels__to_json(v), None => Value::Null });
+    m.insert("matchLabels".into(), match (&p.match_labels) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -427,9 +418,10 @@ fn iface_policy_v1__io_k8s_apimachinery_pkg_apis_meta_v1_label_selector_requirem
     Value::Object(m)
 }
 
-fn iface_policy_v1__io_k8s_apimachinery_pkg_apis_meta_v1_label_selector_match_labels__to_json(p: &iface_policy_v1::IoK8sApimachineryPkgApisMetaV1LabelSelectorMatchLabels) -> Value {
+fn iface_policy_v1__io_k8s_apimachinery_pkg_apis_meta_v1_label_selector_match_labels_entry__to_json(p: &iface_policy_v1::IoK8sApimachineryPkgApisMetaV1LabelSelectorMatchLabelsEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -438,7 +430,7 @@ fn iface_policy_v1__io_k8s_api_policy_v1_pod_disruption_budget_status__to_json(p
     m.insert("conditions".into(), match (&p.conditions) { Some(v) => Value::Array((v).iter().map(|v| iface_policy_v1__io_k8s_apimachinery_pkg_apis_meta_v1_condition__to_json(v)).collect()), None => Value::Null });
     m.insert("currentHealthy".into(), Value::Number(serde_json::Number::from(*(&p.current_healthy))));
     m.insert("desiredHealthy".into(), Value::Number(serde_json::Number::from(*(&p.desired_healthy))));
-    m.insert("disruptedPods".into(), match (&p.disrupted_pods) { Some(v) => iface_policy_v1__io_k8s_api_policy_v1_pod_disruption_budget_status_disrupted_pods__to_json(v), None => Value::Null });
+    m.insert("disruptedPods".into(), match (&p.disrupted_pods) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("disruptionsAllowed".into(), Value::Number(serde_json::Number::from(*(&p.disruptions_allowed))));
     m.insert("expectedPods".into(), Value::Number(serde_json::Number::from(*(&p.expected_pods))));
     m.insert("observedGeneration".into(), match (&p.observed_generation) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
@@ -447,7 +439,7 @@ fn iface_policy_v1__io_k8s_api_policy_v1_pod_disruption_budget_status__to_json(p
 
 fn iface_policy_v1__io_k8s_apimachinery_pkg_apis_meta_v1_condition__to_json(p: &iface_policy_v1::IoK8sApimachineryPkgApisMetaV1Condition) -> Value {
     let mut m = Map::new();
-    m.insert("lastTransitionTime".into(), iface_policy_v1__io_k8s_apimachinery_pkg_apis_meta_v1_time__to_json(&p.last_transition_time));
+    m.insert("lastTransitionTime".into(), Value::String((&p.last_transition_time).clone()));
     m.insert("message".into(), Value::String((&p.message).clone()));
     m.insert("observedGeneration".into(), match (&p.observed_generation) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("reason".into(), Value::String((&p.reason).clone()));
@@ -456,9 +448,10 @@ fn iface_policy_v1__io_k8s_apimachinery_pkg_apis_meta_v1_condition__to_json(p: &
     Value::Object(m)
 }
 
-fn iface_policy_v1__io_k8s_api_policy_v1_pod_disruption_budget_status_disrupted_pods__to_json(p: &iface_policy_v1::IoK8sApiPolicyV1PodDisruptionBudgetStatusDisruptedPods) -> Value {
+fn iface_policy_v1__io_k8s_api_policy_v1_pod_disruption_budget_status_disrupted_pods_entry__to_json(p: &iface_policy_v1::IoK8sApiPolicyV1PodDisruptionBudgetStatusDisruptedPodsEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -510,16 +503,31 @@ fn iface_policy_v1__io_k8s_apimachinery_pkg_apis_meta_v1_status_cause__to_json(p
     Value::Object(m)
 }
 
+fn iface_policy_v1__io_k8s_apimachinery_pkg_apis_meta_v1_patch_entry__to_json(p: &iface_policy_v1::IoK8sApimachineryPkgApisMetaV1PatchEntry) -> Value {
+    let mut m = Map::new();
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
+}
+
+fn iface_policy_v1__io_k8s_apimachinery_pkg_apis_meta_v1_patch_entry_v2__to_json(p: &iface_policy_v1::IoK8sApimachineryPkgApisMetaV1PatchEntryV2) -> Value {
+    let mut m = Map::new();
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
+}
+
 fn iface_policy_v1__io_k8s_apimachinery_pkg_apis_meta_v1_watch_event__to_json(p: &iface_policy_v1::IoK8sApimachineryPkgApisMetaV1WatchEvent) -> Value {
     let mut m = Map::new();
-    m.insert("object".into(), iface_policy_v1__io_k8s_apimachinery_pkg_runtime_raw_extension__to_json(&p.object));
+    m.insert("object".into(), Value::Object((&p.object).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()));
     m.insert("type".into(), Value::String((&p.type_op).clone()));
     Value::Object(m)
 }
 
-fn iface_policy_v1__io_k8s_apimachinery_pkg_runtime_raw_extension__to_json(p: &iface_policy_v1::IoK8sApimachineryPkgRuntimeRawExtension) -> Value {
+fn iface_policy_v1__io_k8s_apimachinery_pkg_runtime_raw_extension_entry__to_json(p: &iface_policy_v1::IoK8sApimachineryPkgRuntimeRawExtensionEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -614,7 +622,7 @@ fn iface_policy_v1__patch_policy_v1_namespaced_pod_disruption_budget_params__to_
     m.insert("field_manager".into(), match (&p.field_manager) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("field_validation".into(), match (&p.field_validation) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("force".into(), match (&p.force) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("body".into(), Value::Object((&p.body).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()));
     Value::Object(m)
 }
 
@@ -670,7 +678,7 @@ fn iface_policy_v1__patch_policy_v1_namespaced_pod_disruption_budget_status_para
     m.insert("field_manager".into(), match (&p.field_manager) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("field_validation".into(), match (&p.field_validation) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("force".into(), match (&p.force) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("body".into(), Value::Object((&p.body).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()));
     Value::Object(m)
 }
 
@@ -791,14 +799,14 @@ fn iface_policy_v1__io_k8s_api_policy_v1_pod_disruption_budget__from_json(v: &Va
 fn iface_policy_v1__io_k8s_apimachinery_pkg_apis_meta_v1_object_meta__from_json(v: &Value) -> Option<iface_policy_v1::IoK8sApimachineryPkgApisMetaV1ObjectMeta> {
     let m = v.as_object()?;
     Some(iface_policy_v1::IoK8sApimachineryPkgApisMetaV1ObjectMeta {
-        annotations: m.get("annotations").filter(|v| !v.is_null()).and_then(|v| iface_policy_v1__io_k8s_apimachinery_pkg_apis_meta_v1_object_meta_annotations__from_json(v)),
-        creation_timestamp: m.get("creationTimestamp").filter(|v| !v.is_null()).and_then(|v| iface_policy_v1__io_k8s_apimachinery_pkg_apis_meta_v1_time__from_json(v)),
+        annotations: m.get("annotations").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_policy_v1::IoK8sApimachineryPkgApisMetaV1ObjectMetaAnnotationsEntry { key: k.clone(), value: val })).collect())),
+        creation_timestamp: m.get("creationTimestamp").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         deletion_grace_period_seconds: m.get("deletionGracePeriodSeconds").filter(|v| !v.is_null()).and_then(|v| (v).as_i64()),
-        deletion_timestamp: m.get("deletionTimestamp").filter(|v| !v.is_null()).and_then(|v| iface_policy_v1__io_k8s_apimachinery_pkg_apis_meta_v1_time__from_json(v)),
+        deletion_timestamp: m.get("deletionTimestamp").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         finalizers: m.get("finalizers").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
         generate_name: m.get("generateName").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         generation: m.get("generation").filter(|v| !v.is_null()).and_then(|v| (v).as_i64()),
-        labels: m.get("labels").filter(|v| !v.is_null()).and_then(|v| iface_policy_v1__io_k8s_apimachinery_pkg_apis_meta_v1_object_meta_labels__from_json(v)),
+        labels: m.get("labels").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_policy_v1::IoK8sApimachineryPkgApisMetaV1ObjectMetaLabelsEntry { key: k.clone(), value: val })).collect())),
         managed_fields: m.get("managedFields").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_policy_v1__io_k8s_apimachinery_pkg_apis_meta_v1_managed_fields_entry__from_json(x)).collect())),
         name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         namespace: m.get("namespace").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
@@ -809,24 +817,19 @@ fn iface_policy_v1__io_k8s_apimachinery_pkg_apis_meta_v1_object_meta__from_json(
     })
 }
 
-fn iface_policy_v1__io_k8s_apimachinery_pkg_apis_meta_v1_object_meta_annotations__from_json(v: &Value) -> Option<iface_policy_v1::IoK8sApimachineryPkgApisMetaV1ObjectMetaAnnotations> {
+fn iface_policy_v1__io_k8s_apimachinery_pkg_apis_meta_v1_object_meta_annotations_entry__from_json(v: &Value) -> Option<iface_policy_v1::IoK8sApimachineryPkgApisMetaV1ObjectMetaAnnotationsEntry> {
     let m = v.as_object()?;
-    Some(iface_policy_v1::IoK8sApimachineryPkgApisMetaV1ObjectMetaAnnotations {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-    })
-}
-
-fn iface_policy_v1__io_k8s_apimachinery_pkg_apis_meta_v1_time__from_json(v: &Value) -> Option<iface_policy_v1::IoK8sApimachineryPkgApisMetaV1Time> {
-    let m = v.as_object()?;
-    Some(iface_policy_v1::IoK8sApimachineryPkgApisMetaV1Time {
+    Some(iface_policy_v1::IoK8sApimachineryPkgApisMetaV1ObjectMetaAnnotationsEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
-fn iface_policy_v1__io_k8s_apimachinery_pkg_apis_meta_v1_object_meta_labels__from_json(v: &Value) -> Option<iface_policy_v1::IoK8sApimachineryPkgApisMetaV1ObjectMetaLabels> {
+fn iface_policy_v1__io_k8s_apimachinery_pkg_apis_meta_v1_object_meta_labels_entry__from_json(v: &Value) -> Option<iface_policy_v1::IoK8sApimachineryPkgApisMetaV1ObjectMetaLabelsEntry> {
     let m = v.as_object()?;
-    Some(iface_policy_v1::IoK8sApimachineryPkgApisMetaV1ObjectMetaLabels {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_policy_v1::IoK8sApimachineryPkgApisMetaV1ObjectMetaLabelsEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -835,18 +838,19 @@ fn iface_policy_v1__io_k8s_apimachinery_pkg_apis_meta_v1_managed_fields_entry__f
     Some(iface_policy_v1::IoK8sApimachineryPkgApisMetaV1ManagedFieldsEntry {
         api_version: m.get("apiVersion").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         fields_type: m.get("fieldsType").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        fields_v1: m.get("fieldsV1").filter(|v| !v.is_null()).and_then(|v| iface_policy_v1__io_k8s_apimachinery_pkg_apis_meta_v1_fields_v1__from_json(v)),
+        fields_v1: m.get("fieldsV1").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_policy_v1::IoK8sApimachineryPkgApisMetaV1FieldsV1Entry { key: k.clone(), value: val })).collect())),
         manager: m.get("manager").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         operation: m.get("operation").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         subresource: m.get("subresource").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        time: m.get("time").filter(|v| !v.is_null()).and_then(|v| iface_policy_v1__io_k8s_apimachinery_pkg_apis_meta_v1_time__from_json(v)),
+        time: m.get("time").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
     })
 }
 
-fn iface_policy_v1__io_k8s_apimachinery_pkg_apis_meta_v1_fields_v1__from_json(v: &Value) -> Option<iface_policy_v1::IoK8sApimachineryPkgApisMetaV1FieldsV1> {
+fn iface_policy_v1__io_k8s_apimachinery_pkg_apis_meta_v1_fields_v1_entry__from_json(v: &Value) -> Option<iface_policy_v1::IoK8sApimachineryPkgApisMetaV1FieldsV1Entry> {
     let m = v.as_object()?;
-    Some(iface_policy_v1::IoK8sApimachineryPkgApisMetaV1FieldsV1 {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_policy_v1::IoK8sApimachineryPkgApisMetaV1FieldsV1Entry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -865,17 +869,10 @@ fn iface_policy_v1__io_k8s_apimachinery_pkg_apis_meta_v1_owner_reference__from_j
 fn iface_policy_v1__io_k8s_api_policy_v1_pod_disruption_budget_spec__from_json(v: &Value) -> Option<iface_policy_v1::IoK8sApiPolicyV1PodDisruptionBudgetSpec> {
     let m = v.as_object()?;
     Some(iface_policy_v1::IoK8sApiPolicyV1PodDisruptionBudgetSpec {
-        max_unavailable: m.get("maxUnavailable").filter(|v| !v.is_null()).and_then(|v| iface_policy_v1__io_k8s_apimachinery_pkg_util_intstr_int_or_string__from_json(v)),
-        min_available: m.get("minAvailable").filter(|v| !v.is_null()).and_then(|v| iface_policy_v1__io_k8s_apimachinery_pkg_util_intstr_int_or_string__from_json(v)),
+        max_unavailable: m.get("maxUnavailable").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        min_available: m.get("minAvailable").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         selector: m.get("selector").filter(|v| !v.is_null()).and_then(|v| iface_policy_v1__io_k8s_apimachinery_pkg_apis_meta_v1_label_selector__from_json(v)),
         unhealthy_pod_eviction_policy: m.get("unhealthyPodEvictionPolicy").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-    })
-}
-
-fn iface_policy_v1__io_k8s_apimachinery_pkg_util_intstr_int_or_string__from_json(v: &Value) -> Option<iface_policy_v1::IoK8sApimachineryPkgUtilIntstrIntOrString> {
-    let m = v.as_object()?;
-    Some(iface_policy_v1::IoK8sApimachineryPkgUtilIntstrIntOrString {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -883,7 +880,7 @@ fn iface_policy_v1__io_k8s_apimachinery_pkg_apis_meta_v1_label_selector__from_js
     let m = v.as_object()?;
     Some(iface_policy_v1::IoK8sApimachineryPkgApisMetaV1LabelSelector {
         match_expressions: m.get("matchExpressions").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_policy_v1__io_k8s_apimachinery_pkg_apis_meta_v1_label_selector_requirement__from_json(x)).collect())),
-        match_labels: m.get("matchLabels").filter(|v| !v.is_null()).and_then(|v| iface_policy_v1__io_k8s_apimachinery_pkg_apis_meta_v1_label_selector_match_labels__from_json(v)),
+        match_labels: m.get("matchLabels").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_policy_v1::IoK8sApimachineryPkgApisMetaV1LabelSelectorMatchLabelsEntry { key: k.clone(), value: val })).collect())),
     })
 }
 
@@ -896,10 +893,11 @@ fn iface_policy_v1__io_k8s_apimachinery_pkg_apis_meta_v1_label_selector_requirem
     })
 }
 
-fn iface_policy_v1__io_k8s_apimachinery_pkg_apis_meta_v1_label_selector_match_labels__from_json(v: &Value) -> Option<iface_policy_v1::IoK8sApimachineryPkgApisMetaV1LabelSelectorMatchLabels> {
+fn iface_policy_v1__io_k8s_apimachinery_pkg_apis_meta_v1_label_selector_match_labels_entry__from_json(v: &Value) -> Option<iface_policy_v1::IoK8sApimachineryPkgApisMetaV1LabelSelectorMatchLabelsEntry> {
     let m = v.as_object()?;
-    Some(iface_policy_v1::IoK8sApimachineryPkgApisMetaV1LabelSelectorMatchLabels {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_policy_v1::IoK8sApimachineryPkgApisMetaV1LabelSelectorMatchLabelsEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -909,7 +907,7 @@ fn iface_policy_v1__io_k8s_api_policy_v1_pod_disruption_budget_status__from_json
         conditions: m.get("conditions").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_policy_v1__io_k8s_apimachinery_pkg_apis_meta_v1_condition__from_json(x)).collect())),
         current_healthy: m.get("currentHealthy").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
         desired_healthy: m.get("desiredHealthy").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
-        disrupted_pods: m.get("disruptedPods").filter(|v| !v.is_null()).and_then(|v| iface_policy_v1__io_k8s_api_policy_v1_pod_disruption_budget_status_disrupted_pods__from_json(v)),
+        disrupted_pods: m.get("disruptedPods").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_policy_v1::IoK8sApiPolicyV1PodDisruptionBudgetStatusDisruptedPodsEntry { key: k.clone(), value: val })).collect())),
         disruptions_allowed: m.get("disruptionsAllowed").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
         expected_pods: m.get("expectedPods").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
         observed_generation: m.get("observedGeneration").filter(|v| !v.is_null()).and_then(|v| (v).as_i64()),
@@ -919,7 +917,7 @@ fn iface_policy_v1__io_k8s_api_policy_v1_pod_disruption_budget_status__from_json
 fn iface_policy_v1__io_k8s_apimachinery_pkg_apis_meta_v1_condition__from_json(v: &Value) -> Option<iface_policy_v1::IoK8sApimachineryPkgApisMetaV1Condition> {
     let m = v.as_object()?;
     Some(iface_policy_v1::IoK8sApimachineryPkgApisMetaV1Condition {
-        last_transition_time: match m.get("lastTransitionTime").and_then(|v| iface_policy_v1__io_k8s_apimachinery_pkg_apis_meta_v1_time__from_json(v)) { Some(x) => x, None => return None },
+        last_transition_time: m.get("lastTransitionTime").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         message: m.get("message").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         observed_generation: m.get("observedGeneration").filter(|v| !v.is_null()).and_then(|v| (v).as_i64()),
         reason: m.get("reason").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
@@ -928,10 +926,11 @@ fn iface_policy_v1__io_k8s_apimachinery_pkg_apis_meta_v1_condition__from_json(v:
     })
 }
 
-fn iface_policy_v1__io_k8s_api_policy_v1_pod_disruption_budget_status_disrupted_pods__from_json(v: &Value) -> Option<iface_policy_v1::IoK8sApiPolicyV1PodDisruptionBudgetStatusDisruptedPods> {
+fn iface_policy_v1__io_k8s_api_policy_v1_pod_disruption_budget_status_disrupted_pods_entry__from_json(v: &Value) -> Option<iface_policy_v1::IoK8sApiPolicyV1PodDisruptionBudgetStatusDisruptedPodsEntry> {
     let m = v.as_object()?;
-    Some(iface_policy_v1::IoK8sApiPolicyV1PodDisruptionBudgetStatusDisruptedPods {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_policy_v1::IoK8sApiPolicyV1PodDisruptionBudgetStatusDisruptedPodsEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -983,15 +982,16 @@ fn iface_policy_v1__io_k8s_apimachinery_pkg_apis_meta_v1_status_cause__from_json
 fn iface_policy_v1__io_k8s_apimachinery_pkg_apis_meta_v1_watch_event__from_json(v: &Value) -> Option<iface_policy_v1::IoK8sApimachineryPkgApisMetaV1WatchEvent> {
     let m = v.as_object()?;
     Some(iface_policy_v1::IoK8sApimachineryPkgApisMetaV1WatchEvent {
-        object: match m.get("object").and_then(|v| iface_policy_v1__io_k8s_apimachinery_pkg_runtime_raw_extension__from_json(v)) { Some(x) => x, None => return None },
+        object: m.get("object").and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_policy_v1::IoK8sApimachineryPkgRuntimeRawExtensionEntry { key: k.clone(), value: val })).collect())).unwrap_or_default(),
         type_op: m.get("type").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
-fn iface_policy_v1__io_k8s_apimachinery_pkg_runtime_raw_extension__from_json(v: &Value) -> Option<iface_policy_v1::IoK8sApimachineryPkgRuntimeRawExtension> {
+fn iface_policy_v1__io_k8s_apimachinery_pkg_runtime_raw_extension_entry__from_json(v: &Value) -> Option<iface_policy_v1::IoK8sApimachineryPkgRuntimeRawExtensionEntry> {
     let m = v.as_object()?;
-    Some(iface_policy_v1::IoK8sApimachineryPkgRuntimeRawExtension {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_policy_v1::IoK8sApimachineryPkgRuntimeRawExtensionEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 

@@ -6,7 +6,7 @@
 /// | Secret name | Applied to each request as |
 /// | --- | --- |
 /// | `key` | query `key` |
-package autostamp:weatherbit@0.5.0;
+package autostamp:weatherbit@0.6.0;
 
 interface alerts {
   record weather-alert {
@@ -18,7 +18,7 @@ interface alerts {
   }
 
   record weather-alert-group {
-    alerts: option<list<alert-region-group>>,
+    alerts: option<list<string>>,
     /// Full description of weather alert
     description: option<string>,
     /// Issued time local
@@ -35,12 +35,6 @@ interface alerts {
     title: option<string>,
     /// URI to weather alert
     uri: option<string>
-  }
-
-  /// List of impacted regions
-  record alert-region-group {
-    /// opaque schema; raw JSON
-    value: string
   }
 
   /// Returns severe weather alerts issued by meteorological agencies - Given a lat/lon.

@@ -639,99 +639,2165 @@ fn iface_me__user_badge_counts__to_json(p: &iface_me::UserBadgeCounts) -> Value 
     Value::Object(m)
 }
 
-fn iface_me__answers__to_json(p: &iface_me::Answers) -> Value {
+fn iface_me__answers_item__to_json(p: &iface_me::AnswersItem) -> Value {
     let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
+    m.insert("accepted".into(), match (&p.accepted) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("answer_id".into(), match (&p.answer_id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("awarded_bounty_amount".into(), match (&p.awarded_bounty_amount) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("awarded_bounty_users".into(), match (&p.awarded_bounty_users) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("body".into(), match (&p.body) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("body_markdown".into(), match (&p.body_markdown) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("can_flag".into(), match (&p.can_flag) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("comment_count".into(), match (&p.comment_count) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("comments".into(), match (&p.comments) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("community_owned_date".into(), match (&p.community_owned_date) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("creation_date".into(), match (&p.creation_date) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("down_vote_count".into(), match (&p.down_vote_count) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("downvoted".into(), match (&p.downvoted) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("is_accepted".into(), match (&p.is_accepted) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("last_activity_date".into(), match (&p.last_activity_date) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("last_edit_date".into(), match (&p.last_edit_date) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("last_editor".into(), match (&p.last_editor) { Some(v) => iface_me__answers_item_last_editor__to_json(v), None => Value::Null });
+    m.insert("link".into(), match (&p.link) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("locked_date".into(), match (&p.locked_date) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("owner".into(), match (&p.owner) { Some(v) => iface_me__answers_item_owner__to_json(v), None => Value::Null });
+    m.insert("question_id".into(), match (&p.question_id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("score".into(), match (&p.score) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("share_link".into(), match (&p.share_link) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("tags".into(), match (&p.tags) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("title".into(), match (&p.title) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("up_vote_count".into(), match (&p.up_vote_count) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("upvoted".into(), match (&p.upvoted) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_me__network_users__to_json(p: &iface_me::NetworkUsers) -> Value {
+fn iface_me__answers_item_last_editor__to_json(p: &iface_me::AnswersItemLastEditor) -> Value {
     let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
+    m.insert("accept_rate".into(), match (&p.accept_rate) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("badge_counts".into(), match (&p.badge_counts) { Some(v) => iface_me__answers_item_last_editor_badge_counts__to_json(v), None => Value::Null });
+    m.insert("display_name".into(), match (&p.display_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("link".into(), match (&p.link) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("profile_image".into(), match (&p.profile_image) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("reputation".into(), match (&p.reputation) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("user_id".into(), match (&p.user_id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("user_type".into(), match (&p.user_type) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_me__badges__to_json(p: &iface_me::Badges) -> Value {
+fn iface_me__answers_item_last_editor_badge_counts__to_json(p: &iface_me::AnswersItemLastEditorBadgeCounts) -> Value {
     let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
+    m.insert("bronze".into(), match (&p.bronze) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("gold".into(), match (&p.gold) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("silver".into(), match (&p.silver) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_me__comments__to_json(p: &iface_me::Comments) -> Value {
+fn iface_me__answers_item_owner__to_json(p: &iface_me::AnswersItemOwner) -> Value {
     let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
+    m.insert("accept_rate".into(), match (&p.accept_rate) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("badge_counts".into(), match (&p.badge_counts) { Some(v) => iface_me__answers_item_owner_badge_counts__to_json(v), None => Value::Null });
+    m.insert("display_name".into(), match (&p.display_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("link".into(), match (&p.link) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("profile_image".into(), match (&p.profile_image) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("reputation".into(), match (&p.reputation) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("user_id".into(), match (&p.user_id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("user_type".into(), match (&p.user_type) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_me__questions__to_json(p: &iface_me::Questions) -> Value {
+fn iface_me__answers_item_owner_badge_counts__to_json(p: &iface_me::AnswersItemOwnerBadgeCounts) -> Value {
     let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
+    m.insert("bronze".into(), match (&p.bronze) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("gold".into(), match (&p.gold) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("silver".into(), match (&p.silver) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_me__inbox_items__to_json(p: &iface_me::InboxItems) -> Value {
+fn iface_me__network_users_item__to_json(p: &iface_me::NetworkUsersItem) -> Value {
     let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
+    m.insert("account_id".into(), match (&p.account_id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("answer_count".into(), match (&p.answer_count) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("badge_counts".into(), match (&p.badge_counts) { Some(v) => iface_me__network_users_item_badge_counts__to_json(v), None => Value::Null });
+    m.insert("creation_date".into(), match (&p.creation_date) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("last_access_date".into(), match (&p.last_access_date) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("question_count".into(), match (&p.question_count) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("reputation".into(), match (&p.reputation) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("site_name".into(), match (&p.site_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("site_url".into(), match (&p.site_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("top_answers".into(), match (&p.top_answers) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("top_questions".into(), match (&p.top_questions) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("user_id".into(), match (&p.user_id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("user_type".into(), match (&p.user_type) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_me__account_merge__to_json(p: &iface_me::AccountMerge) -> Value {
+fn iface_me__network_users_item_badge_counts__to_json(p: &iface_me::NetworkUsersItemBadgeCounts) -> Value {
     let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
+    m.insert("bronze".into(), match (&p.bronze) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("gold".into(), match (&p.gold) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("silver".into(), match (&p.silver) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_me__notifications__to_json(p: &iface_me::Notifications) -> Value {
+fn iface_me__badges_item__to_json(p: &iface_me::BadgesItem) -> Value {
     let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
+    m.insert("award_count".into(), match (&p.award_count) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("badge_id".into(), match (&p.badge_id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("badge_type".into(), match (&p.badge_type) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("description".into(), match (&p.description) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("link".into(), match (&p.link) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("rank".into(), match (&p.rank) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("user".into(), match (&p.user) { Some(v) => iface_me__badges_item_user__to_json(v), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_me__privileges__to_json(p: &iface_me::Privileges) -> Value {
+fn iface_me__badges_item_user__to_json(p: &iface_me::BadgesItemUser) -> Value {
     let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
+    m.insert("accept_rate".into(), match (&p.accept_rate) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("badge_counts".into(), match (&p.badge_counts) { Some(v) => iface_me__badges_item_user_badge_counts__to_json(v), None => Value::Null });
+    m.insert("display_name".into(), match (&p.display_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("link".into(), match (&p.link) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("profile_image".into(), match (&p.profile_image) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("reputation".into(), match (&p.reputation) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("user_id".into(), match (&p.user_id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("user_type".into(), match (&p.user_type) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_me__reputation_changes__to_json(p: &iface_me::ReputationChanges) -> Value {
+fn iface_me__badges_item_user_badge_counts__to_json(p: &iface_me::BadgesItemUserBadgeCounts) -> Value {
     let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
+    m.insert("bronze".into(), match (&p.bronze) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("gold".into(), match (&p.gold) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("silver".into(), match (&p.silver) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_me__reputation_history__to_json(p: &iface_me::ReputationHistory) -> Value {
+fn iface_me__comments_item__to_json(p: &iface_me::CommentsItem) -> Value {
     let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
+    m.insert("body".into(), match (&p.body) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("body_markdown".into(), match (&p.body_markdown) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("can_flag".into(), match (&p.can_flag) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("comment_id".into(), match (&p.comment_id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("creation_date".into(), match (&p.creation_date) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("edited".into(), match (&p.edited) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("link".into(), match (&p.link) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("owner".into(), match (&p.owner) { Some(v) => iface_me__comments_item_owner__to_json(v), None => Value::Null });
+    m.insert("post_id".into(), match (&p.post_id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("post_type".into(), match (&p.post_type) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("reply_to_user".into(), match (&p.reply_to_user) { Some(v) => iface_me__comments_item_reply_to_user__to_json(v), None => Value::Null });
+    m.insert("score".into(), match (&p.score) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("upvoted".into(), match (&p.upvoted) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_me__suggested_edits__to_json(p: &iface_me::SuggestedEdits) -> Value {
+fn iface_me__comments_item_owner__to_json(p: &iface_me::CommentsItemOwner) -> Value {
     let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
+    m.insert("accept_rate".into(), match (&p.accept_rate) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("badge_counts".into(), match (&p.badge_counts) { Some(v) => iface_me__comments_item_owner_badge_counts__to_json(v), None => Value::Null });
+    m.insert("display_name".into(), match (&p.display_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("link".into(), match (&p.link) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("profile_image".into(), match (&p.profile_image) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("reputation".into(), match (&p.reputation) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("user_id".into(), match (&p.user_id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("user_type".into(), match (&p.user_type) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_me__tags__to_json(p: &iface_me::Tags) -> Value {
+fn iface_me__comments_item_owner_badge_counts__to_json(p: &iface_me::CommentsItemOwnerBadgeCounts) -> Value {
     let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
+    m.insert("bronze".into(), match (&p.bronze) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("gold".into(), match (&p.gold) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("silver".into(), match (&p.silver) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_me__user_timeline_objects__to_json(p: &iface_me::UserTimelineObjects) -> Value {
+fn iface_me__comments_item_reply_to_user__to_json(p: &iface_me::CommentsItemReplyToUser) -> Value {
     let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
+    m.insert("accept_rate".into(), match (&p.accept_rate) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("badge_counts".into(), match (&p.badge_counts) { Some(v) => iface_me__comments_item_reply_to_user_badge_counts__to_json(v), None => Value::Null });
+    m.insert("display_name".into(), match (&p.display_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("link".into(), match (&p.link) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("profile_image".into(), match (&p.profile_image) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("reputation".into(), match (&p.reputation) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("user_id".into(), match (&p.user_id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("user_type".into(), match (&p.user_type) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_me__top_tag_objects__to_json(p: &iface_me::TopTagObjects) -> Value {
+fn iface_me__comments_item_reply_to_user_badge_counts__to_json(p: &iface_me::CommentsItemReplyToUserBadgeCounts) -> Value {
     let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
+    m.insert("bronze".into(), match (&p.bronze) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("gold".into(), match (&p.gold) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("silver".into(), match (&p.silver) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_me__write_permissions__to_json(p: &iface_me::WritePermissions) -> Value {
+fn iface_me__comments_item_v2__to_json(p: &iface_me::CommentsItemV2) -> Value {
     let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
+    m.insert("body".into(), match (&p.body) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("body_markdown".into(), match (&p.body_markdown) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("can_flag".into(), match (&p.can_flag) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("comment_id".into(), match (&p.comment_id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("creation_date".into(), match (&p.creation_date) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("edited".into(), match (&p.edited) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("link".into(), match (&p.link) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("owner".into(), match (&p.owner) { Some(v) => iface_me__comments_item_v2_owner__to_json(v), None => Value::Null });
+    m.insert("post_id".into(), match (&p.post_id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("post_type".into(), match (&p.post_type) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("reply_to_user".into(), match (&p.reply_to_user) { Some(v) => iface_me__comments_item_v2_reply_to_user__to_json(v), None => Value::Null });
+    m.insert("score".into(), match (&p.score) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("upvoted".into(), match (&p.upvoted) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_me__comments_item_v2_owner__to_json(p: &iface_me::CommentsItemV2Owner) -> Value {
+    let mut m = Map::new();
+    m.insert("accept_rate".into(), match (&p.accept_rate) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("badge_counts".into(), match (&p.badge_counts) { Some(v) => iface_me__comments_item_v2_owner_badge_counts__to_json(v), None => Value::Null });
+    m.insert("display_name".into(), match (&p.display_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("link".into(), match (&p.link) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("profile_image".into(), match (&p.profile_image) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("reputation".into(), match (&p.reputation) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("user_id".into(), match (&p.user_id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("user_type".into(), match (&p.user_type) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_me__comments_item_v2_owner_badge_counts__to_json(p: &iface_me::CommentsItemV2OwnerBadgeCounts) -> Value {
+    let mut m = Map::new();
+    m.insert("bronze".into(), match (&p.bronze) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("gold".into(), match (&p.gold) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("silver".into(), match (&p.silver) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_me__comments_item_v2_reply_to_user__to_json(p: &iface_me::CommentsItemV2ReplyToUser) -> Value {
+    let mut m = Map::new();
+    m.insert("accept_rate".into(), match (&p.accept_rate) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("badge_counts".into(), match (&p.badge_counts) { Some(v) => iface_me__comments_item_v2_reply_to_user_badge_counts__to_json(v), None => Value::Null });
+    m.insert("display_name".into(), match (&p.display_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("link".into(), match (&p.link) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("profile_image".into(), match (&p.profile_image) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("reputation".into(), match (&p.reputation) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("user_id".into(), match (&p.user_id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("user_type".into(), match (&p.user_type) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_me__comments_item_v2_reply_to_user_badge_counts__to_json(p: &iface_me::CommentsItemV2ReplyToUserBadgeCounts) -> Value {
+    let mut m = Map::new();
+    m.insert("bronze".into(), match (&p.bronze) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("gold".into(), match (&p.gold) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("silver".into(), match (&p.silver) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_me__questions_item__to_json(p: &iface_me::QuestionsItem) -> Value {
+    let mut m = Map::new();
+    m.insert("accepted_answer_id".into(), match (&p.accepted_answer_id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("answer_count".into(), match (&p.answer_count) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("answers".into(), match (&p.answers) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("body".into(), match (&p.body) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("body_markdown".into(), match (&p.body_markdown) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("bounty_amount".into(), match (&p.bounty_amount) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("bounty_closes_date".into(), match (&p.bounty_closes_date) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("bounty_user".into(), match (&p.bounty_user) { Some(v) => iface_me__questions_item_bounty_user__to_json(v), None => Value::Null });
+    m.insert("can_close".into(), match (&p.can_close) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("can_flag".into(), match (&p.can_flag) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("close_vote_count".into(), match (&p.close_vote_count) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("closed_date".into(), match (&p.closed_date) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("closed_details".into(), match (&p.closed_details) { Some(v) => iface_me__questions_item_closed_details__to_json(v), None => Value::Null });
+    m.insert("closed_reason".into(), match (&p.closed_reason) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("comment_count".into(), match (&p.comment_count) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("comments".into(), match (&p.comments) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("community_owned_date".into(), match (&p.community_owned_date) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("creation_date".into(), match (&p.creation_date) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("delete_vote_count".into(), match (&p.delete_vote_count) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("down_vote_count".into(), match (&p.down_vote_count) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("downvoted".into(), match (&p.downvoted) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("favorite_count".into(), match (&p.favorite_count) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("favorited".into(), match (&p.favorited) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("is_answered".into(), match (&p.is_answered) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("last_activity_date".into(), match (&p.last_activity_date) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("last_edit_date".into(), match (&p.last_edit_date) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("last_editor".into(), match (&p.last_editor) { Some(v) => iface_me__questions_item_last_editor__to_json(v), None => Value::Null });
+    m.insert("link".into(), match (&p.link) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("locked_date".into(), match (&p.locked_date) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("migrated_from".into(), match (&p.migrated_from) { Some(v) => iface_me__questions_item_migrated_from__to_json(v), None => Value::Null });
+    m.insert("migrated_to".into(), match (&p.migrated_to) { Some(v) => iface_me__questions_item_migrated_to__to_json(v), None => Value::Null });
+    m.insert("notice".into(), match (&p.notice) { Some(v) => iface_me__questions_item_notice__to_json(v), None => Value::Null });
+    m.insert("owner".into(), match (&p.owner) { Some(v) => iface_me__questions_item_owner__to_json(v), None => Value::Null });
+    m.insert("protected_date".into(), match (&p.protected_date) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("question_id".into(), match (&p.question_id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("reopen_vote_count".into(), match (&p.reopen_vote_count) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("score".into(), match (&p.score) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("share_link".into(), match (&p.share_link) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("tags".into(), match (&p.tags) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("title".into(), match (&p.title) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("up_vote_count".into(), match (&p.up_vote_count) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("upvoted".into(), match (&p.upvoted) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("view_count".into(), match (&p.view_count) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_me__questions_item_bounty_user__to_json(p: &iface_me::QuestionsItemBountyUser) -> Value {
+    let mut m = Map::new();
+    m.insert("accept_rate".into(), match (&p.accept_rate) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("badge_counts".into(), match (&p.badge_counts) { Some(v) => iface_me__questions_item_bounty_user_badge_counts__to_json(v), None => Value::Null });
+    m.insert("display_name".into(), match (&p.display_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("link".into(), match (&p.link) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("profile_image".into(), match (&p.profile_image) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("reputation".into(), match (&p.reputation) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("user_id".into(), match (&p.user_id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("user_type".into(), match (&p.user_type) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_me__questions_item_bounty_user_badge_counts__to_json(p: &iface_me::QuestionsItemBountyUserBadgeCounts) -> Value {
+    let mut m = Map::new();
+    m.insert("bronze".into(), match (&p.bronze) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("gold".into(), match (&p.gold) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("silver".into(), match (&p.silver) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_me__questions_item_closed_details__to_json(p: &iface_me::QuestionsItemClosedDetails) -> Value {
+    let mut m = Map::new();
+    m.insert("by_users".into(), match (&p.by_users) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("description".into(), match (&p.description) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("on_hold".into(), match (&p.on_hold) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("original_questions".into(), match (&p.original_questions) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("reason".into(), match (&p.reason) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_me__questions_item_last_editor__to_json(p: &iface_me::QuestionsItemLastEditor) -> Value {
+    let mut m = Map::new();
+    m.insert("accept_rate".into(), match (&p.accept_rate) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("badge_counts".into(), match (&p.badge_counts) { Some(v) => iface_me__questions_item_last_editor_badge_counts__to_json(v), None => Value::Null });
+    m.insert("display_name".into(), match (&p.display_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("link".into(), match (&p.link) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("profile_image".into(), match (&p.profile_image) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("reputation".into(), match (&p.reputation) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("user_id".into(), match (&p.user_id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("user_type".into(), match (&p.user_type) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_me__questions_item_last_editor_badge_counts__to_json(p: &iface_me::QuestionsItemLastEditorBadgeCounts) -> Value {
+    let mut m = Map::new();
+    m.insert("bronze".into(), match (&p.bronze) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("gold".into(), match (&p.gold) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("silver".into(), match (&p.silver) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_me__questions_item_migrated_from__to_json(p: &iface_me::QuestionsItemMigratedFrom) -> Value {
+    let mut m = Map::new();
+    m.insert("on_date".into(), match (&p.on_date) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("other_site".into(), match (&p.other_site) { Some(v) => iface_me__questions_item_migrated_from_other_site__to_json(v), None => Value::Null });
+    m.insert("question_id".into(), match (&p.question_id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_me__questions_item_migrated_from_other_site__to_json(p: &iface_me::QuestionsItemMigratedFromOtherSite) -> Value {
+    let mut m = Map::new();
+    m.insert("aliases".into(), match (&p.aliases) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("api_site_parameter".into(), match (&p.api_site_parameter) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("audience".into(), match (&p.audience) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("closed_beta_date".into(), match (&p.closed_beta_date) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("favicon_url".into(), match (&p.favicon_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("high_resolution_icon_url".into(), match (&p.high_resolution_icon_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("icon_url".into(), match (&p.icon_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("launch_date".into(), match (&p.launch_date) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("logo_url".into(), match (&p.logo_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("markdown_extensions".into(), match (&p.markdown_extensions) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("open_beta_date".into(), match (&p.open_beta_date) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("related_sites".into(), match (&p.related_sites) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("site_state".into(), match (&p.site_state) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("site_type".into(), match (&p.site_type) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("site_url".into(), match (&p.site_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("styling".into(), match (&p.styling) { Some(v) => iface_me__questions_item_migrated_from_other_site_styling__to_json(v), None => Value::Null });
+    m.insert("twitter_account".into(), match (&p.twitter_account) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_me__questions_item_migrated_from_other_site_styling__to_json(p: &iface_me::QuestionsItemMigratedFromOtherSiteStyling) -> Value {
+    let mut m = Map::new();
+    m.insert("link_color".into(), match (&p.link_color) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("tag_background_color".into(), match (&p.tag_background_color) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("tag_foreground_color".into(), match (&p.tag_foreground_color) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_me__questions_item_migrated_to__to_json(p: &iface_me::QuestionsItemMigratedTo) -> Value {
+    let mut m = Map::new();
+    m.insert("on_date".into(), match (&p.on_date) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("other_site".into(), match (&p.other_site) { Some(v) => iface_me__questions_item_migrated_to_other_site__to_json(v), None => Value::Null });
+    m.insert("question_id".into(), match (&p.question_id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_me__questions_item_migrated_to_other_site__to_json(p: &iface_me::QuestionsItemMigratedToOtherSite) -> Value {
+    let mut m = Map::new();
+    m.insert("aliases".into(), match (&p.aliases) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("api_site_parameter".into(), match (&p.api_site_parameter) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("audience".into(), match (&p.audience) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("closed_beta_date".into(), match (&p.closed_beta_date) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("favicon_url".into(), match (&p.favicon_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("high_resolution_icon_url".into(), match (&p.high_resolution_icon_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("icon_url".into(), match (&p.icon_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("launch_date".into(), match (&p.launch_date) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("logo_url".into(), match (&p.logo_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("markdown_extensions".into(), match (&p.markdown_extensions) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("open_beta_date".into(), match (&p.open_beta_date) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("related_sites".into(), match (&p.related_sites) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("site_state".into(), match (&p.site_state) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("site_type".into(), match (&p.site_type) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("site_url".into(), match (&p.site_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("styling".into(), match (&p.styling) { Some(v) => iface_me__questions_item_migrated_to_other_site_styling__to_json(v), None => Value::Null });
+    m.insert("twitter_account".into(), match (&p.twitter_account) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_me__questions_item_migrated_to_other_site_styling__to_json(p: &iface_me::QuestionsItemMigratedToOtherSiteStyling) -> Value {
+    let mut m = Map::new();
+    m.insert("link_color".into(), match (&p.link_color) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("tag_background_color".into(), match (&p.tag_background_color) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("tag_foreground_color".into(), match (&p.tag_foreground_color) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_me__questions_item_notice__to_json(p: &iface_me::QuestionsItemNotice) -> Value {
+    let mut m = Map::new();
+    m.insert("body".into(), match (&p.body) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("creation_date".into(), match (&p.creation_date) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("owner_user_id".into(), match (&p.owner_user_id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_me__questions_item_owner__to_json(p: &iface_me::QuestionsItemOwner) -> Value {
+    let mut m = Map::new();
+    m.insert("accept_rate".into(), match (&p.accept_rate) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("badge_counts".into(), match (&p.badge_counts) { Some(v) => iface_me__questions_item_owner_badge_counts__to_json(v), None => Value::Null });
+    m.insert("display_name".into(), match (&p.display_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("link".into(), match (&p.link) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("profile_image".into(), match (&p.profile_image) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("reputation".into(), match (&p.reputation) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("user_id".into(), match (&p.user_id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("user_type".into(), match (&p.user_type) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_me__questions_item_owner_badge_counts__to_json(p: &iface_me::QuestionsItemOwnerBadgeCounts) -> Value {
+    let mut m = Map::new();
+    m.insert("bronze".into(), match (&p.bronze) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("gold".into(), match (&p.gold) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("silver".into(), match (&p.silver) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_me__inbox_items_item__to_json(p: &iface_me::InboxItemsItem) -> Value {
+    let mut m = Map::new();
+    m.insert("answer_id".into(), match (&p.answer_id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("body".into(), match (&p.body) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("comment_id".into(), match (&p.comment_id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("creation_date".into(), match (&p.creation_date) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("is_unread".into(), match (&p.is_unread) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("item_type".into(), match (&p.item_type) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("link".into(), match (&p.link) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("question_id".into(), match (&p.question_id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("site".into(), match (&p.site) { Some(v) => iface_me__inbox_items_item_site__to_json(v), None => Value::Null });
+    m.insert("title".into(), match (&p.title) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_me__inbox_items_item_site__to_json(p: &iface_me::InboxItemsItemSite) -> Value {
+    let mut m = Map::new();
+    m.insert("aliases".into(), match (&p.aliases) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("api_site_parameter".into(), match (&p.api_site_parameter) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("audience".into(), match (&p.audience) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("closed_beta_date".into(), match (&p.closed_beta_date) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("favicon_url".into(), match (&p.favicon_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("high_resolution_icon_url".into(), match (&p.high_resolution_icon_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("icon_url".into(), match (&p.icon_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("launch_date".into(), match (&p.launch_date) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("logo_url".into(), match (&p.logo_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("markdown_extensions".into(), match (&p.markdown_extensions) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("open_beta_date".into(), match (&p.open_beta_date) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("related_sites".into(), match (&p.related_sites) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("site_state".into(), match (&p.site_state) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("site_type".into(), match (&p.site_type) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("site_url".into(), match (&p.site_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("styling".into(), match (&p.styling) { Some(v) => iface_me__inbox_items_item_site_styling__to_json(v), None => Value::Null });
+    m.insert("twitter_account".into(), match (&p.twitter_account) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_me__inbox_items_item_site_styling__to_json(p: &iface_me::InboxItemsItemSiteStyling) -> Value {
+    let mut m = Map::new();
+    m.insert("link_color".into(), match (&p.link_color) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("tag_background_color".into(), match (&p.tag_background_color) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("tag_foreground_color".into(), match (&p.tag_foreground_color) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_me__inbox_items_item_v2__to_json(p: &iface_me::InboxItemsItemV2) -> Value {
+    let mut m = Map::new();
+    m.insert("answer_id".into(), match (&p.answer_id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("body".into(), match (&p.body) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("comment_id".into(), match (&p.comment_id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("creation_date".into(), match (&p.creation_date) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("is_unread".into(), match (&p.is_unread) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("item_type".into(), match (&p.item_type) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("link".into(), match (&p.link) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("question_id".into(), match (&p.question_id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("site".into(), match (&p.site) { Some(v) => iface_me__inbox_items_item_v2_site__to_json(v), None => Value::Null });
+    m.insert("title".into(), match (&p.title) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_me__inbox_items_item_v2_site__to_json(p: &iface_me::InboxItemsItemV2Site) -> Value {
+    let mut m = Map::new();
+    m.insert("aliases".into(), match (&p.aliases) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("api_site_parameter".into(), match (&p.api_site_parameter) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("audience".into(), match (&p.audience) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("closed_beta_date".into(), match (&p.closed_beta_date) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("favicon_url".into(), match (&p.favicon_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("high_resolution_icon_url".into(), match (&p.high_resolution_icon_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("icon_url".into(), match (&p.icon_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("launch_date".into(), match (&p.launch_date) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("logo_url".into(), match (&p.logo_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("markdown_extensions".into(), match (&p.markdown_extensions) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("open_beta_date".into(), match (&p.open_beta_date) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("related_sites".into(), match (&p.related_sites) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("site_state".into(), match (&p.site_state) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("site_type".into(), match (&p.site_type) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("site_url".into(), match (&p.site_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("styling".into(), match (&p.styling) { Some(v) => iface_me__inbox_items_item_v2_site_styling__to_json(v), None => Value::Null });
+    m.insert("twitter_account".into(), match (&p.twitter_account) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_me__inbox_items_item_v2_site_styling__to_json(p: &iface_me::InboxItemsItemV2SiteStyling) -> Value {
+    let mut m = Map::new();
+    m.insert("link_color".into(), match (&p.link_color) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("tag_background_color".into(), match (&p.tag_background_color) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("tag_foreground_color".into(), match (&p.tag_foreground_color) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_me__comments_item_v3__to_json(p: &iface_me::CommentsItemV3) -> Value {
+    let mut m = Map::new();
+    m.insert("body".into(), match (&p.body) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("body_markdown".into(), match (&p.body_markdown) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("can_flag".into(), match (&p.can_flag) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("comment_id".into(), match (&p.comment_id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("creation_date".into(), match (&p.creation_date) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("edited".into(), match (&p.edited) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("link".into(), match (&p.link) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("owner".into(), match (&p.owner) { Some(v) => iface_me__comments_item_v3_owner__to_json(v), None => Value::Null });
+    m.insert("post_id".into(), match (&p.post_id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("post_type".into(), match (&p.post_type) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("reply_to_user".into(), match (&p.reply_to_user) { Some(v) => iface_me__comments_item_v3_reply_to_user__to_json(v), None => Value::Null });
+    m.insert("score".into(), match (&p.score) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("upvoted".into(), match (&p.upvoted) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_me__comments_item_v3_owner__to_json(p: &iface_me::CommentsItemV3Owner) -> Value {
+    let mut m = Map::new();
+    m.insert("accept_rate".into(), match (&p.accept_rate) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("badge_counts".into(), match (&p.badge_counts) { Some(v) => iface_me__comments_item_v3_owner_badge_counts__to_json(v), None => Value::Null });
+    m.insert("display_name".into(), match (&p.display_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("link".into(), match (&p.link) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("profile_image".into(), match (&p.profile_image) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("reputation".into(), match (&p.reputation) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("user_id".into(), match (&p.user_id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("user_type".into(), match (&p.user_type) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_me__comments_item_v3_owner_badge_counts__to_json(p: &iface_me::CommentsItemV3OwnerBadgeCounts) -> Value {
+    let mut m = Map::new();
+    m.insert("bronze".into(), match (&p.bronze) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("gold".into(), match (&p.gold) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("silver".into(), match (&p.silver) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_me__comments_item_v3_reply_to_user__to_json(p: &iface_me::CommentsItemV3ReplyToUser) -> Value {
+    let mut m = Map::new();
+    m.insert("accept_rate".into(), match (&p.accept_rate) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("badge_counts".into(), match (&p.badge_counts) { Some(v) => iface_me__comments_item_v3_reply_to_user_badge_counts__to_json(v), None => Value::Null });
+    m.insert("display_name".into(), match (&p.display_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("link".into(), match (&p.link) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("profile_image".into(), match (&p.profile_image) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("reputation".into(), match (&p.reputation) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("user_id".into(), match (&p.user_id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("user_type".into(), match (&p.user_type) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_me__comments_item_v3_reply_to_user_badge_counts__to_json(p: &iface_me::CommentsItemV3ReplyToUserBadgeCounts) -> Value {
+    let mut m = Map::new();
+    m.insert("bronze".into(), match (&p.bronze) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("gold".into(), match (&p.gold) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("silver".into(), match (&p.silver) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_me__account_merge_item__to_json(p: &iface_me::AccountMergeItem) -> Value {
+    let mut m = Map::new();
+    m.insert("merge_date".into(), match (&p.merge_date) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("new_account_id".into(), match (&p.new_account_id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("old_account_id".into(), match (&p.old_account_id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_me__notifications_item__to_json(p: &iface_me::NotificationsItem) -> Value {
+    let mut m = Map::new();
+    m.insert("body".into(), match (&p.body) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("creation_date".into(), match (&p.creation_date) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("is_unread".into(), match (&p.is_unread) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("notification_type".into(), match (&p.notification_type) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("post_id".into(), match (&p.post_id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("site".into(), match (&p.site) { Some(v) => iface_me__notifications_item_site__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_me__notifications_item_site__to_json(p: &iface_me::NotificationsItemSite) -> Value {
+    let mut m = Map::new();
+    m.insert("aliases".into(), match (&p.aliases) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("api_site_parameter".into(), match (&p.api_site_parameter) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("audience".into(), match (&p.audience) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("closed_beta_date".into(), match (&p.closed_beta_date) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("favicon_url".into(), match (&p.favicon_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("high_resolution_icon_url".into(), match (&p.high_resolution_icon_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("icon_url".into(), match (&p.icon_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("launch_date".into(), match (&p.launch_date) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("logo_url".into(), match (&p.logo_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("markdown_extensions".into(), match (&p.markdown_extensions) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("open_beta_date".into(), match (&p.open_beta_date) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("related_sites".into(), match (&p.related_sites) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("site_state".into(), match (&p.site_state) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("site_type".into(), match (&p.site_type) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("site_url".into(), match (&p.site_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("styling".into(), match (&p.styling) { Some(v) => iface_me__notifications_item_site_styling__to_json(v), None => Value::Null });
+    m.insert("twitter_account".into(), match (&p.twitter_account) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_me__notifications_item_site_styling__to_json(p: &iface_me::NotificationsItemSiteStyling) -> Value {
+    let mut m = Map::new();
+    m.insert("link_color".into(), match (&p.link_color) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("tag_background_color".into(), match (&p.tag_background_color) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("tag_foreground_color".into(), match (&p.tag_foreground_color) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_me__notifications_item_v2__to_json(p: &iface_me::NotificationsItemV2) -> Value {
+    let mut m = Map::new();
+    m.insert("body".into(), match (&p.body) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("creation_date".into(), match (&p.creation_date) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("is_unread".into(), match (&p.is_unread) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("notification_type".into(), match (&p.notification_type) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("post_id".into(), match (&p.post_id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("site".into(), match (&p.site) { Some(v) => iface_me__notifications_item_v2_site__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_me__notifications_item_v2_site__to_json(p: &iface_me::NotificationsItemV2Site) -> Value {
+    let mut m = Map::new();
+    m.insert("aliases".into(), match (&p.aliases) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("api_site_parameter".into(), match (&p.api_site_parameter) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("audience".into(), match (&p.audience) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("closed_beta_date".into(), match (&p.closed_beta_date) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("favicon_url".into(), match (&p.favicon_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("high_resolution_icon_url".into(), match (&p.high_resolution_icon_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("icon_url".into(), match (&p.icon_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("launch_date".into(), match (&p.launch_date) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("logo_url".into(), match (&p.logo_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("markdown_extensions".into(), match (&p.markdown_extensions) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("open_beta_date".into(), match (&p.open_beta_date) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("related_sites".into(), match (&p.related_sites) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("site_state".into(), match (&p.site_state) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("site_type".into(), match (&p.site_type) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("site_url".into(), match (&p.site_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("styling".into(), match (&p.styling) { Some(v) => iface_me__notifications_item_v2_site_styling__to_json(v), None => Value::Null });
+    m.insert("twitter_account".into(), match (&p.twitter_account) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_me__notifications_item_v2_site_styling__to_json(p: &iface_me::NotificationsItemV2SiteStyling) -> Value {
+    let mut m = Map::new();
+    m.insert("link_color".into(), match (&p.link_color) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("tag_background_color".into(), match (&p.tag_background_color) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("tag_foreground_color".into(), match (&p.tag_foreground_color) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_me__privileges_item__to_json(p: &iface_me::PrivilegesItem) -> Value {
+    let mut m = Map::new();
+    m.insert("description".into(), match (&p.description) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("reputation".into(), match (&p.reputation) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("short_description".into(), match (&p.short_description) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_me__questions_item_v2__to_json(p: &iface_me::QuestionsItemV2) -> Value {
+    let mut m = Map::new();
+    m.insert("accepted_answer_id".into(), match (&p.accepted_answer_id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("answer_count".into(), match (&p.answer_count) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("answers".into(), match (&p.answers) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("body".into(), match (&p.body) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("body_markdown".into(), match (&p.body_markdown) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("bounty_amount".into(), match (&p.bounty_amount) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("bounty_closes_date".into(), match (&p.bounty_closes_date) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("bounty_user".into(), match (&p.bounty_user) { Some(v) => iface_me__questions_item_v2_bounty_user__to_json(v), None => Value::Null });
+    m.insert("can_close".into(), match (&p.can_close) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("can_flag".into(), match (&p.can_flag) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("close_vote_count".into(), match (&p.close_vote_count) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("closed_date".into(), match (&p.closed_date) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("closed_details".into(), match (&p.closed_details) { Some(v) => iface_me__questions_item_v2_closed_details__to_json(v), None => Value::Null });
+    m.insert("closed_reason".into(), match (&p.closed_reason) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("comment_count".into(), match (&p.comment_count) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("comments".into(), match (&p.comments) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("community_owned_date".into(), match (&p.community_owned_date) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("creation_date".into(), match (&p.creation_date) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("delete_vote_count".into(), match (&p.delete_vote_count) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("down_vote_count".into(), match (&p.down_vote_count) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("downvoted".into(), match (&p.downvoted) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("favorite_count".into(), match (&p.favorite_count) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("favorited".into(), match (&p.favorited) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("is_answered".into(), match (&p.is_answered) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("last_activity_date".into(), match (&p.last_activity_date) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("last_edit_date".into(), match (&p.last_edit_date) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("last_editor".into(), match (&p.last_editor) { Some(v) => iface_me__questions_item_v2_last_editor__to_json(v), None => Value::Null });
+    m.insert("link".into(), match (&p.link) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("locked_date".into(), match (&p.locked_date) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("migrated_from".into(), match (&p.migrated_from) { Some(v) => iface_me__questions_item_v2_migrated_from__to_json(v), None => Value::Null });
+    m.insert("migrated_to".into(), match (&p.migrated_to) { Some(v) => iface_me__questions_item_v2_migrated_to__to_json(v), None => Value::Null });
+    m.insert("notice".into(), match (&p.notice) { Some(v) => iface_me__questions_item_v2_notice__to_json(v), None => Value::Null });
+    m.insert("owner".into(), match (&p.owner) { Some(v) => iface_me__questions_item_v2_owner__to_json(v), None => Value::Null });
+    m.insert("protected_date".into(), match (&p.protected_date) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("question_id".into(), match (&p.question_id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("reopen_vote_count".into(), match (&p.reopen_vote_count) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("score".into(), match (&p.score) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("share_link".into(), match (&p.share_link) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("tags".into(), match (&p.tags) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("title".into(), match (&p.title) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("up_vote_count".into(), match (&p.up_vote_count) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("upvoted".into(), match (&p.upvoted) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("view_count".into(), match (&p.view_count) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_me__questions_item_v2_bounty_user__to_json(p: &iface_me::QuestionsItemV2BountyUser) -> Value {
+    let mut m = Map::new();
+    m.insert("accept_rate".into(), match (&p.accept_rate) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("badge_counts".into(), match (&p.badge_counts) { Some(v) => iface_me__questions_item_v2_bounty_user_badge_counts__to_json(v), None => Value::Null });
+    m.insert("display_name".into(), match (&p.display_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("link".into(), match (&p.link) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("profile_image".into(), match (&p.profile_image) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("reputation".into(), match (&p.reputation) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("user_id".into(), match (&p.user_id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("user_type".into(), match (&p.user_type) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_me__questions_item_v2_bounty_user_badge_counts__to_json(p: &iface_me::QuestionsItemV2BountyUserBadgeCounts) -> Value {
+    let mut m = Map::new();
+    m.insert("bronze".into(), match (&p.bronze) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("gold".into(), match (&p.gold) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("silver".into(), match (&p.silver) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_me__questions_item_v2_closed_details__to_json(p: &iface_me::QuestionsItemV2ClosedDetails) -> Value {
+    let mut m = Map::new();
+    m.insert("by_users".into(), match (&p.by_users) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("description".into(), match (&p.description) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("on_hold".into(), match (&p.on_hold) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("original_questions".into(), match (&p.original_questions) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("reason".into(), match (&p.reason) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_me__questions_item_v2_last_editor__to_json(p: &iface_me::QuestionsItemV2LastEditor) -> Value {
+    let mut m = Map::new();
+    m.insert("accept_rate".into(), match (&p.accept_rate) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("badge_counts".into(), match (&p.badge_counts) { Some(v) => iface_me__questions_item_v2_last_editor_badge_counts__to_json(v), None => Value::Null });
+    m.insert("display_name".into(), match (&p.display_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("link".into(), match (&p.link) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("profile_image".into(), match (&p.profile_image) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("reputation".into(), match (&p.reputation) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("user_id".into(), match (&p.user_id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("user_type".into(), match (&p.user_type) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_me__questions_item_v2_last_editor_badge_counts__to_json(p: &iface_me::QuestionsItemV2LastEditorBadgeCounts) -> Value {
+    let mut m = Map::new();
+    m.insert("bronze".into(), match (&p.bronze) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("gold".into(), match (&p.gold) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("silver".into(), match (&p.silver) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_me__questions_item_v2_migrated_from__to_json(p: &iface_me::QuestionsItemV2MigratedFrom) -> Value {
+    let mut m = Map::new();
+    m.insert("on_date".into(), match (&p.on_date) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("other_site".into(), match (&p.other_site) { Some(v) => iface_me__questions_item_v2_migrated_from_other_site__to_json(v), None => Value::Null });
+    m.insert("question_id".into(), match (&p.question_id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_me__questions_item_v2_migrated_from_other_site__to_json(p: &iface_me::QuestionsItemV2MigratedFromOtherSite) -> Value {
+    let mut m = Map::new();
+    m.insert("aliases".into(), match (&p.aliases) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("api_site_parameter".into(), match (&p.api_site_parameter) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("audience".into(), match (&p.audience) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("closed_beta_date".into(), match (&p.closed_beta_date) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("favicon_url".into(), match (&p.favicon_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("high_resolution_icon_url".into(), match (&p.high_resolution_icon_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("icon_url".into(), match (&p.icon_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("launch_date".into(), match (&p.launch_date) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("logo_url".into(), match (&p.logo_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("markdown_extensions".into(), match (&p.markdown_extensions) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("open_beta_date".into(), match (&p.open_beta_date) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("related_sites".into(), match (&p.related_sites) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("site_state".into(), match (&p.site_state) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("site_type".into(), match (&p.site_type) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("site_url".into(), match (&p.site_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("styling".into(), match (&p.styling) { Some(v) => iface_me__questions_item_v2_migrated_from_other_site_styling__to_json(v), None => Value::Null });
+    m.insert("twitter_account".into(), match (&p.twitter_account) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_me__questions_item_v2_migrated_from_other_site_styling__to_json(p: &iface_me::QuestionsItemV2MigratedFromOtherSiteStyling) -> Value {
+    let mut m = Map::new();
+    m.insert("link_color".into(), match (&p.link_color) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("tag_background_color".into(), match (&p.tag_background_color) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("tag_foreground_color".into(), match (&p.tag_foreground_color) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_me__questions_item_v2_migrated_to__to_json(p: &iface_me::QuestionsItemV2MigratedTo) -> Value {
+    let mut m = Map::new();
+    m.insert("on_date".into(), match (&p.on_date) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("other_site".into(), match (&p.other_site) { Some(v) => iface_me__questions_item_v2_migrated_to_other_site__to_json(v), None => Value::Null });
+    m.insert("question_id".into(), match (&p.question_id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_me__questions_item_v2_migrated_to_other_site__to_json(p: &iface_me::QuestionsItemV2MigratedToOtherSite) -> Value {
+    let mut m = Map::new();
+    m.insert("aliases".into(), match (&p.aliases) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("api_site_parameter".into(), match (&p.api_site_parameter) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("audience".into(), match (&p.audience) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("closed_beta_date".into(), match (&p.closed_beta_date) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("favicon_url".into(), match (&p.favicon_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("high_resolution_icon_url".into(), match (&p.high_resolution_icon_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("icon_url".into(), match (&p.icon_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("launch_date".into(), match (&p.launch_date) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("logo_url".into(), match (&p.logo_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("markdown_extensions".into(), match (&p.markdown_extensions) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("open_beta_date".into(), match (&p.open_beta_date) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("related_sites".into(), match (&p.related_sites) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("site_state".into(), match (&p.site_state) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("site_type".into(), match (&p.site_type) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("site_url".into(), match (&p.site_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("styling".into(), match (&p.styling) { Some(v) => iface_me__questions_item_v2_migrated_to_other_site_styling__to_json(v), None => Value::Null });
+    m.insert("twitter_account".into(), match (&p.twitter_account) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_me__questions_item_v2_migrated_to_other_site_styling__to_json(p: &iface_me::QuestionsItemV2MigratedToOtherSiteStyling) -> Value {
+    let mut m = Map::new();
+    m.insert("link_color".into(), match (&p.link_color) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("tag_background_color".into(), match (&p.tag_background_color) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("tag_foreground_color".into(), match (&p.tag_foreground_color) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_me__questions_item_v2_notice__to_json(p: &iface_me::QuestionsItemV2Notice) -> Value {
+    let mut m = Map::new();
+    m.insert("body".into(), match (&p.body) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("creation_date".into(), match (&p.creation_date) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("owner_user_id".into(), match (&p.owner_user_id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_me__questions_item_v2_owner__to_json(p: &iface_me::QuestionsItemV2Owner) -> Value {
+    let mut m = Map::new();
+    m.insert("accept_rate".into(), match (&p.accept_rate) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("badge_counts".into(), match (&p.badge_counts) { Some(v) => iface_me__questions_item_v2_owner_badge_counts__to_json(v), None => Value::Null });
+    m.insert("display_name".into(), match (&p.display_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("link".into(), match (&p.link) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("profile_image".into(), match (&p.profile_image) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("reputation".into(), match (&p.reputation) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("user_id".into(), match (&p.user_id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("user_type".into(), match (&p.user_type) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_me__questions_item_v2_owner_badge_counts__to_json(p: &iface_me::QuestionsItemV2OwnerBadgeCounts) -> Value {
+    let mut m = Map::new();
+    m.insert("bronze".into(), match (&p.bronze) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("gold".into(), match (&p.gold) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("silver".into(), match (&p.silver) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_me__questions_item_v3__to_json(p: &iface_me::QuestionsItemV3) -> Value {
+    let mut m = Map::new();
+    m.insert("accepted_answer_id".into(), match (&p.accepted_answer_id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("answer_count".into(), match (&p.answer_count) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("answers".into(), match (&p.answers) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("body".into(), match (&p.body) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("body_markdown".into(), match (&p.body_markdown) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("bounty_amount".into(), match (&p.bounty_amount) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("bounty_closes_date".into(), match (&p.bounty_closes_date) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("bounty_user".into(), match (&p.bounty_user) { Some(v) => iface_me__questions_item_v3_bounty_user__to_json(v), None => Value::Null });
+    m.insert("can_close".into(), match (&p.can_close) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("can_flag".into(), match (&p.can_flag) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("close_vote_count".into(), match (&p.close_vote_count) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("closed_date".into(), match (&p.closed_date) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("closed_details".into(), match (&p.closed_details) { Some(v) => iface_me__questions_item_v3_closed_details__to_json(v), None => Value::Null });
+    m.insert("closed_reason".into(), match (&p.closed_reason) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("comment_count".into(), match (&p.comment_count) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("comments".into(), match (&p.comments) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("community_owned_date".into(), match (&p.community_owned_date) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("creation_date".into(), match (&p.creation_date) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("delete_vote_count".into(), match (&p.delete_vote_count) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("down_vote_count".into(), match (&p.down_vote_count) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("downvoted".into(), match (&p.downvoted) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("favorite_count".into(), match (&p.favorite_count) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("favorited".into(), match (&p.favorited) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("is_answered".into(), match (&p.is_answered) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("last_activity_date".into(), match (&p.last_activity_date) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("last_edit_date".into(), match (&p.last_edit_date) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("last_editor".into(), match (&p.last_editor) { Some(v) => iface_me__questions_item_v3_last_editor__to_json(v), None => Value::Null });
+    m.insert("link".into(), match (&p.link) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("locked_date".into(), match (&p.locked_date) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("migrated_from".into(), match (&p.migrated_from) { Some(v) => iface_me__questions_item_v3_migrated_from__to_json(v), None => Value::Null });
+    m.insert("migrated_to".into(), match (&p.migrated_to) { Some(v) => iface_me__questions_item_v3_migrated_to__to_json(v), None => Value::Null });
+    m.insert("notice".into(), match (&p.notice) { Some(v) => iface_me__questions_item_v3_notice__to_json(v), None => Value::Null });
+    m.insert("owner".into(), match (&p.owner) { Some(v) => iface_me__questions_item_v3_owner__to_json(v), None => Value::Null });
+    m.insert("protected_date".into(), match (&p.protected_date) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("question_id".into(), match (&p.question_id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("reopen_vote_count".into(), match (&p.reopen_vote_count) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("score".into(), match (&p.score) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("share_link".into(), match (&p.share_link) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("tags".into(), match (&p.tags) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("title".into(), match (&p.title) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("up_vote_count".into(), match (&p.up_vote_count) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("upvoted".into(), match (&p.upvoted) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("view_count".into(), match (&p.view_count) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_me__questions_item_v3_bounty_user__to_json(p: &iface_me::QuestionsItemV3BountyUser) -> Value {
+    let mut m = Map::new();
+    m.insert("accept_rate".into(), match (&p.accept_rate) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("badge_counts".into(), match (&p.badge_counts) { Some(v) => iface_me__questions_item_v3_bounty_user_badge_counts__to_json(v), None => Value::Null });
+    m.insert("display_name".into(), match (&p.display_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("link".into(), match (&p.link) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("profile_image".into(), match (&p.profile_image) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("reputation".into(), match (&p.reputation) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("user_id".into(), match (&p.user_id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("user_type".into(), match (&p.user_type) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_me__questions_item_v3_bounty_user_badge_counts__to_json(p: &iface_me::QuestionsItemV3BountyUserBadgeCounts) -> Value {
+    let mut m = Map::new();
+    m.insert("bronze".into(), match (&p.bronze) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("gold".into(), match (&p.gold) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("silver".into(), match (&p.silver) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_me__questions_item_v3_closed_details__to_json(p: &iface_me::QuestionsItemV3ClosedDetails) -> Value {
+    let mut m = Map::new();
+    m.insert("by_users".into(), match (&p.by_users) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("description".into(), match (&p.description) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("on_hold".into(), match (&p.on_hold) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("original_questions".into(), match (&p.original_questions) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("reason".into(), match (&p.reason) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_me__questions_item_v3_last_editor__to_json(p: &iface_me::QuestionsItemV3LastEditor) -> Value {
+    let mut m = Map::new();
+    m.insert("accept_rate".into(), match (&p.accept_rate) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("badge_counts".into(), match (&p.badge_counts) { Some(v) => iface_me__questions_item_v3_last_editor_badge_counts__to_json(v), None => Value::Null });
+    m.insert("display_name".into(), match (&p.display_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("link".into(), match (&p.link) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("profile_image".into(), match (&p.profile_image) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("reputation".into(), match (&p.reputation) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("user_id".into(), match (&p.user_id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("user_type".into(), match (&p.user_type) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_me__questions_item_v3_last_editor_badge_counts__to_json(p: &iface_me::QuestionsItemV3LastEditorBadgeCounts) -> Value {
+    let mut m = Map::new();
+    m.insert("bronze".into(), match (&p.bronze) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("gold".into(), match (&p.gold) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("silver".into(), match (&p.silver) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_me__questions_item_v3_migrated_from__to_json(p: &iface_me::QuestionsItemV3MigratedFrom) -> Value {
+    let mut m = Map::new();
+    m.insert("on_date".into(), match (&p.on_date) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("other_site".into(), match (&p.other_site) { Some(v) => iface_me__questions_item_v3_migrated_from_other_site__to_json(v), None => Value::Null });
+    m.insert("question_id".into(), match (&p.question_id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_me__questions_item_v3_migrated_from_other_site__to_json(p: &iface_me::QuestionsItemV3MigratedFromOtherSite) -> Value {
+    let mut m = Map::new();
+    m.insert("aliases".into(), match (&p.aliases) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("api_site_parameter".into(), match (&p.api_site_parameter) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("audience".into(), match (&p.audience) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("closed_beta_date".into(), match (&p.closed_beta_date) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("favicon_url".into(), match (&p.favicon_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("high_resolution_icon_url".into(), match (&p.high_resolution_icon_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("icon_url".into(), match (&p.icon_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("launch_date".into(), match (&p.launch_date) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("logo_url".into(), match (&p.logo_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("markdown_extensions".into(), match (&p.markdown_extensions) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("open_beta_date".into(), match (&p.open_beta_date) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("related_sites".into(), match (&p.related_sites) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("site_state".into(), match (&p.site_state) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("site_type".into(), match (&p.site_type) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("site_url".into(), match (&p.site_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("styling".into(), match (&p.styling) { Some(v) => iface_me__questions_item_v3_migrated_from_other_site_styling__to_json(v), None => Value::Null });
+    m.insert("twitter_account".into(), match (&p.twitter_account) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_me__questions_item_v3_migrated_from_other_site_styling__to_json(p: &iface_me::QuestionsItemV3MigratedFromOtherSiteStyling) -> Value {
+    let mut m = Map::new();
+    m.insert("link_color".into(), match (&p.link_color) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("tag_background_color".into(), match (&p.tag_background_color) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("tag_foreground_color".into(), match (&p.tag_foreground_color) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_me__questions_item_v3_migrated_to__to_json(p: &iface_me::QuestionsItemV3MigratedTo) -> Value {
+    let mut m = Map::new();
+    m.insert("on_date".into(), match (&p.on_date) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("other_site".into(), match (&p.other_site) { Some(v) => iface_me__questions_item_v3_migrated_to_other_site__to_json(v), None => Value::Null });
+    m.insert("question_id".into(), match (&p.question_id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_me__questions_item_v3_migrated_to_other_site__to_json(p: &iface_me::QuestionsItemV3MigratedToOtherSite) -> Value {
+    let mut m = Map::new();
+    m.insert("aliases".into(), match (&p.aliases) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("api_site_parameter".into(), match (&p.api_site_parameter) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("audience".into(), match (&p.audience) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("closed_beta_date".into(), match (&p.closed_beta_date) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("favicon_url".into(), match (&p.favicon_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("high_resolution_icon_url".into(), match (&p.high_resolution_icon_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("icon_url".into(), match (&p.icon_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("launch_date".into(), match (&p.launch_date) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("logo_url".into(), match (&p.logo_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("markdown_extensions".into(), match (&p.markdown_extensions) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("open_beta_date".into(), match (&p.open_beta_date) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("related_sites".into(), match (&p.related_sites) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("site_state".into(), match (&p.site_state) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("site_type".into(), match (&p.site_type) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("site_url".into(), match (&p.site_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("styling".into(), match (&p.styling) { Some(v) => iface_me__questions_item_v3_migrated_to_other_site_styling__to_json(v), None => Value::Null });
+    m.insert("twitter_account".into(), match (&p.twitter_account) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_me__questions_item_v3_migrated_to_other_site_styling__to_json(p: &iface_me::QuestionsItemV3MigratedToOtherSiteStyling) -> Value {
+    let mut m = Map::new();
+    m.insert("link_color".into(), match (&p.link_color) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("tag_background_color".into(), match (&p.tag_background_color) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("tag_foreground_color".into(), match (&p.tag_foreground_color) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_me__questions_item_v3_notice__to_json(p: &iface_me::QuestionsItemV3Notice) -> Value {
+    let mut m = Map::new();
+    m.insert("body".into(), match (&p.body) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("creation_date".into(), match (&p.creation_date) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("owner_user_id".into(), match (&p.owner_user_id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_me__questions_item_v3_owner__to_json(p: &iface_me::QuestionsItemV3Owner) -> Value {
+    let mut m = Map::new();
+    m.insert("accept_rate".into(), match (&p.accept_rate) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("badge_counts".into(), match (&p.badge_counts) { Some(v) => iface_me__questions_item_v3_owner_badge_counts__to_json(v), None => Value::Null });
+    m.insert("display_name".into(), match (&p.display_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("link".into(), match (&p.link) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("profile_image".into(), match (&p.profile_image) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("reputation".into(), match (&p.reputation) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("user_id".into(), match (&p.user_id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("user_type".into(), match (&p.user_type) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_me__questions_item_v3_owner_badge_counts__to_json(p: &iface_me::QuestionsItemV3OwnerBadgeCounts) -> Value {
+    let mut m = Map::new();
+    m.insert("bronze".into(), match (&p.bronze) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("gold".into(), match (&p.gold) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("silver".into(), match (&p.silver) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_me__questions_item_v4__to_json(p: &iface_me::QuestionsItemV4) -> Value {
+    let mut m = Map::new();
+    m.insert("accepted_answer_id".into(), match (&p.accepted_answer_id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("answer_count".into(), match (&p.answer_count) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("answers".into(), match (&p.answers) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("body".into(), match (&p.body) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("body_markdown".into(), match (&p.body_markdown) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("bounty_amount".into(), match (&p.bounty_amount) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("bounty_closes_date".into(), match (&p.bounty_closes_date) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("bounty_user".into(), match (&p.bounty_user) { Some(v) => iface_me__questions_item_v4_bounty_user__to_json(v), None => Value::Null });
+    m.insert("can_close".into(), match (&p.can_close) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("can_flag".into(), match (&p.can_flag) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("close_vote_count".into(), match (&p.close_vote_count) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("closed_date".into(), match (&p.closed_date) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("closed_details".into(), match (&p.closed_details) { Some(v) => iface_me__questions_item_v4_closed_details__to_json(v), None => Value::Null });
+    m.insert("closed_reason".into(), match (&p.closed_reason) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("comment_count".into(), match (&p.comment_count) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("comments".into(), match (&p.comments) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("community_owned_date".into(), match (&p.community_owned_date) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("creation_date".into(), match (&p.creation_date) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("delete_vote_count".into(), match (&p.delete_vote_count) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("down_vote_count".into(), match (&p.down_vote_count) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("downvoted".into(), match (&p.downvoted) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("favorite_count".into(), match (&p.favorite_count) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("favorited".into(), match (&p.favorited) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("is_answered".into(), match (&p.is_answered) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("last_activity_date".into(), match (&p.last_activity_date) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("last_edit_date".into(), match (&p.last_edit_date) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("last_editor".into(), match (&p.last_editor) { Some(v) => iface_me__questions_item_v4_last_editor__to_json(v), None => Value::Null });
+    m.insert("link".into(), match (&p.link) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("locked_date".into(), match (&p.locked_date) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("migrated_from".into(), match (&p.migrated_from) { Some(v) => iface_me__questions_item_v4_migrated_from__to_json(v), None => Value::Null });
+    m.insert("migrated_to".into(), match (&p.migrated_to) { Some(v) => iface_me__questions_item_v4_migrated_to__to_json(v), None => Value::Null });
+    m.insert("notice".into(), match (&p.notice) { Some(v) => iface_me__questions_item_v4_notice__to_json(v), None => Value::Null });
+    m.insert("owner".into(), match (&p.owner) { Some(v) => iface_me__questions_item_v4_owner__to_json(v), None => Value::Null });
+    m.insert("protected_date".into(), match (&p.protected_date) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("question_id".into(), match (&p.question_id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("reopen_vote_count".into(), match (&p.reopen_vote_count) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("score".into(), match (&p.score) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("share_link".into(), match (&p.share_link) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("tags".into(), match (&p.tags) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("title".into(), match (&p.title) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("up_vote_count".into(), match (&p.up_vote_count) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("upvoted".into(), match (&p.upvoted) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("view_count".into(), match (&p.view_count) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_me__questions_item_v4_bounty_user__to_json(p: &iface_me::QuestionsItemV4BountyUser) -> Value {
+    let mut m = Map::new();
+    m.insert("accept_rate".into(), match (&p.accept_rate) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("badge_counts".into(), match (&p.badge_counts) { Some(v) => iface_me__questions_item_v4_bounty_user_badge_counts__to_json(v), None => Value::Null });
+    m.insert("display_name".into(), match (&p.display_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("link".into(), match (&p.link) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("profile_image".into(), match (&p.profile_image) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("reputation".into(), match (&p.reputation) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("user_id".into(), match (&p.user_id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("user_type".into(), match (&p.user_type) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_me__questions_item_v4_bounty_user_badge_counts__to_json(p: &iface_me::QuestionsItemV4BountyUserBadgeCounts) -> Value {
+    let mut m = Map::new();
+    m.insert("bronze".into(), match (&p.bronze) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("gold".into(), match (&p.gold) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("silver".into(), match (&p.silver) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_me__questions_item_v4_closed_details__to_json(p: &iface_me::QuestionsItemV4ClosedDetails) -> Value {
+    let mut m = Map::new();
+    m.insert("by_users".into(), match (&p.by_users) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("description".into(), match (&p.description) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("on_hold".into(), match (&p.on_hold) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("original_questions".into(), match (&p.original_questions) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("reason".into(), match (&p.reason) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_me__questions_item_v4_last_editor__to_json(p: &iface_me::QuestionsItemV4LastEditor) -> Value {
+    let mut m = Map::new();
+    m.insert("accept_rate".into(), match (&p.accept_rate) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("badge_counts".into(), match (&p.badge_counts) { Some(v) => iface_me__questions_item_v4_last_editor_badge_counts__to_json(v), None => Value::Null });
+    m.insert("display_name".into(), match (&p.display_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("link".into(), match (&p.link) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("profile_image".into(), match (&p.profile_image) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("reputation".into(), match (&p.reputation) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("user_id".into(), match (&p.user_id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("user_type".into(), match (&p.user_type) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_me__questions_item_v4_last_editor_badge_counts__to_json(p: &iface_me::QuestionsItemV4LastEditorBadgeCounts) -> Value {
+    let mut m = Map::new();
+    m.insert("bronze".into(), match (&p.bronze) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("gold".into(), match (&p.gold) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("silver".into(), match (&p.silver) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_me__questions_item_v4_migrated_from__to_json(p: &iface_me::QuestionsItemV4MigratedFrom) -> Value {
+    let mut m = Map::new();
+    m.insert("on_date".into(), match (&p.on_date) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("other_site".into(), match (&p.other_site) { Some(v) => iface_me__questions_item_v4_migrated_from_other_site__to_json(v), None => Value::Null });
+    m.insert("question_id".into(), match (&p.question_id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_me__questions_item_v4_migrated_from_other_site__to_json(p: &iface_me::QuestionsItemV4MigratedFromOtherSite) -> Value {
+    let mut m = Map::new();
+    m.insert("aliases".into(), match (&p.aliases) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("api_site_parameter".into(), match (&p.api_site_parameter) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("audience".into(), match (&p.audience) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("closed_beta_date".into(), match (&p.closed_beta_date) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("favicon_url".into(), match (&p.favicon_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("high_resolution_icon_url".into(), match (&p.high_resolution_icon_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("icon_url".into(), match (&p.icon_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("launch_date".into(), match (&p.launch_date) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("logo_url".into(), match (&p.logo_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("markdown_extensions".into(), match (&p.markdown_extensions) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("open_beta_date".into(), match (&p.open_beta_date) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("related_sites".into(), match (&p.related_sites) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("site_state".into(), match (&p.site_state) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("site_type".into(), match (&p.site_type) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("site_url".into(), match (&p.site_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("styling".into(), match (&p.styling) { Some(v) => iface_me__questions_item_v4_migrated_from_other_site_styling__to_json(v), None => Value::Null });
+    m.insert("twitter_account".into(), match (&p.twitter_account) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_me__questions_item_v4_migrated_from_other_site_styling__to_json(p: &iface_me::QuestionsItemV4MigratedFromOtherSiteStyling) -> Value {
+    let mut m = Map::new();
+    m.insert("link_color".into(), match (&p.link_color) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("tag_background_color".into(), match (&p.tag_background_color) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("tag_foreground_color".into(), match (&p.tag_foreground_color) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_me__questions_item_v4_migrated_to__to_json(p: &iface_me::QuestionsItemV4MigratedTo) -> Value {
+    let mut m = Map::new();
+    m.insert("on_date".into(), match (&p.on_date) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("other_site".into(), match (&p.other_site) { Some(v) => iface_me__questions_item_v4_migrated_to_other_site__to_json(v), None => Value::Null });
+    m.insert("question_id".into(), match (&p.question_id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_me__questions_item_v4_migrated_to_other_site__to_json(p: &iface_me::QuestionsItemV4MigratedToOtherSite) -> Value {
+    let mut m = Map::new();
+    m.insert("aliases".into(), match (&p.aliases) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("api_site_parameter".into(), match (&p.api_site_parameter) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("audience".into(), match (&p.audience) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("closed_beta_date".into(), match (&p.closed_beta_date) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("favicon_url".into(), match (&p.favicon_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("high_resolution_icon_url".into(), match (&p.high_resolution_icon_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("icon_url".into(), match (&p.icon_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("launch_date".into(), match (&p.launch_date) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("logo_url".into(), match (&p.logo_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("markdown_extensions".into(), match (&p.markdown_extensions) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("open_beta_date".into(), match (&p.open_beta_date) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("related_sites".into(), match (&p.related_sites) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("site_state".into(), match (&p.site_state) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("site_type".into(), match (&p.site_type) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("site_url".into(), match (&p.site_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("styling".into(), match (&p.styling) { Some(v) => iface_me__questions_item_v4_migrated_to_other_site_styling__to_json(v), None => Value::Null });
+    m.insert("twitter_account".into(), match (&p.twitter_account) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_me__questions_item_v4_migrated_to_other_site_styling__to_json(p: &iface_me::QuestionsItemV4MigratedToOtherSiteStyling) -> Value {
+    let mut m = Map::new();
+    m.insert("link_color".into(), match (&p.link_color) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("tag_background_color".into(), match (&p.tag_background_color) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("tag_foreground_color".into(), match (&p.tag_foreground_color) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_me__questions_item_v4_notice__to_json(p: &iface_me::QuestionsItemV4Notice) -> Value {
+    let mut m = Map::new();
+    m.insert("body".into(), match (&p.body) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("creation_date".into(), match (&p.creation_date) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("owner_user_id".into(), match (&p.owner_user_id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_me__questions_item_v4_owner__to_json(p: &iface_me::QuestionsItemV4Owner) -> Value {
+    let mut m = Map::new();
+    m.insert("accept_rate".into(), match (&p.accept_rate) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("badge_counts".into(), match (&p.badge_counts) { Some(v) => iface_me__questions_item_v4_owner_badge_counts__to_json(v), None => Value::Null });
+    m.insert("display_name".into(), match (&p.display_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("link".into(), match (&p.link) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("profile_image".into(), match (&p.profile_image) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("reputation".into(), match (&p.reputation) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("user_id".into(), match (&p.user_id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("user_type".into(), match (&p.user_type) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_me__questions_item_v4_owner_badge_counts__to_json(p: &iface_me::QuestionsItemV4OwnerBadgeCounts) -> Value {
+    let mut m = Map::new();
+    m.insert("bronze".into(), match (&p.bronze) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("gold".into(), match (&p.gold) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("silver".into(), match (&p.silver) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_me__questions_item_v5__to_json(p: &iface_me::QuestionsItemV5) -> Value {
+    let mut m = Map::new();
+    m.insert("accepted_answer_id".into(), match (&p.accepted_answer_id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("answer_count".into(), match (&p.answer_count) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("answers".into(), match (&p.answers) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("body".into(), match (&p.body) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("body_markdown".into(), match (&p.body_markdown) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("bounty_amount".into(), match (&p.bounty_amount) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("bounty_closes_date".into(), match (&p.bounty_closes_date) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("bounty_user".into(), match (&p.bounty_user) { Some(v) => iface_me__questions_item_v5_bounty_user__to_json(v), None => Value::Null });
+    m.insert("can_close".into(), match (&p.can_close) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("can_flag".into(), match (&p.can_flag) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("close_vote_count".into(), match (&p.close_vote_count) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("closed_date".into(), match (&p.closed_date) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("closed_details".into(), match (&p.closed_details) { Some(v) => iface_me__questions_item_v5_closed_details__to_json(v), None => Value::Null });
+    m.insert("closed_reason".into(), match (&p.closed_reason) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("comment_count".into(), match (&p.comment_count) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("comments".into(), match (&p.comments) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("community_owned_date".into(), match (&p.community_owned_date) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("creation_date".into(), match (&p.creation_date) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("delete_vote_count".into(), match (&p.delete_vote_count) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("down_vote_count".into(), match (&p.down_vote_count) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("downvoted".into(), match (&p.downvoted) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("favorite_count".into(), match (&p.favorite_count) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("favorited".into(), match (&p.favorited) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("is_answered".into(), match (&p.is_answered) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("last_activity_date".into(), match (&p.last_activity_date) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("last_edit_date".into(), match (&p.last_edit_date) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("last_editor".into(), match (&p.last_editor) { Some(v) => iface_me__questions_item_v5_last_editor__to_json(v), None => Value::Null });
+    m.insert("link".into(), match (&p.link) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("locked_date".into(), match (&p.locked_date) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("migrated_from".into(), match (&p.migrated_from) { Some(v) => iface_me__questions_item_v5_migrated_from__to_json(v), None => Value::Null });
+    m.insert("migrated_to".into(), match (&p.migrated_to) { Some(v) => iface_me__questions_item_v5_migrated_to__to_json(v), None => Value::Null });
+    m.insert("notice".into(), match (&p.notice) { Some(v) => iface_me__questions_item_v5_notice__to_json(v), None => Value::Null });
+    m.insert("owner".into(), match (&p.owner) { Some(v) => iface_me__questions_item_v5_owner__to_json(v), None => Value::Null });
+    m.insert("protected_date".into(), match (&p.protected_date) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("question_id".into(), match (&p.question_id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("reopen_vote_count".into(), match (&p.reopen_vote_count) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("score".into(), match (&p.score) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("share_link".into(), match (&p.share_link) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("tags".into(), match (&p.tags) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("title".into(), match (&p.title) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("up_vote_count".into(), match (&p.up_vote_count) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("upvoted".into(), match (&p.upvoted) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("view_count".into(), match (&p.view_count) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_me__questions_item_v5_bounty_user__to_json(p: &iface_me::QuestionsItemV5BountyUser) -> Value {
+    let mut m = Map::new();
+    m.insert("accept_rate".into(), match (&p.accept_rate) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("badge_counts".into(), match (&p.badge_counts) { Some(v) => iface_me__questions_item_v5_bounty_user_badge_counts__to_json(v), None => Value::Null });
+    m.insert("display_name".into(), match (&p.display_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("link".into(), match (&p.link) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("profile_image".into(), match (&p.profile_image) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("reputation".into(), match (&p.reputation) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("user_id".into(), match (&p.user_id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("user_type".into(), match (&p.user_type) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_me__questions_item_v5_bounty_user_badge_counts__to_json(p: &iface_me::QuestionsItemV5BountyUserBadgeCounts) -> Value {
+    let mut m = Map::new();
+    m.insert("bronze".into(), match (&p.bronze) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("gold".into(), match (&p.gold) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("silver".into(), match (&p.silver) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_me__questions_item_v5_closed_details__to_json(p: &iface_me::QuestionsItemV5ClosedDetails) -> Value {
+    let mut m = Map::new();
+    m.insert("by_users".into(), match (&p.by_users) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("description".into(), match (&p.description) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("on_hold".into(), match (&p.on_hold) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("original_questions".into(), match (&p.original_questions) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("reason".into(), match (&p.reason) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_me__questions_item_v5_last_editor__to_json(p: &iface_me::QuestionsItemV5LastEditor) -> Value {
+    let mut m = Map::new();
+    m.insert("accept_rate".into(), match (&p.accept_rate) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("badge_counts".into(), match (&p.badge_counts) { Some(v) => iface_me__questions_item_v5_last_editor_badge_counts__to_json(v), None => Value::Null });
+    m.insert("display_name".into(), match (&p.display_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("link".into(), match (&p.link) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("profile_image".into(), match (&p.profile_image) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("reputation".into(), match (&p.reputation) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("user_id".into(), match (&p.user_id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("user_type".into(), match (&p.user_type) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_me__questions_item_v5_last_editor_badge_counts__to_json(p: &iface_me::QuestionsItemV5LastEditorBadgeCounts) -> Value {
+    let mut m = Map::new();
+    m.insert("bronze".into(), match (&p.bronze) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("gold".into(), match (&p.gold) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("silver".into(), match (&p.silver) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_me__questions_item_v5_migrated_from__to_json(p: &iface_me::QuestionsItemV5MigratedFrom) -> Value {
+    let mut m = Map::new();
+    m.insert("on_date".into(), match (&p.on_date) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("other_site".into(), match (&p.other_site) { Some(v) => iface_me__questions_item_v5_migrated_from_other_site__to_json(v), None => Value::Null });
+    m.insert("question_id".into(), match (&p.question_id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_me__questions_item_v5_migrated_from_other_site__to_json(p: &iface_me::QuestionsItemV5MigratedFromOtherSite) -> Value {
+    let mut m = Map::new();
+    m.insert("aliases".into(), match (&p.aliases) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("api_site_parameter".into(), match (&p.api_site_parameter) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("audience".into(), match (&p.audience) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("closed_beta_date".into(), match (&p.closed_beta_date) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("favicon_url".into(), match (&p.favicon_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("high_resolution_icon_url".into(), match (&p.high_resolution_icon_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("icon_url".into(), match (&p.icon_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("launch_date".into(), match (&p.launch_date) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("logo_url".into(), match (&p.logo_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("markdown_extensions".into(), match (&p.markdown_extensions) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("open_beta_date".into(), match (&p.open_beta_date) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("related_sites".into(), match (&p.related_sites) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("site_state".into(), match (&p.site_state) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("site_type".into(), match (&p.site_type) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("site_url".into(), match (&p.site_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("styling".into(), match (&p.styling) { Some(v) => iface_me__questions_item_v5_migrated_from_other_site_styling__to_json(v), None => Value::Null });
+    m.insert("twitter_account".into(), match (&p.twitter_account) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_me__questions_item_v5_migrated_from_other_site_styling__to_json(p: &iface_me::QuestionsItemV5MigratedFromOtherSiteStyling) -> Value {
+    let mut m = Map::new();
+    m.insert("link_color".into(), match (&p.link_color) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("tag_background_color".into(), match (&p.tag_background_color) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("tag_foreground_color".into(), match (&p.tag_foreground_color) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_me__questions_item_v5_migrated_to__to_json(p: &iface_me::QuestionsItemV5MigratedTo) -> Value {
+    let mut m = Map::new();
+    m.insert("on_date".into(), match (&p.on_date) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("other_site".into(), match (&p.other_site) { Some(v) => iface_me__questions_item_v5_migrated_to_other_site__to_json(v), None => Value::Null });
+    m.insert("question_id".into(), match (&p.question_id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_me__questions_item_v5_migrated_to_other_site__to_json(p: &iface_me::QuestionsItemV5MigratedToOtherSite) -> Value {
+    let mut m = Map::new();
+    m.insert("aliases".into(), match (&p.aliases) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("api_site_parameter".into(), match (&p.api_site_parameter) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("audience".into(), match (&p.audience) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("closed_beta_date".into(), match (&p.closed_beta_date) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("favicon_url".into(), match (&p.favicon_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("high_resolution_icon_url".into(), match (&p.high_resolution_icon_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("icon_url".into(), match (&p.icon_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("launch_date".into(), match (&p.launch_date) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("logo_url".into(), match (&p.logo_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("markdown_extensions".into(), match (&p.markdown_extensions) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("open_beta_date".into(), match (&p.open_beta_date) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("related_sites".into(), match (&p.related_sites) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("site_state".into(), match (&p.site_state) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("site_type".into(), match (&p.site_type) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("site_url".into(), match (&p.site_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("styling".into(), match (&p.styling) { Some(v) => iface_me__questions_item_v5_migrated_to_other_site_styling__to_json(v), None => Value::Null });
+    m.insert("twitter_account".into(), match (&p.twitter_account) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_me__questions_item_v5_migrated_to_other_site_styling__to_json(p: &iface_me::QuestionsItemV5MigratedToOtherSiteStyling) -> Value {
+    let mut m = Map::new();
+    m.insert("link_color".into(), match (&p.link_color) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("tag_background_color".into(), match (&p.tag_background_color) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("tag_foreground_color".into(), match (&p.tag_foreground_color) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_me__questions_item_v5_notice__to_json(p: &iface_me::QuestionsItemV5Notice) -> Value {
+    let mut m = Map::new();
+    m.insert("body".into(), match (&p.body) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("creation_date".into(), match (&p.creation_date) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("owner_user_id".into(), match (&p.owner_user_id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_me__questions_item_v5_owner__to_json(p: &iface_me::QuestionsItemV5Owner) -> Value {
+    let mut m = Map::new();
+    m.insert("accept_rate".into(), match (&p.accept_rate) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("badge_counts".into(), match (&p.badge_counts) { Some(v) => iface_me__questions_item_v5_owner_badge_counts__to_json(v), None => Value::Null });
+    m.insert("display_name".into(), match (&p.display_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("link".into(), match (&p.link) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("profile_image".into(), match (&p.profile_image) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("reputation".into(), match (&p.reputation) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("user_id".into(), match (&p.user_id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("user_type".into(), match (&p.user_type) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_me__questions_item_v5_owner_badge_counts__to_json(p: &iface_me::QuestionsItemV5OwnerBadgeCounts) -> Value {
+    let mut m = Map::new();
+    m.insert("bronze".into(), match (&p.bronze) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("gold".into(), match (&p.gold) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("silver".into(), match (&p.silver) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_me__questions_item_v6__to_json(p: &iface_me::QuestionsItemV6) -> Value {
+    let mut m = Map::new();
+    m.insert("accepted_answer_id".into(), match (&p.accepted_answer_id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("answer_count".into(), match (&p.answer_count) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("answers".into(), match (&p.answers) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("body".into(), match (&p.body) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("body_markdown".into(), match (&p.body_markdown) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("bounty_amount".into(), match (&p.bounty_amount) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("bounty_closes_date".into(), match (&p.bounty_closes_date) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("bounty_user".into(), match (&p.bounty_user) { Some(v) => iface_me__questions_item_v6_bounty_user__to_json(v), None => Value::Null });
+    m.insert("can_close".into(), match (&p.can_close) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("can_flag".into(), match (&p.can_flag) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("close_vote_count".into(), match (&p.close_vote_count) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("closed_date".into(), match (&p.closed_date) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("closed_details".into(), match (&p.closed_details) { Some(v) => iface_me__questions_item_v6_closed_details__to_json(v), None => Value::Null });
+    m.insert("closed_reason".into(), match (&p.closed_reason) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("comment_count".into(), match (&p.comment_count) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("comments".into(), match (&p.comments) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("community_owned_date".into(), match (&p.community_owned_date) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("creation_date".into(), match (&p.creation_date) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("delete_vote_count".into(), match (&p.delete_vote_count) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("down_vote_count".into(), match (&p.down_vote_count) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("downvoted".into(), match (&p.downvoted) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("favorite_count".into(), match (&p.favorite_count) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("favorited".into(), match (&p.favorited) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("is_answered".into(), match (&p.is_answered) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("last_activity_date".into(), match (&p.last_activity_date) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("last_edit_date".into(), match (&p.last_edit_date) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("last_editor".into(), match (&p.last_editor) { Some(v) => iface_me__questions_item_v6_last_editor__to_json(v), None => Value::Null });
+    m.insert("link".into(), match (&p.link) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("locked_date".into(), match (&p.locked_date) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("migrated_from".into(), match (&p.migrated_from) { Some(v) => iface_me__questions_item_v6_migrated_from__to_json(v), None => Value::Null });
+    m.insert("migrated_to".into(), match (&p.migrated_to) { Some(v) => iface_me__questions_item_v6_migrated_to__to_json(v), None => Value::Null });
+    m.insert("notice".into(), match (&p.notice) { Some(v) => iface_me__questions_item_v6_notice__to_json(v), None => Value::Null });
+    m.insert("owner".into(), match (&p.owner) { Some(v) => iface_me__questions_item_v6_owner__to_json(v), None => Value::Null });
+    m.insert("protected_date".into(), match (&p.protected_date) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("question_id".into(), match (&p.question_id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("reopen_vote_count".into(), match (&p.reopen_vote_count) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("score".into(), match (&p.score) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("share_link".into(), match (&p.share_link) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("tags".into(), match (&p.tags) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("title".into(), match (&p.title) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("up_vote_count".into(), match (&p.up_vote_count) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("upvoted".into(), match (&p.upvoted) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("view_count".into(), match (&p.view_count) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_me__questions_item_v6_bounty_user__to_json(p: &iface_me::QuestionsItemV6BountyUser) -> Value {
+    let mut m = Map::new();
+    m.insert("accept_rate".into(), match (&p.accept_rate) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("badge_counts".into(), match (&p.badge_counts) { Some(v) => iface_me__questions_item_v6_bounty_user_badge_counts__to_json(v), None => Value::Null });
+    m.insert("display_name".into(), match (&p.display_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("link".into(), match (&p.link) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("profile_image".into(), match (&p.profile_image) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("reputation".into(), match (&p.reputation) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("user_id".into(), match (&p.user_id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("user_type".into(), match (&p.user_type) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_me__questions_item_v6_bounty_user_badge_counts__to_json(p: &iface_me::QuestionsItemV6BountyUserBadgeCounts) -> Value {
+    let mut m = Map::new();
+    m.insert("bronze".into(), match (&p.bronze) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("gold".into(), match (&p.gold) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("silver".into(), match (&p.silver) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_me__questions_item_v6_closed_details__to_json(p: &iface_me::QuestionsItemV6ClosedDetails) -> Value {
+    let mut m = Map::new();
+    m.insert("by_users".into(), match (&p.by_users) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("description".into(), match (&p.description) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("on_hold".into(), match (&p.on_hold) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("original_questions".into(), match (&p.original_questions) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("reason".into(), match (&p.reason) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_me__questions_item_v6_last_editor__to_json(p: &iface_me::QuestionsItemV6LastEditor) -> Value {
+    let mut m = Map::new();
+    m.insert("accept_rate".into(), match (&p.accept_rate) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("badge_counts".into(), match (&p.badge_counts) { Some(v) => iface_me__questions_item_v6_last_editor_badge_counts__to_json(v), None => Value::Null });
+    m.insert("display_name".into(), match (&p.display_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("link".into(), match (&p.link) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("profile_image".into(), match (&p.profile_image) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("reputation".into(), match (&p.reputation) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("user_id".into(), match (&p.user_id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("user_type".into(), match (&p.user_type) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_me__questions_item_v6_last_editor_badge_counts__to_json(p: &iface_me::QuestionsItemV6LastEditorBadgeCounts) -> Value {
+    let mut m = Map::new();
+    m.insert("bronze".into(), match (&p.bronze) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("gold".into(), match (&p.gold) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("silver".into(), match (&p.silver) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_me__questions_item_v6_migrated_from__to_json(p: &iface_me::QuestionsItemV6MigratedFrom) -> Value {
+    let mut m = Map::new();
+    m.insert("on_date".into(), match (&p.on_date) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("other_site".into(), match (&p.other_site) { Some(v) => iface_me__questions_item_v6_migrated_from_other_site__to_json(v), None => Value::Null });
+    m.insert("question_id".into(), match (&p.question_id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_me__questions_item_v6_migrated_from_other_site__to_json(p: &iface_me::QuestionsItemV6MigratedFromOtherSite) -> Value {
+    let mut m = Map::new();
+    m.insert("aliases".into(), match (&p.aliases) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("api_site_parameter".into(), match (&p.api_site_parameter) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("audience".into(), match (&p.audience) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("closed_beta_date".into(), match (&p.closed_beta_date) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("favicon_url".into(), match (&p.favicon_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("high_resolution_icon_url".into(), match (&p.high_resolution_icon_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("icon_url".into(), match (&p.icon_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("launch_date".into(), match (&p.launch_date) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("logo_url".into(), match (&p.logo_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("markdown_extensions".into(), match (&p.markdown_extensions) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("open_beta_date".into(), match (&p.open_beta_date) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("related_sites".into(), match (&p.related_sites) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("site_state".into(), match (&p.site_state) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("site_type".into(), match (&p.site_type) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("site_url".into(), match (&p.site_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("styling".into(), match (&p.styling) { Some(v) => iface_me__questions_item_v6_migrated_from_other_site_styling__to_json(v), None => Value::Null });
+    m.insert("twitter_account".into(), match (&p.twitter_account) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_me__questions_item_v6_migrated_from_other_site_styling__to_json(p: &iface_me::QuestionsItemV6MigratedFromOtherSiteStyling) -> Value {
+    let mut m = Map::new();
+    m.insert("link_color".into(), match (&p.link_color) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("tag_background_color".into(), match (&p.tag_background_color) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("tag_foreground_color".into(), match (&p.tag_foreground_color) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_me__questions_item_v6_migrated_to__to_json(p: &iface_me::QuestionsItemV6MigratedTo) -> Value {
+    let mut m = Map::new();
+    m.insert("on_date".into(), match (&p.on_date) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("other_site".into(), match (&p.other_site) { Some(v) => iface_me__questions_item_v6_migrated_to_other_site__to_json(v), None => Value::Null });
+    m.insert("question_id".into(), match (&p.question_id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_me__questions_item_v6_migrated_to_other_site__to_json(p: &iface_me::QuestionsItemV6MigratedToOtherSite) -> Value {
+    let mut m = Map::new();
+    m.insert("aliases".into(), match (&p.aliases) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("api_site_parameter".into(), match (&p.api_site_parameter) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("audience".into(), match (&p.audience) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("closed_beta_date".into(), match (&p.closed_beta_date) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("favicon_url".into(), match (&p.favicon_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("high_resolution_icon_url".into(), match (&p.high_resolution_icon_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("icon_url".into(), match (&p.icon_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("launch_date".into(), match (&p.launch_date) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("logo_url".into(), match (&p.logo_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("markdown_extensions".into(), match (&p.markdown_extensions) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("open_beta_date".into(), match (&p.open_beta_date) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("related_sites".into(), match (&p.related_sites) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("site_state".into(), match (&p.site_state) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("site_type".into(), match (&p.site_type) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("site_url".into(), match (&p.site_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("styling".into(), match (&p.styling) { Some(v) => iface_me__questions_item_v6_migrated_to_other_site_styling__to_json(v), None => Value::Null });
+    m.insert("twitter_account".into(), match (&p.twitter_account) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_me__questions_item_v6_migrated_to_other_site_styling__to_json(p: &iface_me::QuestionsItemV6MigratedToOtherSiteStyling) -> Value {
+    let mut m = Map::new();
+    m.insert("link_color".into(), match (&p.link_color) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("tag_background_color".into(), match (&p.tag_background_color) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("tag_foreground_color".into(), match (&p.tag_foreground_color) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_me__questions_item_v6_notice__to_json(p: &iface_me::QuestionsItemV6Notice) -> Value {
+    let mut m = Map::new();
+    m.insert("body".into(), match (&p.body) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("creation_date".into(), match (&p.creation_date) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("owner_user_id".into(), match (&p.owner_user_id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_me__questions_item_v6_owner__to_json(p: &iface_me::QuestionsItemV6Owner) -> Value {
+    let mut m = Map::new();
+    m.insert("accept_rate".into(), match (&p.accept_rate) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("badge_counts".into(), match (&p.badge_counts) { Some(v) => iface_me__questions_item_v6_owner_badge_counts__to_json(v), None => Value::Null });
+    m.insert("display_name".into(), match (&p.display_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("link".into(), match (&p.link) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("profile_image".into(), match (&p.profile_image) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("reputation".into(), match (&p.reputation) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("user_id".into(), match (&p.user_id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("user_type".into(), match (&p.user_type) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_me__questions_item_v6_owner_badge_counts__to_json(p: &iface_me::QuestionsItemV6OwnerBadgeCounts) -> Value {
+    let mut m = Map::new();
+    m.insert("bronze".into(), match (&p.bronze) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("gold".into(), match (&p.gold) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("silver".into(), match (&p.silver) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_me__reputation_changes_item__to_json(p: &iface_me::ReputationChangesItem) -> Value {
+    let mut m = Map::new();
+    m.insert("link".into(), match (&p.link) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("on_date".into(), match (&p.on_date) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("post_id".into(), match (&p.post_id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("post_type".into(), match (&p.post_type) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("reputation_change".into(), match (&p.reputation_change) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("title".into(), match (&p.title) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("user_id".into(), match (&p.user_id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("vote_type".into(), match (&p.vote_type) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_me__reputation_history_item__to_json(p: &iface_me::ReputationHistoryItem) -> Value {
+    let mut m = Map::new();
+    m.insert("creation_date".into(), match (&p.creation_date) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("post_id".into(), match (&p.post_id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("reputation_change".into(), match (&p.reputation_change) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("reputation_history_type".into(), match (&p.reputation_history_type) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("user_id".into(), match (&p.user_id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_me__reputation_history_item_v2__to_json(p: &iface_me::ReputationHistoryItemV2) -> Value {
+    let mut m = Map::new();
+    m.insert("creation_date".into(), match (&p.creation_date) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("post_id".into(), match (&p.post_id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("reputation_change".into(), match (&p.reputation_change) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("reputation_history_type".into(), match (&p.reputation_history_type) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("user_id".into(), match (&p.user_id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_me__suggested_edits_item__to_json(p: &iface_me::SuggestedEditsItem) -> Value {
+    let mut m = Map::new();
+    m.insert("approval_date".into(), match (&p.approval_date) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("body".into(), match (&p.body) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("comment".into(), match (&p.comment) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("creation_date".into(), match (&p.creation_date) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("post_id".into(), match (&p.post_id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("post_type".into(), match (&p.post_type) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("proposing_user".into(), match (&p.proposing_user) { Some(v) => iface_me__suggested_edits_item_proposing_user__to_json(v), None => Value::Null });
+    m.insert("rejection_date".into(), match (&p.rejection_date) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("suggested_edit_id".into(), match (&p.suggested_edit_id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("tags".into(), match (&p.tags) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("title".into(), match (&p.title) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_me__suggested_edits_item_proposing_user__to_json(p: &iface_me::SuggestedEditsItemProposingUser) -> Value {
+    let mut m = Map::new();
+    m.insert("accept_rate".into(), match (&p.accept_rate) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("badge_counts".into(), match (&p.badge_counts) { Some(v) => iface_me__suggested_edits_item_proposing_user_badge_counts__to_json(v), None => Value::Null });
+    m.insert("display_name".into(), match (&p.display_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("link".into(), match (&p.link) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("profile_image".into(), match (&p.profile_image) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("reputation".into(), match (&p.reputation) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("user_id".into(), match (&p.user_id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("user_type".into(), match (&p.user_type) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_me__suggested_edits_item_proposing_user_badge_counts__to_json(p: &iface_me::SuggestedEditsItemProposingUserBadgeCounts) -> Value {
+    let mut m = Map::new();
+    m.insert("bronze".into(), match (&p.bronze) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("gold".into(), match (&p.gold) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("silver".into(), match (&p.silver) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_me__tags_item__to_json(p: &iface_me::TagsItem) -> Value {
+    let mut m = Map::new();
+    m.insert("count".into(), match (&p.count) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("has_synonyms".into(), match (&p.has_synonyms) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("is_moderator_only".into(), match (&p.is_moderator_only) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("is_required".into(), match (&p.is_required) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("last_activity_date".into(), match (&p.last_activity_date) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("synonyms".into(), match (&p.synonyms) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("user_id".into(), match (&p.user_id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_me__answers_item_v2__to_json(p: &iface_me::AnswersItemV2) -> Value {
+    let mut m = Map::new();
+    m.insert("accepted".into(), match (&p.accepted) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("answer_id".into(), match (&p.answer_id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("awarded_bounty_amount".into(), match (&p.awarded_bounty_amount) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("awarded_bounty_users".into(), match (&p.awarded_bounty_users) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("body".into(), match (&p.body) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("body_markdown".into(), match (&p.body_markdown) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("can_flag".into(), match (&p.can_flag) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("comment_count".into(), match (&p.comment_count) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("comments".into(), match (&p.comments) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("community_owned_date".into(), match (&p.community_owned_date) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("creation_date".into(), match (&p.creation_date) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("down_vote_count".into(), match (&p.down_vote_count) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("downvoted".into(), match (&p.downvoted) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("is_accepted".into(), match (&p.is_accepted) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("last_activity_date".into(), match (&p.last_activity_date) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("last_edit_date".into(), match (&p.last_edit_date) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("last_editor".into(), match (&p.last_editor) { Some(v) => iface_me__answers_item_v2_last_editor__to_json(v), None => Value::Null });
+    m.insert("link".into(), match (&p.link) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("locked_date".into(), match (&p.locked_date) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("owner".into(), match (&p.owner) { Some(v) => iface_me__answers_item_v2_owner__to_json(v), None => Value::Null });
+    m.insert("question_id".into(), match (&p.question_id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("score".into(), match (&p.score) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("share_link".into(), match (&p.share_link) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("tags".into(), match (&p.tags) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("title".into(), match (&p.title) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("up_vote_count".into(), match (&p.up_vote_count) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("upvoted".into(), match (&p.upvoted) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_me__answers_item_v2_last_editor__to_json(p: &iface_me::AnswersItemV2LastEditor) -> Value {
+    let mut m = Map::new();
+    m.insert("accept_rate".into(), match (&p.accept_rate) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("badge_counts".into(), match (&p.badge_counts) { Some(v) => iface_me__answers_item_v2_last_editor_badge_counts__to_json(v), None => Value::Null });
+    m.insert("display_name".into(), match (&p.display_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("link".into(), match (&p.link) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("profile_image".into(), match (&p.profile_image) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("reputation".into(), match (&p.reputation) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("user_id".into(), match (&p.user_id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("user_type".into(), match (&p.user_type) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_me__answers_item_v2_last_editor_badge_counts__to_json(p: &iface_me::AnswersItemV2LastEditorBadgeCounts) -> Value {
+    let mut m = Map::new();
+    m.insert("bronze".into(), match (&p.bronze) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("gold".into(), match (&p.gold) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("silver".into(), match (&p.silver) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_me__answers_item_v2_owner__to_json(p: &iface_me::AnswersItemV2Owner) -> Value {
+    let mut m = Map::new();
+    m.insert("accept_rate".into(), match (&p.accept_rate) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("badge_counts".into(), match (&p.badge_counts) { Some(v) => iface_me__answers_item_v2_owner_badge_counts__to_json(v), None => Value::Null });
+    m.insert("display_name".into(), match (&p.display_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("link".into(), match (&p.link) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("profile_image".into(), match (&p.profile_image) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("reputation".into(), match (&p.reputation) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("user_id".into(), match (&p.user_id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("user_type".into(), match (&p.user_type) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_me__answers_item_v2_owner_badge_counts__to_json(p: &iface_me::AnswersItemV2OwnerBadgeCounts) -> Value {
+    let mut m = Map::new();
+    m.insert("bronze".into(), match (&p.bronze) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("gold".into(), match (&p.gold) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("silver".into(), match (&p.silver) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_me__questions_item_v7__to_json(p: &iface_me::QuestionsItemV7) -> Value {
+    let mut m = Map::new();
+    m.insert("accepted_answer_id".into(), match (&p.accepted_answer_id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("answer_count".into(), match (&p.answer_count) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("answers".into(), match (&p.answers) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("body".into(), match (&p.body) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("body_markdown".into(), match (&p.body_markdown) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("bounty_amount".into(), match (&p.bounty_amount) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("bounty_closes_date".into(), match (&p.bounty_closes_date) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("bounty_user".into(), match (&p.bounty_user) { Some(v) => iface_me__questions_item_v7_bounty_user__to_json(v), None => Value::Null });
+    m.insert("can_close".into(), match (&p.can_close) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("can_flag".into(), match (&p.can_flag) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("close_vote_count".into(), match (&p.close_vote_count) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("closed_date".into(), match (&p.closed_date) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("closed_details".into(), match (&p.closed_details) { Some(v) => iface_me__questions_item_v7_closed_details__to_json(v), None => Value::Null });
+    m.insert("closed_reason".into(), match (&p.closed_reason) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("comment_count".into(), match (&p.comment_count) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("comments".into(), match (&p.comments) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("community_owned_date".into(), match (&p.community_owned_date) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("creation_date".into(), match (&p.creation_date) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("delete_vote_count".into(), match (&p.delete_vote_count) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("down_vote_count".into(), match (&p.down_vote_count) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("downvoted".into(), match (&p.downvoted) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("favorite_count".into(), match (&p.favorite_count) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("favorited".into(), match (&p.favorited) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("is_answered".into(), match (&p.is_answered) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("last_activity_date".into(), match (&p.last_activity_date) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("last_edit_date".into(), match (&p.last_edit_date) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("last_editor".into(), match (&p.last_editor) { Some(v) => iface_me__questions_item_v7_last_editor__to_json(v), None => Value::Null });
+    m.insert("link".into(), match (&p.link) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("locked_date".into(), match (&p.locked_date) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("migrated_from".into(), match (&p.migrated_from) { Some(v) => iface_me__questions_item_v7_migrated_from__to_json(v), None => Value::Null });
+    m.insert("migrated_to".into(), match (&p.migrated_to) { Some(v) => iface_me__questions_item_v7_migrated_to__to_json(v), None => Value::Null });
+    m.insert("notice".into(), match (&p.notice) { Some(v) => iface_me__questions_item_v7_notice__to_json(v), None => Value::Null });
+    m.insert("owner".into(), match (&p.owner) { Some(v) => iface_me__questions_item_v7_owner__to_json(v), None => Value::Null });
+    m.insert("protected_date".into(), match (&p.protected_date) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("question_id".into(), match (&p.question_id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("reopen_vote_count".into(), match (&p.reopen_vote_count) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("score".into(), match (&p.score) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("share_link".into(), match (&p.share_link) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("tags".into(), match (&p.tags) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("title".into(), match (&p.title) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("up_vote_count".into(), match (&p.up_vote_count) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("upvoted".into(), match (&p.upvoted) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("view_count".into(), match (&p.view_count) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_me__questions_item_v7_bounty_user__to_json(p: &iface_me::QuestionsItemV7BountyUser) -> Value {
+    let mut m = Map::new();
+    m.insert("accept_rate".into(), match (&p.accept_rate) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("badge_counts".into(), match (&p.badge_counts) { Some(v) => iface_me__questions_item_v7_bounty_user_badge_counts__to_json(v), None => Value::Null });
+    m.insert("display_name".into(), match (&p.display_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("link".into(), match (&p.link) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("profile_image".into(), match (&p.profile_image) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("reputation".into(), match (&p.reputation) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("user_id".into(), match (&p.user_id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("user_type".into(), match (&p.user_type) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_me__questions_item_v7_bounty_user_badge_counts__to_json(p: &iface_me::QuestionsItemV7BountyUserBadgeCounts) -> Value {
+    let mut m = Map::new();
+    m.insert("bronze".into(), match (&p.bronze) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("gold".into(), match (&p.gold) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("silver".into(), match (&p.silver) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_me__questions_item_v7_closed_details__to_json(p: &iface_me::QuestionsItemV7ClosedDetails) -> Value {
+    let mut m = Map::new();
+    m.insert("by_users".into(), match (&p.by_users) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("description".into(), match (&p.description) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("on_hold".into(), match (&p.on_hold) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("original_questions".into(), match (&p.original_questions) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("reason".into(), match (&p.reason) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_me__questions_item_v7_last_editor__to_json(p: &iface_me::QuestionsItemV7LastEditor) -> Value {
+    let mut m = Map::new();
+    m.insert("accept_rate".into(), match (&p.accept_rate) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("badge_counts".into(), match (&p.badge_counts) { Some(v) => iface_me__questions_item_v7_last_editor_badge_counts__to_json(v), None => Value::Null });
+    m.insert("display_name".into(), match (&p.display_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("link".into(), match (&p.link) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("profile_image".into(), match (&p.profile_image) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("reputation".into(), match (&p.reputation) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("user_id".into(), match (&p.user_id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("user_type".into(), match (&p.user_type) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_me__questions_item_v7_last_editor_badge_counts__to_json(p: &iface_me::QuestionsItemV7LastEditorBadgeCounts) -> Value {
+    let mut m = Map::new();
+    m.insert("bronze".into(), match (&p.bronze) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("gold".into(), match (&p.gold) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("silver".into(), match (&p.silver) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_me__questions_item_v7_migrated_from__to_json(p: &iface_me::QuestionsItemV7MigratedFrom) -> Value {
+    let mut m = Map::new();
+    m.insert("on_date".into(), match (&p.on_date) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("other_site".into(), match (&p.other_site) { Some(v) => iface_me__questions_item_v7_migrated_from_other_site__to_json(v), None => Value::Null });
+    m.insert("question_id".into(), match (&p.question_id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_me__questions_item_v7_migrated_from_other_site__to_json(p: &iface_me::QuestionsItemV7MigratedFromOtherSite) -> Value {
+    let mut m = Map::new();
+    m.insert("aliases".into(), match (&p.aliases) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("api_site_parameter".into(), match (&p.api_site_parameter) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("audience".into(), match (&p.audience) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("closed_beta_date".into(), match (&p.closed_beta_date) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("favicon_url".into(), match (&p.favicon_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("high_resolution_icon_url".into(), match (&p.high_resolution_icon_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("icon_url".into(), match (&p.icon_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("launch_date".into(), match (&p.launch_date) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("logo_url".into(), match (&p.logo_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("markdown_extensions".into(), match (&p.markdown_extensions) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("open_beta_date".into(), match (&p.open_beta_date) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("related_sites".into(), match (&p.related_sites) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("site_state".into(), match (&p.site_state) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("site_type".into(), match (&p.site_type) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("site_url".into(), match (&p.site_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("styling".into(), match (&p.styling) { Some(v) => iface_me__questions_item_v7_migrated_from_other_site_styling__to_json(v), None => Value::Null });
+    m.insert("twitter_account".into(), match (&p.twitter_account) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_me__questions_item_v7_migrated_from_other_site_styling__to_json(p: &iface_me::QuestionsItemV7MigratedFromOtherSiteStyling) -> Value {
+    let mut m = Map::new();
+    m.insert("link_color".into(), match (&p.link_color) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("tag_background_color".into(), match (&p.tag_background_color) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("tag_foreground_color".into(), match (&p.tag_foreground_color) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_me__questions_item_v7_migrated_to__to_json(p: &iface_me::QuestionsItemV7MigratedTo) -> Value {
+    let mut m = Map::new();
+    m.insert("on_date".into(), match (&p.on_date) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("other_site".into(), match (&p.other_site) { Some(v) => iface_me__questions_item_v7_migrated_to_other_site__to_json(v), None => Value::Null });
+    m.insert("question_id".into(), match (&p.question_id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_me__questions_item_v7_migrated_to_other_site__to_json(p: &iface_me::QuestionsItemV7MigratedToOtherSite) -> Value {
+    let mut m = Map::new();
+    m.insert("aliases".into(), match (&p.aliases) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("api_site_parameter".into(), match (&p.api_site_parameter) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("audience".into(), match (&p.audience) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("closed_beta_date".into(), match (&p.closed_beta_date) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("favicon_url".into(), match (&p.favicon_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("high_resolution_icon_url".into(), match (&p.high_resolution_icon_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("icon_url".into(), match (&p.icon_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("launch_date".into(), match (&p.launch_date) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("logo_url".into(), match (&p.logo_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("markdown_extensions".into(), match (&p.markdown_extensions) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("open_beta_date".into(), match (&p.open_beta_date) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("related_sites".into(), match (&p.related_sites) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("site_state".into(), match (&p.site_state) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("site_type".into(), match (&p.site_type) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("site_url".into(), match (&p.site_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("styling".into(), match (&p.styling) { Some(v) => iface_me__questions_item_v7_migrated_to_other_site_styling__to_json(v), None => Value::Null });
+    m.insert("twitter_account".into(), match (&p.twitter_account) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_me__questions_item_v7_migrated_to_other_site_styling__to_json(p: &iface_me::QuestionsItemV7MigratedToOtherSiteStyling) -> Value {
+    let mut m = Map::new();
+    m.insert("link_color".into(), match (&p.link_color) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("tag_background_color".into(), match (&p.tag_background_color) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("tag_foreground_color".into(), match (&p.tag_foreground_color) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_me__questions_item_v7_notice__to_json(p: &iface_me::QuestionsItemV7Notice) -> Value {
+    let mut m = Map::new();
+    m.insert("body".into(), match (&p.body) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("creation_date".into(), match (&p.creation_date) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("owner_user_id".into(), match (&p.owner_user_id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_me__questions_item_v7_owner__to_json(p: &iface_me::QuestionsItemV7Owner) -> Value {
+    let mut m = Map::new();
+    m.insert("accept_rate".into(), match (&p.accept_rate) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("badge_counts".into(), match (&p.badge_counts) { Some(v) => iface_me__questions_item_v7_owner_badge_counts__to_json(v), None => Value::Null });
+    m.insert("display_name".into(), match (&p.display_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("link".into(), match (&p.link) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("profile_image".into(), match (&p.profile_image) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("reputation".into(), match (&p.reputation) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("user_id".into(), match (&p.user_id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("user_type".into(), match (&p.user_type) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_me__questions_item_v7_owner_badge_counts__to_json(p: &iface_me::QuestionsItemV7OwnerBadgeCounts) -> Value {
+    let mut m = Map::new();
+    m.insert("bronze".into(), match (&p.bronze) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("gold".into(), match (&p.gold) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("silver".into(), match (&p.silver) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_me__user_timeline_objects_item__to_json(p: &iface_me::UserTimelineObjectsItem) -> Value {
+    let mut m = Map::new();
+    m.insert("badge_id".into(), match (&p.badge_id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("comment_id".into(), match (&p.comment_id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("creation_date".into(), match (&p.creation_date) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("detail".into(), match (&p.detail) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("link".into(), match (&p.link) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("post_id".into(), match (&p.post_id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("post_type".into(), match (&p.post_type) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("suggested_edit_id".into(), match (&p.suggested_edit_id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("timeline_type".into(), match (&p.timeline_type) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("title".into(), match (&p.title) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("user_id".into(), match (&p.user_id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_me__top_tag_objects_item__to_json(p: &iface_me::TopTagObjectsItem) -> Value {
+    let mut m = Map::new();
+    m.insert("answer_count".into(), match (&p.answer_count) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("answer_score".into(), match (&p.answer_score) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("question_count".into(), match (&p.question_count) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("question_score".into(), match (&p.question_score) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("tag_name".into(), match (&p.tag_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("user_id".into(), match (&p.user_id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_me__top_tag_objects_item_v2__to_json(p: &iface_me::TopTagObjectsItemV2) -> Value {
+    let mut m = Map::new();
+    m.insert("answer_count".into(), match (&p.answer_count) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("answer_score".into(), match (&p.answer_score) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("question_count".into(), match (&p.question_count) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("question_score".into(), match (&p.question_score) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("tag_name".into(), match (&p.tag_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("user_id".into(), match (&p.user_id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_me__write_permissions_item__to_json(p: &iface_me::WritePermissionsItem) -> Value {
+    let mut m = Map::new();
+    m.insert("can_add".into(), match (&p.can_add) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("can_delete".into(), match (&p.can_delete) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("can_edit".into(), match (&p.can_edit) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("max_daily_actions".into(), match (&p.max_daily_actions) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("min_seconds_between_actions".into(), match (&p.min_seconds_between_actions) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("object_type".into(), match (&p.object_type) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("user_id".into(), match (&p.user_id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
@@ -1176,115 +3242,2325 @@ fn iface_me__user_badge_counts__from_json(v: &Value) -> Option<iface_me::UserBad
     })
 }
 
-fn iface_me__answers__from_json(v: &Value) -> Option<iface_me::Answers> {
+fn iface_me__answers_item__from_json(v: &Value) -> Option<iface_me::AnswersItem> {
     let m = v.as_object()?;
-    Some(iface_me::Answers {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    Some(iface_me::AnswersItem {
+        accepted: m.get("accepted").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        answer_id: m.get("answer_id").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        awarded_bounty_amount: m.get("awarded_bounty_amount").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        awarded_bounty_users: m.get("awarded_bounty_users").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        body: m.get("body").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        body_markdown: m.get("body_markdown").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        can_flag: m.get("can_flag").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        comment_count: m.get("comment_count").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        comments: m.get("comments").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        community_owned_date: m.get("community_owned_date").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        creation_date: m.get("creation_date").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        down_vote_count: m.get("down_vote_count").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        downvoted: m.get("downvoted").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        is_accepted: m.get("is_accepted").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        last_activity_date: m.get("last_activity_date").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        last_edit_date: m.get("last_edit_date").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        last_editor: m.get("last_editor").filter(|v| !v.is_null()).and_then(|v| iface_me__answers_item_last_editor__from_json(v)),
+        link: m.get("link").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        locked_date: m.get("locked_date").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        owner: m.get("owner").filter(|v| !v.is_null()).and_then(|v| iface_me__answers_item_owner__from_json(v)),
+        question_id: m.get("question_id").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        score: m.get("score").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        share_link: m.get("share_link").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        tags: m.get("tags").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        title: m.get("title").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        up_vote_count: m.get("up_vote_count").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        upvoted: m.get("upvoted").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
     })
 }
 
-fn iface_me__network_users__from_json(v: &Value) -> Option<iface_me::NetworkUsers> {
+fn iface_me__answers_item_last_editor__from_json(v: &Value) -> Option<iface_me::AnswersItemLastEditor> {
     let m = v.as_object()?;
-    Some(iface_me::NetworkUsers {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    Some(iface_me::AnswersItemLastEditor {
+        accept_rate: m.get("accept_rate").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        badge_counts: m.get("badge_counts").filter(|v| !v.is_null()).and_then(|v| iface_me__answers_item_last_editor_badge_counts__from_json(v)),
+        display_name: m.get("display_name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        link: m.get("link").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        profile_image: m.get("profile_image").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        reputation: m.get("reputation").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        user_id: m.get("user_id").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        user_type: m.get("user_type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
     })
 }
 
-fn iface_me__badges__from_json(v: &Value) -> Option<iface_me::Badges> {
+fn iface_me__answers_item_last_editor_badge_counts__from_json(v: &Value) -> Option<iface_me::AnswersItemLastEditorBadgeCounts> {
     let m = v.as_object()?;
-    Some(iface_me::Badges {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    Some(iface_me::AnswersItemLastEditorBadgeCounts {
+        bronze: m.get("bronze").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        gold: m.get("gold").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        silver: m.get("silver").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
     })
 }
 
-fn iface_me__comments__from_json(v: &Value) -> Option<iface_me::Comments> {
+fn iface_me__answers_item_owner__from_json(v: &Value) -> Option<iface_me::AnswersItemOwner> {
     let m = v.as_object()?;
-    Some(iface_me::Comments {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    Some(iface_me::AnswersItemOwner {
+        accept_rate: m.get("accept_rate").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        badge_counts: m.get("badge_counts").filter(|v| !v.is_null()).and_then(|v| iface_me__answers_item_owner_badge_counts__from_json(v)),
+        display_name: m.get("display_name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        link: m.get("link").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        profile_image: m.get("profile_image").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        reputation: m.get("reputation").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        user_id: m.get("user_id").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        user_type: m.get("user_type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
     })
 }
 
-fn iface_me__questions__from_json(v: &Value) -> Option<iface_me::Questions> {
+fn iface_me__answers_item_owner_badge_counts__from_json(v: &Value) -> Option<iface_me::AnswersItemOwnerBadgeCounts> {
     let m = v.as_object()?;
-    Some(iface_me::Questions {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    Some(iface_me::AnswersItemOwnerBadgeCounts {
+        bronze: m.get("bronze").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        gold: m.get("gold").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        silver: m.get("silver").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
     })
 }
 
-fn iface_me__inbox_items__from_json(v: &Value) -> Option<iface_me::InboxItems> {
+fn iface_me__network_users_item__from_json(v: &Value) -> Option<iface_me::NetworkUsersItem> {
     let m = v.as_object()?;
-    Some(iface_me::InboxItems {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    Some(iface_me::NetworkUsersItem {
+        account_id: m.get("account_id").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        answer_count: m.get("answer_count").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        badge_counts: m.get("badge_counts").filter(|v| !v.is_null()).and_then(|v| iface_me__network_users_item_badge_counts__from_json(v)),
+        creation_date: m.get("creation_date").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        last_access_date: m.get("last_access_date").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        question_count: m.get("question_count").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        reputation: m.get("reputation").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        site_name: m.get("site_name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        site_url: m.get("site_url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        top_answers: m.get("top_answers").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        top_questions: m.get("top_questions").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        user_id: m.get("user_id").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        user_type: m.get("user_type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
     })
 }
 
-fn iface_me__account_merge__from_json(v: &Value) -> Option<iface_me::AccountMerge> {
+fn iface_me__network_users_item_badge_counts__from_json(v: &Value) -> Option<iface_me::NetworkUsersItemBadgeCounts> {
     let m = v.as_object()?;
-    Some(iface_me::AccountMerge {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    Some(iface_me::NetworkUsersItemBadgeCounts {
+        bronze: m.get("bronze").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        gold: m.get("gold").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        silver: m.get("silver").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
     })
 }
 
-fn iface_me__notifications__from_json(v: &Value) -> Option<iface_me::Notifications> {
+fn iface_me__badges_item__from_json(v: &Value) -> Option<iface_me::BadgesItem> {
     let m = v.as_object()?;
-    Some(iface_me::Notifications {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    Some(iface_me::BadgesItem {
+        award_count: m.get("award_count").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        badge_id: m.get("badge_id").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        badge_type: m.get("badge_type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        description: m.get("description").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        link: m.get("link").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        rank: m.get("rank").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        user: m.get("user").filter(|v| !v.is_null()).and_then(|v| iface_me__badges_item_user__from_json(v)),
     })
 }
 
-fn iface_me__privileges__from_json(v: &Value) -> Option<iface_me::Privileges> {
+fn iface_me__badges_item_user__from_json(v: &Value) -> Option<iface_me::BadgesItemUser> {
     let m = v.as_object()?;
-    Some(iface_me::Privileges {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    Some(iface_me::BadgesItemUser {
+        accept_rate: m.get("accept_rate").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        badge_counts: m.get("badge_counts").filter(|v| !v.is_null()).and_then(|v| iface_me__badges_item_user_badge_counts__from_json(v)),
+        display_name: m.get("display_name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        link: m.get("link").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        profile_image: m.get("profile_image").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        reputation: m.get("reputation").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        user_id: m.get("user_id").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        user_type: m.get("user_type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
     })
 }
 
-fn iface_me__reputation_changes__from_json(v: &Value) -> Option<iface_me::ReputationChanges> {
+fn iface_me__badges_item_user_badge_counts__from_json(v: &Value) -> Option<iface_me::BadgesItemUserBadgeCounts> {
     let m = v.as_object()?;
-    Some(iface_me::ReputationChanges {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    Some(iface_me::BadgesItemUserBadgeCounts {
+        bronze: m.get("bronze").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        gold: m.get("gold").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        silver: m.get("silver").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
     })
 }
 
-fn iface_me__reputation_history__from_json(v: &Value) -> Option<iface_me::ReputationHistory> {
+fn iface_me__comments_item__from_json(v: &Value) -> Option<iface_me::CommentsItem> {
     let m = v.as_object()?;
-    Some(iface_me::ReputationHistory {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    Some(iface_me::CommentsItem {
+        body: m.get("body").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        body_markdown: m.get("body_markdown").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        can_flag: m.get("can_flag").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        comment_id: m.get("comment_id").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        creation_date: m.get("creation_date").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        edited: m.get("edited").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        link: m.get("link").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        owner: m.get("owner").filter(|v| !v.is_null()).and_then(|v| iface_me__comments_item_owner__from_json(v)),
+        post_id: m.get("post_id").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        post_type: m.get("post_type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        reply_to_user: m.get("reply_to_user").filter(|v| !v.is_null()).and_then(|v| iface_me__comments_item_reply_to_user__from_json(v)),
+        score: m.get("score").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        upvoted: m.get("upvoted").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
     })
 }
 
-fn iface_me__suggested_edits__from_json(v: &Value) -> Option<iface_me::SuggestedEdits> {
+fn iface_me__comments_item_owner__from_json(v: &Value) -> Option<iface_me::CommentsItemOwner> {
     let m = v.as_object()?;
-    Some(iface_me::SuggestedEdits {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    Some(iface_me::CommentsItemOwner {
+        accept_rate: m.get("accept_rate").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        badge_counts: m.get("badge_counts").filter(|v| !v.is_null()).and_then(|v| iface_me__comments_item_owner_badge_counts__from_json(v)),
+        display_name: m.get("display_name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        link: m.get("link").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        profile_image: m.get("profile_image").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        reputation: m.get("reputation").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        user_id: m.get("user_id").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        user_type: m.get("user_type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
     })
 }
 
-fn iface_me__tags__from_json(v: &Value) -> Option<iface_me::Tags> {
+fn iface_me__comments_item_owner_badge_counts__from_json(v: &Value) -> Option<iface_me::CommentsItemOwnerBadgeCounts> {
     let m = v.as_object()?;
-    Some(iface_me::Tags {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    Some(iface_me::CommentsItemOwnerBadgeCounts {
+        bronze: m.get("bronze").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        gold: m.get("gold").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        silver: m.get("silver").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
     })
 }
 
-fn iface_me__user_timeline_objects__from_json(v: &Value) -> Option<iface_me::UserTimelineObjects> {
+fn iface_me__comments_item_reply_to_user__from_json(v: &Value) -> Option<iface_me::CommentsItemReplyToUser> {
     let m = v.as_object()?;
-    Some(iface_me::UserTimelineObjects {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    Some(iface_me::CommentsItemReplyToUser {
+        accept_rate: m.get("accept_rate").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        badge_counts: m.get("badge_counts").filter(|v| !v.is_null()).and_then(|v| iface_me__comments_item_reply_to_user_badge_counts__from_json(v)),
+        display_name: m.get("display_name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        link: m.get("link").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        profile_image: m.get("profile_image").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        reputation: m.get("reputation").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        user_id: m.get("user_id").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        user_type: m.get("user_type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
     })
 }
 
-fn iface_me__top_tag_objects__from_json(v: &Value) -> Option<iface_me::TopTagObjects> {
+fn iface_me__comments_item_reply_to_user_badge_counts__from_json(v: &Value) -> Option<iface_me::CommentsItemReplyToUserBadgeCounts> {
     let m = v.as_object()?;
-    Some(iface_me::TopTagObjects {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    Some(iface_me::CommentsItemReplyToUserBadgeCounts {
+        bronze: m.get("bronze").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        gold: m.get("gold").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        silver: m.get("silver").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
     })
 }
 
-fn iface_me__write_permissions__from_json(v: &Value) -> Option<iface_me::WritePermissions> {
+fn iface_me__comments_item_v2__from_json(v: &Value) -> Option<iface_me::CommentsItemV2> {
     let m = v.as_object()?;
-    Some(iface_me::WritePermissions {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    Some(iface_me::CommentsItemV2 {
+        body: m.get("body").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        body_markdown: m.get("body_markdown").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        can_flag: m.get("can_flag").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        comment_id: m.get("comment_id").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        creation_date: m.get("creation_date").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        edited: m.get("edited").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        link: m.get("link").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        owner: m.get("owner").filter(|v| !v.is_null()).and_then(|v| iface_me__comments_item_v2_owner__from_json(v)),
+        post_id: m.get("post_id").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        post_type: m.get("post_type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        reply_to_user: m.get("reply_to_user").filter(|v| !v.is_null()).and_then(|v| iface_me__comments_item_v2_reply_to_user__from_json(v)),
+        score: m.get("score").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        upvoted: m.get("upvoted").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+    })
+}
+
+fn iface_me__comments_item_v2_owner__from_json(v: &Value) -> Option<iface_me::CommentsItemV2Owner> {
+    let m = v.as_object()?;
+    Some(iface_me::CommentsItemV2Owner {
+        accept_rate: m.get("accept_rate").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        badge_counts: m.get("badge_counts").filter(|v| !v.is_null()).and_then(|v| iface_me__comments_item_v2_owner_badge_counts__from_json(v)),
+        display_name: m.get("display_name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        link: m.get("link").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        profile_image: m.get("profile_image").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        reputation: m.get("reputation").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        user_id: m.get("user_id").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        user_type: m.get("user_type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_me__comments_item_v2_owner_badge_counts__from_json(v: &Value) -> Option<iface_me::CommentsItemV2OwnerBadgeCounts> {
+    let m = v.as_object()?;
+    Some(iface_me::CommentsItemV2OwnerBadgeCounts {
+        bronze: m.get("bronze").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        gold: m.get("gold").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        silver: m.get("silver").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+    })
+}
+
+fn iface_me__comments_item_v2_reply_to_user__from_json(v: &Value) -> Option<iface_me::CommentsItemV2ReplyToUser> {
+    let m = v.as_object()?;
+    Some(iface_me::CommentsItemV2ReplyToUser {
+        accept_rate: m.get("accept_rate").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        badge_counts: m.get("badge_counts").filter(|v| !v.is_null()).and_then(|v| iface_me__comments_item_v2_reply_to_user_badge_counts__from_json(v)),
+        display_name: m.get("display_name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        link: m.get("link").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        profile_image: m.get("profile_image").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        reputation: m.get("reputation").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        user_id: m.get("user_id").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        user_type: m.get("user_type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_me__comments_item_v2_reply_to_user_badge_counts__from_json(v: &Value) -> Option<iface_me::CommentsItemV2ReplyToUserBadgeCounts> {
+    let m = v.as_object()?;
+    Some(iface_me::CommentsItemV2ReplyToUserBadgeCounts {
+        bronze: m.get("bronze").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        gold: m.get("gold").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        silver: m.get("silver").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+    })
+}
+
+fn iface_me__questions_item__from_json(v: &Value) -> Option<iface_me::QuestionsItem> {
+    let m = v.as_object()?;
+    Some(iface_me::QuestionsItem {
+        accepted_answer_id: m.get("accepted_answer_id").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        answer_count: m.get("answer_count").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        answers: m.get("answers").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        body: m.get("body").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        body_markdown: m.get("body_markdown").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        bounty_amount: m.get("bounty_amount").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        bounty_closes_date: m.get("bounty_closes_date").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        bounty_user: m.get("bounty_user").filter(|v| !v.is_null()).and_then(|v| iface_me__questions_item_bounty_user__from_json(v)),
+        can_close: m.get("can_close").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        can_flag: m.get("can_flag").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        close_vote_count: m.get("close_vote_count").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        closed_date: m.get("closed_date").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        closed_details: m.get("closed_details").filter(|v| !v.is_null()).and_then(|v| iface_me__questions_item_closed_details__from_json(v)),
+        closed_reason: m.get("closed_reason").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        comment_count: m.get("comment_count").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        comments: m.get("comments").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        community_owned_date: m.get("community_owned_date").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        creation_date: m.get("creation_date").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        delete_vote_count: m.get("delete_vote_count").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        down_vote_count: m.get("down_vote_count").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        downvoted: m.get("downvoted").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        favorite_count: m.get("favorite_count").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        favorited: m.get("favorited").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        is_answered: m.get("is_answered").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        last_activity_date: m.get("last_activity_date").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        last_edit_date: m.get("last_edit_date").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        last_editor: m.get("last_editor").filter(|v| !v.is_null()).and_then(|v| iface_me__questions_item_last_editor__from_json(v)),
+        link: m.get("link").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        locked_date: m.get("locked_date").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        migrated_from: m.get("migrated_from").filter(|v| !v.is_null()).and_then(|v| iface_me__questions_item_migrated_from__from_json(v)),
+        migrated_to: m.get("migrated_to").filter(|v| !v.is_null()).and_then(|v| iface_me__questions_item_migrated_to__from_json(v)),
+        notice: m.get("notice").filter(|v| !v.is_null()).and_then(|v| iface_me__questions_item_notice__from_json(v)),
+        owner: m.get("owner").filter(|v| !v.is_null()).and_then(|v| iface_me__questions_item_owner__from_json(v)),
+        protected_date: m.get("protected_date").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        question_id: m.get("question_id").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        reopen_vote_count: m.get("reopen_vote_count").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        score: m.get("score").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        share_link: m.get("share_link").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        tags: m.get("tags").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        title: m.get("title").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        up_vote_count: m.get("up_vote_count").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        upvoted: m.get("upvoted").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        view_count: m.get("view_count").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+    })
+}
+
+fn iface_me__questions_item_bounty_user__from_json(v: &Value) -> Option<iface_me::QuestionsItemBountyUser> {
+    let m = v.as_object()?;
+    Some(iface_me::QuestionsItemBountyUser {
+        accept_rate: m.get("accept_rate").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        badge_counts: m.get("badge_counts").filter(|v| !v.is_null()).and_then(|v| iface_me__questions_item_bounty_user_badge_counts__from_json(v)),
+        display_name: m.get("display_name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        link: m.get("link").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        profile_image: m.get("profile_image").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        reputation: m.get("reputation").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        user_id: m.get("user_id").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        user_type: m.get("user_type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_me__questions_item_bounty_user_badge_counts__from_json(v: &Value) -> Option<iface_me::QuestionsItemBountyUserBadgeCounts> {
+    let m = v.as_object()?;
+    Some(iface_me::QuestionsItemBountyUserBadgeCounts {
+        bronze: m.get("bronze").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        gold: m.get("gold").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        silver: m.get("silver").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+    })
+}
+
+fn iface_me__questions_item_closed_details__from_json(v: &Value) -> Option<iface_me::QuestionsItemClosedDetails> {
+    let m = v.as_object()?;
+    Some(iface_me::QuestionsItemClosedDetails {
+        by_users: m.get("by_users").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        description: m.get("description").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        on_hold: m.get("on_hold").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        original_questions: m.get("original_questions").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        reason: m.get("reason").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_me__questions_item_last_editor__from_json(v: &Value) -> Option<iface_me::QuestionsItemLastEditor> {
+    let m = v.as_object()?;
+    Some(iface_me::QuestionsItemLastEditor {
+        accept_rate: m.get("accept_rate").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        badge_counts: m.get("badge_counts").filter(|v| !v.is_null()).and_then(|v| iface_me__questions_item_last_editor_badge_counts__from_json(v)),
+        display_name: m.get("display_name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        link: m.get("link").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        profile_image: m.get("profile_image").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        reputation: m.get("reputation").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        user_id: m.get("user_id").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        user_type: m.get("user_type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_me__questions_item_last_editor_badge_counts__from_json(v: &Value) -> Option<iface_me::QuestionsItemLastEditorBadgeCounts> {
+    let m = v.as_object()?;
+    Some(iface_me::QuestionsItemLastEditorBadgeCounts {
+        bronze: m.get("bronze").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        gold: m.get("gold").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        silver: m.get("silver").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+    })
+}
+
+fn iface_me__questions_item_migrated_from__from_json(v: &Value) -> Option<iface_me::QuestionsItemMigratedFrom> {
+    let m = v.as_object()?;
+    Some(iface_me::QuestionsItemMigratedFrom {
+        on_date: m.get("on_date").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        other_site: m.get("other_site").filter(|v| !v.is_null()).and_then(|v| iface_me__questions_item_migrated_from_other_site__from_json(v)),
+        question_id: m.get("question_id").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+    })
+}
+
+fn iface_me__questions_item_migrated_from_other_site__from_json(v: &Value) -> Option<iface_me::QuestionsItemMigratedFromOtherSite> {
+    let m = v.as_object()?;
+    Some(iface_me::QuestionsItemMigratedFromOtherSite {
+        aliases: m.get("aliases").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        api_site_parameter: m.get("api_site_parameter").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        audience: m.get("audience").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        closed_beta_date: m.get("closed_beta_date").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        favicon_url: m.get("favicon_url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        high_resolution_icon_url: m.get("high_resolution_icon_url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        icon_url: m.get("icon_url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        launch_date: m.get("launch_date").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        logo_url: m.get("logo_url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        markdown_extensions: m.get("markdown_extensions").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        open_beta_date: m.get("open_beta_date").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        related_sites: m.get("related_sites").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        site_state: m.get("site_state").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        site_type: m.get("site_type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        site_url: m.get("site_url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        styling: m.get("styling").filter(|v| !v.is_null()).and_then(|v| iface_me__questions_item_migrated_from_other_site_styling__from_json(v)),
+        twitter_account: m.get("twitter_account").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_me__questions_item_migrated_from_other_site_styling__from_json(v: &Value) -> Option<iface_me::QuestionsItemMigratedFromOtherSiteStyling> {
+    let m = v.as_object()?;
+    Some(iface_me::QuestionsItemMigratedFromOtherSiteStyling {
+        link_color: m.get("link_color").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        tag_background_color: m.get("tag_background_color").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        tag_foreground_color: m.get("tag_foreground_color").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_me__questions_item_migrated_to__from_json(v: &Value) -> Option<iface_me::QuestionsItemMigratedTo> {
+    let m = v.as_object()?;
+    Some(iface_me::QuestionsItemMigratedTo {
+        on_date: m.get("on_date").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        other_site: m.get("other_site").filter(|v| !v.is_null()).and_then(|v| iface_me__questions_item_migrated_to_other_site__from_json(v)),
+        question_id: m.get("question_id").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+    })
+}
+
+fn iface_me__questions_item_migrated_to_other_site__from_json(v: &Value) -> Option<iface_me::QuestionsItemMigratedToOtherSite> {
+    let m = v.as_object()?;
+    Some(iface_me::QuestionsItemMigratedToOtherSite {
+        aliases: m.get("aliases").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        api_site_parameter: m.get("api_site_parameter").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        audience: m.get("audience").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        closed_beta_date: m.get("closed_beta_date").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        favicon_url: m.get("favicon_url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        high_resolution_icon_url: m.get("high_resolution_icon_url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        icon_url: m.get("icon_url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        launch_date: m.get("launch_date").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        logo_url: m.get("logo_url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        markdown_extensions: m.get("markdown_extensions").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        open_beta_date: m.get("open_beta_date").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        related_sites: m.get("related_sites").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        site_state: m.get("site_state").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        site_type: m.get("site_type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        site_url: m.get("site_url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        styling: m.get("styling").filter(|v| !v.is_null()).and_then(|v| iface_me__questions_item_migrated_to_other_site_styling__from_json(v)),
+        twitter_account: m.get("twitter_account").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_me__questions_item_migrated_to_other_site_styling__from_json(v: &Value) -> Option<iface_me::QuestionsItemMigratedToOtherSiteStyling> {
+    let m = v.as_object()?;
+    Some(iface_me::QuestionsItemMigratedToOtherSiteStyling {
+        link_color: m.get("link_color").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        tag_background_color: m.get("tag_background_color").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        tag_foreground_color: m.get("tag_foreground_color").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_me__questions_item_notice__from_json(v: &Value) -> Option<iface_me::QuestionsItemNotice> {
+    let m = v.as_object()?;
+    Some(iface_me::QuestionsItemNotice {
+        body: m.get("body").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        creation_date: m.get("creation_date").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        owner_user_id: m.get("owner_user_id").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+    })
+}
+
+fn iface_me__questions_item_owner__from_json(v: &Value) -> Option<iface_me::QuestionsItemOwner> {
+    let m = v.as_object()?;
+    Some(iface_me::QuestionsItemOwner {
+        accept_rate: m.get("accept_rate").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        badge_counts: m.get("badge_counts").filter(|v| !v.is_null()).and_then(|v| iface_me__questions_item_owner_badge_counts__from_json(v)),
+        display_name: m.get("display_name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        link: m.get("link").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        profile_image: m.get("profile_image").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        reputation: m.get("reputation").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        user_id: m.get("user_id").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        user_type: m.get("user_type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_me__questions_item_owner_badge_counts__from_json(v: &Value) -> Option<iface_me::QuestionsItemOwnerBadgeCounts> {
+    let m = v.as_object()?;
+    Some(iface_me::QuestionsItemOwnerBadgeCounts {
+        bronze: m.get("bronze").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        gold: m.get("gold").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        silver: m.get("silver").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+    })
+}
+
+fn iface_me__inbox_items_item__from_json(v: &Value) -> Option<iface_me::InboxItemsItem> {
+    let m = v.as_object()?;
+    Some(iface_me::InboxItemsItem {
+        answer_id: m.get("answer_id").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        body: m.get("body").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        comment_id: m.get("comment_id").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        creation_date: m.get("creation_date").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        is_unread: m.get("is_unread").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        item_type: m.get("item_type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        link: m.get("link").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        question_id: m.get("question_id").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        site: m.get("site").filter(|v| !v.is_null()).and_then(|v| iface_me__inbox_items_item_site__from_json(v)),
+        title: m.get("title").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_me__inbox_items_item_site__from_json(v: &Value) -> Option<iface_me::InboxItemsItemSite> {
+    let m = v.as_object()?;
+    Some(iface_me::InboxItemsItemSite {
+        aliases: m.get("aliases").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        api_site_parameter: m.get("api_site_parameter").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        audience: m.get("audience").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        closed_beta_date: m.get("closed_beta_date").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        favicon_url: m.get("favicon_url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        high_resolution_icon_url: m.get("high_resolution_icon_url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        icon_url: m.get("icon_url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        launch_date: m.get("launch_date").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        logo_url: m.get("logo_url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        markdown_extensions: m.get("markdown_extensions").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        open_beta_date: m.get("open_beta_date").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        related_sites: m.get("related_sites").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        site_state: m.get("site_state").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        site_type: m.get("site_type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        site_url: m.get("site_url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        styling: m.get("styling").filter(|v| !v.is_null()).and_then(|v| iface_me__inbox_items_item_site_styling__from_json(v)),
+        twitter_account: m.get("twitter_account").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_me__inbox_items_item_site_styling__from_json(v: &Value) -> Option<iface_me::InboxItemsItemSiteStyling> {
+    let m = v.as_object()?;
+    Some(iface_me::InboxItemsItemSiteStyling {
+        link_color: m.get("link_color").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        tag_background_color: m.get("tag_background_color").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        tag_foreground_color: m.get("tag_foreground_color").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_me__inbox_items_item_v2__from_json(v: &Value) -> Option<iface_me::InboxItemsItemV2> {
+    let m = v.as_object()?;
+    Some(iface_me::InboxItemsItemV2 {
+        answer_id: m.get("answer_id").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        body: m.get("body").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        comment_id: m.get("comment_id").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        creation_date: m.get("creation_date").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        is_unread: m.get("is_unread").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        item_type: m.get("item_type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        link: m.get("link").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        question_id: m.get("question_id").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        site: m.get("site").filter(|v| !v.is_null()).and_then(|v| iface_me__inbox_items_item_v2_site__from_json(v)),
+        title: m.get("title").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_me__inbox_items_item_v2_site__from_json(v: &Value) -> Option<iface_me::InboxItemsItemV2Site> {
+    let m = v.as_object()?;
+    Some(iface_me::InboxItemsItemV2Site {
+        aliases: m.get("aliases").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        api_site_parameter: m.get("api_site_parameter").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        audience: m.get("audience").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        closed_beta_date: m.get("closed_beta_date").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        favicon_url: m.get("favicon_url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        high_resolution_icon_url: m.get("high_resolution_icon_url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        icon_url: m.get("icon_url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        launch_date: m.get("launch_date").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        logo_url: m.get("logo_url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        markdown_extensions: m.get("markdown_extensions").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        open_beta_date: m.get("open_beta_date").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        related_sites: m.get("related_sites").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        site_state: m.get("site_state").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        site_type: m.get("site_type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        site_url: m.get("site_url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        styling: m.get("styling").filter(|v| !v.is_null()).and_then(|v| iface_me__inbox_items_item_v2_site_styling__from_json(v)),
+        twitter_account: m.get("twitter_account").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_me__inbox_items_item_v2_site_styling__from_json(v: &Value) -> Option<iface_me::InboxItemsItemV2SiteStyling> {
+    let m = v.as_object()?;
+    Some(iface_me::InboxItemsItemV2SiteStyling {
+        link_color: m.get("link_color").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        tag_background_color: m.get("tag_background_color").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        tag_foreground_color: m.get("tag_foreground_color").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_me__comments_item_v3__from_json(v: &Value) -> Option<iface_me::CommentsItemV3> {
+    let m = v.as_object()?;
+    Some(iface_me::CommentsItemV3 {
+        body: m.get("body").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        body_markdown: m.get("body_markdown").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        can_flag: m.get("can_flag").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        comment_id: m.get("comment_id").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        creation_date: m.get("creation_date").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        edited: m.get("edited").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        link: m.get("link").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        owner: m.get("owner").filter(|v| !v.is_null()).and_then(|v| iface_me__comments_item_v3_owner__from_json(v)),
+        post_id: m.get("post_id").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        post_type: m.get("post_type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        reply_to_user: m.get("reply_to_user").filter(|v| !v.is_null()).and_then(|v| iface_me__comments_item_v3_reply_to_user__from_json(v)),
+        score: m.get("score").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        upvoted: m.get("upvoted").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+    })
+}
+
+fn iface_me__comments_item_v3_owner__from_json(v: &Value) -> Option<iface_me::CommentsItemV3Owner> {
+    let m = v.as_object()?;
+    Some(iface_me::CommentsItemV3Owner {
+        accept_rate: m.get("accept_rate").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        badge_counts: m.get("badge_counts").filter(|v| !v.is_null()).and_then(|v| iface_me__comments_item_v3_owner_badge_counts__from_json(v)),
+        display_name: m.get("display_name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        link: m.get("link").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        profile_image: m.get("profile_image").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        reputation: m.get("reputation").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        user_id: m.get("user_id").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        user_type: m.get("user_type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_me__comments_item_v3_owner_badge_counts__from_json(v: &Value) -> Option<iface_me::CommentsItemV3OwnerBadgeCounts> {
+    let m = v.as_object()?;
+    Some(iface_me::CommentsItemV3OwnerBadgeCounts {
+        bronze: m.get("bronze").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        gold: m.get("gold").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        silver: m.get("silver").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+    })
+}
+
+fn iface_me__comments_item_v3_reply_to_user__from_json(v: &Value) -> Option<iface_me::CommentsItemV3ReplyToUser> {
+    let m = v.as_object()?;
+    Some(iface_me::CommentsItemV3ReplyToUser {
+        accept_rate: m.get("accept_rate").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        badge_counts: m.get("badge_counts").filter(|v| !v.is_null()).and_then(|v| iface_me__comments_item_v3_reply_to_user_badge_counts__from_json(v)),
+        display_name: m.get("display_name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        link: m.get("link").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        profile_image: m.get("profile_image").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        reputation: m.get("reputation").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        user_id: m.get("user_id").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        user_type: m.get("user_type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_me__comments_item_v3_reply_to_user_badge_counts__from_json(v: &Value) -> Option<iface_me::CommentsItemV3ReplyToUserBadgeCounts> {
+    let m = v.as_object()?;
+    Some(iface_me::CommentsItemV3ReplyToUserBadgeCounts {
+        bronze: m.get("bronze").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        gold: m.get("gold").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        silver: m.get("silver").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+    })
+}
+
+fn iface_me__account_merge_item__from_json(v: &Value) -> Option<iface_me::AccountMergeItem> {
+    let m = v.as_object()?;
+    Some(iface_me::AccountMergeItem {
+        merge_date: m.get("merge_date").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        new_account_id: m.get("new_account_id").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        old_account_id: m.get("old_account_id").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+    })
+}
+
+fn iface_me__notifications_item__from_json(v: &Value) -> Option<iface_me::NotificationsItem> {
+    let m = v.as_object()?;
+    Some(iface_me::NotificationsItem {
+        body: m.get("body").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        creation_date: m.get("creation_date").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        is_unread: m.get("is_unread").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        notification_type: m.get("notification_type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        post_id: m.get("post_id").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        site: m.get("site").filter(|v| !v.is_null()).and_then(|v| iface_me__notifications_item_site__from_json(v)),
+    })
+}
+
+fn iface_me__notifications_item_site__from_json(v: &Value) -> Option<iface_me::NotificationsItemSite> {
+    let m = v.as_object()?;
+    Some(iface_me::NotificationsItemSite {
+        aliases: m.get("aliases").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        api_site_parameter: m.get("api_site_parameter").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        audience: m.get("audience").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        closed_beta_date: m.get("closed_beta_date").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        favicon_url: m.get("favicon_url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        high_resolution_icon_url: m.get("high_resolution_icon_url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        icon_url: m.get("icon_url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        launch_date: m.get("launch_date").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        logo_url: m.get("logo_url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        markdown_extensions: m.get("markdown_extensions").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        open_beta_date: m.get("open_beta_date").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        related_sites: m.get("related_sites").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        site_state: m.get("site_state").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        site_type: m.get("site_type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        site_url: m.get("site_url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        styling: m.get("styling").filter(|v| !v.is_null()).and_then(|v| iface_me__notifications_item_site_styling__from_json(v)),
+        twitter_account: m.get("twitter_account").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_me__notifications_item_site_styling__from_json(v: &Value) -> Option<iface_me::NotificationsItemSiteStyling> {
+    let m = v.as_object()?;
+    Some(iface_me::NotificationsItemSiteStyling {
+        link_color: m.get("link_color").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        tag_background_color: m.get("tag_background_color").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        tag_foreground_color: m.get("tag_foreground_color").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_me__notifications_item_v2__from_json(v: &Value) -> Option<iface_me::NotificationsItemV2> {
+    let m = v.as_object()?;
+    Some(iface_me::NotificationsItemV2 {
+        body: m.get("body").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        creation_date: m.get("creation_date").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        is_unread: m.get("is_unread").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        notification_type: m.get("notification_type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        post_id: m.get("post_id").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        site: m.get("site").filter(|v| !v.is_null()).and_then(|v| iface_me__notifications_item_v2_site__from_json(v)),
+    })
+}
+
+fn iface_me__notifications_item_v2_site__from_json(v: &Value) -> Option<iface_me::NotificationsItemV2Site> {
+    let m = v.as_object()?;
+    Some(iface_me::NotificationsItemV2Site {
+        aliases: m.get("aliases").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        api_site_parameter: m.get("api_site_parameter").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        audience: m.get("audience").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        closed_beta_date: m.get("closed_beta_date").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        favicon_url: m.get("favicon_url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        high_resolution_icon_url: m.get("high_resolution_icon_url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        icon_url: m.get("icon_url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        launch_date: m.get("launch_date").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        logo_url: m.get("logo_url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        markdown_extensions: m.get("markdown_extensions").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        open_beta_date: m.get("open_beta_date").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        related_sites: m.get("related_sites").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        site_state: m.get("site_state").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        site_type: m.get("site_type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        site_url: m.get("site_url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        styling: m.get("styling").filter(|v| !v.is_null()).and_then(|v| iface_me__notifications_item_v2_site_styling__from_json(v)),
+        twitter_account: m.get("twitter_account").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_me__notifications_item_v2_site_styling__from_json(v: &Value) -> Option<iface_me::NotificationsItemV2SiteStyling> {
+    let m = v.as_object()?;
+    Some(iface_me::NotificationsItemV2SiteStyling {
+        link_color: m.get("link_color").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        tag_background_color: m.get("tag_background_color").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        tag_foreground_color: m.get("tag_foreground_color").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_me__privileges_item__from_json(v: &Value) -> Option<iface_me::PrivilegesItem> {
+    let m = v.as_object()?;
+    Some(iface_me::PrivilegesItem {
+        description: m.get("description").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        reputation: m.get("reputation").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        short_description: m.get("short_description").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_me__questions_item_v2__from_json(v: &Value) -> Option<iface_me::QuestionsItemV2> {
+    let m = v.as_object()?;
+    Some(iface_me::QuestionsItemV2 {
+        accepted_answer_id: m.get("accepted_answer_id").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        answer_count: m.get("answer_count").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        answers: m.get("answers").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        body: m.get("body").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        body_markdown: m.get("body_markdown").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        bounty_amount: m.get("bounty_amount").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        bounty_closes_date: m.get("bounty_closes_date").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        bounty_user: m.get("bounty_user").filter(|v| !v.is_null()).and_then(|v| iface_me__questions_item_v2_bounty_user__from_json(v)),
+        can_close: m.get("can_close").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        can_flag: m.get("can_flag").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        close_vote_count: m.get("close_vote_count").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        closed_date: m.get("closed_date").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        closed_details: m.get("closed_details").filter(|v| !v.is_null()).and_then(|v| iface_me__questions_item_v2_closed_details__from_json(v)),
+        closed_reason: m.get("closed_reason").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        comment_count: m.get("comment_count").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        comments: m.get("comments").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        community_owned_date: m.get("community_owned_date").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        creation_date: m.get("creation_date").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        delete_vote_count: m.get("delete_vote_count").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        down_vote_count: m.get("down_vote_count").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        downvoted: m.get("downvoted").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        favorite_count: m.get("favorite_count").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        favorited: m.get("favorited").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        is_answered: m.get("is_answered").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        last_activity_date: m.get("last_activity_date").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        last_edit_date: m.get("last_edit_date").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        last_editor: m.get("last_editor").filter(|v| !v.is_null()).and_then(|v| iface_me__questions_item_v2_last_editor__from_json(v)),
+        link: m.get("link").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        locked_date: m.get("locked_date").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        migrated_from: m.get("migrated_from").filter(|v| !v.is_null()).and_then(|v| iface_me__questions_item_v2_migrated_from__from_json(v)),
+        migrated_to: m.get("migrated_to").filter(|v| !v.is_null()).and_then(|v| iface_me__questions_item_v2_migrated_to__from_json(v)),
+        notice: m.get("notice").filter(|v| !v.is_null()).and_then(|v| iface_me__questions_item_v2_notice__from_json(v)),
+        owner: m.get("owner").filter(|v| !v.is_null()).and_then(|v| iface_me__questions_item_v2_owner__from_json(v)),
+        protected_date: m.get("protected_date").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        question_id: m.get("question_id").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        reopen_vote_count: m.get("reopen_vote_count").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        score: m.get("score").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        share_link: m.get("share_link").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        tags: m.get("tags").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        title: m.get("title").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        up_vote_count: m.get("up_vote_count").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        upvoted: m.get("upvoted").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        view_count: m.get("view_count").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+    })
+}
+
+fn iface_me__questions_item_v2_bounty_user__from_json(v: &Value) -> Option<iface_me::QuestionsItemV2BountyUser> {
+    let m = v.as_object()?;
+    Some(iface_me::QuestionsItemV2BountyUser {
+        accept_rate: m.get("accept_rate").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        badge_counts: m.get("badge_counts").filter(|v| !v.is_null()).and_then(|v| iface_me__questions_item_v2_bounty_user_badge_counts__from_json(v)),
+        display_name: m.get("display_name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        link: m.get("link").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        profile_image: m.get("profile_image").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        reputation: m.get("reputation").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        user_id: m.get("user_id").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        user_type: m.get("user_type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_me__questions_item_v2_bounty_user_badge_counts__from_json(v: &Value) -> Option<iface_me::QuestionsItemV2BountyUserBadgeCounts> {
+    let m = v.as_object()?;
+    Some(iface_me::QuestionsItemV2BountyUserBadgeCounts {
+        bronze: m.get("bronze").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        gold: m.get("gold").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        silver: m.get("silver").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+    })
+}
+
+fn iface_me__questions_item_v2_closed_details__from_json(v: &Value) -> Option<iface_me::QuestionsItemV2ClosedDetails> {
+    let m = v.as_object()?;
+    Some(iface_me::QuestionsItemV2ClosedDetails {
+        by_users: m.get("by_users").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        description: m.get("description").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        on_hold: m.get("on_hold").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        original_questions: m.get("original_questions").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        reason: m.get("reason").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_me__questions_item_v2_last_editor__from_json(v: &Value) -> Option<iface_me::QuestionsItemV2LastEditor> {
+    let m = v.as_object()?;
+    Some(iface_me::QuestionsItemV2LastEditor {
+        accept_rate: m.get("accept_rate").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        badge_counts: m.get("badge_counts").filter(|v| !v.is_null()).and_then(|v| iface_me__questions_item_v2_last_editor_badge_counts__from_json(v)),
+        display_name: m.get("display_name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        link: m.get("link").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        profile_image: m.get("profile_image").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        reputation: m.get("reputation").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        user_id: m.get("user_id").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        user_type: m.get("user_type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_me__questions_item_v2_last_editor_badge_counts__from_json(v: &Value) -> Option<iface_me::QuestionsItemV2LastEditorBadgeCounts> {
+    let m = v.as_object()?;
+    Some(iface_me::QuestionsItemV2LastEditorBadgeCounts {
+        bronze: m.get("bronze").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        gold: m.get("gold").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        silver: m.get("silver").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+    })
+}
+
+fn iface_me__questions_item_v2_migrated_from__from_json(v: &Value) -> Option<iface_me::QuestionsItemV2MigratedFrom> {
+    let m = v.as_object()?;
+    Some(iface_me::QuestionsItemV2MigratedFrom {
+        on_date: m.get("on_date").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        other_site: m.get("other_site").filter(|v| !v.is_null()).and_then(|v| iface_me__questions_item_v2_migrated_from_other_site__from_json(v)),
+        question_id: m.get("question_id").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+    })
+}
+
+fn iface_me__questions_item_v2_migrated_from_other_site__from_json(v: &Value) -> Option<iface_me::QuestionsItemV2MigratedFromOtherSite> {
+    let m = v.as_object()?;
+    Some(iface_me::QuestionsItemV2MigratedFromOtherSite {
+        aliases: m.get("aliases").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        api_site_parameter: m.get("api_site_parameter").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        audience: m.get("audience").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        closed_beta_date: m.get("closed_beta_date").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        favicon_url: m.get("favicon_url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        high_resolution_icon_url: m.get("high_resolution_icon_url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        icon_url: m.get("icon_url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        launch_date: m.get("launch_date").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        logo_url: m.get("logo_url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        markdown_extensions: m.get("markdown_extensions").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        open_beta_date: m.get("open_beta_date").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        related_sites: m.get("related_sites").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        site_state: m.get("site_state").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        site_type: m.get("site_type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        site_url: m.get("site_url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        styling: m.get("styling").filter(|v| !v.is_null()).and_then(|v| iface_me__questions_item_v2_migrated_from_other_site_styling__from_json(v)),
+        twitter_account: m.get("twitter_account").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_me__questions_item_v2_migrated_from_other_site_styling__from_json(v: &Value) -> Option<iface_me::QuestionsItemV2MigratedFromOtherSiteStyling> {
+    let m = v.as_object()?;
+    Some(iface_me::QuestionsItemV2MigratedFromOtherSiteStyling {
+        link_color: m.get("link_color").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        tag_background_color: m.get("tag_background_color").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        tag_foreground_color: m.get("tag_foreground_color").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_me__questions_item_v2_migrated_to__from_json(v: &Value) -> Option<iface_me::QuestionsItemV2MigratedTo> {
+    let m = v.as_object()?;
+    Some(iface_me::QuestionsItemV2MigratedTo {
+        on_date: m.get("on_date").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        other_site: m.get("other_site").filter(|v| !v.is_null()).and_then(|v| iface_me__questions_item_v2_migrated_to_other_site__from_json(v)),
+        question_id: m.get("question_id").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+    })
+}
+
+fn iface_me__questions_item_v2_migrated_to_other_site__from_json(v: &Value) -> Option<iface_me::QuestionsItemV2MigratedToOtherSite> {
+    let m = v.as_object()?;
+    Some(iface_me::QuestionsItemV2MigratedToOtherSite {
+        aliases: m.get("aliases").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        api_site_parameter: m.get("api_site_parameter").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        audience: m.get("audience").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        closed_beta_date: m.get("closed_beta_date").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        favicon_url: m.get("favicon_url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        high_resolution_icon_url: m.get("high_resolution_icon_url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        icon_url: m.get("icon_url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        launch_date: m.get("launch_date").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        logo_url: m.get("logo_url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        markdown_extensions: m.get("markdown_extensions").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        open_beta_date: m.get("open_beta_date").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        related_sites: m.get("related_sites").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        site_state: m.get("site_state").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        site_type: m.get("site_type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        site_url: m.get("site_url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        styling: m.get("styling").filter(|v| !v.is_null()).and_then(|v| iface_me__questions_item_v2_migrated_to_other_site_styling__from_json(v)),
+        twitter_account: m.get("twitter_account").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_me__questions_item_v2_migrated_to_other_site_styling__from_json(v: &Value) -> Option<iface_me::QuestionsItemV2MigratedToOtherSiteStyling> {
+    let m = v.as_object()?;
+    Some(iface_me::QuestionsItemV2MigratedToOtherSiteStyling {
+        link_color: m.get("link_color").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        tag_background_color: m.get("tag_background_color").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        tag_foreground_color: m.get("tag_foreground_color").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_me__questions_item_v2_notice__from_json(v: &Value) -> Option<iface_me::QuestionsItemV2Notice> {
+    let m = v.as_object()?;
+    Some(iface_me::QuestionsItemV2Notice {
+        body: m.get("body").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        creation_date: m.get("creation_date").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        owner_user_id: m.get("owner_user_id").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+    })
+}
+
+fn iface_me__questions_item_v2_owner__from_json(v: &Value) -> Option<iface_me::QuestionsItemV2Owner> {
+    let m = v.as_object()?;
+    Some(iface_me::QuestionsItemV2Owner {
+        accept_rate: m.get("accept_rate").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        badge_counts: m.get("badge_counts").filter(|v| !v.is_null()).and_then(|v| iface_me__questions_item_v2_owner_badge_counts__from_json(v)),
+        display_name: m.get("display_name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        link: m.get("link").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        profile_image: m.get("profile_image").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        reputation: m.get("reputation").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        user_id: m.get("user_id").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        user_type: m.get("user_type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_me__questions_item_v2_owner_badge_counts__from_json(v: &Value) -> Option<iface_me::QuestionsItemV2OwnerBadgeCounts> {
+    let m = v.as_object()?;
+    Some(iface_me::QuestionsItemV2OwnerBadgeCounts {
+        bronze: m.get("bronze").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        gold: m.get("gold").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        silver: m.get("silver").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+    })
+}
+
+fn iface_me__questions_item_v3__from_json(v: &Value) -> Option<iface_me::QuestionsItemV3> {
+    let m = v.as_object()?;
+    Some(iface_me::QuestionsItemV3 {
+        accepted_answer_id: m.get("accepted_answer_id").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        answer_count: m.get("answer_count").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        answers: m.get("answers").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        body: m.get("body").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        body_markdown: m.get("body_markdown").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        bounty_amount: m.get("bounty_amount").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        bounty_closes_date: m.get("bounty_closes_date").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        bounty_user: m.get("bounty_user").filter(|v| !v.is_null()).and_then(|v| iface_me__questions_item_v3_bounty_user__from_json(v)),
+        can_close: m.get("can_close").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        can_flag: m.get("can_flag").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        close_vote_count: m.get("close_vote_count").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        closed_date: m.get("closed_date").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        closed_details: m.get("closed_details").filter(|v| !v.is_null()).and_then(|v| iface_me__questions_item_v3_closed_details__from_json(v)),
+        closed_reason: m.get("closed_reason").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        comment_count: m.get("comment_count").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        comments: m.get("comments").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        community_owned_date: m.get("community_owned_date").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        creation_date: m.get("creation_date").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        delete_vote_count: m.get("delete_vote_count").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        down_vote_count: m.get("down_vote_count").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        downvoted: m.get("downvoted").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        favorite_count: m.get("favorite_count").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        favorited: m.get("favorited").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        is_answered: m.get("is_answered").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        last_activity_date: m.get("last_activity_date").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        last_edit_date: m.get("last_edit_date").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        last_editor: m.get("last_editor").filter(|v| !v.is_null()).and_then(|v| iface_me__questions_item_v3_last_editor__from_json(v)),
+        link: m.get("link").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        locked_date: m.get("locked_date").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        migrated_from: m.get("migrated_from").filter(|v| !v.is_null()).and_then(|v| iface_me__questions_item_v3_migrated_from__from_json(v)),
+        migrated_to: m.get("migrated_to").filter(|v| !v.is_null()).and_then(|v| iface_me__questions_item_v3_migrated_to__from_json(v)),
+        notice: m.get("notice").filter(|v| !v.is_null()).and_then(|v| iface_me__questions_item_v3_notice__from_json(v)),
+        owner: m.get("owner").filter(|v| !v.is_null()).and_then(|v| iface_me__questions_item_v3_owner__from_json(v)),
+        protected_date: m.get("protected_date").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        question_id: m.get("question_id").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        reopen_vote_count: m.get("reopen_vote_count").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        score: m.get("score").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        share_link: m.get("share_link").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        tags: m.get("tags").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        title: m.get("title").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        up_vote_count: m.get("up_vote_count").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        upvoted: m.get("upvoted").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        view_count: m.get("view_count").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+    })
+}
+
+fn iface_me__questions_item_v3_bounty_user__from_json(v: &Value) -> Option<iface_me::QuestionsItemV3BountyUser> {
+    let m = v.as_object()?;
+    Some(iface_me::QuestionsItemV3BountyUser {
+        accept_rate: m.get("accept_rate").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        badge_counts: m.get("badge_counts").filter(|v| !v.is_null()).and_then(|v| iface_me__questions_item_v3_bounty_user_badge_counts__from_json(v)),
+        display_name: m.get("display_name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        link: m.get("link").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        profile_image: m.get("profile_image").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        reputation: m.get("reputation").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        user_id: m.get("user_id").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        user_type: m.get("user_type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_me__questions_item_v3_bounty_user_badge_counts__from_json(v: &Value) -> Option<iface_me::QuestionsItemV3BountyUserBadgeCounts> {
+    let m = v.as_object()?;
+    Some(iface_me::QuestionsItemV3BountyUserBadgeCounts {
+        bronze: m.get("bronze").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        gold: m.get("gold").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        silver: m.get("silver").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+    })
+}
+
+fn iface_me__questions_item_v3_closed_details__from_json(v: &Value) -> Option<iface_me::QuestionsItemV3ClosedDetails> {
+    let m = v.as_object()?;
+    Some(iface_me::QuestionsItemV3ClosedDetails {
+        by_users: m.get("by_users").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        description: m.get("description").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        on_hold: m.get("on_hold").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        original_questions: m.get("original_questions").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        reason: m.get("reason").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_me__questions_item_v3_last_editor__from_json(v: &Value) -> Option<iface_me::QuestionsItemV3LastEditor> {
+    let m = v.as_object()?;
+    Some(iface_me::QuestionsItemV3LastEditor {
+        accept_rate: m.get("accept_rate").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        badge_counts: m.get("badge_counts").filter(|v| !v.is_null()).and_then(|v| iface_me__questions_item_v3_last_editor_badge_counts__from_json(v)),
+        display_name: m.get("display_name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        link: m.get("link").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        profile_image: m.get("profile_image").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        reputation: m.get("reputation").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        user_id: m.get("user_id").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        user_type: m.get("user_type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_me__questions_item_v3_last_editor_badge_counts__from_json(v: &Value) -> Option<iface_me::QuestionsItemV3LastEditorBadgeCounts> {
+    let m = v.as_object()?;
+    Some(iface_me::QuestionsItemV3LastEditorBadgeCounts {
+        bronze: m.get("bronze").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        gold: m.get("gold").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        silver: m.get("silver").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+    })
+}
+
+fn iface_me__questions_item_v3_migrated_from__from_json(v: &Value) -> Option<iface_me::QuestionsItemV3MigratedFrom> {
+    let m = v.as_object()?;
+    Some(iface_me::QuestionsItemV3MigratedFrom {
+        on_date: m.get("on_date").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        other_site: m.get("other_site").filter(|v| !v.is_null()).and_then(|v| iface_me__questions_item_v3_migrated_from_other_site__from_json(v)),
+        question_id: m.get("question_id").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+    })
+}
+
+fn iface_me__questions_item_v3_migrated_from_other_site__from_json(v: &Value) -> Option<iface_me::QuestionsItemV3MigratedFromOtherSite> {
+    let m = v.as_object()?;
+    Some(iface_me::QuestionsItemV3MigratedFromOtherSite {
+        aliases: m.get("aliases").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        api_site_parameter: m.get("api_site_parameter").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        audience: m.get("audience").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        closed_beta_date: m.get("closed_beta_date").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        favicon_url: m.get("favicon_url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        high_resolution_icon_url: m.get("high_resolution_icon_url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        icon_url: m.get("icon_url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        launch_date: m.get("launch_date").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        logo_url: m.get("logo_url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        markdown_extensions: m.get("markdown_extensions").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        open_beta_date: m.get("open_beta_date").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        related_sites: m.get("related_sites").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        site_state: m.get("site_state").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        site_type: m.get("site_type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        site_url: m.get("site_url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        styling: m.get("styling").filter(|v| !v.is_null()).and_then(|v| iface_me__questions_item_v3_migrated_from_other_site_styling__from_json(v)),
+        twitter_account: m.get("twitter_account").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_me__questions_item_v3_migrated_from_other_site_styling__from_json(v: &Value) -> Option<iface_me::QuestionsItemV3MigratedFromOtherSiteStyling> {
+    let m = v.as_object()?;
+    Some(iface_me::QuestionsItemV3MigratedFromOtherSiteStyling {
+        link_color: m.get("link_color").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        tag_background_color: m.get("tag_background_color").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        tag_foreground_color: m.get("tag_foreground_color").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_me__questions_item_v3_migrated_to__from_json(v: &Value) -> Option<iface_me::QuestionsItemV3MigratedTo> {
+    let m = v.as_object()?;
+    Some(iface_me::QuestionsItemV3MigratedTo {
+        on_date: m.get("on_date").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        other_site: m.get("other_site").filter(|v| !v.is_null()).and_then(|v| iface_me__questions_item_v3_migrated_to_other_site__from_json(v)),
+        question_id: m.get("question_id").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+    })
+}
+
+fn iface_me__questions_item_v3_migrated_to_other_site__from_json(v: &Value) -> Option<iface_me::QuestionsItemV3MigratedToOtherSite> {
+    let m = v.as_object()?;
+    Some(iface_me::QuestionsItemV3MigratedToOtherSite {
+        aliases: m.get("aliases").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        api_site_parameter: m.get("api_site_parameter").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        audience: m.get("audience").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        closed_beta_date: m.get("closed_beta_date").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        favicon_url: m.get("favicon_url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        high_resolution_icon_url: m.get("high_resolution_icon_url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        icon_url: m.get("icon_url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        launch_date: m.get("launch_date").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        logo_url: m.get("logo_url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        markdown_extensions: m.get("markdown_extensions").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        open_beta_date: m.get("open_beta_date").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        related_sites: m.get("related_sites").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        site_state: m.get("site_state").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        site_type: m.get("site_type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        site_url: m.get("site_url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        styling: m.get("styling").filter(|v| !v.is_null()).and_then(|v| iface_me__questions_item_v3_migrated_to_other_site_styling__from_json(v)),
+        twitter_account: m.get("twitter_account").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_me__questions_item_v3_migrated_to_other_site_styling__from_json(v: &Value) -> Option<iface_me::QuestionsItemV3MigratedToOtherSiteStyling> {
+    let m = v.as_object()?;
+    Some(iface_me::QuestionsItemV3MigratedToOtherSiteStyling {
+        link_color: m.get("link_color").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        tag_background_color: m.get("tag_background_color").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        tag_foreground_color: m.get("tag_foreground_color").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_me__questions_item_v3_notice__from_json(v: &Value) -> Option<iface_me::QuestionsItemV3Notice> {
+    let m = v.as_object()?;
+    Some(iface_me::QuestionsItemV3Notice {
+        body: m.get("body").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        creation_date: m.get("creation_date").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        owner_user_id: m.get("owner_user_id").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+    })
+}
+
+fn iface_me__questions_item_v3_owner__from_json(v: &Value) -> Option<iface_me::QuestionsItemV3Owner> {
+    let m = v.as_object()?;
+    Some(iface_me::QuestionsItemV3Owner {
+        accept_rate: m.get("accept_rate").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        badge_counts: m.get("badge_counts").filter(|v| !v.is_null()).and_then(|v| iface_me__questions_item_v3_owner_badge_counts__from_json(v)),
+        display_name: m.get("display_name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        link: m.get("link").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        profile_image: m.get("profile_image").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        reputation: m.get("reputation").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        user_id: m.get("user_id").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        user_type: m.get("user_type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_me__questions_item_v3_owner_badge_counts__from_json(v: &Value) -> Option<iface_me::QuestionsItemV3OwnerBadgeCounts> {
+    let m = v.as_object()?;
+    Some(iface_me::QuestionsItemV3OwnerBadgeCounts {
+        bronze: m.get("bronze").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        gold: m.get("gold").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        silver: m.get("silver").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+    })
+}
+
+fn iface_me__questions_item_v4__from_json(v: &Value) -> Option<iface_me::QuestionsItemV4> {
+    let m = v.as_object()?;
+    Some(iface_me::QuestionsItemV4 {
+        accepted_answer_id: m.get("accepted_answer_id").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        answer_count: m.get("answer_count").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        answers: m.get("answers").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        body: m.get("body").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        body_markdown: m.get("body_markdown").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        bounty_amount: m.get("bounty_amount").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        bounty_closes_date: m.get("bounty_closes_date").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        bounty_user: m.get("bounty_user").filter(|v| !v.is_null()).and_then(|v| iface_me__questions_item_v4_bounty_user__from_json(v)),
+        can_close: m.get("can_close").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        can_flag: m.get("can_flag").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        close_vote_count: m.get("close_vote_count").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        closed_date: m.get("closed_date").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        closed_details: m.get("closed_details").filter(|v| !v.is_null()).and_then(|v| iface_me__questions_item_v4_closed_details__from_json(v)),
+        closed_reason: m.get("closed_reason").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        comment_count: m.get("comment_count").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        comments: m.get("comments").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        community_owned_date: m.get("community_owned_date").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        creation_date: m.get("creation_date").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        delete_vote_count: m.get("delete_vote_count").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        down_vote_count: m.get("down_vote_count").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        downvoted: m.get("downvoted").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        favorite_count: m.get("favorite_count").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        favorited: m.get("favorited").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        is_answered: m.get("is_answered").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        last_activity_date: m.get("last_activity_date").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        last_edit_date: m.get("last_edit_date").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        last_editor: m.get("last_editor").filter(|v| !v.is_null()).and_then(|v| iface_me__questions_item_v4_last_editor__from_json(v)),
+        link: m.get("link").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        locked_date: m.get("locked_date").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        migrated_from: m.get("migrated_from").filter(|v| !v.is_null()).and_then(|v| iface_me__questions_item_v4_migrated_from__from_json(v)),
+        migrated_to: m.get("migrated_to").filter(|v| !v.is_null()).and_then(|v| iface_me__questions_item_v4_migrated_to__from_json(v)),
+        notice: m.get("notice").filter(|v| !v.is_null()).and_then(|v| iface_me__questions_item_v4_notice__from_json(v)),
+        owner: m.get("owner").filter(|v| !v.is_null()).and_then(|v| iface_me__questions_item_v4_owner__from_json(v)),
+        protected_date: m.get("protected_date").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        question_id: m.get("question_id").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        reopen_vote_count: m.get("reopen_vote_count").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        score: m.get("score").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        share_link: m.get("share_link").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        tags: m.get("tags").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        title: m.get("title").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        up_vote_count: m.get("up_vote_count").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        upvoted: m.get("upvoted").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        view_count: m.get("view_count").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+    })
+}
+
+fn iface_me__questions_item_v4_bounty_user__from_json(v: &Value) -> Option<iface_me::QuestionsItemV4BountyUser> {
+    let m = v.as_object()?;
+    Some(iface_me::QuestionsItemV4BountyUser {
+        accept_rate: m.get("accept_rate").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        badge_counts: m.get("badge_counts").filter(|v| !v.is_null()).and_then(|v| iface_me__questions_item_v4_bounty_user_badge_counts__from_json(v)),
+        display_name: m.get("display_name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        link: m.get("link").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        profile_image: m.get("profile_image").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        reputation: m.get("reputation").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        user_id: m.get("user_id").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        user_type: m.get("user_type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_me__questions_item_v4_bounty_user_badge_counts__from_json(v: &Value) -> Option<iface_me::QuestionsItemV4BountyUserBadgeCounts> {
+    let m = v.as_object()?;
+    Some(iface_me::QuestionsItemV4BountyUserBadgeCounts {
+        bronze: m.get("bronze").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        gold: m.get("gold").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        silver: m.get("silver").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+    })
+}
+
+fn iface_me__questions_item_v4_closed_details__from_json(v: &Value) -> Option<iface_me::QuestionsItemV4ClosedDetails> {
+    let m = v.as_object()?;
+    Some(iface_me::QuestionsItemV4ClosedDetails {
+        by_users: m.get("by_users").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        description: m.get("description").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        on_hold: m.get("on_hold").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        original_questions: m.get("original_questions").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        reason: m.get("reason").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_me__questions_item_v4_last_editor__from_json(v: &Value) -> Option<iface_me::QuestionsItemV4LastEditor> {
+    let m = v.as_object()?;
+    Some(iface_me::QuestionsItemV4LastEditor {
+        accept_rate: m.get("accept_rate").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        badge_counts: m.get("badge_counts").filter(|v| !v.is_null()).and_then(|v| iface_me__questions_item_v4_last_editor_badge_counts__from_json(v)),
+        display_name: m.get("display_name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        link: m.get("link").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        profile_image: m.get("profile_image").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        reputation: m.get("reputation").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        user_id: m.get("user_id").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        user_type: m.get("user_type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_me__questions_item_v4_last_editor_badge_counts__from_json(v: &Value) -> Option<iface_me::QuestionsItemV4LastEditorBadgeCounts> {
+    let m = v.as_object()?;
+    Some(iface_me::QuestionsItemV4LastEditorBadgeCounts {
+        bronze: m.get("bronze").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        gold: m.get("gold").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        silver: m.get("silver").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+    })
+}
+
+fn iface_me__questions_item_v4_migrated_from__from_json(v: &Value) -> Option<iface_me::QuestionsItemV4MigratedFrom> {
+    let m = v.as_object()?;
+    Some(iface_me::QuestionsItemV4MigratedFrom {
+        on_date: m.get("on_date").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        other_site: m.get("other_site").filter(|v| !v.is_null()).and_then(|v| iface_me__questions_item_v4_migrated_from_other_site__from_json(v)),
+        question_id: m.get("question_id").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+    })
+}
+
+fn iface_me__questions_item_v4_migrated_from_other_site__from_json(v: &Value) -> Option<iface_me::QuestionsItemV4MigratedFromOtherSite> {
+    let m = v.as_object()?;
+    Some(iface_me::QuestionsItemV4MigratedFromOtherSite {
+        aliases: m.get("aliases").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        api_site_parameter: m.get("api_site_parameter").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        audience: m.get("audience").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        closed_beta_date: m.get("closed_beta_date").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        favicon_url: m.get("favicon_url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        high_resolution_icon_url: m.get("high_resolution_icon_url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        icon_url: m.get("icon_url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        launch_date: m.get("launch_date").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        logo_url: m.get("logo_url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        markdown_extensions: m.get("markdown_extensions").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        open_beta_date: m.get("open_beta_date").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        related_sites: m.get("related_sites").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        site_state: m.get("site_state").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        site_type: m.get("site_type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        site_url: m.get("site_url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        styling: m.get("styling").filter(|v| !v.is_null()).and_then(|v| iface_me__questions_item_v4_migrated_from_other_site_styling__from_json(v)),
+        twitter_account: m.get("twitter_account").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_me__questions_item_v4_migrated_from_other_site_styling__from_json(v: &Value) -> Option<iface_me::QuestionsItemV4MigratedFromOtherSiteStyling> {
+    let m = v.as_object()?;
+    Some(iface_me::QuestionsItemV4MigratedFromOtherSiteStyling {
+        link_color: m.get("link_color").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        tag_background_color: m.get("tag_background_color").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        tag_foreground_color: m.get("tag_foreground_color").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_me__questions_item_v4_migrated_to__from_json(v: &Value) -> Option<iface_me::QuestionsItemV4MigratedTo> {
+    let m = v.as_object()?;
+    Some(iface_me::QuestionsItemV4MigratedTo {
+        on_date: m.get("on_date").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        other_site: m.get("other_site").filter(|v| !v.is_null()).and_then(|v| iface_me__questions_item_v4_migrated_to_other_site__from_json(v)),
+        question_id: m.get("question_id").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+    })
+}
+
+fn iface_me__questions_item_v4_migrated_to_other_site__from_json(v: &Value) -> Option<iface_me::QuestionsItemV4MigratedToOtherSite> {
+    let m = v.as_object()?;
+    Some(iface_me::QuestionsItemV4MigratedToOtherSite {
+        aliases: m.get("aliases").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        api_site_parameter: m.get("api_site_parameter").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        audience: m.get("audience").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        closed_beta_date: m.get("closed_beta_date").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        favicon_url: m.get("favicon_url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        high_resolution_icon_url: m.get("high_resolution_icon_url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        icon_url: m.get("icon_url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        launch_date: m.get("launch_date").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        logo_url: m.get("logo_url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        markdown_extensions: m.get("markdown_extensions").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        open_beta_date: m.get("open_beta_date").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        related_sites: m.get("related_sites").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        site_state: m.get("site_state").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        site_type: m.get("site_type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        site_url: m.get("site_url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        styling: m.get("styling").filter(|v| !v.is_null()).and_then(|v| iface_me__questions_item_v4_migrated_to_other_site_styling__from_json(v)),
+        twitter_account: m.get("twitter_account").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_me__questions_item_v4_migrated_to_other_site_styling__from_json(v: &Value) -> Option<iface_me::QuestionsItemV4MigratedToOtherSiteStyling> {
+    let m = v.as_object()?;
+    Some(iface_me::QuestionsItemV4MigratedToOtherSiteStyling {
+        link_color: m.get("link_color").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        tag_background_color: m.get("tag_background_color").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        tag_foreground_color: m.get("tag_foreground_color").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_me__questions_item_v4_notice__from_json(v: &Value) -> Option<iface_me::QuestionsItemV4Notice> {
+    let m = v.as_object()?;
+    Some(iface_me::QuestionsItemV4Notice {
+        body: m.get("body").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        creation_date: m.get("creation_date").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        owner_user_id: m.get("owner_user_id").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+    })
+}
+
+fn iface_me__questions_item_v4_owner__from_json(v: &Value) -> Option<iface_me::QuestionsItemV4Owner> {
+    let m = v.as_object()?;
+    Some(iface_me::QuestionsItemV4Owner {
+        accept_rate: m.get("accept_rate").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        badge_counts: m.get("badge_counts").filter(|v| !v.is_null()).and_then(|v| iface_me__questions_item_v4_owner_badge_counts__from_json(v)),
+        display_name: m.get("display_name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        link: m.get("link").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        profile_image: m.get("profile_image").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        reputation: m.get("reputation").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        user_id: m.get("user_id").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        user_type: m.get("user_type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_me__questions_item_v4_owner_badge_counts__from_json(v: &Value) -> Option<iface_me::QuestionsItemV4OwnerBadgeCounts> {
+    let m = v.as_object()?;
+    Some(iface_me::QuestionsItemV4OwnerBadgeCounts {
+        bronze: m.get("bronze").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        gold: m.get("gold").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        silver: m.get("silver").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+    })
+}
+
+fn iface_me__questions_item_v5__from_json(v: &Value) -> Option<iface_me::QuestionsItemV5> {
+    let m = v.as_object()?;
+    Some(iface_me::QuestionsItemV5 {
+        accepted_answer_id: m.get("accepted_answer_id").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        answer_count: m.get("answer_count").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        answers: m.get("answers").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        body: m.get("body").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        body_markdown: m.get("body_markdown").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        bounty_amount: m.get("bounty_amount").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        bounty_closes_date: m.get("bounty_closes_date").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        bounty_user: m.get("bounty_user").filter(|v| !v.is_null()).and_then(|v| iface_me__questions_item_v5_bounty_user__from_json(v)),
+        can_close: m.get("can_close").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        can_flag: m.get("can_flag").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        close_vote_count: m.get("close_vote_count").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        closed_date: m.get("closed_date").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        closed_details: m.get("closed_details").filter(|v| !v.is_null()).and_then(|v| iface_me__questions_item_v5_closed_details__from_json(v)),
+        closed_reason: m.get("closed_reason").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        comment_count: m.get("comment_count").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        comments: m.get("comments").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        community_owned_date: m.get("community_owned_date").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        creation_date: m.get("creation_date").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        delete_vote_count: m.get("delete_vote_count").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        down_vote_count: m.get("down_vote_count").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        downvoted: m.get("downvoted").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        favorite_count: m.get("favorite_count").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        favorited: m.get("favorited").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        is_answered: m.get("is_answered").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        last_activity_date: m.get("last_activity_date").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        last_edit_date: m.get("last_edit_date").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        last_editor: m.get("last_editor").filter(|v| !v.is_null()).and_then(|v| iface_me__questions_item_v5_last_editor__from_json(v)),
+        link: m.get("link").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        locked_date: m.get("locked_date").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        migrated_from: m.get("migrated_from").filter(|v| !v.is_null()).and_then(|v| iface_me__questions_item_v5_migrated_from__from_json(v)),
+        migrated_to: m.get("migrated_to").filter(|v| !v.is_null()).and_then(|v| iface_me__questions_item_v5_migrated_to__from_json(v)),
+        notice: m.get("notice").filter(|v| !v.is_null()).and_then(|v| iface_me__questions_item_v5_notice__from_json(v)),
+        owner: m.get("owner").filter(|v| !v.is_null()).and_then(|v| iface_me__questions_item_v5_owner__from_json(v)),
+        protected_date: m.get("protected_date").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        question_id: m.get("question_id").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        reopen_vote_count: m.get("reopen_vote_count").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        score: m.get("score").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        share_link: m.get("share_link").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        tags: m.get("tags").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        title: m.get("title").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        up_vote_count: m.get("up_vote_count").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        upvoted: m.get("upvoted").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        view_count: m.get("view_count").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+    })
+}
+
+fn iface_me__questions_item_v5_bounty_user__from_json(v: &Value) -> Option<iface_me::QuestionsItemV5BountyUser> {
+    let m = v.as_object()?;
+    Some(iface_me::QuestionsItemV5BountyUser {
+        accept_rate: m.get("accept_rate").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        badge_counts: m.get("badge_counts").filter(|v| !v.is_null()).and_then(|v| iface_me__questions_item_v5_bounty_user_badge_counts__from_json(v)),
+        display_name: m.get("display_name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        link: m.get("link").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        profile_image: m.get("profile_image").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        reputation: m.get("reputation").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        user_id: m.get("user_id").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        user_type: m.get("user_type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_me__questions_item_v5_bounty_user_badge_counts__from_json(v: &Value) -> Option<iface_me::QuestionsItemV5BountyUserBadgeCounts> {
+    let m = v.as_object()?;
+    Some(iface_me::QuestionsItemV5BountyUserBadgeCounts {
+        bronze: m.get("bronze").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        gold: m.get("gold").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        silver: m.get("silver").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+    })
+}
+
+fn iface_me__questions_item_v5_closed_details__from_json(v: &Value) -> Option<iface_me::QuestionsItemV5ClosedDetails> {
+    let m = v.as_object()?;
+    Some(iface_me::QuestionsItemV5ClosedDetails {
+        by_users: m.get("by_users").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        description: m.get("description").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        on_hold: m.get("on_hold").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        original_questions: m.get("original_questions").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        reason: m.get("reason").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_me__questions_item_v5_last_editor__from_json(v: &Value) -> Option<iface_me::QuestionsItemV5LastEditor> {
+    let m = v.as_object()?;
+    Some(iface_me::QuestionsItemV5LastEditor {
+        accept_rate: m.get("accept_rate").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        badge_counts: m.get("badge_counts").filter(|v| !v.is_null()).and_then(|v| iface_me__questions_item_v5_last_editor_badge_counts__from_json(v)),
+        display_name: m.get("display_name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        link: m.get("link").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        profile_image: m.get("profile_image").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        reputation: m.get("reputation").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        user_id: m.get("user_id").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        user_type: m.get("user_type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_me__questions_item_v5_last_editor_badge_counts__from_json(v: &Value) -> Option<iface_me::QuestionsItemV5LastEditorBadgeCounts> {
+    let m = v.as_object()?;
+    Some(iface_me::QuestionsItemV5LastEditorBadgeCounts {
+        bronze: m.get("bronze").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        gold: m.get("gold").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        silver: m.get("silver").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+    })
+}
+
+fn iface_me__questions_item_v5_migrated_from__from_json(v: &Value) -> Option<iface_me::QuestionsItemV5MigratedFrom> {
+    let m = v.as_object()?;
+    Some(iface_me::QuestionsItemV5MigratedFrom {
+        on_date: m.get("on_date").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        other_site: m.get("other_site").filter(|v| !v.is_null()).and_then(|v| iface_me__questions_item_v5_migrated_from_other_site__from_json(v)),
+        question_id: m.get("question_id").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+    })
+}
+
+fn iface_me__questions_item_v5_migrated_from_other_site__from_json(v: &Value) -> Option<iface_me::QuestionsItemV5MigratedFromOtherSite> {
+    let m = v.as_object()?;
+    Some(iface_me::QuestionsItemV5MigratedFromOtherSite {
+        aliases: m.get("aliases").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        api_site_parameter: m.get("api_site_parameter").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        audience: m.get("audience").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        closed_beta_date: m.get("closed_beta_date").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        favicon_url: m.get("favicon_url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        high_resolution_icon_url: m.get("high_resolution_icon_url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        icon_url: m.get("icon_url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        launch_date: m.get("launch_date").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        logo_url: m.get("logo_url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        markdown_extensions: m.get("markdown_extensions").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        open_beta_date: m.get("open_beta_date").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        related_sites: m.get("related_sites").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        site_state: m.get("site_state").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        site_type: m.get("site_type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        site_url: m.get("site_url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        styling: m.get("styling").filter(|v| !v.is_null()).and_then(|v| iface_me__questions_item_v5_migrated_from_other_site_styling__from_json(v)),
+        twitter_account: m.get("twitter_account").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_me__questions_item_v5_migrated_from_other_site_styling__from_json(v: &Value) -> Option<iface_me::QuestionsItemV5MigratedFromOtherSiteStyling> {
+    let m = v.as_object()?;
+    Some(iface_me::QuestionsItemV5MigratedFromOtherSiteStyling {
+        link_color: m.get("link_color").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        tag_background_color: m.get("tag_background_color").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        tag_foreground_color: m.get("tag_foreground_color").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_me__questions_item_v5_migrated_to__from_json(v: &Value) -> Option<iface_me::QuestionsItemV5MigratedTo> {
+    let m = v.as_object()?;
+    Some(iface_me::QuestionsItemV5MigratedTo {
+        on_date: m.get("on_date").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        other_site: m.get("other_site").filter(|v| !v.is_null()).and_then(|v| iface_me__questions_item_v5_migrated_to_other_site__from_json(v)),
+        question_id: m.get("question_id").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+    })
+}
+
+fn iface_me__questions_item_v5_migrated_to_other_site__from_json(v: &Value) -> Option<iface_me::QuestionsItemV5MigratedToOtherSite> {
+    let m = v.as_object()?;
+    Some(iface_me::QuestionsItemV5MigratedToOtherSite {
+        aliases: m.get("aliases").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        api_site_parameter: m.get("api_site_parameter").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        audience: m.get("audience").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        closed_beta_date: m.get("closed_beta_date").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        favicon_url: m.get("favicon_url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        high_resolution_icon_url: m.get("high_resolution_icon_url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        icon_url: m.get("icon_url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        launch_date: m.get("launch_date").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        logo_url: m.get("logo_url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        markdown_extensions: m.get("markdown_extensions").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        open_beta_date: m.get("open_beta_date").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        related_sites: m.get("related_sites").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        site_state: m.get("site_state").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        site_type: m.get("site_type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        site_url: m.get("site_url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        styling: m.get("styling").filter(|v| !v.is_null()).and_then(|v| iface_me__questions_item_v5_migrated_to_other_site_styling__from_json(v)),
+        twitter_account: m.get("twitter_account").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_me__questions_item_v5_migrated_to_other_site_styling__from_json(v: &Value) -> Option<iface_me::QuestionsItemV5MigratedToOtherSiteStyling> {
+    let m = v.as_object()?;
+    Some(iface_me::QuestionsItemV5MigratedToOtherSiteStyling {
+        link_color: m.get("link_color").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        tag_background_color: m.get("tag_background_color").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        tag_foreground_color: m.get("tag_foreground_color").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_me__questions_item_v5_notice__from_json(v: &Value) -> Option<iface_me::QuestionsItemV5Notice> {
+    let m = v.as_object()?;
+    Some(iface_me::QuestionsItemV5Notice {
+        body: m.get("body").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        creation_date: m.get("creation_date").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        owner_user_id: m.get("owner_user_id").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+    })
+}
+
+fn iface_me__questions_item_v5_owner__from_json(v: &Value) -> Option<iface_me::QuestionsItemV5Owner> {
+    let m = v.as_object()?;
+    Some(iface_me::QuestionsItemV5Owner {
+        accept_rate: m.get("accept_rate").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        badge_counts: m.get("badge_counts").filter(|v| !v.is_null()).and_then(|v| iface_me__questions_item_v5_owner_badge_counts__from_json(v)),
+        display_name: m.get("display_name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        link: m.get("link").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        profile_image: m.get("profile_image").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        reputation: m.get("reputation").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        user_id: m.get("user_id").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        user_type: m.get("user_type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_me__questions_item_v5_owner_badge_counts__from_json(v: &Value) -> Option<iface_me::QuestionsItemV5OwnerBadgeCounts> {
+    let m = v.as_object()?;
+    Some(iface_me::QuestionsItemV5OwnerBadgeCounts {
+        bronze: m.get("bronze").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        gold: m.get("gold").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        silver: m.get("silver").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+    })
+}
+
+fn iface_me__questions_item_v6__from_json(v: &Value) -> Option<iface_me::QuestionsItemV6> {
+    let m = v.as_object()?;
+    Some(iface_me::QuestionsItemV6 {
+        accepted_answer_id: m.get("accepted_answer_id").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        answer_count: m.get("answer_count").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        answers: m.get("answers").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        body: m.get("body").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        body_markdown: m.get("body_markdown").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        bounty_amount: m.get("bounty_amount").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        bounty_closes_date: m.get("bounty_closes_date").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        bounty_user: m.get("bounty_user").filter(|v| !v.is_null()).and_then(|v| iface_me__questions_item_v6_bounty_user__from_json(v)),
+        can_close: m.get("can_close").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        can_flag: m.get("can_flag").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        close_vote_count: m.get("close_vote_count").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        closed_date: m.get("closed_date").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        closed_details: m.get("closed_details").filter(|v| !v.is_null()).and_then(|v| iface_me__questions_item_v6_closed_details__from_json(v)),
+        closed_reason: m.get("closed_reason").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        comment_count: m.get("comment_count").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        comments: m.get("comments").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        community_owned_date: m.get("community_owned_date").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        creation_date: m.get("creation_date").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        delete_vote_count: m.get("delete_vote_count").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        down_vote_count: m.get("down_vote_count").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        downvoted: m.get("downvoted").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        favorite_count: m.get("favorite_count").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        favorited: m.get("favorited").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        is_answered: m.get("is_answered").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        last_activity_date: m.get("last_activity_date").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        last_edit_date: m.get("last_edit_date").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        last_editor: m.get("last_editor").filter(|v| !v.is_null()).and_then(|v| iface_me__questions_item_v6_last_editor__from_json(v)),
+        link: m.get("link").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        locked_date: m.get("locked_date").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        migrated_from: m.get("migrated_from").filter(|v| !v.is_null()).and_then(|v| iface_me__questions_item_v6_migrated_from__from_json(v)),
+        migrated_to: m.get("migrated_to").filter(|v| !v.is_null()).and_then(|v| iface_me__questions_item_v6_migrated_to__from_json(v)),
+        notice: m.get("notice").filter(|v| !v.is_null()).and_then(|v| iface_me__questions_item_v6_notice__from_json(v)),
+        owner: m.get("owner").filter(|v| !v.is_null()).and_then(|v| iface_me__questions_item_v6_owner__from_json(v)),
+        protected_date: m.get("protected_date").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        question_id: m.get("question_id").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        reopen_vote_count: m.get("reopen_vote_count").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        score: m.get("score").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        share_link: m.get("share_link").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        tags: m.get("tags").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        title: m.get("title").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        up_vote_count: m.get("up_vote_count").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        upvoted: m.get("upvoted").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        view_count: m.get("view_count").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+    })
+}
+
+fn iface_me__questions_item_v6_bounty_user__from_json(v: &Value) -> Option<iface_me::QuestionsItemV6BountyUser> {
+    let m = v.as_object()?;
+    Some(iface_me::QuestionsItemV6BountyUser {
+        accept_rate: m.get("accept_rate").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        badge_counts: m.get("badge_counts").filter(|v| !v.is_null()).and_then(|v| iface_me__questions_item_v6_bounty_user_badge_counts__from_json(v)),
+        display_name: m.get("display_name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        link: m.get("link").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        profile_image: m.get("profile_image").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        reputation: m.get("reputation").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        user_id: m.get("user_id").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        user_type: m.get("user_type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_me__questions_item_v6_bounty_user_badge_counts__from_json(v: &Value) -> Option<iface_me::QuestionsItemV6BountyUserBadgeCounts> {
+    let m = v.as_object()?;
+    Some(iface_me::QuestionsItemV6BountyUserBadgeCounts {
+        bronze: m.get("bronze").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        gold: m.get("gold").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        silver: m.get("silver").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+    })
+}
+
+fn iface_me__questions_item_v6_closed_details__from_json(v: &Value) -> Option<iface_me::QuestionsItemV6ClosedDetails> {
+    let m = v.as_object()?;
+    Some(iface_me::QuestionsItemV6ClosedDetails {
+        by_users: m.get("by_users").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        description: m.get("description").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        on_hold: m.get("on_hold").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        original_questions: m.get("original_questions").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        reason: m.get("reason").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_me__questions_item_v6_last_editor__from_json(v: &Value) -> Option<iface_me::QuestionsItemV6LastEditor> {
+    let m = v.as_object()?;
+    Some(iface_me::QuestionsItemV6LastEditor {
+        accept_rate: m.get("accept_rate").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        badge_counts: m.get("badge_counts").filter(|v| !v.is_null()).and_then(|v| iface_me__questions_item_v6_last_editor_badge_counts__from_json(v)),
+        display_name: m.get("display_name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        link: m.get("link").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        profile_image: m.get("profile_image").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        reputation: m.get("reputation").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        user_id: m.get("user_id").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        user_type: m.get("user_type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_me__questions_item_v6_last_editor_badge_counts__from_json(v: &Value) -> Option<iface_me::QuestionsItemV6LastEditorBadgeCounts> {
+    let m = v.as_object()?;
+    Some(iface_me::QuestionsItemV6LastEditorBadgeCounts {
+        bronze: m.get("bronze").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        gold: m.get("gold").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        silver: m.get("silver").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+    })
+}
+
+fn iface_me__questions_item_v6_migrated_from__from_json(v: &Value) -> Option<iface_me::QuestionsItemV6MigratedFrom> {
+    let m = v.as_object()?;
+    Some(iface_me::QuestionsItemV6MigratedFrom {
+        on_date: m.get("on_date").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        other_site: m.get("other_site").filter(|v| !v.is_null()).and_then(|v| iface_me__questions_item_v6_migrated_from_other_site__from_json(v)),
+        question_id: m.get("question_id").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+    })
+}
+
+fn iface_me__questions_item_v6_migrated_from_other_site__from_json(v: &Value) -> Option<iface_me::QuestionsItemV6MigratedFromOtherSite> {
+    let m = v.as_object()?;
+    Some(iface_me::QuestionsItemV6MigratedFromOtherSite {
+        aliases: m.get("aliases").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        api_site_parameter: m.get("api_site_parameter").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        audience: m.get("audience").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        closed_beta_date: m.get("closed_beta_date").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        favicon_url: m.get("favicon_url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        high_resolution_icon_url: m.get("high_resolution_icon_url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        icon_url: m.get("icon_url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        launch_date: m.get("launch_date").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        logo_url: m.get("logo_url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        markdown_extensions: m.get("markdown_extensions").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        open_beta_date: m.get("open_beta_date").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        related_sites: m.get("related_sites").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        site_state: m.get("site_state").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        site_type: m.get("site_type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        site_url: m.get("site_url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        styling: m.get("styling").filter(|v| !v.is_null()).and_then(|v| iface_me__questions_item_v6_migrated_from_other_site_styling__from_json(v)),
+        twitter_account: m.get("twitter_account").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_me__questions_item_v6_migrated_from_other_site_styling__from_json(v: &Value) -> Option<iface_me::QuestionsItemV6MigratedFromOtherSiteStyling> {
+    let m = v.as_object()?;
+    Some(iface_me::QuestionsItemV6MigratedFromOtherSiteStyling {
+        link_color: m.get("link_color").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        tag_background_color: m.get("tag_background_color").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        tag_foreground_color: m.get("tag_foreground_color").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_me__questions_item_v6_migrated_to__from_json(v: &Value) -> Option<iface_me::QuestionsItemV6MigratedTo> {
+    let m = v.as_object()?;
+    Some(iface_me::QuestionsItemV6MigratedTo {
+        on_date: m.get("on_date").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        other_site: m.get("other_site").filter(|v| !v.is_null()).and_then(|v| iface_me__questions_item_v6_migrated_to_other_site__from_json(v)),
+        question_id: m.get("question_id").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+    })
+}
+
+fn iface_me__questions_item_v6_migrated_to_other_site__from_json(v: &Value) -> Option<iface_me::QuestionsItemV6MigratedToOtherSite> {
+    let m = v.as_object()?;
+    Some(iface_me::QuestionsItemV6MigratedToOtherSite {
+        aliases: m.get("aliases").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        api_site_parameter: m.get("api_site_parameter").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        audience: m.get("audience").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        closed_beta_date: m.get("closed_beta_date").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        favicon_url: m.get("favicon_url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        high_resolution_icon_url: m.get("high_resolution_icon_url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        icon_url: m.get("icon_url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        launch_date: m.get("launch_date").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        logo_url: m.get("logo_url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        markdown_extensions: m.get("markdown_extensions").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        open_beta_date: m.get("open_beta_date").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        related_sites: m.get("related_sites").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        site_state: m.get("site_state").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        site_type: m.get("site_type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        site_url: m.get("site_url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        styling: m.get("styling").filter(|v| !v.is_null()).and_then(|v| iface_me__questions_item_v6_migrated_to_other_site_styling__from_json(v)),
+        twitter_account: m.get("twitter_account").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_me__questions_item_v6_migrated_to_other_site_styling__from_json(v: &Value) -> Option<iface_me::QuestionsItemV6MigratedToOtherSiteStyling> {
+    let m = v.as_object()?;
+    Some(iface_me::QuestionsItemV6MigratedToOtherSiteStyling {
+        link_color: m.get("link_color").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        tag_background_color: m.get("tag_background_color").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        tag_foreground_color: m.get("tag_foreground_color").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_me__questions_item_v6_notice__from_json(v: &Value) -> Option<iface_me::QuestionsItemV6Notice> {
+    let m = v.as_object()?;
+    Some(iface_me::QuestionsItemV6Notice {
+        body: m.get("body").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        creation_date: m.get("creation_date").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        owner_user_id: m.get("owner_user_id").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+    })
+}
+
+fn iface_me__questions_item_v6_owner__from_json(v: &Value) -> Option<iface_me::QuestionsItemV6Owner> {
+    let m = v.as_object()?;
+    Some(iface_me::QuestionsItemV6Owner {
+        accept_rate: m.get("accept_rate").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        badge_counts: m.get("badge_counts").filter(|v| !v.is_null()).and_then(|v| iface_me__questions_item_v6_owner_badge_counts__from_json(v)),
+        display_name: m.get("display_name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        link: m.get("link").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        profile_image: m.get("profile_image").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        reputation: m.get("reputation").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        user_id: m.get("user_id").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        user_type: m.get("user_type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_me__questions_item_v6_owner_badge_counts__from_json(v: &Value) -> Option<iface_me::QuestionsItemV6OwnerBadgeCounts> {
+    let m = v.as_object()?;
+    Some(iface_me::QuestionsItemV6OwnerBadgeCounts {
+        bronze: m.get("bronze").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        gold: m.get("gold").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        silver: m.get("silver").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+    })
+}
+
+fn iface_me__reputation_changes_item__from_json(v: &Value) -> Option<iface_me::ReputationChangesItem> {
+    let m = v.as_object()?;
+    Some(iface_me::ReputationChangesItem {
+        link: m.get("link").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        on_date: m.get("on_date").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        post_id: m.get("post_id").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        post_type: m.get("post_type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        reputation_change: m.get("reputation_change").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        title: m.get("title").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        user_id: m.get("user_id").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        vote_type: m.get("vote_type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_me__reputation_history_item__from_json(v: &Value) -> Option<iface_me::ReputationHistoryItem> {
+    let m = v.as_object()?;
+    Some(iface_me::ReputationHistoryItem {
+        creation_date: m.get("creation_date").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        post_id: m.get("post_id").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        reputation_change: m.get("reputation_change").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        reputation_history_type: m.get("reputation_history_type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        user_id: m.get("user_id").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+    })
+}
+
+fn iface_me__reputation_history_item_v2__from_json(v: &Value) -> Option<iface_me::ReputationHistoryItemV2> {
+    let m = v.as_object()?;
+    Some(iface_me::ReputationHistoryItemV2 {
+        creation_date: m.get("creation_date").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        post_id: m.get("post_id").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        reputation_change: m.get("reputation_change").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        reputation_history_type: m.get("reputation_history_type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        user_id: m.get("user_id").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+    })
+}
+
+fn iface_me__suggested_edits_item__from_json(v: &Value) -> Option<iface_me::SuggestedEditsItem> {
+    let m = v.as_object()?;
+    Some(iface_me::SuggestedEditsItem {
+        approval_date: m.get("approval_date").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        body: m.get("body").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        comment: m.get("comment").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        creation_date: m.get("creation_date").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        post_id: m.get("post_id").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        post_type: m.get("post_type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        proposing_user: m.get("proposing_user").filter(|v| !v.is_null()).and_then(|v| iface_me__suggested_edits_item_proposing_user__from_json(v)),
+        rejection_date: m.get("rejection_date").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        suggested_edit_id: m.get("suggested_edit_id").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        tags: m.get("tags").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        title: m.get("title").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_me__suggested_edits_item_proposing_user__from_json(v: &Value) -> Option<iface_me::SuggestedEditsItemProposingUser> {
+    let m = v.as_object()?;
+    Some(iface_me::SuggestedEditsItemProposingUser {
+        accept_rate: m.get("accept_rate").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        badge_counts: m.get("badge_counts").filter(|v| !v.is_null()).and_then(|v| iface_me__suggested_edits_item_proposing_user_badge_counts__from_json(v)),
+        display_name: m.get("display_name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        link: m.get("link").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        profile_image: m.get("profile_image").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        reputation: m.get("reputation").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        user_id: m.get("user_id").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        user_type: m.get("user_type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_me__suggested_edits_item_proposing_user_badge_counts__from_json(v: &Value) -> Option<iface_me::SuggestedEditsItemProposingUserBadgeCounts> {
+    let m = v.as_object()?;
+    Some(iface_me::SuggestedEditsItemProposingUserBadgeCounts {
+        bronze: m.get("bronze").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        gold: m.get("gold").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        silver: m.get("silver").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+    })
+}
+
+fn iface_me__tags_item__from_json(v: &Value) -> Option<iface_me::TagsItem> {
+    let m = v.as_object()?;
+    Some(iface_me::TagsItem {
+        count: m.get("count").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        has_synonyms: m.get("has_synonyms").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        is_moderator_only: m.get("is_moderator_only").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        is_required: m.get("is_required").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        last_activity_date: m.get("last_activity_date").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        synonyms: m.get("synonyms").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        user_id: m.get("user_id").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+    })
+}
+
+fn iface_me__answers_item_v2__from_json(v: &Value) -> Option<iface_me::AnswersItemV2> {
+    let m = v.as_object()?;
+    Some(iface_me::AnswersItemV2 {
+        accepted: m.get("accepted").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        answer_id: m.get("answer_id").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        awarded_bounty_amount: m.get("awarded_bounty_amount").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        awarded_bounty_users: m.get("awarded_bounty_users").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        body: m.get("body").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        body_markdown: m.get("body_markdown").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        can_flag: m.get("can_flag").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        comment_count: m.get("comment_count").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        comments: m.get("comments").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        community_owned_date: m.get("community_owned_date").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        creation_date: m.get("creation_date").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        down_vote_count: m.get("down_vote_count").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        downvoted: m.get("downvoted").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        is_accepted: m.get("is_accepted").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        last_activity_date: m.get("last_activity_date").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        last_edit_date: m.get("last_edit_date").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        last_editor: m.get("last_editor").filter(|v| !v.is_null()).and_then(|v| iface_me__answers_item_v2_last_editor__from_json(v)),
+        link: m.get("link").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        locked_date: m.get("locked_date").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        owner: m.get("owner").filter(|v| !v.is_null()).and_then(|v| iface_me__answers_item_v2_owner__from_json(v)),
+        question_id: m.get("question_id").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        score: m.get("score").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        share_link: m.get("share_link").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        tags: m.get("tags").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        title: m.get("title").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        up_vote_count: m.get("up_vote_count").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        upvoted: m.get("upvoted").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+    })
+}
+
+fn iface_me__answers_item_v2_last_editor__from_json(v: &Value) -> Option<iface_me::AnswersItemV2LastEditor> {
+    let m = v.as_object()?;
+    Some(iface_me::AnswersItemV2LastEditor {
+        accept_rate: m.get("accept_rate").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        badge_counts: m.get("badge_counts").filter(|v| !v.is_null()).and_then(|v| iface_me__answers_item_v2_last_editor_badge_counts__from_json(v)),
+        display_name: m.get("display_name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        link: m.get("link").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        profile_image: m.get("profile_image").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        reputation: m.get("reputation").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        user_id: m.get("user_id").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        user_type: m.get("user_type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_me__answers_item_v2_last_editor_badge_counts__from_json(v: &Value) -> Option<iface_me::AnswersItemV2LastEditorBadgeCounts> {
+    let m = v.as_object()?;
+    Some(iface_me::AnswersItemV2LastEditorBadgeCounts {
+        bronze: m.get("bronze").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        gold: m.get("gold").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        silver: m.get("silver").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+    })
+}
+
+fn iface_me__answers_item_v2_owner__from_json(v: &Value) -> Option<iface_me::AnswersItemV2Owner> {
+    let m = v.as_object()?;
+    Some(iface_me::AnswersItemV2Owner {
+        accept_rate: m.get("accept_rate").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        badge_counts: m.get("badge_counts").filter(|v| !v.is_null()).and_then(|v| iface_me__answers_item_v2_owner_badge_counts__from_json(v)),
+        display_name: m.get("display_name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        link: m.get("link").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        profile_image: m.get("profile_image").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        reputation: m.get("reputation").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        user_id: m.get("user_id").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        user_type: m.get("user_type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_me__answers_item_v2_owner_badge_counts__from_json(v: &Value) -> Option<iface_me::AnswersItemV2OwnerBadgeCounts> {
+    let m = v.as_object()?;
+    Some(iface_me::AnswersItemV2OwnerBadgeCounts {
+        bronze: m.get("bronze").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        gold: m.get("gold").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        silver: m.get("silver").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+    })
+}
+
+fn iface_me__questions_item_v7__from_json(v: &Value) -> Option<iface_me::QuestionsItemV7> {
+    let m = v.as_object()?;
+    Some(iface_me::QuestionsItemV7 {
+        accepted_answer_id: m.get("accepted_answer_id").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        answer_count: m.get("answer_count").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        answers: m.get("answers").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        body: m.get("body").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        body_markdown: m.get("body_markdown").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        bounty_amount: m.get("bounty_amount").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        bounty_closes_date: m.get("bounty_closes_date").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        bounty_user: m.get("bounty_user").filter(|v| !v.is_null()).and_then(|v| iface_me__questions_item_v7_bounty_user__from_json(v)),
+        can_close: m.get("can_close").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        can_flag: m.get("can_flag").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        close_vote_count: m.get("close_vote_count").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        closed_date: m.get("closed_date").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        closed_details: m.get("closed_details").filter(|v| !v.is_null()).and_then(|v| iface_me__questions_item_v7_closed_details__from_json(v)),
+        closed_reason: m.get("closed_reason").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        comment_count: m.get("comment_count").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        comments: m.get("comments").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        community_owned_date: m.get("community_owned_date").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        creation_date: m.get("creation_date").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        delete_vote_count: m.get("delete_vote_count").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        down_vote_count: m.get("down_vote_count").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        downvoted: m.get("downvoted").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        favorite_count: m.get("favorite_count").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        favorited: m.get("favorited").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        is_answered: m.get("is_answered").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        last_activity_date: m.get("last_activity_date").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        last_edit_date: m.get("last_edit_date").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        last_editor: m.get("last_editor").filter(|v| !v.is_null()).and_then(|v| iface_me__questions_item_v7_last_editor__from_json(v)),
+        link: m.get("link").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        locked_date: m.get("locked_date").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        migrated_from: m.get("migrated_from").filter(|v| !v.is_null()).and_then(|v| iface_me__questions_item_v7_migrated_from__from_json(v)),
+        migrated_to: m.get("migrated_to").filter(|v| !v.is_null()).and_then(|v| iface_me__questions_item_v7_migrated_to__from_json(v)),
+        notice: m.get("notice").filter(|v| !v.is_null()).and_then(|v| iface_me__questions_item_v7_notice__from_json(v)),
+        owner: m.get("owner").filter(|v| !v.is_null()).and_then(|v| iface_me__questions_item_v7_owner__from_json(v)),
+        protected_date: m.get("protected_date").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        question_id: m.get("question_id").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        reopen_vote_count: m.get("reopen_vote_count").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        score: m.get("score").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        share_link: m.get("share_link").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        tags: m.get("tags").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        title: m.get("title").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        up_vote_count: m.get("up_vote_count").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        upvoted: m.get("upvoted").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        view_count: m.get("view_count").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+    })
+}
+
+fn iface_me__questions_item_v7_bounty_user__from_json(v: &Value) -> Option<iface_me::QuestionsItemV7BountyUser> {
+    let m = v.as_object()?;
+    Some(iface_me::QuestionsItemV7BountyUser {
+        accept_rate: m.get("accept_rate").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        badge_counts: m.get("badge_counts").filter(|v| !v.is_null()).and_then(|v| iface_me__questions_item_v7_bounty_user_badge_counts__from_json(v)),
+        display_name: m.get("display_name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        link: m.get("link").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        profile_image: m.get("profile_image").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        reputation: m.get("reputation").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        user_id: m.get("user_id").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        user_type: m.get("user_type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_me__questions_item_v7_bounty_user_badge_counts__from_json(v: &Value) -> Option<iface_me::QuestionsItemV7BountyUserBadgeCounts> {
+    let m = v.as_object()?;
+    Some(iface_me::QuestionsItemV7BountyUserBadgeCounts {
+        bronze: m.get("bronze").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        gold: m.get("gold").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        silver: m.get("silver").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+    })
+}
+
+fn iface_me__questions_item_v7_closed_details__from_json(v: &Value) -> Option<iface_me::QuestionsItemV7ClosedDetails> {
+    let m = v.as_object()?;
+    Some(iface_me::QuestionsItemV7ClosedDetails {
+        by_users: m.get("by_users").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        description: m.get("description").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        on_hold: m.get("on_hold").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        original_questions: m.get("original_questions").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        reason: m.get("reason").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_me__questions_item_v7_last_editor__from_json(v: &Value) -> Option<iface_me::QuestionsItemV7LastEditor> {
+    let m = v.as_object()?;
+    Some(iface_me::QuestionsItemV7LastEditor {
+        accept_rate: m.get("accept_rate").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        badge_counts: m.get("badge_counts").filter(|v| !v.is_null()).and_then(|v| iface_me__questions_item_v7_last_editor_badge_counts__from_json(v)),
+        display_name: m.get("display_name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        link: m.get("link").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        profile_image: m.get("profile_image").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        reputation: m.get("reputation").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        user_id: m.get("user_id").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        user_type: m.get("user_type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_me__questions_item_v7_last_editor_badge_counts__from_json(v: &Value) -> Option<iface_me::QuestionsItemV7LastEditorBadgeCounts> {
+    let m = v.as_object()?;
+    Some(iface_me::QuestionsItemV7LastEditorBadgeCounts {
+        bronze: m.get("bronze").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        gold: m.get("gold").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        silver: m.get("silver").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+    })
+}
+
+fn iface_me__questions_item_v7_migrated_from__from_json(v: &Value) -> Option<iface_me::QuestionsItemV7MigratedFrom> {
+    let m = v.as_object()?;
+    Some(iface_me::QuestionsItemV7MigratedFrom {
+        on_date: m.get("on_date").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        other_site: m.get("other_site").filter(|v| !v.is_null()).and_then(|v| iface_me__questions_item_v7_migrated_from_other_site__from_json(v)),
+        question_id: m.get("question_id").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+    })
+}
+
+fn iface_me__questions_item_v7_migrated_from_other_site__from_json(v: &Value) -> Option<iface_me::QuestionsItemV7MigratedFromOtherSite> {
+    let m = v.as_object()?;
+    Some(iface_me::QuestionsItemV7MigratedFromOtherSite {
+        aliases: m.get("aliases").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        api_site_parameter: m.get("api_site_parameter").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        audience: m.get("audience").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        closed_beta_date: m.get("closed_beta_date").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        favicon_url: m.get("favicon_url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        high_resolution_icon_url: m.get("high_resolution_icon_url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        icon_url: m.get("icon_url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        launch_date: m.get("launch_date").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        logo_url: m.get("logo_url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        markdown_extensions: m.get("markdown_extensions").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        open_beta_date: m.get("open_beta_date").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        related_sites: m.get("related_sites").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        site_state: m.get("site_state").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        site_type: m.get("site_type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        site_url: m.get("site_url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        styling: m.get("styling").filter(|v| !v.is_null()).and_then(|v| iface_me__questions_item_v7_migrated_from_other_site_styling__from_json(v)),
+        twitter_account: m.get("twitter_account").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_me__questions_item_v7_migrated_from_other_site_styling__from_json(v: &Value) -> Option<iface_me::QuestionsItemV7MigratedFromOtherSiteStyling> {
+    let m = v.as_object()?;
+    Some(iface_me::QuestionsItemV7MigratedFromOtherSiteStyling {
+        link_color: m.get("link_color").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        tag_background_color: m.get("tag_background_color").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        tag_foreground_color: m.get("tag_foreground_color").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_me__questions_item_v7_migrated_to__from_json(v: &Value) -> Option<iface_me::QuestionsItemV7MigratedTo> {
+    let m = v.as_object()?;
+    Some(iface_me::QuestionsItemV7MigratedTo {
+        on_date: m.get("on_date").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        other_site: m.get("other_site").filter(|v| !v.is_null()).and_then(|v| iface_me__questions_item_v7_migrated_to_other_site__from_json(v)),
+        question_id: m.get("question_id").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+    })
+}
+
+fn iface_me__questions_item_v7_migrated_to_other_site__from_json(v: &Value) -> Option<iface_me::QuestionsItemV7MigratedToOtherSite> {
+    let m = v.as_object()?;
+    Some(iface_me::QuestionsItemV7MigratedToOtherSite {
+        aliases: m.get("aliases").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        api_site_parameter: m.get("api_site_parameter").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        audience: m.get("audience").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        closed_beta_date: m.get("closed_beta_date").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        favicon_url: m.get("favicon_url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        high_resolution_icon_url: m.get("high_resolution_icon_url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        icon_url: m.get("icon_url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        launch_date: m.get("launch_date").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        logo_url: m.get("logo_url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        markdown_extensions: m.get("markdown_extensions").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        open_beta_date: m.get("open_beta_date").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        related_sites: m.get("related_sites").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        site_state: m.get("site_state").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        site_type: m.get("site_type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        site_url: m.get("site_url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        styling: m.get("styling").filter(|v| !v.is_null()).and_then(|v| iface_me__questions_item_v7_migrated_to_other_site_styling__from_json(v)),
+        twitter_account: m.get("twitter_account").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_me__questions_item_v7_migrated_to_other_site_styling__from_json(v: &Value) -> Option<iface_me::QuestionsItemV7MigratedToOtherSiteStyling> {
+    let m = v.as_object()?;
+    Some(iface_me::QuestionsItemV7MigratedToOtherSiteStyling {
+        link_color: m.get("link_color").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        tag_background_color: m.get("tag_background_color").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        tag_foreground_color: m.get("tag_foreground_color").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_me__questions_item_v7_notice__from_json(v: &Value) -> Option<iface_me::QuestionsItemV7Notice> {
+    let m = v.as_object()?;
+    Some(iface_me::QuestionsItemV7Notice {
+        body: m.get("body").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        creation_date: m.get("creation_date").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        owner_user_id: m.get("owner_user_id").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+    })
+}
+
+fn iface_me__questions_item_v7_owner__from_json(v: &Value) -> Option<iface_me::QuestionsItemV7Owner> {
+    let m = v.as_object()?;
+    Some(iface_me::QuestionsItemV7Owner {
+        accept_rate: m.get("accept_rate").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        badge_counts: m.get("badge_counts").filter(|v| !v.is_null()).and_then(|v| iface_me__questions_item_v7_owner_badge_counts__from_json(v)),
+        display_name: m.get("display_name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        link: m.get("link").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        profile_image: m.get("profile_image").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        reputation: m.get("reputation").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        user_id: m.get("user_id").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        user_type: m.get("user_type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_me__questions_item_v7_owner_badge_counts__from_json(v: &Value) -> Option<iface_me::QuestionsItemV7OwnerBadgeCounts> {
+    let m = v.as_object()?;
+    Some(iface_me::QuestionsItemV7OwnerBadgeCounts {
+        bronze: m.get("bronze").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        gold: m.get("gold").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        silver: m.get("silver").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+    })
+}
+
+fn iface_me__user_timeline_objects_item__from_json(v: &Value) -> Option<iface_me::UserTimelineObjectsItem> {
+    let m = v.as_object()?;
+    Some(iface_me::UserTimelineObjectsItem {
+        badge_id: m.get("badge_id").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        comment_id: m.get("comment_id").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        creation_date: m.get("creation_date").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        detail: m.get("detail").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        link: m.get("link").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        post_id: m.get("post_id").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        post_type: m.get("post_type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        suggested_edit_id: m.get("suggested_edit_id").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        timeline_type: m.get("timeline_type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        title: m.get("title").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        user_id: m.get("user_id").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+    })
+}
+
+fn iface_me__top_tag_objects_item__from_json(v: &Value) -> Option<iface_me::TopTagObjectsItem> {
+    let m = v.as_object()?;
+    Some(iface_me::TopTagObjectsItem {
+        answer_count: m.get("answer_count").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        answer_score: m.get("answer_score").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        question_count: m.get("question_count").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        question_score: m.get("question_score").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        tag_name: m.get("tag_name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        user_id: m.get("user_id").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+    })
+}
+
+fn iface_me__top_tag_objects_item_v2__from_json(v: &Value) -> Option<iface_me::TopTagObjectsItemV2> {
+    let m = v.as_object()?;
+    Some(iface_me::TopTagObjectsItemV2 {
+        answer_count: m.get("answer_count").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        answer_score: m.get("answer_score").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        question_count: m.get("question_count").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        question_score: m.get("question_score").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        tag_name: m.get("tag_name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        user_id: m.get("user_id").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+    })
+}
+
+fn iface_me__write_permissions_item__from_json(v: &Value) -> Option<iface_me::WritePermissionsItem> {
+    let m = v.as_object()?;
+    Some(iface_me::WritePermissionsItem {
+        can_add: m.get("can_add").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        can_delete: m.get("can_delete").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        can_edit: m.get("can_edit").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        max_daily_actions: m.get("max_daily_actions").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        min_seconds_between_actions: m.get("min_seconds_between_actions").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        object_type: m.get("object_type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        user_id: m.get("user_id").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
     })
 }
 
@@ -1318,12 +5594,12 @@ fn iface_me__get_me__err(e: crate::runtime::DispatchError) -> iface_me::GetMeErr
     }
 }
 
-fn iface_me__get_me_answers__ok(body: String) -> Result<iface_me::Answers, crate::runtime::DispatchError> {
+fn iface_me__get_me_answers__ok(body: String) -> Result<Vec<iface_me::AnswersItem>, crate::runtime::DispatchError> {
     let v: Value = match serde_json::from_str(&body) {
         Ok(v) => v,
         Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
     };
-    match iface_me__answers__from_json(&v) {
+    match (&v).as_array().map(|a| a.iter().filter_map(|x| iface_me__answers_item__from_json(x)).collect()) {
         Some(x) => Ok(x),
         None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
@@ -1348,12 +5624,12 @@ fn iface_me__get_me_answers__err(e: crate::runtime::DispatchError) -> iface_me::
     }
 }
 
-fn iface_me__get_me_associated__ok(body: String) -> Result<iface_me::NetworkUsers, crate::runtime::DispatchError> {
+fn iface_me__get_me_associated__ok(body: String) -> Result<Vec<iface_me::NetworkUsersItem>, crate::runtime::DispatchError> {
     let v: Value = match serde_json::from_str(&body) {
         Ok(v) => v,
         Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
     };
-    match iface_me__network_users__from_json(&v) {
+    match (&v).as_array().map(|a| a.iter().filter_map(|x| iface_me__network_users_item__from_json(x)).collect()) {
         Some(x) => Ok(x),
         None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
@@ -1378,12 +5654,12 @@ fn iface_me__get_me_associated__err(e: crate::runtime::DispatchError) -> iface_m
     }
 }
 
-fn iface_me__get_me_badges__ok(body: String) -> Result<iface_me::Badges, crate::runtime::DispatchError> {
+fn iface_me__get_me_badges__ok(body: String) -> Result<Vec<iface_me::BadgesItem>, crate::runtime::DispatchError> {
     let v: Value = match serde_json::from_str(&body) {
         Ok(v) => v,
         Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
     };
-    match iface_me__badges__from_json(&v) {
+    match (&v).as_array().map(|a| a.iter().filter_map(|x| iface_me__badges_item__from_json(x)).collect()) {
         Some(x) => Ok(x),
         None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
@@ -1408,12 +5684,12 @@ fn iface_me__get_me_badges__err(e: crate::runtime::DispatchError) -> iface_me::G
     }
 }
 
-fn iface_me__get_me_comments__ok(body: String) -> Result<iface_me::Comments, crate::runtime::DispatchError> {
+fn iface_me__get_me_comments__ok(body: String) -> Result<Vec<iface_me::CommentsItem>, crate::runtime::DispatchError> {
     let v: Value = match serde_json::from_str(&body) {
         Ok(v) => v,
         Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
     };
-    match iface_me__comments__from_json(&v) {
+    match (&v).as_array().map(|a| a.iter().filter_map(|x| iface_me__comments_item__from_json(x)).collect()) {
         Some(x) => Ok(x),
         None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
@@ -1438,12 +5714,12 @@ fn iface_me__get_me_comments__err(e: crate::runtime::DispatchError) -> iface_me:
     }
 }
 
-fn iface_me__get_me_comments_to_id__ok(body: String) -> Result<iface_me::Comments, crate::runtime::DispatchError> {
+fn iface_me__get_me_comments_to_id__ok(body: String) -> Result<Vec<iface_me::CommentsItemV2>, crate::runtime::DispatchError> {
     let v: Value = match serde_json::from_str(&body) {
         Ok(v) => v,
         Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
     };
-    match iface_me__comments__from_json(&v) {
+    match (&v).as_array().map(|a| a.iter().filter_map(|x| iface_me__comments_item_v2__from_json(x)).collect()) {
         Some(x) => Ok(x),
         None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
@@ -1468,12 +5744,12 @@ fn iface_me__get_me_comments_to_id__err(e: crate::runtime::DispatchError) -> ifa
     }
 }
 
-fn iface_me__get_me_favorites__ok(body: String) -> Result<iface_me::Questions, crate::runtime::DispatchError> {
+fn iface_me__get_me_favorites__ok(body: String) -> Result<Vec<iface_me::QuestionsItem>, crate::runtime::DispatchError> {
     let v: Value = match serde_json::from_str(&body) {
         Ok(v) => v,
         Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
     };
-    match iface_me__questions__from_json(&v) {
+    match (&v).as_array().map(|a| a.iter().filter_map(|x| iface_me__questions_item__from_json(x)).collect()) {
         Some(x) => Ok(x),
         None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
@@ -1498,12 +5774,12 @@ fn iface_me__get_me_favorites__err(e: crate::runtime::DispatchError) -> iface_me
     }
 }
 
-fn iface_me__get_me_inbox__ok(body: String) -> Result<iface_me::InboxItems, crate::runtime::DispatchError> {
+fn iface_me__get_me_inbox__ok(body: String) -> Result<Vec<iface_me::InboxItemsItem>, crate::runtime::DispatchError> {
     let v: Value = match serde_json::from_str(&body) {
         Ok(v) => v,
         Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
     };
-    match iface_me__inbox_items__from_json(&v) {
+    match (&v).as_array().map(|a| a.iter().filter_map(|x| iface_me__inbox_items_item__from_json(x)).collect()) {
         Some(x) => Ok(x),
         None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
@@ -1528,12 +5804,12 @@ fn iface_me__get_me_inbox__err(e: crate::runtime::DispatchError) -> iface_me::Ge
     }
 }
 
-fn iface_me__get_me_inbox_unread__ok(body: String) -> Result<iface_me::InboxItems, crate::runtime::DispatchError> {
+fn iface_me__get_me_inbox_unread__ok(body: String) -> Result<Vec<iface_me::InboxItemsItemV2>, crate::runtime::DispatchError> {
     let v: Value = match serde_json::from_str(&body) {
         Ok(v) => v,
         Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
     };
-    match iface_me__inbox_items__from_json(&v) {
+    match (&v).as_array().map(|a| a.iter().filter_map(|x| iface_me__inbox_items_item_v2__from_json(x)).collect()) {
         Some(x) => Ok(x),
         None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
@@ -1558,12 +5834,12 @@ fn iface_me__get_me_inbox_unread__err(e: crate::runtime::DispatchError) -> iface
     }
 }
 
-fn iface_me__get_me_mentioned__ok(body: String) -> Result<iface_me::Comments, crate::runtime::DispatchError> {
+fn iface_me__get_me_mentioned__ok(body: String) -> Result<Vec<iface_me::CommentsItemV3>, crate::runtime::DispatchError> {
     let v: Value = match serde_json::from_str(&body) {
         Ok(v) => v,
         Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
     };
-    match iface_me__comments__from_json(&v) {
+    match (&v).as_array().map(|a| a.iter().filter_map(|x| iface_me__comments_item_v3__from_json(x)).collect()) {
         Some(x) => Ok(x),
         None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
@@ -1588,12 +5864,12 @@ fn iface_me__get_me_mentioned__err(e: crate::runtime::DispatchError) -> iface_me
     }
 }
 
-fn iface_me__get_me_merges__ok(body: String) -> Result<iface_me::AccountMerge, crate::runtime::DispatchError> {
+fn iface_me__get_me_merges__ok(body: String) -> Result<Vec<iface_me::AccountMergeItem>, crate::runtime::DispatchError> {
     let v: Value = match serde_json::from_str(&body) {
         Ok(v) => v,
         Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
     };
-    match iface_me__account_merge__from_json(&v) {
+    match (&v).as_array().map(|a| a.iter().filter_map(|x| iface_me__account_merge_item__from_json(x)).collect()) {
         Some(x) => Ok(x),
         None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
@@ -1618,12 +5894,12 @@ fn iface_me__get_me_merges__err(e: crate::runtime::DispatchError) -> iface_me::G
     }
 }
 
-fn iface_me__get_me_notifications__ok(body: String) -> Result<iface_me::Notifications, crate::runtime::DispatchError> {
+fn iface_me__get_me_notifications__ok(body: String) -> Result<Vec<iface_me::NotificationsItem>, crate::runtime::DispatchError> {
     let v: Value = match serde_json::from_str(&body) {
         Ok(v) => v,
         Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
     };
-    match iface_me__notifications__from_json(&v) {
+    match (&v).as_array().map(|a| a.iter().filter_map(|x| iface_me__notifications_item__from_json(x)).collect()) {
         Some(x) => Ok(x),
         None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
@@ -1648,12 +5924,12 @@ fn iface_me__get_me_notifications__err(e: crate::runtime::DispatchError) -> ifac
     }
 }
 
-fn iface_me__get_me_notifications_unread__ok(body: String) -> Result<iface_me::Notifications, crate::runtime::DispatchError> {
+fn iface_me__get_me_notifications_unread__ok(body: String) -> Result<Vec<iface_me::NotificationsItemV2>, crate::runtime::DispatchError> {
     let v: Value = match serde_json::from_str(&body) {
         Ok(v) => v,
         Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
     };
-    match iface_me__notifications__from_json(&v) {
+    match (&v).as_array().map(|a| a.iter().filter_map(|x| iface_me__notifications_item_v2__from_json(x)).collect()) {
         Some(x) => Ok(x),
         None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
@@ -1678,12 +5954,12 @@ fn iface_me__get_me_notifications_unread__err(e: crate::runtime::DispatchError) 
     }
 }
 
-fn iface_me__get_me_privileges__ok(body: String) -> Result<iface_me::Privileges, crate::runtime::DispatchError> {
+fn iface_me__get_me_privileges__ok(body: String) -> Result<Vec<iface_me::PrivilegesItem>, crate::runtime::DispatchError> {
     let v: Value = match serde_json::from_str(&body) {
         Ok(v) => v,
         Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
     };
-    match iface_me__privileges__from_json(&v) {
+    match (&v).as_array().map(|a| a.iter().filter_map(|x| iface_me__privileges_item__from_json(x)).collect()) {
         Some(x) => Ok(x),
         None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
@@ -1708,12 +5984,12 @@ fn iface_me__get_me_privileges__err(e: crate::runtime::DispatchError) -> iface_m
     }
 }
 
-fn iface_me__get_me_questions__ok(body: String) -> Result<iface_me::Questions, crate::runtime::DispatchError> {
+fn iface_me__get_me_questions__ok(body: String) -> Result<Vec<iface_me::QuestionsItemV2>, crate::runtime::DispatchError> {
     let v: Value = match serde_json::from_str(&body) {
         Ok(v) => v,
         Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
     };
-    match iface_me__questions__from_json(&v) {
+    match (&v).as_array().map(|a| a.iter().filter_map(|x| iface_me__questions_item_v2__from_json(x)).collect()) {
         Some(x) => Ok(x),
         None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
@@ -1738,12 +6014,12 @@ fn iface_me__get_me_questions__err(e: crate::runtime::DispatchError) -> iface_me
     }
 }
 
-fn iface_me__get_me_questions_featured__ok(body: String) -> Result<iface_me::Questions, crate::runtime::DispatchError> {
+fn iface_me__get_me_questions_featured__ok(body: String) -> Result<Vec<iface_me::QuestionsItemV3>, crate::runtime::DispatchError> {
     let v: Value = match serde_json::from_str(&body) {
         Ok(v) => v,
         Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
     };
-    match iface_me__questions__from_json(&v) {
+    match (&v).as_array().map(|a| a.iter().filter_map(|x| iface_me__questions_item_v3__from_json(x)).collect()) {
         Some(x) => Ok(x),
         None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
@@ -1768,12 +6044,12 @@ fn iface_me__get_me_questions_featured__err(e: crate::runtime::DispatchError) ->
     }
 }
 
-fn iface_me__get_me_questions_no_answers__ok(body: String) -> Result<iface_me::Questions, crate::runtime::DispatchError> {
+fn iface_me__get_me_questions_no_answers__ok(body: String) -> Result<Vec<iface_me::QuestionsItemV4>, crate::runtime::DispatchError> {
     let v: Value = match serde_json::from_str(&body) {
         Ok(v) => v,
         Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
     };
-    match iface_me__questions__from_json(&v) {
+    match (&v).as_array().map(|a| a.iter().filter_map(|x| iface_me__questions_item_v4__from_json(x)).collect()) {
         Some(x) => Ok(x),
         None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
@@ -1798,12 +6074,12 @@ fn iface_me__get_me_questions_no_answers__err(e: crate::runtime::DispatchError) 
     }
 }
 
-fn iface_me__get_me_questions_unaccepted__ok(body: String) -> Result<iface_me::Questions, crate::runtime::DispatchError> {
+fn iface_me__get_me_questions_unaccepted__ok(body: String) -> Result<Vec<iface_me::QuestionsItemV5>, crate::runtime::DispatchError> {
     let v: Value = match serde_json::from_str(&body) {
         Ok(v) => v,
         Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
     };
-    match iface_me__questions__from_json(&v) {
+    match (&v).as_array().map(|a| a.iter().filter_map(|x| iface_me__questions_item_v5__from_json(x)).collect()) {
         Some(x) => Ok(x),
         None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
@@ -1828,12 +6104,12 @@ fn iface_me__get_me_questions_unaccepted__err(e: crate::runtime::DispatchError) 
     }
 }
 
-fn iface_me__get_me_questions_unanswered__ok(body: String) -> Result<iface_me::Questions, crate::runtime::DispatchError> {
+fn iface_me__get_me_questions_unanswered__ok(body: String) -> Result<Vec<iface_me::QuestionsItemV6>, crate::runtime::DispatchError> {
     let v: Value = match serde_json::from_str(&body) {
         Ok(v) => v,
         Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
     };
-    match iface_me__questions__from_json(&v) {
+    match (&v).as_array().map(|a| a.iter().filter_map(|x| iface_me__questions_item_v6__from_json(x)).collect()) {
         Some(x) => Ok(x),
         None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
@@ -1858,12 +6134,12 @@ fn iface_me__get_me_questions_unanswered__err(e: crate::runtime::DispatchError) 
     }
 }
 
-fn iface_me__get_me_reputation__ok(body: String) -> Result<iface_me::ReputationChanges, crate::runtime::DispatchError> {
+fn iface_me__get_me_reputation__ok(body: String) -> Result<Vec<iface_me::ReputationChangesItem>, crate::runtime::DispatchError> {
     let v: Value = match serde_json::from_str(&body) {
         Ok(v) => v,
         Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
     };
-    match iface_me__reputation_changes__from_json(&v) {
+    match (&v).as_array().map(|a| a.iter().filter_map(|x| iface_me__reputation_changes_item__from_json(x)).collect()) {
         Some(x) => Ok(x),
         None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
@@ -1888,12 +6164,12 @@ fn iface_me__get_me_reputation__err(e: crate::runtime::DispatchError) -> iface_m
     }
 }
 
-fn iface_me__get_me_reputation_history__ok(body: String) -> Result<iface_me::ReputationHistory, crate::runtime::DispatchError> {
+fn iface_me__get_me_reputation_history__ok(body: String) -> Result<Vec<iface_me::ReputationHistoryItem>, crate::runtime::DispatchError> {
     let v: Value = match serde_json::from_str(&body) {
         Ok(v) => v,
         Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
     };
-    match iface_me__reputation_history__from_json(&v) {
+    match (&v).as_array().map(|a| a.iter().filter_map(|x| iface_me__reputation_history_item__from_json(x)).collect()) {
         Some(x) => Ok(x),
         None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
@@ -1918,12 +6194,12 @@ fn iface_me__get_me_reputation_history__err(e: crate::runtime::DispatchError) ->
     }
 }
 
-fn iface_me__get_me_reputation_history_full__ok(body: String) -> Result<iface_me::ReputationHistory, crate::runtime::DispatchError> {
+fn iface_me__get_me_reputation_history_full__ok(body: String) -> Result<Vec<iface_me::ReputationHistoryItemV2>, crate::runtime::DispatchError> {
     let v: Value = match serde_json::from_str(&body) {
         Ok(v) => v,
         Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
     };
-    match iface_me__reputation_history__from_json(&v) {
+    match (&v).as_array().map(|a| a.iter().filter_map(|x| iface_me__reputation_history_item_v2__from_json(x)).collect()) {
         Some(x) => Ok(x),
         None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
@@ -1948,12 +6224,12 @@ fn iface_me__get_me_reputation_history_full__err(e: crate::runtime::DispatchErro
     }
 }
 
-fn iface_me__get_me_suggested_edits__ok(body: String) -> Result<iface_me::SuggestedEdits, crate::runtime::DispatchError> {
+fn iface_me__get_me_suggested_edits__ok(body: String) -> Result<Vec<iface_me::SuggestedEditsItem>, crate::runtime::DispatchError> {
     let v: Value = match serde_json::from_str(&body) {
         Ok(v) => v,
         Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
     };
-    match iface_me__suggested_edits__from_json(&v) {
+    match (&v).as_array().map(|a| a.iter().filter_map(|x| iface_me__suggested_edits_item__from_json(x)).collect()) {
         Some(x) => Ok(x),
         None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
@@ -1978,12 +6254,12 @@ fn iface_me__get_me_suggested_edits__err(e: crate::runtime::DispatchError) -> if
     }
 }
 
-fn iface_me__get_me_tags__ok(body: String) -> Result<iface_me::Tags, crate::runtime::DispatchError> {
+fn iface_me__get_me_tags__ok(body: String) -> Result<Vec<iface_me::TagsItem>, crate::runtime::DispatchError> {
     let v: Value = match serde_json::from_str(&body) {
         Ok(v) => v,
         Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
     };
-    match iface_me__tags__from_json(&v) {
+    match (&v).as_array().map(|a| a.iter().filter_map(|x| iface_me__tags_item__from_json(x)).collect()) {
         Some(x) => Ok(x),
         None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
@@ -2008,12 +6284,12 @@ fn iface_me__get_me_tags__err(e: crate::runtime::DispatchError) -> iface_me::Get
     }
 }
 
-fn iface_me__get_me_tags_tags_top_answers__ok(body: String) -> Result<iface_me::Answers, crate::runtime::DispatchError> {
+fn iface_me__get_me_tags_tags_top_answers__ok(body: String) -> Result<Vec<iface_me::AnswersItemV2>, crate::runtime::DispatchError> {
     let v: Value = match serde_json::from_str(&body) {
         Ok(v) => v,
         Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
     };
-    match iface_me__answers__from_json(&v) {
+    match (&v).as_array().map(|a| a.iter().filter_map(|x| iface_me__answers_item_v2__from_json(x)).collect()) {
         Some(x) => Ok(x),
         None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
@@ -2038,12 +6314,12 @@ fn iface_me__get_me_tags_tags_top_answers__err(e: crate::runtime::DispatchError)
     }
 }
 
-fn iface_me__get_me_tags_tags_top_questions__ok(body: String) -> Result<iface_me::Questions, crate::runtime::DispatchError> {
+fn iface_me__get_me_tags_tags_top_questions__ok(body: String) -> Result<Vec<iface_me::QuestionsItemV7>, crate::runtime::DispatchError> {
     let v: Value = match serde_json::from_str(&body) {
         Ok(v) => v,
         Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
     };
-    match iface_me__questions__from_json(&v) {
+    match (&v).as_array().map(|a| a.iter().filter_map(|x| iface_me__questions_item_v7__from_json(x)).collect()) {
         Some(x) => Ok(x),
         None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
@@ -2068,12 +6344,12 @@ fn iface_me__get_me_tags_tags_top_questions__err(e: crate::runtime::DispatchErro
     }
 }
 
-fn iface_me__get_me_timeline__ok(body: String) -> Result<iface_me::UserTimelineObjects, crate::runtime::DispatchError> {
+fn iface_me__get_me_timeline__ok(body: String) -> Result<Vec<iface_me::UserTimelineObjectsItem>, crate::runtime::DispatchError> {
     let v: Value = match serde_json::from_str(&body) {
         Ok(v) => v,
         Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
     };
-    match iface_me__user_timeline_objects__from_json(&v) {
+    match (&v).as_array().map(|a| a.iter().filter_map(|x| iface_me__user_timeline_objects_item__from_json(x)).collect()) {
         Some(x) => Ok(x),
         None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
@@ -2098,12 +6374,12 @@ fn iface_me__get_me_timeline__err(e: crate::runtime::DispatchError) -> iface_me:
     }
 }
 
-fn iface_me__get_me_top_answer_tags__ok(body: String) -> Result<iface_me::TopTagObjects, crate::runtime::DispatchError> {
+fn iface_me__get_me_top_answer_tags__ok(body: String) -> Result<Vec<iface_me::TopTagObjectsItem>, crate::runtime::DispatchError> {
     let v: Value = match serde_json::from_str(&body) {
         Ok(v) => v,
         Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
     };
-    match iface_me__top_tag_objects__from_json(&v) {
+    match (&v).as_array().map(|a| a.iter().filter_map(|x| iface_me__top_tag_objects_item__from_json(x)).collect()) {
         Some(x) => Ok(x),
         None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
@@ -2128,12 +6404,12 @@ fn iface_me__get_me_top_answer_tags__err(e: crate::runtime::DispatchError) -> if
     }
 }
 
-fn iface_me__get_me_top_question_tags__ok(body: String) -> Result<iface_me::TopTagObjects, crate::runtime::DispatchError> {
+fn iface_me__get_me_top_question_tags__ok(body: String) -> Result<Vec<iface_me::TopTagObjectsItemV2>, crate::runtime::DispatchError> {
     let v: Value = match serde_json::from_str(&body) {
         Ok(v) => v,
         Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
     };
-    match iface_me__top_tag_objects__from_json(&v) {
+    match (&v).as_array().map(|a| a.iter().filter_map(|x| iface_me__top_tag_objects_item_v2__from_json(x)).collect()) {
         Some(x) => Ok(x),
         None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
@@ -2158,12 +6434,12 @@ fn iface_me__get_me_top_question_tags__err(e: crate::runtime::DispatchError) -> 
     }
 }
 
-fn iface_me__get_me_write_permissions__ok(body: String) -> Result<iface_me::WritePermissions, crate::runtime::DispatchError> {
+fn iface_me__get_me_write_permissions__ok(body: String) -> Result<Vec<iface_me::WritePermissionsItem>, crate::runtime::DispatchError> {
     let v: Value = match serde_json::from_str(&body) {
         Ok(v) => v,
         Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
     };
-    match iface_me__write_permissions__from_json(&v) {
+    match (&v).as_array().map(|a| a.iter().filter_map(|x| iface_me__write_permissions_item__from_json(x)).collect()) {
         Some(x) => Ok(x),
         None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
@@ -2196,203 +6472,203 @@ impl iface_me::Guest for crate::Component {
             Err(e) => Err(iface_me__get_me__err(e)),
         }
     }
-    fn get_me_answers(params: iface_me::GetMeAnswersParams) -> Result<iface_me::Answers, iface_me::GetMeAnswersError> {
+    fn get_me_answers(params: iface_me::GetMeAnswersParams) -> Result<Vec<iface_me::AnswersItem>, iface_me::GetMeAnswersError> {
         let json = iface_me__get_me_answers_params__to_json(&params);
         match dispatch(&OP_ME_GET_ME_ANSWERS, json).and_then(iface_me__get_me_answers__ok) {
             Ok(v) => Ok(v),
             Err(e) => Err(iface_me__get_me_answers__err(e)),
         }
     }
-    fn get_me_associated(params: iface_me::GetMeAssociatedParams) -> Result<iface_me::NetworkUsers, iface_me::GetMeAssociatedError> {
+    fn get_me_associated(params: iface_me::GetMeAssociatedParams) -> Result<Vec<iface_me::NetworkUsersItem>, iface_me::GetMeAssociatedError> {
         let json = iface_me__get_me_associated_params__to_json(&params);
         match dispatch(&OP_ME_GET_ME_ASSOCIATED, json).and_then(iface_me__get_me_associated__ok) {
             Ok(v) => Ok(v),
             Err(e) => Err(iface_me__get_me_associated__err(e)),
         }
     }
-    fn get_me_badges(params: iface_me::GetMeBadgesParams) -> Result<iface_me::Badges, iface_me::GetMeBadgesError> {
+    fn get_me_badges(params: iface_me::GetMeBadgesParams) -> Result<Vec<iface_me::BadgesItem>, iface_me::GetMeBadgesError> {
         let json = iface_me__get_me_badges_params__to_json(&params);
         match dispatch(&OP_ME_GET_ME_BADGES, json).and_then(iface_me__get_me_badges__ok) {
             Ok(v) => Ok(v),
             Err(e) => Err(iface_me__get_me_badges__err(e)),
         }
     }
-    fn get_me_comments(params: iface_me::GetMeCommentsParams) -> Result<iface_me::Comments, iface_me::GetMeCommentsError> {
+    fn get_me_comments(params: iface_me::GetMeCommentsParams) -> Result<Vec<iface_me::CommentsItem>, iface_me::GetMeCommentsError> {
         let json = iface_me__get_me_comments_params__to_json(&params);
         match dispatch(&OP_ME_GET_ME_COMMENTS, json).and_then(iface_me__get_me_comments__ok) {
             Ok(v) => Ok(v),
             Err(e) => Err(iface_me__get_me_comments__err(e)),
         }
     }
-    fn get_me_comments_to_id(params: iface_me::GetMeCommentsToIdParams) -> Result<iface_me::Comments, iface_me::GetMeCommentsToIdError> {
+    fn get_me_comments_to_id(params: iface_me::GetMeCommentsToIdParams) -> Result<Vec<iface_me::CommentsItemV2>, iface_me::GetMeCommentsToIdError> {
         let json = iface_me__get_me_comments_to_id_params__to_json(&params);
         match dispatch(&OP_ME_GET_ME_COMMENTS_TO_ID, json).and_then(iface_me__get_me_comments_to_id__ok) {
             Ok(v) => Ok(v),
             Err(e) => Err(iface_me__get_me_comments_to_id__err(e)),
         }
     }
-    fn get_me_favorites(params: iface_me::GetMeFavoritesParams) -> Result<iface_me::Questions, iface_me::GetMeFavoritesError> {
+    fn get_me_favorites(params: iface_me::GetMeFavoritesParams) -> Result<Vec<iface_me::QuestionsItem>, iface_me::GetMeFavoritesError> {
         let json = iface_me__get_me_favorites_params__to_json(&params);
         match dispatch(&OP_ME_GET_ME_FAVORITES, json).and_then(iface_me__get_me_favorites__ok) {
             Ok(v) => Ok(v),
             Err(e) => Err(iface_me__get_me_favorites__err(e)),
         }
     }
-    fn get_me_inbox(params: iface_me::GetMeInboxParams) -> Result<iface_me::InboxItems, iface_me::GetMeInboxError> {
+    fn get_me_inbox(params: iface_me::GetMeInboxParams) -> Result<Vec<iface_me::InboxItemsItem>, iface_me::GetMeInboxError> {
         let json = iface_me__get_me_inbox_params__to_json(&params);
         match dispatch(&OP_ME_GET_ME_INBOX, json).and_then(iface_me__get_me_inbox__ok) {
             Ok(v) => Ok(v),
             Err(e) => Err(iface_me__get_me_inbox__err(e)),
         }
     }
-    fn get_me_inbox_unread(params: iface_me::GetMeInboxUnreadParams) -> Result<iface_me::InboxItems, iface_me::GetMeInboxUnreadError> {
+    fn get_me_inbox_unread(params: iface_me::GetMeInboxUnreadParams) -> Result<Vec<iface_me::InboxItemsItemV2>, iface_me::GetMeInboxUnreadError> {
         let json = iface_me__get_me_inbox_unread_params__to_json(&params);
         match dispatch(&OP_ME_GET_ME_INBOX_UNREAD, json).and_then(iface_me__get_me_inbox_unread__ok) {
             Ok(v) => Ok(v),
             Err(e) => Err(iface_me__get_me_inbox_unread__err(e)),
         }
     }
-    fn get_me_mentioned(params: iface_me::GetMeMentionedParams) -> Result<iface_me::Comments, iface_me::GetMeMentionedError> {
+    fn get_me_mentioned(params: iface_me::GetMeMentionedParams) -> Result<Vec<iface_me::CommentsItemV3>, iface_me::GetMeMentionedError> {
         let json = iface_me__get_me_mentioned_params__to_json(&params);
         match dispatch(&OP_ME_GET_ME_MENTIONED, json).and_then(iface_me__get_me_mentioned__ok) {
             Ok(v) => Ok(v),
             Err(e) => Err(iface_me__get_me_mentioned__err(e)),
         }
     }
-    fn get_me_merges(params: iface_me::GetMeMergesParams) -> Result<iface_me::AccountMerge, iface_me::GetMeMergesError> {
+    fn get_me_merges(params: iface_me::GetMeMergesParams) -> Result<Vec<iface_me::AccountMergeItem>, iface_me::GetMeMergesError> {
         let json = iface_me__get_me_merges_params__to_json(&params);
         match dispatch(&OP_ME_GET_ME_MERGES, json).and_then(iface_me__get_me_merges__ok) {
             Ok(v) => Ok(v),
             Err(e) => Err(iface_me__get_me_merges__err(e)),
         }
     }
-    fn get_me_notifications(params: iface_me::GetMeNotificationsParams) -> Result<iface_me::Notifications, iface_me::GetMeNotificationsError> {
+    fn get_me_notifications(params: iface_me::GetMeNotificationsParams) -> Result<Vec<iface_me::NotificationsItem>, iface_me::GetMeNotificationsError> {
         let json = iface_me__get_me_notifications_params__to_json(&params);
         match dispatch(&OP_ME_GET_ME_NOTIFICATIONS, json).and_then(iface_me__get_me_notifications__ok) {
             Ok(v) => Ok(v),
             Err(e) => Err(iface_me__get_me_notifications__err(e)),
         }
     }
-    fn get_me_notifications_unread(params: iface_me::GetMeNotificationsUnreadParams) -> Result<iface_me::Notifications, iface_me::GetMeNotificationsUnreadError> {
+    fn get_me_notifications_unread(params: iface_me::GetMeNotificationsUnreadParams) -> Result<Vec<iface_me::NotificationsItemV2>, iface_me::GetMeNotificationsUnreadError> {
         let json = iface_me__get_me_notifications_unread_params__to_json(&params);
         match dispatch(&OP_ME_GET_ME_NOTIFICATIONS_UNREAD, json).and_then(iface_me__get_me_notifications_unread__ok) {
             Ok(v) => Ok(v),
             Err(e) => Err(iface_me__get_me_notifications_unread__err(e)),
         }
     }
-    fn get_me_privileges(params: iface_me::GetMePrivilegesParams) -> Result<iface_me::Privileges, iface_me::GetMePrivilegesError> {
+    fn get_me_privileges(params: iface_me::GetMePrivilegesParams) -> Result<Vec<iface_me::PrivilegesItem>, iface_me::GetMePrivilegesError> {
         let json = iface_me__get_me_privileges_params__to_json(&params);
         match dispatch(&OP_ME_GET_ME_PRIVILEGES, json).and_then(iface_me__get_me_privileges__ok) {
             Ok(v) => Ok(v),
             Err(e) => Err(iface_me__get_me_privileges__err(e)),
         }
     }
-    fn get_me_questions(params: iface_me::GetMeQuestionsParams) -> Result<iface_me::Questions, iface_me::GetMeQuestionsError> {
+    fn get_me_questions(params: iface_me::GetMeQuestionsParams) -> Result<Vec<iface_me::QuestionsItemV2>, iface_me::GetMeQuestionsError> {
         let json = iface_me__get_me_questions_params__to_json(&params);
         match dispatch(&OP_ME_GET_ME_QUESTIONS, json).and_then(iface_me__get_me_questions__ok) {
             Ok(v) => Ok(v),
             Err(e) => Err(iface_me__get_me_questions__err(e)),
         }
     }
-    fn get_me_questions_featured(params: iface_me::GetMeQuestionsFeaturedParams) -> Result<iface_me::Questions, iface_me::GetMeQuestionsFeaturedError> {
+    fn get_me_questions_featured(params: iface_me::GetMeQuestionsFeaturedParams) -> Result<Vec<iface_me::QuestionsItemV3>, iface_me::GetMeQuestionsFeaturedError> {
         let json = iface_me__get_me_questions_featured_params__to_json(&params);
         match dispatch(&OP_ME_GET_ME_QUESTIONS_FEATURED, json).and_then(iface_me__get_me_questions_featured__ok) {
             Ok(v) => Ok(v),
             Err(e) => Err(iface_me__get_me_questions_featured__err(e)),
         }
     }
-    fn get_me_questions_no_answers(params: iface_me::GetMeQuestionsNoAnswersParams) -> Result<iface_me::Questions, iface_me::GetMeQuestionsNoAnswersError> {
+    fn get_me_questions_no_answers(params: iface_me::GetMeQuestionsNoAnswersParams) -> Result<Vec<iface_me::QuestionsItemV4>, iface_me::GetMeQuestionsNoAnswersError> {
         let json = iface_me__get_me_questions_no_answers_params__to_json(&params);
         match dispatch(&OP_ME_GET_ME_QUESTIONS_NO_ANSWERS, json).and_then(iface_me__get_me_questions_no_answers__ok) {
             Ok(v) => Ok(v),
             Err(e) => Err(iface_me__get_me_questions_no_answers__err(e)),
         }
     }
-    fn get_me_questions_unaccepted(params: iface_me::GetMeQuestionsUnacceptedParams) -> Result<iface_me::Questions, iface_me::GetMeQuestionsUnacceptedError> {
+    fn get_me_questions_unaccepted(params: iface_me::GetMeQuestionsUnacceptedParams) -> Result<Vec<iface_me::QuestionsItemV5>, iface_me::GetMeQuestionsUnacceptedError> {
         let json = iface_me__get_me_questions_unaccepted_params__to_json(&params);
         match dispatch(&OP_ME_GET_ME_QUESTIONS_UNACCEPTED, json).and_then(iface_me__get_me_questions_unaccepted__ok) {
             Ok(v) => Ok(v),
             Err(e) => Err(iface_me__get_me_questions_unaccepted__err(e)),
         }
     }
-    fn get_me_questions_unanswered(params: iface_me::GetMeQuestionsUnansweredParams) -> Result<iface_me::Questions, iface_me::GetMeQuestionsUnansweredError> {
+    fn get_me_questions_unanswered(params: iface_me::GetMeQuestionsUnansweredParams) -> Result<Vec<iface_me::QuestionsItemV6>, iface_me::GetMeQuestionsUnansweredError> {
         let json = iface_me__get_me_questions_unanswered_params__to_json(&params);
         match dispatch(&OP_ME_GET_ME_QUESTIONS_UNANSWERED, json).and_then(iface_me__get_me_questions_unanswered__ok) {
             Ok(v) => Ok(v),
             Err(e) => Err(iface_me__get_me_questions_unanswered__err(e)),
         }
     }
-    fn get_me_reputation(params: iface_me::GetMeReputationParams) -> Result<iface_me::ReputationChanges, iface_me::GetMeReputationError> {
+    fn get_me_reputation(params: iface_me::GetMeReputationParams) -> Result<Vec<iface_me::ReputationChangesItem>, iface_me::GetMeReputationError> {
         let json = iface_me__get_me_reputation_params__to_json(&params);
         match dispatch(&OP_ME_GET_ME_REPUTATION, json).and_then(iface_me__get_me_reputation__ok) {
             Ok(v) => Ok(v),
             Err(e) => Err(iface_me__get_me_reputation__err(e)),
         }
     }
-    fn get_me_reputation_history(params: iface_me::GetMeReputationHistoryParams) -> Result<iface_me::ReputationHistory, iface_me::GetMeReputationHistoryError> {
+    fn get_me_reputation_history(params: iface_me::GetMeReputationHistoryParams) -> Result<Vec<iface_me::ReputationHistoryItem>, iface_me::GetMeReputationHistoryError> {
         let json = iface_me__get_me_reputation_history_params__to_json(&params);
         match dispatch(&OP_ME_GET_ME_REPUTATION_HISTORY, json).and_then(iface_me__get_me_reputation_history__ok) {
             Ok(v) => Ok(v),
             Err(e) => Err(iface_me__get_me_reputation_history__err(e)),
         }
     }
-    fn get_me_reputation_history_full(params: iface_me::GetMeReputationHistoryFullParams) -> Result<iface_me::ReputationHistory, iface_me::GetMeReputationHistoryFullError> {
+    fn get_me_reputation_history_full(params: iface_me::GetMeReputationHistoryFullParams) -> Result<Vec<iface_me::ReputationHistoryItemV2>, iface_me::GetMeReputationHistoryFullError> {
         let json = iface_me__get_me_reputation_history_full_params__to_json(&params);
         match dispatch(&OP_ME_GET_ME_REPUTATION_HISTORY_FULL, json).and_then(iface_me__get_me_reputation_history_full__ok) {
             Ok(v) => Ok(v),
             Err(e) => Err(iface_me__get_me_reputation_history_full__err(e)),
         }
     }
-    fn get_me_suggested_edits(params: iface_me::GetMeSuggestedEditsParams) -> Result<iface_me::SuggestedEdits, iface_me::GetMeSuggestedEditsError> {
+    fn get_me_suggested_edits(params: iface_me::GetMeSuggestedEditsParams) -> Result<Vec<iface_me::SuggestedEditsItem>, iface_me::GetMeSuggestedEditsError> {
         let json = iface_me__get_me_suggested_edits_params__to_json(&params);
         match dispatch(&OP_ME_GET_ME_SUGGESTED_EDITS, json).and_then(iface_me__get_me_suggested_edits__ok) {
             Ok(v) => Ok(v),
             Err(e) => Err(iface_me__get_me_suggested_edits__err(e)),
         }
     }
-    fn get_me_tags(params: iface_me::GetMeTagsParams) -> Result<iface_me::Tags, iface_me::GetMeTagsError> {
+    fn get_me_tags(params: iface_me::GetMeTagsParams) -> Result<Vec<iface_me::TagsItem>, iface_me::GetMeTagsError> {
         let json = iface_me__get_me_tags_params__to_json(&params);
         match dispatch(&OP_ME_GET_ME_TAGS, json).and_then(iface_me__get_me_tags__ok) {
             Ok(v) => Ok(v),
             Err(e) => Err(iface_me__get_me_tags__err(e)),
         }
     }
-    fn get_me_tags_tags_top_answers(params: iface_me::GetMeTagsTagsTopAnswersParams) -> Result<iface_me::Answers, iface_me::GetMeTagsTagsTopAnswersError> {
+    fn get_me_tags_tags_top_answers(params: iface_me::GetMeTagsTagsTopAnswersParams) -> Result<Vec<iface_me::AnswersItemV2>, iface_me::GetMeTagsTagsTopAnswersError> {
         let json = iface_me__get_me_tags_tags_top_answers_params__to_json(&params);
         match dispatch(&OP_ME_GET_ME_TAGS_TAGS_TOP_ANSWERS, json).and_then(iface_me__get_me_tags_tags_top_answers__ok) {
             Ok(v) => Ok(v),
             Err(e) => Err(iface_me__get_me_tags_tags_top_answers__err(e)),
         }
     }
-    fn get_me_tags_tags_top_questions(params: iface_me::GetMeTagsTagsTopQuestionsParams) -> Result<iface_me::Questions, iface_me::GetMeTagsTagsTopQuestionsError> {
+    fn get_me_tags_tags_top_questions(params: iface_me::GetMeTagsTagsTopQuestionsParams) -> Result<Vec<iface_me::QuestionsItemV7>, iface_me::GetMeTagsTagsTopQuestionsError> {
         let json = iface_me__get_me_tags_tags_top_questions_params__to_json(&params);
         match dispatch(&OP_ME_GET_ME_TAGS_TAGS_TOP_QUESTIONS, json).and_then(iface_me__get_me_tags_tags_top_questions__ok) {
             Ok(v) => Ok(v),
             Err(e) => Err(iface_me__get_me_tags_tags_top_questions__err(e)),
         }
     }
-    fn get_me_timeline(params: iface_me::GetMeTimelineParams) -> Result<iface_me::UserTimelineObjects, iface_me::GetMeTimelineError> {
+    fn get_me_timeline(params: iface_me::GetMeTimelineParams) -> Result<Vec<iface_me::UserTimelineObjectsItem>, iface_me::GetMeTimelineError> {
         let json = iface_me__get_me_timeline_params__to_json(&params);
         match dispatch(&OP_ME_GET_ME_TIMELINE, json).and_then(iface_me__get_me_timeline__ok) {
             Ok(v) => Ok(v),
             Err(e) => Err(iface_me__get_me_timeline__err(e)),
         }
     }
-    fn get_me_top_answer_tags(params: iface_me::GetMeTopAnswerTagsParams) -> Result<iface_me::TopTagObjects, iface_me::GetMeTopAnswerTagsError> {
+    fn get_me_top_answer_tags(params: iface_me::GetMeTopAnswerTagsParams) -> Result<Vec<iface_me::TopTagObjectsItem>, iface_me::GetMeTopAnswerTagsError> {
         let json = iface_me__get_me_top_answer_tags_params__to_json(&params);
         match dispatch(&OP_ME_GET_ME_TOP_ANSWER_TAGS, json).and_then(iface_me__get_me_top_answer_tags__ok) {
             Ok(v) => Ok(v),
             Err(e) => Err(iface_me__get_me_top_answer_tags__err(e)),
         }
     }
-    fn get_me_top_question_tags(params: iface_me::GetMeTopQuestionTagsParams) -> Result<iface_me::TopTagObjects, iface_me::GetMeTopQuestionTagsError> {
+    fn get_me_top_question_tags(params: iface_me::GetMeTopQuestionTagsParams) -> Result<Vec<iface_me::TopTagObjectsItemV2>, iface_me::GetMeTopQuestionTagsError> {
         let json = iface_me__get_me_top_question_tags_params__to_json(&params);
         match dispatch(&OP_ME_GET_ME_TOP_QUESTION_TAGS, json).and_then(iface_me__get_me_top_question_tags__ok) {
             Ok(v) => Ok(v),
             Err(e) => Err(iface_me__get_me_top_question_tags__err(e)),
         }
     }
-    fn get_me_write_permissions(params: iface_me::GetMeWritePermissionsParams) -> Result<iface_me::WritePermissions, iface_me::GetMeWritePermissionsError> {
+    fn get_me_write_permissions(params: iface_me::GetMeWritePermissionsParams) -> Result<Vec<iface_me::WritePermissionsItem>, iface_me::GetMeWritePermissionsError> {
         let json = iface_me__get_me_write_permissions_params__to_json(&params);
         match dispatch(&OP_ME_GET_ME_WRITE_PERMISSIONS, json).and_then(iface_me__get_me_write_permissions__ok) {
             Ok(v) => Ok(v),

@@ -44,6 +44,52 @@ const OP_MDR_SEARCH_BETA_GET_MDR_MESSAGE_BODY: OpSpec = OpSpec {
     ],
 };
 
+fn iface_mdr_search_beta__direction__to_str(e: &iface_mdr_search_beta::Direction) -> &'static str {
+    match e {
+        iface_mdr_search_beta::Direction::Inbound => "INBOUND",
+        iface_mdr_search_beta::Direction::Outbound => "OUTBOUND",
+    }
+}
+
+fn iface_mdr_search_beta__message_status__to_str(e: &iface_mdr_search_beta::MessageStatus) -> &'static str {
+    match e {
+        iface_mdr_search_beta::MessageStatus::GwTimeout => "GW_TIMEOUT",
+        iface_mdr_search_beta::MessageStatus::Delivered => "DELIVERED",
+        iface_mdr_search_beta::MessageStatus::DlrUnconfirmed => "DLR_UNCONFIRMED",
+        iface_mdr_search_beta::MessageStatus::DlrTimeout => "DLR_TIMEOUT",
+        iface_mdr_search_beta::MessageStatus::Received => "RECEIVED",
+        iface_mdr_search_beta::MessageStatus::GwReject => "GW_REJECT",
+        iface_mdr_search_beta::MessageStatus::Failed => "FAILED",
+    }
+}
+
+fn iface_mdr_search_beta__message_type__to_str(e: &iface_mdr_search_beta::MessageType) -> &'static str {
+    match e {
+        iface_mdr_search_beta::MessageType::Audio => "audio",
+        iface_mdr_search_beta::MessageType::Contacts => "contacts",
+        iface_mdr_search_beta::MessageType::Document => "document",
+        iface_mdr_search_beta::MessageType::Hsm => "hsm",
+        iface_mdr_search_beta::MessageType::Image => "image",
+        iface_mdr_search_beta::MessageType::Location => "location",
+        iface_mdr_search_beta::MessageType::Template => "template",
+        iface_mdr_search_beta::MessageType::Text => "text",
+        iface_mdr_search_beta::MessageType::Video => "video",
+        iface_mdr_search_beta::MessageType::Voice => "voice",
+        iface_mdr_search_beta::MessageType::Unknown => "unknown",
+    }
+}
+
+fn iface_mdr_search_beta__product__to_str(e: &iface_mdr_search_beta::Product) -> &'static str {
+    match e {
+        iface_mdr_search_beta::Product::LongCode => "LONG_CODE",
+        iface_mdr_search_beta::Product::ShortCode => "SHORT_CODE",
+        iface_mdr_search_beta::Product::ShortCodeFteu => "SHORT_CODE_FTEU",
+        iface_mdr_search_beta::Product::TollFree => "TOLL_FREE",
+        iface_mdr_search_beta::Product::AlphanumericId => "ALPHANUMERIC_ID",
+        iface_mdr_search_beta::Product::Rcs => "RCS",
+    }
+}
+
 fn iface_mdr_search_beta__mdr_detail_response_currency_enum__to_str(e: &iface_mdr_search_beta::MdrDetailResponseCurrencyEnum) -> &'static str {
     match e {
         iface_mdr_search_beta::MdrDetailResponseCurrencyEnum::Aud => "AUD",
@@ -59,42 +105,6 @@ fn iface_mdr_search_beta__mdr_detail_response_message_type_enum__to_str(e: &ifac
         iface_mdr_search_beta::MdrDetailResponseMessageTypeEnum::Sms => "SMS",
         iface_mdr_search_beta::MdrDetailResponseMessageTypeEnum::Mms => "MMS",
     }
-}
-
-fn iface_mdr_search_beta__mdr_detail_response_status_enum__to_str(e: &iface_mdr_search_beta::MdrDetailResponseStatusEnum) -> &'static str {
-    match e {
-        iface_mdr_search_beta::MdrDetailResponseStatusEnum::GwTimeout => "GW_TIMEOUT",
-        iface_mdr_search_beta::MdrDetailResponseStatusEnum::Delivered => "DELIVERED",
-        iface_mdr_search_beta::MdrDetailResponseStatusEnum::DlrUnconfirmed => "DLR_UNCONFIRMED",
-        iface_mdr_search_beta::MdrDetailResponseStatusEnum::DlrTimeout => "DLR_TIMEOUT",
-        iface_mdr_search_beta::MdrDetailResponseStatusEnum::Received => "RECEIVED",
-        iface_mdr_search_beta::MdrDetailResponseStatusEnum::GwReject => "GW_REJECT",
-        iface_mdr_search_beta::MdrDetailResponseStatusEnum::Failed => "FAILED",
-    }
-}
-
-fn iface_mdr_search_beta__direction__to_json(p: &iface_mdr_search_beta::Direction) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_mdr_search_beta__message_status__to_json(p: &iface_mdr_search_beta::MessageStatus) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_mdr_search_beta__message_type__to_json(p: &iface_mdr_search_beta::MessageType) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_mdr_search_beta__product__to_json(p: &iface_mdr_search_beta::Product) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
 }
 
 fn iface_mdr_search_beta__mdr_get_detail_response__to_json(p: &iface_mdr_search_beta::MdrGetDetailResponse) -> Value {
@@ -118,7 +128,7 @@ fn iface_mdr_search_beta__mdr_detail_response__to_json(p: &iface_mdr_search_beta
     m.insert("profile_name".into(), match (&p.profile_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("rate".into(), match (&p.rate) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("record_type".into(), match (&p.record_type) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("status".into(), match (&p.status) { Some(v) => Value::String(iface_mdr_search_beta__mdr_detail_response_status_enum__to_str(v).into()), None => Value::Null });
+    m.insert("status".into(), match (&p.status) { Some(v) => Value::String(iface_mdr_search_beta__message_status__to_str(v).into()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -149,19 +159,19 @@ fn iface_mdr_search_beta__get_paginated_mdrs_params__to_json(p: &iface_mdr_searc
     m.insert("start_date".into(), Value::String((&p.start_date).clone()));
     m.insert("end_date".into(), Value::String((&p.end_date).clone()));
     m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("direction".into(), match (&p.direction) { Some(v) => iface_mdr_search_beta__direction__to_json(v), None => Value::Null });
+    m.insert("direction".into(), match (&p.direction) { Some(v) => Value::String(iface_mdr_search_beta__direction__to_str(v).into()), None => Value::Null });
     m.insert("outbound_profile_id".into(), match (&p.outbound_profile_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("cld".into(), match (&p.cld) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("cli".into(), match (&p.cli) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("status".into(), match (&p.status) { Some(v) => iface_mdr_search_beta__message_status__to_json(v), None => Value::Null });
-    m.insert("message_type".into(), match (&p.message_type) { Some(v) => iface_mdr_search_beta__message_type__to_json(v), None => Value::Null });
+    m.insert("status".into(), match (&p.status) { Some(v) => Value::String(iface_mdr_search_beta__message_status__to_str(v).into()), None => Value::Null });
+    m.insert("message_type".into(), match (&p.message_type) { Some(v) => Value::String(iface_mdr_search_beta__message_type__to_str(v).into()), None => Value::Null });
     m.insert("country_iso".into(), match (&p.country_iso) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("error".into(), match (&p.error) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("normalized_carrier".into(), match (&p.normalized_carrier) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("tag".into(), match (&p.tag) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("mcc".into(), match (&p.mcc) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("mnc".into(), match (&p.mnc) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("product".into(), match (&p.product) { Some(v) => iface_mdr_search_beta__product__to_json(v), None => Value::Null });
+    m.insert("product".into(), match (&p.product) { Some(v) => Value::String(iface_mdr_search_beta__product__to_str(v).into()), None => Value::Null });
     m.insert("page_number".into(), match (&p.page_number) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("page_size".into(), match (&p.page_size) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("sort".into(), match (&p.sort) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
@@ -197,7 +207,7 @@ fn iface_mdr_search_beta__mdr_detail_response__from_json(v: &Value) -> Option<if
         profile_name: m.get("profile_name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         rate: m.get("rate").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         record_type: m.get("record_type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        status: m.get("status").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_mdr_search_beta__mdr_detail_response_status_enum__from_str)),
+        status: m.get("status").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_mdr_search_beta__message_status__from_str)),
     })
 }
 
@@ -226,6 +236,19 @@ fn iface_mdr_search_beta__message_body__from_json(v: &Value) -> Option<iface_mdr
     })
 }
 
+fn iface_mdr_search_beta__message_status__from_str(s: &str) -> Option<iface_mdr_search_beta::MessageStatus> {
+    match s {
+        "GW_TIMEOUT" => Some(iface_mdr_search_beta::MessageStatus::GwTimeout),
+        "DELIVERED" => Some(iface_mdr_search_beta::MessageStatus::Delivered),
+        "DLR_UNCONFIRMED" => Some(iface_mdr_search_beta::MessageStatus::DlrUnconfirmed),
+        "DLR_TIMEOUT" => Some(iface_mdr_search_beta::MessageStatus::DlrTimeout),
+        "RECEIVED" => Some(iface_mdr_search_beta::MessageStatus::Received),
+        "GW_REJECT" => Some(iface_mdr_search_beta::MessageStatus::GwReject),
+        "FAILED" => Some(iface_mdr_search_beta::MessageStatus::Failed),
+        _ => None,
+    }
+}
+
 fn iface_mdr_search_beta__mdr_detail_response_currency_enum__from_str(s: &str) -> Option<iface_mdr_search_beta::MdrDetailResponseCurrencyEnum> {
     match s {
         "AUD" => Some(iface_mdr_search_beta::MdrDetailResponseCurrencyEnum::Aud),
@@ -241,19 +264,6 @@ fn iface_mdr_search_beta__mdr_detail_response_message_type_enum__from_str(s: &st
     match s {
         "SMS" => Some(iface_mdr_search_beta::MdrDetailResponseMessageTypeEnum::Sms),
         "MMS" => Some(iface_mdr_search_beta::MdrDetailResponseMessageTypeEnum::Mms),
-        _ => None,
-    }
-}
-
-fn iface_mdr_search_beta__mdr_detail_response_status_enum__from_str(s: &str) -> Option<iface_mdr_search_beta::MdrDetailResponseStatusEnum> {
-    match s {
-        "GW_TIMEOUT" => Some(iface_mdr_search_beta::MdrDetailResponseStatusEnum::GwTimeout),
-        "DELIVERED" => Some(iface_mdr_search_beta::MdrDetailResponseStatusEnum::Delivered),
-        "DLR_UNCONFIRMED" => Some(iface_mdr_search_beta::MdrDetailResponseStatusEnum::DlrUnconfirmed),
-        "DLR_TIMEOUT" => Some(iface_mdr_search_beta::MdrDetailResponseStatusEnum::DlrTimeout),
-        "RECEIVED" => Some(iface_mdr_search_beta::MdrDetailResponseStatusEnum::Received),
-        "GW_REJECT" => Some(iface_mdr_search_beta::MdrDetailResponseStatusEnum::GwReject),
-        "FAILED" => Some(iface_mdr_search_beta::MdrDetailResponseStatusEnum::Failed),
         _ => None,
     }
 }

@@ -60,7 +60,7 @@ fn iface_shared_catalog_id_assign_products__catalog_data_product_extension_inter
 
 fn iface_shared_catalog_id_assign_products__bundle_data_option_interface__to_json(p: &iface_shared_catalog_id_assign_products::BundleDataOptionInterface) -> Value {
     let mut m = Map::new();
-    m.insert("extension_attributes".into(), match (&p.extension_attributes) { Some(v) => iface_shared_catalog_id_assign_products__bundle_data_option_extension_interface__to_json(v), None => Value::Null });
+    m.insert("extension_attributes".into(), match (&p.extension_attributes) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("option_id".into(), match (&p.option_id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("position".into(), match (&p.position) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("product_links".into(), match (&p.product_links) { Some(v) => Value::Array((v).iter().map(|v| iface_shared_catalog_id_assign_products__bundle_data_link_interface__to_json(v)).collect()), None => Value::Null });
@@ -71,16 +71,17 @@ fn iface_shared_catalog_id_assign_products__bundle_data_option_interface__to_jso
     Value::Object(m)
 }
 
-fn iface_shared_catalog_id_assign_products__bundle_data_option_extension_interface__to_json(p: &iface_shared_catalog_id_assign_products::BundleDataOptionExtensionInterface) -> Value {
+fn iface_shared_catalog_id_assign_products__bundle_data_option_extension_interface_entry__to_json(p: &iface_shared_catalog_id_assign_products::BundleDataOptionExtensionInterfaceEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
 fn iface_shared_catalog_id_assign_products__bundle_data_link_interface__to_json(p: &iface_shared_catalog_id_assign_products::BundleDataLinkInterface) -> Value {
     let mut m = Map::new();
     m.insert("can_change_quantity".into(), match (&p.can_change_quantity) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    m.insert("extension_attributes".into(), match (&p.extension_attributes) { Some(v) => iface_shared_catalog_id_assign_products__bundle_data_link_extension_interface__to_json(v), None => Value::Null });
+    m.insert("extension_attributes".into(), match (&p.extension_attributes) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("is_default".into(), Value::Bool(*(&p.is_default)));
     m.insert("option_id".into(), match (&p.option_id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
@@ -92,30 +93,32 @@ fn iface_shared_catalog_id_assign_products__bundle_data_link_interface__to_json(
     Value::Object(m)
 }
 
-fn iface_shared_catalog_id_assign_products__bundle_data_link_extension_interface__to_json(p: &iface_shared_catalog_id_assign_products::BundleDataLinkExtensionInterface) -> Value {
+fn iface_shared_catalog_id_assign_products__bundle_data_link_extension_interface_entry__to_json(p: &iface_shared_catalog_id_assign_products::BundleDataLinkExtensionInterfaceEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
 fn iface_shared_catalog_id_assign_products__catalog_data_category_link_interface__to_json(p: &iface_shared_catalog_id_assign_products::CatalogDataCategoryLinkInterface) -> Value {
     let mut m = Map::new();
     m.insert("category_id".into(), Value::String((&p.category_id).clone()));
-    m.insert("extension_attributes".into(), match (&p.extension_attributes) { Some(v) => iface_shared_catalog_id_assign_products__catalog_data_category_link_extension_interface__to_json(v), None => Value::Null });
+    m.insert("extension_attributes".into(), match (&p.extension_attributes) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("position".into(), match (&p.position) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_shared_catalog_id_assign_products__catalog_data_category_link_extension_interface__to_json(p: &iface_shared_catalog_id_assign_products::CatalogDataCategoryLinkExtensionInterface) -> Value {
+fn iface_shared_catalog_id_assign_products__catalog_data_category_link_extension_interface_entry__to_json(p: &iface_shared_catalog_id_assign_products::CatalogDataCategoryLinkExtensionInterfaceEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
 fn iface_shared_catalog_id_assign_products__configurable_product_data_option_interface__to_json(p: &iface_shared_catalog_id_assign_products::ConfigurableProductDataOptionInterface) -> Value {
     let mut m = Map::new();
     m.insert("attribute_id".into(), match (&p.attribute_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("extension_attributes".into(), match (&p.extension_attributes) { Some(v) => iface_shared_catalog_id_assign_products__configurable_product_data_option_extension_interface__to_json(v), None => Value::Null });
+    m.insert("extension_attributes".into(), match (&p.extension_attributes) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("id".into(), match (&p.id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("is_use_default".into(), match (&p.is_use_default) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     m.insert("label".into(), match (&p.label) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -125,28 +128,30 @@ fn iface_shared_catalog_id_assign_products__configurable_product_data_option_int
     Value::Object(m)
 }
 
-fn iface_shared_catalog_id_assign_products__configurable_product_data_option_extension_interface__to_json(p: &iface_shared_catalog_id_assign_products::ConfigurableProductDataOptionExtensionInterface) -> Value {
+fn iface_shared_catalog_id_assign_products__configurable_product_data_option_extension_interface_entry__to_json(p: &iface_shared_catalog_id_assign_products::ConfigurableProductDataOptionExtensionInterfaceEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
 fn iface_shared_catalog_id_assign_products__configurable_product_data_option_value_interface__to_json(p: &iface_shared_catalog_id_assign_products::ConfigurableProductDataOptionValueInterface) -> Value {
     let mut m = Map::new();
-    m.insert("extension_attributes".into(), match (&p.extension_attributes) { Some(v) => iface_shared_catalog_id_assign_products__configurable_product_data_option_value_extension_interface__to_json(v), None => Value::Null });
+    m.insert("extension_attributes".into(), match (&p.extension_attributes) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("value_index".into(), Value::Number(serde_json::Number::from(*(&p.value_index))));
     Value::Object(m)
 }
 
-fn iface_shared_catalog_id_assign_products__configurable_product_data_option_value_extension_interface__to_json(p: &iface_shared_catalog_id_assign_products::ConfigurableProductDataOptionValueExtensionInterface) -> Value {
+fn iface_shared_catalog_id_assign_products__configurable_product_data_option_value_extension_interface_entry__to_json(p: &iface_shared_catalog_id_assign_products::ConfigurableProductDataOptionValueExtensionInterfaceEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
 fn iface_shared_catalog_id_assign_products__downloadable_data_link_interface__to_json(p: &iface_shared_catalog_id_assign_products::DownloadableDataLinkInterface) -> Value {
     let mut m = Map::new();
-    m.insert("extension_attributes".into(), match (&p.extension_attributes) { Some(v) => iface_shared_catalog_id_assign_products__downloadable_data_link_extension_interface__to_json(v), None => Value::Null });
+    m.insert("extension_attributes".into(), match (&p.extension_attributes) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("id".into(), match (&p.id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("is_shareable".into(), Value::Number(serde_json::Number::from(*(&p.is_shareable))));
     m.insert("link_file".into(), match (&p.link_file) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -164,29 +169,31 @@ fn iface_shared_catalog_id_assign_products__downloadable_data_link_interface__to
     Value::Object(m)
 }
 
-fn iface_shared_catalog_id_assign_products__downloadable_data_link_extension_interface__to_json(p: &iface_shared_catalog_id_assign_products::DownloadableDataLinkExtensionInterface) -> Value {
+fn iface_shared_catalog_id_assign_products__downloadable_data_link_extension_interface_entry__to_json(p: &iface_shared_catalog_id_assign_products::DownloadableDataLinkExtensionInterfaceEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
 fn iface_shared_catalog_id_assign_products__downloadable_data_file_content_interface__to_json(p: &iface_shared_catalog_id_assign_products::DownloadableDataFileContentInterface) -> Value {
     let mut m = Map::new();
-    m.insert("extension_attributes".into(), match (&p.extension_attributes) { Some(v) => iface_shared_catalog_id_assign_products__downloadable_data_file_content_extension_interface__to_json(v), None => Value::Null });
+    m.insert("extension_attributes".into(), match (&p.extension_attributes) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("file_data".into(), Value::String((&p.file_data).clone()));
     m.insert("name".into(), Value::String((&p.name).clone()));
     Value::Object(m)
 }
 
-fn iface_shared_catalog_id_assign_products__downloadable_data_file_content_extension_interface__to_json(p: &iface_shared_catalog_id_assign_products::DownloadableDataFileContentExtensionInterface) -> Value {
+fn iface_shared_catalog_id_assign_products__downloadable_data_file_content_extension_interface_entry__to_json(p: &iface_shared_catalog_id_assign_products::DownloadableDataFileContentExtensionInterfaceEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
 fn iface_shared_catalog_id_assign_products__downloadable_data_sample_interface__to_json(p: &iface_shared_catalog_id_assign_products::DownloadableDataSampleInterface) -> Value {
     let mut m = Map::new();
-    m.insert("extension_attributes".into(), match (&p.extension_attributes) { Some(v) => iface_shared_catalog_id_assign_products__downloadable_data_sample_extension_interface__to_json(v), None => Value::Null });
+    m.insert("extension_attributes".into(), match (&p.extension_attributes) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("id".into(), match (&p.id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("sample_file".into(), match (&p.sample_file) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("sample_file_content".into(), match (&p.sample_file_content) { Some(v) => iface_shared_catalog_id_assign_products__downloadable_data_file_content_interface__to_json(v), None => Value::Null });
@@ -197,25 +204,27 @@ fn iface_shared_catalog_id_assign_products__downloadable_data_sample_interface__
     Value::Object(m)
 }
 
-fn iface_shared_catalog_id_assign_products__downloadable_data_sample_extension_interface__to_json(p: &iface_shared_catalog_id_assign_products::DownloadableDataSampleExtensionInterface) -> Value {
+fn iface_shared_catalog_id_assign_products__downloadable_data_sample_extension_interface_entry__to_json(p: &iface_shared_catalog_id_assign_products::DownloadableDataSampleExtensionInterfaceEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
 fn iface_shared_catalog_id_assign_products__gift_card_data_giftcard_amount_interface__to_json(p: &iface_shared_catalog_id_assign_products::GiftCardDataGiftcardAmountInterface) -> Value {
     let mut m = Map::new();
     m.insert("attribute_id".into(), Value::Number(serde_json::Number::from(*(&p.attribute_id))));
-    m.insert("extension_attributes".into(), match (&p.extension_attributes) { Some(v) => iface_shared_catalog_id_assign_products__gift_card_data_giftcard_amount_extension_interface__to_json(v), None => Value::Null });
+    m.insert("extension_attributes".into(), match (&p.extension_attributes) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("value".into(), serde_json::Number::from_f64(*(&p.value)).map(Value::Number).unwrap_or(Value::Null));
     m.insert("website_id".into(), Value::Number(serde_json::Number::from(*(&p.website_id))));
     m.insert("website_value".into(), serde_json::Number::from_f64(*(&p.website_value)).map(Value::Number).unwrap_or(Value::Null));
     Value::Object(m)
 }
 
-fn iface_shared_catalog_id_assign_products__gift_card_data_giftcard_amount_extension_interface__to_json(p: &iface_shared_catalog_id_assign_products::GiftCardDataGiftcardAmountExtensionInterface) -> Value {
+fn iface_shared_catalog_id_assign_products__gift_card_data_giftcard_amount_extension_interface_entry__to_json(p: &iface_shared_catalog_id_assign_products::GiftCardDataGiftcardAmountExtensionInterfaceEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -223,7 +232,7 @@ fn iface_shared_catalog_id_assign_products__catalog_inventory_data_stock_item_in
     let mut m = Map::new();
     m.insert("backorders".into(), Value::Number(serde_json::Number::from(*(&p.backorders))));
     m.insert("enable_qty_increments".into(), Value::Bool(*(&p.enable_qty_increments)));
-    m.insert("extension_attributes".into(), match (&p.extension_attributes) { Some(v) => iface_shared_catalog_id_assign_products__catalog_inventory_data_stock_item_extension_interface__to_json(v), None => Value::Null });
+    m.insert("extension_attributes".into(), match (&p.extension_attributes) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("is_decimal_divided".into(), Value::Bool(*(&p.is_decimal_divided)));
     m.insert("is_in_stock".into(), Value::Bool(*(&p.is_in_stock)));
     m.insert("is_qty_decimal".into(), Value::Bool(*(&p.is_qty_decimal)));
@@ -251,9 +260,10 @@ fn iface_shared_catalog_id_assign_products__catalog_inventory_data_stock_item_in
     Value::Object(m)
 }
 
-fn iface_shared_catalog_id_assign_products__catalog_inventory_data_stock_item_extension_interface__to_json(p: &iface_shared_catalog_id_assign_products::CatalogInventoryDataStockItemExtensionInterface) -> Value {
+fn iface_shared_catalog_id_assign_products__catalog_inventory_data_stock_item_extension_interface_entry__to_json(p: &iface_shared_catalog_id_assign_products::CatalogInventoryDataStockItemExtensionInterfaceEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 

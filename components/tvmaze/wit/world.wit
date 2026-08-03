@@ -6,7 +6,7 @@
 /// | Secret name | Applied to each request as |
 /// | --- | --- |
 /// | `usertoken` | `Authorization: Basic base64(<secret>)` |
-package autostamp:tvmaze@0.5.0;
+package autostamp:tvmaze@0.6.0;
 
 interface auth {
   record post-auth-poll-response {
@@ -87,9 +87,34 @@ interface scrobbling {
     data: option<string>
   }
 
-  /// A list of responses to your bulk input, ordered the same as your input
-  record bulk-response {
-    /// opaque schema; raw JSON
+  record bulk-response-item {
+    /// The HTTP code that corresponds to this item
+    code: option<s32>,
+    /// A list of validation errors for this item (in case of error)
+    errors: option<list<bulk-response-item-errors-entry>>,
+    /// The request data that belonged to this response (in case of error)
+    input: option<list<bulk-response-item-input-entry>>,
+    /// A human-readable error message (in case of error)
+    message: option<string>,
+    /// The resulting created/updated object (in case of success)
+    result-op: option<list<bulk-response-item-result-op-entry>>
+  }
+
+  /// one entry of a string-keyed map (free-form object)
+  record bulk-response-item-errors-entry {
+    key: string,
+    value: string
+  }
+
+  /// one entry of a string-keyed map (free-form object)
+  record bulk-response-item-input-entry {
+    key: string,
+    value: string
+  }
+
+  /// one entry of a string-keyed map (free-form object)
+  record bulk-response-item-result-op-entry {
+    key: string,
     value: string
   }
 
@@ -102,12 +127,13 @@ interface scrobbling {
   }
 
   record marked-episode-embedded {
-    episode: option<episode>
+    episode: option<list<episode-entry>>
   }
 
-  record episode {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record episode-entry {
+    key: string,
+    value: string
   }
 
   record post-scrobble-shows-body-item {
@@ -120,6 +146,37 @@ interface scrobbling {
     /// The season number
     season: option<s32>,
     type-op: option<mark-type>
+  }
+
+  record bulk-response-item-v2 {
+    /// The HTTP code that corresponds to this item
+    code: option<s32>,
+    /// A list of validation errors for this item (in case of error)
+    errors: option<list<bulk-response-item-v2-errors-entry>>,
+    /// The request data that belonged to this response (in case of error)
+    input: option<list<bulk-response-item-v2-input-entry>>,
+    /// A human-readable error message (in case of error)
+    message: option<string>,
+    /// The resulting created/updated object (in case of success)
+    result-op: option<list<bulk-response-item-v2-result-op-entry>>
+  }
+
+  /// one entry of a string-keyed map (free-form object)
+  record bulk-response-item-v2-errors-entry {
+    key: string,
+    value: string
+  }
+
+  /// one entry of a string-keyed map (free-form object)
+  record bulk-response-item-v2-input-entry {
+    key: string,
+    value: string
+  }
+
+  /// one entry of a string-keyed map (free-form object)
+  record bulk-response-item-v2-result-op-entry {
+    key: string,
+    value: string
   }
 
   variant post-scrobble-episodes-error {
@@ -142,7 +199,7 @@ interface scrobbling {
   record post-scrobble-episodes-params {
     body: option<list<post-scrobble-episodes-body-item>>
   }
-  post-scrobble-episodes: func(params: post-scrobble-episodes-params) -> result<bulk-response, post-scrobble-episodes-error>;
+  post-scrobble-episodes: func(params: post-scrobble-episodes-params) -> result<list<bulk-response-item>, post-scrobble-episodes-error>;
 
   /// Mark an episode as acquired or watched based on its ID
   record put-scrobble-episodes-episode-id-params {
@@ -165,7 +222,7 @@ interface scrobbling {
     imdb-id: option<s32>,
     body: option<list<post-scrobble-shows-body-item>>
   }
-  post-scrobble-shows: func(params: post-scrobble-shows-params) -> result<bulk-response, post-scrobble-shows-error>;
+  post-scrobble-shows: func(params: post-scrobble-shows-params) -> result<list<bulk-response-item-v2>, post-scrobble-shows-error>;
 
   /// List watched and acquired episodes for a show
   record get-scrobble-shows-show-id-params {
@@ -188,12 +245,13 @@ interface marked-episodes {
   }
 
   record marked-episode-embedded {
-    episode: option<episode>
+    episode: option<list<episode-entry>>
   }
 
-  record episode {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record episode-entry {
+    key: string,
+    value: string
   }
 
   /// 0 for watched, 1 for acquired, 2 for skipped
@@ -261,12 +319,13 @@ interface followed-networks {
   }
 
   record network-follow-embedded {
-    network: option<network>
+    network: option<list<network-entry>>
   }
 
-  record network {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record network-entry {
+    key: string,
+    value: string
   }
 
   variant get-user-follows-networks-network-id-error {
@@ -322,12 +381,13 @@ interface followed-people {
   }
 
   record person-follow-embedded {
-    person: option<person>
+    person: option<list<person-entry>>
   }
 
-  record person {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record person-entry {
+    key: string,
+    value: string
   }
 
   variant get-user-follows-people-person-id-error {
@@ -383,12 +443,13 @@ interface followed-shows {
   }
 
   record show-follow-embedded {
-    show: option<show>
+    show: option<list<show-entry>>
   }
 
-  record show {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record show-entry {
+    key: string,
+    value: string
   }
 
   variant get-user-follows-shows-show-id-error {
@@ -444,12 +505,13 @@ interface followed-webchannels {
   }
 
   record webchannel-follow-embedded {
-    webchannel: option<webchannel>
+    webchannel: option<list<webchannel-entry>>
   }
 
-  record webchannel {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record webchannel-entry {
+    key: string,
+    value: string
   }
 
   variant get-user-follows-webchannels-webchannel-id-error {
@@ -510,12 +572,13 @@ interface tagged-shows {
   }
 
   record tag-instance-embedded {
-    show: option<show>
+    show: option<list<show-entry>>
   }
 
-  record show {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record show-entry {
+    key: string,
+    value: string
   }
 
   variant post-user-tags-error {

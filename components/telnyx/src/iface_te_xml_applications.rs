@@ -96,6 +96,29 @@ fn iface_te_xml_applications__find_texml_applications_sort_enum__to_str(e: &ifac
     }
 }
 
+fn iface_te_xml_applications__anchorsite_override__to_str(e: &iface_te_xml_applications::AnchorsiteOverride) -> &'static str {
+    match e {
+        iface_te_xml_applications::AnchorsiteOverride::Latency => "Latency",
+        iface_te_xml_applications::AnchorsiteOverride::ChicagoIl => "Chicago, IL",
+        iface_te_xml_applications::AnchorsiteOverride::AshburnVa => "Ashburn, VA",
+        iface_te_xml_applications::AnchorsiteOverride::SanJoseCa => "San Jose, CA",
+        iface_te_xml_applications::AnchorsiteOverride::SydneyAustralia => "Sydney, Australia",
+        iface_te_xml_applications::AnchorsiteOverride::AmsterdamNetherlands => "Amsterdam, Netherlands",
+        iface_te_xml_applications::AnchorsiteOverride::LondonUk => "London, UK",
+        iface_te_xml_applications::AnchorsiteOverride::TorontoCanada => "Toronto, Canada",
+        iface_te_xml_applications::AnchorsiteOverride::VancouverCanada => "Vancouver, Canada",
+        iface_te_xml_applications::AnchorsiteOverride::FrankfurtGermany => "Frankfurt, Germany",
+    }
+}
+
+fn iface_te_xml_applications__dtmf_type__to_str(e: &iface_te_xml_applications::DtmfType) -> &'static str {
+    match e {
+        iface_te_xml_applications::DtmfType::RfcV2833 => "RFC 2833",
+        iface_te_xml_applications::DtmfType::Inband => "Inband",
+        iface_te_xml_applications::DtmfType::SipInfo => "SIP INFO",
+    }
+}
+
 fn iface_te_xml_applications__texml_application_inbound_sip_subdomain_receive_settings_enum__to_str(e: &iface_te_xml_applications::TexmlApplicationInboundSipSubdomainReceiveSettingsEnum) -> &'static str {
     match e {
         iface_te_xml_applications::TexmlApplicationInboundSipSubdomainReceiveSettingsEnum::OnlyMyConnections => "only_my_connections",
@@ -119,71 +142,23 @@ fn iface_te_xml_applications__find_texml_applications_response__to_json(p: &ifac
 
 fn iface_te_xml_applications__texml_application__to_json(p: &iface_te_xml_applications::TexmlApplication) -> Value {
     let mut m = Map::new();
-    m.insert("active".into(), match (&p.active) { Some(v) => iface_te_xml_applications__connection_active__to_json(v), None => Value::Null });
-    m.insert("anchorsite_override".into(), match (&p.anchorsite_override) { Some(v) => iface_te_xml_applications__anchorsite_override__to_json(v), None => Value::Null });
-    m.insert("created_at".into(), match (&p.created_at) { Some(v) => iface_te_xml_applications__created_at__to_json(v), None => Value::Null });
-    m.insert("dtmf_type".into(), match (&p.dtmf_type) { Some(v) => iface_te_xml_applications__dtmf_type__to_json(v), None => Value::Null });
-    m.insert("first_command_timeout".into(), match (&p.first_command_timeout) { Some(v) => iface_te_xml_applications__first_command_timeout__to_json(v), None => Value::Null });
-    m.insert("first_command_timeout_secs".into(), match (&p.first_command_timeout_secs) { Some(v) => iface_te_xml_applications__first_command_timeout_secs__to_json(v), None => Value::Null });
-    m.insert("friendly_name".into(), match (&p.friendly_name) { Some(v) => iface_te_xml_applications__application_name__to_json(v), None => Value::Null });
-    m.insert("id".into(), match (&p.id) { Some(v) => iface_te_xml_applications__int_id__to_json(v), None => Value::Null });
+    m.insert("active".into(), match (&p.active) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("anchorsite_override".into(), match (&p.anchorsite_override) { Some(v) => Value::String(iface_te_xml_applications__anchorsite_override__to_str(v).into()), None => Value::Null });
+    m.insert("created_at".into(), match (&p.created_at) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("dtmf_type".into(), match (&p.dtmf_type) { Some(v) => Value::String(iface_te_xml_applications__dtmf_type__to_str(v).into()), None => Value::Null });
+    m.insert("first_command_timeout".into(), match (&p.first_command_timeout) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("first_command_timeout_secs".into(), match (&p.first_command_timeout_secs) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("friendly_name".into(), match (&p.friendly_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("inbound".into(), match (&p.inbound) { Some(v) => iface_te_xml_applications__texml_application_inbound__to_json(v), None => Value::Null });
     m.insert("outbound".into(), match (&p.outbound) { Some(v) => iface_te_xml_applications__texml_application_outbound__to_json(v), None => Value::Null });
     m.insert("record_type".into(), match (&p.record_type) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("status_callback".into(), match (&p.status_callback) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("status_callback_method".into(), match (&p.status_callback_method) { Some(v) => Value::String(iface_te_xml_applications__texml_application_status_callback_method_enum__to_str(v).into()), None => Value::Null });
-    m.insert("updated_at".into(), match (&p.updated_at) { Some(v) => iface_te_xml_applications__updated_at__to_json(v), None => Value::Null });
+    m.insert("updated_at".into(), match (&p.updated_at) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("voice_fallback_url".into(), match (&p.voice_fallback_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("voice_method".into(), match (&p.voice_method) { Some(v) => Value::String(iface_te_xml_applications__texml_application_status_callback_method_enum__to_str(v).into()), None => Value::Null });
     m.insert("voice_url".into(), match (&p.voice_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_te_xml_applications__connection_active__to_json(p: &iface_te_xml_applications::ConnectionActive) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_te_xml_applications__anchorsite_override__to_json(p: &iface_te_xml_applications::AnchorsiteOverride) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_te_xml_applications__created_at__to_json(p: &iface_te_xml_applications::CreatedAt) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_te_xml_applications__dtmf_type__to_json(p: &iface_te_xml_applications::DtmfType) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_te_xml_applications__first_command_timeout__to_json(p: &iface_te_xml_applications::FirstCommandTimeout) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_te_xml_applications__first_command_timeout_secs__to_json(p: &iface_te_xml_applications::FirstCommandTimeoutSecs) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_te_xml_applications__application_name__to_json(p: &iface_te_xml_applications::ApplicationName) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_te_xml_applications__int_id__to_json(p: &iface_te_xml_applications::IntId) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -198,19 +173,7 @@ fn iface_te_xml_applications__texml_application_inbound__to_json(p: &iface_te_xm
 fn iface_te_xml_applications__texml_application_outbound__to_json(p: &iface_te_xml_applications::TexmlApplicationOutbound) -> Value {
     let mut m = Map::new();
     m.insert("channel_limit".into(), match (&p.channel_limit) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    m.insert("outbound_voice_profile_id".into(), match (&p.outbound_voice_profile_id) { Some(v) => iface_te_xml_applications__outbound_voice_profile_id__to_json(v), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_te_xml_applications__outbound_voice_profile_id__to_json(p: &iface_te_xml_applications::OutboundVoiceProfileId) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_te_xml_applications__updated_at__to_json(p: &iface_te_xml_applications::UpdatedAt) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
+    m.insert("outbound_voice_profile_id".into(), match (&p.outbound_voice_profile_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -234,7 +197,7 @@ fn iface_te_xml_applications__create_texml_application_request_inbound__to_json(
 fn iface_te_xml_applications__create_texml_application_request_outbound__to_json(p: &iface_te_xml_applications::CreateTexmlApplicationRequestOutbound) -> Value {
     let mut m = Map::new();
     m.insert("channel_limit".into(), match (&p.channel_limit) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    m.insert("outbound_voice_profile_id".into(), match (&p.outbound_voice_profile_id) { Some(v) => iface_te_xml_applications__outbound_voice_profile_id__to_json(v), None => Value::Null });
+    m.insert("outbound_voice_profile_id".into(), match (&p.outbound_voice_profile_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -261,7 +224,7 @@ fn iface_te_xml_applications__update_texml_application_request_inbound__to_json(
 fn iface_te_xml_applications__update_texml_application_request_outbound__to_json(p: &iface_te_xml_applications::UpdateTexmlApplicationRequestOutbound) -> Value {
     let mut m = Map::new();
     m.insert("channel_limit".into(), match (&p.channel_limit) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    m.insert("outbound_voice_profile_id".into(), match (&p.outbound_voice_profile_id) { Some(v) => iface_te_xml_applications__outbound_voice_profile_id__to_json(v), None => Value::Null });
+    m.insert("outbound_voice_profile_id".into(), match (&p.outbound_voice_profile_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -289,12 +252,12 @@ fn iface_te_xml_applications__find_texml_applications_params__to_json(p: &iface_
 
 fn iface_te_xml_applications__create_texml_application_params__to_json(p: &iface_te_xml_applications::CreateTexmlApplicationParams) -> Value {
     let mut m = Map::new();
-    m.insert("active".into(), match (&p.active) { Some(v) => iface_te_xml_applications__connection_active__to_json(v), None => Value::Null });
-    m.insert("anchorsite_override".into(), match (&p.anchorsite_override) { Some(v) => iface_te_xml_applications__anchorsite_override__to_json(v), None => Value::Null });
-    m.insert("dtmf_type".into(), match (&p.dtmf_type) { Some(v) => iface_te_xml_applications__dtmf_type__to_json(v), None => Value::Null });
-    m.insert("first_command_timeout".into(), match (&p.first_command_timeout) { Some(v) => iface_te_xml_applications__first_command_timeout__to_json(v), None => Value::Null });
-    m.insert("first_command_timeout_secs".into(), match (&p.first_command_timeout_secs) { Some(v) => iface_te_xml_applications__first_command_timeout_secs__to_json(v), None => Value::Null });
-    m.insert("friendly_name".into(), iface_te_xml_applications__application_name__to_json(&p.friendly_name));
+    m.insert("active".into(), match (&p.active) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("anchorsite_override".into(), match (&p.anchorsite_override) { Some(v) => Value::String(iface_te_xml_applications__anchorsite_override__to_str(v).into()), None => Value::Null });
+    m.insert("dtmf_type".into(), match (&p.dtmf_type) { Some(v) => Value::String(iface_te_xml_applications__dtmf_type__to_str(v).into()), None => Value::Null });
+    m.insert("first_command_timeout".into(), match (&p.first_command_timeout) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("first_command_timeout_secs".into(), match (&p.first_command_timeout_secs) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("friendly_name".into(), Value::String((&p.friendly_name).clone()));
     m.insert("inbound".into(), match (&p.inbound) { Some(v) => iface_te_xml_applications__create_texml_application_request_inbound__to_json(v), None => Value::Null });
     m.insert("outbound".into(), match (&p.outbound) { Some(v) => iface_te_xml_applications__create_texml_application_request_outbound__to_json(v), None => Value::Null });
     m.insert("status_callback".into(), match (&p.status_callback) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -314,12 +277,12 @@ fn iface_te_xml_applications__get_texml_application_params__to_json(p: &iface_te
 fn iface_te_xml_applications__update_texml_application_params__to_json(p: &iface_te_xml_applications::UpdateTexmlApplicationParams) -> Value {
     let mut m = Map::new();
     m.insert("id".into(), Value::String((&p.id).clone()));
-    m.insert("active".into(), match (&p.active) { Some(v) => iface_te_xml_applications__connection_active__to_json(v), None => Value::Null });
-    m.insert("anchorsite_override".into(), match (&p.anchorsite_override) { Some(v) => iface_te_xml_applications__anchorsite_override__to_json(v), None => Value::Null });
-    m.insert("dtmf_type".into(), match (&p.dtmf_type) { Some(v) => iface_te_xml_applications__dtmf_type__to_json(v), None => Value::Null });
-    m.insert("first_command_timeout".into(), match (&p.first_command_timeout) { Some(v) => iface_te_xml_applications__first_command_timeout__to_json(v), None => Value::Null });
-    m.insert("first_command_timeout_secs".into(), match (&p.first_command_timeout_secs) { Some(v) => iface_te_xml_applications__first_command_timeout_secs__to_json(v), None => Value::Null });
-    m.insert("friendly_name".into(), iface_te_xml_applications__application_name__to_json(&p.friendly_name));
+    m.insert("active".into(), match (&p.active) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("anchorsite_override".into(), match (&p.anchorsite_override) { Some(v) => Value::String(iface_te_xml_applications__anchorsite_override__to_str(v).into()), None => Value::Null });
+    m.insert("dtmf_type".into(), match (&p.dtmf_type) { Some(v) => Value::String(iface_te_xml_applications__dtmf_type__to_str(v).into()), None => Value::Null });
+    m.insert("first_command_timeout".into(), match (&p.first_command_timeout) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("first_command_timeout_secs".into(), match (&p.first_command_timeout_secs) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("friendly_name".into(), Value::String((&p.friendly_name).clone()));
     m.insert("inbound".into(), match (&p.inbound) { Some(v) => iface_te_xml_applications__update_texml_application_request_inbound__to_json(v), None => Value::Null });
     m.insert("outbound".into(), match (&p.outbound) { Some(v) => iface_te_xml_applications__update_texml_application_request_outbound__to_json(v), None => Value::Null });
     m.insert("status_callback".into(), match (&p.status_callback) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -347,79 +310,23 @@ fn iface_te_xml_applications__find_texml_applications_response__from_json(v: &Va
 fn iface_te_xml_applications__texml_application__from_json(v: &Value) -> Option<iface_te_xml_applications::TexmlApplication> {
     let m = v.as_object()?;
     Some(iface_te_xml_applications::TexmlApplication {
-        active: m.get("active").filter(|v| !v.is_null()).and_then(|v| iface_te_xml_applications__connection_active__from_json(v)),
-        anchorsite_override: m.get("anchorsite_override").filter(|v| !v.is_null()).and_then(|v| iface_te_xml_applications__anchorsite_override__from_json(v)),
-        created_at: m.get("created_at").filter(|v| !v.is_null()).and_then(|v| iface_te_xml_applications__created_at__from_json(v)),
-        dtmf_type: m.get("dtmf_type").filter(|v| !v.is_null()).and_then(|v| iface_te_xml_applications__dtmf_type__from_json(v)),
-        first_command_timeout: m.get("first_command_timeout").filter(|v| !v.is_null()).and_then(|v| iface_te_xml_applications__first_command_timeout__from_json(v)),
-        first_command_timeout_secs: m.get("first_command_timeout_secs").filter(|v| !v.is_null()).and_then(|v| iface_te_xml_applications__first_command_timeout_secs__from_json(v)),
-        friendly_name: m.get("friendly_name").filter(|v| !v.is_null()).and_then(|v| iface_te_xml_applications__application_name__from_json(v)),
-        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| iface_te_xml_applications__int_id__from_json(v)),
+        active: m.get("active").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        anchorsite_override: m.get("anchorsite_override").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_te_xml_applications__anchorsite_override__from_str)),
+        created_at: m.get("created_at").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        dtmf_type: m.get("dtmf_type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_te_xml_applications__dtmf_type__from_str)),
+        first_command_timeout: m.get("first_command_timeout").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        first_command_timeout_secs: m.get("first_command_timeout_secs").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        friendly_name: m.get("friendly_name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         inbound: m.get("inbound").filter(|v| !v.is_null()).and_then(|v| iface_te_xml_applications__texml_application_inbound__from_json(v)),
         outbound: m.get("outbound").filter(|v| !v.is_null()).and_then(|v| iface_te_xml_applications__texml_application_outbound__from_json(v)),
         record_type: m.get("record_type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         status_callback: m.get("status_callback").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         status_callback_method: m.get("status_callback_method").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_te_xml_applications__texml_application_status_callback_method_enum__from_str)),
-        updated_at: m.get("updated_at").filter(|v| !v.is_null()).and_then(|v| iface_te_xml_applications__updated_at__from_json(v)),
+        updated_at: m.get("updated_at").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         voice_fallback_url: m.get("voice_fallback_url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         voice_method: m.get("voice_method").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_te_xml_applications__texml_application_status_callback_method_enum__from_str)),
         voice_url: m.get("voice_url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-    })
-}
-
-fn iface_te_xml_applications__connection_active__from_json(v: &Value) -> Option<iface_te_xml_applications::ConnectionActive> {
-    let m = v.as_object()?;
-    Some(iface_te_xml_applications::ConnectionActive {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-    })
-}
-
-fn iface_te_xml_applications__anchorsite_override__from_json(v: &Value) -> Option<iface_te_xml_applications::AnchorsiteOverride> {
-    let m = v.as_object()?;
-    Some(iface_te_xml_applications::AnchorsiteOverride {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-    })
-}
-
-fn iface_te_xml_applications__created_at__from_json(v: &Value) -> Option<iface_te_xml_applications::CreatedAt> {
-    let m = v.as_object()?;
-    Some(iface_te_xml_applications::CreatedAt {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-    })
-}
-
-fn iface_te_xml_applications__dtmf_type__from_json(v: &Value) -> Option<iface_te_xml_applications::DtmfType> {
-    let m = v.as_object()?;
-    Some(iface_te_xml_applications::DtmfType {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-    })
-}
-
-fn iface_te_xml_applications__first_command_timeout__from_json(v: &Value) -> Option<iface_te_xml_applications::FirstCommandTimeout> {
-    let m = v.as_object()?;
-    Some(iface_te_xml_applications::FirstCommandTimeout {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-    })
-}
-
-fn iface_te_xml_applications__first_command_timeout_secs__from_json(v: &Value) -> Option<iface_te_xml_applications::FirstCommandTimeoutSecs> {
-    let m = v.as_object()?;
-    Some(iface_te_xml_applications::FirstCommandTimeoutSecs {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-    })
-}
-
-fn iface_te_xml_applications__application_name__from_json(v: &Value) -> Option<iface_te_xml_applications::ApplicationName> {
-    let m = v.as_object()?;
-    Some(iface_te_xml_applications::ApplicationName {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-    })
-}
-
-fn iface_te_xml_applications__int_id__from_json(v: &Value) -> Option<iface_te_xml_applications::IntId> {
-    let m = v.as_object()?;
-    Some(iface_te_xml_applications::IntId {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -436,21 +343,7 @@ fn iface_te_xml_applications__texml_application_outbound__from_json(v: &Value) -
     let m = v.as_object()?;
     Some(iface_te_xml_applications::TexmlApplicationOutbound {
         channel_limit: m.get("channel_limit").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
-        outbound_voice_profile_id: m.get("outbound_voice_profile_id").filter(|v| !v.is_null()).and_then(|v| iface_te_xml_applications__outbound_voice_profile_id__from_json(v)),
-    })
-}
-
-fn iface_te_xml_applications__outbound_voice_profile_id__from_json(v: &Value) -> Option<iface_te_xml_applications::OutboundVoiceProfileId> {
-    let m = v.as_object()?;
-    Some(iface_te_xml_applications::OutboundVoiceProfileId {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-    })
-}
-
-fn iface_te_xml_applications__updated_at__from_json(v: &Value) -> Option<iface_te_xml_applications::UpdatedAt> {
-    let m = v.as_object()?;
-    Some(iface_te_xml_applications::UpdatedAt {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        outbound_voice_profile_id: m.get("outbound_voice_profile_id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
     })
 }
 
@@ -490,6 +383,31 @@ fn iface_te_xml_applications__delete_texml_application_response__from_json(v: &V
     Some(iface_te_xml_applications::DeleteTexmlApplicationResponse {
         data: m.get("data").filter(|v| !v.is_null()).and_then(|v| iface_te_xml_applications__texml_application__from_json(v)),
     })
+}
+
+fn iface_te_xml_applications__anchorsite_override__from_str(s: &str) -> Option<iface_te_xml_applications::AnchorsiteOverride> {
+    match s {
+        "Latency" => Some(iface_te_xml_applications::AnchorsiteOverride::Latency),
+        "Chicago, IL" => Some(iface_te_xml_applications::AnchorsiteOverride::ChicagoIl),
+        "Ashburn, VA" => Some(iface_te_xml_applications::AnchorsiteOverride::AshburnVa),
+        "San Jose, CA" => Some(iface_te_xml_applications::AnchorsiteOverride::SanJoseCa),
+        "Sydney, Australia" => Some(iface_te_xml_applications::AnchorsiteOverride::SydneyAustralia),
+        "Amsterdam, Netherlands" => Some(iface_te_xml_applications::AnchorsiteOverride::AmsterdamNetherlands),
+        "London, UK" => Some(iface_te_xml_applications::AnchorsiteOverride::LondonUk),
+        "Toronto, Canada" => Some(iface_te_xml_applications::AnchorsiteOverride::TorontoCanada),
+        "Vancouver, Canada" => Some(iface_te_xml_applications::AnchorsiteOverride::VancouverCanada),
+        "Frankfurt, Germany" => Some(iface_te_xml_applications::AnchorsiteOverride::FrankfurtGermany),
+        _ => None,
+    }
+}
+
+fn iface_te_xml_applications__dtmf_type__from_str(s: &str) -> Option<iface_te_xml_applications::DtmfType> {
+    match s {
+        "RFC 2833" => Some(iface_te_xml_applications::DtmfType::RfcV2833),
+        "Inband" => Some(iface_te_xml_applications::DtmfType::Inband),
+        "SIP INFO" => Some(iface_te_xml_applications::DtmfType::SipInfo),
+        _ => None,
+    }
 }
 
 fn iface_te_xml_applications__texml_application_inbound_sip_subdomain_receive_settings_enum__from_str(s: &str) -> Option<iface_te_xml_applications::TexmlApplicationInboundSipSubdomainReceiveSettingsEnum> {

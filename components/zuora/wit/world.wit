@@ -1,4 +1,4 @@
-package autostamp:zuora@0.5.0;
+package autostamp:zuora@0.6.0;
 
 interface charge-metrics {
   record discount-allocation-detail-response {
@@ -271,6 +271,36 @@ interface notifications {
     delete,
   }
 
+  enum filter-rule-parameter-definition-value-type-enum {
+    string-op,
+    byte,
+    short,
+    character,
+    integer,
+    long,
+    float,
+    double,
+    boolean,
+    big-integer,
+    big-decimal,
+    local-date,
+    local-date-time,
+    timestamp,
+    byte-array,
+    short-array,
+    character-array,
+    integer-array,
+    float-array,
+    double-array,
+    boolean-array,
+    string-array,
+    big-integer-array,
+    big-decimal-array,
+    local-date-array,
+    local-date-time-array,
+    timestamp-array,
+  }
+
   record get-query-email-templates-response {
     data: option<list<get-public-email-template-response>>,
     /// The URI to query the next page of data, e.g. '/notification-definitions?start=1&limit=10'. The start equals request's start+limit, and the limit equals the request's limit. If the current page is the last page, this value is null.
@@ -358,7 +388,7 @@ interface notifications {
     /// The namespace of the `eventTypeName` field. 
     event-type-namespace: option<string>,
     filter-rule: option<get-public-notification-definition-response-filter-rule>,
-    filter-rule-params: option<filter-rule-parameter-values>,
+    filter-rule-params: option<list<filter-rule-parameter-values-entry>>,
     /// The filter rule associated with this notification definition.
     id: option<string>,
     /// The name of the notification definition.
@@ -375,7 +405,7 @@ interface notifications {
     callout-auth: option<callout-auth>,
     /// The callout URL. It must start with 'https://'
     callout-baseurl: option<string>,
-    callout-params: option<callout-merge-fields>,
+    callout-params: option<list<callout-merge-fields-entry>>,
     /// Specified whether to retry the callout when the callout fails. The default is true.
     callout-retry: option<bool>,
     /// Description for the callout.
@@ -404,10 +434,10 @@ interface notifications {
     username: option<string>
   }
 
-  /// A key-value map of merge fields of this callout.
-  record callout-merge-fields {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record callout-merge-fields-entry {
+    key: string,
+    value: string
   }
 
   record get-public-notification-definition-response-filter-rule {
@@ -420,19 +450,30 @@ interface notifications {
     event-type-name: option<string>,
     /// The ID of the filter rule. If not specified or null, the notification definition is always qualified to process events of "eventType".
     id: option<string>,
-    parameters: option<filter-rule-parameter-definitions>
+    parameters: option<list<filter-rule-parameter-definitions-entry>>
   }
 
-  /// The parameters of the filter rule and their name must match those in the filter rule. And all parameters must be defined in the event type payload. The name of parameters can't be duplicate. The following reserved keywords should not be used as a parameter name: `AttachmentList`, `RecipientList`, `RecipientType`, `Exceptions`, `OCP_OBJECT_TYPE`, `OCP_OBJECT_ID`, `OCP_TRIGGER_BY`
-  record filter-rule-parameter-definitions {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// Definition of a filter rule parameter.
+  record filter-rule-parameter-definition {
+    description: option<string>,
+    /// The display name of the parameter.
+    display-name: option<string>,
+    /// The option values of the parameter.
+    options: option<list<string>>,
+    /// The type of the value.
+    value-type: option<filter-rule-parameter-definition-value-type-enum>
   }
 
-  /// The parameter values used to configure the filter rule.
-  record filter-rule-parameter-values {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record filter-rule-parameter-definitions-entry {
+    key: string,
+    value: filter-rule-parameter-definition
+  }
+
+  /// one entry of a string-keyed map (free-form object)
+  record filter-rule-parameter-values-entry {
+    key: string,
+    value: string
   }
 
   record post-public-notification-definition-request-callout {
@@ -441,7 +482,7 @@ interface notifications {
     callout-auth: option<callout-auth>,
     /// The callout URL. It must start with 'https://'
     callout-baseurl: string,
-    callout-params: option<callout-merge-fields>,
+    callout-params: option<list<callout-merge-fields-entry-v2>>,
     /// Specified whether to retry the callout when the callout fails. The default is true.
     callout-retry: option<bool>,
     /// Description for the callout.
@@ -456,13 +497,31 @@ interface notifications {
     required-auth: bool
   }
 
+  /// one entry of a string-keyed map (free-form object)
+  record callout-merge-fields-entry-v2 {
+    key: string,
+    value: string
+  }
+
   record post-public-notification-definition-request-filter-rule {
     /// The filter rule conditions, written in [JEXL](http://commons.apache.org/proper/commons-jexl/).
     /// The rule might contain event context merge fields and data source merge fields. Data source merge fields must be from [the base object of the event or from the joined objects of the base object](https://knowledgecenter.zuora.com/DC_Developers/M_Export_ZOQL#Data_Sources_and_Objects). Notifications with invalid merge fields will fail to evaluate, thus will not be invoked. For example, to filter an invoice posted notification to only invoices with an amount over 1000, you would define the following condition:
     condition: string,
     /// The description of the filter rule.
     description: option<string>,
-    parameters: filter-rule-parameter-definitions
+    parameters: list<filter-rule-parameter-definitions-entry-v2>
+  }
+
+  /// one entry of a string-keyed map (free-form object)
+  record filter-rule-parameter-definitions-entry-v2 {
+    key: string,
+    value: filter-rule-parameter-definition
+  }
+
+  /// one entry of a string-keyed map (free-form object)
+  record filter-rule-parameter-values-entry-v2 {
+    key: string,
+    value: string
   }
 
   record put-public-notification-definition-request-callout {
@@ -471,7 +530,7 @@ interface notifications {
     callout-auth: option<callout-auth>,
     /// The callout URL. It must start with 'https://'
     callout-baseurl: string,
-    callout-params: option<callout-merge-fields>,
+    callout-params: option<list<callout-merge-fields-entry-v3>>,
     /// Specified whether to retry the callout when the callout fails. The default is true.
     callout-retry: option<bool>,
     /// Description for the callout.
@@ -484,13 +543,31 @@ interface notifications {
     required-auth: bool
   }
 
+  /// one entry of a string-keyed map (free-form object)
+  record callout-merge-fields-entry-v3 {
+    key: string,
+    value: string
+  }
+
   record put-public-notification-definition-request-filter-rule {
     /// The filter rule conditions, written in [JEXL](http://commons.apache.org/proper/commons-jexl/).
     /// The rule might contain event context merge fields and data source merge fields. Data source merge fields must be from [the base object of the event or from the joined objects of the base object](https://knowledgecenter.zuora.com/DC_Developers/M_Export_ZOQL#Data_Sources_and_Objects). Notifications with invalid merge fields will fail to evaluate, thus will not be invoked. For example, to trigger an event when an invoice is posted with the amount over 1000, you would define the following condition on the `Invoice` object:
     condition: string,
     /// The description of the filter rule.
     description: option<string>,
-    parameters: filter-rule-parameter-definitions
+    parameters: list<filter-rule-parameter-definitions-entry-v3>
+  }
+
+  /// one entry of a string-keyed map (free-form object)
+  record filter-rule-parameter-definitions-entry-v3 {
+    key: string,
+    value: filter-rule-parameter-definition
+  }
+
+  /// one entry of a string-keyed map (free-form object)
+  record filter-rule-parameter-values-entry-v3 {
+    key: string,
+    value: string
   }
 
   variant get-query-email-templates-error {
@@ -832,7 +909,7 @@ interface notifications {
     ///           
     event-type-namespace: option<string>,
     filter-rule: option<post-public-notification-definition-request-filter-rule>,
-    filter-rule-params: option<filter-rule-parameter-values>,
+    filter-rule-params: option<list<filter-rule-parameter-values-entry-v2>>,
     /// The name of the notification definition, unique per communication profile.
     name: string
   }
@@ -881,7 +958,7 @@ interface notifications {
     /// false to true, an email template is required, and the EventType of
     email-template-id: option<string>,
     filter-rule: option<put-public-notification-definition-request-filter-rule>,
-    filter-rule-params: option<filter-rule-parameter-values>,
+    filter-rule-params: option<list<filter-rule-parameter-values-entry-v3>>,
     /// The name of the notification definition, which is unique in the profile.
     name: option<string>
   }
@@ -994,15 +1071,21 @@ interface custom-object-records {
     allow-partial-success: option<bool>,
     /// Ids of the custom object records that you want to delete. Only applicable when `type` is `delete`.
     ids: option<list<string>>,
-    records: option<custom-object-record-batch-update-mapping>,
+    records: option<list<custom-object-record-batch-update-mapping-entry>>,
     /// The type of the batch action
     type-op: custom-object-record-batch-action-type-op-enum
   }
 
-  /// Object records that you want to update. Only applicable when `type` is `update`.
-  record custom-object-record-batch-update-mapping {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record custom-object-record-batch-update-mapping-value-entry {
+    key: string,
+    value: string
+  }
+
+  /// one entry of a string-keyed map (free-form object)
+  record custom-object-record-batch-update-mapping-entry {
+    key: string,
+    value: list<custom-object-record-batch-update-mapping-value-entry>
   }
 
   record batch-update-partial-success-response {
@@ -1034,15 +1117,28 @@ interface custom-object-records {
     records: list<custom-object-record-with-all-fields>
   }
 
-  record custom-object-record-with-only-custom-fields {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record custom-object-record-with-only-custom-fields-entry {
+    key: string,
+    value: string
   }
 
   record post-custom-object-records-response {
     error: option<error-response>,
     /// The custom object records that are succesfully created and stored
     records: option<list<custom-object-record-with-all-fields>>
+  }
+
+  /// one entry of a string-keyed map (free-form object)
+  record custom-object-record-with-only-custom-fields-entry-v2 {
+    key: string,
+    value: string
+  }
+
+  /// one entry of a string-keyed map (free-form object)
+  record custom-object-record-with-only-custom-fields-entry-v3 {
+    key: string,
+    value: string
   }
 
   variant post-custom-object-records-batch-update-or-delete-error {
@@ -1133,7 +1229,7 @@ interface custom-object-records {
     /// Indicates whether the records that pass the schema validation should be created when not all records in the request pass the schema validation.
     allow-partial-success: option<bool>,
     /// A list of custom object records to be created
-    records: list<custom-object-record-with-only-custom-fields>
+    records: list<list<custom-object-record-with-only-custom-fields-entry>>
   }
   post-custom-object-records: func(params: post-custom-object-records-params) -> result<post-custom-object-records-response, post-custom-object-records-error>;
 
@@ -1172,8 +1268,7 @@ interface custom-object-records {
     object: string,
     /// Id identifier in uuid form
     id: string,
-    /// JSON-encoded free-form object payload
-    data: option<string>
+    body: list<custom-object-record-with-only-custom-fields-entry-v2>
   }
   put-custom-object-record: func(params: put-custom-object-record-params) -> result<custom-object-record-with-all-fields, put-custom-object-record-error>;
 
@@ -1192,8 +1287,7 @@ interface custom-object-records {
     object: string,
     /// Id identifier in uuid form
     id: string,
-    /// JSON-encoded free-form object payload
-    data: option<string>
+    body: list<custom-object-record-with-only-custom-fields-entry-v3>
   }
   patch-partial-update-custom-object-record: func(params: patch-partial-update-custom-object-record-params) -> result<custom-object-record-with-all-fields, patch-partial-update-custom-object-record-error>;
 
@@ -1247,12 +1341,12 @@ interface custom-object-definitions {
     object,
   }
 
-  enum custom-object-custom-field-definition-update-origin-enum {
-    custom,
+  enum post-custom-object-definitions-request-definition-relationships-item-cardinality-enum {
+    many-to-one,
   }
 
-  enum custom-object-definition-update-action-request-relationship-cardinality-enum {
-    many-to-one,
+  enum custom-object-custom-field-definition-update-origin-enum {
+    custom,
   }
 
   enum custom-object-definition-update-action-request-type-op-enum {
@@ -1268,19 +1362,7 @@ interface custom-object-definitions {
   record get-all-custom-object-definitions-in-namespace-response {
     /// The number of objects in the `definitions` object. The value of this field is the number of custom object definitions in the namespace.
     count: option<s32>,
-    definitions: option<custom-object-definitions>
-  }
-
-  /// The custom object definitions. This object maps types to custom object definitions.
-  record custom-object-definitions {
-    /// JSON-encoded free-form object payload
-    data: option<string>
-  }
-
-  /// The custom object definitions. This object maps types to custom object definitions.
-  record post-custom-object-definitions-request-definitions {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+    definitions: option<list<custom-object-definitions-entry>>
   }
 
   record custom-object-definition {
@@ -1391,7 +1473,7 @@ interface custom-object-definitions {
     /// The cardinality of the relationship from this object to another object.
     /// 
     cardinality: option<custom-object-definition-schema-relationships-item-cardinality-enum>,
-    fields: option<fields-additional-properties>,
+    fields: option<list<fields-additional-properties-entry>>,
     /// The namespace where the related object is located
     namespace: option<string>,
     /// The API name of the related object
@@ -1400,10 +1482,10 @@ interface custom-object-definitions {
     record-constraints: option<custom-object-definition-schema-relationships-item-record-constraints>
   }
 
-  /// Field mappings in the form of `<this-object-field-name>`: `<other-object-field-name>`.
-  record fields-additional-properties {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record fields-additional-properties-entry {
+    key: string,
+    value: string
   }
 
   /// Specifies contraints to apply to custom object records.
@@ -1415,6 +1497,77 @@ interface custom-object-definitions {
     /// Specifies whether Zuora validates the values of mapped fields
     /// in custom object records.
     enforce-valid-mapping: option<bool>
+  }
+
+  /// one entry of a string-keyed map (free-form object)
+  record custom-object-definitions-entry {
+    key: string,
+    value: custom-object-definition
+  }
+
+  record post-custom-object-definitions-request-definition {
+    /// The set of fields that are allowed to be queried on. Queries on non-filterable fields will be rejected. You can not change a non-filterable field to filterable.
+    filterable: option<list<string>>,
+    /// A UI label for the custom object
+    label: string,
+    /// The API name of the custom object
+    object: string,
+    properties: option<list<post-custom-object-definition-fields-definition-request-entry>>,
+    /// An array of relationships with Zuora objects or other custom objects. You can add at most 2 `manyToOne` relationships when creating a custom field definition.
+    relationships: option<list<post-custom-object-definitions-request-definition-relationships-item>>,
+    /// The required fields of the custom object. You can change required fields to optional. However, you can only change optional fields to required on the custom objects with no records.
+    required: option<list<string>>
+  }
+
+  record post-custom-object-definition-field-definition-request {
+    /// The data format of the custom field
+    format: option<string>,
+    /// The UI label of the custom field
+    label: string,
+    /// The data type of the custom field
+    type-op: string
+  }
+
+  /// one entry of a string-keyed map (free-form object)
+  record post-custom-object-definition-fields-definition-request-entry {
+    key: string,
+    value: post-custom-object-definition-field-definition-request
+  }
+
+  record post-custom-object-definitions-request-definition-relationships-item {
+    /// The cardinality of the relationship from this object to another object.
+    /// 
+    cardinality: option<post-custom-object-definitions-request-definition-relationships-item-cardinality-enum>,
+    fields: list<fields-additional-properties-for-post-definition-entry>,
+    /// The namespace where the related object is located
+    namespace: string,
+    /// The API name of the related object
+    object: string,
+    /// Specifies contraints to apply to custom object records.
+    record-constraints: option<post-custom-object-definitions-request-definition-relationships-item-record-constraints>
+  }
+
+  /// one entry of a string-keyed map (free-form object)
+  record fields-additional-properties-for-post-definition-entry {
+    key: string,
+    value: string
+  }
+
+  /// Specifies contraints to apply to custom object records.
+  record post-custom-object-definitions-request-definition-relationships-item-record-constraints {
+    create: option<post-custom-object-definitions-request-definition-relationships-item-record-constraints-create>
+  }
+
+  record post-custom-object-definitions-request-definition-relationships-item-record-constraints-create {
+    /// Specifies whether Zuora validates the values of mapped fields
+    /// in custom object records.
+    enforce-valid-mapping: option<bool>
+  }
+
+  /// one entry of a string-keyed map (free-form object)
+  record post-custom-object-definitions-request-definitions-entry {
+    key: string,
+    value: post-custom-object-definitions-request-definition
   }
 
   record custom-object-definition-update-action-request {
@@ -1466,14 +1619,20 @@ interface custom-object-definitions {
   record custom-object-definition-update-action-request-relationship {
     /// The cardinality of the relationship from this object to another object.
     /// 
-    cardinality: option<custom-object-definition-update-action-request-relationship-cardinality-enum>,
-    fields: fields-additional-properties,
+    cardinality: option<post-custom-object-definitions-request-definition-relationships-item-cardinality-enum>,
+    fields: list<fields-additional-properties-entry-v2>,
     /// The namespace where the related object is located
     namespace: string,
     /// The API name of the related object
     object: string,
     /// Specifies contraints to apply to custom object records.
     record-constraints: option<custom-object-definition-update-action-request-relationship-record-constraints>
+  }
+
+  /// one entry of a string-keyed map (free-form object)
+  record fields-additional-properties-entry-v2 {
+    key: string,
+    value: string
   }
 
   /// Specifies contraints to apply to custom object records.
@@ -1511,13 +1670,19 @@ interface custom-object-definitions {
     /// The cardinality of the relationship from this object to another object.
     /// 
     cardinality: option<custom-object-definition-schema-relationships-item-cardinality-enum>,
-    fields: option<fields-additional-properties>,
+    fields: option<list<fields-additional-properties-entry-v3>>,
     /// The namespace where the related object is located
     namespace: option<string>,
     /// The API name of the related object
     object: option<string>,
     /// Specifies contraints to apply to custom object records.
     record-constraints: option<custom-object-definition-update-action-response-relationship-record-constraints>
+  }
+
+  /// one entry of a string-keyed map (free-form object)
+  record fields-additional-properties-entry-v3 {
+    key: string,
+    value: string
   }
 
   /// Specifies contraints to apply to custom object records.
@@ -1568,7 +1733,7 @@ interface custom-object-definitions {
     authorization: string,
     /// API version that determines the response schema. The default version is used if this parameter is not included. Specify `Zuora-Version` in the request header if you expect a specific response schema.
     zuora-version: option<string>,
-    definitions: option<post-custom-object-definitions-request-definitions>
+    definitions: option<list<post-custom-object-definitions-request-definitions-entry>>
   }
   post-custom-object-definitions: func(params: post-custom-object-definitions-params) -> result<get-all-custom-object-definitions-in-namespace-response, post-custom-object-definitions-error>;
 
@@ -1998,7 +2163,7 @@ interface settings {
   }
 
   record setting-value-request {
-    body: option<body-in-setting-value-request>,
+    body: option<list<body-in-setting-value-request-entry>>,
     /// An array of requests that can only be executed after its parent request has been executed successfully.
     children: option<list<children-setting-value-request>>,
     /// The id of the request. You can set it to any string. It must be unique within the whole batch.
@@ -2009,20 +2174,26 @@ interface settings {
     url: option<string>
   }
 
-  /// Request payload if any
-  record body-in-setting-value-request {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record body-in-setting-value-request-entry {
+    key: string,
+    value: string
   }
 
   record children-setting-value-request {
-    body: option<body-in-setting-value-request>,
+    body: option<list<body-in-setting-value-request-entry-v2>>,
     /// The id of the request. You can set it to any string. It must be unique within the whole batch.
     id: option<string>,
     /// One of the HTTP methods supported by the setting endpoint, for example, GET,PUT,POST or DELETE.
     method: option<children-setting-value-request-method-enum>,
     /// The relative URL of the setting. It is the same as in the `pathPattern` field in the response body of [Listing all settings](https://www.zuora.com/developer/api-reference/#operation/GET_ListAllSettings). For example, `/billing-rules`.
     url: option<string>
+  }
+
+  /// one entry of a string-keyed map (free-form object)
+  record body-in-setting-value-request-entry-v2 {
+    key: string,
+    value: string
   }
 
   record batch-response {
@@ -2040,17 +2211,17 @@ interface settings {
   }
 
   record setting-value-response {
-    body: option<body-in-setting-value-reponse>,
+    body: option<list<body-in-setting-value-reponse-entry>>,
     /// An array of error messages if errors occur when executing the request.
     error-messages: option<list<string>>,
     /// User readable response status, for example, 502 BAD_GATEWAY.
     status: option<string>
   }
 
-  /// Response body if the request is executed successfully.
-  record body-in-setting-value-reponse {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record body-in-setting-value-reponse-entry {
+    key: string,
+    value: string
   }
 
   record list-all-settings-response {
@@ -2076,9 +2247,9 @@ interface settings {
     /// An array of paramters required by this operation.
     parameters: option<list<setting-item-http-request-parameter>>,
     /// JSON Schema for the request body of this operation.
-    request-type: option<setting-item-http-operation-request-type>,
+    request-type: option<list<setting-item-http-operation-request-type-entry>>,
     /// JSON Schema for the response body of this operation.
-    response-type: option<setting-item-http-operation-response-type>,
+    response-type: option<list<setting-item-http-operation-response-type-entry>>,
     /// The endpoint url of the operation method. For example, `/settings/billing-rules`.
     url: option<string>
   }
@@ -2090,16 +2261,16 @@ interface settings {
     name: option<string>
   }
 
-  /// JSON Schema for the request body of this operation.
-  record setting-item-http-operation-request-type {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record setting-item-http-operation-request-type-entry {
+    key: string,
+    value: string
   }
 
-  /// JSON Schema for the response body of this operation.
-  record setting-item-http-operation-response-type {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record setting-item-http-operation-response-type-entry {
+    key: string,
+    value: string
   }
 
   /// Submit settings requests
@@ -4075,9 +4246,16 @@ interface actions {
     preview-type: option<string>
   }
 
-  record z-object {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record z-object-entry {
+    key: string,
+    value: string
+  }
+
+  /// one entry of a string-keyed map (free-form object)
+  record z-object-entry-v2 {
+    key: string,
+    value: string
   }
 
   record proxy-actionquery-request-conf {
@@ -4088,8 +4266,14 @@ interface actions {
   record proxy-actionquery-more-response {
     done: option<bool>,
     query-locator: option<string>,
-    records: option<list<z-object>>,
+    records: option<list<list<z-object-entry-v3>>>,
     size: option<s32>
+  }
+
+  /// one entry of a string-keyed map (free-form object)
+  record z-object-entry-v3 {
+    key: string,
+    value: string
   }
 
   record subscribe-request {
@@ -5173,7 +5357,7 @@ interface actions {
     zuora-track-id: option<string>,
     /// Zuora WSDL version number.
     x-zuora-wsdl-version: option<string>,
-    objects: list<z-object>,
+    objects: list<list<z-object-entry>>,
     type-op: string
   }
   action-pos-tcreate: func(params: action-pos-tcreate-params) -> result<string, action-pos-tcreate-error>;
@@ -5230,7 +5414,7 @@ interface actions {
     zuora-track-id: option<string>,
     /// Zuora WSDL version number.
     x-zuora-wsdl-version: option<string>,
-    objects: list<z-object>,
+    objects: list<list<z-object-entry-v2>>,
     type-op: proxy-actiongenerate-request-type-op-enum
   }
   action-pos-tgenerate: func(params: action-pos-tgenerate-params) -> result<string, action-pos-tgenerate-error>;
@@ -5730,10 +5914,10 @@ interface orders {
     customer-acceptance,
   }
 
-  /// Container for custom fields of an Order object.
-  record order-object-custom-fields {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record order-object-custom-fields-entry {
+    key: string,
+    value: string
   }
 
   record account {
@@ -5758,7 +5942,7 @@ interface orders {
     /// 3 uppercase character currency code.
     /// 
     currency: string,
-    custom-fields: option<account-object-custom-fields>,
+    custom-fields: option<list<account-object-custom-fields-entry>>,
     /// Name of the account's customer service representative, if applicable.
     customer-service-rep-name: option<string>,
     /// **Note:** This field is only available if you have [Invoice Settlement](https://knowledgecenter.zuora.com/Billing/Billing_and_Payments/Invoice_Settlement) enabled. The Invoice Settlement feature is generally available as of Zuora Billing Release 296 (March 2021). This feature includes Unapplied Payments, Credit and Debit Memo, and Invoice Item Settlement. If you want to enable Invoice Settlement, see [Invoice Settlement Enablement and Checklist Guide](https://knowledgecenter.zuora.com/Billing/Billing_and_Payments/Invoice_Settlement/Invoice_Settlement_Migration_Checklist_and_Guide) for more information.
@@ -5872,10 +6056,10 @@ interface orders {
     zip-code: option<string>
   }
 
-  /// Container for custom fields of an Account object.
-  record account-object-custom-fields {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record account-object-custom-fields-entry {
+    key: string,
+    value: string
   }
 
   /// Payment method to create for this new account. Supports all the payment methods that are supported in the "Create payment method" operation. See for more information about how to use this field in [Create payment method](https://www.zuora.com/developer/api-reference/#operation/POST_PaymentMethods).
@@ -6090,7 +6274,7 @@ interface orders {
     amount-per-unit: option<f64>,
     /// The target date for the Order Line Item to be picked up by bill run for billing.
     bill-target-date: option<string>,
-    custom-fields: option<order-line-item-custom-fields>,
+    custom-fields: option<list<order-line-item-custom-fields-entry>>,
     /// The deferred revenue accounting code for the Order Line Item.
     deferred-revenue-accounting-code: option<string>,
     /// The description of the Order Line Item.
@@ -6128,10 +6312,10 @@ interface orders {
     transaction-date: option<string>
   }
 
-  /// Container for custom fields of an Order Line Item object.
-  record order-line-item-custom-fields {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record order-line-item-custom-fields-entry {
+    key: string,
+    value: string
   }
 
   /// Use this field to create a new account as the sold-to contact of the Order Line Item (OLI). 
@@ -6193,7 +6377,7 @@ interface orders {
   }
 
   record post-order-request-type-subscriptions-item {
-    custom-fields: option<subscription-object-custom-fields>,
+    custom-fields: option<list<subscription-object-custom-fields-entry>>,
     /// The actions to be applied to the subscription. Order actions will be stored with the sequence when it was provided in the request.
     order-actions: option<list<create-order-order-action>>,
     quote: option<quote-object-fields>,
@@ -6202,17 +6386,17 @@ interface orders {
     subscription-number: option<string>
   }
 
-  /// Container for custom fields of a Subscription object.
-  record subscription-object-custom-fields {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record subscription-object-custom-fields-entry {
+    key: string,
+    value: string
   }
 
   record create-order-order-action {
     add-product: option<create-order-rate-plan-override>,
     cancel-subscription: option<cancel-subscription>,
     create-subscription: option<create-order-create-subscription>,
-    custom-fields: option<order-action-object-custom-fields>,
+    custom-fields: option<list<order-action-object-custom-fields-entry>>,
     owner-transfer: option<owner-transfer>,
     remove-product: option<remove-product>,
     resume: option<create-order-resume>,
@@ -6235,7 +6419,7 @@ interface orders {
   record create-order-rate-plan-override {
     /// List of charges associated with the rate plan.
     charge-overrides: option<list<create-order-charge-override>>,
-    custom-fields: option<rate-plan-object-custom-fields>,
+    custom-fields: option<list<rate-plan-object-custom-fields-entry>>,
     /// Internal identifier of the product rate plan that the rate plan is based on.
     product-rate-plan-id: string,
     /// Unique identifier for the rate plan. This identifier enables you to refer to the rate plan before the rate plan has an internal identifier in Zuora.
@@ -6250,7 +6434,7 @@ interface orders {
     /// Charge number of the charge. For example, C-00000307.
     /// 
     charge-number: option<string>,
-    custom-fields: option<rate-plan-charge-object-custom-fields>,
+    custom-fields: option<list<rate-plan-charge-object-custom-fields-entry>>,
     /// Description of the charge.
     description: option<string>,
     end-date: option<end-conditions>,
@@ -6293,10 +6477,10 @@ interface orders {
     weekly-bill-cycle-day: option<create-order-charge-override-billing-weekly-bill-cycle-day-enum>
   }
 
-  /// Container for custom fields of a Rate Plan Charge object.
-  record rate-plan-charge-object-custom-fields {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record rate-plan-charge-object-custom-fields-entry {
+    key: string,
+    value: string
   }
 
   /// Specifies when a charge becomes inactive.
@@ -6572,10 +6756,10 @@ interface orders {
     trigger-event: option<create-order-trigger-params-trigger-event-enum>
   }
 
-  /// Container for custom fields of a Rate Plan object.
-  record rate-plan-object-custom-fields {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record rate-plan-object-custom-fields-entry {
+    key: string,
+    value: string
   }
 
   /// Information about an order action of type `CancelSubscription`.
@@ -6628,7 +6812,7 @@ interface orders {
     crm-id: option<string>,
     /// ISO 3-letter currency code (uppercase). For example, USD.
     currency: string,
-    custom-fields: option<account-object-custom-fields>,
+    custom-fields: option<list<account-object-custom-fields-entry-v2>>,
     /// Name of the account's customer service representative, if applicable.
     customer-service-rep-name: option<string>,
     /// **Note:** This field is only available if you have [Invoice Settlement](https://knowledgecenter.zuora.com/Billing/Billing_and_Payments/Invoice_Settlement) enabled. The Invoice Settlement feature is generally available as of Zuora Billing Release 296 (March 2021). This feature includes Unapplied Payments, Credit and Debit Memo, and Invoice Item Settlement. If you want to enable Invoice Settlement, see [Invoice Settlement Enablement and Checklist Guide](https://knowledgecenter.zuora.com/Billing/Billing_and_Payments/Invoice_Settlement/Invoice_Settlement_Migration_Checklist_and_Guide) for more information.
@@ -6664,6 +6848,12 @@ interface orders {
     tax-info: option<tax-info>
   }
 
+  /// one entry of a string-keyed map (free-form object)
+  record account-object-custom-fields-entry-v2 {
+    key: string,
+    value: string
+  }
+
   /// Container for the terms and renewal settings of the subscription.
   record create-order-create-subscription-terms {
     /// Specifies whether the subscription automatically renews at the end of the each term. Only applicable if the type of the first term is `TERMED`.
@@ -6696,10 +6886,10 @@ interface orders {
     period-type: option<create-order-create-subscription-terms-initial-term-period-type-enum>
   }
 
-  /// Container for custom fields of an Order Action object.
-  record order-action-object-custom-fields {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record order-action-object-custom-fields-entry {
+    key: string,
+    value: string
   }
 
   /// Information about an order action of type `OwnerTransfer`.
@@ -6782,7 +6972,7 @@ interface orders {
   /// Information about an order action of type `UpdateProduct`.
   record create-order-rate-plan-update {
     charge-updates: option<list<create-order-charge-update>>,
-    custom-fields: option<rate-plan-object-custom-fields>,
+    custom-fields: option<list<rate-plan-object-custom-fields-entry-v2>>,
     /// The id of the rate plan to be updated. It can be the latest version or any history version id.
     rate-plan-id: option<string>,
     /// 
@@ -6797,7 +6987,7 @@ interface orders {
     billing: option<billing-update>,
     /// Read only. Identifies the charge to be updated.
     charge-number: option<string>,
-    custom-fields: option<rate-plan-charge-object-custom-fields>,
+    custom-fields: option<list<rate-plan-charge-object-custom-fields-entry-v2>>,
     description: option<string>,
     effective-date: option<create-order-update-product-trigger-params>,
     pricing: option<create-order-pricing-update>,
@@ -6807,6 +6997,12 @@ interface orders {
 
   record billing-update {
     billing-period-alignment: option<create-order-charge-override-billing-billing-period-alignment-enum>
+  }
+
+  /// one entry of a string-keyed map (free-form object)
+  record rate-plan-charge-object-custom-fields-entry-v2 {
+    key: string,
+    value: string
   }
 
   /// Specifies when a charge becomes active.
@@ -6941,6 +7137,12 @@ interface orders {
     tiers: option<list<charge-tier>>
   }
 
+  /// one entry of a string-keyed map (free-form object)
+  record rate-plan-object-custom-fields-entry-v2 {
+    key: string,
+    value: string
+  }
+
   /// The fields populated for a quote when a quote is sent to Zuora Billing from Zuora Quote.
   record quote-object-fields {
     /// The closing date of the Opportunity.
@@ -6995,15 +7197,27 @@ interface orders {
     start-date: string
   }
 
+  /// one entry of a string-keyed map (free-form object)
+  record order-object-custom-fields-entry-v2 {
+    key: string,
+    value: string
+  }
+
   /// Information about the account that will own the order.
   record preview-account-info {
     /// Day of the month that the account prefers billing periods to begin on. If set to 0, the bill cycle day will be set as "AutoSet".
     bill-cycle-day: s32,
     /// ISO 3-letter currency code (uppercase). For example, USD.
     currency: string,
-    custom-fields: option<account-object-custom-fields>,
+    custom-fields: option<list<account-object-custom-fields-entry-v3>>,
     sold-to-contact: option<preview-contact-info>,
     tax-info: option<tax-info>
+  }
+
+  /// one entry of a string-keyed map (free-form object)
+  record account-object-custom-fields-entry-v3 {
+    key: string,
+    value: string
   }
 
   record preview-contact-info {
@@ -7031,7 +7245,7 @@ interface orders {
   }
 
   record post-order-preview-request-type-subscriptions-item {
-    custom-fields: option<subscription-object-custom-fields>,
+    custom-fields: option<list<subscription-object-custom-fields-entry-v2>>,
     /// The actions to be applied to the subscription. Order actions will be stored with the sequence when it was provided in the request.
     order-actions: option<list<preview-order-order-action>>,
     quote: option<quote-object-fields>,
@@ -7040,11 +7254,17 @@ interface orders {
     subscription-number: option<string>
   }
 
+  /// one entry of a string-keyed map (free-form object)
+  record subscription-object-custom-fields-entry-v2 {
+    key: string,
+    value: string
+  }
+
   record preview-order-order-action {
     add-product: option<preview-order-rate-plan-override>,
     cancel-subscription: option<cancel-subscription>,
     create-subscription: option<preview-order-create-subscription>,
-    custom-fields: option<order-action-object-custom-fields>,
+    custom-fields: option<list<order-action-object-custom-fields-entry-v2>>,
     owner-transfer: option<owner-transfer>,
     remove-product: option<remove-product>,
     resume: option<create-order-resume>,
@@ -7063,7 +7283,7 @@ interface orders {
   record preview-order-rate-plan-override {
     /// List of charges associated with the rate plan.
     charge-overrides: option<list<preview-order-charge-override>>,
-    custom-fields: option<rate-plan-object-custom-fields>,
+    custom-fields: option<list<rate-plan-object-custom-fields-entry-v3>>,
     /// Internal identifier of the product rate plan that the rate plan is based on.
     product-rate-plan-id: string,
     /// Unique identifier for the rate plan. This identifier enables you to refer to the rate plan before the rate plan has an internal identifier in Zuora.
@@ -7078,7 +7298,7 @@ interface orders {
     /// Charge number of the charge. For example, C-00000307.
     /// 
     charge-number: option<string>,
-    custom-fields: option<rate-plan-charge-object-custom-fields>,
+    custom-fields: option<list<rate-plan-charge-object-custom-fields-entry-v3>>,
     /// Description of the charge.
     description: option<string>,
     end-date: option<end-conditions>,
@@ -7121,6 +7341,12 @@ interface orders {
     weekly-bill-cycle-day: option<create-order-charge-override-billing-weekly-bill-cycle-day-enum>
   }
 
+  /// one entry of a string-keyed map (free-form object)
+  record rate-plan-charge-object-custom-fields-entry-v3 {
+    key: string,
+    value: string
+  }
+
   /// Pricing information about the charge.
   record preview-order-charge-override-pricing {
     charge-model-data: option<charge-model-data-override>,
@@ -7149,6 +7375,12 @@ interface orders {
     /// Condition for the charge to become active.
     /// 
     trigger-event: option<create-order-trigger-params-trigger-event-enum>
+  }
+
+  /// one entry of a string-keyed map (free-form object)
+  record rate-plan-object-custom-fields-entry-v3 {
+    key: string,
+    value: string
   }
 
   /// Information about an order action of type `CreateSubscription`.
@@ -7202,7 +7434,7 @@ interface orders {
     crm-id: option<string>,
     /// ISO 3-letter currency code (uppercase). For example, USD.
     currency: string,
-    custom-fields: option<account-object-custom-fields>,
+    custom-fields: option<list<account-object-custom-fields-entry-v4>>,
     /// Name of the account's customer service representative, if applicable.
     customer-service-rep-name: option<string>,
     /// **Note:** This field is only available if you have [Invoice Settlement](https://knowledgecenter.zuora.com/Billing/Billing_and_Payments/Invoice_Settlement) enabled. The Invoice Settlement feature is generally available as of Zuora Billing Release 296 (March 2021). This feature includes Unapplied Payments, Credit and Debit Memo, and Invoice Item Settlement. If you want to enable Invoice Settlement, see [Invoice Settlement Enablement and Checklist Guide](https://knowledgecenter.zuora.com/Billing/Billing_and_Payments/Invoice_Settlement/Invoice_Settlement_Migration_Checklist_and_Guide) for more information.
@@ -7238,6 +7470,12 @@ interface orders {
     tax-info: option<tax-info>
   }
 
+  /// one entry of a string-keyed map (free-form object)
+  record account-object-custom-fields-entry-v4 {
+    key: string,
+    value: string
+  }
+
   /// Container for the terms and renewal settings of the subscription.
   record preview-order-create-subscription-terms {
     /// Specifies whether the subscription automatically renews at the end of the each term. Only applicable if the type of the first term is `TERMED`.
@@ -7263,12 +7501,18 @@ interface orders {
     term-type: create-order-create-subscription-terms-initial-term-term-type-enum
   }
 
+  /// one entry of a string-keyed map (free-form object)
+  record order-action-object-custom-fields-entry-v2 {
+    key: string,
+    value: string
+  }
+
   /// Information about an order action of type `UpdateProduct`.
   record preview-order-rate-plan-update {
     /// Array of the JSON objects containing the information for a charge update in the `updateProduct` type of order action.
     /// 
     charge-updates: option<list<preview-order-charge-update>>,
-    custom-fields: option<rate-plan-object-custom-fields>,
+    custom-fields: option<list<rate-plan-object-custom-fields-entry-v4>>,
     /// The id of the rate plan to be updated. It can be the latest version or any history version id.
     rate-plan-id: option<string>,
     /// 
@@ -7282,12 +7526,18 @@ interface orders {
     billing: option<billing-update>,
     /// Read only. Identifies the charge to be updated.
     charge-number: option<string>,
-    custom-fields: option<rate-plan-charge-object-custom-fields>,
+    custom-fields: option<list<rate-plan-charge-object-custom-fields-entry-v4>>,
     description: option<string>,
     effective-date: option<preview-order-trigger-params>,
     pricing: option<preview-order-pricing-update>,
     /// A unique string to represent the rate plan charge in the order. The unique token is used to perform multiple actions against a newly added rate plan. For example, if you want to add and update a product in the same order, you would assign a unique token to the product rate plan when added and use that token in future order actions.
     unique-token: option<string>
+  }
+
+  /// one entry of a string-keyed map (free-form object)
+  record rate-plan-charge-object-custom-fields-entry-v4 {
+    key: string,
+    value: string
   }
 
   record preview-order-pricing-update {
@@ -7305,17 +7555,35 @@ interface orders {
     usage-volume: option<usage-volume-pricing-update>
   }
 
+  /// one entry of a string-keyed map (free-form object)
+  record rate-plan-object-custom-fields-entry-v4 {
+    key: string,
+    value: string
+  }
+
+  /// one entry of a string-keyed map (free-form object)
+  record order-object-custom-fields-entry-v3 {
+    key: string,
+    value: string
+  }
+
   record put-order-patch-request-type-subscriptions-item {
     order-actions: option<list<put-order-patch-request-type-subscriptions-item-order-actions-item>>,
     subscription-number: option<string>
   }
 
   record put-order-patch-request-type-subscriptions-item-order-actions-item {
-    custom-fields: option<order-action-object-custom-fields>,
+    custom-fields: option<list<order-action-object-custom-fields-entry-v3>>,
     /// The Id of the order action in the order. You can provide either the `sequence` or the `orderActionId` field to specify which order action to update. You cannot use then both at the same time.
     order-action-id: option<string>,
     /// The sequence number of the order action in the order. You can provide either the `sequence` or the `orderActionId` field to specify which order action to update. You cannot use then both at the same time.
     sequence: option<s32>
+  }
+
+  /// one entry of a string-keyed map (free-form object)
+  record order-action-object-custom-fields-entry-v3 {
+    key: string,
+    value: string
   }
 
   record put-order-action-trigger-dates-request-type-subscriptions-item {
@@ -7346,9 +7614,15 @@ interface orders {
     trigger-date: option<string>
   }
 
+  /// one entry of a string-keyed map (free-form object)
+  record subscription-object-custom-fields-entry-v3 {
+    key: string,
+    value: string
+  }
+
   record put-subscription-patch-request-type-rate-plans-item {
     charges: option<list<put-subscription-patch-request-type-rate-plans-item-charges-item>>,
-    custom-fields: option<rate-plan-object-custom-fields>,
+    custom-fields: option<list<rate-plan-object-custom-fields-entry-v5>>,
     /// The rate plan id in any version of the subscription. This will be linked to the only one rate plan in the current version.
     rate-plan-id: string
   }
@@ -7358,7 +7632,19 @@ interface orders {
     charge-id: option<string>,
     /// Use either this field or the `chargeId` field to specify the charge for which you will be updating the custom fields. By using this field you actually specify the last charge segment of a charge. See [Segmented rate plan charges](https://knowledgecenter.zuora.com/Central_Platform/API/G_SOAP_API/E1_SOAP_API_Object_Reference/RatePlanCharge#Segmented_rate_plan_charges) for more information about charge segments.
     charge-number: option<string>,
-    custom-fields: option<rate-plan-charge-object-custom-fields>
+    custom-fields: option<list<rate-plan-charge-object-custom-fields-entry-v5>>
+  }
+
+  /// one entry of a string-keyed map (free-form object)
+  record rate-plan-charge-object-custom-fields-entry-v5 {
+    key: string,
+    value: string
+  }
+
+  /// one entry of a string-keyed map (free-form object)
+  record rate-plan-object-custom-fields-entry-v5 {
+    key: string,
+    value: string
   }
 
   /// Retrieve the status and response of a job
@@ -7383,7 +7669,7 @@ interface orders {
     /// 
     /// The minor version of the Zuora REST API. 
     zuora-version: option<string>,
-    custom-fields: option<order-object-custom-fields>,
+    custom-fields: option<list<order-object-custom-fields-entry>>,
     /// A description of the order.
     description: option<string>,
     /// The account number that this order will be created under. It can be either the accountNumber or the account info provided. It will return an error if both are specified.
@@ -7410,7 +7696,7 @@ interface orders {
     zuora-track-id: option<string>,
     /// An entity ID. If you have [Zuora Multi-entity](https://knowledgecenter.zuora.com/BB_Introducing_Z_Business/Multi-entity) enabled and the OAuth token is valid for more than one entity, you must use this header to specify which entity to perform the operation in. If the OAuth token is only valid for a single entity, or you do not have Zuora Multi-entity enabled, you do not need to set this header.
     zuora-entity-ids: option<string>,
-    custom-fields: option<order-object-custom-fields>,
+    custom-fields: option<list<order-object-custom-fields-entry-v2>>,
     /// A description of the order.
     description: option<string>,
     /// The account number that this order will be created under. It can be either the accountNumber or the account info. It will return an error if both are specified.
@@ -7462,7 +7748,7 @@ interface orders {
     /// 
     /// The minor version of the Zuora REST API. 
     zuora-version: option<string>,
-    custom-fields: option<order-object-custom-fields>,
+    custom-fields: option<list<order-object-custom-fields-entry>>,
     /// A description of the order.
     description: option<string>,
     /// The account number that this order will be created under. It can be either the accountNumber or the account info provided. It will return an error if both are specified.
@@ -7511,7 +7797,7 @@ interface orders {
     zuora-track-id: option<string>,
     /// An entity ID. If you have [Zuora Multi-entity](https://knowledgecenter.zuora.com/BB_Introducing_Z_Business/Multi-entity) enabled and the OAuth token is valid for more than one entity, you must use this header to specify which entity to perform the operation in. If the OAuth token is only valid for a single entity, or you do not have Zuora Multi-entity enabled, you do not need to set this header.
     zuora-entity-ids: option<string>,
-    custom-fields: option<order-object-custom-fields>,
+    custom-fields: option<list<order-object-custom-fields-entry-v2>>,
     /// A description of the order.
     description: option<string>,
     /// The account number that this order will be created under. It can be either the accountNumber or the account info. It will return an error if both are specified.
@@ -7627,7 +7913,7 @@ interface orders {
     zuora-entity-ids: option<string>,
     /// The order number.
     order-number: string,
-    custom-fields: option<order-object-custom-fields>,
+    custom-fields: option<list<order-object-custom-fields-entry-v3>>,
     subscriptions: option<list<put-order-patch-request-type-subscriptions-item>>
   }
   put-update-order-custom-fields: func(params: put-update-order-custom-fields-params) -> result<string, string>;
@@ -7672,7 +7958,7 @@ interface orders {
     zuora-entity-ids: option<string>,
     /// The subscription number to be updated.
     subscription-number: string,
-    custom-fields: option<subscription-object-custom-fields>,
+    custom-fields: option<list<subscription-object-custom-fields-entry-v3>>,
     rate-plans: option<list<put-subscription-patch-request-type-rate-plans-item>>
   }
   put-update-subscription-custom-fields: func(params: put-update-subscription-custom-fields-params) -> result<string, string>;
@@ -12821,11 +13107,10 @@ interface payment-methods {
     zip-code: option<string>
   }
 
-  /// The complete JSON Object representing the encrypted payment token payload returned in the response from the Apple Pay session.
-  /// 
-  record post-payment-method-decryption-payment-token {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record post-payment-method-decryption-payment-token-entry {
+    key: string,
+    value: string
   }
 
   record putpm-account-holder-info {
@@ -13199,7 +13484,7 @@ interface payment-methods {
     payment-gateway: option<string>,
     /// The complete JSON Object representing the encrypted payment token payload returned in the response from the Apple Pay session.
     /// 
-    payment-token: post-payment-method-decryption-payment-token,
+    payment-token: list<post-payment-method-decryption-payment-token-entry>,
     /// A boolean flag to control whether a payment should be processed after creating payment method. The payment amount will be equivalent to the amount the merchant supplied in the ApplePay session. Default is false.
     /// 
     process-payment: option<bool>
@@ -15353,15 +15638,15 @@ interface subscriptions {
     trigger-event: option<string>
   }
 
-  /// Container for custom fields of a Subscription object.
-  record subscription-object-custom-fields {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record subscription-object-custom-fields-entry {
+    key: string,
+    value: string
   }
 
   record put-subscription-patch-request-type-rate-plans-item {
     charges: option<list<put-subscription-patch-request-type-rate-plans-item-charges-item>>,
-    custom-fields: option<rate-plan-object-custom-fields>,
+    custom-fields: option<list<rate-plan-object-custom-fields-entry>>,
     /// The rate plan id in any version of the subscription. This will be linked to the only one rate plan in the current version.
     rate-plan-id: string
   }
@@ -15371,19 +15656,19 @@ interface subscriptions {
     charge-id: option<string>,
     /// Use either this field or the `chargeId` field to specify the charge for which you will be updating the custom fields. By using this field you actually specify the last charge segment of a charge. See [Segmented rate plan charges](https://knowledgecenter.zuora.com/Central_Platform/API/G_SOAP_API/E1_SOAP_API_Object_Reference/RatePlanCharge#Segmented_rate_plan_charges) for more information about charge segments.
     charge-number: option<string>,
-    custom-fields: option<rate-plan-charge-object-custom-fields>
+    custom-fields: option<list<rate-plan-charge-object-custom-fields-entry>>
   }
 
-  /// Container for custom fields of a Rate Plan Charge object.
-  record rate-plan-charge-object-custom-fields {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record rate-plan-charge-object-custom-fields-entry {
+    key: string,
+    value: string
   }
 
-  /// Container for custom fields of a Rate Plan object.
-  record rate-plan-object-custom-fields {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record rate-plan-object-custom-fields-entry {
+    key: string,
+    value: string
   }
 
   variant object-get-subscription-error {
@@ -16096,7 +16381,7 @@ interface subscriptions {
     subscription-number: string,
     /// The subscription version to be updated.
     version: string,
-    custom-fields: option<subscription-object-custom-fields>,
+    custom-fields: option<list<subscription-object-custom-fields-entry>>,
     rate-plans: option<list<put-subscription-patch-request-type-rate-plans-item>>
   }
   put-update-subscription-custom-fields-of-a-specified-version: func(params: put-update-subscription-custom-fields-of-a-specified-version-params) -> result<string, string>;
@@ -16711,7 +16996,7 @@ interface order-line-items {
     /// The target date for the Order Line Item (OLI) to be picked up by bill run for generating invoice.
     /// 
     bill-target-date: option<string>,
-    custom-fields: option<order-line-item-custom-fields>,
+    custom-fields: option<list<order-line-item-custom-fields-entry>>,
     /// The deferred revenue accounting code for the Order Line Item (OLI).
     /// 
     deferred-revenue-accounting-code: option<string>,
@@ -16759,10 +17044,10 @@ interface order-line-items {
     transaction-date: option<string>
   }
 
-  /// Container for custom fields of an Order Line Item object.
-  record order-line-item-custom-fields {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record order-line-item-custom-fields-entry {
+    key: string,
+    value: string
   }
 
   /// Invoice or Payment.
@@ -16826,7 +17111,7 @@ interface order-line-items {
     amount-per-unit: option<f64>,
     /// The target date for the Order Line Item to be picked up by bill run for billing.
     bill-target-date: option<string>,
-    custom-fields: option<order-line-item-custom-fields-retrieve-order-line-item>,
+    custom-fields: option<list<order-line-item-custom-fields-retrieve-order-line-item-entry>>,
     /// The deferred revenue accounting code for the Order Line Item.
     deferred-revenue-accounting-code: option<string>,
     /// The description of the Order Line Item.
@@ -16864,10 +17149,10 @@ interface order-line-items {
     transaction-date: option<string>
   }
 
-  /// Container for custom fields of an Order Line Item object.
-  record order-line-item-custom-fields-retrieve-order-line-item {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record order-line-item-custom-fields-retrieve-order-line-item-entry {
+    key: string,
+    value: string
   }
 
   /// A new account created as the sold-to contact of the Order Line Item (OLI). 
@@ -16890,6 +17175,12 @@ interface order-line-items {
     postal-code: option<string>,
     /// State or province of the contact's address.
     state: option<string>
+  }
+
+  /// one entry of a string-keyed map (free-form object)
+  record order-line-item-custom-fields-entry-v2 {
+    key: string,
+    value: string
   }
 
   /// Update order line items
@@ -16937,7 +17228,7 @@ interface order-line-items {
     /// The target date for the Order Line Item (OLI) to be picked up by bill run for generating invoice.
     /// 
     bill-target-date: option<string>,
-    custom-fields: option<order-line-item-custom-fields>,
+    custom-fields: option<list<order-line-item-custom-fields-entry-v2>>,
     /// The deferred revenue accounting code for the Order Line Item (OLI).
     /// 
     deferred-revenue-accounting-code: option<string>,
@@ -18558,7 +18849,7 @@ interface workflows {
     /// the number of concurrent tasks that are allowed to run simultaneously
     concurrent-limit: option<s32>,
     /// The data payload for the task.
-    data: option<task-data>,
+    data: option<list<task-data-entry>>,
     /// If **Instance** is **true**, the end time of the task instance.
     end-time: option<string>,
     /// If **Instance** is **true** and **status** is **Error**, the error reason of the task instance failure.
@@ -18582,7 +18873,7 @@ interface workflows {
     /// If **Instance** is **true**, the ID of the original workflow.
     original-workflow-id: option<s32>,
     /// The configuration of the task.
-    parameters: option<task-parameters>,
+    parameters: option<list<task-parameters-entry>>,
     /// If **Instance** is **true**, the start time of the task instance.
     start-time: option<string>,
     /// If **Instance** is **true**, the status of the task instance.
@@ -18595,16 +18886,16 @@ interface workflows {
     workflow-id: option<s32>
   }
 
-  /// The data payload for the task.
-  record task-data {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record task-data-entry {
+    key: string,
+    value: string
   }
 
-  /// The configuration of the task.
-  record task-parameters {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record task-parameters-entry {
+    key: string,
+    value: string
   }
 
   /// A workflow.
@@ -18655,6 +18946,12 @@ interface workflows {
     tags: option<list<string>>,
     /// The ID of the workflow the task belongs too.
     workflow-id: option<s32>
+  }
+
+  /// one entry of a string-keyed map (free-form object)
+  record post-run-workflow-body-entry {
+    key: string,
+    value: string
   }
 
   variant put-workflows-tasks-update-error {
@@ -18890,8 +19187,7 @@ interface workflows {
     zuora-track-id: option<string>,
     /// The ID of the workflow you want to run.
     workflow-id: string,
-    /// JSON-encoded free-form object payload
-    data: option<string>
+    body: option<list<post-run-workflow-body-entry>>
   }
   post-run-workflow: func(params: post-run-workflow-params) -> result<string, post-run-workflow-error>;
 

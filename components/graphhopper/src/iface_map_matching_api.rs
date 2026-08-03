@@ -35,7 +35,7 @@ fn iface_map_matching_api__route_response_path__to_json(p: &iface_map_matching_a
     m.insert("ascend".into(), match (&p.ascend) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
     m.insert("bbox".into(), match (&p.bbox) { Some(v) => Value::Array((v).iter().map(|v| serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null)).collect()), None => Value::Null });
     m.insert("descend".into(), match (&p.descend) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
-    m.insert("details".into(), match (&p.details) { Some(v) => iface_map_matching_api__route_response_path_details__to_json(v), None => Value::Null });
+    m.insert("details".into(), match (&p.details) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("distance".into(), match (&p.distance) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
     m.insert("instructions".into(), match (&p.instructions) { Some(v) => Value::Array((v).iter().map(|v| iface_map_matching_api__route_response_path_instructions_item__to_json(v)).collect()), None => Value::Null });
     m.insert("points".into(), match (&p.points) { Some(v) => iface_map_matching_api__route_response_path_points__to_json(v), None => Value::Null });
@@ -46,9 +46,10 @@ fn iface_map_matching_api__route_response_path__to_json(p: &iface_map_matching_a
     Value::Object(m)
 }
 
-fn iface_map_matching_api__route_response_path_details__to_json(p: &iface_map_matching_api::RouteResponsePathDetails) -> Value {
+fn iface_map_matching_api__route_response_path_details_entry__to_json(p: &iface_map_matching_api::RouteResponsePathDetailsEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -106,7 +107,7 @@ fn iface_map_matching_api__route_response_path__from_json(v: &Value) -> Option<i
         ascend: m.get("ascend").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
         bbox: m.get("bbox").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_f64()).collect())),
         descend: m.get("descend").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
-        details: m.get("details").filter(|v| !v.is_null()).and_then(|v| iface_map_matching_api__route_response_path_details__from_json(v)),
+        details: m.get("details").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_map_matching_api::RouteResponsePathDetailsEntry { key: k.clone(), value: val })).collect())),
         distance: m.get("distance").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
         instructions: m.get("instructions").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_map_matching_api__route_response_path_instructions_item__from_json(x)).collect())),
         points: m.get("points").filter(|v| !v.is_null()).and_then(|v| iface_map_matching_api__route_response_path_points__from_json(v)),
@@ -117,10 +118,11 @@ fn iface_map_matching_api__route_response_path__from_json(v: &Value) -> Option<i
     })
 }
 
-fn iface_map_matching_api__route_response_path_details__from_json(v: &Value) -> Option<iface_map_matching_api::RouteResponsePathDetails> {
+fn iface_map_matching_api__route_response_path_details_entry__from_json(v: &Value) -> Option<iface_map_matching_api::RouteResponsePathDetailsEntry> {
     let m = v.as_object()?;
-    Some(iface_map_matching_api::RouteResponsePathDetails {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_map_matching_api::RouteResponsePathDetailsEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 

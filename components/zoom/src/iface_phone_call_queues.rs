@@ -310,9 +310,10 @@ fn iface_phone_call_queues__add_members_to_call_queue_body_members_users_item__t
     Value::Object(m)
 }
 
-fn iface_phone_call_queues__add_members_to_call_queue_response__to_json(p: &iface_phone_call_queues::AddMembersToCallQueueResponse) -> Value {
+fn iface_phone_call_queues__add_members_to_call_queue_response_entry__to_json(p: &iface_phone_call_queues::AddMembersToCallQueueResponseEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -323,21 +324,24 @@ fn iface_phone_call_queues__assign_phone_to_call_queue_body_phone_numbers_item__
     Value::Object(m)
 }
 
-fn iface_phone_call_queues__assign_phone_to_call_queue_response__to_json(p: &iface_phone_call_queues::AssignPhoneToCallQueueResponse) -> Value {
+fn iface_phone_call_queues__assign_phone_to_call_queue_response_entry__to_json(p: &iface_phone_call_queues::AssignPhoneToCallQueueResponseEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
-fn iface_phone_call_queues__unassign_a_phone_num_call_queue_response__to_json(p: &iface_phone_call_queues::UnassignAPhoneNumCallQueueResponse) -> Value {
+fn iface_phone_call_queues__unassign_a_phone_num_call_queue_response_entry__to_json(p: &iface_phone_call_queues::UnassignAPhoneNumCallQueueResponseEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
-fn iface_phone_call_queues__un_assign_phone_num_call_queue_response__to_json(p: &iface_phone_call_queues::UnAssignPhoneNumCallQueueResponse) -> Value {
+fn iface_phone_call_queues__un_assign_phone_num_call_queue_response_entry__to_json(p: &iface_phone_call_queues::UnAssignPhoneNumCallQueueResponseEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -571,31 +575,35 @@ fn iface_phone_call_queues__get_a_call_queue_response_site__from_json(v: &Value)
     })
 }
 
-fn iface_phone_call_queues__add_members_to_call_queue_response__from_json(v: &Value) -> Option<iface_phone_call_queues::AddMembersToCallQueueResponse> {
+fn iface_phone_call_queues__add_members_to_call_queue_response_entry__from_json(v: &Value) -> Option<iface_phone_call_queues::AddMembersToCallQueueResponseEntry> {
     let m = v.as_object()?;
-    Some(iface_phone_call_queues::AddMembersToCallQueueResponse {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_phone_call_queues::AddMembersToCallQueueResponseEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
-fn iface_phone_call_queues__assign_phone_to_call_queue_response__from_json(v: &Value) -> Option<iface_phone_call_queues::AssignPhoneToCallQueueResponse> {
+fn iface_phone_call_queues__assign_phone_to_call_queue_response_entry__from_json(v: &Value) -> Option<iface_phone_call_queues::AssignPhoneToCallQueueResponseEntry> {
     let m = v.as_object()?;
-    Some(iface_phone_call_queues::AssignPhoneToCallQueueResponse {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_phone_call_queues::AssignPhoneToCallQueueResponseEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
-fn iface_phone_call_queues__unassign_a_phone_num_call_queue_response__from_json(v: &Value) -> Option<iface_phone_call_queues::UnassignAPhoneNumCallQueueResponse> {
+fn iface_phone_call_queues__unassign_a_phone_num_call_queue_response_entry__from_json(v: &Value) -> Option<iface_phone_call_queues::UnassignAPhoneNumCallQueueResponseEntry> {
     let m = v.as_object()?;
-    Some(iface_phone_call_queues::UnassignAPhoneNumCallQueueResponse {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_phone_call_queues::UnassignAPhoneNumCallQueueResponseEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
-fn iface_phone_call_queues__un_assign_phone_num_call_queue_response__from_json(v: &Value) -> Option<iface_phone_call_queues::UnAssignPhoneNumCallQueueResponse> {
+fn iface_phone_call_queues__un_assign_phone_num_call_queue_response_entry__from_json(v: &Value) -> Option<iface_phone_call_queues::UnAssignPhoneNumCallQueueResponseEntry> {
     let m = v.as_object()?;
-    Some(iface_phone_call_queues::UnAssignPhoneNumCallQueueResponse {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_phone_call_queues::UnAssignPhoneNumCallQueueResponseEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -756,12 +764,12 @@ fn iface_phone_call_queues__change_call_queue_manager__err(e: crate::runtime::Di
     }
 }
 
-fn iface_phone_call_queues__add_members_to_call_queue__ok(body: String) -> Result<iface_phone_call_queues::AddMembersToCallQueueResponse, crate::runtime::DispatchError> {
+fn iface_phone_call_queues__add_members_to_call_queue__ok(body: String) -> Result<Vec<iface_phone_call_queues::AddMembersToCallQueueResponseEntry>, crate::runtime::DispatchError> {
     let v: Value = match serde_json::from_str(&body) {
         Ok(v) => v,
         Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
     };
-    match iface_phone_call_queues__add_members_to_call_queue_response__from_json(&v) {
+    match (&v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_phone_call_queues::AddMembersToCallQueueResponseEntry { key: k.clone(), value: val })).collect()) {
         Some(x) => Ok(x),
         None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
@@ -807,12 +815,12 @@ fn iface_phone_call_queues__unassign_member_from_call_queue__err(e: crate::runti
     }
 }
 
-fn iface_phone_call_queues__assign_phone_to_call_queue__ok(body: String) -> Result<iface_phone_call_queues::AssignPhoneToCallQueueResponse, crate::runtime::DispatchError> {
+fn iface_phone_call_queues__assign_phone_to_call_queue__ok(body: String) -> Result<Vec<iface_phone_call_queues::AssignPhoneToCallQueueResponseEntry>, crate::runtime::DispatchError> {
     let v: Value = match serde_json::from_str(&body) {
         Ok(v) => v,
         Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
     };
-    match iface_phone_call_queues__assign_phone_to_call_queue_response__from_json(&v) {
+    match (&v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_phone_call_queues::AssignPhoneToCallQueueResponseEntry { key: k.clone(), value: val })).collect()) {
         Some(x) => Ok(x),
         None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
@@ -825,12 +833,12 @@ fn iface_phone_call_queues__assign_phone_to_call_queue__err(e: crate::runtime::D
     }
 }
 
-fn iface_phone_call_queues__unassign_a_phone_num_call_queue__ok(body: String) -> Result<iface_phone_call_queues::UnassignAPhoneNumCallQueueResponse, crate::runtime::DispatchError> {
+fn iface_phone_call_queues__unassign_a_phone_num_call_queue__ok(body: String) -> Result<Vec<iface_phone_call_queues::UnassignAPhoneNumCallQueueResponseEntry>, crate::runtime::DispatchError> {
     let v: Value = match serde_json::from_str(&body) {
         Ok(v) => v,
         Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
     };
-    match iface_phone_call_queues__unassign_a_phone_num_call_queue_response__from_json(&v) {
+    match (&v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_phone_call_queues::UnassignAPhoneNumCallQueueResponseEntry { key: k.clone(), value: val })).collect()) {
         Some(x) => Ok(x),
         None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
@@ -846,12 +854,12 @@ fn iface_phone_call_queues__unassign_a_phone_num_call_queue__err(e: crate::runti
     }
 }
 
-fn iface_phone_call_queues__un_assign_phone_num_call_queue__ok(body: String) -> Result<iface_phone_call_queues::UnAssignPhoneNumCallQueueResponse, crate::runtime::DispatchError> {
+fn iface_phone_call_queues__un_assign_phone_num_call_queue__ok(body: String) -> Result<Vec<iface_phone_call_queues::UnAssignPhoneNumCallQueueResponseEntry>, crate::runtime::DispatchError> {
     let v: Value = match serde_json::from_str(&body) {
         Ok(v) => v,
         Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
     };
-    match iface_phone_call_queues__un_assign_phone_num_call_queue_response__from_json(&v) {
+    match (&v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_phone_call_queues::UnAssignPhoneNumCallQueueResponseEntry { key: k.clone(), value: val })).collect()) {
         Some(x) => Ok(x),
         None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
@@ -929,7 +937,7 @@ impl iface_phone_call_queues::Guest for crate::Component {
             Err(e) => Err(iface_phone_call_queues__change_call_queue_manager__err(e)),
         }
     }
-    fn add_members_to_call_queue(params: iface_phone_call_queues::AddMembersToCallQueueParams) -> Result<iface_phone_call_queues::AddMembersToCallQueueResponse, iface_phone_call_queues::AddMembersToCallQueueError> {
+    fn add_members_to_call_queue(params: iface_phone_call_queues::AddMembersToCallQueueParams) -> Result<Vec<iface_phone_call_queues::AddMembersToCallQueueResponseEntry>, iface_phone_call_queues::AddMembersToCallQueueError> {
         let json = iface_phone_call_queues__add_members_to_call_queue_params__to_json(&params);
         match dispatch(&OP_PHONE_CALL_QUEUES_ADD_MEMBERS_TO_CALL_QUEUE, json).and_then(iface_phone_call_queues__add_members_to_call_queue__ok) {
             Ok(v) => Ok(v),
@@ -950,21 +958,21 @@ impl iface_phone_call_queues::Guest for crate::Component {
             Err(e) => Err(iface_phone_call_queues__unassign_member_from_call_queue__err(e)),
         }
     }
-    fn assign_phone_to_call_queue(params: iface_phone_call_queues::AssignPhoneToCallQueueParams) -> Result<iface_phone_call_queues::AssignPhoneToCallQueueResponse, String> {
+    fn assign_phone_to_call_queue(params: iface_phone_call_queues::AssignPhoneToCallQueueParams) -> Result<Vec<iface_phone_call_queues::AssignPhoneToCallQueueResponseEntry>, String> {
         let json = iface_phone_call_queues__assign_phone_to_call_queue_params__to_json(&params);
         match dispatch(&OP_PHONE_CALL_QUEUES_ASSIGN_PHONE_TO_CALL_QUEUE, json).and_then(iface_phone_call_queues__assign_phone_to_call_queue__ok) {
             Ok(v) => Ok(v),
             Err(e) => Err(iface_phone_call_queues__assign_phone_to_call_queue__err(e)),
         }
     }
-    fn unassign_a_phone_num_call_queue(params: iface_phone_call_queues::UnassignAPhoneNumCallQueueParams) -> Result<iface_phone_call_queues::UnassignAPhoneNumCallQueueResponse, iface_phone_call_queues::UnassignAPhoneNumCallQueueError> {
+    fn unassign_a_phone_num_call_queue(params: iface_phone_call_queues::UnassignAPhoneNumCallQueueParams) -> Result<Vec<iface_phone_call_queues::UnassignAPhoneNumCallQueueResponseEntry>, iface_phone_call_queues::UnassignAPhoneNumCallQueueError> {
         let json = iface_phone_call_queues__unassign_a_phone_num_call_queue_params__to_json(&params);
         match dispatch(&OP_PHONE_CALL_QUEUES_UNASSIGN_A_PHONE_NUM_CALL_QUEUE, json).and_then(iface_phone_call_queues__unassign_a_phone_num_call_queue__ok) {
             Ok(v) => Ok(v),
             Err(e) => Err(iface_phone_call_queues__unassign_a_phone_num_call_queue__err(e)),
         }
     }
-    fn un_assign_phone_num_call_queue(params: iface_phone_call_queues::UnAssignPhoneNumCallQueueParams) -> Result<iface_phone_call_queues::UnAssignPhoneNumCallQueueResponse, iface_phone_call_queues::UnAssignPhoneNumCallQueueError> {
+    fn un_assign_phone_num_call_queue(params: iface_phone_call_queues::UnAssignPhoneNumCallQueueParams) -> Result<Vec<iface_phone_call_queues::UnAssignPhoneNumCallQueueResponseEntry>, iface_phone_call_queues::UnAssignPhoneNumCallQueueError> {
         let json = iface_phone_call_queues__un_assign_phone_num_call_queue_params__to_json(&params);
         match dispatch(&OP_PHONE_CALL_QUEUES_UN_ASSIGN_PHONE_NUM_CALL_QUEUE, json).and_then(iface_phone_call_queues__un_assign_phone_num_call_queue__ok) {
             Ok(v) => Ok(v),

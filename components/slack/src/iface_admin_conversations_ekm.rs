@@ -21,13 +21,7 @@ const OP_ADMIN_CONVERSATIONS_EKM_LIST_ORIGINAL_CONNECTED_CHANNEL_INFO: OpSpec = 
 
 fn iface_admin_conversations_ekm__list_original_connected_channel_info_response__to_json(p: &iface_admin_conversations_ekm::ListOriginalConnectedChannelInfoResponse) -> Value {
     let mut m = Map::new();
-    m.insert("ok".into(), iface_admin_conversations_ekm__defs_ok_true__to_json(&p.ok));
-    Value::Object(m)
-}
-
-fn iface_admin_conversations_ekm__defs_ok_true__to_json(p: &iface_admin_conversations_ekm::DefsOkTrue) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
+    m.insert("ok".into(), Value::Bool(*(&p.ok)));
     Value::Object(m)
 }
 
@@ -44,14 +38,7 @@ fn iface_admin_conversations_ekm__list_original_connected_channel_info_params__t
 fn iface_admin_conversations_ekm__list_original_connected_channel_info_response__from_json(v: &Value) -> Option<iface_admin_conversations_ekm::ListOriginalConnectedChannelInfoResponse> {
     let m = v.as_object()?;
     Some(iface_admin_conversations_ekm::ListOriginalConnectedChannelInfoResponse {
-        ok: match m.get("ok").and_then(|v| iface_admin_conversations_ekm__defs_ok_true__from_json(v)) { Some(x) => x, None => return None },
-    })
-}
-
-fn iface_admin_conversations_ekm__defs_ok_true__from_json(v: &Value) -> Option<iface_admin_conversations_ekm::DefsOkTrue> {
-    let m = v.as_object()?;
-    Some(iface_admin_conversations_ekm::DefsOkTrue {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        ok: m.get("ok").and_then(|v| (v).as_bool()).unwrap_or_default(),
     })
 }
 
