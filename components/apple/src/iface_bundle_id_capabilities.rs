@@ -38,6 +38,39 @@ const OP_BUNDLE_ID_CAPABILITIES_DELETE_INSTANCE: OpSpec = OpSpec {
     ],
 };
 
+fn iface_bundle_id_capabilities__capability_type__to_str(e: &iface_bundle_id_capabilities::CapabilityType) -> &'static str {
+    match e {
+        iface_bundle_id_capabilities::CapabilityType::Icloud => "ICLOUD",
+        iface_bundle_id_capabilities::CapabilityType::InAppPurchase => "IN_APP_PURCHASE",
+        iface_bundle_id_capabilities::CapabilityType::GameCenter => "GAME_CENTER",
+        iface_bundle_id_capabilities::CapabilityType::PushNotifications => "PUSH_NOTIFICATIONS",
+        iface_bundle_id_capabilities::CapabilityType::Wallet => "WALLET",
+        iface_bundle_id_capabilities::CapabilityType::InterAppAudio => "INTER_APP_AUDIO",
+        iface_bundle_id_capabilities::CapabilityType::Maps => "MAPS",
+        iface_bundle_id_capabilities::CapabilityType::AssociatedDomains => "ASSOCIATED_DOMAINS",
+        iface_bundle_id_capabilities::CapabilityType::PersonalVpn => "PERSONAL_VPN",
+        iface_bundle_id_capabilities::CapabilityType::AppGroups => "APP_GROUPS",
+        iface_bundle_id_capabilities::CapabilityType::Healthkit => "HEALTHKIT",
+        iface_bundle_id_capabilities::CapabilityType::Homekit => "HOMEKIT",
+        iface_bundle_id_capabilities::CapabilityType::WirelessAccessoryConfiguration => "WIRELESS_ACCESSORY_CONFIGURATION",
+        iface_bundle_id_capabilities::CapabilityType::ApplePay => "APPLE_PAY",
+        iface_bundle_id_capabilities::CapabilityType::DataProtection => "DATA_PROTECTION",
+        iface_bundle_id_capabilities::CapabilityType::Sirikit => "SIRIKIT",
+        iface_bundle_id_capabilities::CapabilityType::NetworkExtensions => "NETWORK_EXTENSIONS",
+        iface_bundle_id_capabilities::CapabilityType::Multipath => "MULTIPATH",
+        iface_bundle_id_capabilities::CapabilityType::HotSpot => "HOT_SPOT",
+        iface_bundle_id_capabilities::CapabilityType::NfcTagReading => "NFC_TAG_READING",
+        iface_bundle_id_capabilities::CapabilityType::Classkit => "CLASSKIT",
+        iface_bundle_id_capabilities::CapabilityType::AutofillCredentialProvider => "AUTOFILL_CREDENTIAL_PROVIDER",
+        iface_bundle_id_capabilities::CapabilityType::AccessWifiInformation => "ACCESS_WIFI_INFORMATION",
+        iface_bundle_id_capabilities::CapabilityType::NetworkCustomProtocol => "NETWORK_CUSTOM_PROTOCOL",
+        iface_bundle_id_capabilities::CapabilityType::CoremediaHlsLowLatency => "COREMEDIA_HLS_LOW_LATENCY",
+        iface_bundle_id_capabilities::CapabilityType::SystemExtensionInstall => "SYSTEM_EXTENSION_INSTALL",
+        iface_bundle_id_capabilities::CapabilityType::UserManagement => "USER_MANAGEMENT",
+        iface_bundle_id_capabilities::CapabilityType::AppleIdAuth => "APPLE_ID_AUTH",
+    }
+}
+
 fn iface_bundle_id_capabilities__capability_setting_allowed_instances_enum__to_str(e: &iface_bundle_id_capabilities::CapabilitySettingAllowedInstancesEnum) -> &'static str {
     match e {
         iface_bundle_id_capabilities::CapabilitySettingAllowedInstancesEnum::Entry => "ENTRY",
@@ -87,14 +120,8 @@ fn iface_bundle_id_capabilities__bundle_id_capability_create_request_data__to_js
 
 fn iface_bundle_id_capabilities__bundle_id_capability_create_request_data_attributes__to_json(p: &iface_bundle_id_capabilities::BundleIdCapabilityCreateRequestDataAttributes) -> Value {
     let mut m = Map::new();
-    m.insert("capabilityType".into(), iface_bundle_id_capabilities__capability_type__to_json(&p.capability_type));
+    m.insert("capabilityType".into(), Value::String(iface_bundle_id_capabilities__capability_type__to_str(&p.capability_type).into()));
     m.insert("settings".into(), match (&p.settings) { Some(v) => Value::Array((v).iter().map(|v| iface_bundle_id_capabilities__capability_setting__to_json(v)).collect()), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_bundle_id_capabilities__capability_type__to_json(p: &iface_bundle_id_capabilities::CapabilityType) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -159,7 +186,7 @@ fn iface_bundle_id_capabilities__bundle_id_capability__to_json(p: &iface_bundle_
 
 fn iface_bundle_id_capabilities__bundle_id_capability_attributes__to_json(p: &iface_bundle_id_capabilities::BundleIdCapabilityAttributes) -> Value {
     let mut m = Map::new();
-    m.insert("capabilityType".into(), match (&p.capability_type) { Some(v) => iface_bundle_id_capabilities__capability_type__to_json(v), None => Value::Null });
+    m.insert("capabilityType".into(), match (&p.capability_type) { Some(v) => Value::String(iface_bundle_id_capabilities__capability_type__to_str(v).into()), None => Value::Null });
     m.insert("settings".into(), match (&p.settings) { Some(v) => Value::Array((v).iter().map(|v| iface_bundle_id_capabilities__capability_setting__to_json(v)).collect()), None => Value::Null });
     Value::Object(m)
 }
@@ -186,7 +213,7 @@ fn iface_bundle_id_capabilities__bundle_id_capability_update_request_data__to_js
 
 fn iface_bundle_id_capabilities__bundle_id_capability_update_request_data_attributes__to_json(p: &iface_bundle_id_capabilities::BundleIdCapabilityUpdateRequestDataAttributes) -> Value {
     let mut m = Map::new();
-    m.insert("capabilityType".into(), match (&p.capability_type) { Some(v) => iface_bundle_id_capabilities__capability_type__to_json(v), None => Value::Null });
+    m.insert("capabilityType".into(), match (&p.capability_type) { Some(v) => Value::String(iface_bundle_id_capabilities__capability_type__to_str(v).into()), None => Value::Null });
     m.insert("settings".into(), match (&p.settings) { Some(v) => Value::Array((v).iter().map(|v| iface_bundle_id_capabilities__capability_setting__to_json(v)).collect()), None => Value::Null });
     Value::Object(m)
 }
@@ -208,13 +235,6 @@ fn iface_bundle_id_capabilities__delete_instance_params__to_json(p: &iface_bundl
     let mut m = Map::new();
     m.insert("id".into(), Value::String((&p.id).clone()));
     Value::Object(m)
-}
-
-fn iface_bundle_id_capabilities__capability_type__from_json(v: &Value) -> Option<iface_bundle_id_capabilities::CapabilityType> {
-    let m = v.as_object()?;
-    Some(iface_bundle_id_capabilities::CapabilityType {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-    })
 }
 
 fn iface_bundle_id_capabilities__capability_setting__from_json(v: &Value) -> Option<iface_bundle_id_capabilities::CapabilitySetting> {
@@ -264,7 +284,7 @@ fn iface_bundle_id_capabilities__bundle_id_capability__from_json(v: &Value) -> O
 fn iface_bundle_id_capabilities__bundle_id_capability_attributes__from_json(v: &Value) -> Option<iface_bundle_id_capabilities::BundleIdCapabilityAttributes> {
     let m = v.as_object()?;
     Some(iface_bundle_id_capabilities::BundleIdCapabilityAttributes {
-        capability_type: m.get("capabilityType").filter(|v| !v.is_null()).and_then(|v| iface_bundle_id_capabilities__capability_type__from_json(v)),
+        capability_type: m.get("capabilityType").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_bundle_id_capabilities__capability_type__from_str)),
         settings: m.get("settings").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_bundle_id_capabilities__capability_setting__from_json(x)).collect())),
     })
 }
@@ -281,6 +301,40 @@ fn iface_bundle_id_capabilities__document_links__from_json(v: &Value) -> Option<
     Some(iface_bundle_id_capabilities::DocumentLinks {
         self_: m.get("self").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
+}
+
+fn iface_bundle_id_capabilities__capability_type__from_str(s: &str) -> Option<iface_bundle_id_capabilities::CapabilityType> {
+    match s {
+        "ICLOUD" => Some(iface_bundle_id_capabilities::CapabilityType::Icloud),
+        "IN_APP_PURCHASE" => Some(iface_bundle_id_capabilities::CapabilityType::InAppPurchase),
+        "GAME_CENTER" => Some(iface_bundle_id_capabilities::CapabilityType::GameCenter),
+        "PUSH_NOTIFICATIONS" => Some(iface_bundle_id_capabilities::CapabilityType::PushNotifications),
+        "WALLET" => Some(iface_bundle_id_capabilities::CapabilityType::Wallet),
+        "INTER_APP_AUDIO" => Some(iface_bundle_id_capabilities::CapabilityType::InterAppAudio),
+        "MAPS" => Some(iface_bundle_id_capabilities::CapabilityType::Maps),
+        "ASSOCIATED_DOMAINS" => Some(iface_bundle_id_capabilities::CapabilityType::AssociatedDomains),
+        "PERSONAL_VPN" => Some(iface_bundle_id_capabilities::CapabilityType::PersonalVpn),
+        "APP_GROUPS" => Some(iface_bundle_id_capabilities::CapabilityType::AppGroups),
+        "HEALTHKIT" => Some(iface_bundle_id_capabilities::CapabilityType::Healthkit),
+        "HOMEKIT" => Some(iface_bundle_id_capabilities::CapabilityType::Homekit),
+        "WIRELESS_ACCESSORY_CONFIGURATION" => Some(iface_bundle_id_capabilities::CapabilityType::WirelessAccessoryConfiguration),
+        "APPLE_PAY" => Some(iface_bundle_id_capabilities::CapabilityType::ApplePay),
+        "DATA_PROTECTION" => Some(iface_bundle_id_capabilities::CapabilityType::DataProtection),
+        "SIRIKIT" => Some(iface_bundle_id_capabilities::CapabilityType::Sirikit),
+        "NETWORK_EXTENSIONS" => Some(iface_bundle_id_capabilities::CapabilityType::NetworkExtensions),
+        "MULTIPATH" => Some(iface_bundle_id_capabilities::CapabilityType::Multipath),
+        "HOT_SPOT" => Some(iface_bundle_id_capabilities::CapabilityType::HotSpot),
+        "NFC_TAG_READING" => Some(iface_bundle_id_capabilities::CapabilityType::NfcTagReading),
+        "CLASSKIT" => Some(iface_bundle_id_capabilities::CapabilityType::Classkit),
+        "AUTOFILL_CREDENTIAL_PROVIDER" => Some(iface_bundle_id_capabilities::CapabilityType::AutofillCredentialProvider),
+        "ACCESS_WIFI_INFORMATION" => Some(iface_bundle_id_capabilities::CapabilityType::AccessWifiInformation),
+        "NETWORK_CUSTOM_PROTOCOL" => Some(iface_bundle_id_capabilities::CapabilityType::NetworkCustomProtocol),
+        "COREMEDIA_HLS_LOW_LATENCY" => Some(iface_bundle_id_capabilities::CapabilityType::CoremediaHlsLowLatency),
+        "SYSTEM_EXTENSION_INSTALL" => Some(iface_bundle_id_capabilities::CapabilityType::SystemExtensionInstall),
+        "USER_MANAGEMENT" => Some(iface_bundle_id_capabilities::CapabilityType::UserManagement),
+        "APPLE_ID_AUTH" => Some(iface_bundle_id_capabilities::CapabilityType::AppleIdAuth),
+        _ => None,
+    }
 }
 
 fn iface_bundle_id_capabilities__capability_setting_allowed_instances_enum__from_str(s: &str) -> Option<iface_bundle_id_capabilities::CapabilitySettingAllowedInstancesEnum> {

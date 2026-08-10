@@ -53,13 +53,14 @@ const OP_ISSUE_WATCHERS_REMOVE_WATCHER: OpSpec = OpSpec {
 
 fn iface_issue_watchers__bulk_issue_is_watching__to_json(p: &iface_issue_watchers::BulkIssueIsWatching) -> Value {
     let mut m = Map::new();
-    m.insert("issuesIsWatching".into(), match (&p.issues_is_watching) { Some(v) => iface_issue_watchers__bulk_issue_is_watching_issues_is_watching__to_json(v), None => Value::Null });
+    m.insert("issuesIsWatching".into(), match (&p.issues_is_watching) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::Bool(*(&e.value)))).collect()), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_issue_watchers__bulk_issue_is_watching_issues_is_watching__to_json(p: &iface_issue_watchers::BulkIssueIsWatchingIssuesIsWatching) -> Value {
+fn iface_issue_watchers__bulk_issue_is_watching_issues_is_watching_entry__to_json(p: &iface_issue_watchers::BulkIssueIsWatchingIssuesIsWatchingEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::Bool(*(&p.value)));
     Value::Object(m)
 }
 
@@ -126,14 +127,15 @@ fn iface_issue_watchers__remove_watcher_params__to_json(p: &iface_issue_watchers
 fn iface_issue_watchers__bulk_issue_is_watching__from_json(v: &Value) -> Option<iface_issue_watchers::BulkIssueIsWatching> {
     let m = v.as_object()?;
     Some(iface_issue_watchers::BulkIssueIsWatching {
-        issues_is_watching: m.get("issuesIsWatching").filter(|v| !v.is_null()).and_then(|v| iface_issue_watchers__bulk_issue_is_watching_issues_is_watching__from_json(v)),
+        issues_is_watching: m.get("issuesIsWatching").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_bool()).map(|val| iface_issue_watchers::BulkIssueIsWatchingIssuesIsWatchingEntry { key: k.clone(), value: val })).collect())),
     })
 }
 
-fn iface_issue_watchers__bulk_issue_is_watching_issues_is_watching__from_json(v: &Value) -> Option<iface_issue_watchers::BulkIssueIsWatchingIssuesIsWatching> {
+fn iface_issue_watchers__bulk_issue_is_watching_issues_is_watching_entry__from_json(v: &Value) -> Option<iface_issue_watchers::BulkIssueIsWatchingIssuesIsWatchingEntry> {
     let m = v.as_object()?;
-    Some(iface_issue_watchers::BulkIssueIsWatchingIssuesIsWatching {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_issue_watchers::BulkIssueIsWatchingIssuesIsWatchingEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_bool()).unwrap_or_default(),
     })
 }
 

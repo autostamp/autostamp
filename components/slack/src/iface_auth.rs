@@ -29,45 +29,21 @@ const OP_AUTH_TEST: OpSpec = OpSpec {
 
 fn iface_auth__revoke_response__to_json(p: &iface_auth::RevokeResponse) -> Value {
     let mut m = Map::new();
-    m.insert("ok".into(), iface_auth__defs_ok_true__to_json(&p.ok));
+    m.insert("ok".into(), Value::Bool(*(&p.ok)));
     m.insert("revoked".into(), Value::Bool(*(&p.revoked)));
-    Value::Object(m)
-}
-
-fn iface_auth__defs_ok_true__to_json(p: &iface_auth::DefsOkTrue) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
 fn iface_auth__test_response__to_json(p: &iface_auth::TestResponse) -> Value {
     let mut m = Map::new();
-    m.insert("bot_id".into(), match (&p.bot_id) { Some(v) => iface_auth__defs_bot_id__to_json(v), None => Value::Null });
+    m.insert("bot_id".into(), match (&p.bot_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("is_enterprise_install".into(), match (&p.is_enterprise_install) { Some(v) => Value::Bool(*(v)), None => Value::Null });
-    m.insert("ok".into(), iface_auth__defs_ok_true__to_json(&p.ok));
+    m.insert("ok".into(), Value::Bool(*(&p.ok)));
     m.insert("team".into(), Value::String((&p.team).clone()));
-    m.insert("team_id".into(), iface_auth__defs_team__to_json(&p.team_id));
+    m.insert("team_id".into(), Value::String((&p.team_id).clone()));
     m.insert("url".into(), Value::String((&p.url).clone()));
     m.insert("user".into(), Value::String((&p.user).clone()));
-    m.insert("user_id".into(), iface_auth__defs_user_id__to_json(&p.user_id));
-    Value::Object(m)
-}
-
-fn iface_auth__defs_bot_id__to_json(p: &iface_auth::DefsBotId) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_auth__defs_team__to_json(p: &iface_auth::DefsTeam) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_auth__defs_user_id__to_json(p: &iface_auth::DefsUserId) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
+    m.insert("user_id".into(), Value::String((&p.user_id).clone()));
     Value::Object(m)
 }
 
@@ -87,50 +63,22 @@ fn iface_auth__test_params__to_json(p: &iface_auth::TestParams) -> Value {
 fn iface_auth__revoke_response__from_json(v: &Value) -> Option<iface_auth::RevokeResponse> {
     let m = v.as_object()?;
     Some(iface_auth::RevokeResponse {
-        ok: match m.get("ok").and_then(|v| iface_auth__defs_ok_true__from_json(v)) { Some(x) => x, None => return None },
+        ok: m.get("ok").and_then(|v| (v).as_bool()).unwrap_or_default(),
         revoked: m.get("revoked").and_then(|v| (v).as_bool()).unwrap_or_default(),
-    })
-}
-
-fn iface_auth__defs_ok_true__from_json(v: &Value) -> Option<iface_auth::DefsOkTrue> {
-    let m = v.as_object()?;
-    Some(iface_auth::DefsOkTrue {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
 fn iface_auth__test_response__from_json(v: &Value) -> Option<iface_auth::TestResponse> {
     let m = v.as_object()?;
     Some(iface_auth::TestResponse {
-        bot_id: m.get("bot_id").filter(|v| !v.is_null()).and_then(|v| iface_auth__defs_bot_id__from_json(v)),
+        bot_id: m.get("bot_id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         is_enterprise_install: m.get("is_enterprise_install").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
-        ok: match m.get("ok").and_then(|v| iface_auth__defs_ok_true__from_json(v)) { Some(x) => x, None => return None },
+        ok: m.get("ok").and_then(|v| (v).as_bool()).unwrap_or_default(),
         team: m.get("team").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-        team_id: match m.get("team_id").and_then(|v| iface_auth__defs_team__from_json(v)) { Some(x) => x, None => return None },
+        team_id: m.get("team_id").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         url: m.get("url").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         user: m.get("user").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-        user_id: match m.get("user_id").and_then(|v| iface_auth__defs_user_id__from_json(v)) { Some(x) => x, None => return None },
-    })
-}
-
-fn iface_auth__defs_bot_id__from_json(v: &Value) -> Option<iface_auth::DefsBotId> {
-    let m = v.as_object()?;
-    Some(iface_auth::DefsBotId {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-    })
-}
-
-fn iface_auth__defs_team__from_json(v: &Value) -> Option<iface_auth::DefsTeam> {
-    let m = v.as_object()?;
-    Some(iface_auth::DefsTeam {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-    })
-}
-
-fn iface_auth__defs_user_id__from_json(v: &Value) -> Option<iface_auth::DefsUserId> {
-    let m = v.as_object()?;
-    Some(iface_auth::DefsUserId {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        user_id: m.get("user_id").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 

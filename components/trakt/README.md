@@ -20,8 +20,8 @@ triggered.
 
 | Setting | Value |
 | --- | --- |
-| Package | `autostamp:trakt@0.5.0` |
-| Published version | `0.5.0+trakt-1.0.0` |
+| Package | `autostamp:trakt@0.6.0` |
+| Published version | `0.6.0+trakt-1.0.0` |
 | Tag filter | all tags |
 | Operations generated | 183 |
 | Infer API-key credentials | enabled — not triggered |

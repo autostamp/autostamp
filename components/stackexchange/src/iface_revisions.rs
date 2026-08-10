@@ -21,9 +21,45 @@ const OP_REVISIONS_GET_REVISIONS_IDS: OpSpec = OpSpec {
     ],
 };
 
-fn iface_revisions__revisions__to_json(p: &iface_revisions::Revisions) -> Value {
+fn iface_revisions__revisions_item__to_json(p: &iface_revisions::RevisionsItem) -> Value {
     let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
+    m.insert("body".into(), match (&p.body) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("comment".into(), match (&p.comment) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("creation_date".into(), match (&p.creation_date) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("is_rollback".into(), match (&p.is_rollback) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("last_body".into(), match (&p.last_body) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("last_tags".into(), match (&p.last_tags) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("last_title".into(), match (&p.last_title) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("post_id".into(), match (&p.post_id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("post_type".into(), match (&p.post_type) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("revision_guid".into(), match (&p.revision_guid) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("revision_number".into(), match (&p.revision_number) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("revision_type".into(), match (&p.revision_type) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("set_community_wiki".into(), match (&p.set_community_wiki) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("tags".into(), match (&p.tags) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("title".into(), match (&p.title) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("user".into(), match (&p.user) { Some(v) => iface_revisions__revisions_item_user__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_revisions__revisions_item_user__to_json(p: &iface_revisions::RevisionsItemUser) -> Value {
+    let mut m = Map::new();
+    m.insert("accept_rate".into(), match (&p.accept_rate) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("badge_counts".into(), match (&p.badge_counts) { Some(v) => iface_revisions__revisions_item_user_badge_counts__to_json(v), None => Value::Null });
+    m.insert("display_name".into(), match (&p.display_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("link".into(), match (&p.link) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("profile_image".into(), match (&p.profile_image) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("reputation".into(), match (&p.reputation) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("user_id".into(), match (&p.user_id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("user_type".into(), match (&p.user_type) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_revisions__revisions_item_user_badge_counts__to_json(p: &iface_revisions::RevisionsItemUserBadgeCounts) -> Value {
+    let mut m = Map::new();
+    m.insert("bronze".into(), match (&p.bronze) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("gold".into(), match (&p.gold) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("silver".into(), match (&p.silver) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
@@ -40,19 +76,57 @@ fn iface_revisions__get_revisions_ids_params__to_json(p: &iface_revisions::GetRe
     Value::Object(m)
 }
 
-fn iface_revisions__revisions__from_json(v: &Value) -> Option<iface_revisions::Revisions> {
+fn iface_revisions__revisions_item__from_json(v: &Value) -> Option<iface_revisions::RevisionsItem> {
     let m = v.as_object()?;
-    Some(iface_revisions::Revisions {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    Some(iface_revisions::RevisionsItem {
+        body: m.get("body").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        comment: m.get("comment").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        creation_date: m.get("creation_date").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        is_rollback: m.get("is_rollback").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        last_body: m.get("last_body").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        last_tags: m.get("last_tags").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        last_title: m.get("last_title").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        post_id: m.get("post_id").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        post_type: m.get("post_type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        revision_guid: m.get("revision_guid").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        revision_number: m.get("revision_number").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        revision_type: m.get("revision_type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        set_community_wiki: m.get("set_community_wiki").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        tags: m.get("tags").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        title: m.get("title").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        user: m.get("user").filter(|v| !v.is_null()).and_then(|v| iface_revisions__revisions_item_user__from_json(v)),
     })
 }
 
-fn iface_revisions__get_revisions_ids__ok(body: String) -> Result<iface_revisions::Revisions, crate::runtime::DispatchError> {
+fn iface_revisions__revisions_item_user__from_json(v: &Value) -> Option<iface_revisions::RevisionsItemUser> {
+    let m = v.as_object()?;
+    Some(iface_revisions::RevisionsItemUser {
+        accept_rate: m.get("accept_rate").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        badge_counts: m.get("badge_counts").filter(|v| !v.is_null()).and_then(|v| iface_revisions__revisions_item_user_badge_counts__from_json(v)),
+        display_name: m.get("display_name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        link: m.get("link").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        profile_image: m.get("profile_image").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        reputation: m.get("reputation").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        user_id: m.get("user_id").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        user_type: m.get("user_type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_revisions__revisions_item_user_badge_counts__from_json(v: &Value) -> Option<iface_revisions::RevisionsItemUserBadgeCounts> {
+    let m = v.as_object()?;
+    Some(iface_revisions::RevisionsItemUserBadgeCounts {
+        bronze: m.get("bronze").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        gold: m.get("gold").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        silver: m.get("silver").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+    })
+}
+
+fn iface_revisions__get_revisions_ids__ok(body: String) -> Result<Vec<iface_revisions::RevisionsItem>, crate::runtime::DispatchError> {
     let v: Value = match serde_json::from_str(&body) {
         Ok(v) => v,
         Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
     };
-    match iface_revisions__revisions__from_json(&v) {
+    match (&v).as_array().map(|a| a.iter().filter_map(|x| iface_revisions__revisions_item__from_json(x)).collect()) {
         Some(x) => Ok(x),
         None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
@@ -78,7 +152,7 @@ fn iface_revisions__get_revisions_ids__err(e: crate::runtime::DispatchError) -> 
 }
 
 impl iface_revisions::Guest for crate::Component {
-    fn get_revisions_ids(params: iface_revisions::GetRevisionsIdsParams) -> Result<iface_revisions::Revisions, iface_revisions::GetRevisionsIdsError> {
+    fn get_revisions_ids(params: iface_revisions::GetRevisionsIdsParams) -> Result<Vec<iface_revisions::RevisionsItem>, iface_revisions::GetRevisionsIdsError> {
         let json = iface_revisions__get_revisions_ids_params__to_json(&params);
         match dispatch(&OP_REVISIONS_GET_REVISIONS_IDS, json).and_then(iface_revisions__get_revisions_ids__ok) {
             Ok(v) => Ok(v),

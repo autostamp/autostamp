@@ -99,6 +99,36 @@ fn iface_fqdn_connections__list_fqdn_connections_sort_enum__to_str(e: &iface_fqd
     }
 }
 
+fn iface_fqdn_connections__anchorsite_override__to_str(e: &iface_fqdn_connections::AnchorsiteOverride) -> &'static str {
+    match e {
+        iface_fqdn_connections::AnchorsiteOverride::Latency => "Latency",
+        iface_fqdn_connections::AnchorsiteOverride::ChicagoIl => "Chicago, IL",
+        iface_fqdn_connections::AnchorsiteOverride::AshburnVa => "Ashburn, VA",
+        iface_fqdn_connections::AnchorsiteOverride::SanJoseCa => "San Jose, CA",
+        iface_fqdn_connections::AnchorsiteOverride::SydneyAustralia => "Sydney, Australia",
+        iface_fqdn_connections::AnchorsiteOverride::AmsterdamNetherlands => "Amsterdam, Netherlands",
+        iface_fqdn_connections::AnchorsiteOverride::LondonUk => "London, UK",
+        iface_fqdn_connections::AnchorsiteOverride::TorontoCanada => "Toronto, Canada",
+        iface_fqdn_connections::AnchorsiteOverride::VancouverCanada => "Vancouver, Canada",
+        iface_fqdn_connections::AnchorsiteOverride::FrankfurtGermany => "Frankfurt, Germany",
+    }
+}
+
+fn iface_fqdn_connections__dtmf_type__to_str(e: &iface_fqdn_connections::DtmfType) -> &'static str {
+    match e {
+        iface_fqdn_connections::DtmfType::RfcV2833 => "RFC 2833",
+        iface_fqdn_connections::DtmfType::Inband => "Inband",
+        iface_fqdn_connections::DtmfType::SipInfo => "SIP INFO",
+    }
+}
+
+fn iface_fqdn_connections__encrypted_media__to_str(e: &iface_fqdn_connections::EncryptedMedia) -> &'static str {
+    match e {
+        iface_fqdn_connections::EncryptedMedia::Srtp => "SRTP",
+        iface_fqdn_connections::EncryptedMedia::Zrtp => "ZRTP",
+    }
+}
+
 fn iface_fqdn_connections__inbound_fqdn_ani_number_format_enum__to_str(e: &iface_fqdn_connections::InboundFqdnAniNumberFormatEnum) -> &'static str {
     match e {
         iface_fqdn_connections::InboundFqdnAniNumberFormatEnum::EV164 => "+E.164",
@@ -139,6 +169,14 @@ fn iface_fqdn_connections__inbound_fqdn_sip_subdomain_receive_settings_enum__to_
     }
 }
 
+fn iface_fqdn_connections__fqdn_connection_transport_protocol__to_str(e: &iface_fqdn_connections::FqdnConnectionTransportProtocol) -> &'static str {
+    match e {
+        iface_fqdn_connections::FqdnConnectionTransportProtocol::Udp => "UDP",
+        iface_fqdn_connections::FqdnConnectionTransportProtocol::Tcp => "TCP",
+        iface_fqdn_connections::FqdnConnectionTransportProtocol::Tls => "TLS",
+    }
+}
+
 fn iface_fqdn_connections__fqdn_connection_webhook_api_version_enum__to_str(e: &iface_fqdn_connections::FqdnConnectionWebhookApiVersionEnum) -> &'static str {
     match e {
         iface_fqdn_connections::FqdnConnectionWebhookApiVersionEnum::V1 => "1",
@@ -156,42 +194,24 @@ fn iface_fqdn_connections__list_fqdn_connections_response__to_json(p: &iface_fqd
 fn iface_fqdn_connections__fqdn_connection__to_json(p: &iface_fqdn_connections::FqdnConnection) -> Value {
     let mut m = Map::new();
     m.insert("active".into(), match (&p.active) { Some(v) => Value::Bool(*(v)), None => Value::Null });
-    m.insert("anchorsite_override".into(), match (&p.anchorsite_override) { Some(v) => iface_fqdn_connections__anchorsite_override__to_json(v), None => Value::Null });
+    m.insert("anchorsite_override".into(), match (&p.anchorsite_override) { Some(v) => Value::String(iface_fqdn_connections__anchorsite_override__to_str(v).into()), None => Value::Null });
     m.insert("connection_name".into(), Value::String((&p.connection_name).clone()));
     m.insert("created_at".into(), match (&p.created_at) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("default_on_hold_comfort_noise_enabled".into(), match (&p.default_on_hold_comfort_noise_enabled) { Some(v) => Value::Bool(*(v)), None => Value::Null });
-    m.insert("dtmf_type".into(), match (&p.dtmf_type) { Some(v) => iface_fqdn_connections__dtmf_type__to_json(v), None => Value::Null });
+    m.insert("dtmf_type".into(), match (&p.dtmf_type) { Some(v) => Value::String(iface_fqdn_connections__dtmf_type__to_str(v).into()), None => Value::Null });
     m.insert("encode_contact_header_enabled".into(), match (&p.encode_contact_header_enabled) { Some(v) => Value::Bool(*(v)), None => Value::Null });
-    m.insert("encrypted_media".into(), match (&p.encrypted_media) { Some(v) => iface_fqdn_connections__encrypted_media__to_json(v), None => Value::Null });
+    m.insert("encrypted_media".into(), match (&p.encrypted_media) { Some(v) => Value::String(iface_fqdn_connections__encrypted_media__to_str(v).into()), None => Value::Null });
     m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("inbound".into(), match (&p.inbound) { Some(v) => iface_fqdn_connections__inbound_fqdn__to_json(v), None => Value::Null });
     m.insert("onnet_t38_passthrough_enabled".into(), match (&p.onnet_t38_passthrough_enabled) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     m.insert("record_type".into(), match (&p.record_type) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("rtcp_settings".into(), match (&p.rtcp_settings) { Some(v) => iface_fqdn_connections__connection_rtcp_settings__to_json(v), None => Value::Null });
-    m.insert("transport_protocol".into(), match (&p.transport_protocol) { Some(v) => iface_fqdn_connections__fqdn_connection_transport_protocol__to_json(v), None => Value::Null });
+    m.insert("transport_protocol".into(), match (&p.transport_protocol) { Some(v) => Value::String(iface_fqdn_connections__fqdn_connection_transport_protocol__to_str(v).into()), None => Value::Null });
     m.insert("updated_at".into(), match (&p.updated_at) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("webhook_api_version".into(), match (&p.webhook_api_version) { Some(v) => Value::String(iface_fqdn_connections__fqdn_connection_webhook_api_version_enum__to_str(v).into()), None => Value::Null });
     m.insert("webhook_event_failover_url".into(), match (&p.webhook_event_failover_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("webhook_event_url".into(), match (&p.webhook_event_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("webhook_timeout_secs".into(), match (&p.webhook_timeout_secs) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_fqdn_connections__anchorsite_override__to_json(p: &iface_fqdn_connections::AnchorsiteOverride) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_fqdn_connections__dtmf_type__to_json(p: &iface_fqdn_connections::DtmfType) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_fqdn_connections__encrypted_media__to_json(p: &iface_fqdn_connections::EncryptedMedia) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -220,12 +240,6 @@ fn iface_fqdn_connections__connection_rtcp_settings__to_json(p: &iface_fqdn_conn
     m.insert("capture_enabled".into(), match (&p.capture_enabled) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     m.insert("port".into(), match (&p.port) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("report_frequency_secs".into(), match (&p.report_frequency_secs) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_fqdn_connections__fqdn_connection_transport_protocol__to_json(p: &iface_fqdn_connections::FqdnConnectionTransportProtocol) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -274,16 +288,16 @@ fn iface_fqdn_connections__list_fqdn_connections_params__to_json(p: &iface_fqdn_
 fn iface_fqdn_connections__create_fqdn_connection_params__to_json(p: &iface_fqdn_connections::CreateFqdnConnectionParams) -> Value {
     let mut m = Map::new();
     m.insert("active".into(), match (&p.active) { Some(v) => Value::Bool(*(v)), None => Value::Null });
-    m.insert("anchorsite_override".into(), match (&p.anchorsite_override) { Some(v) => iface_fqdn_connections__anchorsite_override__to_json(v), None => Value::Null });
+    m.insert("anchorsite_override".into(), match (&p.anchorsite_override) { Some(v) => Value::String(iface_fqdn_connections__anchorsite_override__to_str(v).into()), None => Value::Null });
     m.insert("connection_name".into(), Value::String((&p.connection_name).clone()));
     m.insert("default_on_hold_comfort_noise_enabled".into(), match (&p.default_on_hold_comfort_noise_enabled) { Some(v) => Value::Bool(*(v)), None => Value::Null });
-    m.insert("dtmf_type".into(), match (&p.dtmf_type) { Some(v) => iface_fqdn_connections__dtmf_type__to_json(v), None => Value::Null });
+    m.insert("dtmf_type".into(), match (&p.dtmf_type) { Some(v) => Value::String(iface_fqdn_connections__dtmf_type__to_str(v).into()), None => Value::Null });
     m.insert("encode_contact_header_enabled".into(), match (&p.encode_contact_header_enabled) { Some(v) => Value::Bool(*(v)), None => Value::Null });
-    m.insert("encrypted_media".into(), match (&p.encrypted_media) { Some(v) => iface_fqdn_connections__encrypted_media__to_json(v), None => Value::Null });
+    m.insert("encrypted_media".into(), match (&p.encrypted_media) { Some(v) => Value::String(iface_fqdn_connections__encrypted_media__to_str(v).into()), None => Value::Null });
     m.insert("inbound".into(), match (&p.inbound) { Some(v) => iface_fqdn_connections__inbound_fqdn__to_json(v), None => Value::Null });
     m.insert("onnet_t38_passthrough_enabled".into(), match (&p.onnet_t38_passthrough_enabled) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     m.insert("rtcp_settings".into(), match (&p.rtcp_settings) { Some(v) => iface_fqdn_connections__connection_rtcp_settings__to_json(v), None => Value::Null });
-    m.insert("transport_protocol".into(), match (&p.transport_protocol) { Some(v) => iface_fqdn_connections__fqdn_connection_transport_protocol__to_json(v), None => Value::Null });
+    m.insert("transport_protocol".into(), match (&p.transport_protocol) { Some(v) => Value::String(iface_fqdn_connections__fqdn_connection_transport_protocol__to_str(v).into()), None => Value::Null });
     m.insert("webhook_api_version".into(), match (&p.webhook_api_version) { Some(v) => Value::String(iface_fqdn_connections__fqdn_connection_webhook_api_version_enum__to_str(v).into()), None => Value::Null });
     m.insert("webhook_event_failover_url".into(), match (&p.webhook_event_failover_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("webhook_event_url".into(), match (&p.webhook_event_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -301,16 +315,16 @@ fn iface_fqdn_connections__update_fqdn_connection_params__to_json(p: &iface_fqdn
     let mut m = Map::new();
     m.insert("id".into(), Value::String((&p.id).clone()));
     m.insert("active".into(), match (&p.active) { Some(v) => Value::Bool(*(v)), None => Value::Null });
-    m.insert("anchorsite_override".into(), match (&p.anchorsite_override) { Some(v) => iface_fqdn_connections__anchorsite_override__to_json(v), None => Value::Null });
+    m.insert("anchorsite_override".into(), match (&p.anchorsite_override) { Some(v) => Value::String(iface_fqdn_connections__anchorsite_override__to_str(v).into()), None => Value::Null });
     m.insert("connection_name".into(), match (&p.connection_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("default_on_hold_comfort_noise_enabled".into(), match (&p.default_on_hold_comfort_noise_enabled) { Some(v) => Value::Bool(*(v)), None => Value::Null });
-    m.insert("dtmf_type".into(), match (&p.dtmf_type) { Some(v) => iface_fqdn_connections__dtmf_type__to_json(v), None => Value::Null });
+    m.insert("dtmf_type".into(), match (&p.dtmf_type) { Some(v) => Value::String(iface_fqdn_connections__dtmf_type__to_str(v).into()), None => Value::Null });
     m.insert("encode_contact_header_enabled".into(), match (&p.encode_contact_header_enabled) { Some(v) => Value::Bool(*(v)), None => Value::Null });
-    m.insert("encrypted_media".into(), match (&p.encrypted_media) { Some(v) => iface_fqdn_connections__encrypted_media__to_json(v), None => Value::Null });
+    m.insert("encrypted_media".into(), match (&p.encrypted_media) { Some(v) => Value::String(iface_fqdn_connections__encrypted_media__to_str(v).into()), None => Value::Null });
     m.insert("inbound".into(), match (&p.inbound) { Some(v) => iface_fqdn_connections__inbound_fqdn__to_json(v), None => Value::Null });
     m.insert("onnet_t38_passthrough_enabled".into(), match (&p.onnet_t38_passthrough_enabled) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     m.insert("rtcp_settings".into(), match (&p.rtcp_settings) { Some(v) => iface_fqdn_connections__connection_rtcp_settings__to_json(v), None => Value::Null });
-    m.insert("transport_protocol".into(), match (&p.transport_protocol) { Some(v) => iface_fqdn_connections__fqdn_connection_transport_protocol__to_json(v), None => Value::Null });
+    m.insert("transport_protocol".into(), match (&p.transport_protocol) { Some(v) => Value::String(iface_fqdn_connections__fqdn_connection_transport_protocol__to_str(v).into()), None => Value::Null });
     m.insert("webhook_api_version".into(), match (&p.webhook_api_version) { Some(v) => Value::String(iface_fqdn_connections__fqdn_connection_webhook_api_version_enum__to_str(v).into()), None => Value::Null });
     m.insert("webhook_event_failover_url".into(), match (&p.webhook_event_failover_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("webhook_event_url".into(), match (&p.webhook_event_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -336,45 +350,24 @@ fn iface_fqdn_connections__fqdn_connection__from_json(v: &Value) -> Option<iface
     let m = v.as_object()?;
     Some(iface_fqdn_connections::FqdnConnection {
         active: m.get("active").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
-        anchorsite_override: m.get("anchorsite_override").filter(|v| !v.is_null()).and_then(|v| iface_fqdn_connections__anchorsite_override__from_json(v)),
+        anchorsite_override: m.get("anchorsite_override").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_fqdn_connections__anchorsite_override__from_str)),
         connection_name: m.get("connection_name").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         created_at: m.get("created_at").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         default_on_hold_comfort_noise_enabled: m.get("default_on_hold_comfort_noise_enabled").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
-        dtmf_type: m.get("dtmf_type").filter(|v| !v.is_null()).and_then(|v| iface_fqdn_connections__dtmf_type__from_json(v)),
+        dtmf_type: m.get("dtmf_type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_fqdn_connections__dtmf_type__from_str)),
         encode_contact_header_enabled: m.get("encode_contact_header_enabled").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
-        encrypted_media: m.get("encrypted_media").filter(|v| !v.is_null()).and_then(|v| iface_fqdn_connections__encrypted_media__from_json(v)),
+        encrypted_media: m.get("encrypted_media").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_fqdn_connections__encrypted_media__from_str)),
         id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         inbound: m.get("inbound").filter(|v| !v.is_null()).and_then(|v| iface_fqdn_connections__inbound_fqdn__from_json(v)),
         onnet_t38_passthrough_enabled: m.get("onnet_t38_passthrough_enabled").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
         record_type: m.get("record_type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         rtcp_settings: m.get("rtcp_settings").filter(|v| !v.is_null()).and_then(|v| iface_fqdn_connections__connection_rtcp_settings__from_json(v)),
-        transport_protocol: m.get("transport_protocol").filter(|v| !v.is_null()).and_then(|v| iface_fqdn_connections__fqdn_connection_transport_protocol__from_json(v)),
+        transport_protocol: m.get("transport_protocol").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_fqdn_connections__fqdn_connection_transport_protocol__from_str)),
         updated_at: m.get("updated_at").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         webhook_api_version: m.get("webhook_api_version").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_fqdn_connections__fqdn_connection_webhook_api_version_enum__from_str)),
         webhook_event_failover_url: m.get("webhook_event_failover_url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         webhook_event_url: m.get("webhook_event_url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         webhook_timeout_secs: m.get("webhook_timeout_secs").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
-    })
-}
-
-fn iface_fqdn_connections__anchorsite_override__from_json(v: &Value) -> Option<iface_fqdn_connections::AnchorsiteOverride> {
-    let m = v.as_object()?;
-    Some(iface_fqdn_connections::AnchorsiteOverride {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-    })
-}
-
-fn iface_fqdn_connections__dtmf_type__from_json(v: &Value) -> Option<iface_fqdn_connections::DtmfType> {
-    let m = v.as_object()?;
-    Some(iface_fqdn_connections::DtmfType {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-    })
-}
-
-fn iface_fqdn_connections__encrypted_media__from_json(v: &Value) -> Option<iface_fqdn_connections::EncryptedMedia> {
-    let m = v.as_object()?;
-    Some(iface_fqdn_connections::EncryptedMedia {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -405,13 +398,6 @@ fn iface_fqdn_connections__connection_rtcp_settings__from_json(v: &Value) -> Opt
         capture_enabled: m.get("capture_enabled").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
         port: m.get("port").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         report_frequency_secs: m.get("report_frequency_secs").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
-    })
-}
-
-fn iface_fqdn_connections__fqdn_connection_transport_protocol__from_json(v: &Value) -> Option<iface_fqdn_connections::FqdnConnectionTransportProtocol> {
-    let m = v.as_object()?;
-    Some(iface_fqdn_connections::FqdnConnectionTransportProtocol {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -451,6 +437,39 @@ fn iface_fqdn_connections__delete_fqdn_connection_response__from_json(v: &Value)
     Some(iface_fqdn_connections::DeleteFqdnConnectionResponse {
         data: m.get("data").filter(|v| !v.is_null()).and_then(|v| iface_fqdn_connections__fqdn_connection__from_json(v)),
     })
+}
+
+fn iface_fqdn_connections__anchorsite_override__from_str(s: &str) -> Option<iface_fqdn_connections::AnchorsiteOverride> {
+    match s {
+        "Latency" => Some(iface_fqdn_connections::AnchorsiteOverride::Latency),
+        "Chicago, IL" => Some(iface_fqdn_connections::AnchorsiteOverride::ChicagoIl),
+        "Ashburn, VA" => Some(iface_fqdn_connections::AnchorsiteOverride::AshburnVa),
+        "San Jose, CA" => Some(iface_fqdn_connections::AnchorsiteOverride::SanJoseCa),
+        "Sydney, Australia" => Some(iface_fqdn_connections::AnchorsiteOverride::SydneyAustralia),
+        "Amsterdam, Netherlands" => Some(iface_fqdn_connections::AnchorsiteOverride::AmsterdamNetherlands),
+        "London, UK" => Some(iface_fqdn_connections::AnchorsiteOverride::LondonUk),
+        "Toronto, Canada" => Some(iface_fqdn_connections::AnchorsiteOverride::TorontoCanada),
+        "Vancouver, Canada" => Some(iface_fqdn_connections::AnchorsiteOverride::VancouverCanada),
+        "Frankfurt, Germany" => Some(iface_fqdn_connections::AnchorsiteOverride::FrankfurtGermany),
+        _ => None,
+    }
+}
+
+fn iface_fqdn_connections__dtmf_type__from_str(s: &str) -> Option<iface_fqdn_connections::DtmfType> {
+    match s {
+        "RFC 2833" => Some(iface_fqdn_connections::DtmfType::RfcV2833),
+        "Inband" => Some(iface_fqdn_connections::DtmfType::Inband),
+        "SIP INFO" => Some(iface_fqdn_connections::DtmfType::SipInfo),
+        _ => None,
+    }
+}
+
+fn iface_fqdn_connections__encrypted_media__from_str(s: &str) -> Option<iface_fqdn_connections::EncryptedMedia> {
+    match s {
+        "SRTP" => Some(iface_fqdn_connections::EncryptedMedia::Srtp),
+        "ZRTP" => Some(iface_fqdn_connections::EncryptedMedia::Zrtp),
+        _ => None,
+    }
 }
 
 fn iface_fqdn_connections__inbound_fqdn_ani_number_format_enum__from_str(s: &str) -> Option<iface_fqdn_connections::InboundFqdnAniNumberFormatEnum> {
@@ -494,6 +513,15 @@ fn iface_fqdn_connections__inbound_fqdn_sip_subdomain_receive_settings_enum__fro
     match s {
         "only_my_connections" => Some(iface_fqdn_connections::InboundFqdnSipSubdomainReceiveSettingsEnum::OnlyMyConnections),
         "from_anyone" => Some(iface_fqdn_connections::InboundFqdnSipSubdomainReceiveSettingsEnum::FromAnyone),
+        _ => None,
+    }
+}
+
+fn iface_fqdn_connections__fqdn_connection_transport_protocol__from_str(s: &str) -> Option<iface_fqdn_connections::FqdnConnectionTransportProtocol> {
+    match s {
+        "UDP" => Some(iface_fqdn_connections::FqdnConnectionTransportProtocol::Udp),
+        "TCP" => Some(iface_fqdn_connections::FqdnConnectionTransportProtocol::Tcp),
+        "TLS" => Some(iface_fqdn_connections::FqdnConnectionTransportProtocol::Tls),
         _ => None,
     }
 }

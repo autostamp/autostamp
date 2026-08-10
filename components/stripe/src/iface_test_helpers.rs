@@ -1028,7 +1028,7 @@ fn iface_test_helpers__issuing_card__to_json(p: &iface_test_helpers::IssuingCard
     m.insert("id".into(), Value::String((&p.id).clone()));
     m.insert("last4".into(), Value::String((&p.last4).clone()));
     m.insert("livemode".into(), Value::Bool(*(&p.livemode)));
-    m.insert("metadata".into(), iface_test_helpers__issuing_card_metadata__to_json(&p.metadata));
+    m.insert("metadata".into(), Value::Object((&p.metadata).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()));
     m.insert("number".into(), match (&p.number) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("object".into(), Value::String(iface_test_helpers__issuing_card_object_enum__to_str(&p.object).into()));
     m.insert("replaced_by".into(), match (&p.replaced_by) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -1051,7 +1051,7 @@ fn iface_test_helpers__issuing_cardholder__to_json(p: &iface_test_helpers::Issui
     m.insert("id".into(), Value::String((&p.id).clone()));
     m.insert("individual".into(), match (&p.individual) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("livemode".into(), Value::Bool(*(&p.livemode)));
-    m.insert("metadata".into(), iface_test_helpers__issuing_cardholder_metadata__to_json(&p.metadata));
+    m.insert("metadata".into(), Value::Object((&p.metadata).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()));
     m.insert("name".into(), Value::String((&p.name).clone()));
     m.insert("object".into(), Value::String(iface_test_helpers__issuing_cardholder_object_enum__to_str(&p.object).into()));
     m.insert("phone_number".into(), match (&p.phone_number) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -1079,9 +1079,10 @@ fn iface_test_helpers__address__to_json(p: &iface_test_helpers::Address) -> Valu
     Value::Object(m)
 }
 
-fn iface_test_helpers__issuing_cardholder_metadata__to_json(p: &iface_test_helpers::IssuingCardholderMetadata) -> Value {
+fn iface_test_helpers__issuing_cardholder_metadata_entry__to_json(p: &iface_test_helpers::IssuingCardholderMetadataEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -1092,9 +1093,10 @@ fn iface_test_helpers__issuing_cardholder_requirements__to_json(p: &iface_test_h
     Value::Object(m)
 }
 
-fn iface_test_helpers__issuing_card_metadata__to_json(p: &iface_test_helpers::IssuingCardMetadata) -> Value {
+fn iface_test_helpers__issuing_card_metadata_entry__to_json(p: &iface_test_helpers::IssuingCardMetadataEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -1127,7 +1129,7 @@ fn iface_test_helpers__refund__to_json(p: &iface_test_helpers::Refund) -> Value 
     m.insert("failure_reason".into(), match (&p.failure_reason) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("id".into(), Value::String((&p.id).clone()));
     m.insert("instructions_email".into(), match (&p.instructions_email) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("metadata".into(), match (&p.metadata) { Some(v) => iface_test_helpers__refund_metadata__to_json(v), None => Value::Null });
+    m.insert("metadata".into(), match (&p.metadata) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("next_action".into(), match (&p.next_action) { Some(v) => iface_test_helpers__refund_next_action__to_json(v), None => Value::Null });
     m.insert("object".into(), Value::String(iface_test_helpers__refund_object_enum__to_str(&p.object).into()));
     m.insert("payment_intent".into(), match (&p.payment_intent) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -1139,9 +1141,10 @@ fn iface_test_helpers__refund__to_json(p: &iface_test_helpers::Refund) -> Value 
     Value::Object(m)
 }
 
-fn iface_test_helpers__refund_metadata__to_json(p: &iface_test_helpers::RefundMetadata) -> Value {
+fn iface_test_helpers__refund_metadata_entry__to_json(p: &iface_test_helpers::RefundMetadataEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -1174,16 +1177,17 @@ fn iface_test_helpers__terminal_reader__to_json(p: &iface_test_helpers::Terminal
     m.insert("label".into(), Value::String((&p.label).clone()));
     m.insert("livemode".into(), Value::Bool(*(&p.livemode)));
     m.insert("location".into(), match (&p.location) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("metadata".into(), iface_test_helpers__terminal_reader_metadata__to_json(&p.metadata));
+    m.insert("metadata".into(), Value::Object((&p.metadata).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()));
     m.insert("object".into(), Value::String(iface_test_helpers__terminal_reader_object_enum__to_str(&p.object).into()));
     m.insert("serial_number".into(), Value::String((&p.serial_number).clone()));
     m.insert("status".into(), match (&p.status) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_test_helpers__terminal_reader_metadata__to_json(p: &iface_test_helpers::TerminalReaderMetadata) -> Value {
+fn iface_test_helpers__terminal_reader_metadata_entry__to_json(p: &iface_test_helpers::TerminalReaderMetadataEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -1236,7 +1240,7 @@ fn iface_test_helpers__treasury_inbound_transfer__to_json(p: &iface_test_helpers
     m.insert("id".into(), Value::String((&p.id).clone()));
     m.insert("linked_flows".into(), iface_test_helpers__treasury_inbound_transfers_resource_inbound_transfer_resource_linked_flows__to_json(&p.linked_flows));
     m.insert("livemode".into(), Value::Bool(*(&p.livemode)));
-    m.insert("metadata".into(), iface_test_helpers__treasury_inbound_transfer_metadata__to_json(&p.metadata));
+    m.insert("metadata".into(), Value::Object((&p.metadata).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()));
     m.insert("object".into(), Value::String(iface_test_helpers__treasury_inbound_transfer_object_enum__to_str(&p.object).into()));
     m.insert("origin_payment_method".into(), Value::String((&p.origin_payment_method).clone()));
     m.insert("origin_payment_method_details".into(), match (&p.origin_payment_method_details) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -1254,9 +1258,10 @@ fn iface_test_helpers__treasury_inbound_transfers_resource_inbound_transfer_reso
     Value::Object(m)
 }
 
-fn iface_test_helpers__treasury_inbound_transfer_metadata__to_json(p: &iface_test_helpers::TreasuryInboundTransferMetadata) -> Value {
+fn iface_test_helpers__treasury_inbound_transfer_metadata_entry__to_json(p: &iface_test_helpers::TreasuryInboundTransferMetadataEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -1284,7 +1289,7 @@ fn iface_test_helpers__treasury_outbound_payment__to_json(p: &iface_test_helpers
     m.insert("hosted_regulatory_receipt_url".into(), match (&p.hosted_regulatory_receipt_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("id".into(), Value::String((&p.id).clone()));
     m.insert("livemode".into(), Value::Bool(*(&p.livemode)));
-    m.insert("metadata".into(), iface_test_helpers__treasury_outbound_payment_metadata__to_json(&p.metadata));
+    m.insert("metadata".into(), Value::Object((&p.metadata).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()));
     m.insert("object".into(), Value::String(iface_test_helpers__treasury_outbound_payment_object_enum__to_str(&p.object).into()));
     m.insert("returned_details".into(), match (&p.returned_details) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("statement_descriptor".into(), Value::String((&p.statement_descriptor).clone()));
@@ -1294,9 +1299,10 @@ fn iface_test_helpers__treasury_outbound_payment__to_json(p: &iface_test_helpers
     Value::Object(m)
 }
 
-fn iface_test_helpers__treasury_outbound_payment_metadata__to_json(p: &iface_test_helpers::TreasuryOutboundPaymentMetadata) -> Value {
+fn iface_test_helpers__treasury_outbound_payment_metadata_entry__to_json(p: &iface_test_helpers::TreasuryOutboundPaymentMetadataEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -1329,7 +1335,7 @@ fn iface_test_helpers__treasury_outbound_transfer__to_json(p: &iface_test_helper
     m.insert("hosted_regulatory_receipt_url".into(), match (&p.hosted_regulatory_receipt_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("id".into(), Value::String((&p.id).clone()));
     m.insert("livemode".into(), Value::Bool(*(&p.livemode)));
-    m.insert("metadata".into(), iface_test_helpers__treasury_outbound_transfer_metadata__to_json(&p.metadata));
+    m.insert("metadata".into(), Value::Object((&p.metadata).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()));
     m.insert("object".into(), Value::String(iface_test_helpers__treasury_outbound_transfer_object_enum__to_str(&p.object).into()));
     m.insert("returned_details".into(), match (&p.returned_details) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("statement_descriptor".into(), Value::String((&p.statement_descriptor).clone()));
@@ -1367,9 +1373,10 @@ fn iface_test_helpers__outbound_transfers_payment_method_details_us_bank_account
     Value::Object(m)
 }
 
-fn iface_test_helpers__treasury_outbound_transfer_metadata__to_json(p: &iface_test_helpers::TreasuryOutboundTransferMetadata) -> Value {
+fn iface_test_helpers__treasury_outbound_transfer_metadata_entry__to_json(p: &iface_test_helpers::TreasuryOutboundTransferMetadataEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -1773,7 +1780,7 @@ fn iface_test_helpers__issuing_card__from_json(v: &Value) -> Option<iface_test_h
         id: m.get("id").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         last4: m.get("last4").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         livemode: m.get("livemode").and_then(|v| (v).as_bool()).unwrap_or_default(),
-        metadata: match m.get("metadata").and_then(|v| iface_test_helpers__issuing_card_metadata__from_json(v)) { Some(x) => x, None => return None },
+        metadata: m.get("metadata").and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_test_helpers::IssuingCardMetadataEntry { key: k.clone(), value: val })).collect())).unwrap_or_default(),
         number: m.get("number").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         object: match m.get("object").and_then(|v| (v).as_str().and_then(iface_test_helpers__issuing_card_object_enum__from_str)) { Some(x) => x, None => return None },
         replaced_by: m.get("replaced_by").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
@@ -1797,7 +1804,7 @@ fn iface_test_helpers__issuing_cardholder__from_json(v: &Value) -> Option<iface_
         id: m.get("id").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         individual: m.get("individual").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         livemode: m.get("livemode").and_then(|v| (v).as_bool()).unwrap_or_default(),
-        metadata: match m.get("metadata").and_then(|v| iface_test_helpers__issuing_cardholder_metadata__from_json(v)) { Some(x) => x, None => return None },
+        metadata: m.get("metadata").and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_test_helpers::IssuingCardholderMetadataEntry { key: k.clone(), value: val })).collect())).unwrap_or_default(),
         name: m.get("name").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         object: match m.get("object").and_then(|v| (v).as_str().and_then(iface_test_helpers__issuing_cardholder_object_enum__from_str)) { Some(x) => x, None => return None },
         phone_number: m.get("phone_number").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
@@ -1827,10 +1834,11 @@ fn iface_test_helpers__address__from_json(v: &Value) -> Option<iface_test_helper
     })
 }
 
-fn iface_test_helpers__issuing_cardholder_metadata__from_json(v: &Value) -> Option<iface_test_helpers::IssuingCardholderMetadata> {
+fn iface_test_helpers__issuing_cardholder_metadata_entry__from_json(v: &Value) -> Option<iface_test_helpers::IssuingCardholderMetadataEntry> {
     let m = v.as_object()?;
-    Some(iface_test_helpers::IssuingCardholderMetadata {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_test_helpers::IssuingCardholderMetadataEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -1842,10 +1850,11 @@ fn iface_test_helpers__issuing_cardholder_requirements__from_json(v: &Value) -> 
     })
 }
 
-fn iface_test_helpers__issuing_card_metadata__from_json(v: &Value) -> Option<iface_test_helpers::IssuingCardMetadata> {
+fn iface_test_helpers__issuing_card_metadata_entry__from_json(v: &Value) -> Option<iface_test_helpers::IssuingCardMetadataEntry> {
     let m = v.as_object()?;
-    Some(iface_test_helpers::IssuingCardMetadata {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_test_helpers::IssuingCardMetadataEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -1881,7 +1890,7 @@ fn iface_test_helpers__refund__from_json(v: &Value) -> Option<iface_test_helpers
         failure_reason: m.get("failure_reason").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         id: m.get("id").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         instructions_email: m.get("instructions_email").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        metadata: m.get("metadata").filter(|v| !v.is_null()).and_then(|v| iface_test_helpers__refund_metadata__from_json(v)),
+        metadata: m.get("metadata").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_test_helpers::RefundMetadataEntry { key: k.clone(), value: val })).collect())),
         next_action: m.get("next_action").filter(|v| !v.is_null()).and_then(|v| iface_test_helpers__refund_next_action__from_json(v)),
         object: match m.get("object").and_then(|v| (v).as_str().and_then(iface_test_helpers__refund_object_enum__from_str)) { Some(x) => x, None => return None },
         payment_intent: m.get("payment_intent").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
@@ -1893,10 +1902,11 @@ fn iface_test_helpers__refund__from_json(v: &Value) -> Option<iface_test_helpers
     })
 }
 
-fn iface_test_helpers__refund_metadata__from_json(v: &Value) -> Option<iface_test_helpers::RefundMetadata> {
+fn iface_test_helpers__refund_metadata_entry__from_json(v: &Value) -> Option<iface_test_helpers::RefundMetadataEntry> {
     let m = v.as_object()?;
-    Some(iface_test_helpers::RefundMetadata {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_test_helpers::RefundMetadataEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -1919,17 +1929,18 @@ fn iface_test_helpers__terminal_reader__from_json(v: &Value) -> Option<iface_tes
         label: m.get("label").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         livemode: m.get("livemode").and_then(|v| (v).as_bool()).unwrap_or_default(),
         location: m.get("location").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        metadata: match m.get("metadata").and_then(|v| iface_test_helpers__terminal_reader_metadata__from_json(v)) { Some(x) => x, None => return None },
+        metadata: m.get("metadata").and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_test_helpers::TerminalReaderMetadataEntry { key: k.clone(), value: val })).collect())).unwrap_or_default(),
         object: match m.get("object").and_then(|v| (v).as_str().and_then(iface_test_helpers__terminal_reader_object_enum__from_str)) { Some(x) => x, None => return None },
         serial_number: m.get("serial_number").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         status: m.get("status").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
     })
 }
 
-fn iface_test_helpers__terminal_reader_metadata__from_json(v: &Value) -> Option<iface_test_helpers::TerminalReaderMetadata> {
+fn iface_test_helpers__terminal_reader_metadata_entry__from_json(v: &Value) -> Option<iface_test_helpers::TerminalReaderMetadataEntry> {
     let m = v.as_object()?;
-    Some(iface_test_helpers::TerminalReaderMetadata {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_test_helpers::TerminalReaderMetadataEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -1980,7 +1991,7 @@ fn iface_test_helpers__treasury_inbound_transfer__from_json(v: &Value) -> Option
         id: m.get("id").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         linked_flows: match m.get("linked_flows").and_then(|v| iface_test_helpers__treasury_inbound_transfers_resource_inbound_transfer_resource_linked_flows__from_json(v)) { Some(x) => x, None => return None },
         livemode: m.get("livemode").and_then(|v| (v).as_bool()).unwrap_or_default(),
-        metadata: match m.get("metadata").and_then(|v| iface_test_helpers__treasury_inbound_transfer_metadata__from_json(v)) { Some(x) => x, None => return None },
+        metadata: m.get("metadata").and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_test_helpers::TreasuryInboundTransferMetadataEntry { key: k.clone(), value: val })).collect())).unwrap_or_default(),
         object: match m.get("object").and_then(|v| (v).as_str().and_then(iface_test_helpers__treasury_inbound_transfer_object_enum__from_str)) { Some(x) => x, None => return None },
         origin_payment_method: m.get("origin_payment_method").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         origin_payment_method_details: m.get("origin_payment_method_details").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
@@ -1999,10 +2010,11 @@ fn iface_test_helpers__treasury_inbound_transfers_resource_inbound_transfer_reso
     })
 }
 
-fn iface_test_helpers__treasury_inbound_transfer_metadata__from_json(v: &Value) -> Option<iface_test_helpers::TreasuryInboundTransferMetadata> {
+fn iface_test_helpers__treasury_inbound_transfer_metadata_entry__from_json(v: &Value) -> Option<iface_test_helpers::TreasuryInboundTransferMetadataEntry> {
     let m = v.as_object()?;
-    Some(iface_test_helpers::TreasuryInboundTransferMetadata {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_test_helpers::TreasuryInboundTransferMetadataEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -2032,7 +2044,7 @@ fn iface_test_helpers__treasury_outbound_payment__from_json(v: &Value) -> Option
         hosted_regulatory_receipt_url: m.get("hosted_regulatory_receipt_url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         id: m.get("id").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         livemode: m.get("livemode").and_then(|v| (v).as_bool()).unwrap_or_default(),
-        metadata: match m.get("metadata").and_then(|v| iface_test_helpers__treasury_outbound_payment_metadata__from_json(v)) { Some(x) => x, None => return None },
+        metadata: m.get("metadata").and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_test_helpers::TreasuryOutboundPaymentMetadataEntry { key: k.clone(), value: val })).collect())).unwrap_or_default(),
         object: match m.get("object").and_then(|v| (v).as_str().and_then(iface_test_helpers__treasury_outbound_payment_object_enum__from_str)) { Some(x) => x, None => return None },
         returned_details: m.get("returned_details").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         statement_descriptor: m.get("statement_descriptor").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
@@ -2042,10 +2054,11 @@ fn iface_test_helpers__treasury_outbound_payment__from_json(v: &Value) -> Option
     })
 }
 
-fn iface_test_helpers__treasury_outbound_payment_metadata__from_json(v: &Value) -> Option<iface_test_helpers::TreasuryOutboundPaymentMetadata> {
+fn iface_test_helpers__treasury_outbound_payment_metadata_entry__from_json(v: &Value) -> Option<iface_test_helpers::TreasuryOutboundPaymentMetadataEntry> {
     let m = v.as_object()?;
-    Some(iface_test_helpers::TreasuryOutboundPaymentMetadata {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_test_helpers::TreasuryOutboundPaymentMetadataEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -2074,7 +2087,7 @@ fn iface_test_helpers__treasury_outbound_transfer__from_json(v: &Value) -> Optio
         hosted_regulatory_receipt_url: m.get("hosted_regulatory_receipt_url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         id: m.get("id").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         livemode: m.get("livemode").and_then(|v| (v).as_bool()).unwrap_or_default(),
-        metadata: match m.get("metadata").and_then(|v| iface_test_helpers__treasury_outbound_transfer_metadata__from_json(v)) { Some(x) => x, None => return None },
+        metadata: m.get("metadata").and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_test_helpers::TreasuryOutboundTransferMetadataEntry { key: k.clone(), value: val })).collect())).unwrap_or_default(),
         object: match m.get("object").and_then(|v| (v).as_str().and_then(iface_test_helpers__treasury_outbound_transfer_object_enum__from_str)) { Some(x) => x, None => return None },
         returned_details: m.get("returned_details").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         statement_descriptor: m.get("statement_descriptor").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
@@ -2115,10 +2128,11 @@ fn iface_test_helpers__outbound_transfers_payment_method_details_us_bank_account
     })
 }
 
-fn iface_test_helpers__treasury_outbound_transfer_metadata__from_json(v: &Value) -> Option<iface_test_helpers::TreasuryOutboundTransferMetadata> {
+fn iface_test_helpers__treasury_outbound_transfer_metadata_entry__from_json(v: &Value) -> Option<iface_test_helpers::TreasuryOutboundTransferMetadataEntry> {
     let m = v.as_object()?;
-    Some(iface_test_helpers::TreasuryOutboundTransferMetadata {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_test_helpers::TreasuryOutboundTransferMetadataEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 

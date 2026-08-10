@@ -464,14 +464,15 @@ fn iface_on_demand_purchases_and_rentals__category_subcategories_item__to_json(p
 fn iface_on_demand_purchases_and_rentals__video_context__to_json(p: &iface_on_demand_purchases_and_rentals::VideoContext) -> Value {
     let mut m = Map::new();
     m.insert("action".into(), Value::String(iface_on_demand_purchases_and_rentals__video_context_action_enum__to_str(&p.action).into()));
-    m.insert("resource".into(), iface_on_demand_purchases_and_rentals__video_context_resource_op__to_json(&p.resource_op));
+    m.insert("resource".into(), Value::Object((&p.resource_op).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()));
     m.insert("resource_type".into(), Value::String((&p.resource_type).clone()));
     Value::Object(m)
 }
 
-fn iface_on_demand_purchases_and_rentals__video_context_resource_op__to_json(p: &iface_on_demand_purchases_and_rentals::VideoContextResourceOp) -> Value {
+fn iface_on_demand_purchases_and_rentals__video_context_resource_op_entry__to_json(p: &iface_on_demand_purchases_and_rentals::VideoContextResourceOpEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -1301,7 +1302,7 @@ fn iface_on_demand_purchases_and_rentals__on_demand_page_metadata_connections_me
 fn iface_on_demand_purchases_and_rentals__purchase_interaction__to_json(p: &iface_on_demand_purchases_and_rentals::PurchaseInteraction) -> Value {
     let mut m = Map::new();
     m.insert("buy".into(), match (&p.buy) { Some(v) => iface_on_demand_purchases_and_rentals__purchase_interaction_buy__to_json(v), None => Value::Null });
-    m.insert("rent".into(), match (&p.rent) { Some(v) => iface_on_demand_purchases_and_rentals__purchase_interaction_rent__to_json(v), None => Value::Null });
+    m.insert("rent".into(), match (&p.rent) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("subscribe".into(), match (&p.subscribe) { Some(v) => iface_on_demand_purchases_and_rentals__purchase_interaction_subscribe__to_json(v), None => Value::Null });
     Value::Object(m)
 }
@@ -1312,9 +1313,10 @@ fn iface_on_demand_purchases_and_rentals__purchase_interaction_buy__to_json(p: &
     Value::Object(m)
 }
 
-fn iface_on_demand_purchases_and_rentals__purchase_interaction_rent__to_json(p: &iface_on_demand_purchases_and_rentals::PurchaseInteractionRent) -> Value {
+fn iface_on_demand_purchases_and_rentals__purchase_interaction_rent_entry__to_json(p: &iface_on_demand_purchases_and_rentals::PurchaseInteractionRentEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -1350,13 +1352,14 @@ fn iface_on_demand_purchases_and_rentals__on_demand_page_subscription__to_json(p
     m.insert("active".into(), Value::Bool(*(&p.active)));
     m.insert("link".into(), Value::String((&p.link).clone()));
     m.insert("period".into(), match (&p.period) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("price".into(), iface_on_demand_purchases_and_rentals__on_demand_page_subscription_price__to_json(&p.price));
+    m.insert("price".into(), Value::Object((&p.price).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()));
     Value::Object(m)
 }
 
-fn iface_on_demand_purchases_and_rentals__on_demand_page_subscription_price__to_json(p: &iface_on_demand_purchases_and_rentals::OnDemandPageSubscriptionPrice) -> Value {
+fn iface_on_demand_purchases_and_rentals__on_demand_page_subscription_price_entry__to_json(p: &iface_on_demand_purchases_and_rentals::OnDemandPageSubscriptionPriceEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -1614,15 +1617,16 @@ fn iface_on_demand_purchases_and_rentals__video_context__from_json(v: &Value) ->
     let m = v.as_object()?;
     Some(iface_on_demand_purchases_and_rentals::VideoContext {
         action: match m.get("action").and_then(|v| (v).as_str().and_then(iface_on_demand_purchases_and_rentals__video_context_action_enum__from_str)) { Some(x) => x, None => return None },
-        resource_op: match m.get("resource").and_then(|v| iface_on_demand_purchases_and_rentals__video_context_resource_op__from_json(v)) { Some(x) => x, None => return None },
+        resource_op: m.get("resource").and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_on_demand_purchases_and_rentals::VideoContextResourceOpEntry { key: k.clone(), value: val })).collect())).unwrap_or_default(),
         resource_type: m.get("resource_type").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
-fn iface_on_demand_purchases_and_rentals__video_context_resource_op__from_json(v: &Value) -> Option<iface_on_demand_purchases_and_rentals::VideoContextResourceOp> {
+fn iface_on_demand_purchases_and_rentals__video_context_resource_op_entry__from_json(v: &Value) -> Option<iface_on_demand_purchases_and_rentals::VideoContextResourceOpEntry> {
     let m = v.as_object()?;
-    Some(iface_on_demand_purchases_and_rentals::VideoContextResourceOp {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_on_demand_purchases_and_rentals::VideoContextResourceOpEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -2548,7 +2552,7 @@ fn iface_on_demand_purchases_and_rentals__purchase_interaction__from_json(v: &Va
     let m = v.as_object()?;
     Some(iface_on_demand_purchases_and_rentals::PurchaseInteraction {
         buy: m.get("buy").filter(|v| !v.is_null()).and_then(|v| iface_on_demand_purchases_and_rentals__purchase_interaction_buy__from_json(v)),
-        rent: m.get("rent").filter(|v| !v.is_null()).and_then(|v| iface_on_demand_purchases_and_rentals__purchase_interaction_rent__from_json(v)),
+        rent: m.get("rent").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_on_demand_purchases_and_rentals::PurchaseInteractionRentEntry { key: k.clone(), value: val })).collect())),
         subscribe: m.get("subscribe").filter(|v| !v.is_null()).and_then(|v| iface_on_demand_purchases_and_rentals__purchase_interaction_subscribe__from_json(v)),
     })
 }
@@ -2560,10 +2564,11 @@ fn iface_on_demand_purchases_and_rentals__purchase_interaction_buy__from_json(v:
     })
 }
 
-fn iface_on_demand_purchases_and_rentals__purchase_interaction_rent__from_json(v: &Value) -> Option<iface_on_demand_purchases_and_rentals::PurchaseInteractionRent> {
+fn iface_on_demand_purchases_and_rentals__purchase_interaction_rent_entry__from_json(v: &Value) -> Option<iface_on_demand_purchases_and_rentals::PurchaseInteractionRentEntry> {
     let m = v.as_object()?;
-    Some(iface_on_demand_purchases_and_rentals::PurchaseInteractionRent {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_on_demand_purchases_and_rentals::PurchaseInteractionRentEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -2603,14 +2608,15 @@ fn iface_on_demand_purchases_and_rentals__on_demand_page_subscription__from_json
         active: m.get("active").and_then(|v| (v).as_bool()).unwrap_or_default(),
         link: m.get("link").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         period: m.get("period").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        price: match m.get("price").and_then(|v| iface_on_demand_purchases_and_rentals__on_demand_page_subscription_price__from_json(v)) { Some(x) => x, None => return None },
+        price: m.get("price").and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_on_demand_purchases_and_rentals::OnDemandPageSubscriptionPriceEntry { key: k.clone(), value: val })).collect())).unwrap_or_default(),
     })
 }
 
-fn iface_on_demand_purchases_and_rentals__on_demand_page_subscription_price__from_json(v: &Value) -> Option<iface_on_demand_purchases_and_rentals::OnDemandPageSubscriptionPrice> {
+fn iface_on_demand_purchases_and_rentals__on_demand_page_subscription_price_entry__from_json(v: &Value) -> Option<iface_on_demand_purchases_and_rentals::OnDemandPageSubscriptionPriceEntry> {
     let m = v.as_object()?;
-    Some(iface_on_demand_purchases_and_rentals::OnDemandPageSubscriptionPrice {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_on_demand_purchases_and_rentals::OnDemandPageSubscriptionPriceEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 

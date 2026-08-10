@@ -82,7 +82,7 @@ fn iface_webhooks__link__to_json(p: &iface_webhooks::Link) -> Value {
 
 fn iface_webhooks__webhook__to_json(p: &iface_webhooks::Webhook) -> Value {
     let mut m = Map::new();
-    m.insert("_id".into(), match (&p.id) { Some(v) => iface_webhooks__id__to_json(v), None => Value::Null });
+    m.insert("_id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("_links".into(), match (&p.links) { Some(v) => iface_webhooks__links__to_json(v), None => Value::Null });
     m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("on".into(), match (&p.on) { Some(v) => Value::Bool(*(v)), None => Value::Null });
@@ -90,12 +90,6 @@ fn iface_webhooks__webhook__to_json(p: &iface_webhooks::Webhook) -> Value {
     m.insert("statements".into(), match (&p.statements) { Some(v) => Value::Array((v).iter().map(|v| iface_webhooks__statement__to_json(v)).collect()), None => Value::Null });
     m.insert("tags".into(), match (&p.tags) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
     m.insert("url".into(), match (&p.url) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_webhooks__id__to_json(p: &iface_webhooks::Id) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -154,7 +148,7 @@ fn iface_webhooks__link__from_json(v: &Value) -> Option<iface_webhooks::Link> {
 fn iface_webhooks__webhook__from_json(v: &Value) -> Option<iface_webhooks::Webhook> {
     let m = v.as_object()?;
     Some(iface_webhooks::Webhook {
-        id: m.get("_id").filter(|v| !v.is_null()).and_then(|v| iface_webhooks__id__from_json(v)),
+        id: m.get("_id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         links: m.get("_links").filter(|v| !v.is_null()).and_then(|v| iface_webhooks__links__from_json(v)),
         name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         on: m.get("on").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
@@ -162,13 +156,6 @@ fn iface_webhooks__webhook__from_json(v: &Value) -> Option<iface_webhooks::Webho
         statements: m.get("statements").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_webhooks__statement__from_json(x)).collect())),
         tags: m.get("tags").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
         url: m.get("url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-    })
-}
-
-fn iface_webhooks__id__from_json(v: &Value) -> Option<iface_webhooks::Id> {
-    let m = v.as_object()?;
-    Some(iface_webhooks::Id {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 

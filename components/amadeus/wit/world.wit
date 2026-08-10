@@ -1,4 +1,4 @@
-package autostamp:amadeus@0.5.0;
+package autostamp:amadeus@0.6.0;
 
 interface shopping {
   enum get-flight-offers-travel-class-enum {
@@ -6,6 +6,71 @@ interface shopping {
     premium-economy,
     business,
     first,
+  }
+
+  enum travel-class {
+    economy,
+    premium-economy,
+    business,
+    first,
+  }
+
+  enum pricing-options-fare-type-item-enum {
+    published,
+    negotiated,
+    corporate,
+  }
+
+  enum flight-offer-source {
+    gds,
+  }
+
+  enum service-name {
+    priority-boarding,
+    airport-checkin,
+  }
+
+  enum slice-dice-indicator {
+    local-availability,
+    sub-od-availability-v1,
+    sub-od-availability-v2,
+  }
+
+  enum traveler-pricing-fare-option {
+    standard,
+    inclusive-tour,
+    spanish-melilla-resident,
+    spanish-ceuta-resident,
+    spanish-canary-resident,
+    spanish-balearic-resident,
+    air-france-metropolitan-discount-pass,
+    air-france-dom-discount-pass,
+    air-france-combined-discount-pass,
+    air-france-family,
+    adult-with-companion,
+    companion,
+  }
+
+  enum fee-type {
+    ticketing,
+    form-of-payment,
+    supplier,
+  }
+
+  enum traveler-type {
+    adult,
+    child,
+    senior,
+    young,
+    held-infant,
+    seated-infant,
+    student,
+  }
+
+  enum coverage {
+    most-segments,
+    at-least-one-segment,
+    all-segments,
   }
 
   record get-flight-offers-response {
@@ -82,12 +147,6 @@ interface shopping {
     weight-unit: option<string>
   }
 
-  /// quality of service offered in the cabin where the seat is located in this flight. Economy, premium economy, business or first class
-  record travel-class {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
   /// information related to the aircraft
   record aircraft-equipment {
     /// IATA aircraft code (http://www.flugzeuginfo.net/table_accodes_iata_en.php)
@@ -129,7 +188,7 @@ interface shopping {
   }
 
   record flight-offer-pricing-options {
-    fare-type: option<pricing-options-fare-type>,
+    fare-type: option<list<pricing-options-fare-type-item-enum>>,
     /// If true, returns the flight-offers with included checked bags only
     included-checked-bags-only: option<bool>,
     /// If true, returns the flight-offers with no penalty fares only
@@ -138,18 +197,6 @@ interface shopping {
     no-restriction-fare: option<bool>,
     /// If true, returns the flight-offers with refundable fares only
     refundable-fare: option<bool>
-  }
-
-  /// type of fare of the flight-offer
-  record pricing-options-fare-type {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
-  /// source of the flight offer
-  record flight-offer-source {
-    /// opaque schema; raw JSON
-    value: string
   }
 
   record flight-offer-traveler-pricings-item {
@@ -199,28 +246,9 @@ interface shopping {
     weight-unit: option<string>
   }
 
-  /// type of service
-  record service-name {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
   record flight-offer-traveler-pricings-item-fare-details-by-segment-item-allotment-details {
     tour-name: option<string>,
     tour-reference: option<string>
-  }
-
-  /// slice and Dice indicator, such as Local Availability, Sub OnD(Origin and Destination) 1 Availability and Sub OnD 2 Availability
-  record slice-dice-indicator {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
-  /// option specifying a group of fares, which may be valid under certain conditons
-  /// Can be used to specify special fare discount for a passenger
-  record traveler-pricing-fare-option {
-    /// opaque schema; raw JSON
-    value: string
   }
 
   record price {
@@ -242,23 +270,10 @@ interface shopping {
     type-op: option<fee-type>
   }
 
-  /// type of fee
-  record fee-type {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
   /// a tax
   record tax {
     amount: option<string>,
     code: option<string>
-  }
-
-  /// traveler type
-  /// age restrictions : CHILD < 12y, HELD_INFANT < 2y, SEATED_INFANT < 2y, SENIOR >=60y
-  record traveler-type {
-    /// opaque schema; raw JSON
-    value: string
   }
 
   record dictionaries {
@@ -409,12 +424,6 @@ interface shopping {
     coverage: option<coverage>,
     /// The list of originDestination identifiers for which the cabinRestriction applies
     origin-destination-ids: option<list<string>>
-  }
-
-  /// part of the trip covered by the travel class restriction (ALL_SEGMENTS if ommited)
-  record coverage {
-    /// opaque schema; raw JSON
-    value: string
   }
 
   /// Restriction towards carriers.

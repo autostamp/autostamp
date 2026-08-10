@@ -6,7 +6,7 @@
 /// | Secret name | Applied to each request as |
 /// | --- | --- |
 /// | `key` | query `key` |
-package autostamp:ip2location@0.5.0;
+package autostamp:ip2location@0.6.0;
 
 interface ip2-location-ip-geolocation {
   enum get-package-op-enum {

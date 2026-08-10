@@ -186,7 +186,7 @@ const OP_APPS_V1_PATCH_APPS_V1_NAMESPACED_CONTROLLER_REVISION: OpSpec = OpSpec {
         FieldSpec { snake: "field_manager", wire: "fieldManager", location: FieldLocation::Query },
         FieldSpec { snake: "field_validation", wire: "fieldValidation", location: FieldLocation::Query },
         FieldSpec { snake: "force", wire: "force", location: FieldLocation::Query },
-        FieldSpec { snake: "data", wire: "data", location: FieldLocation::Body },
+        FieldSpec { snake: "body", wire: "body", location: FieldLocation::Body },
     ],
     auth: &[
     ],
@@ -328,7 +328,7 @@ const OP_APPS_V1_PATCH_APPS_V1_NAMESPACED_DAEMON_SET: OpSpec = OpSpec {
         FieldSpec { snake: "field_manager", wire: "fieldManager", location: FieldLocation::Query },
         FieldSpec { snake: "field_validation", wire: "fieldValidation", location: FieldLocation::Query },
         FieldSpec { snake: "force", wire: "force", location: FieldLocation::Query },
-        FieldSpec { snake: "data", wire: "data", location: FieldLocation::Body },
+        FieldSpec { snake: "body", wire: "body", location: FieldLocation::Body },
     ],
     auth: &[
     ],
@@ -400,7 +400,7 @@ const OP_APPS_V1_PATCH_APPS_V1_NAMESPACED_DAEMON_SET_STATUS: OpSpec = OpSpec {
         FieldSpec { snake: "field_manager", wire: "fieldManager", location: FieldLocation::Query },
         FieldSpec { snake: "field_validation", wire: "fieldValidation", location: FieldLocation::Query },
         FieldSpec { snake: "force", wire: "force", location: FieldLocation::Query },
-        FieldSpec { snake: "data", wire: "data", location: FieldLocation::Body },
+        FieldSpec { snake: "body", wire: "body", location: FieldLocation::Body },
     ],
     auth: &[
     ],
@@ -519,7 +519,7 @@ const OP_APPS_V1_PATCH_APPS_V1_NAMESPACED_DEPLOYMENT: OpSpec = OpSpec {
         FieldSpec { snake: "field_manager", wire: "fieldManager", location: FieldLocation::Query },
         FieldSpec { snake: "field_validation", wire: "fieldValidation", location: FieldLocation::Query },
         FieldSpec { snake: "force", wire: "force", location: FieldLocation::Query },
-        FieldSpec { snake: "data", wire: "data", location: FieldLocation::Body },
+        FieldSpec { snake: "body", wire: "body", location: FieldLocation::Body },
     ],
     auth: &[
     ],
@@ -591,7 +591,7 @@ const OP_APPS_V1_PATCH_APPS_V1_NAMESPACED_DEPLOYMENT_SCALE: OpSpec = OpSpec {
         FieldSpec { snake: "field_manager", wire: "fieldManager", location: FieldLocation::Query },
         FieldSpec { snake: "field_validation", wire: "fieldValidation", location: FieldLocation::Query },
         FieldSpec { snake: "force", wire: "force", location: FieldLocation::Query },
-        FieldSpec { snake: "data", wire: "data", location: FieldLocation::Body },
+        FieldSpec { snake: "body", wire: "body", location: FieldLocation::Body },
     ],
     auth: &[
     ],
@@ -640,7 +640,7 @@ const OP_APPS_V1_PATCH_APPS_V1_NAMESPACED_DEPLOYMENT_STATUS: OpSpec = OpSpec {
         FieldSpec { snake: "field_manager", wire: "fieldManager", location: FieldLocation::Query },
         FieldSpec { snake: "field_validation", wire: "fieldValidation", location: FieldLocation::Query },
         FieldSpec { snake: "force", wire: "force", location: FieldLocation::Query },
-        FieldSpec { snake: "data", wire: "data", location: FieldLocation::Body },
+        FieldSpec { snake: "body", wire: "body", location: FieldLocation::Body },
     ],
     auth: &[
     ],
@@ -759,7 +759,7 @@ const OP_APPS_V1_PATCH_APPS_V1_NAMESPACED_REPLICA_SET: OpSpec = OpSpec {
         FieldSpec { snake: "field_manager", wire: "fieldManager", location: FieldLocation::Query },
         FieldSpec { snake: "field_validation", wire: "fieldValidation", location: FieldLocation::Query },
         FieldSpec { snake: "force", wire: "force", location: FieldLocation::Query },
-        FieldSpec { snake: "data", wire: "data", location: FieldLocation::Body },
+        FieldSpec { snake: "body", wire: "body", location: FieldLocation::Body },
     ],
     auth: &[
     ],
@@ -831,7 +831,7 @@ const OP_APPS_V1_PATCH_APPS_V1_NAMESPACED_REPLICA_SET_SCALE: OpSpec = OpSpec {
         FieldSpec { snake: "field_manager", wire: "fieldManager", location: FieldLocation::Query },
         FieldSpec { snake: "field_validation", wire: "fieldValidation", location: FieldLocation::Query },
         FieldSpec { snake: "force", wire: "force", location: FieldLocation::Query },
-        FieldSpec { snake: "data", wire: "data", location: FieldLocation::Body },
+        FieldSpec { snake: "body", wire: "body", location: FieldLocation::Body },
     ],
     auth: &[
     ],
@@ -880,7 +880,7 @@ const OP_APPS_V1_PATCH_APPS_V1_NAMESPACED_REPLICA_SET_STATUS: OpSpec = OpSpec {
         FieldSpec { snake: "field_manager", wire: "fieldManager", location: FieldLocation::Query },
         FieldSpec { snake: "field_validation", wire: "fieldValidation", location: FieldLocation::Query },
         FieldSpec { snake: "force", wire: "force", location: FieldLocation::Query },
-        FieldSpec { snake: "data", wire: "data", location: FieldLocation::Body },
+        FieldSpec { snake: "body", wire: "body", location: FieldLocation::Body },
     ],
     auth: &[
     ],
@@ -999,7 +999,7 @@ const OP_APPS_V1_PATCH_APPS_V1_NAMESPACED_STATEFUL_SET: OpSpec = OpSpec {
         FieldSpec { snake: "field_manager", wire: "fieldManager", location: FieldLocation::Query },
         FieldSpec { snake: "field_validation", wire: "fieldValidation", location: FieldLocation::Query },
         FieldSpec { snake: "force", wire: "force", location: FieldLocation::Query },
-        FieldSpec { snake: "data", wire: "data", location: FieldLocation::Body },
+        FieldSpec { snake: "body", wire: "body", location: FieldLocation::Body },
     ],
     auth: &[
     ],
@@ -1071,7 +1071,7 @@ const OP_APPS_V1_PATCH_APPS_V1_NAMESPACED_STATEFUL_SET_SCALE: OpSpec = OpSpec {
         FieldSpec { snake: "field_manager", wire: "fieldManager", location: FieldLocation::Query },
         FieldSpec { snake: "field_validation", wire: "fieldValidation", location: FieldLocation::Query },
         FieldSpec { snake: "force", wire: "force", location: FieldLocation::Query },
-        FieldSpec { snake: "data", wire: "data", location: FieldLocation::Body },
+        FieldSpec { snake: "body", wire: "body", location: FieldLocation::Body },
     ],
     auth: &[
     ],
@@ -1120,7 +1120,7 @@ const OP_APPS_V1_PATCH_APPS_V1_NAMESPACED_STATEFUL_SET_STATUS: OpSpec = OpSpec {
         FieldSpec { snake: "field_manager", wire: "fieldManager", location: FieldLocation::Query },
         FieldSpec { snake: "field_validation", wire: "fieldValidation", location: FieldLocation::Query },
         FieldSpec { snake: "force", wire: "force", location: FieldLocation::Query },
-        FieldSpec { snake: "data", wire: "data", location: FieldLocation::Body },
+        FieldSpec { snake: "body", wire: "body", location: FieldLocation::Body },
     ],
     auth: &[
     ],
@@ -1517,29 +1517,30 @@ fn iface_apps_v1__io_k8s_api_apps_v1_controller_revision_list__to_json(p: &iface
 fn iface_apps_v1__io_k8s_api_apps_v1_controller_revision__to_json(p: &iface_apps_v1::IoK8sApiAppsV1ControllerRevision) -> Value {
     let mut m = Map::new();
     m.insert("apiVersion".into(), match (&p.api_version) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("data".into(), match (&p.data) { Some(v) => iface_apps_v1__io_k8s_apimachinery_pkg_runtime_raw_extension__to_json(v), None => Value::Null });
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("kind".into(), match (&p.kind) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("metadata".into(), match (&p.metadata) { Some(v) => iface_apps_v1__io_k8s_apimachinery_pkg_apis_meta_v1_object_meta__to_json(v), None => Value::Null });
     m.insert("revision".into(), Value::Number(serde_json::Number::from(*(&p.revision))));
     Value::Object(m)
 }
 
-fn iface_apps_v1__io_k8s_apimachinery_pkg_runtime_raw_extension__to_json(p: &iface_apps_v1::IoK8sApimachineryPkgRuntimeRawExtension) -> Value {
+fn iface_apps_v1__io_k8s_apimachinery_pkg_runtime_raw_extension_entry__to_json(p: &iface_apps_v1::IoK8sApimachineryPkgRuntimeRawExtensionEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
 fn iface_apps_v1__io_k8s_apimachinery_pkg_apis_meta_v1_object_meta__to_json(p: &iface_apps_v1::IoK8sApimachineryPkgApisMetaV1ObjectMeta) -> Value {
     let mut m = Map::new();
-    m.insert("annotations".into(), match (&p.annotations) { Some(v) => iface_apps_v1__io_k8s_apimachinery_pkg_apis_meta_v1_object_meta_annotations__to_json(v), None => Value::Null });
-    m.insert("creationTimestamp".into(), match (&p.creation_timestamp) { Some(v) => iface_apps_v1__io_k8s_apimachinery_pkg_apis_meta_v1_time__to_json(v), None => Value::Null });
+    m.insert("annotations".into(), match (&p.annotations) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
+    m.insert("creationTimestamp".into(), match (&p.creation_timestamp) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("deletionGracePeriodSeconds".into(), match (&p.deletion_grace_period_seconds) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    m.insert("deletionTimestamp".into(), match (&p.deletion_timestamp) { Some(v) => iface_apps_v1__io_k8s_apimachinery_pkg_apis_meta_v1_time__to_json(v), None => Value::Null });
+    m.insert("deletionTimestamp".into(), match (&p.deletion_timestamp) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("finalizers".into(), match (&p.finalizers) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
     m.insert("generateName".into(), match (&p.generate_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("generation".into(), match (&p.generation) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    m.insert("labels".into(), match (&p.labels) { Some(v) => iface_apps_v1__io_k8s_apimachinery_pkg_apis_meta_v1_object_meta_labels__to_json(v), None => Value::Null });
+    m.insert("labels".into(), match (&p.labels) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("managedFields".into(), match (&p.managed_fields) { Some(v) => Value::Array((v).iter().map(|v| iface_apps_v1__io_k8s_apimachinery_pkg_apis_meta_v1_managed_fields_entry__to_json(v)).collect()), None => Value::Null });
     m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("namespace".into(), match (&p.namespace) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -1550,21 +1551,17 @@ fn iface_apps_v1__io_k8s_apimachinery_pkg_apis_meta_v1_object_meta__to_json(p: &
     Value::Object(m)
 }
 
-fn iface_apps_v1__io_k8s_apimachinery_pkg_apis_meta_v1_object_meta_annotations__to_json(p: &iface_apps_v1::IoK8sApimachineryPkgApisMetaV1ObjectMetaAnnotations) -> Value {
+fn iface_apps_v1__io_k8s_apimachinery_pkg_apis_meta_v1_object_meta_annotations_entry__to_json(p: &iface_apps_v1::IoK8sApimachineryPkgApisMetaV1ObjectMetaAnnotationsEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_apps_v1__io_k8s_apimachinery_pkg_apis_meta_v1_time__to_json(p: &iface_apps_v1::IoK8sApimachineryPkgApisMetaV1Time) -> Value {
-    let mut m = Map::new();
+    m.insert("key".into(), Value::String((&p.key).clone()));
     m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
-fn iface_apps_v1__io_k8s_apimachinery_pkg_apis_meta_v1_object_meta_labels__to_json(p: &iface_apps_v1::IoK8sApimachineryPkgApisMetaV1ObjectMetaLabels) -> Value {
+fn iface_apps_v1__io_k8s_apimachinery_pkg_apis_meta_v1_object_meta_labels_entry__to_json(p: &iface_apps_v1::IoK8sApimachineryPkgApisMetaV1ObjectMetaLabelsEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -1572,17 +1569,18 @@ fn iface_apps_v1__io_k8s_apimachinery_pkg_apis_meta_v1_managed_fields_entry__to_
     let mut m = Map::new();
     m.insert("apiVersion".into(), match (&p.api_version) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("fieldsType".into(), match (&p.fields_type) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("fieldsV1".into(), match (&p.fields_v1) { Some(v) => iface_apps_v1__io_k8s_apimachinery_pkg_apis_meta_v1_fields_v1__to_json(v), None => Value::Null });
+    m.insert("fieldsV1".into(), match (&p.fields_v1) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("manager".into(), match (&p.manager) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("operation".into(), match (&p.operation) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("subresource".into(), match (&p.subresource) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("time".into(), match (&p.time) { Some(v) => iface_apps_v1__io_k8s_apimachinery_pkg_apis_meta_v1_time__to_json(v), None => Value::Null });
+    m.insert("time".into(), match (&p.time) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_apps_v1__io_k8s_apimachinery_pkg_apis_meta_v1_fields_v1__to_json(p: &iface_apps_v1::IoK8sApimachineryPkgApisMetaV1FieldsV1) -> Value {
+fn iface_apps_v1__io_k8s_apimachinery_pkg_apis_meta_v1_fields_v1_entry__to_json(p: &iface_apps_v1::IoK8sApimachineryPkgApisMetaV1FieldsV1Entry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -1638,7 +1636,7 @@ fn iface_apps_v1__io_k8s_api_apps_v1_daemon_set_spec__to_json(p: &iface_apps_v1:
 fn iface_apps_v1__io_k8s_apimachinery_pkg_apis_meta_v1_label_selector__to_json(p: &iface_apps_v1::IoK8sApimachineryPkgApisMetaV1LabelSelector) -> Value {
     let mut m = Map::new();
     m.insert("matchExpressions".into(), match (&p.match_expressions) { Some(v) => Value::Array((v).iter().map(|v| iface_apps_v1__io_k8s_apimachinery_pkg_apis_meta_v1_label_selector_requirement__to_json(v)).collect()), None => Value::Null });
-    m.insert("matchLabels".into(), match (&p.match_labels) { Some(v) => iface_apps_v1__io_k8s_apimachinery_pkg_apis_meta_v1_label_selector_match_labels__to_json(v), None => Value::Null });
+    m.insert("matchLabels".into(), match (&p.match_labels) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -1650,9 +1648,10 @@ fn iface_apps_v1__io_k8s_apimachinery_pkg_apis_meta_v1_label_selector_requiremen
     Value::Object(m)
 }
 
-fn iface_apps_v1__io_k8s_apimachinery_pkg_apis_meta_v1_label_selector_match_labels__to_json(p: &iface_apps_v1::IoK8sApimachineryPkgApisMetaV1LabelSelectorMatchLabels) -> Value {
+fn iface_apps_v1__io_k8s_apimachinery_pkg_apis_meta_v1_label_selector_match_labels_entry__to_json(p: &iface_apps_v1::IoK8sApimachineryPkgApisMetaV1LabelSelectorMatchLabelsEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -1682,9 +1681,9 @@ fn iface_apps_v1__io_k8s_api_core_v1_pod_spec__to_json(p: &iface_apps_v1::IoK8sA
     m.insert("imagePullSecrets".into(), match (&p.image_pull_secrets) { Some(v) => Value::Array((v).iter().map(|v| iface_apps_v1__io_k8s_api_core_v1_local_object_reference__to_json(v)).collect()), None => Value::Null });
     m.insert("initContainers".into(), match (&p.init_containers) { Some(v) => Value::Array((v).iter().map(|v| iface_apps_v1__io_k8s_api_core_v1_container__to_json(v)).collect()), None => Value::Null });
     m.insert("nodeName".into(), match (&p.node_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("nodeSelector".into(), match (&p.node_selector) { Some(v) => iface_apps_v1__io_k8s_api_core_v1_pod_spec_node_selector__to_json(v), None => Value::Null });
+    m.insert("nodeSelector".into(), match (&p.node_selector) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("os".into(), match (&p.os) { Some(v) => iface_apps_v1__io_k8s_api_core_v1_pod_os__to_json(v), None => Value::Null });
-    m.insert("overhead".into(), match (&p.overhead) { Some(v) => iface_apps_v1__io_k8s_api_core_v1_pod_spec_overhead__to_json(v), None => Value::Null });
+    m.insert("overhead".into(), match (&p.overhead) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("preemptionPolicy".into(), match (&p.preemption_policy) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("priority".into(), match (&p.priority) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("priorityClassName".into(), match (&p.priority_class_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -1843,14 +1842,8 @@ fn iface_apps_v1__io_k8s_api_core_v1_object_field_selector__to_json(p: &iface_ap
 fn iface_apps_v1__io_k8s_api_core_v1_resource_field_selector__to_json(p: &iface_apps_v1::IoK8sApiCoreV1ResourceFieldSelector) -> Value {
     let mut m = Map::new();
     m.insert("containerName".into(), match (&p.container_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("divisor".into(), match (&p.divisor) { Some(v) => iface_apps_v1__io_k8s_apimachinery_pkg_api_resource_quantity__to_json(v), None => Value::Null });
+    m.insert("divisor".into(), match (&p.divisor) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("resource".into(), Value::String((&p.resource_op).clone()));
-    Value::Object(m)
-}
-
-fn iface_apps_v1__io_k8s_apimachinery_pkg_api_resource_quantity__to_json(p: &iface_apps_v1::IoK8sApimachineryPkgApiResourceQuantity) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -1910,7 +1903,7 @@ fn iface_apps_v1__io_k8s_api_core_v1_http_get_action__to_json(p: &iface_apps_v1:
     m.insert("host".into(), match (&p.host) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("httpHeaders".into(), match (&p.http_headers) { Some(v) => Value::Array((v).iter().map(|v| iface_apps_v1__io_k8s_api_core_v1_http_header__to_json(v)).collect()), None => Value::Null });
     m.insert("path".into(), match (&p.path) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("port".into(), iface_apps_v1__io_k8s_apimachinery_pkg_util_intstr_int_or_string__to_json(&p.port));
+    m.insert("port".into(), Value::String((&p.port).clone()));
     m.insert("scheme".into(), match (&p.scheme) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
@@ -1922,16 +1915,10 @@ fn iface_apps_v1__io_k8s_api_core_v1_http_header__to_json(p: &iface_apps_v1::IoK
     Value::Object(m)
 }
 
-fn iface_apps_v1__io_k8s_apimachinery_pkg_util_intstr_int_or_string__to_json(p: &iface_apps_v1::IoK8sApimachineryPkgUtilIntstrIntOrString) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
 fn iface_apps_v1__io_k8s_api_core_v1_tcp_socket_action__to_json(p: &iface_apps_v1::IoK8sApiCoreV1TcpSocketAction) -> Value {
     let mut m = Map::new();
     m.insert("host".into(), match (&p.host) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("port".into(), iface_apps_v1__io_k8s_apimachinery_pkg_util_intstr_int_or_string__to_json(&p.port));
+    m.insert("port".into(), Value::String((&p.port).clone()));
     Value::Object(m)
 }
 
@@ -1977,8 +1964,8 @@ fn iface_apps_v1__io_k8s_api_core_v1_container_resize_policy__to_json(p: &iface_
 fn iface_apps_v1__io_k8s_api_core_v1_resource_requirements__to_json(p: &iface_apps_v1::IoK8sApiCoreV1ResourceRequirements) -> Value {
     let mut m = Map::new();
     m.insert("claims".into(), match (&p.claims) { Some(v) => Value::Array((v).iter().map(|v| iface_apps_v1__io_k8s_api_core_v1_resource_claim__to_json(v)).collect()), None => Value::Null });
-    m.insert("limits".into(), match (&p.limits) { Some(v) => iface_apps_v1__io_k8s_api_core_v1_resource_requirements_limits__to_json(v), None => Value::Null });
-    m.insert("requests".into(), match (&p.requests) { Some(v) => iface_apps_v1__io_k8s_api_core_v1_resource_requirements_requests__to_json(v), None => Value::Null });
+    m.insert("limits".into(), match (&p.limits) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
+    m.insert("requests".into(), match (&p.requests) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -1988,15 +1975,17 @@ fn iface_apps_v1__io_k8s_api_core_v1_resource_claim__to_json(p: &iface_apps_v1::
     Value::Object(m)
 }
 
-fn iface_apps_v1__io_k8s_api_core_v1_resource_requirements_limits__to_json(p: &iface_apps_v1::IoK8sApiCoreV1ResourceRequirementsLimits) -> Value {
+fn iface_apps_v1__io_k8s_api_core_v1_resource_requirements_limits_entry__to_json(p: &iface_apps_v1::IoK8sApiCoreV1ResourceRequirementsLimitsEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
-fn iface_apps_v1__io_k8s_api_core_v1_resource_requirements_requests__to_json(p: &iface_apps_v1::IoK8sApiCoreV1ResourceRequirementsRequests) -> Value {
+fn iface_apps_v1__io_k8s_api_core_v1_resource_requirements_requests_entry__to_json(p: &iface_apps_v1::IoK8sApiCoreV1ResourceRequirementsRequestsEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -2123,9 +2112,10 @@ fn iface_apps_v1__io_k8s_api_core_v1_local_object_reference__to_json(p: &iface_a
     Value::Object(m)
 }
 
-fn iface_apps_v1__io_k8s_api_core_v1_pod_spec_node_selector__to_json(p: &iface_apps_v1::IoK8sApiCoreV1PodSpecNodeSelector) -> Value {
+fn iface_apps_v1__io_k8s_api_core_v1_pod_spec_node_selector_entry__to_json(p: &iface_apps_v1::IoK8sApiCoreV1PodSpecNodeSelectorEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -2135,9 +2125,10 @@ fn iface_apps_v1__io_k8s_api_core_v1_pod_os__to_json(p: &iface_apps_v1::IoK8sApi
     Value::Object(m)
 }
 
-fn iface_apps_v1__io_k8s_api_core_v1_pod_spec_overhead__to_json(p: &iface_apps_v1::IoK8sApiCoreV1PodSpecOverhead) -> Value {
+fn iface_apps_v1__io_k8s_api_core_v1_pod_spec_overhead_entry__to_json(p: &iface_apps_v1::IoK8sApiCoreV1PodSpecOverheadEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -2318,13 +2309,14 @@ fn iface_apps_v1__io_k8s_api_core_v1_csi_volume_source__to_json(p: &iface_apps_v
     m.insert("fsType".into(), match (&p.fs_type) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("nodePublishSecretRef".into(), match (&p.node_publish_secret_ref) { Some(v) => iface_apps_v1__io_k8s_api_core_v1_local_object_reference__to_json(v), None => Value::Null });
     m.insert("readOnly".into(), match (&p.read_only) { Some(v) => Value::Bool(*(v)), None => Value::Null });
-    m.insert("volumeAttributes".into(), match (&p.volume_attributes) { Some(v) => iface_apps_v1__io_k8s_api_core_v1_csi_volume_source_volume_attributes__to_json(v), None => Value::Null });
+    m.insert("volumeAttributes".into(), match (&p.volume_attributes) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_apps_v1__io_k8s_api_core_v1_csi_volume_source_volume_attributes__to_json(p: &iface_apps_v1::IoK8sApiCoreV1CsiVolumeSourceVolumeAttributes) -> Value {
+fn iface_apps_v1__io_k8s_api_core_v1_csi_volume_source_volume_attributes_entry__to_json(p: &iface_apps_v1::IoK8sApiCoreV1CsiVolumeSourceVolumeAttributesEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -2347,7 +2339,7 @@ fn iface_apps_v1__io_k8s_api_core_v1_downward_api_volume_file__to_json(p: &iface
 fn iface_apps_v1__io_k8s_api_core_v1_empty_dir_volume_source__to_json(p: &iface_apps_v1::IoK8sApiCoreV1EmptyDirVolumeSource) -> Value {
     let mut m = Map::new();
     m.insert("medium".into(), match (&p.medium) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("sizeLimit".into(), match (&p.size_limit) { Some(v) => iface_apps_v1__io_k8s_apimachinery_pkg_api_resource_quantity__to_json(v), None => Value::Null });
+    m.insert("sizeLimit".into(), match (&p.size_limit) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -2408,15 +2400,16 @@ fn iface_apps_v1__io_k8s_api_core_v1_flex_volume_source__to_json(p: &iface_apps_
     let mut m = Map::new();
     m.insert("driver".into(), Value::String((&p.driver).clone()));
     m.insert("fsType".into(), match (&p.fs_type) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("options".into(), match (&p.options) { Some(v) => iface_apps_v1__io_k8s_api_core_v1_flex_volume_source_options__to_json(v), None => Value::Null });
+    m.insert("options".into(), match (&p.options) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("readOnly".into(), match (&p.read_only) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     m.insert("secretRef".into(), match (&p.secret_ref) { Some(v) => iface_apps_v1__io_k8s_api_core_v1_local_object_reference__to_json(v), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_apps_v1__io_k8s_api_core_v1_flex_volume_source_options__to_json(p: &iface_apps_v1::IoK8sApiCoreV1FlexVolumeSourceOptions) -> Value {
+fn iface_apps_v1__io_k8s_api_core_v1_flex_volume_source_options_entry__to_json(p: &iface_apps_v1::IoK8sApiCoreV1FlexVolumeSourceOptionsEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -2627,8 +2620,8 @@ fn iface_apps_v1__io_k8s_api_apps_v1_daemon_set_update_strategy__to_json(p: &ifa
 
 fn iface_apps_v1__io_k8s_api_apps_v1_rolling_update_daemon_set__to_json(p: &iface_apps_v1::IoK8sApiAppsV1RollingUpdateDaemonSet) -> Value {
     let mut m = Map::new();
-    m.insert("maxSurge".into(), match (&p.max_surge) { Some(v) => iface_apps_v1__io_k8s_apimachinery_pkg_util_intstr_int_or_string__to_json(v), None => Value::Null });
-    m.insert("maxUnavailable".into(), match (&p.max_unavailable) { Some(v) => iface_apps_v1__io_k8s_apimachinery_pkg_util_intstr_int_or_string__to_json(v), None => Value::Null });
+    m.insert("maxSurge".into(), match (&p.max_surge) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("maxUnavailable".into(), match (&p.max_unavailable) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -2649,7 +2642,7 @@ fn iface_apps_v1__io_k8s_api_apps_v1_daemon_set_status__to_json(p: &iface_apps_v
 
 fn iface_apps_v1__io_k8s_api_apps_v1_daemon_set_condition__to_json(p: &iface_apps_v1::IoK8sApiAppsV1DaemonSetCondition) -> Value {
     let mut m = Map::new();
-    m.insert("lastTransitionTime".into(), match (&p.last_transition_time) { Some(v) => iface_apps_v1__io_k8s_apimachinery_pkg_apis_meta_v1_time__to_json(v), None => Value::Null });
+    m.insert("lastTransitionTime".into(), match (&p.last_transition_time) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("message".into(), match (&p.message) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("reason".into(), match (&p.reason) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("status".into(), Value::String((&p.status).clone()));
@@ -2698,8 +2691,8 @@ fn iface_apps_v1__io_k8s_api_apps_v1_deployment_strategy__to_json(p: &iface_apps
 
 fn iface_apps_v1__io_k8s_api_apps_v1_rolling_update_deployment__to_json(p: &iface_apps_v1::IoK8sApiAppsV1RollingUpdateDeployment) -> Value {
     let mut m = Map::new();
-    m.insert("maxSurge".into(), match (&p.max_surge) { Some(v) => iface_apps_v1__io_k8s_apimachinery_pkg_util_intstr_int_or_string__to_json(v), None => Value::Null });
-    m.insert("maxUnavailable".into(), match (&p.max_unavailable) { Some(v) => iface_apps_v1__io_k8s_apimachinery_pkg_util_intstr_int_or_string__to_json(v), None => Value::Null });
+    m.insert("maxSurge".into(), match (&p.max_surge) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("maxUnavailable".into(), match (&p.max_unavailable) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -2718,8 +2711,8 @@ fn iface_apps_v1__io_k8s_api_apps_v1_deployment_status__to_json(p: &iface_apps_v
 
 fn iface_apps_v1__io_k8s_api_apps_v1_deployment_condition__to_json(p: &iface_apps_v1::IoK8sApiAppsV1DeploymentCondition) -> Value {
     let mut m = Map::new();
-    m.insert("lastTransitionTime".into(), match (&p.last_transition_time) { Some(v) => iface_apps_v1__io_k8s_apimachinery_pkg_apis_meta_v1_time__to_json(v), None => Value::Null });
-    m.insert("lastUpdateTime".into(), match (&p.last_update_time) { Some(v) => iface_apps_v1__io_k8s_apimachinery_pkg_apis_meta_v1_time__to_json(v), None => Value::Null });
+    m.insert("lastTransitionTime".into(), match (&p.last_transition_time) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("lastUpdateTime".into(), match (&p.last_update_time) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("message".into(), match (&p.message) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("reason".into(), match (&p.reason) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("status".into(), Value::String((&p.status).clone()));
@@ -2766,6 +2759,34 @@ fn iface_apps_v1__io_k8s_apimachinery_pkg_apis_meta_v1_status_cause__to_json(p: 
     Value::Object(m)
 }
 
+fn iface_apps_v1__io_k8s_apimachinery_pkg_apis_meta_v1_patch_entry__to_json(p: &iface_apps_v1::IoK8sApimachineryPkgApisMetaV1PatchEntry) -> Value {
+    let mut m = Map::new();
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
+}
+
+fn iface_apps_v1__io_k8s_apimachinery_pkg_apis_meta_v1_patch_entry_v2__to_json(p: &iface_apps_v1::IoK8sApimachineryPkgApisMetaV1PatchEntryV2) -> Value {
+    let mut m = Map::new();
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
+}
+
+fn iface_apps_v1__io_k8s_apimachinery_pkg_apis_meta_v1_patch_entry_v3__to_json(p: &iface_apps_v1::IoK8sApimachineryPkgApisMetaV1PatchEntryV3) -> Value {
+    let mut m = Map::new();
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
+}
+
+fn iface_apps_v1__io_k8s_apimachinery_pkg_apis_meta_v1_patch_entry_v4__to_json(p: &iface_apps_v1::IoK8sApimachineryPkgApisMetaV1PatchEntryV4) -> Value {
+    let mut m = Map::new();
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
+}
+
 fn iface_apps_v1__io_k8s_api_autoscaling_v1_scale__to_json(p: &iface_apps_v1::IoK8sApiAutoscalingV1Scale) -> Value {
     let mut m = Map::new();
     m.insert("apiVersion".into(), match (&p.api_version) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -2786,6 +2807,20 @@ fn iface_apps_v1__io_k8s_api_autoscaling_v1_scale_status__to_json(p: &iface_apps
     let mut m = Map::new();
     m.insert("replicas".into(), Value::Number(serde_json::Number::from(*(&p.replicas))));
     m.insert("selector".into(), match (&p.selector) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_apps_v1__io_k8s_apimachinery_pkg_apis_meta_v1_patch_entry_v5__to_json(p: &iface_apps_v1::IoK8sApimachineryPkgApisMetaV1PatchEntryV5) -> Value {
+    let mut m = Map::new();
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
+}
+
+fn iface_apps_v1__io_k8s_apimachinery_pkg_apis_meta_v1_patch_entry_v6__to_json(p: &iface_apps_v1::IoK8sApimachineryPkgApisMetaV1PatchEntryV6) -> Value {
+    let mut m = Map::new();
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -2830,11 +2865,32 @@ fn iface_apps_v1__io_k8s_api_apps_v1_replica_set_status__to_json(p: &iface_apps_
 
 fn iface_apps_v1__io_k8s_api_apps_v1_replica_set_condition__to_json(p: &iface_apps_v1::IoK8sApiAppsV1ReplicaSetCondition) -> Value {
     let mut m = Map::new();
-    m.insert("lastTransitionTime".into(), match (&p.last_transition_time) { Some(v) => iface_apps_v1__io_k8s_apimachinery_pkg_apis_meta_v1_time__to_json(v), None => Value::Null });
+    m.insert("lastTransitionTime".into(), match (&p.last_transition_time) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("message".into(), match (&p.message) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("reason".into(), match (&p.reason) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("status".into(), Value::String((&p.status).clone()));
     m.insert("type".into(), Value::String((&p.type_op).clone()));
+    Value::Object(m)
+}
+
+fn iface_apps_v1__io_k8s_apimachinery_pkg_apis_meta_v1_patch_entry_v7__to_json(p: &iface_apps_v1::IoK8sApimachineryPkgApisMetaV1PatchEntryV7) -> Value {
+    let mut m = Map::new();
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
+}
+
+fn iface_apps_v1__io_k8s_apimachinery_pkg_apis_meta_v1_patch_entry_v8__to_json(p: &iface_apps_v1::IoK8sApimachineryPkgApisMetaV1PatchEntryV8) -> Value {
+    let mut m = Map::new();
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
+}
+
+fn iface_apps_v1__io_k8s_apimachinery_pkg_apis_meta_v1_patch_entry_v9__to_json(p: &iface_apps_v1::IoK8sApimachineryPkgApisMetaV1PatchEntryV9) -> Value {
+    let mut m = Map::new();
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -2895,7 +2951,7 @@ fn iface_apps_v1__io_k8s_api_apps_v1_stateful_set_update_strategy__to_json(p: &i
 
 fn iface_apps_v1__io_k8s_api_apps_v1_rolling_update_stateful_set_strategy__to_json(p: &iface_apps_v1::IoK8sApiAppsV1RollingUpdateStatefulSetStrategy) -> Value {
     let mut m = Map::new();
-    m.insert("maxUnavailable".into(), match (&p.max_unavailable) { Some(v) => iface_apps_v1__io_k8s_apimachinery_pkg_util_intstr_int_or_string__to_json(v), None => Value::Null });
+    m.insert("maxUnavailable".into(), match (&p.max_unavailable) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("partition".into(), match (&p.partition) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
@@ -2913,30 +2969,32 @@ fn iface_apps_v1__io_k8s_api_core_v1_persistent_volume_claim__to_json(p: &iface_
 fn iface_apps_v1__io_k8s_api_core_v1_persistent_volume_claim_status__to_json(p: &iface_apps_v1::IoK8sApiCoreV1PersistentVolumeClaimStatus) -> Value {
     let mut m = Map::new();
     m.insert("accessModes".into(), match (&p.access_modes) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
-    m.insert("allocatedResources".into(), match (&p.allocated_resources) { Some(v) => iface_apps_v1__io_k8s_api_core_v1_persistent_volume_claim_status_allocated_resources__to_json(v), None => Value::Null });
-    m.insert("capacity".into(), match (&p.capacity) { Some(v) => iface_apps_v1__io_k8s_api_core_v1_persistent_volume_claim_status_capacity__to_json(v), None => Value::Null });
+    m.insert("allocatedResources".into(), match (&p.allocated_resources) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
+    m.insert("capacity".into(), match (&p.capacity) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("conditions".into(), match (&p.conditions) { Some(v) => Value::Array((v).iter().map(|v| iface_apps_v1__io_k8s_api_core_v1_persistent_volume_claim_condition__to_json(v)).collect()), None => Value::Null });
     m.insert("phase".into(), match (&p.phase) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("resizeStatus".into(), match (&p.resize_status) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_apps_v1__io_k8s_api_core_v1_persistent_volume_claim_status_allocated_resources__to_json(p: &iface_apps_v1::IoK8sApiCoreV1PersistentVolumeClaimStatusAllocatedResources) -> Value {
+fn iface_apps_v1__io_k8s_api_core_v1_persistent_volume_claim_status_allocated_resources_entry__to_json(p: &iface_apps_v1::IoK8sApiCoreV1PersistentVolumeClaimStatusAllocatedResourcesEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
-fn iface_apps_v1__io_k8s_api_core_v1_persistent_volume_claim_status_capacity__to_json(p: &iface_apps_v1::IoK8sApiCoreV1PersistentVolumeClaimStatusCapacity) -> Value {
+fn iface_apps_v1__io_k8s_api_core_v1_persistent_volume_claim_status_capacity_entry__to_json(p: &iface_apps_v1::IoK8sApiCoreV1PersistentVolumeClaimStatusCapacityEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
 fn iface_apps_v1__io_k8s_api_core_v1_persistent_volume_claim_condition__to_json(p: &iface_apps_v1::IoK8sApiCoreV1PersistentVolumeClaimCondition) -> Value {
     let mut m = Map::new();
-    m.insert("lastProbeTime".into(), match (&p.last_probe_time) { Some(v) => iface_apps_v1__io_k8s_apimachinery_pkg_apis_meta_v1_time__to_json(v), None => Value::Null });
-    m.insert("lastTransitionTime".into(), match (&p.last_transition_time) { Some(v) => iface_apps_v1__io_k8s_apimachinery_pkg_apis_meta_v1_time__to_json(v), None => Value::Null });
+    m.insert("lastProbeTime".into(), match (&p.last_probe_time) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("lastTransitionTime".into(), match (&p.last_transition_time) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("message".into(), match (&p.message) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("reason".into(), match (&p.reason) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("status".into(), Value::String((&p.status).clone()));
@@ -2961,7 +3019,7 @@ fn iface_apps_v1__io_k8s_api_apps_v1_stateful_set_status__to_json(p: &iface_apps
 
 fn iface_apps_v1__io_k8s_api_apps_v1_stateful_set_condition__to_json(p: &iface_apps_v1::IoK8sApiAppsV1StatefulSetCondition) -> Value {
     let mut m = Map::new();
-    m.insert("lastTransitionTime".into(), match (&p.last_transition_time) { Some(v) => iface_apps_v1__io_k8s_apimachinery_pkg_apis_meta_v1_time__to_json(v), None => Value::Null });
+    m.insert("lastTransitionTime".into(), match (&p.last_transition_time) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("message".into(), match (&p.message) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("reason".into(), match (&p.reason) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("status".into(), Value::String((&p.status).clone()));
@@ -2969,10 +3027,38 @@ fn iface_apps_v1__io_k8s_api_apps_v1_stateful_set_condition__to_json(p: &iface_a
     Value::Object(m)
 }
 
+fn iface_apps_v1__io_k8s_apimachinery_pkg_apis_meta_v1_patch_entry_v10__to_json(p: &iface_apps_v1::IoK8sApimachineryPkgApisMetaV1PatchEntryV10) -> Value {
+    let mut m = Map::new();
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
+}
+
+fn iface_apps_v1__io_k8s_apimachinery_pkg_apis_meta_v1_patch_entry_v11__to_json(p: &iface_apps_v1::IoK8sApimachineryPkgApisMetaV1PatchEntryV11) -> Value {
+    let mut m = Map::new();
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
+}
+
+fn iface_apps_v1__io_k8s_apimachinery_pkg_apis_meta_v1_patch_entry_v12__to_json(p: &iface_apps_v1::IoK8sApimachineryPkgApisMetaV1PatchEntryV12) -> Value {
+    let mut m = Map::new();
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
+}
+
 fn iface_apps_v1__io_k8s_apimachinery_pkg_apis_meta_v1_watch_event__to_json(p: &iface_apps_v1::IoK8sApimachineryPkgApisMetaV1WatchEvent) -> Value {
     let mut m = Map::new();
-    m.insert("object".into(), iface_apps_v1__io_k8s_apimachinery_pkg_runtime_raw_extension__to_json(&p.object));
+    m.insert("object".into(), Value::Object((&p.object).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()));
     m.insert("type".into(), Value::String((&p.type_op).clone()));
+    Value::Object(m)
+}
+
+fn iface_apps_v1__io_k8s_apimachinery_pkg_runtime_raw_extension_entry_v2__to_json(p: &iface_apps_v1::IoK8sApimachineryPkgRuntimeRawExtensionEntryV2) -> Value {
+    let mut m = Map::new();
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -3049,7 +3135,7 @@ fn iface_apps_v1__create_apps_v1_namespaced_controller_revision_params__to_json(
     m.insert("field_manager".into(), match (&p.field_manager) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("field_validation".into(), match (&p.field_validation) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("api_version".into(), match (&p.api_version) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("data".into(), match (&p.data) { Some(v) => iface_apps_v1__io_k8s_apimachinery_pkg_runtime_raw_extension__to_json(v), None => Value::Null });
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("kind".into(), match (&p.kind) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("metadata".into(), match (&p.metadata) { Some(v) => iface_apps_v1__io_k8s_apimachinery_pkg_apis_meta_v1_object_meta__to_json(v), None => Value::Null });
     m.insert("revision".into(), Value::Number(serde_json::Number::from(*(&p.revision))));
@@ -3099,7 +3185,7 @@ fn iface_apps_v1__replace_apps_v1_namespaced_controller_revision_params__to_json
     m.insert("field_manager".into(), match (&p.field_manager) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("field_validation".into(), match (&p.field_validation) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("api_version".into(), match (&p.api_version) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("data".into(), match (&p.data) { Some(v) => iface_apps_v1__io_k8s_apimachinery_pkg_runtime_raw_extension__to_json(v), None => Value::Null });
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("kind".into(), match (&p.kind) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("metadata".into(), match (&p.metadata) { Some(v) => iface_apps_v1__io_k8s_apimachinery_pkg_apis_meta_v1_object_meta__to_json(v), None => Value::Null });
     m.insert("revision".into(), Value::Number(serde_json::Number::from(*(&p.revision))));
@@ -3115,7 +3201,7 @@ fn iface_apps_v1__patch_apps_v1_namespaced_controller_revision_params__to_json(p
     m.insert("field_manager".into(), match (&p.field_manager) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("field_validation".into(), match (&p.field_validation) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("force".into(), match (&p.force) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("body".into(), Value::Object((&p.body).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()));
     Value::Object(m)
 }
 
@@ -3229,7 +3315,7 @@ fn iface_apps_v1__patch_apps_v1_namespaced_daemon_set_params__to_json(p: &iface_
     m.insert("field_manager".into(), match (&p.field_manager) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("field_validation".into(), match (&p.field_validation) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("force".into(), match (&p.force) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("body".into(), Value::Object((&p.body).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()));
     Value::Object(m)
 }
 
@@ -3285,7 +3371,7 @@ fn iface_apps_v1__patch_apps_v1_namespaced_daemon_set_status_params__to_json(p: 
     m.insert("field_manager".into(), match (&p.field_manager) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("field_validation".into(), match (&p.field_validation) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("force".into(), match (&p.force) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("body".into(), Value::Object((&p.body).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()));
     Value::Object(m)
 }
 
@@ -3380,7 +3466,7 @@ fn iface_apps_v1__patch_apps_v1_namespaced_deployment_params__to_json(p: &iface_
     m.insert("field_manager".into(), match (&p.field_manager) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("field_validation".into(), match (&p.field_validation) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("force".into(), match (&p.force) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("body".into(), Value::Object((&p.body).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()));
     Value::Object(m)
 }
 
@@ -3436,7 +3522,7 @@ fn iface_apps_v1__patch_apps_v1_namespaced_deployment_scale_params__to_json(p: &
     m.insert("field_manager".into(), match (&p.field_manager) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("field_validation".into(), match (&p.field_validation) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("force".into(), match (&p.force) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("body".into(), Value::Object((&p.body).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()));
     Value::Object(m)
 }
 
@@ -3473,7 +3559,7 @@ fn iface_apps_v1__patch_apps_v1_namespaced_deployment_status_params__to_json(p: 
     m.insert("field_manager".into(), match (&p.field_manager) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("field_validation".into(), match (&p.field_validation) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("force".into(), match (&p.force) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("body".into(), Value::Object((&p.body).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()));
     Value::Object(m)
 }
 
@@ -3568,7 +3654,7 @@ fn iface_apps_v1__patch_apps_v1_namespaced_replica_set_params__to_json(p: &iface
     m.insert("field_manager".into(), match (&p.field_manager) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("field_validation".into(), match (&p.field_validation) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("force".into(), match (&p.force) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("body".into(), Value::Object((&p.body).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()));
     Value::Object(m)
 }
 
@@ -3624,7 +3710,7 @@ fn iface_apps_v1__patch_apps_v1_namespaced_replica_set_scale_params__to_json(p: 
     m.insert("field_manager".into(), match (&p.field_manager) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("field_validation".into(), match (&p.field_validation) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("force".into(), match (&p.force) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("body".into(), Value::Object((&p.body).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()));
     Value::Object(m)
 }
 
@@ -3661,7 +3747,7 @@ fn iface_apps_v1__patch_apps_v1_namespaced_replica_set_status_params__to_json(p:
     m.insert("field_manager".into(), match (&p.field_manager) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("field_validation".into(), match (&p.field_validation) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("force".into(), match (&p.force) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("body".into(), Value::Object((&p.body).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()));
     Value::Object(m)
 }
 
@@ -3756,7 +3842,7 @@ fn iface_apps_v1__patch_apps_v1_namespaced_stateful_set_params__to_json(p: &ifac
     m.insert("field_manager".into(), match (&p.field_manager) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("field_validation".into(), match (&p.field_validation) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("force".into(), match (&p.force) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("body".into(), Value::Object((&p.body).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()));
     Value::Object(m)
 }
 
@@ -3812,7 +3898,7 @@ fn iface_apps_v1__patch_apps_v1_namespaced_stateful_set_scale_params__to_json(p:
     m.insert("field_manager".into(), match (&p.field_manager) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("field_validation".into(), match (&p.field_validation) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("force".into(), match (&p.force) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("body".into(), Value::Object((&p.body).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()));
     Value::Object(m)
 }
 
@@ -3849,7 +3935,7 @@ fn iface_apps_v1__patch_apps_v1_namespaced_stateful_set_status_params__to_json(p
     m.insert("field_manager".into(), match (&p.field_manager) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("field_validation".into(), match (&p.field_validation) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("force".into(), match (&p.force) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("body".into(), Value::Object((&p.body).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()));
     Value::Object(m)
 }
 
@@ -4180,31 +4266,32 @@ fn iface_apps_v1__io_k8s_api_apps_v1_controller_revision__from_json(v: &Value) -
     let m = v.as_object()?;
     Some(iface_apps_v1::IoK8sApiAppsV1ControllerRevision {
         api_version: m.get("apiVersion").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| iface_apps_v1__io_k8s_apimachinery_pkg_runtime_raw_extension__from_json(v)),
+        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_apps_v1::IoK8sApimachineryPkgRuntimeRawExtensionEntry { key: k.clone(), value: val })).collect())),
         kind: m.get("kind").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         metadata: m.get("metadata").filter(|v| !v.is_null()).and_then(|v| iface_apps_v1__io_k8s_apimachinery_pkg_apis_meta_v1_object_meta__from_json(v)),
         revision: m.get("revision").and_then(|v| (v).as_i64()).unwrap_or_default(),
     })
 }
 
-fn iface_apps_v1__io_k8s_apimachinery_pkg_runtime_raw_extension__from_json(v: &Value) -> Option<iface_apps_v1::IoK8sApimachineryPkgRuntimeRawExtension> {
+fn iface_apps_v1__io_k8s_apimachinery_pkg_runtime_raw_extension_entry__from_json(v: &Value) -> Option<iface_apps_v1::IoK8sApimachineryPkgRuntimeRawExtensionEntry> {
     let m = v.as_object()?;
-    Some(iface_apps_v1::IoK8sApimachineryPkgRuntimeRawExtension {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_apps_v1::IoK8sApimachineryPkgRuntimeRawExtensionEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
 fn iface_apps_v1__io_k8s_apimachinery_pkg_apis_meta_v1_object_meta__from_json(v: &Value) -> Option<iface_apps_v1::IoK8sApimachineryPkgApisMetaV1ObjectMeta> {
     let m = v.as_object()?;
     Some(iface_apps_v1::IoK8sApimachineryPkgApisMetaV1ObjectMeta {
-        annotations: m.get("annotations").filter(|v| !v.is_null()).and_then(|v| iface_apps_v1__io_k8s_apimachinery_pkg_apis_meta_v1_object_meta_annotations__from_json(v)),
-        creation_timestamp: m.get("creationTimestamp").filter(|v| !v.is_null()).and_then(|v| iface_apps_v1__io_k8s_apimachinery_pkg_apis_meta_v1_time__from_json(v)),
+        annotations: m.get("annotations").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_apps_v1::IoK8sApimachineryPkgApisMetaV1ObjectMetaAnnotationsEntry { key: k.clone(), value: val })).collect())),
+        creation_timestamp: m.get("creationTimestamp").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         deletion_grace_period_seconds: m.get("deletionGracePeriodSeconds").filter(|v| !v.is_null()).and_then(|v| (v).as_i64()),
-        deletion_timestamp: m.get("deletionTimestamp").filter(|v| !v.is_null()).and_then(|v| iface_apps_v1__io_k8s_apimachinery_pkg_apis_meta_v1_time__from_json(v)),
+        deletion_timestamp: m.get("deletionTimestamp").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         finalizers: m.get("finalizers").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
         generate_name: m.get("generateName").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         generation: m.get("generation").filter(|v| !v.is_null()).and_then(|v| (v).as_i64()),
-        labels: m.get("labels").filter(|v| !v.is_null()).and_then(|v| iface_apps_v1__io_k8s_apimachinery_pkg_apis_meta_v1_object_meta_labels__from_json(v)),
+        labels: m.get("labels").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_apps_v1::IoK8sApimachineryPkgApisMetaV1ObjectMetaLabelsEntry { key: k.clone(), value: val })).collect())),
         managed_fields: m.get("managedFields").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_apps_v1__io_k8s_apimachinery_pkg_apis_meta_v1_managed_fields_entry__from_json(x)).collect())),
         name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         namespace: m.get("namespace").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
@@ -4215,24 +4302,19 @@ fn iface_apps_v1__io_k8s_apimachinery_pkg_apis_meta_v1_object_meta__from_json(v:
     })
 }
 
-fn iface_apps_v1__io_k8s_apimachinery_pkg_apis_meta_v1_object_meta_annotations__from_json(v: &Value) -> Option<iface_apps_v1::IoK8sApimachineryPkgApisMetaV1ObjectMetaAnnotations> {
+fn iface_apps_v1__io_k8s_apimachinery_pkg_apis_meta_v1_object_meta_annotations_entry__from_json(v: &Value) -> Option<iface_apps_v1::IoK8sApimachineryPkgApisMetaV1ObjectMetaAnnotationsEntry> {
     let m = v.as_object()?;
-    Some(iface_apps_v1::IoK8sApimachineryPkgApisMetaV1ObjectMetaAnnotations {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-    })
-}
-
-fn iface_apps_v1__io_k8s_apimachinery_pkg_apis_meta_v1_time__from_json(v: &Value) -> Option<iface_apps_v1::IoK8sApimachineryPkgApisMetaV1Time> {
-    let m = v.as_object()?;
-    Some(iface_apps_v1::IoK8sApimachineryPkgApisMetaV1Time {
+    Some(iface_apps_v1::IoK8sApimachineryPkgApisMetaV1ObjectMetaAnnotationsEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
-fn iface_apps_v1__io_k8s_apimachinery_pkg_apis_meta_v1_object_meta_labels__from_json(v: &Value) -> Option<iface_apps_v1::IoK8sApimachineryPkgApisMetaV1ObjectMetaLabels> {
+fn iface_apps_v1__io_k8s_apimachinery_pkg_apis_meta_v1_object_meta_labels_entry__from_json(v: &Value) -> Option<iface_apps_v1::IoK8sApimachineryPkgApisMetaV1ObjectMetaLabelsEntry> {
     let m = v.as_object()?;
-    Some(iface_apps_v1::IoK8sApimachineryPkgApisMetaV1ObjectMetaLabels {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_apps_v1::IoK8sApimachineryPkgApisMetaV1ObjectMetaLabelsEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -4241,18 +4323,19 @@ fn iface_apps_v1__io_k8s_apimachinery_pkg_apis_meta_v1_managed_fields_entry__fro
     Some(iface_apps_v1::IoK8sApimachineryPkgApisMetaV1ManagedFieldsEntry {
         api_version: m.get("apiVersion").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         fields_type: m.get("fieldsType").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        fields_v1: m.get("fieldsV1").filter(|v| !v.is_null()).and_then(|v| iface_apps_v1__io_k8s_apimachinery_pkg_apis_meta_v1_fields_v1__from_json(v)),
+        fields_v1: m.get("fieldsV1").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_apps_v1::IoK8sApimachineryPkgApisMetaV1FieldsV1Entry { key: k.clone(), value: val })).collect())),
         manager: m.get("manager").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         operation: m.get("operation").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         subresource: m.get("subresource").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        time: m.get("time").filter(|v| !v.is_null()).and_then(|v| iface_apps_v1__io_k8s_apimachinery_pkg_apis_meta_v1_time__from_json(v)),
+        time: m.get("time").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
     })
 }
 
-fn iface_apps_v1__io_k8s_apimachinery_pkg_apis_meta_v1_fields_v1__from_json(v: &Value) -> Option<iface_apps_v1::IoK8sApimachineryPkgApisMetaV1FieldsV1> {
+fn iface_apps_v1__io_k8s_apimachinery_pkg_apis_meta_v1_fields_v1_entry__from_json(v: &Value) -> Option<iface_apps_v1::IoK8sApimachineryPkgApisMetaV1FieldsV1Entry> {
     let m = v.as_object()?;
-    Some(iface_apps_v1::IoK8sApimachineryPkgApisMetaV1FieldsV1 {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_apps_v1::IoK8sApimachineryPkgApisMetaV1FieldsV1Entry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -4314,7 +4397,7 @@ fn iface_apps_v1__io_k8s_apimachinery_pkg_apis_meta_v1_label_selector__from_json
     let m = v.as_object()?;
     Some(iface_apps_v1::IoK8sApimachineryPkgApisMetaV1LabelSelector {
         match_expressions: m.get("matchExpressions").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_apps_v1__io_k8s_apimachinery_pkg_apis_meta_v1_label_selector_requirement__from_json(x)).collect())),
-        match_labels: m.get("matchLabels").filter(|v| !v.is_null()).and_then(|v| iface_apps_v1__io_k8s_apimachinery_pkg_apis_meta_v1_label_selector_match_labels__from_json(v)),
+        match_labels: m.get("matchLabels").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_apps_v1::IoK8sApimachineryPkgApisMetaV1LabelSelectorMatchLabelsEntry { key: k.clone(), value: val })).collect())),
     })
 }
 
@@ -4327,10 +4410,11 @@ fn iface_apps_v1__io_k8s_apimachinery_pkg_apis_meta_v1_label_selector_requiremen
     })
 }
 
-fn iface_apps_v1__io_k8s_apimachinery_pkg_apis_meta_v1_label_selector_match_labels__from_json(v: &Value) -> Option<iface_apps_v1::IoK8sApimachineryPkgApisMetaV1LabelSelectorMatchLabels> {
+fn iface_apps_v1__io_k8s_apimachinery_pkg_apis_meta_v1_label_selector_match_labels_entry__from_json(v: &Value) -> Option<iface_apps_v1::IoK8sApimachineryPkgApisMetaV1LabelSelectorMatchLabelsEntry> {
     let m = v.as_object()?;
-    Some(iface_apps_v1::IoK8sApimachineryPkgApisMetaV1LabelSelectorMatchLabels {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_apps_v1::IoK8sApimachineryPkgApisMetaV1LabelSelectorMatchLabelsEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -4362,9 +4446,9 @@ fn iface_apps_v1__io_k8s_api_core_v1_pod_spec__from_json(v: &Value) -> Option<if
         image_pull_secrets: m.get("imagePullSecrets").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_apps_v1__io_k8s_api_core_v1_local_object_reference__from_json(x)).collect())),
         init_containers: m.get("initContainers").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_apps_v1__io_k8s_api_core_v1_container__from_json(x)).collect())),
         node_name: m.get("nodeName").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        node_selector: m.get("nodeSelector").filter(|v| !v.is_null()).and_then(|v| iface_apps_v1__io_k8s_api_core_v1_pod_spec_node_selector__from_json(v)),
+        node_selector: m.get("nodeSelector").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_apps_v1::IoK8sApiCoreV1PodSpecNodeSelectorEntry { key: k.clone(), value: val })).collect())),
         os: m.get("os").filter(|v| !v.is_null()).and_then(|v| iface_apps_v1__io_k8s_api_core_v1_pod_os__from_json(v)),
-        overhead: m.get("overhead").filter(|v| !v.is_null()).and_then(|v| iface_apps_v1__io_k8s_api_core_v1_pod_spec_overhead__from_json(v)),
+        overhead: m.get("overhead").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_apps_v1::IoK8sApiCoreV1PodSpecOverheadEntry { key: k.clone(), value: val })).collect())),
         preemption_policy: m.get("preemptionPolicy").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         priority: m.get("priority").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
         priority_class_name: m.get("priorityClassName").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
@@ -4539,15 +4623,8 @@ fn iface_apps_v1__io_k8s_api_core_v1_resource_field_selector__from_json(v: &Valu
     let m = v.as_object()?;
     Some(iface_apps_v1::IoK8sApiCoreV1ResourceFieldSelector {
         container_name: m.get("containerName").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        divisor: m.get("divisor").filter(|v| !v.is_null()).and_then(|v| iface_apps_v1__io_k8s_apimachinery_pkg_api_resource_quantity__from_json(v)),
+        divisor: m.get("divisor").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         resource_op: m.get("resource").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-    })
-}
-
-fn iface_apps_v1__io_k8s_apimachinery_pkg_api_resource_quantity__from_json(v: &Value) -> Option<iface_apps_v1::IoK8sApimachineryPkgApiResourceQuantity> {
-    let m = v.as_object()?;
-    Some(iface_apps_v1::IoK8sApimachineryPkgApiResourceQuantity {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -4615,7 +4692,7 @@ fn iface_apps_v1__io_k8s_api_core_v1_http_get_action__from_json(v: &Value) -> Op
         host: m.get("host").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         http_headers: m.get("httpHeaders").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_apps_v1__io_k8s_api_core_v1_http_header__from_json(x)).collect())),
         path: m.get("path").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        port: match m.get("port").and_then(|v| iface_apps_v1__io_k8s_apimachinery_pkg_util_intstr_int_or_string__from_json(v)) { Some(x) => x, None => return None },
+        port: m.get("port").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         scheme: m.get("scheme").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
     })
 }
@@ -4628,18 +4705,11 @@ fn iface_apps_v1__io_k8s_api_core_v1_http_header__from_json(v: &Value) -> Option
     })
 }
 
-fn iface_apps_v1__io_k8s_apimachinery_pkg_util_intstr_int_or_string__from_json(v: &Value) -> Option<iface_apps_v1::IoK8sApimachineryPkgUtilIntstrIntOrString> {
-    let m = v.as_object()?;
-    Some(iface_apps_v1::IoK8sApimachineryPkgUtilIntstrIntOrString {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-    })
-}
-
 fn iface_apps_v1__io_k8s_api_core_v1_tcp_socket_action__from_json(v: &Value) -> Option<iface_apps_v1::IoK8sApiCoreV1TcpSocketAction> {
     let m = v.as_object()?;
     Some(iface_apps_v1::IoK8sApiCoreV1TcpSocketAction {
         host: m.get("host").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        port: match m.get("port").and_then(|v| iface_apps_v1__io_k8s_apimachinery_pkg_util_intstr_int_or_string__from_json(v)) { Some(x) => x, None => return None },
+        port: m.get("port").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -4690,8 +4760,8 @@ fn iface_apps_v1__io_k8s_api_core_v1_resource_requirements__from_json(v: &Value)
     let m = v.as_object()?;
     Some(iface_apps_v1::IoK8sApiCoreV1ResourceRequirements {
         claims: m.get("claims").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_apps_v1__io_k8s_api_core_v1_resource_claim__from_json(x)).collect())),
-        limits: m.get("limits").filter(|v| !v.is_null()).and_then(|v| iface_apps_v1__io_k8s_api_core_v1_resource_requirements_limits__from_json(v)),
-        requests: m.get("requests").filter(|v| !v.is_null()).and_then(|v| iface_apps_v1__io_k8s_api_core_v1_resource_requirements_requests__from_json(v)),
+        limits: m.get("limits").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_apps_v1::IoK8sApiCoreV1ResourceRequirementsLimitsEntry { key: k.clone(), value: val })).collect())),
+        requests: m.get("requests").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_apps_v1::IoK8sApiCoreV1ResourceRequirementsRequestsEntry { key: k.clone(), value: val })).collect())),
     })
 }
 
@@ -4702,17 +4772,19 @@ fn iface_apps_v1__io_k8s_api_core_v1_resource_claim__from_json(v: &Value) -> Opt
     })
 }
 
-fn iface_apps_v1__io_k8s_api_core_v1_resource_requirements_limits__from_json(v: &Value) -> Option<iface_apps_v1::IoK8sApiCoreV1ResourceRequirementsLimits> {
+fn iface_apps_v1__io_k8s_api_core_v1_resource_requirements_limits_entry__from_json(v: &Value) -> Option<iface_apps_v1::IoK8sApiCoreV1ResourceRequirementsLimitsEntry> {
     let m = v.as_object()?;
-    Some(iface_apps_v1::IoK8sApiCoreV1ResourceRequirementsLimits {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_apps_v1::IoK8sApiCoreV1ResourceRequirementsLimitsEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
-fn iface_apps_v1__io_k8s_api_core_v1_resource_requirements_requests__from_json(v: &Value) -> Option<iface_apps_v1::IoK8sApiCoreV1ResourceRequirementsRequests> {
+fn iface_apps_v1__io_k8s_api_core_v1_resource_requirements_requests_entry__from_json(v: &Value) -> Option<iface_apps_v1::IoK8sApiCoreV1ResourceRequirementsRequestsEntry> {
     let m = v.as_object()?;
-    Some(iface_apps_v1::IoK8sApiCoreV1ResourceRequirementsRequests {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_apps_v1::IoK8sApiCoreV1ResourceRequirementsRequestsEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -4851,10 +4923,11 @@ fn iface_apps_v1__io_k8s_api_core_v1_local_object_reference__from_json(v: &Value
     })
 }
 
-fn iface_apps_v1__io_k8s_api_core_v1_pod_spec_node_selector__from_json(v: &Value) -> Option<iface_apps_v1::IoK8sApiCoreV1PodSpecNodeSelector> {
+fn iface_apps_v1__io_k8s_api_core_v1_pod_spec_node_selector_entry__from_json(v: &Value) -> Option<iface_apps_v1::IoK8sApiCoreV1PodSpecNodeSelectorEntry> {
     let m = v.as_object()?;
-    Some(iface_apps_v1::IoK8sApiCoreV1PodSpecNodeSelector {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_apps_v1::IoK8sApiCoreV1PodSpecNodeSelectorEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -4865,10 +4938,11 @@ fn iface_apps_v1__io_k8s_api_core_v1_pod_os__from_json(v: &Value) -> Option<ifac
     })
 }
 
-fn iface_apps_v1__io_k8s_api_core_v1_pod_spec_overhead__from_json(v: &Value) -> Option<iface_apps_v1::IoK8sApiCoreV1PodSpecOverhead> {
+fn iface_apps_v1__io_k8s_api_core_v1_pod_spec_overhead_entry__from_json(v: &Value) -> Option<iface_apps_v1::IoK8sApiCoreV1PodSpecOverheadEntry> {
     let m = v.as_object()?;
-    Some(iface_apps_v1::IoK8sApiCoreV1PodSpecOverhead {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_apps_v1::IoK8sApiCoreV1PodSpecOverheadEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -5066,14 +5140,15 @@ fn iface_apps_v1__io_k8s_api_core_v1_csi_volume_source__from_json(v: &Value) -> 
         fs_type: m.get("fsType").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         node_publish_secret_ref: m.get("nodePublishSecretRef").filter(|v| !v.is_null()).and_then(|v| iface_apps_v1__io_k8s_api_core_v1_local_object_reference__from_json(v)),
         read_only: m.get("readOnly").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
-        volume_attributes: m.get("volumeAttributes").filter(|v| !v.is_null()).and_then(|v| iface_apps_v1__io_k8s_api_core_v1_csi_volume_source_volume_attributes__from_json(v)),
+        volume_attributes: m.get("volumeAttributes").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_apps_v1::IoK8sApiCoreV1CsiVolumeSourceVolumeAttributesEntry { key: k.clone(), value: val })).collect())),
     })
 }
 
-fn iface_apps_v1__io_k8s_api_core_v1_csi_volume_source_volume_attributes__from_json(v: &Value) -> Option<iface_apps_v1::IoK8sApiCoreV1CsiVolumeSourceVolumeAttributes> {
+fn iface_apps_v1__io_k8s_api_core_v1_csi_volume_source_volume_attributes_entry__from_json(v: &Value) -> Option<iface_apps_v1::IoK8sApiCoreV1CsiVolumeSourceVolumeAttributesEntry> {
     let m = v.as_object()?;
-    Some(iface_apps_v1::IoK8sApiCoreV1CsiVolumeSourceVolumeAttributes {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_apps_v1::IoK8sApiCoreV1CsiVolumeSourceVolumeAttributesEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -5099,7 +5174,7 @@ fn iface_apps_v1__io_k8s_api_core_v1_empty_dir_volume_source__from_json(v: &Valu
     let m = v.as_object()?;
     Some(iface_apps_v1::IoK8sApiCoreV1EmptyDirVolumeSource {
         medium: m.get("medium").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        size_limit: m.get("sizeLimit").filter(|v| !v.is_null()).and_then(|v| iface_apps_v1__io_k8s_apimachinery_pkg_api_resource_quantity__from_json(v)),
+        size_limit: m.get("sizeLimit").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
     })
 }
 
@@ -5167,16 +5242,17 @@ fn iface_apps_v1__io_k8s_api_core_v1_flex_volume_source__from_json(v: &Value) ->
     Some(iface_apps_v1::IoK8sApiCoreV1FlexVolumeSource {
         driver: m.get("driver").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         fs_type: m.get("fsType").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        options: m.get("options").filter(|v| !v.is_null()).and_then(|v| iface_apps_v1__io_k8s_api_core_v1_flex_volume_source_options__from_json(v)),
+        options: m.get("options").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_apps_v1::IoK8sApiCoreV1FlexVolumeSourceOptionsEntry { key: k.clone(), value: val })).collect())),
         read_only: m.get("readOnly").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
         secret_ref: m.get("secretRef").filter(|v| !v.is_null()).and_then(|v| iface_apps_v1__io_k8s_api_core_v1_local_object_reference__from_json(v)),
     })
 }
 
-fn iface_apps_v1__io_k8s_api_core_v1_flex_volume_source_options__from_json(v: &Value) -> Option<iface_apps_v1::IoK8sApiCoreV1FlexVolumeSourceOptions> {
+fn iface_apps_v1__io_k8s_api_core_v1_flex_volume_source_options_entry__from_json(v: &Value) -> Option<iface_apps_v1::IoK8sApiCoreV1FlexVolumeSourceOptionsEntry> {
     let m = v.as_object()?;
-    Some(iface_apps_v1::IoK8sApiCoreV1FlexVolumeSourceOptions {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_apps_v1::IoK8sApiCoreV1FlexVolumeSourceOptionsEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -5411,8 +5487,8 @@ fn iface_apps_v1__io_k8s_api_apps_v1_daemon_set_update_strategy__from_json(v: &V
 fn iface_apps_v1__io_k8s_api_apps_v1_rolling_update_daemon_set__from_json(v: &Value) -> Option<iface_apps_v1::IoK8sApiAppsV1RollingUpdateDaemonSet> {
     let m = v.as_object()?;
     Some(iface_apps_v1::IoK8sApiAppsV1RollingUpdateDaemonSet {
-        max_surge: m.get("maxSurge").filter(|v| !v.is_null()).and_then(|v| iface_apps_v1__io_k8s_apimachinery_pkg_util_intstr_int_or_string__from_json(v)),
-        max_unavailable: m.get("maxUnavailable").filter(|v| !v.is_null()).and_then(|v| iface_apps_v1__io_k8s_apimachinery_pkg_util_intstr_int_or_string__from_json(v)),
+        max_surge: m.get("maxSurge").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        max_unavailable: m.get("maxUnavailable").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
     })
 }
 
@@ -5435,7 +5511,7 @@ fn iface_apps_v1__io_k8s_api_apps_v1_daemon_set_status__from_json(v: &Value) -> 
 fn iface_apps_v1__io_k8s_api_apps_v1_daemon_set_condition__from_json(v: &Value) -> Option<iface_apps_v1::IoK8sApiAppsV1DaemonSetCondition> {
     let m = v.as_object()?;
     Some(iface_apps_v1::IoK8sApiAppsV1DaemonSetCondition {
-        last_transition_time: m.get("lastTransitionTime").filter(|v| !v.is_null()).and_then(|v| iface_apps_v1__io_k8s_apimachinery_pkg_apis_meta_v1_time__from_json(v)),
+        last_transition_time: m.get("lastTransitionTime").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         message: m.get("message").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         reason: m.get("reason").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         status: m.get("status").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
@@ -5489,8 +5565,8 @@ fn iface_apps_v1__io_k8s_api_apps_v1_deployment_strategy__from_json(v: &Value) -
 fn iface_apps_v1__io_k8s_api_apps_v1_rolling_update_deployment__from_json(v: &Value) -> Option<iface_apps_v1::IoK8sApiAppsV1RollingUpdateDeployment> {
     let m = v.as_object()?;
     Some(iface_apps_v1::IoK8sApiAppsV1RollingUpdateDeployment {
-        max_surge: m.get("maxSurge").filter(|v| !v.is_null()).and_then(|v| iface_apps_v1__io_k8s_apimachinery_pkg_util_intstr_int_or_string__from_json(v)),
-        max_unavailable: m.get("maxUnavailable").filter(|v| !v.is_null()).and_then(|v| iface_apps_v1__io_k8s_apimachinery_pkg_util_intstr_int_or_string__from_json(v)),
+        max_surge: m.get("maxSurge").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        max_unavailable: m.get("maxUnavailable").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
     })
 }
 
@@ -5511,8 +5587,8 @@ fn iface_apps_v1__io_k8s_api_apps_v1_deployment_status__from_json(v: &Value) -> 
 fn iface_apps_v1__io_k8s_api_apps_v1_deployment_condition__from_json(v: &Value) -> Option<iface_apps_v1::IoK8sApiAppsV1DeploymentCondition> {
     let m = v.as_object()?;
     Some(iface_apps_v1::IoK8sApiAppsV1DeploymentCondition {
-        last_transition_time: m.get("lastTransitionTime").filter(|v| !v.is_null()).and_then(|v| iface_apps_v1__io_k8s_apimachinery_pkg_apis_meta_v1_time__from_json(v)),
-        last_update_time: m.get("lastUpdateTime").filter(|v| !v.is_null()).and_then(|v| iface_apps_v1__io_k8s_apimachinery_pkg_apis_meta_v1_time__from_json(v)),
+        last_transition_time: m.get("lastTransitionTime").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        last_update_time: m.get("lastUpdateTime").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         message: m.get("message").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         reason: m.get("reason").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         status: m.get("status").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
@@ -5627,7 +5703,7 @@ fn iface_apps_v1__io_k8s_api_apps_v1_replica_set_status__from_json(v: &Value) ->
 fn iface_apps_v1__io_k8s_api_apps_v1_replica_set_condition__from_json(v: &Value) -> Option<iface_apps_v1::IoK8sApiAppsV1ReplicaSetCondition> {
     let m = v.as_object()?;
     Some(iface_apps_v1::IoK8sApiAppsV1ReplicaSetCondition {
-        last_transition_time: m.get("lastTransitionTime").filter(|v| !v.is_null()).and_then(|v| iface_apps_v1__io_k8s_apimachinery_pkg_apis_meta_v1_time__from_json(v)),
+        last_transition_time: m.get("lastTransitionTime").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         message: m.get("message").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         reason: m.get("reason").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         status: m.get("status").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
@@ -5699,7 +5775,7 @@ fn iface_apps_v1__io_k8s_api_apps_v1_stateful_set_update_strategy__from_json(v: 
 fn iface_apps_v1__io_k8s_api_apps_v1_rolling_update_stateful_set_strategy__from_json(v: &Value) -> Option<iface_apps_v1::IoK8sApiAppsV1RollingUpdateStatefulSetStrategy> {
     let m = v.as_object()?;
     Some(iface_apps_v1::IoK8sApiAppsV1RollingUpdateStatefulSetStrategy {
-        max_unavailable: m.get("maxUnavailable").filter(|v| !v.is_null()).and_then(|v| iface_apps_v1__io_k8s_apimachinery_pkg_util_intstr_int_or_string__from_json(v)),
+        max_unavailable: m.get("maxUnavailable").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         partition: m.get("partition").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
     })
 }
@@ -5719,33 +5795,35 @@ fn iface_apps_v1__io_k8s_api_core_v1_persistent_volume_claim_status__from_json(v
     let m = v.as_object()?;
     Some(iface_apps_v1::IoK8sApiCoreV1PersistentVolumeClaimStatus {
         access_modes: m.get("accessModes").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
-        allocated_resources: m.get("allocatedResources").filter(|v| !v.is_null()).and_then(|v| iface_apps_v1__io_k8s_api_core_v1_persistent_volume_claim_status_allocated_resources__from_json(v)),
-        capacity: m.get("capacity").filter(|v| !v.is_null()).and_then(|v| iface_apps_v1__io_k8s_api_core_v1_persistent_volume_claim_status_capacity__from_json(v)),
+        allocated_resources: m.get("allocatedResources").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_apps_v1::IoK8sApiCoreV1PersistentVolumeClaimStatusAllocatedResourcesEntry { key: k.clone(), value: val })).collect())),
+        capacity: m.get("capacity").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_apps_v1::IoK8sApiCoreV1PersistentVolumeClaimStatusCapacityEntry { key: k.clone(), value: val })).collect())),
         conditions: m.get("conditions").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_apps_v1__io_k8s_api_core_v1_persistent_volume_claim_condition__from_json(x)).collect())),
         phase: m.get("phase").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         resize_status: m.get("resizeStatus").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
     })
 }
 
-fn iface_apps_v1__io_k8s_api_core_v1_persistent_volume_claim_status_allocated_resources__from_json(v: &Value) -> Option<iface_apps_v1::IoK8sApiCoreV1PersistentVolumeClaimStatusAllocatedResources> {
+fn iface_apps_v1__io_k8s_api_core_v1_persistent_volume_claim_status_allocated_resources_entry__from_json(v: &Value) -> Option<iface_apps_v1::IoK8sApiCoreV1PersistentVolumeClaimStatusAllocatedResourcesEntry> {
     let m = v.as_object()?;
-    Some(iface_apps_v1::IoK8sApiCoreV1PersistentVolumeClaimStatusAllocatedResources {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_apps_v1::IoK8sApiCoreV1PersistentVolumeClaimStatusAllocatedResourcesEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
-fn iface_apps_v1__io_k8s_api_core_v1_persistent_volume_claim_status_capacity__from_json(v: &Value) -> Option<iface_apps_v1::IoK8sApiCoreV1PersistentVolumeClaimStatusCapacity> {
+fn iface_apps_v1__io_k8s_api_core_v1_persistent_volume_claim_status_capacity_entry__from_json(v: &Value) -> Option<iface_apps_v1::IoK8sApiCoreV1PersistentVolumeClaimStatusCapacityEntry> {
     let m = v.as_object()?;
-    Some(iface_apps_v1::IoK8sApiCoreV1PersistentVolumeClaimStatusCapacity {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_apps_v1::IoK8sApiCoreV1PersistentVolumeClaimStatusCapacityEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
 fn iface_apps_v1__io_k8s_api_core_v1_persistent_volume_claim_condition__from_json(v: &Value) -> Option<iface_apps_v1::IoK8sApiCoreV1PersistentVolumeClaimCondition> {
     let m = v.as_object()?;
     Some(iface_apps_v1::IoK8sApiCoreV1PersistentVolumeClaimCondition {
-        last_probe_time: m.get("lastProbeTime").filter(|v| !v.is_null()).and_then(|v| iface_apps_v1__io_k8s_apimachinery_pkg_apis_meta_v1_time__from_json(v)),
-        last_transition_time: m.get("lastTransitionTime").filter(|v| !v.is_null()).and_then(|v| iface_apps_v1__io_k8s_apimachinery_pkg_apis_meta_v1_time__from_json(v)),
+        last_probe_time: m.get("lastProbeTime").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        last_transition_time: m.get("lastTransitionTime").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         message: m.get("message").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         reason: m.get("reason").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         status: m.get("status").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
@@ -5772,7 +5850,7 @@ fn iface_apps_v1__io_k8s_api_apps_v1_stateful_set_status__from_json(v: &Value) -
 fn iface_apps_v1__io_k8s_api_apps_v1_stateful_set_condition__from_json(v: &Value) -> Option<iface_apps_v1::IoK8sApiAppsV1StatefulSetCondition> {
     let m = v.as_object()?;
     Some(iface_apps_v1::IoK8sApiAppsV1StatefulSetCondition {
-        last_transition_time: m.get("lastTransitionTime").filter(|v| !v.is_null()).and_then(|v| iface_apps_v1__io_k8s_apimachinery_pkg_apis_meta_v1_time__from_json(v)),
+        last_transition_time: m.get("lastTransitionTime").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         message: m.get("message").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         reason: m.get("reason").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         status: m.get("status").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
@@ -5783,8 +5861,16 @@ fn iface_apps_v1__io_k8s_api_apps_v1_stateful_set_condition__from_json(v: &Value
 fn iface_apps_v1__io_k8s_apimachinery_pkg_apis_meta_v1_watch_event__from_json(v: &Value) -> Option<iface_apps_v1::IoK8sApimachineryPkgApisMetaV1WatchEvent> {
     let m = v.as_object()?;
     Some(iface_apps_v1::IoK8sApimachineryPkgApisMetaV1WatchEvent {
-        object: match m.get("object").and_then(|v| iface_apps_v1__io_k8s_apimachinery_pkg_runtime_raw_extension__from_json(v)) { Some(x) => x, None => return None },
+        object: m.get("object").and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_apps_v1::IoK8sApimachineryPkgRuntimeRawExtensionEntryV2 { key: k.clone(), value: val })).collect())).unwrap_or_default(),
         type_op: m.get("type").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_apps_v1__io_k8s_apimachinery_pkg_runtime_raw_extension_entry_v2__from_json(v: &Value) -> Option<iface_apps_v1::IoK8sApimachineryPkgRuntimeRawExtensionEntryV2> {
+    let m = v.as_object()?;
+    Some(iface_apps_v1::IoK8sApimachineryPkgRuntimeRawExtensionEntryV2 {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 

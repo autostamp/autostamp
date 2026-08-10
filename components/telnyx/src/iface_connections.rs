@@ -38,6 +38,21 @@ fn iface_connections__list_connections_sort_enum__to_str(e: &iface_connections::
     }
 }
 
+fn iface_connections__anchorsite_override__to_str(e: &iface_connections::AnchorsiteOverride) -> &'static str {
+    match e {
+        iface_connections::AnchorsiteOverride::Latency => "Latency",
+        iface_connections::AnchorsiteOverride::ChicagoIl => "Chicago, IL",
+        iface_connections::AnchorsiteOverride::AshburnVa => "Ashburn, VA",
+        iface_connections::AnchorsiteOverride::SanJoseCa => "San Jose, CA",
+        iface_connections::AnchorsiteOverride::SydneyAustralia => "Sydney, Australia",
+        iface_connections::AnchorsiteOverride::AmsterdamNetherlands => "Amsterdam, Netherlands",
+        iface_connections::AnchorsiteOverride::LondonUk => "London, UK",
+        iface_connections::AnchorsiteOverride::TorontoCanada => "Toronto, Canada",
+        iface_connections::AnchorsiteOverride::VancouverCanada => "Vancouver, Canada",
+        iface_connections::AnchorsiteOverride::FrankfurtGermany => "Frankfurt, Germany",
+    }
+}
+
 fn iface_connections__connection_webhook_api_version_enum__to_str(e: &iface_connections::ConnectionWebhookApiVersionEnum) -> &'static str {
     match e {
         iface_connections::ConnectionWebhookApiVersionEnum::V1 => "1",
@@ -55,28 +70,16 @@ fn iface_connections__list_connections_response__to_json(p: &iface_connections::
 fn iface_connections__connection__to_json(p: &iface_connections::Connection) -> Value {
     let mut m = Map::new();
     m.insert("active".into(), match (&p.active) { Some(v) => Value::Bool(*(v)), None => Value::Null });
-    m.insert("anchorsite_override".into(), match (&p.anchorsite_override) { Some(v) => iface_connections__anchorsite_override__to_json(v), None => Value::Null });
+    m.insert("anchorsite_override".into(), match (&p.anchorsite_override) { Some(v) => Value::String(iface_connections__anchorsite_override__to_str(v).into()), None => Value::Null });
     m.insert("connection_name".into(), match (&p.connection_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("created_at".into(), match (&p.created_at) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("outbound_voice_profile_id".into(), match (&p.outbound_voice_profile_id) { Some(v) => iface_connections__outbound_voice_profile_id__to_json(v), None => Value::Null });
+    m.insert("outbound_voice_profile_id".into(), match (&p.outbound_voice_profile_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("record_type".into(), match (&p.record_type) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("updated_at".into(), match (&p.updated_at) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("webhook_api_version".into(), match (&p.webhook_api_version) { Some(v) => Value::String(iface_connections__connection_webhook_api_version_enum__to_str(v).into()), None => Value::Null });
     m.insert("webhook_event_failover_url".into(), match (&p.webhook_event_failover_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("webhook_event_url".into(), match (&p.webhook_event_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_connections__anchorsite_override__to_json(p: &iface_connections::AnchorsiteOverride) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_connections__outbound_voice_profile_id__to_json(p: &iface_connections::OutboundVoiceProfileId) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -123,30 +126,16 @@ fn iface_connections__connection__from_json(v: &Value) -> Option<iface_connectio
     let m = v.as_object()?;
     Some(iface_connections::Connection {
         active: m.get("active").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
-        anchorsite_override: m.get("anchorsite_override").filter(|v| !v.is_null()).and_then(|v| iface_connections__anchorsite_override__from_json(v)),
+        anchorsite_override: m.get("anchorsite_override").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_connections__anchorsite_override__from_str)),
         connection_name: m.get("connection_name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         created_at: m.get("created_at").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        outbound_voice_profile_id: m.get("outbound_voice_profile_id").filter(|v| !v.is_null()).and_then(|v| iface_connections__outbound_voice_profile_id__from_json(v)),
+        outbound_voice_profile_id: m.get("outbound_voice_profile_id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         record_type: m.get("record_type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         updated_at: m.get("updated_at").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         webhook_api_version: m.get("webhook_api_version").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_connections__connection_webhook_api_version_enum__from_str)),
         webhook_event_failover_url: m.get("webhook_event_failover_url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         webhook_event_url: m.get("webhook_event_url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-    })
-}
-
-fn iface_connections__anchorsite_override__from_json(v: &Value) -> Option<iface_connections::AnchorsiteOverride> {
-    let m = v.as_object()?;
-    Some(iface_connections::AnchorsiteOverride {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-    })
-}
-
-fn iface_connections__outbound_voice_profile_id__from_json(v: &Value) -> Option<iface_connections::OutboundVoiceProfileId> {
-    let m = v.as_object()?;
-    Some(iface_connections::OutboundVoiceProfileId {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -165,6 +154,22 @@ fn iface_connections__retrieve_connection_response__from_json(v: &Value) -> Opti
     Some(iface_connections::RetrieveConnectionResponse {
         data: m.get("data").filter(|v| !v.is_null()).and_then(|v| iface_connections__connection__from_json(v)),
     })
+}
+
+fn iface_connections__anchorsite_override__from_str(s: &str) -> Option<iface_connections::AnchorsiteOverride> {
+    match s {
+        "Latency" => Some(iface_connections::AnchorsiteOverride::Latency),
+        "Chicago, IL" => Some(iface_connections::AnchorsiteOverride::ChicagoIl),
+        "Ashburn, VA" => Some(iface_connections::AnchorsiteOverride::AshburnVa),
+        "San Jose, CA" => Some(iface_connections::AnchorsiteOverride::SanJoseCa),
+        "Sydney, Australia" => Some(iface_connections::AnchorsiteOverride::SydneyAustralia),
+        "Amsterdam, Netherlands" => Some(iface_connections::AnchorsiteOverride::AmsterdamNetherlands),
+        "London, UK" => Some(iface_connections::AnchorsiteOverride::LondonUk),
+        "Toronto, Canada" => Some(iface_connections::AnchorsiteOverride::TorontoCanada),
+        "Vancouver, Canada" => Some(iface_connections::AnchorsiteOverride::VancouverCanada),
+        "Frankfurt, Germany" => Some(iface_connections::AnchorsiteOverride::FrankfurtGermany),
+        _ => None,
+    }
 }
 
 fn iface_connections__connection_webhook_api_version_enum__from_str(s: &str) -> Option<iface_connections::ConnectionWebhookApiVersionEnum> {

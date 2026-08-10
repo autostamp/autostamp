@@ -65,7 +65,7 @@ fn iface_audit_log_api__audit_log_event__to_json(p: &iface_audit_log_api::AuditL
     m.insert("actor".into(), match (&p.actor) { Some(v) => iface_audit_log_api__audit_log_event_actor__to_json(v), None => Value::Null });
     m.insert("context".into(), match (&p.context) { Some(v) => iface_audit_log_api__audit_log_event_context__to_json(v), None => Value::Null });
     m.insert("created_at".into(), match (&p.created_at) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("details".into(), match (&p.details) { Some(v) => iface_audit_log_api__audit_log_event_details__to_json(v), None => Value::Null });
+    m.insert("details".into(), match (&p.details) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("event_category".into(), match (&p.event_category) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("event_type".into(), match (&p.event_type) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("gid".into(), match (&p.gid) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -92,9 +92,10 @@ fn iface_audit_log_api__audit_log_event_context__to_json(p: &iface_audit_log_api
     Value::Object(m)
 }
 
-fn iface_audit_log_api__audit_log_event_details__to_json(p: &iface_audit_log_api::AuditLogEventDetails) -> Value {
+fn iface_audit_log_api__audit_log_event_details_entry__to_json(p: &iface_audit_log_api::AuditLogEventDetailsEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -135,7 +136,7 @@ fn iface_audit_log_api__audit_log_event__from_json(v: &Value) -> Option<iface_au
         actor: m.get("actor").filter(|v| !v.is_null()).and_then(|v| iface_audit_log_api__audit_log_event_actor__from_json(v)),
         context: m.get("context").filter(|v| !v.is_null()).and_then(|v| iface_audit_log_api__audit_log_event_context__from_json(v)),
         created_at: m.get("created_at").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        details: m.get("details").filter(|v| !v.is_null()).and_then(|v| iface_audit_log_api__audit_log_event_details__from_json(v)),
+        details: m.get("details").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_audit_log_api::AuditLogEventDetailsEntry { key: k.clone(), value: val })).collect())),
         event_category: m.get("event_category").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         event_type: m.get("event_type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         gid: m.get("gid").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
@@ -164,10 +165,11 @@ fn iface_audit_log_api__audit_log_event_context__from_json(v: &Value) -> Option<
     })
 }
 
-fn iface_audit_log_api__audit_log_event_details__from_json(v: &Value) -> Option<iface_audit_log_api::AuditLogEventDetails> {
+fn iface_audit_log_api__audit_log_event_details_entry__from_json(v: &Value) -> Option<iface_audit_log_api::AuditLogEventDetailsEntry> {
     let m = v.as_object()?;
-    Some(iface_audit_log_api::AuditLogEventDetails {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_audit_log_api::AuditLogEventDetailsEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
