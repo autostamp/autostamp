@@ -21,7 +21,7 @@ fn iface_shared_catalog_id_assign_categories__catalog_data_category_interface__t
     m.insert("children".into(), match (&p.children) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("created_at".into(), match (&p.created_at) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("custom_attributes".into(), match (&p.custom_attributes) { Some(v) => Value::Array((v).iter().map(|v| iface_shared_catalog_id_assign_categories__framework_attribute_interface__to_json(v)).collect()), None => Value::Null });
-    m.insert("extension_attributes".into(), match (&p.extension_attributes) { Some(v) => iface_shared_catalog_id_assign_categories__catalog_data_category_extension_interface__to_json(v), None => Value::Null });
+    m.insert("extension_attributes".into(), match (&p.extension_attributes) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("id".into(), match (&p.id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("include_in_menu".into(), match (&p.include_in_menu) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     m.insert("is_active".into(), match (&p.is_active) { Some(v) => Value::Bool(*(v)), None => Value::Null });
@@ -41,9 +41,10 @@ fn iface_shared_catalog_id_assign_categories__framework_attribute_interface__to_
     Value::Object(m)
 }
 
-fn iface_shared_catalog_id_assign_categories__catalog_data_category_extension_interface__to_json(p: &iface_shared_catalog_id_assign_categories::CatalogDataCategoryExtensionInterface) -> Value {
+fn iface_shared_catalog_id_assign_categories__catalog_data_category_extension_interface_entry__to_json(p: &iface_shared_catalog_id_assign_categories::CatalogDataCategoryExtensionInterfaceEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 

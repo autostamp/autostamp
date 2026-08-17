@@ -20,8 +20,8 @@ triggered.
 
 | Setting | Value |
 | --- | --- |
-| Package | `autostamp:weatherbit@0.5.0` |
-| Published version | `0.5.0+weatherbit-2.0.0` |
+| Package | `autostamp:weatherbit@0.6.0` |
+| Published version | `0.6.0+weatherbit-2.0.0` |
 | Tag filter | all tags |
 | Operations generated | 47 |
 | Infer API-key credentials | enabled — **triggered**, inferred 1 secret: `key` |

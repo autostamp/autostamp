@@ -1,4 +1,4 @@
-package autostamp:visualcrossing@0.5.0;
+package autostamp:visualcrossing@0.6.0;
 
 interface timeline-weather-api-v15-day-forecast-request {
   /// Historical and Forecast Weather API

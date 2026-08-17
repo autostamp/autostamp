@@ -86,41 +86,38 @@ const OP_VECTOR_OPERATIONS_UPSERT: OpSpec = OpSpec {
     ],
 };
 
-fn iface_vector_operations__vector_filter__to_json(p: &iface_vector_operations::VectorFilter) -> Value {
+fn iface_vector_operations__vector_filter_entry__to_json(p: &iface_vector_operations::VectorFilterEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
 fn iface_vector_operations__describe_index_stats_response__to_json(p: &iface_vector_operations::DescribeIndexStatsResponse) -> Value {
     let mut m = Map::new();
-    m.insert("dimension".into(), match (&p.dimension) { Some(v) => iface_vector_operations__vector_dimensionality__to_json(v), None => Value::Null });
+    m.insert("dimension".into(), match (&p.dimension) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("indexFullness".into(), match (&p.index_fullness) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
-    m.insert("namespaces".into(), match (&p.namespaces) { Some(v) => iface_vector_operations__describe_index_stats_response_namespaces__to_json(v), None => Value::Null });
+    m.insert("namespaces".into(), match (&p.namespaces) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), iface_vector_operations__index_namespace_stats__to_json(&e.value))).collect()), None => Value::Null });
     m.insert("totalVectorCount".into(), match (&p.total_vector_count) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_vector_operations__vector_dimensionality__to_json(p: &iface_vector_operations::VectorDimensionality) -> Value {
+fn iface_vector_operations__index_namespace_stats__to_json(p: &iface_vector_operations::IndexNamespaceStats) -> Value {
     let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
+    m.insert("vectorCount".into(), match (&p.vector_count) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_vector_operations__describe_index_stats_response_namespaces__to_json(p: &iface_vector_operations::DescribeIndexStatsResponseNamespaces) -> Value {
+fn iface_vector_operations__describe_index_stats_response_namespaces_entry__to_json(p: &iface_vector_operations::DescribeIndexStatsResponseNamespacesEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), iface_vector_operations__index_namespace_stats__to_json(&p.value));
     Value::Object(m)
 }
 
-fn iface_vector_operations__vector_id__to_json(p: &iface_vector_operations::VectorId) -> Value {
+fn iface_vector_operations__vector_filter_entry_v2__to_json(p: &iface_vector_operations::VectorFilterEntryV2) -> Value {
     let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_vector_operations__namespace_name__to_json(p: &iface_vector_operations::NamespaceName) -> Value {
-    let mut m = Map::new();
+    m.insert("key".into(), Value::String((&p.key).clone()));
     m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
@@ -132,57 +129,69 @@ fn iface_vector_operations__sparse_vector_data__to_json(p: &iface_vector_operati
     Value::Object(m)
 }
 
-fn iface_vector_operations__vector_data__to_json(p: &iface_vector_operations::VectorData) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
 fn iface_vector_operations__query_response__to_json(p: &iface_vector_operations::QueryResponse) -> Value {
     let mut m = Map::new();
     m.insert("matches".into(), match (&p.matches) { Some(v) => Value::Array((v).iter().map(|v| iface_vector_operations__query_match__to_json(v)).collect()), None => Value::Null });
-    m.insert("namespace".into(), match (&p.namespace) { Some(v) => iface_vector_operations__namespace_name__to_json(v), None => Value::Null });
+    m.insert("namespace".into(), match (&p.namespace) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
 fn iface_vector_operations__query_match__to_json(p: &iface_vector_operations::QueryMatch) -> Value {
     let mut m = Map::new();
-    m.insert("id".into(), iface_vector_operations__vector_id__to_json(&p.id));
-    m.insert("metadata".into(), match (&p.metadata) { Some(v) => iface_vector_operations__vector_metadata__to_json(v), None => Value::Null });
+    m.insert("id".into(), Value::String((&p.id).clone()));
+    m.insert("metadata".into(), match (&p.metadata) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("score".into(), match (&p.score) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
     m.insert("sparseValues".into(), match (&p.sparse_values) { Some(v) => iface_vector_operations__sparse_vector_data__to_json(v), None => Value::Null });
-    m.insert("values".into(), match (&p.values) { Some(v) => iface_vector_operations__vector_data__to_json(v), None => Value::Null });
+    m.insert("values".into(), match (&p.values) { Some(v) => Value::Array((v).iter().map(|v| serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null)).collect()), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_vector_operations__vector_metadata__to_json(p: &iface_vector_operations::VectorMetadata) -> Value {
+fn iface_vector_operations__vector_metadata_entry__to_json(p: &iface_vector_operations::VectorMetadataEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
-fn iface_vector_operations__delete_response__to_json(p: &iface_vector_operations::DeleteResponse) -> Value {
+fn iface_vector_operations__vector_filter_entry_v3__to_json(p: &iface_vector_operations::VectorFilterEntryV3) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
+}
+
+fn iface_vector_operations__delete_response_entry__to_json(p: &iface_vector_operations::DeleteResponseEntry) -> Value {
+    let mut m = Map::new();
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
 fn iface_vector_operations__fetch_response__to_json(p: &iface_vector_operations::FetchResponse) -> Value {
     let mut m = Map::new();
-    m.insert("namespace".into(), match (&p.namespace) { Some(v) => iface_vector_operations__namespace_name__to_json(v), None => Value::Null });
-    m.insert("vectors".into(), match (&p.vectors) { Some(v) => iface_vector_operations__fetch_response_vectors__to_json(v), None => Value::Null });
+    m.insert("namespace".into(), match (&p.namespace) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("vectors".into(), match (&p.vectors) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::Array((&e.value).iter().map(|v| serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null)).collect()))).collect()), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_vector_operations__fetch_response_vectors__to_json(p: &iface_vector_operations::FetchResponseVectors) -> Value {
+fn iface_vector_operations__fetch_response_vectors_entry__to_json(p: &iface_vector_operations::FetchResponseVectorsEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::Array((&p.value).iter().map(|v| serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null)).collect()));
     Value::Object(m)
 }
 
-fn iface_vector_operations__update_response__to_json(p: &iface_vector_operations::UpdateResponse) -> Value {
+fn iface_vector_operations__vector_metadata_entry_v2__to_json(p: &iface_vector_operations::VectorMetadataEntryV2) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
+}
+
+fn iface_vector_operations__update_response_entry__to_json(p: &iface_vector_operations::UpdateResponseEntry) -> Value {
+    let mut m = Map::new();
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -194,52 +203,52 @@ fn iface_vector_operations__upsert_response__to_json(p: &iface_vector_operations
 
 fn iface_vector_operations__describe_index_stats_params__to_json(p: &iface_vector_operations::DescribeIndexStatsParams) -> Value {
     let mut m = Map::new();
-    m.insert("filter".into(), match (&p.filter) { Some(v) => iface_vector_operations__vector_filter__to_json(v), None => Value::Null });
+    m.insert("filter".into(), match (&p.filter) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     Value::Object(m)
 }
 
 fn iface_vector_operations__query_params__to_json(p: &iface_vector_operations::QueryParams) -> Value {
     let mut m = Map::new();
-    m.insert("filter".into(), match (&p.filter) { Some(v) => iface_vector_operations__vector_filter__to_json(v), None => Value::Null });
-    m.insert("id".into(), match (&p.id) { Some(v) => iface_vector_operations__vector_id__to_json(v), None => Value::Null });
+    m.insert("filter".into(), match (&p.filter) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("include_metadata".into(), match (&p.include_metadata) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     m.insert("include_values".into(), match (&p.include_values) { Some(v) => Value::Bool(*(v)), None => Value::Null });
-    m.insert("namespace".into(), match (&p.namespace) { Some(v) => iface_vector_operations__namespace_name__to_json(v), None => Value::Null });
+    m.insert("namespace".into(), match (&p.namespace) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("sparse_vector".into(), match (&p.sparse_vector) { Some(v) => iface_vector_operations__sparse_vector_data__to_json(v), None => Value::Null });
     m.insert("top_k".into(), Value::Number(serde_json::Number::from(*(&p.top_k))));
-    m.insert("vector".into(), match (&p.vector) { Some(v) => iface_vector_operations__vector_data__to_json(v), None => Value::Null });
+    m.insert("vector".into(), match (&p.vector) { Some(v) => Value::Array((v).iter().map(|v| serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null)).collect()), None => Value::Null });
     Value::Object(m)
 }
 
 fn iface_vector_operations__delete_params__to_json(p: &iface_vector_operations::DeleteParams) -> Value {
     let mut m = Map::new();
     m.insert("delete_all".into(), match (&p.delete_all) { Some(v) => Value::Bool(*(v)), None => Value::Null });
-    m.insert("filter".into(), match (&p.filter) { Some(v) => iface_vector_operations__vector_filter__to_json(v), None => Value::Null });
+    m.insert("filter".into(), match (&p.filter) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("ids".into(), match (&p.ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("namespace".into(), match (&p.namespace) { Some(v) => iface_vector_operations__namespace_name__to_json(v), None => Value::Null });
+    m.insert("namespace".into(), match (&p.namespace) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
 fn iface_vector_operations__fetch_params__to_json(p: &iface_vector_operations::FetchParams) -> Value {
     let mut m = Map::new();
     m.insert("ids".into(), Value::String((&p.ids).clone()));
-    m.insert("namespace".into(), match (&p.namespace) { Some(v) => iface_vector_operations__namespace_name__to_json(v), None => Value::Null });
+    m.insert("namespace".into(), match (&p.namespace) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
 fn iface_vector_operations__update_params__to_json(p: &iface_vector_operations::UpdateParams) -> Value {
     let mut m = Map::new();
     m.insert("id".into(), Value::String((&p.id).clone()));
-    m.insert("namespace".into(), match (&p.namespace) { Some(v) => iface_vector_operations__namespace_name__to_json(v), None => Value::Null });
-    m.insert("set_metadata".into(), match (&p.set_metadata) { Some(v) => iface_vector_operations__vector_metadata__to_json(v), None => Value::Null });
+    m.insert("namespace".into(), match (&p.namespace) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("set_metadata".into(), match (&p.set_metadata) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("sparse_values".into(), match (&p.sparse_values) { Some(v) => iface_vector_operations__sparse_vector_data__to_json(v), None => Value::Null });
-    m.insert("values".into(), match (&p.values) { Some(v) => iface_vector_operations__vector_data__to_json(v), None => Value::Null });
+    m.insert("values".into(), match (&p.values) { Some(v) => Value::Array((v).iter().map(|v| serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null)).collect()), None => Value::Null });
     Value::Object(m)
 }
 
 fn iface_vector_operations__upsert_params__to_json(p: &iface_vector_operations::UpsertParams) -> Value {
     let mut m = Map::new();
-    m.insert("namespace".into(), match (&p.namespace) { Some(v) => iface_vector_operations__namespace_name__to_json(v), None => Value::Null });
+    m.insert("namespace".into(), match (&p.namespace) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("vectors".into(), Value::String((&p.vectors).clone()));
     Value::Object(m)
 }
@@ -247,38 +256,25 @@ fn iface_vector_operations__upsert_params__to_json(p: &iface_vector_operations::
 fn iface_vector_operations__describe_index_stats_response__from_json(v: &Value) -> Option<iface_vector_operations::DescribeIndexStatsResponse> {
     let m = v.as_object()?;
     Some(iface_vector_operations::DescribeIndexStatsResponse {
-        dimension: m.get("dimension").filter(|v| !v.is_null()).and_then(|v| iface_vector_operations__vector_dimensionality__from_json(v)),
+        dimension: m.get("dimension").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
         index_fullness: m.get("indexFullness").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
-        namespaces: m.get("namespaces").filter(|v| !v.is_null()).and_then(|v| iface_vector_operations__describe_index_stats_response_namespaces__from_json(v)),
+        namespaces: m.get("namespaces").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| (iface_vector_operations__index_namespace_stats__from_json(x)).map(|val| iface_vector_operations::DescribeIndexStatsResponseNamespacesEntry { key: k.clone(), value: val })).collect())),
         total_vector_count: m.get("totalVectorCount").filter(|v| !v.is_null()).and_then(|v| (v).as_i64()),
     })
 }
 
-fn iface_vector_operations__vector_dimensionality__from_json(v: &Value) -> Option<iface_vector_operations::VectorDimensionality> {
+fn iface_vector_operations__index_namespace_stats__from_json(v: &Value) -> Option<iface_vector_operations::IndexNamespaceStats> {
     let m = v.as_object()?;
-    Some(iface_vector_operations::VectorDimensionality {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    Some(iface_vector_operations::IndexNamespaceStats {
+        vector_count: m.get("vectorCount").filter(|v| !v.is_null()).and_then(|v| (v).as_i64()),
     })
 }
 
-fn iface_vector_operations__describe_index_stats_response_namespaces__from_json(v: &Value) -> Option<iface_vector_operations::DescribeIndexStatsResponseNamespaces> {
+fn iface_vector_operations__describe_index_stats_response_namespaces_entry__from_json(v: &Value) -> Option<iface_vector_operations::DescribeIndexStatsResponseNamespacesEntry> {
     let m = v.as_object()?;
-    Some(iface_vector_operations::DescribeIndexStatsResponseNamespaces {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-    })
-}
-
-fn iface_vector_operations__vector_id__from_json(v: &Value) -> Option<iface_vector_operations::VectorId> {
-    let m = v.as_object()?;
-    Some(iface_vector_operations::VectorId {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-    })
-}
-
-fn iface_vector_operations__namespace_name__from_json(v: &Value) -> Option<iface_vector_operations::NamespaceName> {
-    let m = v.as_object()?;
-    Some(iface_vector_operations::NamespaceName {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    Some(iface_vector_operations::DescribeIndexStatsResponseNamespacesEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: match m.get("value").and_then(|v| iface_vector_operations__index_namespace_stats__from_json(v)) { Some(x) => x, None => return None },
     })
 }
 
@@ -290,65 +286,62 @@ fn iface_vector_operations__sparse_vector_data__from_json(v: &Value) -> Option<i
     })
 }
 
-fn iface_vector_operations__vector_data__from_json(v: &Value) -> Option<iface_vector_operations::VectorData> {
-    let m = v.as_object()?;
-    Some(iface_vector_operations::VectorData {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-    })
-}
-
 fn iface_vector_operations__query_response__from_json(v: &Value) -> Option<iface_vector_operations::QueryResponse> {
     let m = v.as_object()?;
     Some(iface_vector_operations::QueryResponse {
         matches: m.get("matches").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_vector_operations__query_match__from_json(x)).collect())),
-        namespace: m.get("namespace").filter(|v| !v.is_null()).and_then(|v| iface_vector_operations__namespace_name__from_json(v)),
+        namespace: m.get("namespace").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
     })
 }
 
 fn iface_vector_operations__query_match__from_json(v: &Value) -> Option<iface_vector_operations::QueryMatch> {
     let m = v.as_object()?;
     Some(iface_vector_operations::QueryMatch {
-        id: match m.get("id").and_then(|v| iface_vector_operations__vector_id__from_json(v)) { Some(x) => x, None => return None },
-        metadata: m.get("metadata").filter(|v| !v.is_null()).and_then(|v| iface_vector_operations__vector_metadata__from_json(v)),
+        id: m.get("id").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        metadata: m.get("metadata").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_vector_operations::VectorMetadataEntry { key: k.clone(), value: val })).collect())),
         score: m.get("score").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
         sparse_values: m.get("sparseValues").filter(|v| !v.is_null()).and_then(|v| iface_vector_operations__sparse_vector_data__from_json(v)),
-        values: m.get("values").filter(|v| !v.is_null()).and_then(|v| iface_vector_operations__vector_data__from_json(v)),
+        values: m.get("values").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_f64()).collect())),
     })
 }
 
-fn iface_vector_operations__vector_metadata__from_json(v: &Value) -> Option<iface_vector_operations::VectorMetadata> {
+fn iface_vector_operations__vector_metadata_entry__from_json(v: &Value) -> Option<iface_vector_operations::VectorMetadataEntry> {
     let m = v.as_object()?;
-    Some(iface_vector_operations::VectorMetadata {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_vector_operations::VectorMetadataEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
-fn iface_vector_operations__delete_response__from_json(v: &Value) -> Option<iface_vector_operations::DeleteResponse> {
+fn iface_vector_operations__delete_response_entry__from_json(v: &Value) -> Option<iface_vector_operations::DeleteResponseEntry> {
     let m = v.as_object()?;
-    Some(iface_vector_operations::DeleteResponse {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_vector_operations::DeleteResponseEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
 fn iface_vector_operations__fetch_response__from_json(v: &Value) -> Option<iface_vector_operations::FetchResponse> {
     let m = v.as_object()?;
     Some(iface_vector_operations::FetchResponse {
-        namespace: m.get("namespace").filter(|v| !v.is_null()).and_then(|v| iface_vector_operations__namespace_name__from_json(v)),
-        vectors: m.get("vectors").filter(|v| !v.is_null()).and_then(|v| iface_vector_operations__fetch_response_vectors__from_json(v)),
+        namespace: m.get("namespace").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        vectors: m.get("vectors").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_array().map(|a| a.iter().filter_map(|x| (x).as_f64()).collect())).map(|val| iface_vector_operations::FetchResponseVectorsEntry { key: k.clone(), value: val })).collect())),
     })
 }
 
-fn iface_vector_operations__fetch_response_vectors__from_json(v: &Value) -> Option<iface_vector_operations::FetchResponseVectors> {
+fn iface_vector_operations__fetch_response_vectors_entry__from_json(v: &Value) -> Option<iface_vector_operations::FetchResponseVectorsEntry> {
     let m = v.as_object()?;
-    Some(iface_vector_operations::FetchResponseVectors {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_vector_operations::FetchResponseVectorsEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_f64()).collect())).unwrap_or_default(),
     })
 }
 
-fn iface_vector_operations__update_response__from_json(v: &Value) -> Option<iface_vector_operations::UpdateResponse> {
+fn iface_vector_operations__update_response_entry__from_json(v: &Value) -> Option<iface_vector_operations::UpdateResponseEntry> {
     let m = v.as_object()?;
-    Some(iface_vector_operations::UpdateResponse {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_vector_operations::UpdateResponseEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -395,12 +388,12 @@ fn iface_vector_operations__query__err(e: crate::runtime::DispatchError) -> Stri
     }
 }
 
-fn iface_vector_operations__delete__ok(body: String) -> Result<iface_vector_operations::DeleteResponse, crate::runtime::DispatchError> {
+fn iface_vector_operations__delete__ok(body: String) -> Result<Vec<iface_vector_operations::DeleteResponseEntry>, crate::runtime::DispatchError> {
     let v: Value = match serde_json::from_str(&body) {
         Ok(v) => v,
         Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
     };
-    match iface_vector_operations__delete_response__from_json(&v) {
+    match (&v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_vector_operations::DeleteResponseEntry { key: k.clone(), value: val })).collect()) {
         Some(x) => Ok(x),
         None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
@@ -431,12 +424,12 @@ fn iface_vector_operations__fetch__err(e: crate::runtime::DispatchError) -> Stri
     }
 }
 
-fn iface_vector_operations__update__ok(body: String) -> Result<iface_vector_operations::UpdateResponse, crate::runtime::DispatchError> {
+fn iface_vector_operations__update__ok(body: String) -> Result<Vec<iface_vector_operations::UpdateResponseEntry>, crate::runtime::DispatchError> {
     let v: Value = match serde_json::from_str(&body) {
         Ok(v) => v,
         Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
     };
-    match iface_vector_operations__update_response__from_json(&v) {
+    match (&v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_vector_operations::UpdateResponseEntry { key: k.clone(), value: val })).collect()) {
         Some(x) => Ok(x),
         None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
@@ -482,7 +475,7 @@ impl iface_vector_operations::Guest for crate::Component {
             Err(e) => Err(iface_vector_operations__query__err(e)),
         }
     }
-    fn delete(params: iface_vector_operations::DeleteParams) -> Result<iface_vector_operations::DeleteResponse, String> {
+    fn delete(params: iface_vector_operations::DeleteParams) -> Result<Vec<iface_vector_operations::DeleteResponseEntry>, String> {
         let json = iface_vector_operations__delete_params__to_json(&params);
         match dispatch(&OP_VECTOR_OPERATIONS_DELETE, json).and_then(iface_vector_operations__delete__ok) {
             Ok(v) => Ok(v),
@@ -496,7 +489,7 @@ impl iface_vector_operations::Guest for crate::Component {
             Err(e) => Err(iface_vector_operations__fetch__err(e)),
         }
     }
-    fn update(params: iface_vector_operations::UpdateParams) -> Result<iface_vector_operations::UpdateResponse, String> {
+    fn update(params: iface_vector_operations::UpdateParams) -> Result<Vec<iface_vector_operations::UpdateResponseEntry>, String> {
         let json = iface_vector_operations__update_params__to_json(&params);
         match dispatch(&OP_VECTOR_OPERATIONS_UPDATE, json).and_then(iface_vector_operations__update__ok) {
             Ok(v) => Ok(v),

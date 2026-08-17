@@ -159,15 +159,17 @@ fn iface_sender_identities_api__sender_id_request_reply_to__to_json(p: &iface_se
     Value::Object(m)
 }
 
-fn iface_sender_identities_api__delete_v3_senders_sender_id_response__to_json(p: &iface_sender_identities_api::DeleteV3SendersSenderIdResponse) -> Value {
+fn iface_sender_identities_api__delete_v3_senders_sender_id_response_entry__to_json(p: &iface_sender_identities_api::DeleteV3SendersSenderIdResponseEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
-fn iface_sender_identities_api__post_v3_senders_sender_id_resend_verification_response__to_json(p: &iface_sender_identities_api::PostV3SendersSenderIdResendVerificationResponse) -> Value {
+fn iface_sender_identities_api__post_v3_senders_sender_id_resend_verification_response_entry__to_json(p: &iface_sender_identities_api::PostV3SendersSenderIdResendVerificationResponseEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -272,17 +274,19 @@ fn iface_sender_identities_api__sender_id_reply_to__from_json(v: &Value) -> Opti
     })
 }
 
-fn iface_sender_identities_api__delete_v3_senders_sender_id_response__from_json(v: &Value) -> Option<iface_sender_identities_api::DeleteV3SendersSenderIdResponse> {
+fn iface_sender_identities_api__delete_v3_senders_sender_id_response_entry__from_json(v: &Value) -> Option<iface_sender_identities_api::DeleteV3SendersSenderIdResponseEntry> {
     let m = v.as_object()?;
-    Some(iface_sender_identities_api::DeleteV3SendersSenderIdResponse {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_sender_identities_api::DeleteV3SendersSenderIdResponseEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
-fn iface_sender_identities_api__post_v3_senders_sender_id_resend_verification_response__from_json(v: &Value) -> Option<iface_sender_identities_api::PostV3SendersSenderIdResendVerificationResponse> {
+fn iface_sender_identities_api__post_v3_senders_sender_id_resend_verification_response_entry__from_json(v: &Value) -> Option<iface_sender_identities_api::PostV3SendersSenderIdResendVerificationResponseEntry> {
     let m = v.as_object()?;
-    Some(iface_sender_identities_api::PostV3SendersSenderIdResendVerificationResponse {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_sender_identities_api::PostV3SendersSenderIdResendVerificationResponseEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -369,12 +373,12 @@ fn iface_sender_identities_api__patch_v3_senders_sender_id__err(e: crate::runtim
     }
 }
 
-fn iface_sender_identities_api__delete_v3_senders_sender_id__ok(body: String) -> Result<iface_sender_identities_api::DeleteV3SendersSenderIdResponse, crate::runtime::DispatchError> {
+fn iface_sender_identities_api__delete_v3_senders_sender_id__ok(body: String) -> Result<Vec<iface_sender_identities_api::DeleteV3SendersSenderIdResponseEntry>, crate::runtime::DispatchError> {
     let v: Value = match serde_json::from_str(&body) {
         Ok(v) => v,
         Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
     };
-    match iface_sender_identities_api__delete_v3_senders_sender_id_response__from_json(&v) {
+    match (&v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_sender_identities_api::DeleteV3SendersSenderIdResponseEntry { key: k.clone(), value: val })).collect()) {
         Some(x) => Ok(x),
         None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
@@ -391,12 +395,12 @@ fn iface_sender_identities_api__delete_v3_senders_sender_id__err(e: crate::runti
     }
 }
 
-fn iface_sender_identities_api__post_v3_senders_sender_id_resend_verification__ok(body: String) -> Result<iface_sender_identities_api::PostV3SendersSenderIdResendVerificationResponse, crate::runtime::DispatchError> {
+fn iface_sender_identities_api__post_v3_senders_sender_id_resend_verification__ok(body: String) -> Result<Vec<iface_sender_identities_api::PostV3SendersSenderIdResendVerificationResponseEntry>, crate::runtime::DispatchError> {
     let v: Value = match serde_json::from_str(&body) {
         Ok(v) => v,
         Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
     };
-    match iface_sender_identities_api__post_v3_senders_sender_id_resend_verification_response__from_json(&v) {
+    match (&v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_sender_identities_api::PostV3SendersSenderIdResendVerificationResponseEntry { key: k.clone(), value: val })).collect()) {
         Some(x) => Ok(x),
         None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
@@ -442,14 +446,14 @@ impl iface_sender_identities_api::Guest for crate::Component {
             Err(e) => Err(iface_sender_identities_api__patch_v3_senders_sender_id__err(e)),
         }
     }
-    fn delete_v3_senders_sender_id(params: iface_sender_identities_api::DeleteV3SendersSenderIdParams) -> Result<iface_sender_identities_api::DeleteV3SendersSenderIdResponse, iface_sender_identities_api::DeleteV3SendersSenderIdError> {
+    fn delete_v3_senders_sender_id(params: iface_sender_identities_api::DeleteV3SendersSenderIdParams) -> Result<Vec<iface_sender_identities_api::DeleteV3SendersSenderIdResponseEntry>, iface_sender_identities_api::DeleteV3SendersSenderIdError> {
         let json = iface_sender_identities_api__delete_v3_senders_sender_id_params__to_json(&params);
         match dispatch(&OP_SENDER_IDENTITIES_API_DELETE_V3_SENDERS_SENDER_ID, json).and_then(iface_sender_identities_api__delete_v3_senders_sender_id__ok) {
             Ok(v) => Ok(v),
             Err(e) => Err(iface_sender_identities_api__delete_v3_senders_sender_id__err(e)),
         }
     }
-    fn post_v3_senders_sender_id_resend_verification(params: iface_sender_identities_api::PostV3SendersSenderIdResendVerificationParams) -> Result<iface_sender_identities_api::PostV3SendersSenderIdResendVerificationResponse, iface_sender_identities_api::PostV3SendersSenderIdResendVerificationError> {
+    fn post_v3_senders_sender_id_resend_verification(params: iface_sender_identities_api::PostV3SendersSenderIdResendVerificationParams) -> Result<Vec<iface_sender_identities_api::PostV3SendersSenderIdResendVerificationResponseEntry>, iface_sender_identities_api::PostV3SendersSenderIdResendVerificationError> {
         let json = iface_sender_identities_api__post_v3_senders_sender_id_resend_verification_params__to_json(&params);
         match dispatch(&OP_SENDER_IDENTITIES_API_POST_V3_SENDERS_SENDER_ID_RESEND_VERIFICATION, json).and_then(iface_sender_identities_api__post_v3_senders_sender_id_resend_verification__ok) {
             Ok(v) => Ok(v),

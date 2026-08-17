@@ -27,9 +27,11 @@ const OP_ERRORS_GET_ERRORS_ID: OpSpec = OpSpec {
     ],
 };
 
-fn iface_errors__errors__to_json(p: &iface_errors::Errors) -> Value {
+fn iface_errors__errors_item__to_json(p: &iface_errors::ErrorsItem) -> Value {
     let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
+    m.insert("description".into(), match (&p.description) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("error_id".into(), match (&p.error_id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("error_name".into(), match (&p.error_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -56,10 +58,12 @@ fn iface_errors__get_errors_id_params__to_json(p: &iface_errors::GetErrorsIdPara
     Value::Object(m)
 }
 
-fn iface_errors__errors__from_json(v: &Value) -> Option<iface_errors::Errors> {
+fn iface_errors__errors_item__from_json(v: &Value) -> Option<iface_errors::ErrorsItem> {
     let m = v.as_object()?;
-    Some(iface_errors::Errors {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    Some(iface_errors::ErrorsItem {
+        description: m.get("description").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        error_id: m.get("error_id").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        error_name: m.get("error_name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
     })
 }
 
@@ -72,12 +76,12 @@ fn iface_errors__error__from_json(v: &Value) -> Option<iface_errors::Error> {
     })
 }
 
-fn iface_errors__get_errors__ok(body: String) -> Result<iface_errors::Errors, crate::runtime::DispatchError> {
+fn iface_errors__get_errors__ok(body: String) -> Result<Vec<iface_errors::ErrorsItem>, crate::runtime::DispatchError> {
     let v: Value = match serde_json::from_str(&body) {
         Ok(v) => v,
         Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
     };
-    match iface_errors__errors__from_json(&v) {
+    match (&v).as_array().map(|a| a.iter().filter_map(|x| iface_errors__errors_item__from_json(x)).collect()) {
         Some(x) => Ok(x),
         None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
@@ -133,7 +137,7 @@ fn iface_errors__get_errors_id__err(e: crate::runtime::DispatchError) -> iface_e
 }
 
 impl iface_errors::Guest for crate::Component {
-    fn get_errors(params: iface_errors::GetErrorsParams) -> Result<iface_errors::Errors, iface_errors::GetErrorsError> {
+    fn get_errors(params: iface_errors::GetErrorsParams) -> Result<Vec<iface_errors::ErrorsItem>, iface_errors::GetErrorsError> {
         let json = iface_errors__get_errors_params__to_json(&params);
         match dispatch(&OP_ERRORS_GET_ERRORS, json).and_then(iface_errors__get_errors__ok) {
             Ok(v) => Ok(v),

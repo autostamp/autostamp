@@ -100,22 +100,28 @@ const OP_INTERACTIONS_REMOVE_RESTRICTIONS_FOR_AUTHENTICATED_USER: OpSpec = OpSpe
     ],
 };
 
-fn iface_interactions__interaction_expiry__to_json(p: &iface_interactions::InteractionExpiry) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
+fn iface_interactions__interaction_expiry__to_str(e: &iface_interactions::InteractionExpiry) -> &'static str {
+    match e {
+        iface_interactions::InteractionExpiry::OneDay => "one_day",
+        iface_interactions::InteractionExpiry::ThreeDays => "three_days",
+        iface_interactions::InteractionExpiry::OneWeek => "one_week",
+        iface_interactions::InteractionExpiry::OneMonth => "one_month",
+        iface_interactions::InteractionExpiry::SixMonths => "six_months",
+    }
 }
 
-fn iface_interactions__interaction_group__to_json(p: &iface_interactions::InteractionGroup) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
+fn iface_interactions__interaction_group__to_str(e: &iface_interactions::InteractionGroup) -> &'static str {
+    match e {
+        iface_interactions::InteractionGroup::ExistingUsers => "existing_users",
+        iface_interactions::InteractionGroup::ContributorsOnly => "contributors_only",
+        iface_interactions::InteractionGroup::CollaboratorsOnly => "collaborators_only",
+    }
 }
 
 fn iface_interactions__interaction_limit_response__to_json(p: &iface_interactions::InteractionLimitResponse) -> Value {
     let mut m = Map::new();
     m.insert("expires_at".into(), Value::String((&p.expires_at).clone()));
-    m.insert("limit".into(), iface_interactions__interaction_group__to_json(&p.limit));
+    m.insert("limit".into(), Value::String(iface_interactions__interaction_group__to_str(&p.limit).into()));
     m.insert("origin".into(), Value::String((&p.origin).clone()));
     Value::Object(m)
 }
@@ -129,8 +135,8 @@ fn iface_interactions__get_restrictions_for_org_params__to_json(p: &iface_intera
 fn iface_interactions__set_restrictions_for_org_params__to_json(p: &iface_interactions::SetRestrictionsForOrgParams) -> Value {
     let mut m = Map::new();
     m.insert("org".into(), Value::String((&p.org).clone()));
-    m.insert("expiry".into(), match (&p.expiry) { Some(v) => iface_interactions__interaction_expiry__to_json(v), None => Value::Null });
-    m.insert("limit".into(), iface_interactions__interaction_group__to_json(&p.limit));
+    m.insert("expiry".into(), match (&p.expiry) { Some(v) => Value::String(iface_interactions__interaction_expiry__to_str(v).into()), None => Value::Null });
+    m.insert("limit".into(), Value::String(iface_interactions__interaction_group__to_str(&p.limit).into()));
     Value::Object(m)
 }
 
@@ -151,8 +157,8 @@ fn iface_interactions__set_restrictions_for_repo_params__to_json(p: &iface_inter
     let mut m = Map::new();
     m.insert("owner".into(), Value::String((&p.owner).clone()));
     m.insert("repo".into(), Value::String((&p.repo).clone()));
-    m.insert("expiry".into(), match (&p.expiry) { Some(v) => iface_interactions__interaction_expiry__to_json(v), None => Value::Null });
-    m.insert("limit".into(), iface_interactions__interaction_group__to_json(&p.limit));
+    m.insert("expiry".into(), match (&p.expiry) { Some(v) => Value::String(iface_interactions__interaction_expiry__to_str(v).into()), None => Value::Null });
+    m.insert("limit".into(), Value::String(iface_interactions__interaction_group__to_str(&p.limit).into()));
     Value::Object(m)
 }
 
@@ -165,25 +171,27 @@ fn iface_interactions__remove_restrictions_for_repo_params__to_json(p: &iface_in
 
 fn iface_interactions__set_restrictions_for_authenticated_user_params__to_json(p: &iface_interactions::SetRestrictionsForAuthenticatedUserParams) -> Value {
     let mut m = Map::new();
-    m.insert("expiry".into(), match (&p.expiry) { Some(v) => iface_interactions__interaction_expiry__to_json(v), None => Value::Null });
-    m.insert("limit".into(), iface_interactions__interaction_group__to_json(&p.limit));
+    m.insert("expiry".into(), match (&p.expiry) { Some(v) => Value::String(iface_interactions__interaction_expiry__to_str(v).into()), None => Value::Null });
+    m.insert("limit".into(), Value::String(iface_interactions__interaction_group__to_str(&p.limit).into()));
     Value::Object(m)
-}
-
-fn iface_interactions__interaction_group__from_json(v: &Value) -> Option<iface_interactions::InteractionGroup> {
-    let m = v.as_object()?;
-    Some(iface_interactions::InteractionGroup {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-    })
 }
 
 fn iface_interactions__interaction_limit_response__from_json(v: &Value) -> Option<iface_interactions::InteractionLimitResponse> {
     let m = v.as_object()?;
     Some(iface_interactions::InteractionLimitResponse {
         expires_at: m.get("expires_at").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-        limit: match m.get("limit").and_then(|v| iface_interactions__interaction_group__from_json(v)) { Some(x) => x, None => return None },
+        limit: match m.get("limit").and_then(|v| (v).as_str().and_then(iface_interactions__interaction_group__from_str)) { Some(x) => x, None => return None },
         origin: m.get("origin").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
+}
+
+fn iface_interactions__interaction_group__from_str(s: &str) -> Option<iface_interactions::InteractionGroup> {
+    match s {
+        "existing_users" => Some(iface_interactions::InteractionGroup::ExistingUsers),
+        "contributors_only" => Some(iface_interactions::InteractionGroup::ContributorsOnly),
+        "collaborators_only" => Some(iface_interactions::InteractionGroup::CollaboratorsOnly),
+        _ => None,
+    }
 }
 
 fn iface_interactions__get_restrictions_for_org__ok(body: String) -> Result<String, crate::runtime::DispatchError> {

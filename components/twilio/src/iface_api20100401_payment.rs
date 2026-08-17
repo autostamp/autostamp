@@ -49,22 +49,44 @@ const OP_API20100401_PAYMENT_UPDATE_PAYMENTS: OpSpec = OpSpec {
     ],
 };
 
-fn iface_api20100401_payment__payments_enum_bank_account_type__to_json(p: &iface_api20100401_payment::PaymentsEnumBankAccountType) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
+fn iface_api20100401_payment__payments_enum_bank_account_type__to_str(e: &iface_api20100401_payment::PaymentsEnumBankAccountType) -> &'static str {
+    match e {
+        iface_api20100401_payment::PaymentsEnumBankAccountType::ConsumerChecking => "consumer-checking",
+        iface_api20100401_payment::PaymentsEnumBankAccountType::ConsumerSavings => "consumer-savings",
+        iface_api20100401_payment::PaymentsEnumBankAccountType::CommercialChecking => "commercial-checking",
+    }
 }
 
-fn iface_api20100401_payment__payments_enum_payment_method__to_json(p: &iface_api20100401_payment::PaymentsEnumPaymentMethod) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
+fn iface_api20100401_payment__payments_enum_payment_method__to_str(e: &iface_api20100401_payment::PaymentsEnumPaymentMethod) -> &'static str {
+    match e {
+        iface_api20100401_payment::PaymentsEnumPaymentMethod::CreditCard => "credit-card",
+        iface_api20100401_payment::PaymentsEnumPaymentMethod::AchDebit => "ach-debit",
+    }
 }
 
-fn iface_api20100401_payment__payments_enum_token_type__to_json(p: &iface_api20100401_payment::PaymentsEnumTokenType) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
+fn iface_api20100401_payment__payments_enum_token_type__to_str(e: &iface_api20100401_payment::PaymentsEnumTokenType) -> &'static str {
+    match e {
+        iface_api20100401_payment::PaymentsEnumTokenType::OneTime => "one-time",
+        iface_api20100401_payment::PaymentsEnumTokenType::Reusable => "reusable",
+    }
+}
+
+fn iface_api20100401_payment__payments_enum_capture__to_str(e: &iface_api20100401_payment::PaymentsEnumCapture) -> &'static str {
+    match e {
+        iface_api20100401_payment::PaymentsEnumCapture::PaymentCardNumber => "payment-card-number",
+        iface_api20100401_payment::PaymentsEnumCapture::ExpirationDate => "expiration-date",
+        iface_api20100401_payment::PaymentsEnumCapture::SecurityCode => "security-code",
+        iface_api20100401_payment::PaymentsEnumCapture::PostalCode => "postal-code",
+        iface_api20100401_payment::PaymentsEnumCapture::BankRoutingNumber => "bank-routing-number",
+        iface_api20100401_payment::PaymentsEnumCapture::BankAccountNumber => "bank-account-number",
+    }
+}
+
+fn iface_api20100401_payment__payments_enum_status__to_str(e: &iface_api20100401_payment::PaymentsEnumStatus) -> &'static str {
+    match e {
+        iface_api20100401_payment::PaymentsEnumStatus::Complete => "complete",
+        iface_api20100401_payment::PaymentsEnumStatus::Cancel => "cancel",
+    }
 }
 
 fn iface_api20100401_payment__api_v2010_account_call_payments__to_json(p: &iface_api20100401_payment::ApiV2010AccountCallPayments) -> Value {
@@ -78,23 +100,11 @@ fn iface_api20100401_payment__api_v2010_account_call_payments__to_json(p: &iface
     Value::Object(m)
 }
 
-fn iface_api20100401_payment__payments_enum_capture__to_json(p: &iface_api20100401_payment::PaymentsEnumCapture) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_api20100401_payment__payments_enum_status__to_json(p: &iface_api20100401_payment::PaymentsEnumStatus) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
 fn iface_api20100401_payment__create_payments_params__to_json(p: &iface_api20100401_payment::CreatePaymentsParams) -> Value {
     let mut m = Map::new();
     m.insert("account_sid".into(), Value::String((&p.account_sid).clone()));
     m.insert("call_sid".into(), Value::String((&p.call_sid).clone()));
-    m.insert("bank_account_type".into(), match (&p.bank_account_type) { Some(v) => iface_api20100401_payment__payments_enum_bank_account_type__to_json(v), None => Value::Null });
+    m.insert("bank_account_type".into(), match (&p.bank_account_type) { Some(v) => Value::String(iface_api20100401_payment__payments_enum_bank_account_type__to_str(v).into()), None => Value::Null });
     m.insert("charge_amount".into(), match (&p.charge_amount) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
     m.insert("currency".into(), match (&p.currency) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("description".into(), match (&p.description) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -103,12 +113,12 @@ fn iface_api20100401_payment__create_payments_params__to_json(p: &iface_api20100
     m.insert("min_postal_code_length".into(), match (&p.min_postal_code_length) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("parameter".into(), match (&p.parameter) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("payment_connector".into(), match (&p.payment_connector) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("payment_method".into(), match (&p.payment_method) { Some(v) => iface_api20100401_payment__payments_enum_payment_method__to_json(v), None => Value::Null });
+    m.insert("payment_method".into(), match (&p.payment_method) { Some(v) => Value::String(iface_api20100401_payment__payments_enum_payment_method__to_str(v).into()), None => Value::Null });
     m.insert("postal_code".into(), match (&p.postal_code) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     m.insert("security_code".into(), match (&p.security_code) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     m.insert("status_callback".into(), Value::String((&p.status_callback).clone()));
     m.insert("timeout".into(), match (&p.timeout) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    m.insert("token_type".into(), match (&p.token_type) { Some(v) => iface_api20100401_payment__payments_enum_token_type__to_json(v), None => Value::Null });
+    m.insert("token_type".into(), match (&p.token_type) { Some(v) => Value::String(iface_api20100401_payment__payments_enum_token_type__to_str(v).into()), None => Value::Null });
     m.insert("valid_card_types".into(), match (&p.valid_card_types) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
@@ -118,9 +128,9 @@ fn iface_api20100401_payment__update_payments_params__to_json(p: &iface_api20100
     m.insert("account_sid".into(), Value::String((&p.account_sid).clone()));
     m.insert("call_sid".into(), Value::String((&p.call_sid).clone()));
     m.insert("sid".into(), Value::String((&p.sid).clone()));
-    m.insert("capture".into(), match (&p.capture) { Some(v) => iface_api20100401_payment__payments_enum_capture__to_json(v), None => Value::Null });
+    m.insert("capture".into(), match (&p.capture) { Some(v) => Value::String(iface_api20100401_payment__payments_enum_capture__to_str(v).into()), None => Value::Null });
     m.insert("idempotency_key".into(), Value::String((&p.idempotency_key).clone()));
-    m.insert("status".into(), match (&p.status) { Some(v) => iface_api20100401_payment__payments_enum_status__to_json(v), None => Value::Null });
+    m.insert("status".into(), match (&p.status) { Some(v) => Value::String(iface_api20100401_payment__payments_enum_status__to_str(v).into()), None => Value::Null });
     m.insert("status_callback".into(), Value::String((&p.status_callback).clone()));
     Value::Object(m)
 }

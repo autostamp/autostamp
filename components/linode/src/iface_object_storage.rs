@@ -323,9 +323,9 @@ fn iface_object_storage__key_bucket_access_item_permissions_enum__to_str(e: &ifa
 fn iface_object_storage__get_object_storage_buckets_response__to_json(p: &iface_object_storage::GetObjectStorageBucketsResponse) -> Value {
     let mut m = Map::new();
     m.insert("data".into(), match (&p.data) { Some(v) => Value::Array((v).iter().map(|v| iface_object_storage__bucket__to_json(v)).collect()), None => Value::Null });
-    m.insert("page".into(), match (&p.page) { Some(v) => iface_object_storage__pagination_envelope_properties_page__to_json(v), None => Value::Null });
-    m.insert("pages".into(), match (&p.pages) { Some(v) => iface_object_storage__pagination_envelope_properties_pages__to_json(v), None => Value::Null });
-    m.insert("results".into(), match (&p.results) { Some(v) => iface_object_storage__pagination_envelope_properties_results__to_json(v), None => Value::Null });
+    m.insert("page".into(), match (&p.page) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("pages".into(), match (&p.pages) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("results".into(), match (&p.results) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
@@ -340,48 +340,33 @@ fn iface_object_storage__bucket__to_json(p: &iface_object_storage::Bucket) -> Va
     Value::Object(m)
 }
 
-fn iface_object_storage__pagination_envelope_properties_page__to_json(p: &iface_object_storage::PaginationEnvelopePropertiesPage) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_object_storage__pagination_envelope_properties_pages__to_json(p: &iface_object_storage::PaginationEnvelopePropertiesPages) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_object_storage__pagination_envelope_properties_results__to_json(p: &iface_object_storage::PaginationEnvelopePropertiesResults) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
 fn iface_object_storage__get_object_storage_bucketin_cluster_response__to_json(p: &iface_object_storage::GetObjectStorageBucketinClusterResponse) -> Value {
     let mut m = Map::new();
     m.insert("data".into(), match (&p.data) { Some(v) => Value::Array((v).iter().map(|v| iface_object_storage__bucket__to_json(v)).collect()), None => Value::Null });
-    m.insert("page".into(), match (&p.page) { Some(v) => iface_object_storage__pagination_envelope_properties_page__to_json(v), None => Value::Null });
-    m.insert("pages".into(), match (&p.pages) { Some(v) => iface_object_storage__pagination_envelope_properties_pages__to_json(v), None => Value::Null });
-    m.insert("results".into(), match (&p.results) { Some(v) => iface_object_storage__pagination_envelope_properties_results__to_json(v), None => Value::Null });
+    m.insert("page".into(), match (&p.page) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("pages".into(), match (&p.pages) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("results".into(), match (&p.results) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_object_storage__delete_object_storage_bucket_response__to_json(p: &iface_object_storage::DeleteObjectStorageBucketResponse) -> Value {
+fn iface_object_storage__delete_object_storage_bucket_response_entry__to_json(p: &iface_object_storage::DeleteObjectStorageBucketResponseEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
-fn iface_object_storage__modify_object_storage_bucket_access_response__to_json(p: &iface_object_storage::ModifyObjectStorageBucketAccessResponse) -> Value {
+fn iface_object_storage__modify_object_storage_bucket_access_response_entry__to_json(p: &iface_object_storage::ModifyObjectStorageBucketAccessResponseEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
-fn iface_object_storage__update_object_storage_bucket_access_response__to_json(p: &iface_object_storage::UpdateObjectStorageBucketAccessResponse) -> Value {
+fn iface_object_storage__update_object_storage_bucket_access_response_entry__to_json(p: &iface_object_storage::UpdateObjectStorageBucketAccessResponseEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -429,24 +414,26 @@ fn iface_object_storage__ssl_response__to_json(p: &iface_object_storage::SslResp
     Value::Object(m)
 }
 
-fn iface_object_storage__delete_object_storage_ssl_response__to_json(p: &iface_object_storage::DeleteObjectStorageSslResponse) -> Value {
+fn iface_object_storage__delete_object_storage_ssl_response_entry__to_json(p: &iface_object_storage::DeleteObjectStorageSslResponseEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
-fn iface_object_storage__cancel_object_storage_response__to_json(p: &iface_object_storage::CancelObjectStorageResponse) -> Value {
+fn iface_object_storage__cancel_object_storage_response_entry__to_json(p: &iface_object_storage::CancelObjectStorageResponseEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
 fn iface_object_storage__get_object_storage_clusters_response__to_json(p: &iface_object_storage::GetObjectStorageClustersResponse) -> Value {
     let mut m = Map::new();
     m.insert("data".into(), match (&p.data) { Some(v) => Value::Array((v).iter().map(|v| iface_object_storage__cluster__to_json(v)).collect()), None => Value::Null });
-    m.insert("page".into(), match (&p.page) { Some(v) => iface_object_storage__pagination_envelope_properties_page__to_json(v), None => Value::Null });
-    m.insert("pages".into(), match (&p.pages) { Some(v) => iface_object_storage__pagination_envelope_properties_pages__to_json(v), None => Value::Null });
-    m.insert("results".into(), match (&p.results) { Some(v) => iface_object_storage__pagination_envelope_properties_results__to_json(v), None => Value::Null });
+    m.insert("page".into(), match (&p.page) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("pages".into(), match (&p.pages) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("results".into(), match (&p.results) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
@@ -463,9 +450,9 @@ fn iface_object_storage__cluster__to_json(p: &iface_object_storage::Cluster) -> 
 fn iface_object_storage__get_object_storage_keys_response__to_json(p: &iface_object_storage::GetObjectStorageKeysResponse) -> Value {
     let mut m = Map::new();
     m.insert("data".into(), match (&p.data) { Some(v) => Value::Array((v).iter().map(|v| iface_object_storage__key__to_json(v)).collect()), None => Value::Null });
-    m.insert("page".into(), match (&p.page) { Some(v) => iface_object_storage__pagination_envelope_properties_page__to_json(v), None => Value::Null });
-    m.insert("pages".into(), match (&p.pages) { Some(v) => iface_object_storage__pagination_envelope_properties_pages__to_json(v), None => Value::Null });
-    m.insert("results".into(), match (&p.results) { Some(v) => iface_object_storage__pagination_envelope_properties_results__to_json(v), None => Value::Null });
+    m.insert("page".into(), match (&p.page) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("pages".into(), match (&p.pages) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("results".into(), match (&p.results) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
@@ -488,9 +475,10 @@ fn iface_object_storage__key_bucket_access_item__to_json(p: &iface_object_storag
     Value::Object(m)
 }
 
-fn iface_object_storage__delete_object_storage_key_response__to_json(p: &iface_object_storage::DeleteObjectStorageKeyResponse) -> Value {
+fn iface_object_storage__delete_object_storage_key_response_entry__to_json(p: &iface_object_storage::DeleteObjectStorageKeyResponseEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -649,9 +637,9 @@ fn iface_object_storage__get_object_storage_buckets_response__from_json(v: &Valu
     let m = v.as_object()?;
     Some(iface_object_storage::GetObjectStorageBucketsResponse {
         data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_object_storage__bucket__from_json(x)).collect())),
-        page: m.get("page").filter(|v| !v.is_null()).and_then(|v| iface_object_storage__pagination_envelope_properties_page__from_json(v)),
-        pages: m.get("pages").filter(|v| !v.is_null()).and_then(|v| iface_object_storage__pagination_envelope_properties_pages__from_json(v)),
-        results: m.get("results").filter(|v| !v.is_null()).and_then(|v| iface_object_storage__pagination_envelope_properties_results__from_json(v)),
+        page: m.get("page").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        pages: m.get("pages").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        results: m.get("results").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
     })
 }
 
@@ -667,55 +655,37 @@ fn iface_object_storage__bucket__from_json(v: &Value) -> Option<iface_object_sto
     })
 }
 
-fn iface_object_storage__pagination_envelope_properties_page__from_json(v: &Value) -> Option<iface_object_storage::PaginationEnvelopePropertiesPage> {
-    let m = v.as_object()?;
-    Some(iface_object_storage::PaginationEnvelopePropertiesPage {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-    })
-}
-
-fn iface_object_storage__pagination_envelope_properties_pages__from_json(v: &Value) -> Option<iface_object_storage::PaginationEnvelopePropertiesPages> {
-    let m = v.as_object()?;
-    Some(iface_object_storage::PaginationEnvelopePropertiesPages {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-    })
-}
-
-fn iface_object_storage__pagination_envelope_properties_results__from_json(v: &Value) -> Option<iface_object_storage::PaginationEnvelopePropertiesResults> {
-    let m = v.as_object()?;
-    Some(iface_object_storage::PaginationEnvelopePropertiesResults {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-    })
-}
-
 fn iface_object_storage__get_object_storage_bucketin_cluster_response__from_json(v: &Value) -> Option<iface_object_storage::GetObjectStorageBucketinClusterResponse> {
     let m = v.as_object()?;
     Some(iface_object_storage::GetObjectStorageBucketinClusterResponse {
         data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_object_storage__bucket__from_json(x)).collect())),
-        page: m.get("page").filter(|v| !v.is_null()).and_then(|v| iface_object_storage__pagination_envelope_properties_page__from_json(v)),
-        pages: m.get("pages").filter(|v| !v.is_null()).and_then(|v| iface_object_storage__pagination_envelope_properties_pages__from_json(v)),
-        results: m.get("results").filter(|v| !v.is_null()).and_then(|v| iface_object_storage__pagination_envelope_properties_results__from_json(v)),
+        page: m.get("page").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        pages: m.get("pages").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        results: m.get("results").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
     })
 }
 
-fn iface_object_storage__delete_object_storage_bucket_response__from_json(v: &Value) -> Option<iface_object_storage::DeleteObjectStorageBucketResponse> {
+fn iface_object_storage__delete_object_storage_bucket_response_entry__from_json(v: &Value) -> Option<iface_object_storage::DeleteObjectStorageBucketResponseEntry> {
     let m = v.as_object()?;
-    Some(iface_object_storage::DeleteObjectStorageBucketResponse {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_object_storage::DeleteObjectStorageBucketResponseEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
-fn iface_object_storage__modify_object_storage_bucket_access_response__from_json(v: &Value) -> Option<iface_object_storage::ModifyObjectStorageBucketAccessResponse> {
+fn iface_object_storage__modify_object_storage_bucket_access_response_entry__from_json(v: &Value) -> Option<iface_object_storage::ModifyObjectStorageBucketAccessResponseEntry> {
     let m = v.as_object()?;
-    Some(iface_object_storage::ModifyObjectStorageBucketAccessResponse {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_object_storage::ModifyObjectStorageBucketAccessResponseEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
-fn iface_object_storage__update_object_storage_bucket_access_response__from_json(v: &Value) -> Option<iface_object_storage::UpdateObjectStorageBucketAccessResponse> {
+fn iface_object_storage__update_object_storage_bucket_access_response_entry__from_json(v: &Value) -> Option<iface_object_storage::UpdateObjectStorageBucketAccessResponseEntry> {
     let m = v.as_object()?;
-    Some(iface_object_storage::UpdateObjectStorageBucketAccessResponse {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_object_storage::UpdateObjectStorageBucketAccessResponseEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -769,17 +739,19 @@ fn iface_object_storage__ssl_response__from_json(v: &Value) -> Option<iface_obje
     })
 }
 
-fn iface_object_storage__delete_object_storage_ssl_response__from_json(v: &Value) -> Option<iface_object_storage::DeleteObjectStorageSslResponse> {
+fn iface_object_storage__delete_object_storage_ssl_response_entry__from_json(v: &Value) -> Option<iface_object_storage::DeleteObjectStorageSslResponseEntry> {
     let m = v.as_object()?;
-    Some(iface_object_storage::DeleteObjectStorageSslResponse {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_object_storage::DeleteObjectStorageSslResponseEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
-fn iface_object_storage__cancel_object_storage_response__from_json(v: &Value) -> Option<iface_object_storage::CancelObjectStorageResponse> {
+fn iface_object_storage__cancel_object_storage_response_entry__from_json(v: &Value) -> Option<iface_object_storage::CancelObjectStorageResponseEntry> {
     let m = v.as_object()?;
-    Some(iface_object_storage::CancelObjectStorageResponse {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_object_storage::CancelObjectStorageResponseEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -787,9 +759,9 @@ fn iface_object_storage__get_object_storage_clusters_response__from_json(v: &Val
     let m = v.as_object()?;
     Some(iface_object_storage::GetObjectStorageClustersResponse {
         data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_object_storage__cluster__from_json(x)).collect())),
-        page: m.get("page").filter(|v| !v.is_null()).and_then(|v| iface_object_storage__pagination_envelope_properties_page__from_json(v)),
-        pages: m.get("pages").filter(|v| !v.is_null()).and_then(|v| iface_object_storage__pagination_envelope_properties_pages__from_json(v)),
-        results: m.get("results").filter(|v| !v.is_null()).and_then(|v| iface_object_storage__pagination_envelope_properties_results__from_json(v)),
+        page: m.get("page").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        pages: m.get("pages").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        results: m.get("results").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
     })
 }
 
@@ -808,9 +780,9 @@ fn iface_object_storage__get_object_storage_keys_response__from_json(v: &Value) 
     let m = v.as_object()?;
     Some(iface_object_storage::GetObjectStorageKeysResponse {
         data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_object_storage__key__from_json(x)).collect())),
-        page: m.get("page").filter(|v| !v.is_null()).and_then(|v| iface_object_storage__pagination_envelope_properties_page__from_json(v)),
-        pages: m.get("pages").filter(|v| !v.is_null()).and_then(|v| iface_object_storage__pagination_envelope_properties_pages__from_json(v)),
-        results: m.get("results").filter(|v| !v.is_null()).and_then(|v| iface_object_storage__pagination_envelope_properties_results__from_json(v)),
+        page: m.get("page").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        pages: m.get("pages").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        results: m.get("results").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
     })
 }
 
@@ -835,10 +807,11 @@ fn iface_object_storage__key_bucket_access_item__from_json(v: &Value) -> Option<
     })
 }
 
-fn iface_object_storage__delete_object_storage_key_response__from_json(v: &Value) -> Option<iface_object_storage::DeleteObjectStorageKeyResponse> {
+fn iface_object_storage__delete_object_storage_key_response_entry__from_json(v: &Value) -> Option<iface_object_storage::DeleteObjectStorageKeyResponseEntry> {
     let m = v.as_object()?;
-    Some(iface_object_storage::DeleteObjectStorageKeyResponse {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_object_storage::DeleteObjectStorageKeyResponseEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -948,12 +921,12 @@ fn iface_object_storage__get_object_storage_bucket__err(e: crate::runtime::Dispa
     }
 }
 
-fn iface_object_storage__delete_object_storage_bucket__ok(body: String) -> Result<iface_object_storage::DeleteObjectStorageBucketResponse, crate::runtime::DispatchError> {
+fn iface_object_storage__delete_object_storage_bucket__ok(body: String) -> Result<Vec<iface_object_storage::DeleteObjectStorageBucketResponseEntry>, crate::runtime::DispatchError> {
     let v: Value = match serde_json::from_str(&body) {
         Ok(v) => v,
         Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
     };
-    match iface_object_storage__delete_object_storage_bucket_response__from_json(&v) {
+    match (&v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_object_storage::DeleteObjectStorageBucketResponseEntry { key: k.clone(), value: val })).collect()) {
         Some(x) => Ok(x),
         None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
@@ -966,12 +939,12 @@ fn iface_object_storage__delete_object_storage_bucket__err(e: crate::runtime::Di
     }
 }
 
-fn iface_object_storage__modify_object_storage_bucket_access__ok(body: String) -> Result<iface_object_storage::ModifyObjectStorageBucketAccessResponse, crate::runtime::DispatchError> {
+fn iface_object_storage__modify_object_storage_bucket_access__ok(body: String) -> Result<Vec<iface_object_storage::ModifyObjectStorageBucketAccessResponseEntry>, crate::runtime::DispatchError> {
     let v: Value = match serde_json::from_str(&body) {
         Ok(v) => v,
         Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
     };
-    match iface_object_storage__modify_object_storage_bucket_access_response__from_json(&v) {
+    match (&v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_object_storage::ModifyObjectStorageBucketAccessResponseEntry { key: k.clone(), value: val })).collect()) {
         Some(x) => Ok(x),
         None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
@@ -984,12 +957,12 @@ fn iface_object_storage__modify_object_storage_bucket_access__err(e: crate::runt
     }
 }
 
-fn iface_object_storage__update_object_storage_bucket_access__ok(body: String) -> Result<iface_object_storage::UpdateObjectStorageBucketAccessResponse, crate::runtime::DispatchError> {
+fn iface_object_storage__update_object_storage_bucket_access__ok(body: String) -> Result<Vec<iface_object_storage::UpdateObjectStorageBucketAccessResponseEntry>, crate::runtime::DispatchError> {
     let v: Value = match serde_json::from_str(&body) {
         Ok(v) => v,
         Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
     };
-    match iface_object_storage__update_object_storage_bucket_access_response__from_json(&v) {
+    match (&v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_object_storage::UpdateObjectStorageBucketAccessResponseEntry { key: k.clone(), value: val })).collect()) {
         Some(x) => Ok(x),
         None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
@@ -1110,12 +1083,12 @@ fn iface_object_storage__create_object_storage_ssl__err(e: crate::runtime::Dispa
     }
 }
 
-fn iface_object_storage__delete_object_storage_ssl__ok(body: String) -> Result<iface_object_storage::DeleteObjectStorageSslResponse, crate::runtime::DispatchError> {
+fn iface_object_storage__delete_object_storage_ssl__ok(body: String) -> Result<Vec<iface_object_storage::DeleteObjectStorageSslResponseEntry>, crate::runtime::DispatchError> {
     let v: Value = match serde_json::from_str(&body) {
         Ok(v) => v,
         Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
     };
-    match iface_object_storage__delete_object_storage_ssl_response__from_json(&v) {
+    match (&v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_object_storage::DeleteObjectStorageSslResponseEntry { key: k.clone(), value: val })).collect()) {
         Some(x) => Ok(x),
         None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
@@ -1128,12 +1101,12 @@ fn iface_object_storage__delete_object_storage_ssl__err(e: crate::runtime::Dispa
     }
 }
 
-fn iface_object_storage__cancel_object_storage__ok(body: String) -> Result<iface_object_storage::CancelObjectStorageResponse, crate::runtime::DispatchError> {
+fn iface_object_storage__cancel_object_storage__ok(body: String) -> Result<Vec<iface_object_storage::CancelObjectStorageResponseEntry>, crate::runtime::DispatchError> {
     let v: Value = match serde_json::from_str(&body) {
         Ok(v) => v,
         Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
     };
-    match iface_object_storage__cancel_object_storage_response__from_json(&v) {
+    match (&v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_object_storage::CancelObjectStorageResponseEntry { key: k.clone(), value: val })).collect()) {
         Some(x) => Ok(x),
         None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
@@ -1254,12 +1227,12 @@ fn iface_object_storage__update_object_storage_key__err(e: crate::runtime::Dispa
     }
 }
 
-fn iface_object_storage__delete_object_storage_key__ok(body: String) -> Result<iface_object_storage::DeleteObjectStorageKeyResponse, crate::runtime::DispatchError> {
+fn iface_object_storage__delete_object_storage_key__ok(body: String) -> Result<Vec<iface_object_storage::DeleteObjectStorageKeyResponseEntry>, crate::runtime::DispatchError> {
     let v: Value = match serde_json::from_str(&body) {
         Ok(v) => v,
         Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
     };
-    match iface_object_storage__delete_object_storage_key_response__from_json(&v) {
+    match (&v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_object_storage::DeleteObjectStorageKeyResponseEntry { key: k.clone(), value: val })).collect()) {
         Some(x) => Ok(x),
         None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
@@ -1318,21 +1291,21 @@ impl iface_object_storage::Guest for crate::Component {
             Err(e) => Err(iface_object_storage__get_object_storage_bucket__err(e)),
         }
     }
-    fn delete_object_storage_bucket(params: iface_object_storage::DeleteObjectStorageBucketParams) -> Result<iface_object_storage::DeleteObjectStorageBucketResponse, String> {
+    fn delete_object_storage_bucket(params: iface_object_storage::DeleteObjectStorageBucketParams) -> Result<Vec<iface_object_storage::DeleteObjectStorageBucketResponseEntry>, String> {
         let json = iface_object_storage__delete_object_storage_bucket_params__to_json(&params);
         match dispatch(&OP_OBJECT_STORAGE_DELETE_OBJECT_STORAGE_BUCKET, json).and_then(iface_object_storage__delete_object_storage_bucket__ok) {
             Ok(v) => Ok(v),
             Err(e) => Err(iface_object_storage__delete_object_storage_bucket__err(e)),
         }
     }
-    fn modify_object_storage_bucket_access(params: iface_object_storage::ModifyObjectStorageBucketAccessParams) -> Result<iface_object_storage::ModifyObjectStorageBucketAccessResponse, String> {
+    fn modify_object_storage_bucket_access(params: iface_object_storage::ModifyObjectStorageBucketAccessParams) -> Result<Vec<iface_object_storage::ModifyObjectStorageBucketAccessResponseEntry>, String> {
         let json = iface_object_storage__modify_object_storage_bucket_access_params__to_json(&params);
         match dispatch(&OP_OBJECT_STORAGE_MODIFY_OBJECT_STORAGE_BUCKET_ACCESS, json).and_then(iface_object_storage__modify_object_storage_bucket_access__ok) {
             Ok(v) => Ok(v),
             Err(e) => Err(iface_object_storage__modify_object_storage_bucket_access__err(e)),
         }
     }
-    fn update_object_storage_bucket_access(params: iface_object_storage::UpdateObjectStorageBucketAccessParams) -> Result<iface_object_storage::UpdateObjectStorageBucketAccessResponse, String> {
+    fn update_object_storage_bucket_access(params: iface_object_storage::UpdateObjectStorageBucketAccessParams) -> Result<Vec<iface_object_storage::UpdateObjectStorageBucketAccessResponseEntry>, String> {
         let json = iface_object_storage__update_object_storage_bucket_access_params__to_json(&params);
         match dispatch(&OP_OBJECT_STORAGE_UPDATE_OBJECT_STORAGE_BUCKET_ACCESS, json).and_then(iface_object_storage__update_object_storage_bucket_access__ok) {
             Ok(v) => Ok(v),
@@ -1381,14 +1354,14 @@ impl iface_object_storage::Guest for crate::Component {
             Err(e) => Err(iface_object_storage__create_object_storage_ssl__err(e)),
         }
     }
-    fn delete_object_storage_ssl(params: iface_object_storage::DeleteObjectStorageSslParams) -> Result<iface_object_storage::DeleteObjectStorageSslResponse, String> {
+    fn delete_object_storage_ssl(params: iface_object_storage::DeleteObjectStorageSslParams) -> Result<Vec<iface_object_storage::DeleteObjectStorageSslResponseEntry>, String> {
         let json = iface_object_storage__delete_object_storage_ssl_params__to_json(&params);
         match dispatch(&OP_OBJECT_STORAGE_DELETE_OBJECT_STORAGE_SSL, json).and_then(iface_object_storage__delete_object_storage_ssl__ok) {
             Ok(v) => Ok(v),
             Err(e) => Err(iface_object_storage__delete_object_storage_ssl__err(e)),
         }
     }
-    fn cancel_object_storage() -> Result<iface_object_storage::CancelObjectStorageResponse, String> {
+    fn cancel_object_storage() -> Result<Vec<iface_object_storage::CancelObjectStorageResponseEntry>, String> {
         match dispatch(&OP_OBJECT_STORAGE_CANCEL_OBJECT_STORAGE, Value::Object(Map::new())).and_then(iface_object_storage__cancel_object_storage__ok) {
             Ok(v) => Ok(v),
             Err(e) => Err(iface_object_storage__cancel_object_storage__err(e)),
@@ -1434,7 +1407,7 @@ impl iface_object_storage::Guest for crate::Component {
             Err(e) => Err(iface_object_storage__update_object_storage_key__err(e)),
         }
     }
-    fn delete_object_storage_key(params: iface_object_storage::DeleteObjectStorageKeyParams) -> Result<iface_object_storage::DeleteObjectStorageKeyResponse, String> {
+    fn delete_object_storage_key(params: iface_object_storage::DeleteObjectStorageKeyParams) -> Result<Vec<iface_object_storage::DeleteObjectStorageKeyResponseEntry>, String> {
         let json = iface_object_storage__delete_object_storage_key_params__to_json(&params);
         match dispatch(&OP_OBJECT_STORAGE_DELETE_OBJECT_STORAGE_KEY, json).and_then(iface_object_storage__delete_object_storage_key__ok) {
             Ok(v) => Ok(v),

@@ -86,6 +86,21 @@ fn iface_programmable_fax_applications__list_fax_applications_sort_enum__to_str(
     }
 }
 
+fn iface_programmable_fax_applications__anchorsite_override__to_str(e: &iface_programmable_fax_applications::AnchorsiteOverride) -> &'static str {
+    match e {
+        iface_programmable_fax_applications::AnchorsiteOverride::Latency => "Latency",
+        iface_programmable_fax_applications::AnchorsiteOverride::ChicagoIl => "Chicago, IL",
+        iface_programmable_fax_applications::AnchorsiteOverride::AshburnVa => "Ashburn, VA",
+        iface_programmable_fax_applications::AnchorsiteOverride::SanJoseCa => "San Jose, CA",
+        iface_programmable_fax_applications::AnchorsiteOverride::SydneyAustralia => "Sydney, Australia",
+        iface_programmable_fax_applications::AnchorsiteOverride::AmsterdamNetherlands => "Amsterdam, Netherlands",
+        iface_programmable_fax_applications::AnchorsiteOverride::LondonUk => "London, UK",
+        iface_programmable_fax_applications::AnchorsiteOverride::TorontoCanada => "Toronto, Canada",
+        iface_programmable_fax_applications::AnchorsiteOverride::VancouverCanada => "Vancouver, Canada",
+        iface_programmable_fax_applications::AnchorsiteOverride::FrankfurtGermany => "Frankfurt, Germany",
+    }
+}
+
 fn iface_programmable_fax_applications__fax_application_inbound_sip_subdomain_receive_settings_enum__to_str(e: &iface_programmable_fax_applications::FaxApplicationInboundSipSubdomainReceiveSettingsEnum) -> &'static str {
     match e {
         iface_programmable_fax_applications::FaxApplicationInboundSipSubdomainReceiveSettingsEnum::OnlyMyConnections => "only_my_connections",
@@ -102,42 +117,18 @@ fn iface_programmable_fax_applications__list_fax_applications_response__to_json(
 
 fn iface_programmable_fax_applications__fax_application__to_json(p: &iface_programmable_fax_applications::FaxApplication) -> Value {
     let mut m = Map::new();
-    m.insert("active".into(), match (&p.active) { Some(v) => iface_programmable_fax_applications__connection_active__to_json(v), None => Value::Null });
-    m.insert("anchorsite_override".into(), match (&p.anchorsite_override) { Some(v) => iface_programmable_fax_applications__anchorsite_override__to_json(v), None => Value::Null });
-    m.insert("application_name".into(), match (&p.application_name) { Some(v) => iface_programmable_fax_applications__application_name__to_json(v), None => Value::Null });
+    m.insert("active".into(), match (&p.active) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("anchorsite_override".into(), match (&p.anchorsite_override) { Some(v) => Value::String(iface_programmable_fax_applications__anchorsite_override__to_str(v).into()), None => Value::Null });
+    m.insert("application_name".into(), match (&p.application_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("created_at".into(), match (&p.created_at) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("id".into(), match (&p.id) { Some(v) => iface_programmable_fax_applications__int_id__to_json(v), None => Value::Null });
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("inbound".into(), match (&p.inbound) { Some(v) => iface_programmable_fax_applications__fax_application_inbound__to_json(v), None => Value::Null });
     m.insert("outbound".into(), match (&p.outbound) { Some(v) => iface_programmable_fax_applications__fax_application_outbound__to_json(v), None => Value::Null });
     m.insert("record_type".into(), match (&p.record_type) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("updated_at".into(), match (&p.updated_at) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("webhook_event_failover_url".into(), match (&p.webhook_event_failover_url) { Some(v) => iface_programmable_fax_applications__webhook_event_failover_url__to_json(v), None => Value::Null });
-    m.insert("webhook_event_url".into(), match (&p.webhook_event_url) { Some(v) => iface_programmable_fax_applications__webhook_event_url__to_json(v), None => Value::Null });
-    m.insert("webhook_timeout_secs".into(), match (&p.webhook_timeout_secs) { Some(v) => iface_programmable_fax_applications__webhook_timeout_secs__to_json(v), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_programmable_fax_applications__connection_active__to_json(p: &iface_programmable_fax_applications::ConnectionActive) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_programmable_fax_applications__anchorsite_override__to_json(p: &iface_programmable_fax_applications::AnchorsiteOverride) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_programmable_fax_applications__application_name__to_json(p: &iface_programmable_fax_applications::ApplicationName) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_programmable_fax_applications__int_id__to_json(p: &iface_programmable_fax_applications::IntId) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
+    m.insert("webhook_event_failover_url".into(), match (&p.webhook_event_failover_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("webhook_event_url".into(), match (&p.webhook_event_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("webhook_timeout_secs".into(), match (&p.webhook_timeout_secs) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
@@ -152,31 +143,7 @@ fn iface_programmable_fax_applications__fax_application_inbound__to_json(p: &ifa
 fn iface_programmable_fax_applications__fax_application_outbound__to_json(p: &iface_programmable_fax_applications::FaxApplicationOutbound) -> Value {
     let mut m = Map::new();
     m.insert("channel_limit".into(), match (&p.channel_limit) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    m.insert("outbound_voice_profile_id".into(), match (&p.outbound_voice_profile_id) { Some(v) => iface_programmable_fax_applications__outbound_voice_profile_id__to_json(v), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_programmable_fax_applications__outbound_voice_profile_id__to_json(p: &iface_programmable_fax_applications::OutboundVoiceProfileId) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_programmable_fax_applications__webhook_event_failover_url__to_json(p: &iface_programmable_fax_applications::WebhookEventFailoverUrl) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_programmable_fax_applications__webhook_event_url__to_json(p: &iface_programmable_fax_applications::WebhookEventUrl) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_programmable_fax_applications__webhook_timeout_secs__to_json(p: &iface_programmable_fax_applications::WebhookTimeoutSecs) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
+    m.insert("outbound_voice_profile_id".into(), match (&p.outbound_voice_profile_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -200,7 +167,7 @@ fn iface_programmable_fax_applications__create_fax_application_request_inbound__
 fn iface_programmable_fax_applications__create_fax_application_request_outbound__to_json(p: &iface_programmable_fax_applications::CreateFaxApplicationRequestOutbound) -> Value {
     let mut m = Map::new();
     m.insert("channel_limit".into(), match (&p.channel_limit) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    m.insert("outbound_voice_profile_id".into(), match (&p.outbound_voice_profile_id) { Some(v) => iface_programmable_fax_applications__outbound_voice_profile_id__to_json(v), None => Value::Null });
+    m.insert("outbound_voice_profile_id".into(), match (&p.outbound_voice_profile_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -227,7 +194,7 @@ fn iface_programmable_fax_applications__update_fax_application_request_inbound__
 fn iface_programmable_fax_applications__update_fax_application_request_outbound__to_json(p: &iface_programmable_fax_applications::UpdateFaxApplicationRequestOutbound) -> Value {
     let mut m = Map::new();
     m.insert("channel_limit".into(), match (&p.channel_limit) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    m.insert("outbound_voice_profile_id".into(), match (&p.outbound_voice_profile_id) { Some(v) => iface_programmable_fax_applications__outbound_voice_profile_id__to_json(v), None => Value::Null });
+    m.insert("outbound_voice_profile_id".into(), match (&p.outbound_voice_profile_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -255,14 +222,14 @@ fn iface_programmable_fax_applications__list_fax_applications_params__to_json(p:
 
 fn iface_programmable_fax_applications__create_fax_application_params__to_json(p: &iface_programmable_fax_applications::CreateFaxApplicationParams) -> Value {
     let mut m = Map::new();
-    m.insert("active".into(), match (&p.active) { Some(v) => iface_programmable_fax_applications__connection_active__to_json(v), None => Value::Null });
-    m.insert("anchorsite_override".into(), match (&p.anchorsite_override) { Some(v) => iface_programmable_fax_applications__anchorsite_override__to_json(v), None => Value::Null });
-    m.insert("application_name".into(), iface_programmable_fax_applications__application_name__to_json(&p.application_name));
+    m.insert("active".into(), match (&p.active) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("anchorsite_override".into(), match (&p.anchorsite_override) { Some(v) => Value::String(iface_programmable_fax_applications__anchorsite_override__to_str(v).into()), None => Value::Null });
+    m.insert("application_name".into(), Value::String((&p.application_name).clone()));
     m.insert("inbound".into(), match (&p.inbound) { Some(v) => iface_programmable_fax_applications__create_fax_application_request_inbound__to_json(v), None => Value::Null });
     m.insert("outbound".into(), match (&p.outbound) { Some(v) => iface_programmable_fax_applications__create_fax_application_request_outbound__to_json(v), None => Value::Null });
-    m.insert("webhook_event_failover_url".into(), match (&p.webhook_event_failover_url) { Some(v) => iface_programmable_fax_applications__webhook_event_failover_url__to_json(v), None => Value::Null });
-    m.insert("webhook_event_url".into(), iface_programmable_fax_applications__webhook_event_url__to_json(&p.webhook_event_url));
-    m.insert("webhook_timeout_secs".into(), match (&p.webhook_timeout_secs) { Some(v) => iface_programmable_fax_applications__webhook_timeout_secs__to_json(v), None => Value::Null });
+    m.insert("webhook_event_failover_url".into(), match (&p.webhook_event_failover_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("webhook_event_url".into(), Value::String((&p.webhook_event_url).clone()));
+    m.insert("webhook_timeout_secs".into(), match (&p.webhook_timeout_secs) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
@@ -275,14 +242,14 @@ fn iface_programmable_fax_applications__get_fax_application_params__to_json(p: &
 fn iface_programmable_fax_applications__update_fax_application_params__to_json(p: &iface_programmable_fax_applications::UpdateFaxApplicationParams) -> Value {
     let mut m = Map::new();
     m.insert("id".into(), Value::String((&p.id).clone()));
-    m.insert("active".into(), match (&p.active) { Some(v) => iface_programmable_fax_applications__connection_active__to_json(v), None => Value::Null });
-    m.insert("anchorsite_override".into(), match (&p.anchorsite_override) { Some(v) => iface_programmable_fax_applications__anchorsite_override__to_json(v), None => Value::Null });
-    m.insert("application_name".into(), iface_programmable_fax_applications__application_name__to_json(&p.application_name));
+    m.insert("active".into(), match (&p.active) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("anchorsite_override".into(), match (&p.anchorsite_override) { Some(v) => Value::String(iface_programmable_fax_applications__anchorsite_override__to_str(v).into()), None => Value::Null });
+    m.insert("application_name".into(), Value::String((&p.application_name).clone()));
     m.insert("inbound".into(), match (&p.inbound) { Some(v) => iface_programmable_fax_applications__update_fax_application_request_inbound__to_json(v), None => Value::Null });
     m.insert("outbound".into(), match (&p.outbound) { Some(v) => iface_programmable_fax_applications__update_fax_application_request_outbound__to_json(v), None => Value::Null });
-    m.insert("webhook_event_failover_url".into(), match (&p.webhook_event_failover_url) { Some(v) => iface_programmable_fax_applications__webhook_event_failover_url__to_json(v), None => Value::Null });
-    m.insert("webhook_event_url".into(), iface_programmable_fax_applications__webhook_event_url__to_json(&p.webhook_event_url));
-    m.insert("webhook_timeout_secs".into(), match (&p.webhook_timeout_secs) { Some(v) => iface_programmable_fax_applications__webhook_timeout_secs__to_json(v), None => Value::Null });
+    m.insert("webhook_event_failover_url".into(), match (&p.webhook_event_failover_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("webhook_event_url".into(), Value::String((&p.webhook_event_url).clone()));
+    m.insert("webhook_timeout_secs".into(), match (&p.webhook_timeout_secs) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
@@ -303,46 +270,18 @@ fn iface_programmable_fax_applications__list_fax_applications_response__from_jso
 fn iface_programmable_fax_applications__fax_application__from_json(v: &Value) -> Option<iface_programmable_fax_applications::FaxApplication> {
     let m = v.as_object()?;
     Some(iface_programmable_fax_applications::FaxApplication {
-        active: m.get("active").filter(|v| !v.is_null()).and_then(|v| iface_programmable_fax_applications__connection_active__from_json(v)),
-        anchorsite_override: m.get("anchorsite_override").filter(|v| !v.is_null()).and_then(|v| iface_programmable_fax_applications__anchorsite_override__from_json(v)),
-        application_name: m.get("application_name").filter(|v| !v.is_null()).and_then(|v| iface_programmable_fax_applications__application_name__from_json(v)),
+        active: m.get("active").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        anchorsite_override: m.get("anchorsite_override").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_programmable_fax_applications__anchorsite_override__from_str)),
+        application_name: m.get("application_name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         created_at: m.get("created_at").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| iface_programmable_fax_applications__int_id__from_json(v)),
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         inbound: m.get("inbound").filter(|v| !v.is_null()).and_then(|v| iface_programmable_fax_applications__fax_application_inbound__from_json(v)),
         outbound: m.get("outbound").filter(|v| !v.is_null()).and_then(|v| iface_programmable_fax_applications__fax_application_outbound__from_json(v)),
         record_type: m.get("record_type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         updated_at: m.get("updated_at").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        webhook_event_failover_url: m.get("webhook_event_failover_url").filter(|v| !v.is_null()).and_then(|v| iface_programmable_fax_applications__webhook_event_failover_url__from_json(v)),
-        webhook_event_url: m.get("webhook_event_url").filter(|v| !v.is_null()).and_then(|v| iface_programmable_fax_applications__webhook_event_url__from_json(v)),
-        webhook_timeout_secs: m.get("webhook_timeout_secs").filter(|v| !v.is_null()).and_then(|v| iface_programmable_fax_applications__webhook_timeout_secs__from_json(v)),
-    })
-}
-
-fn iface_programmable_fax_applications__connection_active__from_json(v: &Value) -> Option<iface_programmable_fax_applications::ConnectionActive> {
-    let m = v.as_object()?;
-    Some(iface_programmable_fax_applications::ConnectionActive {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-    })
-}
-
-fn iface_programmable_fax_applications__anchorsite_override__from_json(v: &Value) -> Option<iface_programmable_fax_applications::AnchorsiteOverride> {
-    let m = v.as_object()?;
-    Some(iface_programmable_fax_applications::AnchorsiteOverride {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-    })
-}
-
-fn iface_programmable_fax_applications__application_name__from_json(v: &Value) -> Option<iface_programmable_fax_applications::ApplicationName> {
-    let m = v.as_object()?;
-    Some(iface_programmable_fax_applications::ApplicationName {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-    })
-}
-
-fn iface_programmable_fax_applications__int_id__from_json(v: &Value) -> Option<iface_programmable_fax_applications::IntId> {
-    let m = v.as_object()?;
-    Some(iface_programmable_fax_applications::IntId {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        webhook_event_failover_url: m.get("webhook_event_failover_url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        webhook_event_url: m.get("webhook_event_url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        webhook_timeout_secs: m.get("webhook_timeout_secs").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
     })
 }
 
@@ -359,35 +298,7 @@ fn iface_programmable_fax_applications__fax_application_outbound__from_json(v: &
     let m = v.as_object()?;
     Some(iface_programmable_fax_applications::FaxApplicationOutbound {
         channel_limit: m.get("channel_limit").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
-        outbound_voice_profile_id: m.get("outbound_voice_profile_id").filter(|v| !v.is_null()).and_then(|v| iface_programmable_fax_applications__outbound_voice_profile_id__from_json(v)),
-    })
-}
-
-fn iface_programmable_fax_applications__outbound_voice_profile_id__from_json(v: &Value) -> Option<iface_programmable_fax_applications::OutboundVoiceProfileId> {
-    let m = v.as_object()?;
-    Some(iface_programmable_fax_applications::OutboundVoiceProfileId {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-    })
-}
-
-fn iface_programmable_fax_applications__webhook_event_failover_url__from_json(v: &Value) -> Option<iface_programmable_fax_applications::WebhookEventFailoverUrl> {
-    let m = v.as_object()?;
-    Some(iface_programmable_fax_applications::WebhookEventFailoverUrl {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-    })
-}
-
-fn iface_programmable_fax_applications__webhook_event_url__from_json(v: &Value) -> Option<iface_programmable_fax_applications::WebhookEventUrl> {
-    let m = v.as_object()?;
-    Some(iface_programmable_fax_applications::WebhookEventUrl {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-    })
-}
-
-fn iface_programmable_fax_applications__webhook_timeout_secs__from_json(v: &Value) -> Option<iface_programmable_fax_applications::WebhookTimeoutSecs> {
-    let m = v.as_object()?;
-    Some(iface_programmable_fax_applications::WebhookTimeoutSecs {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        outbound_voice_profile_id: m.get("outbound_voice_profile_id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
     })
 }
 
@@ -427,6 +338,22 @@ fn iface_programmable_fax_applications__delete_fax_application_response__from_js
     Some(iface_programmable_fax_applications::DeleteFaxApplicationResponse {
         data: m.get("data").filter(|v| !v.is_null()).and_then(|v| iface_programmable_fax_applications__fax_application__from_json(v)),
     })
+}
+
+fn iface_programmable_fax_applications__anchorsite_override__from_str(s: &str) -> Option<iface_programmable_fax_applications::AnchorsiteOverride> {
+    match s {
+        "Latency" => Some(iface_programmable_fax_applications::AnchorsiteOverride::Latency),
+        "Chicago, IL" => Some(iface_programmable_fax_applications::AnchorsiteOverride::ChicagoIl),
+        "Ashburn, VA" => Some(iface_programmable_fax_applications::AnchorsiteOverride::AshburnVa),
+        "San Jose, CA" => Some(iface_programmable_fax_applications::AnchorsiteOverride::SanJoseCa),
+        "Sydney, Australia" => Some(iface_programmable_fax_applications::AnchorsiteOverride::SydneyAustralia),
+        "Amsterdam, Netherlands" => Some(iface_programmable_fax_applications::AnchorsiteOverride::AmsterdamNetherlands),
+        "London, UK" => Some(iface_programmable_fax_applications::AnchorsiteOverride::LondonUk),
+        "Toronto, Canada" => Some(iface_programmable_fax_applications::AnchorsiteOverride::TorontoCanada),
+        "Vancouver, Canada" => Some(iface_programmable_fax_applications::AnchorsiteOverride::VancouverCanada),
+        "Frankfurt, Germany" => Some(iface_programmable_fax_applications::AnchorsiteOverride::FrankfurtGermany),
+        _ => None,
+    }
 }
 
 fn iface_programmable_fax_applications__fax_application_inbound_sip_subdomain_receive_settings_enum__from_str(s: &str) -> Option<iface_programmable_fax_applications::FaxApplicationInboundSipSubdomainReceiveSettingsEnum> {

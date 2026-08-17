@@ -18,9 +18,10 @@ const OP_PREMIUM_RETRIEVE_ACCOUNT_TRANSACTIONS_V2: OpSpec = OpSpec {
     ],
 };
 
-fn iface_premium__retrieve_account_transactions_v2_response__to_json(p: &iface_premium::RetrieveAccountTransactionsV2Response) -> Value {
+fn iface_premium__retrieve_account_transactions_v2_response_entry__to_json(p: &iface_premium::RetrieveAccountTransactionsV2ResponseEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -33,19 +34,20 @@ fn iface_premium__retrieve_account_transactions_v2_params__to_json(p: &iface_pre
     Value::Object(m)
 }
 
-fn iface_premium__retrieve_account_transactions_v2_response__from_json(v: &Value) -> Option<iface_premium::RetrieveAccountTransactionsV2Response> {
+fn iface_premium__retrieve_account_transactions_v2_response_entry__from_json(v: &Value) -> Option<iface_premium::RetrieveAccountTransactionsV2ResponseEntry> {
     let m = v.as_object()?;
-    Some(iface_premium::RetrieveAccountTransactionsV2Response {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_premium::RetrieveAccountTransactionsV2ResponseEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
-fn iface_premium__retrieve_account_transactions_v2__ok(body: String) -> Result<iface_premium::RetrieveAccountTransactionsV2Response, crate::runtime::DispatchError> {
+fn iface_premium__retrieve_account_transactions_v2__ok(body: String) -> Result<Vec<iface_premium::RetrieveAccountTransactionsV2ResponseEntry>, crate::runtime::DispatchError> {
     let v: Value = match serde_json::from_str(&body) {
         Ok(v) => v,
         Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
     };
-    match iface_premium__retrieve_account_transactions_v2_response__from_json(&v) {
+    match (&v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_premium::RetrieveAccountTransactionsV2ResponseEntry { key: k.clone(), value: val })).collect()) {
         Some(x) => Ok(x),
         None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
@@ -69,7 +71,7 @@ fn iface_premium__retrieve_account_transactions_v2__err(e: crate::runtime::Dispa
 }
 
 impl iface_premium::Guest for crate::Component {
-    fn retrieve_account_transactions_v2(params: iface_premium::RetrieveAccountTransactionsV2Params) -> Result<iface_premium::RetrieveAccountTransactionsV2Response, iface_premium::RetrieveAccountTransactionsV2Error> {
+    fn retrieve_account_transactions_v2(params: iface_premium::RetrieveAccountTransactionsV2Params) -> Result<Vec<iface_premium::RetrieveAccountTransactionsV2ResponseEntry>, iface_premium::RetrieveAccountTransactionsV2Error> {
         let json = iface_premium__retrieve_account_transactions_v2_params__to_json(&params);
         match dispatch(&OP_PREMIUM_RETRIEVE_ACCOUNT_TRANSACTIONS_V2, json).and_then(iface_premium__retrieve_account_transactions_v2__ok) {
             Ok(v) => Ok(v),

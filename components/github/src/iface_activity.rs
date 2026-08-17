@@ -373,6 +373,19 @@ const OP_ACTIVITY_LIST_REPOS_WATCHED_BY_USER: OpSpec = OpSpec {
     ],
 };
 
+fn iface_activity__author_association__to_str(e: &iface_activity::AuthorAssociation) -> &'static str {
+    match e {
+        iface_activity::AuthorAssociation::Collaborator => "COLLABORATOR",
+        iface_activity::AuthorAssociation::Contributor => "CONTRIBUTOR",
+        iface_activity::AuthorAssociation::FirstTimer => "FIRST_TIMER",
+        iface_activity::AuthorAssociation::FirstTimeContributor => "FIRST_TIME_CONTRIBUTOR",
+        iface_activity::AuthorAssociation::Mannequin => "MANNEQUIN",
+        iface_activity::AuthorAssociation::Member => "MEMBER",
+        iface_activity::AuthorAssociation::None => "NONE",
+        iface_activity::AuthorAssociation::Owner => "OWNER",
+    }
+}
+
 fn iface_activity__nullable_milestone_state_enum__to_str(e: &iface_activity::NullableMilestoneStateEnum) -> &'static str {
     match e {
         iface_activity::NullableMilestoneStateEnum::Open => "open",
@@ -474,7 +487,7 @@ fn iface_activity__event_payload__to_json(p: &iface_activity::EventPayload) -> V
 
 fn iface_activity__issue_comment__to_json(p: &iface_activity::IssueComment) -> Value {
     let mut m = Map::new();
-    m.insert("author_association".into(), iface_activity__author_association__to_json(&p.author_association));
+    m.insert("author_association".into(), Value::String(iface_activity__author_association__to_str(&p.author_association).into()));
     m.insert("body".into(), match (&p.body) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("body_html".into(), match (&p.body_html) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("body_text".into(), match (&p.body_text) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -488,12 +501,6 @@ fn iface_activity__issue_comment__to_json(p: &iface_activity::IssueComment) -> V
     m.insert("updated_at".into(), Value::String((&p.updated_at).clone()));
     m.insert("url".into(), Value::String((&p.url).clone()));
     m.insert("user".into(), iface_activity__nullable_simple_user__to_json(&p.user));
-    Value::Object(m)
-}
-
-fn iface_activity__author_association__to_json(p: &iface_activity::AuthorAssociation) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -575,7 +582,7 @@ fn iface_activity__issue__to_json(p: &iface_activity::Issue) -> Value {
     m.insert("active_lock_reason".into(), match (&p.active_lock_reason) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("assignee".into(), iface_activity__nullable_simple_user__to_json(&p.assignee));
     m.insert("assignees".into(), match (&p.assignees) { Some(v) => Value::Array((v).iter().map(|v| iface_activity__simple_user__to_json(v)).collect()), None => Value::Null });
-    m.insert("author_association".into(), iface_activity__author_association__to_json(&p.author_association));
+    m.insert("author_association".into(), Value::String(iface_activity__author_association__to_str(&p.author_association).into()));
     m.insert("body".into(), match (&p.body) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("body_html".into(), match (&p.body_html) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("body_text".into(), match (&p.body_text) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -1459,7 +1466,7 @@ fn iface_activity__event_payload__from_json(v: &Value) -> Option<iface_activity:
 fn iface_activity__issue_comment__from_json(v: &Value) -> Option<iface_activity::IssueComment> {
     let m = v.as_object()?;
     Some(iface_activity::IssueComment {
-        author_association: match m.get("author_association").and_then(|v| iface_activity__author_association__from_json(v)) { Some(x) => x, None => return None },
+        author_association: match m.get("author_association").and_then(|v| (v).as_str().and_then(iface_activity__author_association__from_str)) { Some(x) => x, None => return None },
         body: m.get("body").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         body_html: m.get("body_html").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         body_text: m.get("body_text").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
@@ -1473,13 +1480,6 @@ fn iface_activity__issue_comment__from_json(v: &Value) -> Option<iface_activity:
         updated_at: m.get("updated_at").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         url: m.get("url").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         user: match m.get("user").and_then(|v| iface_activity__nullable_simple_user__from_json(v)) { Some(x) => x, None => return None },
-    })
-}
-
-fn iface_activity__author_association__from_json(v: &Value) -> Option<iface_activity::AuthorAssociation> {
-    let m = v.as_object()?;
-    Some(iface_activity::AuthorAssociation {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -1566,7 +1566,7 @@ fn iface_activity__issue__from_json(v: &Value) -> Option<iface_activity::Issue> 
         active_lock_reason: m.get("active_lock_reason").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         assignee: match m.get("assignee").and_then(|v| iface_activity__nullable_simple_user__from_json(v)) { Some(x) => x, None => return None },
         assignees: m.get("assignees").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_activity__simple_user__from_json(x)).collect())),
-        author_association: match m.get("author_association").and_then(|v| iface_activity__author_association__from_json(v)) { Some(x) => x, None => return None },
+        author_association: match m.get("author_association").and_then(|v| (v).as_str().and_then(iface_activity__author_association__from_str)) { Some(x) => x, None => return None },
         body: m.get("body").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         body_html: m.get("body_html").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         body_text: m.get("body_text").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
@@ -2197,6 +2197,20 @@ fn iface_activity__repository_subscription__from_json(v: &Value) -> Option<iface
         subscribed: m.get("subscribed").and_then(|v| (v).as_bool()).unwrap_or_default(),
         url: m.get("url").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
+}
+
+fn iface_activity__author_association__from_str(s: &str) -> Option<iface_activity::AuthorAssociation> {
+    match s {
+        "COLLABORATOR" => Some(iface_activity::AuthorAssociation::Collaborator),
+        "CONTRIBUTOR" => Some(iface_activity::AuthorAssociation::Contributor),
+        "FIRST_TIMER" => Some(iface_activity::AuthorAssociation::FirstTimer),
+        "FIRST_TIME_CONTRIBUTOR" => Some(iface_activity::AuthorAssociation::FirstTimeContributor),
+        "MANNEQUIN" => Some(iface_activity::AuthorAssociation::Mannequin),
+        "MEMBER" => Some(iface_activity::AuthorAssociation::Member),
+        "NONE" => Some(iface_activity::AuthorAssociation::None),
+        "OWNER" => Some(iface_activity::AuthorAssociation::Owner),
+        _ => None,
+    }
 }
 
 fn iface_activity__nullable_milestone_state_enum__from_str(s: &str) -> Option<iface_activity::NullableMilestoneStateEnum> {

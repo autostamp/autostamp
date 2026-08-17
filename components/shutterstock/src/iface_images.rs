@@ -43,7 +43,7 @@ const OP_IMAGES_BULK_SEARCH_IMAGES: OpSpec = OpSpec {
         FieldSpec { snake: "width", wire: "width", location: FieldLocation::Query },
         FieldSpec { snake: "width_from", wire: "width_from", location: FieldLocation::Query },
         FieldSpec { snake: "width_to", wire: "width_to", location: FieldLocation::Query },
-        FieldSpec { snake: "value", wire: "value", location: FieldLocation::Body },
+        FieldSpec { snake: "body", wire: "body", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "basic", kind: AuthKind::Basic },
@@ -402,6 +402,53 @@ fn iface_images__bulk_search_images_image_type_item_enum__to_str(e: &iface_image
     }
 }
 
+fn iface_images__language__to_str(e: &iface_images::Language) -> &'static str {
+    match e {
+        iface_images::Language::Ar => "ar",
+        iface_images::Language::Bg => "bg",
+        iface_images::Language::Bn => "bn",
+        iface_images::Language::Cs => "cs",
+        iface_images::Language::Da => "da",
+        iface_images::Language::De => "de",
+        iface_images::Language::El => "el",
+        iface_images::Language::En => "en",
+        iface_images::Language::Es => "es",
+        iface_images::Language::Fi => "fi",
+        iface_images::Language::Fr => "fr",
+        iface_images::Language::Gu => "gu",
+        iface_images::Language::He => "he",
+        iface_images::Language::Hi => "hi",
+        iface_images::Language::Hr => "hr",
+        iface_images::Language::Hu => "hu",
+        iface_images::Language::Id => "id",
+        iface_images::Language::It => "it",
+        iface_images::Language::Ja => "ja",
+        iface_images::Language::Kn => "kn",
+        iface_images::Language::Ko => "ko",
+        iface_images::Language::Ml => "ml",
+        iface_images::Language::Mr => "mr",
+        iface_images::Language::Nb => "nb",
+        iface_images::Language::Nl => "nl",
+        iface_images::Language::Or => "or",
+        iface_images::Language::Pl => "pl",
+        iface_images::Language::Pt => "pt",
+        iface_images::Language::Ro => "ro",
+        iface_images::Language::Ru => "ru",
+        iface_images::Language::Sk => "sk",
+        iface_images::Language::Sl => "sl",
+        iface_images::Language::Sv => "sv",
+        iface_images::Language::Ta => "ta",
+        iface_images::Language::Te => "te",
+        iface_images::Language::Th => "th",
+        iface_images::Language::Tr => "tr",
+        iface_images::Language::Uk => "uk",
+        iface_images::Language::Ur => "ur",
+        iface_images::Language::Vi => "vi",
+        iface_images::Language::Zh => "zh",
+        iface_images::Language::ZhHant => "zh-Hant",
+    }
+}
+
 fn iface_images__bulk_search_images_license_item_enum__to_str(e: &iface_images::BulkSearchImagesLicenseItemEnum) -> &'static str {
     match e {
         iface_images::BulkSearchImagesLicenseItemEnum::Commercial => "commercial",
@@ -587,9 +634,45 @@ fn iface_images__get_updated_images_type_op_item_enum__to_str(e: &iface_images::
     }
 }
 
-fn iface_images__language__to_json(p: &iface_images::Language) -> Value {
+fn iface_images__search_image__to_json(p: &iface_images::SearchImage) -> Value {
     let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
+    m.insert("added_date".into(), match (&p.added_date) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("added_date_end".into(), match (&p.added_date_end) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("added_date_start".into(), match (&p.added_date_start) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("aspect_ratio".into(), match (&p.aspect_ratio) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("aspect_ratio_max".into(), match (&p.aspect_ratio_max) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("aspect_ratio_min".into(), match (&p.aspect_ratio_min) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("authentic".into(), match (&p.authentic) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("category".into(), match (&p.category) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("color".into(), match (&p.color) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("contributor".into(), match (&p.contributor) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("contributor_country".into(), match (&p.contributor_country) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("fields".into(), match (&p.fields) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("height".into(), match (&p.height) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("height_from".into(), match (&p.height_from) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("height_to".into(), match (&p.height_to) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("image_type".into(), match (&p.image_type) { Some(v) => Value::Array((v).iter().map(|v| Value::String(iface_images__bulk_search_images_image_type_item_enum__to_str(v).into())).collect()), None => Value::Null });
+    m.insert("keyword_safe_search".into(), match (&p.keyword_safe_search) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("language".into(), match (&p.language) { Some(v) => Value::String(iface_images__language__to_str(v).into()), None => Value::Null });
+    m.insert("license".into(), match (&p.license) { Some(v) => Value::Array((v).iter().map(|v| Value::String(iface_images__bulk_search_images_license_item_enum__to_str(v).into())).collect()), None => Value::Null });
+    m.insert("model".into(), match (&p.model) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("orientation".into(), match (&p.orientation) { Some(v) => Value::String(iface_images__bulk_search_images_orientation_enum__to_str(v).into()), None => Value::Null });
+    m.insert("page".into(), match (&p.page) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("people_age".into(), match (&p.people_age) { Some(v) => Value::String(iface_images__bulk_search_images_people_age_enum__to_str(v).into()), None => Value::Null });
+    m.insert("people_ethnicity".into(), match (&p.people_ethnicity) { Some(v) => Value::Array((v).iter().map(|v| Value::String(iface_images__bulk_search_images_people_ethnicity_item_enum__to_str(v).into())).collect()), None => Value::Null });
+    m.insert("people_gender".into(), match (&p.people_gender) { Some(v) => Value::String(iface_images__bulk_search_images_people_gender_enum__to_str(v).into()), None => Value::Null });
+    m.insert("people_model_released".into(), match (&p.people_model_released) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("people_number".into(), match (&p.people_number) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("per_page".into(), match (&p.per_page) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("query".into(), match (&p.query) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("region".into(), match (&p.region) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("safe".into(), match (&p.safe) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("sort".into(), match (&p.sort) { Some(v) => Value::String(iface_images__bulk_search_images_sort_enum__to_str(v).into()), None => Value::Null });
+    m.insert("spellcheck_query".into(), match (&p.spellcheck_query) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("view".into(), match (&p.view) { Some(v) => Value::String(iface_images__bulk_search_images_view_enum__to_str(v).into()), None => Value::Null });
+    m.insert("width".into(), match (&p.width) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("width_from".into(), match (&p.width_from) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("width_to".into(), match (&p.width_to) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
@@ -608,7 +691,7 @@ fn iface_images__image_search_results__to_json(p: &iface_images::ImageSearchResu
     m.insert("page".into(), match (&p.page) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("per_page".into(), match (&p.per_page) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("search_id".into(), Value::String((&p.search_id).clone()));
-    m.insert("spellcheck_info".into(), match (&p.spellcheck_info) { Some(v) => iface_images__image_search_results_spellcheck_info__to_json(v), None => Value::Null });
+    m.insert("spellcheck_info".into(), match (&p.spellcheck_info) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("total_count".into(), Value::Number(serde_json::Number::from(*(&p.total_count))));
     Value::Object(m)
 }
@@ -719,9 +802,10 @@ fn iface_images__insights_label_performance_item__to_json(p: &iface_images::Insi
     Value::Object(m)
 }
 
-fn iface_images__image_search_results_spellcheck_info__to_json(p: &iface_images::ImageSearchResultsSpellcheckInfo) -> Value {
+fn iface_images__image_search_results_spellcheck_info_entry__to_json(p: &iface_images::ImageSearchResultsSpellcheckInfoEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -740,15 +824,16 @@ fn iface_images__error__to_json(p: &iface_images::Error) -> Value {
     let mut m = Map::new();
     m.insert("code".into(), match (&p.code) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("items".into(), match (&p.items) { Some(v) => Value::Array((v).iter().map(|v| iface_images__error_items_item__to_json(v)).collect()), None => Value::Null });
+    m.insert("items".into(), match (&p.items) { Some(v) => Value::Array((v).iter().map(|v| Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect())).collect()), None => Value::Null });
     m.insert("message".into(), Value::String((&p.message).clone()));
     m.insert("path".into(), match (&p.path) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_images__error_items_item__to_json(p: &iface_images::ErrorItemsItem) -> Value {
+fn iface_images__error_items_item_entry__to_json(p: &iface_images::ErrorItemsItemEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -863,7 +948,7 @@ fn iface_images__download_history__to_json(p: &iface_images::DownloadHistory) ->
     m.insert("image".into(), match (&p.image) { Some(v) => iface_images__download_history_media_details__to_json(v), None => Value::Null });
     m.insert("is_downloadable".into(), match (&p.is_downloadable) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     m.insert("license".into(), Value::String((&p.license).clone()));
-    m.insert("metadata".into(), match (&p.metadata) { Some(v) => iface_images__download_history_metadata__to_json(v), None => Value::Null });
+    m.insert("metadata".into(), match (&p.metadata) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("revshare".into(), match (&p.revshare) { Some(v) => iface_images__download_history_revshare_details__to_json(v), None => Value::Null });
     m.insert("subscription_id".into(), match (&p.subscription_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("user".into(), match (&p.user) { Some(v) => iface_images__download_history_user_details__to_json(v), None => Value::Null });
@@ -885,9 +970,10 @@ fn iface_images__download_history_format_details__to_json(p: &iface_images::Down
     Value::Object(m)
 }
 
-fn iface_images__download_history_metadata__to_json(p: &iface_images::DownloadHistoryMetadata) -> Value {
+fn iface_images__download_history_metadata_entry__to_json(p: &iface_images::DownloadHistoryMetadataEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -1012,7 +1098,7 @@ fn iface_images__bulk_search_images_params__to_json(p: &iface_images::BulkSearch
     m.insert("height_to".into(), match (&p.height_to) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("image_type".into(), match (&p.image_type) { Some(v) => Value::Array((v).iter().map(|v| Value::String(iface_images__bulk_search_images_image_type_item_enum__to_str(v).into())).collect()), None => Value::Null });
     m.insert("keyword_safe_search".into(), match (&p.keyword_safe_search) { Some(v) => Value::Bool(*(v)), None => Value::Null });
-    m.insert("language".into(), match (&p.language) { Some(v) => iface_images__language__to_json(v), None => Value::Null });
+    m.insert("language".into(), match (&p.language) { Some(v) => Value::String(iface_images__language__to_str(v).into()), None => Value::Null });
     m.insert("license".into(), match (&p.license) { Some(v) => Value::Array((v).iter().map(|v| Value::String(iface_images__bulk_search_images_license_item_enum__to_str(v).into())).collect()), None => Value::Null });
     m.insert("model".into(), match (&p.model) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
     m.insert("orientation".into(), match (&p.orientation) { Some(v) => Value::String(iface_images__bulk_search_images_orientation_enum__to_str(v).into()), None => Value::Null });
@@ -1031,7 +1117,7 @@ fn iface_images__bulk_search_images_params__to_json(p: &iface_images::BulkSearch
     m.insert("width".into(), match (&p.width) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("width_from".into(), match (&p.width_from) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("width_to".into(), match (&p.width_to) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    m.insert("value".into(), Value::String((&p.value).clone()));
+    m.insert("body".into(), Value::Array((&p.body).iter().map(|v| iface_images__search_image__to_json(v)).collect()));
     Value::Object(m)
 }
 
@@ -1045,7 +1131,7 @@ fn iface_images__get_image_list_params__to_json(p: &iface_images::GetImageListPa
 
 fn iface_images__list_image_categories_params__to_json(p: &iface_images::ListImageCategoriesParams) -> Value {
     let mut m = Map::new();
-    m.insert("language".into(), match (&p.language) { Some(v) => iface_images__language__to_json(v), None => Value::Null });
+    m.insert("language".into(), match (&p.language) { Some(v) => Value::String(iface_images__language__to_str(v).into()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -1197,7 +1283,7 @@ fn iface_images__search_images_params__to_json(p: &iface_images::SearchImagesPar
     m.insert("height_to".into(), match (&p.height_to) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("image_type".into(), match (&p.image_type) { Some(v) => Value::Array((v).iter().map(|v| Value::String(iface_images__bulk_search_images_image_type_item_enum__to_str(v).into())).collect()), None => Value::Null });
     m.insert("keyword_safe_search".into(), match (&p.keyword_safe_search) { Some(v) => Value::Bool(*(v)), None => Value::Null });
-    m.insert("language".into(), match (&p.language) { Some(v) => iface_images__language__to_json(v), None => Value::Null });
+    m.insert("language".into(), match (&p.language) { Some(v) => Value::String(iface_images__language__to_str(v).into()), None => Value::Null });
     m.insert("license".into(), match (&p.license) { Some(v) => Value::Array((v).iter().map(|v| Value::String(iface_images__bulk_search_images_license_item_enum__to_str(v).into())).collect()), None => Value::Null });
     m.insert("model".into(), match (&p.model) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
     m.insert("orientation".into(), match (&p.orientation) { Some(v) => Value::String(iface_images__bulk_search_images_orientation_enum__to_str(v).into()), None => Value::Null });
@@ -1248,7 +1334,7 @@ fn iface_images__get_updated_images_params__to_json(p: &iface_images::GetUpdated
 fn iface_images__get_image_params__to_json(p: &iface_images::GetImageParams) -> Value {
     let mut m = Map::new();
     m.insert("id".into(), Value::String((&p.id).clone()));
-    m.insert("language".into(), match (&p.language) { Some(v) => iface_images__language__to_json(v), None => Value::Null });
+    m.insert("language".into(), match (&p.language) { Some(v) => Value::String(iface_images__language__to_str(v).into()), None => Value::Null });
     m.insert("view".into(), match (&p.view) { Some(v) => Value::String(iface_images__bulk_search_images_view_enum__to_str(v).into()), None => Value::Null });
     m.insert("search_id".into(), match (&p.search_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
@@ -1257,7 +1343,7 @@ fn iface_images__get_image_params__to_json(p: &iface_images::GetImageParams) -> 
 fn iface_images__list_similar_images_params__to_json(p: &iface_images::ListSimilarImagesParams) -> Value {
     let mut m = Map::new();
     m.insert("id".into(), Value::String((&p.id).clone()));
-    m.insert("language".into(), match (&p.language) { Some(v) => iface_images__language__to_json(v), None => Value::Null });
+    m.insert("language".into(), match (&p.language) { Some(v) => Value::String(iface_images__language__to_str(v).into()), None => Value::Null });
     m.insert("page".into(), match (&p.page) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("per_page".into(), match (&p.per_page) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("view".into(), match (&p.view) { Some(v) => Value::String(iface_images__bulk_search_images_view_enum__to_str(v).into()), None => Value::Null });
@@ -1281,7 +1367,7 @@ fn iface_images__image_search_results__from_json(v: &Value) -> Option<iface_imag
         page: m.get("page").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
         per_page: m.get("per_page").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
         search_id: m.get("search_id").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-        spellcheck_info: m.get("spellcheck_info").filter(|v| !v.is_null()).and_then(|v| iface_images__image_search_results_spellcheck_info__from_json(v)),
+        spellcheck_info: m.get("spellcheck_info").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_images::ImageSearchResultsSpellcheckInfoEntry { key: k.clone(), value: val })).collect())),
         total_count: m.get("total_count").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
     })
 }
@@ -1403,10 +1489,11 @@ fn iface_images__insights_label_performance_item__from_json(v: &Value) -> Option
     })
 }
 
-fn iface_images__image_search_results_spellcheck_info__from_json(v: &Value) -> Option<iface_images::ImageSearchResultsSpellcheckInfo> {
+fn iface_images__image_search_results_spellcheck_info_entry__from_json(v: &Value) -> Option<iface_images::ImageSearchResultsSpellcheckInfoEntry> {
     let m = v.as_object()?;
-    Some(iface_images::ImageSearchResultsSpellcheckInfo {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_images::ImageSearchResultsSpellcheckInfoEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -1427,16 +1514,17 @@ fn iface_images__error__from_json(v: &Value) -> Option<iface_images::Error> {
     Some(iface_images::Error {
         code: m.get("code").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        items: m.get("items").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_images__error_items_item__from_json(x)).collect())),
+        items: m.get("items").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_images::ErrorItemsItemEntry { key: k.clone(), value: val })).collect())).collect())),
         message: m.get("message").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         path: m.get("path").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
     })
 }
 
-fn iface_images__error_items_item__from_json(v: &Value) -> Option<iface_images::ErrorItemsItem> {
+fn iface_images__error_items_item_entry__from_json(v: &Value) -> Option<iface_images::ErrorItemsItemEntry> {
     let m = v.as_object()?;
-    Some(iface_images::ErrorItemsItem {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_images::ErrorItemsItemEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -1562,7 +1650,7 @@ fn iface_images__download_history__from_json(v: &Value) -> Option<iface_images::
         image: m.get("image").filter(|v| !v.is_null()).and_then(|v| iface_images__download_history_media_details__from_json(v)),
         is_downloadable: m.get("is_downloadable").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
         license: m.get("license").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-        metadata: m.get("metadata").filter(|v| !v.is_null()).and_then(|v| iface_images__download_history_metadata__from_json(v)),
+        metadata: m.get("metadata").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_images::DownloadHistoryMetadataEntry { key: k.clone(), value: val })).collect())),
         revshare: m.get("revshare").filter(|v| !v.is_null()).and_then(|v| iface_images__download_history_revshare_details__from_json(v)),
         subscription_id: m.get("subscription_id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         user: m.get("user").filter(|v| !v.is_null()).and_then(|v| iface_images__download_history_user_details__from_json(v)),
@@ -1586,10 +1674,11 @@ fn iface_images__download_history_format_details__from_json(v: &Value) -> Option
     })
 }
 
-fn iface_images__download_history_metadata__from_json(v: &Value) -> Option<iface_images::DownloadHistoryMetadata> {
+fn iface_images__download_history_metadata_entry__from_json(v: &Value) -> Option<iface_images::DownloadHistoryMetadataEntry> {
     let m = v.as_object()?;
-    Some(iface_images::DownloadHistoryMetadata {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_images::DownloadHistoryMetadataEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 

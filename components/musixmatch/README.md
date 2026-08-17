@@ -11,8 +11,8 @@ triggered.
 
 | Setting | Value |
 | --- | --- |
-| Package | `autostamp:musixmatch@0.5.0` |
-| Published version | `0.5.0+musixmatch-1.1.0` |
+| Package | `autostamp:musixmatch@0.6.0` |
+| Published version | `0.6.0+musixmatch-1.1.0` |
 | Tag filter | all tags |
 | Operations generated | 16 |
 | Infer API-key credentials | enabled — not triggered |

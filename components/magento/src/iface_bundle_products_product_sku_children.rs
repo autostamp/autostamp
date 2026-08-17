@@ -18,7 +18,7 @@ const OP_BUNDLE_PRODUCTS_PRODUCT_SKU_CHILDREN_BUNDLE_PRODUCT_LINK_MANAGEMENT_V1_
 fn iface_bundle_products_product_sku_children__bundle_data_link_interface__to_json(p: &iface_bundle_products_product_sku_children::BundleDataLinkInterface) -> Value {
     let mut m = Map::new();
     m.insert("can_change_quantity".into(), match (&p.can_change_quantity) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    m.insert("extension_attributes".into(), match (&p.extension_attributes) { Some(v) => iface_bundle_products_product_sku_children__bundle_data_link_extension_interface__to_json(v), None => Value::Null });
+    m.insert("extension_attributes".into(), match (&p.extension_attributes) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("is_default".into(), Value::Bool(*(&p.is_default)));
     m.insert("option_id".into(), match (&p.option_id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
@@ -30,9 +30,10 @@ fn iface_bundle_products_product_sku_children__bundle_data_link_interface__to_js
     Value::Object(m)
 }
 
-fn iface_bundle_products_product_sku_children__bundle_data_link_extension_interface__to_json(p: &iface_bundle_products_product_sku_children::BundleDataLinkExtensionInterface) -> Value {
+fn iface_bundle_products_product_sku_children__bundle_data_link_extension_interface_entry__to_json(p: &iface_bundle_products_product_sku_children::BundleDataLinkExtensionInterfaceEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -47,7 +48,7 @@ fn iface_bundle_products_product_sku_children__bundle_data_link_interface__from_
     let m = v.as_object()?;
     Some(iface_bundle_products_product_sku_children::BundleDataLinkInterface {
         can_change_quantity: m.get("can_change_quantity").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
-        extension_attributes: m.get("extension_attributes").filter(|v| !v.is_null()).and_then(|v| iface_bundle_products_product_sku_children__bundle_data_link_extension_interface__from_json(v)),
+        extension_attributes: m.get("extension_attributes").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_bundle_products_product_sku_children::BundleDataLinkExtensionInterfaceEntry { key: k.clone(), value: val })).collect())),
         id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         is_default: m.get("is_default").and_then(|v| (v).as_bool()).unwrap_or_default(),
         option_id: m.get("option_id").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
@@ -59,10 +60,11 @@ fn iface_bundle_products_product_sku_children__bundle_data_link_interface__from_
     })
 }
 
-fn iface_bundle_products_product_sku_children__bundle_data_link_extension_interface__from_json(v: &Value) -> Option<iface_bundle_products_product_sku_children::BundleDataLinkExtensionInterface> {
+fn iface_bundle_products_product_sku_children__bundle_data_link_extension_interface_entry__from_json(v: &Value) -> Option<iface_bundle_products_product_sku_children::BundleDataLinkExtensionInterfaceEntry> {
     let m = v.as_object()?;
-    Some(iface_bundle_products_product_sku_children::BundleDataLinkExtensionInterface {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_bundle_products_product_sku_children::BundleDataLinkExtensionInterfaceEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 

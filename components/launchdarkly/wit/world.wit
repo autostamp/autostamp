@@ -1,4 +1,4 @@
-package autostamp:launchdarkly@0.5.0;
+package autostamp:launchdarkly@0.6.0;
 
 interface root {
   record links {
@@ -22,13 +22,20 @@ interface root {
 
 
 interface relay-proxy-configurations {
+  enum role {
+    writer,
+    reader,
+    admin,
+    owner,
+  }
+
   record relay-proxy-configs {
     items: option<list<relay-proxy-config>>
   }
 
   record relay-proxy-config {
     creator: member,
-    id: id,
+    id: string,
     /// A unix epoch time in milliseconds specifying the creation time of this relay proxy configuration
     creation-date: s64,
     /// The last 4 digits of the unique secret key for this relay proxy configuration
@@ -43,25 +50,19 @@ interface relay-proxy-configurations {
   }
 
   record member {
-    id: option<id>,
+    id: option<string>,
     /// A unix epoch time in milliseconds specifying the last time this member was active in LaunchDarkly.
     last-seen: option<s64>,
     last-seen-metadata: option<member-last-seen-metadata>,
     links: option<links>,
     pending-invite: option<bool>,
     verified: option<bool>,
-    custom-roles: option<list<id>>,
+    custom-roles: option<list<string>>,
     email: option<string>,
     first-name: option<string>,
     is-beta: option<bool>,
     last-name: option<string>,
     role: option<role>
-  }
-
-  /// The unique resource id.
-  record id {
-    /// opaque schema; raw JSON
-    value: string
   }
 
   record member-last-seen-metadata {
@@ -77,11 +78,6 @@ interface relay-proxy-configurations {
   record link {
     href: option<string>,
     type-op: option<string>
-  }
-
-  record role {
-    /// opaque schema; raw JSON
-    value: string
   }
 
   record policy {
@@ -164,6 +160,13 @@ interface relay-proxy-configurations {
 }
 
 interface audit-log {
+  enum role {
+    writer,
+    reader,
+    admin,
+    owner,
+  }
+
   record entries {
     links: option<links>,
     items: option<list<entry>>
@@ -180,7 +183,7 @@ interface audit-log {
   }
 
   record entry {
-    id: option<id>,
+    id: option<string>,
     links: option<links>,
     comment: option<string>,
     date: option<s64>,
@@ -194,21 +197,15 @@ interface audit-log {
     title-verb: option<string>
   }
 
-  /// The unique resource id.
-  record id {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
   record member {
-    id: option<id>,
+    id: option<string>,
     /// A unix epoch time in milliseconds specifying the last time this member was active in LaunchDarkly.
     last-seen: option<s64>,
     last-seen-metadata: option<member-last-seen-metadata>,
     links: option<links>,
     pending-invite: option<bool>,
     verified: option<bool>,
-    custom-roles: option<list<id>>,
+    custom-roles: option<list<string>>,
     email: option<string>,
     first-name: option<string>,
     is-beta: option<bool>,
@@ -219,11 +216,6 @@ interface audit-log {
   record member-last-seen-metadata {
     /// If the last time this member accessed LaunchDarkly was using the REST API, this value will be set to the ID of the personal access token used.
     token-id: option<string>
-  }
-
-  record role {
-    /// opaque schema; raw JSON
-    value: string
   }
 
   record entry-target {
@@ -296,7 +288,7 @@ interface data-export-destinations {
     id: option<string>,
     links: option<links>,
     /// destination-specific configuration.
-    config: option<destination-config>,
+    config: option<list<destination-config-entry>>,
     /// Destination type ("google-pubsub", "kinesis", "mparticle", or "segment")
     kind: option<destination-kind-enum>,
     /// The destination name
@@ -306,10 +298,10 @@ interface data-export-destinations {
     version: option<s32>
   }
 
-  /// destination-specific configuration.
-  record destination-config {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record destination-config-entry {
+    key: string,
+    value: string
   }
 
   variant get-destinations-error {
@@ -392,11 +384,24 @@ interface data-export-destinations {
 }
 
 interface feature-flags {
-  enum feature-flag-status-name-enum {
+  enum feature-flag-status-for-queried-environment-name-enum {
     new,
     active,
     inactive,
     launched,
+  }
+
+  enum role {
+    writer,
+    reader,
+    admin,
+    owner,
+  }
+
+  enum approval-request-review-status {
+    pending,
+    approved,
+    declined,
   }
 
   enum approval-request-status-enum {
@@ -408,7 +413,7 @@ interface feature-flags {
 
   record feature-flag-status-across-environments {
     links: option<feature-flag-status-links>,
-    environments: option<feature-flag-status-across-environments-environments>,
+    environments: option<list<feature-flag-status-across-environments-environments-entry>>,
     key: option<string>
   }
 
@@ -422,9 +427,24 @@ interface feature-flags {
     type-op: option<string>
   }
 
-  record feature-flag-status-across-environments-environments {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  record feature-flag-status-for-queried-environment {
+    default: option<list<feature-flag-status-for-queried-environment-default-entry>>,
+    last-requested: option<string>,
+    /// | Name     | Description |
+    /// | --------:| ----------- |
+    name: option<feature-flag-status-for-queried-environment-name-enum>
+  }
+
+  /// one entry of a string-keyed map (free-form object)
+  record feature-flag-status-for-queried-environment-default-entry {
+    key: string,
+    value: string
+  }
+
+  /// one entry of a string-keyed map (free-form object)
+  record feature-flag-status-across-environments-environments-entry {
+    key: string,
+    value: feature-flag-status-for-queried-environment
   }
 
   record feature-flag-statuses {
@@ -434,16 +454,17 @@ interface feature-flags {
 
   record feature-flag-status {
     links: option<feature-flag-status-links>,
-    default: option<feature-flag-status-default>,
+    default: option<list<feature-flag-status-default-entry>>,
     last-requested: option<string>,
     /// | Name     | Description |
     /// | --------:| ----------- |
-    name: option<feature-flag-status-name-enum>
+    name: option<feature-flag-status-for-queried-environment-name-enum>
   }
 
-  record feature-flag-status-default {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record feature-flag-status-default-entry {
+    key: string,
+    value: string
   }
 
   record feature-flags {
@@ -469,11 +490,11 @@ interface feature-flags {
     /// A unix epoch time in milliseconds specifying the creation time of this flag.
     creation-date: option<s64>,
     /// A mapping of keys to CustomProperty entries.
-    custom-properties: option<feature-flag-custom-properties>,
+    custom-properties: option<list<feature-flag-custom-properties-entry>>,
     defaults: option<defaults>,
     /// Description of the feature flag.
     description: option<string>,
-    environments: option<feature-flag-environments>,
+    environments: option<list<feature-flag-environments-entry>>,
     /// An array goals from all environments associated with this feature flag
     goal-ids: option<list<string>>,
     include-in-snippet: option<bool>,
@@ -493,14 +514,14 @@ interface feature-flags {
   }
 
   record member {
-    id: option<id>,
+    id: option<string>,
     /// A unix epoch time in milliseconds specifying the last time this member was active in LaunchDarkly.
     last-seen: option<s64>,
     last-seen-metadata: option<member-last-seen-metadata>,
     links: option<links>,
     pending-invite: option<bool>,
     verified: option<bool>,
-    custom-roles: option<list<id>>,
+    custom-roles: option<list<string>>,
     email: option<string>,
     first-name: option<string>,
     is-beta: option<bool>,
@@ -508,20 +529,9 @@ interface feature-flags {
     role: option<role>
   }
 
-  /// The unique resource id.
-  record id {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
   record member-last-seen-metadata {
     /// If the last time this member accessed LaunchDarkly was using the REST API, this value will be set to the ID of the personal access token used.
     token-id: option<string>
-  }
-
-  record role {
-    /// opaque schema; raw JSON
-    value: string
   }
 
   record client-side-availability {
@@ -531,10 +541,18 @@ interface feature-flags {
     using-mobile-key: option<bool>
   }
 
-  /// A mapping of keys to CustomProperty entries.
-  record feature-flag-custom-properties {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// A name and value describing a custom property.
+  record custom-property {
+    /// The name of the property.
+    name: string,
+    /// Values for this property.
+    value: option<list<string>>
+  }
+
+  /// one entry of a string-keyed map (free-form object)
+  record feature-flag-custom-properties-entry {
+    key: string,
+    value: custom-property
   }
 
   /// Default values to be used when a new environment is created.
@@ -545,21 +563,96 @@ interface feature-flags {
     on-variation: s32
   }
 
-  record feature-flag-environments {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  record feature-flag-config {
+    environment-name: option<string>,
+    site: option<site>,
+    archived: option<bool>,
+    fallthrough: option<fallthrough>,
+    last-modified: option<s64>,
+    off-variation: option<s32>,
+    on: option<bool>,
+    prerequisites: option<list<prerequisite>>,
+    rules: option<list<rule>>,
+    salt: option<string>,
+    sel: option<string>,
+    targets: option<list<target>>,
+    /// Set to true to send detailed event information for this flag.
+    track-events: option<bool>,
+    /// Set to true to send detailed event information when targeting is enabled but no individual targeting rule is matched.
+    track-events-fallthrough: option<bool>,
+    version: option<s32>
+  }
+
+  record site {
+    href: option<string>,
+    type-op: option<string>
+  }
+
+  record fallthrough {
+    rollout: option<rollout>,
+    variation: option<s32>
+  }
+
+  record rollout {
+    bucket-by: option<string>,
+    variations: option<list<weighted-variation>>
+  }
+
+  record weighted-variation {
+    variation: option<s32>,
+    weight: option<s32>
+  }
+
+  record prerequisite {
+    key: option<string>,
+    variation: option<s32>
+  }
+
+  record rule {
+    id: option<string>,
+    clauses: option<list<clause>>,
+    description: option<string>,
+    rollout: option<rollout>,
+    track-events: option<bool>,
+    variation: option<s32>
+  }
+
+  record clause {
+    id: option<string>,
+    attribute: option<string>,
+    negate: option<bool>,
+    op: option<string>,
+    values: option<list<list<clause-values-item-entry>>>
+  }
+
+  /// one entry of a string-keyed map (free-form object)
+  record clause-values-item-entry {
+    key: string,
+    value: string
+  }
+
+  record target {
+    values: option<list<string>>,
+    variation: option<s32>
+  }
+
+  /// one entry of a string-keyed map (free-form object)
+  record feature-flag-environments-entry {
+    key: string,
+    value: feature-flag-config
   }
 
   record variation {
     id: option<string>,
     description: option<string>,
     name: option<string>,
-    value: variation-value
+    value: list<variation-value-entry>
   }
 
-  record variation-value {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record variation-value-entry {
+    key: string,
+    value: string
   }
 
   record dependent-flags-by-environment {
@@ -571,11 +664,6 @@ interface feature-flags {
   record dependent-flags-links {
     parent: option<link>,
     self: option<link>
-  }
-
-  record site {
-    href: option<string>,
-    type-op: option<string>
   }
 
   record dependent-flag {
@@ -647,7 +735,7 @@ interface feature-flags {
   }
 
   record approval-request {
-    id: option<id>,
+    id: option<string>,
     version: option<s32>,
     all-reviews: option<list<approval-request-review>>,
     /// The id of the member that applied the approval request
@@ -658,7 +746,7 @@ interface feature-flags {
     creation-date: option<s32>,
     /// Timestamp for when instructions will be executed
     execution-date: option<s64>,
-    instructions: option<semantic-patch-instruction>,
+    instructions: option<list<semantic-patch-instruction-item>>,
     notify-member-ids: option<list<string>>,
     /// ID of scheduled change to edit or delete
     operating-on-id: option<string>,
@@ -671,26 +759,16 @@ interface feature-flags {
   }
 
   record approval-request-review {
-    id: option<id>,
+    id: option<string>,
     /// A unix epoch time in milliseconds specifying the date the approval request was reviewed
     creation-date: option<s32>,
     kind: option<approval-request-review-status>,
-    member-id: option<id>
+    member-id: option<string>
   }
 
-  /// | Name     | Description |
-  /// | --------:| ----------- |
-  /// | pending  | the approval request has not been reviewed yet |
-  /// | approved | the approval request has been approved and can now be applied |
-  /// | declined | the approval request has been declined and cannot be applied |
-  record approval-request-review-status {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
-  record semantic-patch-instruction {
-    /// opaque schema; raw JSON
-    value: string
+  record semantic-patch-instruction-item {
+    /// The name of the modification you would like to perform on a resource.
+    kind: option<string>
   }
 
   record feature-flag-scheduled-changes {
@@ -703,7 +781,12 @@ interface feature-flags {
     version: option<s32>,
     /// A unix epoch time in milliseconds specifying the date the scheduled changes will be applied
     execution-date: option<s32>,
-    instructions: option<semantic-patch-instruction>
+    instructions: option<list<semantic-patch-instruction-item-v2>>
+  }
+
+  record semantic-patch-instruction-item-v2 {
+    /// The name of the modification you would like to perform on a resource.
+    kind: option<string>
   }
 
   record feature-flag-scheduled-changes-conflicts {
@@ -1178,22 +1261,22 @@ interface integrations {
 
   record integrations {
     /// A mapping of integration types to their respective API endpoints.
-    links: option<integrations-links>,
+    links: option<list<integrations-links-entry>>,
     items: option<list<integration-subscription>>
   }
 
-  /// A mapping of integration types to their respective API endpoints.
-  record integrations-links {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record integrations-links-entry {
+    key: string,
+    value: string
   }
 
   record integration-subscription {
-    id: option<id>,
+    id: option<string>,
     links: option<hierarchical-links>,
     status: option<integration-subscription-status>,
     /// A key-value mapping of configuration fields.
-    config: option<integration-subscription-config>,
+    config: option<list<integration-subscription-config-entry>>,
     /// The type of integration associated with this configuration.
     kind: option<string>,
     /// The user-defined name associated with this configuration.
@@ -1203,12 +1286,6 @@ interface integrations {
     statements: option<list<statement>>,
     /// An array of tags for this integration configuration.
     tags: option<list<string>>
-  }
-
-  /// The unique resource id.
-  record id {
-    /// opaque schema; raw JSON
-    value: string
   }
 
   record hierarchical-links {
@@ -1228,10 +1305,10 @@ interface integrations {
     success-count: option<s32>
   }
 
-  /// A key-value mapping of configuration fields.
-  record integration-subscription-config {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record integration-subscription-config-entry {
+    key: string,
+    value: string
   }
 
   record statement {
@@ -1337,6 +1414,13 @@ interface integrations {
 }
 
 interface team-members {
+  enum role {
+    writer,
+    reader,
+    admin,
+    owner,
+  }
+
   record members {
     links: option<links>,
     items: option<list<member>>,
@@ -1354,14 +1438,14 @@ interface team-members {
   }
 
   record member {
-    id: option<id>,
+    id: option<string>,
     /// A unix epoch time in milliseconds specifying the last time this member was active in LaunchDarkly.
     last-seen: option<s64>,
     last-seen-metadata: option<member-last-seen-metadata>,
     links: option<links>,
     pending-invite: option<bool>,
     verified: option<bool>,
-    custom-roles: option<list<id>>,
+    custom-roles: option<list<string>>,
     email: option<string>,
     first-name: option<string>,
     is-beta: option<bool>,
@@ -1369,20 +1453,9 @@ interface team-members {
     role: option<role>
   }
 
-  /// The unique resource id.
-  record id {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
   record member-last-seen-metadata {
     /// If the last time this member accessed LaunchDarkly was using the REST API, this value will be set to the ID of the personal access token used.
     token-id: option<string>
-  }
-
-  record role {
-    /// opaque schema; raw JSON
-    value: string
   }
 
   variant get-members-error {
@@ -1487,7 +1560,7 @@ interface projects {
   }
 
   record project {
-    id: option<id>,
+    id: option<string>,
     links: option<links>,
     default-client-side-availability: option<client-side-availability>,
     environments: option<list<environment>>,
@@ -1498,12 +1571,6 @@ interface projects {
     tags: option<list<string>>
   }
 
-  /// The unique resource id.
-  record id {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
   record client-side-availability {
     /// When set to true, this flag will be available to SDKs using the client-side id.
     using-environment-id: option<bool>,
@@ -1512,7 +1579,7 @@ interface projects {
   }
 
   record environment {
-    id: option<id>,
+    id: option<string>,
     links: option<links>,
     /// The SDK key for backend LaunchDarkly SDKs.
     api-key: option<string>,
@@ -1624,7 +1691,7 @@ interface environments {
   }
 
   record environment {
-    id: option<id>,
+    id: option<string>,
     links: option<links>,
     /// The SDK key for backend LaunchDarkly SDKs.
     api-key: option<string>,
@@ -1650,12 +1717,6 @@ interface environments {
     secure-mode: option<bool>,
     /// An array of tags for this environment.
     tags: option<list<string>>
-  }
-
-  /// The unique resource id.
-  record id {
-    /// opaque schema; raw JSON
-    value: string
   }
 
   record links {
@@ -1798,7 +1859,7 @@ interface custom-roles {
   }
 
   record custom-role {
-    id: option<id>,
+    id: option<string>,
     links: option<links>,
     /// Description of the custom role.
     description: option<string>,
@@ -1807,12 +1868,6 @@ interface custom-roles {
     /// Name of the custom role.
     name: option<string>,
     policy: option<list<policy>>
-  }
-
-  /// The unique resource id.
-  record id {
-    /// opaque schema; raw JSON
-    value: string
   }
 
   record policy {
@@ -1950,12 +2005,13 @@ interface user-segments {
     attribute: option<string>,
     negate: option<bool>,
     op: option<string>,
-    values: option<list<clause-values-item>>
+    values: option<list<list<clause-values-item-entry>>>
   }
 
-  record clause-values-item {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record clause-values-item-entry {
+    key: string,
+    value: string
   }
 
   record user-targeting-expiration-for-segment {
@@ -2120,6 +2176,13 @@ interface user-segments {
 }
 
 interface access-tokens {
+  enum role {
+    writer,
+    reader,
+    admin,
+    owner,
+  }
+
   enum statement-effect-enum {
     allow,
     deny,
@@ -2141,7 +2204,7 @@ interface access-tokens {
   }
 
   record token {
-    id: option<id>,
+    id: option<string>,
     links: option<links>,
     member: option<member>,
     /// A unix epoch time in milliseconds specifying the creation time of this access token.
@@ -2155,10 +2218,10 @@ interface access-tokens {
     last-modified: option<s64>,
     /// A unix epoch time in milliseconds specifying the last time this access token was used to authorize access to the LaunchDarkly REST API.
     last-used: option<s64>,
-    member-id: option<id>,
+    member-id: option<string>,
     /// A human-friendly name for the access token
     name: option<string>,
-    owner-id: option<id>,
+    owner-id: option<string>,
     /// The name of a built-in role for the token
     role: option<string>,
     /// Whether the token will be a service token https://docs.launchdarkly.com/home/account-security/api-access-tokens#service-tokens
@@ -2167,21 +2230,15 @@ interface access-tokens {
     token: option<string>
   }
 
-  /// The unique resource id.
-  record id {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
   record member {
-    id: option<id>,
+    id: option<string>,
     /// A unix epoch time in milliseconds specifying the last time this member was active in LaunchDarkly.
     last-seen: option<s64>,
     last-seen-metadata: option<member-last-seen-metadata>,
     links: option<links>,
     pending-invite: option<bool>,
     verified: option<bool>,
-    custom-roles: option<list<id>>,
+    custom-roles: option<list<string>>,
     email: option<string>,
     first-name: option<string>,
     is-beta: option<bool>,
@@ -2192,11 +2249,6 @@ interface access-tokens {
   record member-last-seen-metadata {
     /// If the last time this member accessed LaunchDarkly was using the REST API, this value will be set to the ID of the personal access token used.
     token-id: option<string>
-  }
-
-  record role {
-    /// opaque schema; raw JSON
-    value: string
   }
 
   record statement {
@@ -2349,13 +2401,14 @@ interface customer-metrics {
 
   record ma-uby-category {
     links: option<stream-by-sdk-links>,
-    metadata: option<list<mau-metadata>>,
+    metadata: option<list<list<mau-metadata-entry>>>,
     series: option<list<stream-usage-series>>
   }
 
-  record mau-metadata {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record mau-metadata-entry {
+    key: string,
+    value: string
   }
 
   record streams {
@@ -2519,21 +2572,15 @@ interface users {
     avatar: option<string>,
     environment-id: option<string>,
     last-ping: option<string>,
-    owner-id: option<id>,
+    owner-id: option<string>,
     user: option<user>
-  }
-
-  /// The unique resource id.
-  record id {
-    /// opaque schema; raw JSON
-    value: string
   }
 
   record user {
     anonymous: option<bool>,
     avatar: option<string>,
     country: option<string>,
-    custom: option<user-custom>,
+    custom: option<list<user-custom-entry>>,
     email: option<string>,
     first-name: option<string>,
     ip: option<string>,
@@ -2543,9 +2590,10 @@ interface users {
     secondary: option<string>
   }
 
-  record user-custom {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record user-custom-entry {
+    key: string,
+    value: string
   }
 
   variant get-search-users-error {
@@ -2629,7 +2677,7 @@ interface users {
 interface user-settings {
   record user-flag-settings {
     links: option<links>,
-    items: option<user-flag-settings-items>
+    items: option<list<user-flag-settings-items-entry>>
   }
 
   record links {
@@ -2642,17 +2690,18 @@ interface user-settings {
     type-op: option<string>
   }
 
-  record user-flag-settings-items {
-    /// JSON-encoded free-form object payload
-    data: option<string>
-  }
-
   record user-flag-setting {
     links: option<links>,
     /// The most important attribute in the response. The _value is the current setting for the user. For a boolean feature toggle, this will be true, false, or null if there is no defined fallthrough value.
     value: option<bool>,
     /// The setting attribute indicates whether you've explicitly targeted this user to receive a particular variation. For example, if you have explicitly turned off a feature toggle for a user, setting will be false. A setting of null means that you haven't assigned that user to a specific variation.
     setting: option<bool>
+  }
+
+  /// one entry of a string-keyed map (free-form object)
+  record user-flag-settings-items-entry {
+    key: string,
+    value: user-flag-setting
   }
 
   record user-targeting-expiration-on-flags-for-user {
@@ -2796,7 +2845,7 @@ interface webhooks {
   }
 
   record webhook {
-    id: option<id>,
+    id: option<string>,
     links: option<links>,
     /// The name of the webhook.
     name: option<string>,
@@ -2809,12 +2858,6 @@ interface webhooks {
     tags: option<list<string>>,
     /// The URL of the remote webhook.
     url: option<string>
-  }
-
-  /// The unique resource id.
-  record id {
-    /// opaque schema; raw JSON
-    value: string
   }
 
   record statement {

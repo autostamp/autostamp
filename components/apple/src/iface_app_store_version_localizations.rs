@@ -195,6 +195,26 @@ fn iface_app_store_version_localizations__app_preview_sets_get_to_many_related_i
     }
 }
 
+fn iface_app_store_version_localizations__preview_type__to_str(e: &iface_app_store_version_localizations::PreviewType) -> &'static str {
+    match e {
+        iface_app_store_version_localizations::PreviewType::IphoneV65 => "IPHONE_65",
+        iface_app_store_version_localizations::PreviewType::IphoneV58 => "IPHONE_58",
+        iface_app_store_version_localizations::PreviewType::IphoneV55 => "IPHONE_55",
+        iface_app_store_version_localizations::PreviewType::IphoneV47 => "IPHONE_47",
+        iface_app_store_version_localizations::PreviewType::IphoneV40 => "IPHONE_40",
+        iface_app_store_version_localizations::PreviewType::IphoneV35 => "IPHONE_35",
+        iface_app_store_version_localizations::PreviewType::IpadProV3genV129 => "IPAD_PRO_3GEN_129",
+        iface_app_store_version_localizations::PreviewType::IpadProV3genV11 => "IPAD_PRO_3GEN_11",
+        iface_app_store_version_localizations::PreviewType::IpadProV129 => "IPAD_PRO_129",
+        iface_app_store_version_localizations::PreviewType::IpadV105 => "IPAD_105",
+        iface_app_store_version_localizations::PreviewType::IpadV97 => "IPAD_97",
+        iface_app_store_version_localizations::PreviewType::Desktop => "DESKTOP",
+        iface_app_store_version_localizations::PreviewType::WatchSeriesV4 => "WATCH_SERIES_4",
+        iface_app_store_version_localizations::PreviewType::WatchSeriesV3 => "WATCH_SERIES_3",
+        iface_app_store_version_localizations::PreviewType::AppleTv => "APPLE_TV",
+    }
+}
+
 fn iface_app_store_version_localizations__app_preview_set_relationships_app_previews_data_item_type_op_enum__to_str(e: &iface_app_store_version_localizations::AppPreviewSetRelationshipsAppPreviewsDataItemTypeOpEnum) -> &'static str {
     match e {
         iface_app_store_version_localizations::AppPreviewSetRelationshipsAppPreviewsDataItemTypeOpEnum::AppPreviews => "appPreviews",
@@ -259,6 +279,36 @@ fn iface_app_store_version_localizations__app_screenshot_sets_get_to_many_relate
     match e {
         iface_app_store_version_localizations::AppScreenshotSetsGetToManyRelatedIncludeOpItemEnum::AppScreenshots => "appScreenshots",
         iface_app_store_version_localizations::AppScreenshotSetsGetToManyRelatedIncludeOpItemEnum::AppStoreVersionLocalization => "appStoreVersionLocalization",
+    }
+}
+
+fn iface_app_store_version_localizations__screenshot_display_type__to_str(e: &iface_app_store_version_localizations::ScreenshotDisplayType) -> &'static str {
+    match e {
+        iface_app_store_version_localizations::ScreenshotDisplayType::AppIphoneV65 => "APP_IPHONE_65",
+        iface_app_store_version_localizations::ScreenshotDisplayType::AppIphoneV58 => "APP_IPHONE_58",
+        iface_app_store_version_localizations::ScreenshotDisplayType::AppIphoneV55 => "APP_IPHONE_55",
+        iface_app_store_version_localizations::ScreenshotDisplayType::AppIphoneV47 => "APP_IPHONE_47",
+        iface_app_store_version_localizations::ScreenshotDisplayType::AppIphoneV40 => "APP_IPHONE_40",
+        iface_app_store_version_localizations::ScreenshotDisplayType::AppIphoneV35 => "APP_IPHONE_35",
+        iface_app_store_version_localizations::ScreenshotDisplayType::AppIpadProV3genV129 => "APP_IPAD_PRO_3GEN_129",
+        iface_app_store_version_localizations::ScreenshotDisplayType::AppIpadProV3genV11 => "APP_IPAD_PRO_3GEN_11",
+        iface_app_store_version_localizations::ScreenshotDisplayType::AppIpadProV129 => "APP_IPAD_PRO_129",
+        iface_app_store_version_localizations::ScreenshotDisplayType::AppIpadV105 => "APP_IPAD_105",
+        iface_app_store_version_localizations::ScreenshotDisplayType::AppIpadV97 => "APP_IPAD_97",
+        iface_app_store_version_localizations::ScreenshotDisplayType::AppDesktop => "APP_DESKTOP",
+        iface_app_store_version_localizations::ScreenshotDisplayType::AppWatchSeriesV4 => "APP_WATCH_SERIES_4",
+        iface_app_store_version_localizations::ScreenshotDisplayType::AppWatchSeriesV3 => "APP_WATCH_SERIES_3",
+        iface_app_store_version_localizations::ScreenshotDisplayType::AppAppleTv => "APP_APPLE_TV",
+        iface_app_store_version_localizations::ScreenshotDisplayType::ImessageAppIphoneV65 => "IMESSAGE_APP_IPHONE_65",
+        iface_app_store_version_localizations::ScreenshotDisplayType::ImessageAppIphoneV58 => "IMESSAGE_APP_IPHONE_58",
+        iface_app_store_version_localizations::ScreenshotDisplayType::ImessageAppIphoneV55 => "IMESSAGE_APP_IPHONE_55",
+        iface_app_store_version_localizations::ScreenshotDisplayType::ImessageAppIphoneV47 => "IMESSAGE_APP_IPHONE_47",
+        iface_app_store_version_localizations::ScreenshotDisplayType::ImessageAppIphoneV40 => "IMESSAGE_APP_IPHONE_40",
+        iface_app_store_version_localizations::ScreenshotDisplayType::ImessageAppIpadProV3genV129 => "IMESSAGE_APP_IPAD_PRO_3GEN_129",
+        iface_app_store_version_localizations::ScreenshotDisplayType::ImessageAppIpadProV3genV11 => "IMESSAGE_APP_IPAD_PRO_3GEN_11",
+        iface_app_store_version_localizations::ScreenshotDisplayType::ImessageAppIpadProV129 => "IMESSAGE_APP_IPAD_PRO_129",
+        iface_app_store_version_localizations::ScreenshotDisplayType::ImessageAppIpadV105 => "IMESSAGE_APP_IPAD_105",
+        iface_app_store_version_localizations::ScreenshotDisplayType::ImessageAppIpadV97 => "IMESSAGE_APP_IPAD_97",
     }
 }
 
@@ -475,13 +525,7 @@ fn iface_app_store_version_localizations__app_preview_set__to_json(p: &iface_app
 
 fn iface_app_store_version_localizations__app_preview_set_attributes__to_json(p: &iface_app_store_version_localizations::AppPreviewSetAttributes) -> Value {
     let mut m = Map::new();
-    m.insert("previewType".into(), match (&p.preview_type) { Some(v) => iface_app_store_version_localizations__preview_type__to_json(v), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_app_store_version_localizations__preview_type__to_json(p: &iface_app_store_version_localizations::PreviewType) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
+    m.insert("previewType".into(), match (&p.preview_type) { Some(v) => Value::String(iface_app_store_version_localizations__preview_type__to_str(v).into()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -655,13 +699,7 @@ fn iface_app_store_version_localizations__app_screenshot_set__to_json(p: &iface_
 
 fn iface_app_store_version_localizations__app_screenshot_set_attributes__to_json(p: &iface_app_store_version_localizations::AppScreenshotSetAttributes) -> Value {
     let mut m = Map::new();
-    m.insert("screenshotDisplayType".into(), match (&p.screenshot_display_type) { Some(v) => iface_app_store_version_localizations__screenshot_display_type__to_json(v), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_app_store_version_localizations__screenshot_display_type__to_json(p: &iface_app_store_version_localizations::ScreenshotDisplayType) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
+    m.insert("screenshotDisplayType".into(), match (&p.screenshot_display_type) { Some(v) => Value::String(iface_app_store_version_localizations__screenshot_display_type__to_str(v).into()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -989,14 +1027,7 @@ fn iface_app_store_version_localizations__app_preview_set__from_json(v: &Value) 
 fn iface_app_store_version_localizations__app_preview_set_attributes__from_json(v: &Value) -> Option<iface_app_store_version_localizations::AppPreviewSetAttributes> {
     let m = v.as_object()?;
     Some(iface_app_store_version_localizations::AppPreviewSetAttributes {
-        preview_type: m.get("previewType").filter(|v| !v.is_null()).and_then(|v| iface_app_store_version_localizations__preview_type__from_json(v)),
-    })
-}
-
-fn iface_app_store_version_localizations__preview_type__from_json(v: &Value) -> Option<iface_app_store_version_localizations::PreviewType> {
-    let m = v.as_object()?;
-    Some(iface_app_store_version_localizations::PreviewType {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        preview_type: m.get("previewType").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_app_store_version_localizations__preview_type__from_str)),
     })
 }
 
@@ -1192,14 +1223,7 @@ fn iface_app_store_version_localizations__app_screenshot_set__from_json(v: &Valu
 fn iface_app_store_version_localizations__app_screenshot_set_attributes__from_json(v: &Value) -> Option<iface_app_store_version_localizations::AppScreenshotSetAttributes> {
     let m = v.as_object()?;
     Some(iface_app_store_version_localizations::AppScreenshotSetAttributes {
-        screenshot_display_type: m.get("screenshotDisplayType").filter(|v| !v.is_null()).and_then(|v| iface_app_store_version_localizations__screenshot_display_type__from_json(v)),
-    })
-}
-
-fn iface_app_store_version_localizations__screenshot_display_type__from_json(v: &Value) -> Option<iface_app_store_version_localizations::ScreenshotDisplayType> {
-    let m = v.as_object()?;
-    Some(iface_app_store_version_localizations::ScreenshotDisplayType {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        screenshot_display_type: m.get("screenshotDisplayType").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_app_store_version_localizations__screenshot_display_type__from_str)),
     })
 }
 
@@ -1344,6 +1368,27 @@ fn iface_app_store_version_localizations__app_store_version_localization_relatio
     }
 }
 
+fn iface_app_store_version_localizations__preview_type__from_str(s: &str) -> Option<iface_app_store_version_localizations::PreviewType> {
+    match s {
+        "IPHONE_65" => Some(iface_app_store_version_localizations::PreviewType::IphoneV65),
+        "IPHONE_58" => Some(iface_app_store_version_localizations::PreviewType::IphoneV58),
+        "IPHONE_55" => Some(iface_app_store_version_localizations::PreviewType::IphoneV55),
+        "IPHONE_47" => Some(iface_app_store_version_localizations::PreviewType::IphoneV47),
+        "IPHONE_40" => Some(iface_app_store_version_localizations::PreviewType::IphoneV40),
+        "IPHONE_35" => Some(iface_app_store_version_localizations::PreviewType::IphoneV35),
+        "IPAD_PRO_3GEN_129" => Some(iface_app_store_version_localizations::PreviewType::IpadProV3genV129),
+        "IPAD_PRO_3GEN_11" => Some(iface_app_store_version_localizations::PreviewType::IpadProV3genV11),
+        "IPAD_PRO_129" => Some(iface_app_store_version_localizations::PreviewType::IpadProV129),
+        "IPAD_105" => Some(iface_app_store_version_localizations::PreviewType::IpadV105),
+        "IPAD_97" => Some(iface_app_store_version_localizations::PreviewType::IpadV97),
+        "DESKTOP" => Some(iface_app_store_version_localizations::PreviewType::Desktop),
+        "WATCH_SERIES_4" => Some(iface_app_store_version_localizations::PreviewType::WatchSeriesV4),
+        "WATCH_SERIES_3" => Some(iface_app_store_version_localizations::PreviewType::WatchSeriesV3),
+        "APPLE_TV" => Some(iface_app_store_version_localizations::PreviewType::AppleTv),
+        _ => None,
+    }
+}
+
 fn iface_app_store_version_localizations__app_preview_set_relationships_app_previews_data_item_type_op_enum__from_str(s: &str) -> Option<iface_app_store_version_localizations::AppPreviewSetRelationshipsAppPreviewsDataItemTypeOpEnum> {
     match s {
         "appPreviews" => Some(iface_app_store_version_localizations::AppPreviewSetRelationshipsAppPreviewsDataItemTypeOpEnum::AppPreviews),
@@ -1357,6 +1402,37 @@ fn iface_app_store_version_localizations__app_media_asset_state_state_enum__from
         "UPLOAD_COMPLETE" => Some(iface_app_store_version_localizations::AppMediaAssetStateStateEnum::UploadComplete),
         "COMPLETE" => Some(iface_app_store_version_localizations::AppMediaAssetStateStateEnum::Complete),
         "FAILED" => Some(iface_app_store_version_localizations::AppMediaAssetStateStateEnum::Failed),
+        _ => None,
+    }
+}
+
+fn iface_app_store_version_localizations__screenshot_display_type__from_str(s: &str) -> Option<iface_app_store_version_localizations::ScreenshotDisplayType> {
+    match s {
+        "APP_IPHONE_65" => Some(iface_app_store_version_localizations::ScreenshotDisplayType::AppIphoneV65),
+        "APP_IPHONE_58" => Some(iface_app_store_version_localizations::ScreenshotDisplayType::AppIphoneV58),
+        "APP_IPHONE_55" => Some(iface_app_store_version_localizations::ScreenshotDisplayType::AppIphoneV55),
+        "APP_IPHONE_47" => Some(iface_app_store_version_localizations::ScreenshotDisplayType::AppIphoneV47),
+        "APP_IPHONE_40" => Some(iface_app_store_version_localizations::ScreenshotDisplayType::AppIphoneV40),
+        "APP_IPHONE_35" => Some(iface_app_store_version_localizations::ScreenshotDisplayType::AppIphoneV35),
+        "APP_IPAD_PRO_3GEN_129" => Some(iface_app_store_version_localizations::ScreenshotDisplayType::AppIpadProV3genV129),
+        "APP_IPAD_PRO_3GEN_11" => Some(iface_app_store_version_localizations::ScreenshotDisplayType::AppIpadProV3genV11),
+        "APP_IPAD_PRO_129" => Some(iface_app_store_version_localizations::ScreenshotDisplayType::AppIpadProV129),
+        "APP_IPAD_105" => Some(iface_app_store_version_localizations::ScreenshotDisplayType::AppIpadV105),
+        "APP_IPAD_97" => Some(iface_app_store_version_localizations::ScreenshotDisplayType::AppIpadV97),
+        "APP_DESKTOP" => Some(iface_app_store_version_localizations::ScreenshotDisplayType::AppDesktop),
+        "APP_WATCH_SERIES_4" => Some(iface_app_store_version_localizations::ScreenshotDisplayType::AppWatchSeriesV4),
+        "APP_WATCH_SERIES_3" => Some(iface_app_store_version_localizations::ScreenshotDisplayType::AppWatchSeriesV3),
+        "APP_APPLE_TV" => Some(iface_app_store_version_localizations::ScreenshotDisplayType::AppAppleTv),
+        "IMESSAGE_APP_IPHONE_65" => Some(iface_app_store_version_localizations::ScreenshotDisplayType::ImessageAppIphoneV65),
+        "IMESSAGE_APP_IPHONE_58" => Some(iface_app_store_version_localizations::ScreenshotDisplayType::ImessageAppIphoneV58),
+        "IMESSAGE_APP_IPHONE_55" => Some(iface_app_store_version_localizations::ScreenshotDisplayType::ImessageAppIphoneV55),
+        "IMESSAGE_APP_IPHONE_47" => Some(iface_app_store_version_localizations::ScreenshotDisplayType::ImessageAppIphoneV47),
+        "IMESSAGE_APP_IPHONE_40" => Some(iface_app_store_version_localizations::ScreenshotDisplayType::ImessageAppIphoneV40),
+        "IMESSAGE_APP_IPAD_PRO_3GEN_129" => Some(iface_app_store_version_localizations::ScreenshotDisplayType::ImessageAppIpadProV3genV129),
+        "IMESSAGE_APP_IPAD_PRO_3GEN_11" => Some(iface_app_store_version_localizations::ScreenshotDisplayType::ImessageAppIpadProV3genV11),
+        "IMESSAGE_APP_IPAD_PRO_129" => Some(iface_app_store_version_localizations::ScreenshotDisplayType::ImessageAppIpadProV129),
+        "IMESSAGE_APP_IPAD_105" => Some(iface_app_store_version_localizations::ScreenshotDisplayType::ImessageAppIpadV105),
+        "IMESSAGE_APP_IPAD_97" => Some(iface_app_store_version_localizations::ScreenshotDisplayType::ImessageAppIpadV97),
         _ => None,
     }
 }
