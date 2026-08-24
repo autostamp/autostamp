@@ -7,7 +7,7 @@
 /// | --- | --- |
 /// | `BearerAuth` | `Authorization: Bearer <secret>` |
 /// | `bearerAuth` | `Authorization: Bearer <secret>` |
-package autostamp:telnyx@0.5.0;
+package autostamp:telnyx@0.6.0;
 
 interface bulk-credentials {
   record create-bulk-telephony-credential-response {
@@ -157,10 +157,11 @@ interface sim-cards {
     data,
   }
 
-  /// A list of mobile operator networks and the priority that should be applied when the SIM is connecting to the network.
-  record mobile-operator-networks-preferences-request {
-    /// opaque schema; raw JSON
-    value: string
+  record mobile-operator-network-preferences-request {
+    /// The mobile operator network resource identification UUID.
+    mobile-operator-network-id: option<string>,
+    /// It determines what is the priority of a specific operator network that should be assumed by a SIM card when connecting to a network. The highest priority is 0, the second highest is 1 and so on.
+    priority: option<s32>
   }
 
   record bulk-sim-card-network-preferences-response {
@@ -172,7 +173,7 @@ interface sim-cards {
   record sim-card-network-preference-with-ota-updates {
     /// ISO 8601 formatted date-time indicating when the resource was created.
     created-at: option<string>,
-    mobile-operator-networks-preferences: option<mobile-operator-networks-preferences-response>,
+    mobile-operator-networks-preferences: option<list<mobile-operator-network-preferences-response>>,
     ota-updates: option<list<complete-ota-update>>,
     record-type: option<string>,
     sim-card-id: option<string>,
@@ -180,10 +181,13 @@ interface sim-cards {
     updated-at: option<string>
   }
 
-  /// A list of mobile operator networks and the priority that should be applied when the SIM is connecting to the network.
-  record mobile-operator-networks-preferences-response {
-    /// opaque schema; raw JSON
-    value: string
+  record mobile-operator-network-preferences-response {
+    /// The mobile operator network resource identification UUID.
+    mobile-operator-network-id: option<string>,
+    /// The mobile operator network resource name.
+    mobile-operator-network-name: option<string>,
+    /// It determines what is the priority of a specific operator network that should be assumed by a SIM card when connecting to a network. The highest priority is 0, the second highest is 1 and so on.
+    priority: option<s32>
   }
 
   /// This object represents an Over the Air (OTA) update request. It allows tracking the current status of a operation that apply settings in a particular SIM card. <br/><br/>
@@ -206,20 +210,21 @@ interface sim-cards {
 
   /// A JSON object representation of the operation. The information present here will relate directly to the source of the OTA request.
   record complete-ota-update-settings {
-    mobile-operator-networks-preferences: option<mobile-operator-networks-preferences-response>
+    mobile-operator-networks-preferences: option<list<mobile-operator-network-preferences-response>>
   }
 
   record error {
     code: string,
     detail: option<string>,
-    meta: option<error-meta>,
+    meta: option<list<error-meta-entry>>,
     source: option<error-source>,
     title: string
   }
 
-  record error-meta {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record error-meta-entry {
+    key: string,
+    value: string
   }
 
   record error-source {
@@ -343,13 +348,6 @@ interface sim-cards {
     data: option<sim-card-network-preference-with-ota-updates>
   }
 
-  record mobile-operator-network-preferences-request {
-    /// The mobile operator network resource identification UUID.
-    mobile-operator-network-id: option<string>,
-    /// It determines what is the priority of a specific operator network that should be assumed by a SIM card when connecting to a network. The highest priority is 0, the second highest is 1 and so on.
-    priority: option<s32>
-  }
-
   record sim-card-network-preferences-put-response {
     data: option<sim-card-network-preference-with-ota-updates>
   }
@@ -447,7 +445,7 @@ interface sim-cards {
 
   /// Bulk Network Preferences for SIM cards
   record bulk-sim-card-network-preferences-params {
-    mobile-operator-networks-preferences: option<mobile-operator-networks-preferences-request>,
+    mobile-operator-networks-preferences: option<list<mobile-operator-network-preferences-request>>,
     sim-card-ids: option<list<string>>
   }
   bulk-sim-card-network-preferences: func(params: bulk-sim-card-network-preferences-params) -> result<bulk-sim-card-network-preferences-response, bulk-sim-card-network-preferences-error>;
@@ -637,119 +635,29 @@ interface addresses {
   }
 
   record address {
-    address-book: option<address-book>,
-    administrative-area: option<administrative-area>,
-    borough: option<borough>,
-    business-name: option<business-name>,
-    country-code: option<country-code>,
+    address-book: option<bool>,
+    administrative-area: option<string>,
+    borough: option<string>,
+    business-name: option<string>,
+    country-code: option<string>,
     /// ISO 8601 formatted date indicating when the resource was created.
     created-at: option<string>,
-    customer-reference: option<customer-reference>,
-    extended-address: option<extended-address>,
-    first-name: option<first-name>,
+    customer-reference: option<string>,
+    extended-address: option<string>,
+    first-name: option<string>,
     /// Uniquely identifies the address.
     id: option<string>,
-    last-name: option<last-name>,
-    locality: option<locality>,
-    neighborhood: option<neighborhood>,
-    phone-number: option<phone-number>,
-    postal-code: option<postal-code>,
+    last-name: option<string>,
+    locality: option<string>,
+    neighborhood: option<string>,
+    phone-number: option<string>,
+    postal-code: option<string>,
     /// Identifies the type of the resource.
     record-type: option<string>,
-    street-address: option<street-address>,
+    street-address: option<string>,
     /// ISO 8601 formatted date indicating when the resource was updated.
     updated-at: option<string>,
-    validate-address: option<validate-address>
-  }
-
-  /// Indicates whether or not the address should be considered part of your list of addresses that appear for regular use.
-  record address-book {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
-  /// The locality of the address. For US addresses, this corresponds to the state of the address.
-  record administrative-area {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
-  /// The borough of the address. This field is not used for addresses in the US but is used for some international addresses.
-  record borough {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
-  /// The business name associated with the address. An address must have either a first last name or a business name.
-  record business-name {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
-  /// The two-character (ISO 3166-1 alpha-2) country code of the address.
-  record country-code {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
-  /// A customer reference string for customer look ups.
-  record customer-reference {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
-  /// Additional street address information about the address such as, but not limited to, unit number or apartment number.
-  record extended-address {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
-  /// The first name associated with the address. An address must have either a first last name or a business name.
-  record first-name {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
-  /// The last name associated with the address. An address must have either a first last name or a business name.
-  record last-name {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
-  /// The locality of the address. For US addresses, this corresponds to the city of the address.
-  record locality {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
-  /// The neighborhood of the address. This field is not used for addresses in the US but is used for some international addresses.
-  record neighborhood {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
-  /// The phone number associated with the address.
-  record phone-number {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
-  /// The postal code of the address.
-  record postal-code {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
-  /// The primary street address information about the address.
-  record street-address {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
-  /// Indicates whether or not the address should be validated for emergency use upon creation or not. This should be left with the default value of `true` unless you have used the `/addresses/actions/validate` endpoint to validate the address separately prior to creation. If an address is not validated for emergency use upon creation and it is not valid, it will not be able to be used for emergency services.
-  record validate-address {
-    /// opaque schema; raw JSON
-    value: string
+    validate-address: option<bool>
   }
 
   record pagination-meta {
@@ -763,7 +671,7 @@ interface addresses {
     data: option<address>
   }
 
-  record validate-address-v2-response {
+  record validate-address-response {
     data: option<validate-address-result>
   }
 
@@ -773,20 +681,21 @@ interface addresses {
     record-type: option<string>,
     /// Indicates whether an address is valid or invalid.
     result-op: validate-address-result-result-op-enum,
-    suggested: validate-address-v3
+    suggested: validate-address-v2
   }
 
   record error {
     code: string,
     detail: option<string>,
-    meta: option<error-meta>,
+    meta: option<list<error-meta-entry>>,
     source: option<error-source>,
     title: string
   }
 
-  record error-meta {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record error-meta-entry {
+    key: string,
+    value: string
   }
 
   record error-source {
@@ -796,13 +705,13 @@ interface addresses {
     pointer: option<string>
   }
 
-  record validate-address-v3 {
-    administrative-area: option<administrative-area>,
-    country-code: option<country-code>,
-    extended-address: option<extended-address>,
-    locality: option<locality>,
-    postal-code: option<postal-code>,
-    street-address: option<street-address>
+  record validate-address-v2 {
+    administrative-area: option<string>,
+    country-code: option<string>,
+    extended-address: option<string>,
+    locality: option<string>,
+    postal-code: option<string>,
+    street-address: option<string>
   }
 
   record get-address-response {
@@ -825,7 +734,7 @@ interface addresses {
     other(string)
   }
 
-  variant validate-address-v2-error {
+  variant validate-address-error {
     unprocessable-entity(string),
     other(string)
   }
@@ -868,34 +777,34 @@ interface addresses {
 
   /// Creates an address
   record create-address-params {
-    address-book: option<address-book>,
-    administrative-area: option<administrative-area>,
-    borough: option<borough>,
-    business-name: business-name,
-    country-code: country-code,
-    customer-reference: option<customer-reference>,
-    extended-address: option<extended-address>,
-    first-name: first-name,
-    last-name: last-name,
-    locality: locality,
-    neighborhood: option<neighborhood>,
-    phone-number: option<phone-number>,
-    postal-code: option<postal-code>,
-    street-address: street-address,
-    validate-address: option<validate-address>
+    address-book: option<bool>,
+    administrative-area: option<string>,
+    borough: option<string>,
+    business-name: string,
+    country-code: string,
+    customer-reference: option<string>,
+    extended-address: option<string>,
+    first-name: string,
+    last-name: string,
+    locality: string,
+    neighborhood: option<string>,
+    phone-number: option<string>,
+    postal-code: option<string>,
+    street-address: string,
+    validate-address: option<bool>
   }
   create-address: func(params: create-address-params) -> result<create-address-response, create-address-error>;
 
   /// Validate an address
-  record validate-address-v2-params {
-    administrative-area: option<administrative-area>,
-    country-code: country-code,
-    extended-address: option<extended-address>,
-    locality: option<locality>,
-    postal-code: postal-code,
-    street-address: street-address
+  record validate-address-params {
+    administrative-area: option<string>,
+    country-code: string,
+    extended-address: option<string>,
+    locality: option<string>,
+    postal-code: string,
+    street-address: string
   }
-  validate-address-v2: func(params: validate-address-v2-params) -> result<validate-address-v2-response, validate-address-v2-error>;
+  validate-address: func(params: validate-address-params) -> result<validate-address-response, validate-address-error>;
 
   /// Retrieve an address
   record get-address-params {
@@ -940,38 +849,20 @@ interface authentication-providers {
   }
 
   record authentication-provider {
-    active: option<active>,
+    active: option<bool>,
     /// ISO 8601 formatted date indicating when the resource was created.
     created-at: option<string>,
     /// Uniquely identifies the authentication provider.
     id: option<string>,
-    name: option<name>,
-    organization-id: option<organization-id>,
+    name: option<string>,
+    organization-id: option<string>,
     /// Identifies the type of the resource.
     record-type: option<string>,
     /// The settings associated with the authentication provider.
     settings: option<authentication-provider-settings>,
-    short-name: option<short-name>,
+    short-name: option<string>,
     /// ISO 8601 formatted date indicating when the resource was updated.
     updated-at: option<string>
-  }
-
-  /// The active status of the authentication provider
-  record active {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
-  /// The name associated with the authentication provider.
-  record name {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
-  /// The id from the Organization the authentication provider belongs to.
-  record organization-id {
-    /// opaque schema; raw JSON
-    value: string
   }
 
   /// The settings associated with the authentication provider.
@@ -992,12 +883,6 @@ interface authentication-providers {
     service-provider-entity-id: option<string>
   }
 
-  /// The short name associated with the authentication provider. This must be unique and URL-friendly, as it's going to be part of the login URL.
-  record short-name {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
   record pagination-meta {
     page-number: option<s32>,
     page-size: option<s32>,
@@ -1015,12 +900,6 @@ interface authentication-providers {
     idp-entity-id: string,
     /// The SSO target url for the identity provider (IdP).
     idp-sso-target-url: string
-  }
-
-  /// The URL for the identity provider metadata file to populate the settings automatically. If the settings attribute is provided, that will be used instead.
-  record settings-url {
-    /// opaque schema; raw JSON
-    value: string
   }
 
   record create-authentication-provider-response {
@@ -1086,11 +965,11 @@ interface authentication-providers {
 
   /// Creates an authentication provider
   record create-authentication-provider-params {
-    active: option<active>,
-    name: name,
+    active: option<bool>,
+    name: string,
     settings: settings,
-    settings-url: option<settings-url>,
-    short-name: short-name
+    settings-url: option<string>,
+    short-name: string
   }
   create-authentication-provider: func(params: create-authentication-provider-params) -> result<create-authentication-provider-response, create-authentication-provider-error>;
 
@@ -1105,11 +984,11 @@ interface authentication-providers {
   record update-authentication-provider-params {
     /// Identifies the resource.
     id: string,
-    active: option<active>,
-    name: option<name>,
+    active: option<bool>,
+    name: option<string>,
     settings: option<settings>,
-    settings-url: option<settings-url>,
-    short-name: option<short-name>
+    settings-url: option<string>,
+    short-name: option<string>
   }
   update-authentication-provider: func(params: update-authentication-provider-params) -> result<update-authentication-provider-response, update-authentication-provider-error>;
 
@@ -1653,7 +1532,7 @@ interface debugging {
     /// Event timestamp
     event-timestamp: string,
     /// Event metadata, which includes raw event, and extra information based on event type
-    metadata: call-event-metadata,
+    metadata: list<call-event-metadata-entry>,
     /// Event name
     name: string,
     record-type: call-event-record-type-enum,
@@ -1661,10 +1540,10 @@ interface debugging {
     type-op: list-call-events-filter-type-enum
   }
 
-  /// Event metadata, which includes raw event, and extra information based on event type
-  record call-event-metadata {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record call-event-metadata-entry {
+    key: string,
+    value: string
   }
 
   record pagination-meta {
@@ -1886,11 +1765,6 @@ interface call-commands {
 
   record leave-queue-response {
     data: option<call-control-command-result>
-  }
-
-  record loopcount {
-    /// opaque schema; raw JSON
-    value: string
   }
 
   record call-playback-start-response {
@@ -2206,7 +2080,7 @@ interface call-commands {
     client-state: option<string>,
     /// Use this field to avoid duplicate commands. Telnyx will ignore commands with the same `command_id`.
     command-id: option<string>,
-    loop: option<loopcount>,
+    loop: option<string>,
     /// The media_name of a file to be played back on the call. The media_name must point to a file previously uploaded to api.telnyx.com/v2/media by the same user/organization. The file must either be a WAV or MP3 file.
     media-name: option<string>,
     /// When enabled, audio will be mixed on top of any other audio that is actively being played back. Note that `overlay: true` will only work if there is another audio file already being played on the call.
@@ -3104,11 +2978,6 @@ interface conference-commands {
     data: option<conference-command-result>
   }
 
-  record loopcount {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
   record conference-play-audio-response {
     data: option<conference-command-result>
   }
@@ -3420,7 +3289,7 @@ interface conference-commands {
     audio-url: option<string>,
     /// List of call control ids identifying participants the audio file should be played to. If not given, the audio file will be played to the entire conference.
     call-control-ids: option<list<string>>,
-    loop: option<loopcount>,
+    loop: option<string>,
     /// The media_name of a file to be played back in the conference. The media_name must point to a file previously uploaded to api.telnyx.com/v2/media by the same user/organization. The file must either be a WAV or MP3 file.
     media-name: option<string>
   }
@@ -3526,6 +3395,19 @@ interface connections {
     active,
   }
 
+  enum anchorsite-override {
+    latency,
+    chicago-il,
+    ashburn-va,
+    san-jose-ca,
+    sydney-australia,
+    amsterdam-netherlands,
+    london-uk,
+    toronto-canada,
+    vancouver-canada,
+    frankfurt-germany,
+  }
+
   enum connection-webhook-api-version-enum {
     v1,
     v2,
@@ -3545,7 +3427,7 @@ interface connections {
     created-at: option<string>,
     /// Identifies the specific resource.
     id: option<string>,
-    outbound-voice-profile-id: option<outbound-voice-profile-id>,
+    outbound-voice-profile-id: option<string>,
     /// Identifies the type of the resource.
     record-type: option<string>,
     /// ISO 8601 formatted date indicating when the resource was updated.
@@ -3556,18 +3438,6 @@ interface connections {
     webhook-event-failover-url: option<string>,
     /// The URL where webhooks related to this connection will be sent.
     webhook-event-url: option<string>
-  }
-
-  /// `Latency` directs Telnyx to route media through the site with the lowest round-trip time to the user's connection. Telnyx calculates this time using ICMP ping messages. This can be disabled by specifying a site to handle all media.
-  record anchorsite-override {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
-  /// Identifies the associated outbound voice profile.
-  record outbound-voice-profile-id {
-    /// opaque schema; raw JSON
-    value: string
   }
 
   record pagination-meta {
@@ -3625,6 +3495,30 @@ interface credential-connections {
     created-at,
     connection-name,
     active,
+  }
+
+  enum anchorsite-override {
+    latency,
+    chicago-il,
+    ashburn-va,
+    san-jose-ca,
+    sydney-australia,
+    amsterdam-netherlands,
+    london-uk,
+    toronto-canada,
+    vancouver-canada,
+    frankfurt-germany,
+  }
+
+  enum dtmf-type {
+    rfc-v2833,
+    inband,
+    sip-info,
+  }
+
+  enum encrypted-media {
+    srtp,
+    zrtp,
   }
 
   enum credential-inbound-ani-number-format-enum {
@@ -3712,24 +3606,6 @@ interface credential-connections {
     webhook-timeout-secs: option<s32>
   }
 
-  /// `Latency` directs Telnyx to route media through the site with the lowest round-trip time to the user's connection. Telnyx calculates this time using ICMP ping messages. This can be disabled by specifying a site to handle all media.
-  record anchorsite-override {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
-  /// Sets the type of DTMF digits sent from Telnyx to this Connection. Note that DTMF digits sent to Telnyx will be accepted in all formats.
-  record dtmf-type {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
-  /// Enable use of SRTP or ZRTP for encryption. Valid values are those listed or null. Cannot be set to non-null if the transport_portocol is TLS.
-  record encrypted-media {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
   record credential-inbound {
     /// This setting allows you to set the format with which the caller's number (ANI) is sent for inbound phone calls.
     ani-number-format: option<credential-inbound-ani-number-format-enum>,
@@ -3769,15 +3645,9 @@ interface credential-connections {
     instant-ringback-enabled: option<bool>,
     /// A 2-character country code specifying the country whose national dialing rules should be used. For example, if set to `US` then any US number can be dialed without preprending +1 to the number. When left blank, Telnyx will try US and GB dialing rules, in that order, by default.
     localization: option<string>,
-    outbound-voice-profile-id: option<outbound-voice-profile-id>,
+    outbound-voice-profile-id: option<string>,
     /// This setting only affects connections with Fax-type Outbound Voice Profiles. The setting dictates whether or not Telnyx sends a t.38 reinvite.<br/><br/> By default, Telnyx will send the re-invite. If set to `customer`, the caller is expected to send the t.38 reinvite.
     t38-reinvite-source: option<credential-outbound-t38-reinvite-source-enum>
-  }
-
-  /// Identifies the associated outbound voice profile.
-  record outbound-voice-profile-id {
-    /// opaque schema; raw JSON
-    value: string
   }
 
   record connection-rtcp-settings {
@@ -4102,8 +3972,7 @@ interface documents {
 
   /// Upload a document
   record create-document-params {
-    /// opaque schema; raw JSON
-    value: string
+    body: string
   }
   create-document: func(params: create-document-params) -> result<create-document-response, create-document-error>;
 
@@ -4162,6 +4031,19 @@ interface programmable-fax-applications {
     active,
   }
 
+  enum anchorsite-override {
+    latency,
+    chicago-il,
+    ashburn-va,
+    san-jose-ca,
+    sydney-australia,
+    amsterdam-netherlands,
+    london-uk,
+    toronto-canada,
+    vancouver-canada,
+    frankfurt-germany,
+  }
+
   enum fax-application-inbound-sip-subdomain-receive-settings-enum {
     only-my-connections,
     from-anyone,
@@ -4173,45 +4055,21 @@ interface programmable-fax-applications {
   }
 
   record fax-application {
-    active: option<connection-active>,
+    active: option<bool>,
     anchorsite-override: option<anchorsite-override>,
-    application-name: option<application-name>,
+    application-name: option<string>,
     /// ISO 8601 formatted date indicating when the resource was created.
     created-at: option<string>,
-    id: option<int-id>,
+    id: option<string>,
     inbound: option<fax-application-inbound>,
     outbound: option<fax-application-outbound>,
     /// Identifies the type of the resource.
     record-type: option<string>,
     /// ISO 8601 formatted date indicating when the resource was updated.
     updated-at: option<string>,
-    webhook-event-failover-url: option<webhook-event-failover-url>,
-    webhook-event-url: option<webhook-event-url>,
-    webhook-timeout-secs: option<webhook-timeout-secs>
-  }
-
-  /// Specifies whether the connection can be used.
-  record connection-active {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
-  /// `Latency` directs Telnyx to route media through the site with the lowest round-trip time to the user's connection. Telnyx calculates this time using ICMP ping messages. This can be disabled by specifying a site to handle all media.
-  record anchorsite-override {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
-  /// A user-assigned name to help manage the application.
-  record application-name {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
-  /// Uniquely identifies the resource.
-  record int-id {
-    /// opaque schema; raw JSON
-    value: string
+    webhook-event-failover-url: option<string>,
+    webhook-event-url: option<string>,
+    webhook-timeout-secs: option<s32>
   }
 
   record fax-application-inbound {
@@ -4226,31 +4084,7 @@ interface programmable-fax-applications {
   record fax-application-outbound {
     /// When set, this will limit the number of concurrent outbound calls to phone numbers associated with this connection.
     channel-limit: option<s32>,
-    outbound-voice-profile-id: option<outbound-voice-profile-id>
-  }
-
-  /// Identifies the associated outbound voice profile.
-  record outbound-voice-profile-id {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
-  /// The failover URL where webhooks related to this connection will be sent if sending to the primary URL fails. Must include a scheme, such as 'https'.
-  record webhook-event-failover-url {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
-  /// The URL where webhooks related to this connection will be sent. Must include a scheme, such as 'https'.
-  record webhook-event-url {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
-  /// Specifies how many seconds to wait before timing out a webhook.
-  record webhook-timeout-secs {
-    /// opaque schema; raw JSON
-    value: string
+    outbound-voice-profile-id: option<string>
   }
 
   record pagination-meta {
@@ -4272,7 +4106,7 @@ interface programmable-fax-applications {
   record create-fax-application-request-outbound {
     /// When set, this will limit the number of concurrent outbound calls to phone numbers associated with this connection.
     channel-limit: option<s32>,
-    outbound-voice-profile-id: option<outbound-voice-profile-id>
+    outbound-voice-profile-id: option<string>
   }
 
   record create-fax-application-response {
@@ -4295,7 +4129,7 @@ interface programmable-fax-applications {
   record update-fax-application-request-outbound {
     /// When set, this will limit the number of concurrent outbound calls to phone numbers associated with this connection.
     channel-limit: option<s32>,
-    outbound-voice-profile-id: option<outbound-voice-profile-id>
+    outbound-voice-profile-id: option<string>
   }
 
   record update-fax-application-response {
@@ -4357,14 +4191,14 @@ interface programmable-fax-applications {
 
   /// Creates a Fax Application
   record create-fax-application-params {
-    active: option<connection-active>,
+    active: option<bool>,
     anchorsite-override: option<anchorsite-override>,
-    application-name: application-name,
+    application-name: string,
     inbound: option<create-fax-application-request-inbound>,
     outbound: option<create-fax-application-request-outbound>,
-    webhook-event-failover-url: option<webhook-event-failover-url>,
-    webhook-event-url: webhook-event-url,
-    webhook-timeout-secs: option<webhook-timeout-secs>
+    webhook-event-failover-url: option<string>,
+    webhook-event-url: string,
+    webhook-timeout-secs: option<s32>
   }
   create-fax-application: func(params: create-fax-application-params) -> result<create-fax-application-response, create-fax-application-error>;
 
@@ -4379,14 +4213,14 @@ interface programmable-fax-applications {
   record update-fax-application-params {
     /// Identifies the resource.
     id: string,
-    active: option<connection-active>,
+    active: option<bool>,
     anchorsite-override: option<anchorsite-override>,
-    application-name: application-name,
+    application-name: string,
     inbound: option<update-fax-application-request-inbound>,
     outbound: option<update-fax-application-request-outbound>,
-    webhook-event-failover-url: option<webhook-event-failover-url>,
-    webhook-event-url: webhook-event-url,
-    webhook-timeout-secs: option<webhook-timeout-secs>
+    webhook-event-failover-url: option<string>,
+    webhook-event-url: string,
+    webhook-timeout-secs: option<s32>
   }
   update-fax-application: func(params: update-fax-application-params) -> result<update-fax-application-response, update-fax-application-error>;
 
@@ -4423,7 +4257,7 @@ interface programmable-fax-commands {
 
   record list-faxes-response {
     data: option<list<fax>>,
-    meta: option<list-faxes-response-meta>
+    meta: option<list<list-faxes-response-meta-entry>>
   }
 
   record fax {
@@ -4461,9 +4295,10 @@ interface programmable-fax-commands {
     webhook-url: option<string>
   }
 
-  record list-faxes-response-meta {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record list-faxes-response-meta-entry {
+    key: string,
+    value: string
   }
 
   record send-fax-response {
@@ -4553,6 +4388,30 @@ interface fqdn-connections {
     active,
   }
 
+  enum anchorsite-override {
+    latency,
+    chicago-il,
+    ashburn-va,
+    san-jose-ca,
+    sydney-australia,
+    amsterdam-netherlands,
+    london-uk,
+    toronto-canada,
+    vancouver-canada,
+    frankfurt-germany,
+  }
+
+  enum dtmf-type {
+    rfc-v2833,
+    inband,
+    sip-info,
+  }
+
+  enum encrypted-media {
+    srtp,
+    zrtp,
+  }
+
   enum inbound-fqdn-ani-number-format-enum {
     e-v164,
     e-v164-v2,
@@ -4581,6 +4440,12 @@ interface fqdn-connections {
   enum inbound-fqdn-sip-subdomain-receive-settings-enum {
     only-my-connections,
     from-anyone,
+  }
+
+  enum fqdn-connection-transport-protocol {
+    udp,
+    tcp,
+    tls,
   }
 
   enum fqdn-connection-webhook-api-version-enum {
@@ -4627,24 +4492,6 @@ interface fqdn-connections {
     webhook-timeout-secs: option<s32>
   }
 
-  /// `Latency` directs Telnyx to route media through the site with the lowest round-trip time to the user's connection. Telnyx calculates this time using ICMP ping messages. This can be disabled by specifying a site to handle all media.
-  record anchorsite-override {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
-  /// Sets the type of DTMF digits sent from Telnyx to this Connection. Note that DTMF digits sent to Telnyx will be accepted in all formats.
-  record dtmf-type {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
-  /// Enable use of SRTP or ZRTP for encryption. Valid values are those listed or null. Cannot be set to non-null if the transport_portocol is TLS.
-  record encrypted-media {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
   record inbound-fqdn {
     /// This setting allows you to set the format with which the caller's number (ANI) is sent for inbound phone calls.
     ani-number-format: option<inbound-fqdn-ani-number-format-enum>,
@@ -4684,12 +4531,6 @@ interface fqdn-connections {
     port: option<string>,
     /// RTCP reports are sent to customers based on the frequency set. Frequency is in seconds and it can be set to values from 5 to 3000 seconds.
     report-frequency-secs: option<s32>
-  }
-
-  /// One of UDP, TLS, or TCP. Applies only to connections with IP authentication or FQDN authentication.
-  record fqdn-connection-transport-protocol {
-    /// opaque schema; raw JSON
-    value: string
   }
 
   record pagination-meta {
@@ -5060,6 +4901,30 @@ interface ip-connections {
     active,
   }
 
+  enum anchorsite-override {
+    latency,
+    chicago-il,
+    ashburn-va,
+    san-jose-ca,
+    sydney-australia,
+    amsterdam-netherlands,
+    london-uk,
+    toronto-canada,
+    vancouver-canada,
+    frankfurt-germany,
+  }
+
+  enum dtmf-type {
+    rfc-v2833,
+    inband,
+    sip-info,
+  }
+
+  enum encrypted-media {
+    srtp,
+    zrtp,
+  }
+
   enum inbound-ip-ani-number-format-enum {
     e-v164,
     e-v164-v2,
@@ -5162,24 +5027,6 @@ interface ip-connections {
     webhook-timeout-secs: option<s32>
   }
 
-  /// `Latency` directs Telnyx to route media through the site with the lowest round-trip time to the user's connection. Telnyx calculates this time using ICMP ping messages. This can be disabled by specifying a site to handle all media.
-  record anchorsite-override {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
-  /// Sets the type of DTMF digits sent from Telnyx to this Connection. Note that DTMF digits sent to Telnyx will be accepted in all formats.
-  record dtmf-type {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
-  /// Enable use of SRTP or ZRTP for encryption. Valid values are those listed or null. Cannot be set to non-null if the transport_portocol is TLS.
-  record encrypted-media {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
   record inbound-ip {
     /// This setting allows you to set the format with which the caller's number (ANI) is sent for inbound phone calls.
     ani-number-format: option<inbound-ip-ani-number-format-enum>,
@@ -5238,17 +5085,11 @@ interface ip-connections {
     ip-authentication-token: option<string>,
     /// A 2-character country code specifying the country whose national dialing rules should be used. For example, if set to `US` then any US number can be dialed without preprending +1 to the number. When left blank, Telnyx will try US and GB dialing rules, in that order, by default.
     localization: option<string>,
-    outbound-voice-profile-id: option<outbound-voice-profile-id>,
+    outbound-voice-profile-id: option<string>,
     /// This setting only affects connections with Fax-type Outbound Voice Profiles. The setting dictates whether or not Telnyx sends a t.38 reinvite.<br/><br/> By default, Telnyx will send the re-invite. If set to `customer`, the caller is expected to send the t.38 reinvite.
     t38-reinvite-source: option<outbound-ip-t38-reinvite-source-enum>,
     /// Numerical chars only, exactly 4 characters.
     tech-prefix: option<string>
-  }
-
-  /// Identifies the associated outbound voice profile.
-  record outbound-voice-profile-id {
-    /// opaque schema; raw JSON
-    value: string
   }
 
   record connection-rtcp-settings {
@@ -5865,6 +5706,44 @@ interface media-storage-api {
 }
 
 interface mdr-search-beta {
+  enum direction {
+    inbound,
+    outbound,
+  }
+
+  enum message-status {
+    gw-timeout,
+    delivered,
+    dlr-unconfirmed,
+    dlr-timeout,
+    received,
+    gw-reject,
+    failed,
+  }
+
+  enum message-type {
+    audio,
+    contacts,
+    document,
+    hsm,
+    image,
+    location,
+    template,
+    text,
+    video,
+    voice,
+    unknown,
+  }
+
+  enum product {
+    long-code,
+    short-code,
+    short-code-fteu,
+    toll-free,
+    alphanumeric-id,
+    rcs,
+  }
+
   enum mdr-detail-response-currency-enum {
     aud,
     cad,
@@ -5876,39 +5755,6 @@ interface mdr-search-beta {
   enum mdr-detail-response-message-type-enum {
     sms,
     mms,
-  }
-
-  enum mdr-detail-response-status-enum {
-    gw-timeout,
-    delivered,
-    dlr-unconfirmed,
-    dlr-timeout,
-    received,
-    gw-reject,
-    failed,
-  }
-
-  record direction {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
-  /// Message status
-  record message-status {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
-  /// type of the message
-  record message-type {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
-  /// Used product
-  record product {
-    /// opaque schema; raw JSON
-    value: string
   }
 
   record mdr-get-detail-response {
@@ -5941,7 +5787,7 @@ interface mdr-search-beta {
     rate: option<string>,
     record-type: option<string>,
     /// Message status
-    status: option<mdr-detail-response-status-enum>
+    status: option<message-status>
   }
 
   record pagination-meta {
@@ -6032,12 +5878,6 @@ interface messages {
     delivery-failed,
   }
 
-  /// Receiving address (+E.164 formatted phone number or short code).
-  record to-number {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
   record create-message-response {
     data: option<outbound-message-payload>
   }
@@ -6096,14 +5936,15 @@ interface messages {
   record error {
     code: string,
     detail: option<string>,
-    meta: option<error-meta>,
+    meta: option<list<error-meta-entry>>,
     source: option<error-source>,
     title: string
   }
 
-  record error-meta {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record error-meta-entry {
+    key: string,
+    value: string
   }
 
   record error-source {
@@ -6178,7 +6019,7 @@ interface messages {
     /// Message body (i.e., content) as a non-empty string.
     /// 
     text: option<string>,
-    to: to-number,
+    to: string,
     /// The protocol for sending the message, either SMS or MMS.
     type-op: option<create-message-request-type-op-enum>,
     /// If the profile this number is associated with has webhooks, use them for delivery notifications. If webhooks are also specified on the message itself, they will be attempted first, then those on the profile.
@@ -6204,7 +6045,7 @@ interface messages {
     /// Message body (i.e., content) as a non-empty string.
     /// 
     text: option<string>,
-    to: to-number,
+    to: string,
     /// The protocol for sending the message, either SMS or MMS.
     type-op: option<create-message-request-type-op-enum>,
     /// If the profile this number is associated with has webhooks, use them for delivery notifications. If webhooks are also specified on the message itself, they will be attempted first, then those on the profile.
@@ -6230,7 +6071,7 @@ interface messages {
     /// Message body (i.e., content) as a non-empty string.
     /// 
     text: option<string>,
-    to: to-number,
+    to: string,
     /// The protocol for sending the message, either SMS or MMS.
     type-op: option<create-message-request-type-op-enum>,
     /// If the profile this number is associated with has webhooks, use them for delivery notifications. If webhooks are also specified on the message itself, they will be attempted first, then those on the profile.
@@ -6256,7 +6097,7 @@ interface messages {
     /// Message body (i.e., content) as a non-empty string.
     /// 
     text: option<string>,
-    to: to-number,
+    to: string,
     /// The protocol for sending the message, either SMS or MMS.
     type-op: option<create-message-request-type-op-enum>,
     /// If the profile this number is associated with has webhooks, use them for delivery notifications. If webhooks are also specified on the message itself, they will be attempted first, then those on the profile.
@@ -7752,13 +7593,16 @@ interface ota-updates {
 
   /// A JSON object representation of the operation. The information present here will relate directly to the source of the OTA request.
   record complete-ota-update-settings {
-    mobile-operator-networks-preferences: option<mobile-operator-networks-preferences-response>
+    mobile-operator-networks-preferences: option<list<mobile-operator-network-preferences-response>>
   }
 
-  /// A list of mobile operator networks and the priority that should be applied when the SIM is connecting to the network.
-  record mobile-operator-networks-preferences-response {
-    /// opaque schema; raw JSON
-    value: string
+  record mobile-operator-network-preferences-response {
+    /// The mobile operator network resource identification UUID.
+    mobile-operator-network-id: option<string>,
+    /// The mobile operator network resource name.
+    mobile-operator-network-name: option<string>,
+    /// It determines what is the priority of a specific operator network that should be assumed by a SIM card when connecting to a network. The highest priority is 0, the second highest is 1 and so on.
+    priority: option<s32>
   }
 
   /// List OTA updates
@@ -7817,6 +7661,22 @@ interface outbound-voice-profiles {
     by-caller-phone-number,
   }
 
+  enum service-plan {
+    us,
+    international,
+    global,
+  }
+
+  enum traffic-type {
+    conversational,
+    short-duration,
+  }
+
+  enum usage-payment-method {
+    tariff,
+    rate-deck,
+  }
+
   record list-outbound-voice-profiles-response {
     data: option<list<outbound-voice-profile>>,
     meta: option<pagination-meta>
@@ -7865,24 +7725,6 @@ interface outbound-voice-profiles {
     call-recording-format: option<outbound-call-recording-call-recording-format-enum>,
     /// Specifies which calls are recorded.
     call-recording-type: option<outbound-call-recording-call-recording-type-enum>
-  }
-
-  /// Indicates the coverage of the termination regions. International and Global are the same but International may only be used for high volume/short duration Outbound Voice Profiles.
-  record service-plan {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
-  /// Specifies the type of traffic allowed in this profile.
-  record traffic-type {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
-  /// Setting for how costs for outbound profile are calculated.
-  record usage-payment-method {
-    /// opaque schema; raw JSON
-    value: string
   }
 
   record pagination-meta {
@@ -8077,14 +7919,15 @@ interface number-blocks-background-jobs {
   record error {
     code: string,
     detail: option<string>,
-    meta: option<error-meta>,
+    meta: option<list<error-meta-entry>>,
     source: option<error-source>,
     title: string
   }
 
-  record error-meta {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record error-meta-entry {
+    key: string,
+    value: string
   }
 
   record error-source {
@@ -8264,7 +8107,7 @@ interface number-configurations {
     emergency-enabled: option<bool>,
     /// If someone attempts to port your phone number away from Telnyx and your phone number has an external PIN set, Telnyx will attempt to verify that you provided the correct external PIN to the winning carrier. Note that not all carriers cooperate with this security mechanism.
     external-pin: option<string>,
-    id: option<int-id>,
+    id: option<string>,
     /// Identifies the messaging profile associated with the phone number.
     messaging-profile-id: option<string>,
     /// The name of the messaging profile associated with the phone number.
@@ -8285,12 +8128,6 @@ interface number-configurations {
     t38-fax-gateway-enabled: option<bool>,
     /// A list of user-assigned tags to help manage the phone number.
     tags: option<list<string>>
-  }
-
-  /// Uniquely identifies the resource.
-  record int-id {
-    /// opaque schema; raw JSON
-    value: string
   }
 
   record pagination-meta {
@@ -8477,7 +8314,7 @@ interface number-configurations {
     emergency-enabled: option<bool>,
     /// If someone attempts to port your phone number away from Telnyx and your phone number has an external PIN set, Telnyx will attempt to verify that you provided the correct external PIN to the winning carrier. Note that not all carriers cooperate with this security mechanism.
     external-pin: option<string>,
-    id: option<int-id>,
+    id: option<string>,
     /// Identifies the messaging profile associated with the phone number.
     messaging-profile-id: option<string>,
     /// The name of the messaging profile associated with the phone number.
@@ -8832,14 +8669,15 @@ interface number-background-jobs {
   record error {
     code: string,
     detail: option<string>,
-    meta: option<error-meta>,
+    meta: option<list<error-meta-entry>>,
     source: option<error-source>,
     title: string
   }
 
-  record error-meta {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record error-meta-entry {
+    key: string,
+    value: string
   }
 
   record error-source {
@@ -8975,11 +8813,37 @@ interface phone-number-porting {
 }
 
 interface porting-order {
+  enum type-op {
+    full,
+    partial,
+  }
+
   enum list-porting-orders-sort-enum {
     created-at,
     created-at-v2,
     activation-settings-foc-datetime-requested,
     activation-settings-foc-datetime-requested-v2,
+  }
+
+  enum activation-status {
+    new,
+    pending,
+    conflict,
+    cancel-pending,
+    failed,
+    concurred,
+    activate-rdy,
+    disconnect-pending,
+    concurrence-sent,
+    old,
+    sending,
+    active,
+    canceled,
+  }
+
+  enum remaining-numbers-action {
+    keep,
+    disconnect,
   }
 
   enum requirement-field-type-enum {
@@ -9035,6 +8899,12 @@ interface porting-order {
     system,
   }
 
+  enum portability-status {
+    pending,
+    confirmed,
+    provisional,
+  }
+
   enum phone-number-regulatory-requirement-field-type-enum {
     textual,
     datetime,
@@ -9046,12 +8916,6 @@ interface porting-order {
     pending,
     success,
     failure,
-  }
-
-  /// A port can be either 'full' or 'partial'. When type is 'full' the other attributes should be omitted.
-  record type-op {
-    /// opaque schema; raw JSON
-    value: string
   }
 
   record list-porting-orders-response {
@@ -9097,12 +8961,6 @@ interface porting-order {
     foc-datetime-requested: option<string>
   }
 
-  /// Activation status
-  record activation-status {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
   record porting-end-user {
     admin: option<end-user-admin>,
     location: option<end-user-location>
@@ -9145,12 +9003,6 @@ interface porting-order {
     new-billing-phone-number: option<string>,
     remaining-numbers-action: option<remaining-numbers-action>,
     type-op: option<type-op>
-  }
-
-  /// Remaining numbers can be either kept with their current service provider or disconnected. 'new_billing_telephone_number' is required when 'remaining_numbers_action' is 'keep'.
-  record remaining-numbers-action {
-    /// opaque schema; raw JSON
-    value: string
   }
 
   record phone-number-configuration {
@@ -9319,12 +9171,6 @@ interface porting-order {
 
   record create-porting-order-comment-v2-response {
     data: option<porting-orders-comment>
-  }
-
-  /// Specifies whether Telnyx is able to confirm portability this number in the United States & Canada. International phone numbers are provisional by default.
-  record portability-status {
-    /// opaque schema; raw JSON
-    value: string
   }
 
   record get-porting-phone-numbers-response {
@@ -10331,7 +10177,7 @@ interface cdr-usage-reports {
     product-breakdown: option<get-usage-report-sync-product-breakdown-enum>,
     record-type: option<string>,
     report-url: option<string>,
-    result-op: option<cdr-usage-report-response-result-op>,
+    result-op: option<list<cdr-usage-report-response-result-op-entry>>,
     start-time: option<string>,
     status: option<cdr-usage-report-response-status-enum>,
     updated-at: option<string>
@@ -10341,9 +10187,10 @@ interface cdr-usage-reports {
     empty: option<bool>
   }
 
-  record cdr-usage-report-response-result-op {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record cdr-usage-report-response-result-op-entry {
+    key: string,
+    value: string
   }
 
   record get-usage-report-sync-params {
@@ -10588,24 +10435,8 @@ interface requirement-types {
   }
 
   record doc-reqs-list-requirement-types-response {
-    data: option<doc-reqs-requirement-type-list>,
+    data: option<list<doc-reqs-requirement-type>>,
     meta: option<pagination-meta>
-  }
-
-  record doc-reqs-requirement-type-list {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
-  record pagination-meta {
-    page-number: option<s32>,
-    page-size: option<s32>,
-    total-pages: option<s32>,
-    total-results: option<s32>
-  }
-
-  record doc-reqs-retrieve-requirement-type-response {
-    data: option<doc-reqs-requirement-type>
   }
 
   record doc-reqs-requirement-type {
@@ -10635,6 +10466,17 @@ interface requirement-types {
     locality-limit: option<string>,
     /// Specifies time-based acceptance criteria
     time-limit: option<string>
+  }
+
+  record pagination-meta {
+    page-number: option<s32>,
+    page-size: option<s32>,
+    total-pages: option<s32>,
+    total-results: option<s32>
+  }
+
+  record doc-reqs-retrieve-requirement-type-response {
+    data: option<doc-reqs-requirement-type>
   }
 
   /// List all requirement types
@@ -10687,24 +10529,8 @@ interface requirements {
   }
 
   record list-requirements-response {
-    data: option<doc-reqs-requirement-list>,
+    data: option<list<doc-reqs-requirement>>,
     meta: option<pagination-meta>
-  }
-
-  record doc-reqs-requirement-list {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
-  record pagination-meta {
-    page-number: option<s32>,
-    page-size: option<s32>,
-    total-pages: option<s32>,
-    total-results: option<s32>
-  }
-
-  record doc-reqs-retrieve-document-requirements-response {
-    data: option<doc-reqs-requirement>
   }
 
   record doc-reqs-requirement {
@@ -10755,6 +10581,17 @@ interface requirements {
     locality-limit: option<string>,
     /// Specifies time-based acceptance criteria
     time-limit: option<string>
+  }
+
+  record pagination-meta {
+    page-number: option<s32>,
+    page-size: option<s32>,
+    total-pages: option<s32>,
+    total-results: option<s32>
+  }
+
+  record doc-reqs-retrieve-document-requirements-response {
+    data: option<doc-reqs-requirement>
   }
 
   /// List all requirements
@@ -11931,6 +11768,25 @@ interface te-xml-applications {
     active,
   }
 
+  enum anchorsite-override {
+    latency,
+    chicago-il,
+    ashburn-va,
+    san-jose-ca,
+    sydney-australia,
+    amsterdam-netherlands,
+    london-uk,
+    toronto-canada,
+    vancouver-canada,
+    frankfurt-germany,
+  }
+
+  enum dtmf-type {
+    rfc-v2833,
+    inband,
+    sip-info,
+  }
+
   enum texml-application-inbound-sip-subdomain-receive-settings-enum {
     only-my-connections,
     from-anyone,
@@ -11947,14 +11803,14 @@ interface te-xml-applications {
   }
 
   record texml-application {
-    active: option<connection-active>,
+    active: option<bool>,
     anchorsite-override: option<anchorsite-override>,
-    created-at: option<created-at>,
+    created-at: option<string>,
     dtmf-type: option<dtmf-type>,
-    first-command-timeout: option<first-command-timeout>,
-    first-command-timeout-secs: option<first-command-timeout-secs>,
-    friendly-name: option<application-name>,
-    id: option<int-id>,
+    first-command-timeout: option<bool>,
+    first-command-timeout-secs: option<s32>,
+    friendly-name: option<string>,
+    id: option<string>,
     inbound: option<texml-application-inbound>,
     outbound: option<texml-application-outbound>,
     /// Identifies the type of the resource.
@@ -11963,61 +11819,13 @@ interface te-xml-applications {
     status-callback: option<string>,
     /// HTTP request method Telnyx should use when requesting the status_callback URL.
     status-callback-method: option<texml-application-status-callback-method-enum>,
-    updated-at: option<updated-at>,
+    updated-at: option<string>,
     /// URL to which Telnyx will deliver your XML Translator webhooks if we get an error response from your voice_url.
     voice-fallback-url: option<string>,
     /// HTTP request method Telnyx will use to interact with your XML Translator webhooks. Either 'get' or 'post'.
     voice-method: option<texml-application-status-callback-method-enum>,
     /// URL to which Telnyx will deliver your XML Translator webhooks.
     voice-url: option<string>
-  }
-
-  /// Specifies whether the connection can be used.
-  record connection-active {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
-  /// `Latency` directs Telnyx to route media through the site with the lowest round-trip time to the user's connection. Telnyx calculates this time using ICMP ping messages. This can be disabled by specifying a site to handle all media.
-  record anchorsite-override {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
-  /// ISO 8601 formatted date indicating when the resource was created.
-  record created-at {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
-  /// Sets the type of DTMF digits sent from Telnyx to this Connection. Note that DTMF digits sent to Telnyx will be accepted in all formats.
-  record dtmf-type {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
-  /// Specifies whether calls to phone numbers associated with this connection should hangup after timing out.
-  record first-command-timeout {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
-  /// Specifies how many seconds to wait before timing out a dial command.
-  record first-command-timeout-secs {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
-  /// A user-assigned name to help manage the application.
-  record application-name {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
-  /// Uniquely identifies the resource.
-  record int-id {
-    /// opaque schema; raw JSON
-    value: string
   }
 
   record texml-application-inbound {
@@ -12032,19 +11840,7 @@ interface te-xml-applications {
   record texml-application-outbound {
     /// When set, this will limit the total number of outbound calls to phone numbers associated with this connection.
     channel-limit: option<s32>,
-    outbound-voice-profile-id: option<outbound-voice-profile-id>
-  }
-
-  /// Identifies the associated outbound voice profile.
-  record outbound-voice-profile-id {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
-  /// ISO 8601 formatted date indicating when the resource was updated.
-  record updated-at {
-    /// opaque schema; raw JSON
-    value: string
+    outbound-voice-profile-id: option<string>
   }
 
   record pagination-meta {
@@ -12066,7 +11862,7 @@ interface te-xml-applications {
   record create-texml-application-request-outbound {
     /// When set, this will limit the total number of outbound calls to phone numbers associated with this connection.
     channel-limit: option<s32>,
-    outbound-voice-profile-id: option<outbound-voice-profile-id>
+    outbound-voice-profile-id: option<string>
   }
 
   record create-texml-application-response {
@@ -12089,7 +11885,7 @@ interface te-xml-applications {
   record update-texml-application-request-outbound {
     /// When set, this will limit the total number of outbound calls to phone numbers associated with this connection.
     channel-limit: option<s32>,
-    outbound-voice-profile-id: option<outbound-voice-profile-id>
+    outbound-voice-profile-id: option<string>
   }
 
   record update-texml-application-response {
@@ -12151,12 +11947,12 @@ interface te-xml-applications {
 
   /// Creates a TeXML Application
   record create-texml-application-params {
-    active: option<connection-active>,
+    active: option<bool>,
     anchorsite-override: option<anchorsite-override>,
     dtmf-type: option<dtmf-type>,
-    first-command-timeout: option<first-command-timeout>,
-    first-command-timeout-secs: option<first-command-timeout-secs>,
-    friendly-name: application-name,
+    first-command-timeout: option<bool>,
+    first-command-timeout-secs: option<s32>,
+    friendly-name: string,
     inbound: option<create-texml-application-request-inbound>,
     outbound: option<create-texml-application-request-outbound>,
     /// URL for Telnyx to send requests to containing information about call progress events.
@@ -12183,12 +11979,12 @@ interface te-xml-applications {
   record update-texml-application-params {
     /// Identifies the resource.
     id: string,
-    active: option<connection-active>,
+    active: option<bool>,
     anchorsite-override: option<anchorsite-override>,
     dtmf-type: option<dtmf-type>,
-    first-command-timeout: option<first-command-timeout>,
-    first-command-timeout-secs: option<first-command-timeout-secs>,
-    friendly-name: application-name,
+    first-command-timeout: option<bool>,
+    first-command-timeout-secs: option<s32>,
+    friendly-name: string,
     inbound: option<update-texml-application-request-inbound>,
     outbound: option<update-texml-application-request-outbound>,
     /// URL for Telnyx to send requests to containing information about call progress events.
@@ -12214,9 +12010,46 @@ interface te-xml-applications {
 }
 
 interface verify {
+  enum verification-record-type {
+    verification,
+  }
+
+  enum verification-status {
+    pending,
+    sms-delivery-failed,
+    accepted,
+    expired,
+    not-enough-credit,
+    network-error,
+    number-unreachable,
+    internal-error,
+    invalid-destination,
+    timed-out,
+  }
+
+  enum verification-type {
+    sms-verification,
+    psd2-verification,
+    whatsapp-verification,
+    call-verification,
+    flashcall-verification,
+  }
+
   enum verification-code-response-data-response-code-enum {
     accepted,
     rejected,
+  }
+
+  enum currencies {
+    usd,
+    eur,
+    gbp,
+    aud,
+    cad,
+  }
+
+  enum verification-profile-record-type {
+    verification-profile,
   }
 
   record list-verifications-response {
@@ -12241,24 +12074,6 @@ interface verify {
     verify-profile-id: option<string>
   }
 
-  /// The possible verification record types.
-  record verification-record-type {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
-  /// The possible statuses of the verification request.
-  record verification-status {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
-  /// The possible types of verification.
-  record verification-type {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
   record meta {
     page-number: option<s32>,
     page-size: option<s32>,
@@ -12279,12 +12094,6 @@ interface verify {
 
   record create-verification-response {
     data: verification
-  }
-
-  /// The supported currencies.
-  record currencies {
-    /// opaque schema; raw JSON
-    value: string
   }
 
   record retrieve-verification-response {
@@ -12330,12 +12139,6 @@ interface verify {
   record profile-psd2-response {
     /// For every request that is initiated via this Verify profile, this sets the number of seconds before a verification request code expires. Once the verification request expires, the user cannot use the code to verify their identity.
     default-verification-timeout-secs: option<s32>
-  }
-
-  /// The possible verification profile record types.
-  record verification-profile-record-type {
-    /// opaque schema; raw JSON
-    value: string
   }
 
   record profile-sms-response {
@@ -12708,20 +12511,14 @@ interface webhooks {
   }
 
   record http-request {
-    headers: option<http-headers>,
+    headers: option<list<string>>,
     url: option<string>
-  }
-
-  /// List of headers, limited to 10kB.
-  record http-headers {
-    /// opaque schema; raw JSON
-    value: string
   }
 
   record http-response {
     /// Raw response body, limited to 10kB.
     body: option<string>,
-    headers: option<http-headers>,
+    headers: option<list<string>>,
     status: option<s32>
   }
 
@@ -12733,14 +12530,15 @@ interface webhooks {
     id: option<string>,
     /// ISO 8601 datetime of when the event occurred.
     occurred-at: option<string>,
-    payload: option<webhook-delivery-webhook-payload>,
+    payload: option<list<webhook-delivery-webhook-payload-entry>>,
     /// Identifies the type of the resource.
     record-type: option<webhook-delivery-webhook-record-type-enum>
   }
 
-  record webhook-delivery-webhook-payload {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record webhook-delivery-webhook-payload-entry {
+    key: string,
+    value: string
   }
 
   record pagination-meta-simple {
@@ -12959,6 +12757,35 @@ interface whats-app-messages {
     deterministic,
   }
 
+  enum template-parameters-item-type-op-enum {
+    text,
+    currency,
+    date-time,
+    image,
+    document,
+    video,
+  }
+
+  enum template-components-item-type-op-enum {
+    header,
+    body,
+    footer,
+  }
+
+  enum message-type {
+    audio,
+    contacts,
+    document,
+    hsm,
+    image,
+    location,
+    template,
+    text,
+    video,
+    voice,
+    unknown,
+  }
+
   enum message-record-type-enum {
     whatsapp-message-id,
   }
@@ -13142,7 +12969,7 @@ interface whats-app-messages {
   }
 
   record template {
-    components: option<template-components>,
+    components: option<list<template-components-item>>,
     language: language,
     /// Name of the template.
     name: string,
@@ -13150,19 +12977,22 @@ interface whats-app-messages {
     namespace: string
   }
 
-  record template-components {
-    /// opaque schema; raw JSON
-    value: string
+  record template-components-item {
+    parameters: option<list<template-parameters-item>>,
+    /// Describes the component type.
+    type-op: template-components-item-type-op-enum
   }
 
-  record text {
-    body: string
-  }
-
-  /// type of the message
-  record message-type {
-    /// opaque schema; raw JSON
-    value: string
+  /// Array containing the content of the message.
+  record template-parameters-item {
+    currency: option<currency>,
+    date-time: option<date-time-object>,
+    document: option<document>,
+    image: option<image>,
+    text: option<string>,
+    /// Describes the parameter type.
+    type-op: template-parameters-item-type-op-enum,
+    video: option<video>
   }
 
   /// The media object containing a video
@@ -13173,6 +13003,10 @@ interface whats-app-messages {
     id: option<string>,
     /// The protocol and URL of the media to be sent. Use only with HTTP/HTTPS URLs. Either id or link must be provided, not both.
     link: option<string>
+  }
+
+  record text {
+    body: string
   }
 
   record send-message-response {

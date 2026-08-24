@@ -18,7 +18,7 @@ fn iface_carts_mine_shipping_information__checkout_data_shipping_information_int
     let mut m = Map::new();
     m.insert("billing_address".into(), match (&p.billing_address) { Some(v) => iface_carts_mine_shipping_information__quote_data_address_interface__to_json(v), None => Value::Null });
     m.insert("custom_attributes".into(), match (&p.custom_attributes) { Some(v) => Value::Array((v).iter().map(|v| iface_carts_mine_shipping_information__framework_attribute_interface__to_json(v)).collect()), None => Value::Null });
-    m.insert("extension_attributes".into(), match (&p.extension_attributes) { Some(v) => iface_carts_mine_shipping_information__checkout_data_shipping_information_extension_interface__to_json(v), None => Value::Null });
+    m.insert("extension_attributes".into(), match (&p.extension_attributes) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("shipping_address".into(), iface_carts_mine_shipping_information__quote_data_address_interface__to_json(&p.shipping_address));
     m.insert("shipping_carrier_code".into(), Value::String((&p.shipping_carrier_code).clone()));
     m.insert("shipping_method_code".into(), Value::String((&p.shipping_method_code).clone()));
@@ -68,23 +68,25 @@ fn iface_carts_mine_shipping_information__quote_data_address_extension_interface
     Value::Object(m)
 }
 
-fn iface_carts_mine_shipping_information__checkout_data_shipping_information_extension_interface__to_json(p: &iface_carts_mine_shipping_information::CheckoutDataShippingInformationExtensionInterface) -> Value {
+fn iface_carts_mine_shipping_information__checkout_data_shipping_information_extension_interface_entry__to_json(p: &iface_carts_mine_shipping_information::CheckoutDataShippingInformationExtensionInterfaceEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
 fn iface_carts_mine_shipping_information__checkout_data_payment_details_interface__to_json(p: &iface_carts_mine_shipping_information::CheckoutDataPaymentDetailsInterface) -> Value {
     let mut m = Map::new();
-    m.insert("extension_attributes".into(), match (&p.extension_attributes) { Some(v) => iface_carts_mine_shipping_information__checkout_data_payment_details_extension_interface__to_json(v), None => Value::Null });
+    m.insert("extension_attributes".into(), match (&p.extension_attributes) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("payment_methods".into(), Value::Array((&p.payment_methods).iter().map(|v| iface_carts_mine_shipping_information__quote_data_payment_method_interface__to_json(v)).collect()));
     m.insert("totals".into(), iface_carts_mine_shipping_information__quote_data_totals_interface__to_json(&p.totals));
     Value::Object(m)
 }
 
-fn iface_carts_mine_shipping_information__checkout_data_payment_details_extension_interface__to_json(p: &iface_carts_mine_shipping_information::CheckoutDataPaymentDetailsExtensionInterface) -> Value {
+fn iface_carts_mine_shipping_information__checkout_data_payment_details_extension_interface_entry__to_json(p: &iface_carts_mine_shipping_information::CheckoutDataPaymentDetailsExtensionInterfaceEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -207,13 +209,14 @@ fn iface_carts_mine_shipping_information__negotiable_quote_data_negotiable_quote
     m.insert("catalog_price".into(), serde_json::Number::from_f64(*(&p.catalog_price)).map(Value::Number).unwrap_or(Value::Null));
     m.insert("catalog_price_incl_tax".into(), serde_json::Number::from_f64(*(&p.catalog_price_incl_tax)).map(Value::Number).unwrap_or(Value::Null));
     m.insert("cost".into(), serde_json::Number::from_f64(*(&p.cost)).map(Value::Number).unwrap_or(Value::Null));
-    m.insert("extension_attributes".into(), match (&p.extension_attributes) { Some(v) => iface_carts_mine_shipping_information__negotiable_quote_data_negotiable_quote_item_totals_extension_interface__to_json(v), None => Value::Null });
+    m.insert("extension_attributes".into(), match (&p.extension_attributes) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_carts_mine_shipping_information__negotiable_quote_data_negotiable_quote_item_totals_extension_interface__to_json(p: &iface_carts_mine_shipping_information::NegotiableQuoteDataNegotiableQuoteItemTotalsExtensionInterface) -> Value {
+fn iface_carts_mine_shipping_information__negotiable_quote_data_negotiable_quote_item_totals_extension_interface_entry__to_json(p: &iface_carts_mine_shipping_information::NegotiableQuoteDataNegotiableQuoteItemTotalsExtensionInterfaceEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -281,16 +284,17 @@ fn iface_carts_mine_shipping_information__checkout_shipping_information_manageme
 fn iface_carts_mine_shipping_information__checkout_data_payment_details_interface__from_json(v: &Value) -> Option<iface_carts_mine_shipping_information::CheckoutDataPaymentDetailsInterface> {
     let m = v.as_object()?;
     Some(iface_carts_mine_shipping_information::CheckoutDataPaymentDetailsInterface {
-        extension_attributes: m.get("extension_attributes").filter(|v| !v.is_null()).and_then(|v| iface_carts_mine_shipping_information__checkout_data_payment_details_extension_interface__from_json(v)),
+        extension_attributes: m.get("extension_attributes").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_carts_mine_shipping_information::CheckoutDataPaymentDetailsExtensionInterfaceEntry { key: k.clone(), value: val })).collect())),
         payment_methods: m.get("payment_methods").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_carts_mine_shipping_information__quote_data_payment_method_interface__from_json(x)).collect())).unwrap_or_default(),
         totals: match m.get("totals").and_then(|v| iface_carts_mine_shipping_information__quote_data_totals_interface__from_json(v)) { Some(x) => x, None => return None },
     })
 }
 
-fn iface_carts_mine_shipping_information__checkout_data_payment_details_extension_interface__from_json(v: &Value) -> Option<iface_carts_mine_shipping_information::CheckoutDataPaymentDetailsExtensionInterface> {
+fn iface_carts_mine_shipping_information__checkout_data_payment_details_extension_interface_entry__from_json(v: &Value) -> Option<iface_carts_mine_shipping_information::CheckoutDataPaymentDetailsExtensionInterfaceEntry> {
     let m = v.as_object()?;
-    Some(iface_carts_mine_shipping_information::CheckoutDataPaymentDetailsExtensionInterface {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_carts_mine_shipping_information::CheckoutDataPaymentDetailsExtensionInterfaceEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -420,14 +424,15 @@ fn iface_carts_mine_shipping_information__negotiable_quote_data_negotiable_quote
         catalog_price: m.get("catalog_price").and_then(|v| (v).as_f64()).unwrap_or_default(),
         catalog_price_incl_tax: m.get("catalog_price_incl_tax").and_then(|v| (v).as_f64()).unwrap_or_default(),
         cost: m.get("cost").and_then(|v| (v).as_f64()).unwrap_or_default(),
-        extension_attributes: m.get("extension_attributes").filter(|v| !v.is_null()).and_then(|v| iface_carts_mine_shipping_information__negotiable_quote_data_negotiable_quote_item_totals_extension_interface__from_json(v)),
+        extension_attributes: m.get("extension_attributes").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_carts_mine_shipping_information::NegotiableQuoteDataNegotiableQuoteItemTotalsExtensionInterfaceEntry { key: k.clone(), value: val })).collect())),
     })
 }
 
-fn iface_carts_mine_shipping_information__negotiable_quote_data_negotiable_quote_item_totals_extension_interface__from_json(v: &Value) -> Option<iface_carts_mine_shipping_information::NegotiableQuoteDataNegotiableQuoteItemTotalsExtensionInterface> {
+fn iface_carts_mine_shipping_information__negotiable_quote_data_negotiable_quote_item_totals_extension_interface_entry__from_json(v: &Value) -> Option<iface_carts_mine_shipping_information::NegotiableQuoteDataNegotiableQuoteItemTotalsExtensionInterfaceEntry> {
     let m = v.as_object()?;
-    Some(iface_carts_mine_shipping_information::NegotiableQuoteDataNegotiableQuoteItemTotalsExtensionInterface {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_carts_mine_shipping_information::NegotiableQuoteDataNegotiableQuoteItemTotalsExtensionInterfaceEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 

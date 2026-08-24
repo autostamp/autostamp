@@ -745,7 +745,7 @@ fn iface_tasks__task_request__to_json(p: &iface_tasks::TaskRequest) -> Value {
     m.insert("start_on".into(), match (&p.start_on) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("assignee".into(), match (&p.assignee) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("assignee_section".into(), match (&p.assignee_section) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("custom_fields".into(), match (&p.custom_fields) { Some(v) => iface_tasks__task_request_custom_fields__to_json(v), None => Value::Null });
+    m.insert("custom_fields".into(), match (&p.custom_fields) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("followers".into(), match (&p.followers) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
     m.insert("parent".into(), match (&p.parent) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("projects".into(), match (&p.projects) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
@@ -806,9 +806,10 @@ fn iface_tasks__section_compact__to_json(p: &iface_tasks::SectionCompact) -> Val
     Value::Object(m)
 }
 
-fn iface_tasks__task_request_custom_fields__to_json(p: &iface_tasks::TaskRequestCustomFields) -> Value {
+fn iface_tasks__task_request_custom_fields_entry__to_json(p: &iface_tasks::TaskRequestCustomFieldsEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -979,13 +980,14 @@ fn iface_tasks__update_task_response__to_json(p: &iface_tasks::UpdateTaskRespons
 
 fn iface_tasks__delete_task_response__to_json(p: &iface_tasks::DeleteTaskResponse) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => iface_tasks__empty_response__to_json(v), None => Value::Null });
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_tasks__empty_response__to_json(p: &iface_tasks::EmptyResponse) -> Value {
+fn iface_tasks__empty_response_entry__to_json(p: &iface_tasks::EmptyResponseEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -997,7 +999,14 @@ fn iface_tasks__modify_dependencies_request__to_json(p: &iface_tasks::ModifyDepe
 
 fn iface_tasks__add_dependencies_for_task_response__to_json(p: &iface_tasks::AddDependenciesForTaskResponse) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => iface_tasks__empty_response__to_json(v), None => Value::Null });
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_tasks__empty_response_entry_v2__to_json(p: &iface_tasks::EmptyResponseEntryV2) -> Value {
+    let mut m = Map::new();
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -1009,7 +1018,14 @@ fn iface_tasks__modify_dependents_request__to_json(p: &iface_tasks::ModifyDepend
 
 fn iface_tasks__add_dependents_for_task_response__to_json(p: &iface_tasks::AddDependentsForTaskResponse) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => iface_tasks__empty_response__to_json(v), None => Value::Null });
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_tasks__empty_response_entry_v3__to_json(p: &iface_tasks::EmptyResponseEntryV3) -> Value {
+    let mut m = Map::new();
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -1036,7 +1052,14 @@ fn iface_tasks__task_add_project_request__to_json(p: &iface_tasks::TaskAddProjec
 
 fn iface_tasks__add_project_for_task_response__to_json(p: &iface_tasks::AddProjectForTaskResponse) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => iface_tasks__empty_response__to_json(v), None => Value::Null });
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_tasks__empty_response_entry_v4__to_json(p: &iface_tasks::EmptyResponseEntryV4) -> Value {
+    let mut m = Map::new();
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -1048,7 +1071,14 @@ fn iface_tasks__task_add_tag_request__to_json(p: &iface_tasks::TaskAddTagRequest
 
 fn iface_tasks__add_tag_for_task_response__to_json(p: &iface_tasks::AddTagForTaskResponse) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => iface_tasks__empty_response__to_json(v), None => Value::Null });
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_tasks__empty_response_entry_v5__to_json(p: &iface_tasks::EmptyResponseEntryV5) -> Value {
+    let mut m = Map::new();
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -1099,13 +1129,27 @@ fn iface_tasks__project_template_compact__to_json(p: &iface_tasks::ProjectTempla
 
 fn iface_tasks__remove_dependencies_for_task_response__to_json(p: &iface_tasks::RemoveDependenciesForTaskResponse) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => iface_tasks__empty_response__to_json(v), None => Value::Null });
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_tasks__empty_response_entry_v6__to_json(p: &iface_tasks::EmptyResponseEntryV6) -> Value {
+    let mut m = Map::new();
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
 fn iface_tasks__remove_dependents_for_task_response__to_json(p: &iface_tasks::RemoveDependentsForTaskResponse) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => iface_tasks__empty_response__to_json(v), None => Value::Null });
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_tasks__empty_response_entry_v7__to_json(p: &iface_tasks::EmptyResponseEntryV7) -> Value {
+    let mut m = Map::new();
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -1129,7 +1173,14 @@ fn iface_tasks__task_remove_project_request__to_json(p: &iface_tasks::TaskRemove
 
 fn iface_tasks__remove_project_for_task_response__to_json(p: &iface_tasks::RemoveProjectForTaskResponse) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => iface_tasks__empty_response__to_json(v), None => Value::Null });
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_tasks__empty_response_entry_v8__to_json(p: &iface_tasks::EmptyResponseEntryV8) -> Value {
+    let mut m = Map::new();
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -1141,7 +1192,14 @@ fn iface_tasks__task_remove_tag_request__to_json(p: &iface_tasks::TaskRemoveTagR
 
 fn iface_tasks__remove_tag_for_task_response__to_json(p: &iface_tasks::RemoveTagForTaskResponse) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => iface_tasks__empty_response__to_json(v), None => Value::Null });
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_tasks__empty_response_entry_v9__to_json(p: &iface_tasks::EmptyResponseEntryV9) -> Value {
+    let mut m = Map::new();
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -1743,28 +1801,45 @@ fn iface_tasks__update_task_response__from_json(v: &Value) -> Option<iface_tasks
 fn iface_tasks__delete_task_response__from_json(v: &Value) -> Option<iface_tasks::DeleteTaskResponse> {
     let m = v.as_object()?;
     Some(iface_tasks::DeleteTaskResponse {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| iface_tasks__empty_response__from_json(v)),
+        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_tasks::EmptyResponseEntry { key: k.clone(), value: val })).collect())),
     })
 }
 
-fn iface_tasks__empty_response__from_json(v: &Value) -> Option<iface_tasks::EmptyResponse> {
+fn iface_tasks__empty_response_entry__from_json(v: &Value) -> Option<iface_tasks::EmptyResponseEntry> {
     let m = v.as_object()?;
-    Some(iface_tasks::EmptyResponse {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_tasks::EmptyResponseEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
 fn iface_tasks__add_dependencies_for_task_response__from_json(v: &Value) -> Option<iface_tasks::AddDependenciesForTaskResponse> {
     let m = v.as_object()?;
     Some(iface_tasks::AddDependenciesForTaskResponse {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| iface_tasks__empty_response__from_json(v)),
+        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_tasks::EmptyResponseEntryV2 { key: k.clone(), value: val })).collect())),
+    })
+}
+
+fn iface_tasks__empty_response_entry_v2__from_json(v: &Value) -> Option<iface_tasks::EmptyResponseEntryV2> {
+    let m = v.as_object()?;
+    Some(iface_tasks::EmptyResponseEntryV2 {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
 fn iface_tasks__add_dependents_for_task_response__from_json(v: &Value) -> Option<iface_tasks::AddDependentsForTaskResponse> {
     let m = v.as_object()?;
     Some(iface_tasks::AddDependentsForTaskResponse {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| iface_tasks__empty_response__from_json(v)),
+        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_tasks::EmptyResponseEntryV3 { key: k.clone(), value: val })).collect())),
+    })
+}
+
+fn iface_tasks__empty_response_entry_v3__from_json(v: &Value) -> Option<iface_tasks::EmptyResponseEntryV3> {
+    let m = v.as_object()?;
+    Some(iface_tasks::EmptyResponseEntryV3 {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -1778,14 +1853,30 @@ fn iface_tasks__add_followers_for_task_response__from_json(v: &Value) -> Option<
 fn iface_tasks__add_project_for_task_response__from_json(v: &Value) -> Option<iface_tasks::AddProjectForTaskResponse> {
     let m = v.as_object()?;
     Some(iface_tasks::AddProjectForTaskResponse {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| iface_tasks__empty_response__from_json(v)),
+        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_tasks::EmptyResponseEntryV4 { key: k.clone(), value: val })).collect())),
+    })
+}
+
+fn iface_tasks__empty_response_entry_v4__from_json(v: &Value) -> Option<iface_tasks::EmptyResponseEntryV4> {
+    let m = v.as_object()?;
+    Some(iface_tasks::EmptyResponseEntryV4 {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
 fn iface_tasks__add_tag_for_task_response__from_json(v: &Value) -> Option<iface_tasks::AddTagForTaskResponse> {
     let m = v.as_object()?;
     Some(iface_tasks::AddTagForTaskResponse {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| iface_tasks__empty_response__from_json(v)),
+        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_tasks::EmptyResponseEntryV5 { key: k.clone(), value: val })).collect())),
+    })
+}
+
+fn iface_tasks__empty_response_entry_v5__from_json(v: &Value) -> Option<iface_tasks::EmptyResponseEntryV5> {
+    let m = v.as_object()?;
+    Some(iface_tasks::EmptyResponseEntryV5 {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -1835,14 +1926,30 @@ fn iface_tasks__project_template_compact__from_json(v: &Value) -> Option<iface_t
 fn iface_tasks__remove_dependencies_for_task_response__from_json(v: &Value) -> Option<iface_tasks::RemoveDependenciesForTaskResponse> {
     let m = v.as_object()?;
     Some(iface_tasks::RemoveDependenciesForTaskResponse {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| iface_tasks__empty_response__from_json(v)),
+        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_tasks::EmptyResponseEntryV6 { key: k.clone(), value: val })).collect())),
+    })
+}
+
+fn iface_tasks__empty_response_entry_v6__from_json(v: &Value) -> Option<iface_tasks::EmptyResponseEntryV6> {
+    let m = v.as_object()?;
+    Some(iface_tasks::EmptyResponseEntryV6 {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
 fn iface_tasks__remove_dependents_for_task_response__from_json(v: &Value) -> Option<iface_tasks::RemoveDependentsForTaskResponse> {
     let m = v.as_object()?;
     Some(iface_tasks::RemoveDependentsForTaskResponse {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| iface_tasks__empty_response__from_json(v)),
+        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_tasks::EmptyResponseEntryV7 { key: k.clone(), value: val })).collect())),
+    })
+}
+
+fn iface_tasks__empty_response_entry_v7__from_json(v: &Value) -> Option<iface_tasks::EmptyResponseEntryV7> {
+    let m = v.as_object()?;
+    Some(iface_tasks::EmptyResponseEntryV7 {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -1856,14 +1963,30 @@ fn iface_tasks__remove_follower_for_task_response__from_json(v: &Value) -> Optio
 fn iface_tasks__remove_project_for_task_response__from_json(v: &Value) -> Option<iface_tasks::RemoveProjectForTaskResponse> {
     let m = v.as_object()?;
     Some(iface_tasks::RemoveProjectForTaskResponse {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| iface_tasks__empty_response__from_json(v)),
+        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_tasks::EmptyResponseEntryV8 { key: k.clone(), value: val })).collect())),
+    })
+}
+
+fn iface_tasks__empty_response_entry_v8__from_json(v: &Value) -> Option<iface_tasks::EmptyResponseEntryV8> {
+    let m = v.as_object()?;
+    Some(iface_tasks::EmptyResponseEntryV8 {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
 fn iface_tasks__remove_tag_for_task_response__from_json(v: &Value) -> Option<iface_tasks::RemoveTagForTaskResponse> {
     let m = v.as_object()?;
     Some(iface_tasks::RemoveTagForTaskResponse {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| iface_tasks__empty_response__from_json(v)),
+        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_tasks::EmptyResponseEntryV9 { key: k.clone(), value: val })).collect())),
+    })
+}
+
+fn iface_tasks__empty_response_entry_v9__from_json(v: &Value) -> Option<iface_tasks::EmptyResponseEntryV9> {
+    let m = v.as_object()?;
+    Some(iface_tasks::EmptyResponseEntryV9 {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 

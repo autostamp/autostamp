@@ -11,8 +11,8 @@ triggered.
 
 | Setting | Value |
 | --- | --- |
-| Package | `autostamp:omdbapi@0.5.0` |
-| Published version | `0.5.0+omdbapi-1` |
+| Package | `autostamp:omdbapi@0.6.0` |
+| Published version | `0.6.0+omdbapi-1` |
 | Tag filter | all tags |
 | Operations generated | 1 |
 | Infer API-key credentials | enabled — not triggered |

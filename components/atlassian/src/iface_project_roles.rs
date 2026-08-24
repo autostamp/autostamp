@@ -134,9 +134,10 @@ fn iface_project_roles__scope_type_op_enum__to_str(e: &iface_project_roles::Scop
     }
 }
 
-fn iface_project_roles__get_project_roles_response__to_json(p: &iface_project_roles::GetProjectRolesResponse) -> Value {
+fn iface_project_roles__get_project_roles_response_entry__to_json(p: &iface_project_roles::GetProjectRolesResponseEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -292,10 +293,11 @@ fn iface_project_roles__delete_project_role_params__to_json(p: &iface_project_ro
     Value::Object(m)
 }
 
-fn iface_project_roles__get_project_roles_response__from_json(v: &Value) -> Option<iface_project_roles::GetProjectRolesResponse> {
+fn iface_project_roles__get_project_roles_response_entry__from_json(v: &Value) -> Option<iface_project_roles::GetProjectRolesResponseEntry> {
     let m = v.as_object()?;
-    Some(iface_project_roles::GetProjectRolesResponse {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_project_roles::GetProjectRolesResponseEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -427,12 +429,12 @@ fn iface_project_roles__scope_type_op_enum__from_str(s: &str) -> Option<iface_pr
     }
 }
 
-fn iface_project_roles__get_project_roles__ok(body: String) -> Result<iface_project_roles::GetProjectRolesResponse, crate::runtime::DispatchError> {
+fn iface_project_roles__get_project_roles__ok(body: String) -> Result<Vec<iface_project_roles::GetProjectRolesResponseEntry>, crate::runtime::DispatchError> {
     let v: Value = match serde_json::from_str(&body) {
         Ok(v) => v,
         Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
     };
-    match iface_project_roles__get_project_roles_response__from_json(&v) {
+    match (&v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_project_roles::GetProjectRolesResponseEntry { key: k.clone(), value: val })).collect()) {
         Some(x) => Ok(x),
         None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
@@ -630,7 +632,7 @@ fn iface_project_roles__delete_project_role__err(e: crate::runtime::DispatchErro
 }
 
 impl iface_project_roles::Guest for crate::Component {
-    fn get_project_roles(params: iface_project_roles::GetProjectRolesParams) -> Result<iface_project_roles::GetProjectRolesResponse, iface_project_roles::GetProjectRolesError> {
+    fn get_project_roles(params: iface_project_roles::GetProjectRolesParams) -> Result<Vec<iface_project_roles::GetProjectRolesResponseEntry>, iface_project_roles::GetProjectRolesError> {
         let json = iface_project_roles__get_project_roles_params__to_json(&params);
         match dispatch(&OP_PROJECT_ROLES_GET_PROJECT_ROLES, json).and_then(iface_project_roles__get_project_roles__ok) {
             Ok(v) => Ok(v),

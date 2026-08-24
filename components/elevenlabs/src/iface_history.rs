@@ -81,7 +81,7 @@ fn iface_history__item_response_model__to_json(p: &iface_history::ItemResponseMo
     m.insert("feedback".into(), iface_history__feedback_response_model__to_json(&p.feedback));
     m.insert("history_item_id".into(), Value::String((&p.history_item_id).clone()));
     m.insert("request_id".into(), Value::String((&p.request_id).clone()));
-    m.insert("settings".into(), iface_history__item_response_model_settings__to_json(&p.settings));
+    m.insert("settings".into(), Value::Object((&p.settings).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()));
     m.insert("state".into(), Value::String(iface_history__item_response_model_state_enum__to_str(&p.state).into()));
     m.insert("text".into(), Value::String((&p.text).clone()));
     m.insert("voice_id".into(), Value::String((&p.voice_id).clone()));
@@ -102,9 +102,10 @@ fn iface_history__feedback_response_model__to_json(p: &iface_history::FeedbackRe
     Value::Object(m)
 }
 
-fn iface_history__item_response_model_settings__to_json(p: &iface_history::ItemResponseModelSettings) -> Value {
+fn iface_history__item_response_model_settings_entry__to_json(p: &iface_history::ItemResponseModelSettingsEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -159,7 +160,7 @@ fn iface_history__item_response_model__from_json(v: &Value) -> Option<iface_hist
         feedback: match m.get("feedback").and_then(|v| iface_history__feedback_response_model__from_json(v)) { Some(x) => x, None => return None },
         history_item_id: m.get("history_item_id").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         request_id: m.get("request_id").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-        settings: match m.get("settings").and_then(|v| iface_history__item_response_model_settings__from_json(v)) { Some(x) => x, None => return None },
+        settings: m.get("settings").and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_history::ItemResponseModelSettingsEntry { key: k.clone(), value: val })).collect())).unwrap_or_default(),
         state: match m.get("state").and_then(|v| (v).as_str().and_then(iface_history__item_response_model_state_enum__from_str)) { Some(x) => x, None => return None },
         text: m.get("text").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         voice_id: m.get("voice_id").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
@@ -181,10 +182,11 @@ fn iface_history__feedback_response_model__from_json(v: &Value) -> Option<iface_
     })
 }
 
-fn iface_history__item_response_model_settings__from_json(v: &Value) -> Option<iface_history::ItemResponseModelSettings> {
+fn iface_history__item_response_model_settings_entry__from_json(v: &Value) -> Option<iface_history::ItemResponseModelSettingsEntry> {
     let m = v.as_object()?;
-    Some(iface_history::ItemResponseModelSettings {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_history::ItemResponseModelSettingsEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 

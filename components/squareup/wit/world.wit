@@ -7,7 +7,7 @@
 /// | --- | --- |
 /// | `oauth2` | `Authorization: Bearer <secret>` |
 /// | `oauth2ClientSecret` | header `Authorization` |
-package autostamp:squareup@0.5.0;
+package autostamp:squareup@0.6.0;
 
 interface mobile-authorization {
   /// Defines the fields that are included in the response body of
@@ -1848,7 +1848,7 @@ interface catalog {
     custom-attribute-definition-data: option<custom-attribute-definition>,
     /// A map (key-value pairs) of application-defined custom attribute values. The value of a key-value pair
     /// is a [CatalogCustomAttributeValue](https://developer.squareup.com/reference/square_2021-08-18/objects/CatalogCustomAttributeValue) object. The key is the `key` attribute
-    custom-attribute-values: option<object-custom-attribute-values>,
+    custom-attribute-values: option<list<object-custom-attribute-values-entry>>,
     discount-data: option<discount>,
     /// An identifier to reference this object in the catalog. When a new `CatalogObject`
     /// is inserted, the client should set the id to a temporary identifier starting with
@@ -1982,25 +1982,33 @@ interface catalog {
     enforce-uniqueness: option<bool>
   }
 
-  /// A map (key-value pairs) of application-defined custom attribute values. The value of a key-value pair
-  /// is a [CatalogCustomAttributeValue](https://developer.squareup.com/reference/square_2021-08-18/objects/CatalogCustomAttributeValue) object. The key is the `key` attribute
-  /// value defined in the associated [CatalogCustomAttributeDefinition](https://developer.squareup.com/reference/square_2021-08-18/objects/CatalogCustomAttributeDefinition)
-  /// object defined by the application making the request.
-  /// 
-  /// If the `CatalogCustomAttributeDefinition` object is
-  /// defined by another application, the `CatalogCustomAttributeDefinition`'s key attribute value is prefixed by
-  /// the defining application ID. For example, if the `CatalogCustomAttributeDefinition` has a `key` attribute of
-  /// `"cocoa_brand"` and the defining application ID is `"abcd1234"`, the key in the map is `"abcd1234:cocoa_brand"`
-  /// if the application making the request is different from the application defining the custom attribute definition.
-  /// Otherwise, the key used in the map is simply `"cocoa_brand"`.
-  /// 
-  /// Application-defined custom attributes that are set at a global (location-independent) level.
-  /// Custom attribute values are intended to store additional information about a catalog object
-  /// or associations with an entity in another system. Do not use custom attributes
-  /// to store any sensitive information (personally identifiable information, card details, etc.).
-  record object-custom-attribute-values {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// An instance of a custom attribute. Custom attributes can be defined and
+  /// added to `ITEM` and `ITEM_VARIATION` type catalog objects.
+  /// [Read more about custom attributes](https://developer.squareup.com/docs/catalog-api/add-custom-attributes).
+  record custom-attribute-value {
+    /// A `true` or `false` value. Populated if `type` = `BOOLEAN`.
+    boolean-value: option<bool>,
+    /// __Read-only.__ The id of the [CatalogCustomAttributeDefinition](https://developer.squareup.com/reference/square_2021-08-18/objects/CatalogCustomAttributeDefinition) this value belongs to.
+    custom-attribute-definition-id: option<string>,
+    /// __Read-only.__ A copy of key from the associated `CatalogCustomAttributeDefinition`.
+    key: option<string>,
+    /// The name of the custom attribute.
+    name: option<string>,
+    /// Populated if `type` = `NUMBER`. Contains a string
+    /// representation of a decimal number, using a `.` as the decimal separator.
+    number-value: option<string>,
+    /// One or more choices from `allowed_selections`. Populated if `type` = `SELECTION`.
+    selection-uid-values: option<list<string>>,
+    /// The string value of the custom attribute.  Populated if `type` = `STRING`.
+    string-value: option<string>,
+    /// __Read-only.__ A copy of type from the associated `CatalogCustomAttributeDefinition`.
+    type-op: option<string>
+  }
+
+  /// one entry of a string-keyed map (free-form object)
+  record object-custom-attribute-values-entry {
+    key: string,
+    value: custom-attribute-value
   }
 
   /// A discount applicable to items.
@@ -6260,7 +6268,7 @@ interface checkout {
     location-id: string,
     /// Application-defined data attached to this order. Metadata fields are intended
     /// to store descriptive references or associations with an entity in another system or store brief
-    metadata: option<order-metadata>,
+    metadata: option<list<order-metadata-entry>>,
     net-amounts: option<order-money-amounts>,
     pricing-options: option<order-pricing-options>,
     /// A client-specified ID to associate an entity in another system
@@ -6312,7 +6320,7 @@ interface checkout {
     catalog-version: option<s64>,
     /// Application-defined data attached to this discount. Metadata fields are intended
     /// to store descriptive references or associations with an entity in another system or store brief
-    metadata: option<order-line-item-discount-metadata>,
+    metadata: option<list<order-line-item-discount-metadata-entry>>,
     /// The discount's name.
     name: option<string>,
     /// The percentage of the discount, as a string representation of a decimal number.
@@ -6334,34 +6342,17 @@ interface checkout {
     uid: option<string>
   }
 
-  /// Application-defined data attached to this discount. Metadata fields are intended
-  /// to store descriptive references or associations with an entity in another system or store brief
-  /// information about the object. Square does not process this field; it only stores and returns it
-  /// in relevant API calls. Do not use metadata to store any sensitive information (such as personally
-  /// identifiable information or card details).
-  /// 
-  /// Keys written by applications must be 60 characters or less and must be in the character set
-  /// `[a-zA-Z0-9_-]`. Entries can also include metadata generated by Square. These keys are prefixed
-  /// with a namespace, separated from the key with a ':' character.
-  /// 
-  /// Values have a maximum length of 255 characters.
-  /// 
-  /// An application can have up to 10 entries per metadata field.
-  /// 
-  /// Entries written by applications are private and can only be read or modified by the same
-  /// application.
-  /// 
-  /// For more information, see [Metadata](https://developer.squareup.com/docs/build-basics/metadata).
-  record order-line-item-discount-metadata {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record order-line-item-discount-metadata-entry {
+    key: string,
+    value: string
   }
 
   /// Contains details about how to fulfill this order.
   record order-fulfillment {
     /// Application-defined data attached to this fulfillment. Metadata fields are intended
     /// to store descriptive references or associations with an entity in another system or store brief
-    metadata: option<order-fulfillment-metadata>,
+    metadata: option<list<order-fulfillment-metadata-entry>>,
     pickup-details: option<order-fulfillment-pickup-details>,
     shipment-details: option<order-fulfillment-shipment-details>,
     /// The state of the fulfillment.
@@ -6372,27 +6363,10 @@ interface checkout {
     uid: option<string>
   }
 
-  /// Application-defined data attached to this fulfillment. Metadata fields are intended
-  /// to store descriptive references or associations with an entity in another system or store brief
-  /// information about the object. Square does not process this field; it only stores and returns it
-  /// in relevant API calls. Do not use metadata to store any sensitive information (such as personally
-  /// identifiable information or card details).
-  /// 
-  /// Keys written by applications must be 60 characters or less and must be in the character set
-  /// `[a-zA-Z0-9_-]`. Entries can also include metadata generated by Square. These keys are prefixed
-  /// with a namespace, separated from the key with a ':' character.
-  /// 
-  /// Values have a maximum length of 255 characters.
-  /// 
-  /// An application can have up to 10 entries per metadata field.
-  /// 
-  /// Entries written by applications are private and can only be read or modified by the same
-  /// application.
-  /// 
-  /// For more information, see [Metadata](https://developer.squareup.com/docs/build-basics/metadata).
-  record order-fulfillment-metadata {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record order-fulfillment-metadata-entry {
+    key: string,
+    value: string
   }
 
   /// Contains details necessary to fulfill a pickup order.
@@ -6598,7 +6572,7 @@ interface checkout {
     item-type: option<string>,
     /// Application-defined data attached to this line item. Metadata fields are intended
     /// to store descriptive references or associations with an entity in another system or store brief
-    metadata: option<order-line-item-metadata>,
+    metadata: option<list<order-line-item-metadata-entry>>,
     /// The [CatalogModifier](https://developer.squareup.com/reference/square_2021-08-18/objects/CatalogModifier)s applied to this line item.
     modifiers: option<list<order-line-item-modifier>>,
     /// The name of the line item.
@@ -6650,27 +6624,10 @@ interface checkout {
     uid: option<string>
   }
 
-  /// Application-defined data attached to this line item. Metadata fields are intended
-  /// to store descriptive references or associations with an entity in another system or store brief
-  /// information about the object. Square does not process this field; it only stores and returns it
-  /// in relevant API calls. Do not use metadata to store any sensitive information (such as personally
-  /// identifiable information or card details).
-  /// 
-  /// Keys written by applications must be 60 characters or less and must be in the character set
-  /// `[a-zA-Z0-9_-]`. Entries can also include metadata generated by Square. These keys are prefixed
-  /// with a namespace, separated from the key with a ':' character.
-  /// 
-  /// Values have a maximum length of 255 characters.
-  /// 
-  /// An application can have up to 10 entries per metadata field.
-  /// 
-  /// Entries written by applications are private and can only be read or modified by the same
-  /// application.
-  /// 
-  /// For more information, see [Metadata](https://developer.squareup.com/docs/build-basics/metadata).
-  record order-line-item-metadata {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record order-line-item-metadata-entry {
+    key: string,
+    value: string
   }
 
   /// A [CatalogModifier](https://developer.squareup.com/reference/square_2021-08-18/objects/CatalogModifier).
@@ -6767,27 +6724,10 @@ interface checkout {
     name: string
   }
 
-  /// Application-defined data attached to this order. Metadata fields are intended
-  /// to store descriptive references or associations with an entity in another system or store brief
-  /// information about the object. Square does not process this field; it only stores and returns it
-  /// in relevant API calls. Do not use metadata to store any sensitive information (such as personally
-  /// identifiable information or card details).
-  /// 
-  /// Keys written by applications must be 60 characters or less and must be in the character set
-  /// `[a-zA-Z0-9_-]`. Entries can also include metadata generated by Square. These keys are prefixed
-  /// with a namespace, separated from the key with a ':' character.
-  /// 
-  /// Values have a maximum length of 255 characters.
-  /// 
-  /// An application can have up to 10 entries per metadata field.
-  /// 
-  /// Entries written by applications are private and can only be read or modified by the same
-  /// application.
-  /// 
-  /// For more information, see  [Metadata](https://developer.squareup.com/docs/build-basics/metadata).
-  record order-metadata {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record order-metadata-entry {
+    key: string,
+    value: string
   }
 
   /// A collection of various money amounts.
@@ -7044,7 +6984,7 @@ interface checkout {
     catalog-version: option<s64>,
     /// Application-defined data attached to this service charge. Metadata fields are intended
     /// to store descriptive references or associations with an entity in another system or store brief
-    metadata: option<order-service-charge-metadata>,
+    metadata: option<list<order-service-charge-metadata-entry>>,
     /// The name of the service charge.
     name: option<string>,
     /// The service charge percentage as a string representation of a
@@ -7061,27 +7001,10 @@ interface checkout {
     uid: option<string>
   }
 
-  /// Application-defined data attached to this service charge. Metadata fields are intended
-  /// to store descriptive references or associations with an entity in another system or store brief
-  /// information about the object. Square does not process this field; it only stores and returns it
-  /// in relevant API calls. Do not use metadata to store any sensitive information (such as personally
-  /// identifiable information or card details).
-  /// 
-  /// Keys written by applications must be 60 characters or less and must be in the character set
-  /// `[a-zA-Z0-9_-]`. Entries can also include metadata generated by Square. These keys are prefixed
-  /// with a namespace, separated from the key with a ':' character.
-  /// 
-  /// Values have a maximum length of 255 characters.
-  /// 
-  /// An application can have up to 10 entries per metadata field.
-  /// 
-  /// Entries written by applications are private and can only be read or modified by the same
-  /// application.
-  /// 
-  /// For more information, see [Metadata](https://developer.squareup.com/docs/build-basics/metadata).
-  record order-service-charge-metadata {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record order-service-charge-metadata-entry {
+    key: string,
+    value: string
   }
 
   /// Represents the origination details of an order.
@@ -7107,7 +7030,7 @@ interface checkout {
     catalog-version: option<s64>,
     /// Application-defined data attached to this tax. Metadata fields are intended
     /// to store descriptive references or associations with an entity in another system or store brief
-    metadata: option<order-line-item-tax-metadata>,
+    metadata: option<list<order-line-item-tax-metadata-entry>>,
     /// The tax's name.
     name: option<string>,
     /// The percentage of the tax, as a string representation of a decimal
@@ -7122,27 +7045,10 @@ interface checkout {
     uid: option<string>
   }
 
-  /// Application-defined data attached to this tax. Metadata fields are intended
-  /// to store descriptive references or associations with an entity in another system or store brief
-  /// information about the object. Square does not process this field; it only stores and returns it
-  /// in relevant API calls. Do not use metadata to store any sensitive information (such as personally
-  /// identifiable information or card details).
-  /// 
-  /// Keys written by applications must be 60 characters or less and must be in the character set
-  /// `[a-zA-Z0-9_-]`. Entries can also include metadata generated by Square. These keys are prefixed
-  /// with a namespace, separated from the key with a ':' character.
-  /// 
-  /// Values have a maximum length of 255 characters.
-  /// 
-  /// An application can have up to 10 entries per metadata field.
-  /// 
-  /// Entries written by applications are private and can only be read or modified by the same
-  /// application.
-  /// 
-  /// For more information, see [Metadata](https://developer.squareup.com/docs/build-basics/metadata).
-  record order-line-item-tax-metadata {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record order-line-item-tax-metadata-entry {
+    key: string,
+    value: string
   }
 
   /// Represents a tender (i.e., a method of payment) used in a Square transaction.
@@ -8478,7 +8384,7 @@ interface orders {
     location-id: string,
     /// Application-defined data attached to this order. Metadata fields are intended
     /// to store descriptive references or associations with an entity in another system or store brief
-    metadata: option<order-metadata>,
+    metadata: option<list<order-metadata-entry>>,
     net-amounts: option<order-money-amounts>,
     pricing-options: option<order-pricing-options>,
     /// A client-specified ID to associate an entity in another system
@@ -8530,7 +8436,7 @@ interface orders {
     catalog-version: option<s64>,
     /// Application-defined data attached to this discount. Metadata fields are intended
     /// to store descriptive references or associations with an entity in another system or store brief
-    metadata: option<order-line-item-discount-metadata>,
+    metadata: option<list<order-line-item-discount-metadata-entry>>,
     /// The discount's name.
     name: option<string>,
     /// The percentage of the discount, as a string representation of a decimal number.
@@ -8567,34 +8473,17 @@ interface orders {
     currency: option<string>
   }
 
-  /// Application-defined data attached to this discount. Metadata fields are intended
-  /// to store descriptive references or associations with an entity in another system or store brief
-  /// information about the object. Square does not process this field; it only stores and returns it
-  /// in relevant API calls. Do not use metadata to store any sensitive information (such as personally
-  /// identifiable information or card details).
-  /// 
-  /// Keys written by applications must be 60 characters or less and must be in the character set
-  /// `[a-zA-Z0-9_-]`. Entries can also include metadata generated by Square. These keys are prefixed
-  /// with a namespace, separated from the key with a ':' character.
-  /// 
-  /// Values have a maximum length of 255 characters.
-  /// 
-  /// An application can have up to 10 entries per metadata field.
-  /// 
-  /// Entries written by applications are private and can only be read or modified by the same
-  /// application.
-  /// 
-  /// For more information, see [Metadata](https://developer.squareup.com/docs/build-basics/metadata).
-  record order-line-item-discount-metadata {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record order-line-item-discount-metadata-entry {
+    key: string,
+    value: string
   }
 
   /// Contains details about how to fulfill this order.
   record order-fulfillment {
     /// Application-defined data attached to this fulfillment. Metadata fields are intended
     /// to store descriptive references or associations with an entity in another system or store brief
-    metadata: option<order-fulfillment-metadata>,
+    metadata: option<list<order-fulfillment-metadata-entry>>,
     pickup-details: option<order-fulfillment-pickup-details>,
     shipment-details: option<order-fulfillment-shipment-details>,
     /// The state of the fulfillment.
@@ -8605,27 +8494,10 @@ interface orders {
     uid: option<string>
   }
 
-  /// Application-defined data attached to this fulfillment. Metadata fields are intended
-  /// to store descriptive references or associations with an entity in another system or store brief
-  /// information about the object. Square does not process this field; it only stores and returns it
-  /// in relevant API calls. Do not use metadata to store any sensitive information (such as personally
-  /// identifiable information or card details).
-  /// 
-  /// Keys written by applications must be 60 characters or less and must be in the character set
-  /// `[a-zA-Z0-9_-]`. Entries can also include metadata generated by Square. These keys are prefixed
-  /// with a namespace, separated from the key with a ':' character.
-  /// 
-  /// Values have a maximum length of 255 characters.
-  /// 
-  /// An application can have up to 10 entries per metadata field.
-  /// 
-  /// Entries written by applications are private and can only be read or modified by the same
-  /// application.
-  /// 
-  /// For more information, see [Metadata](https://developer.squareup.com/docs/build-basics/metadata).
-  record order-fulfillment-metadata {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record order-fulfillment-metadata-entry {
+    key: string,
+    value: string
   }
 
   /// Contains details necessary to fulfill a pickup order.
@@ -8831,7 +8703,7 @@ interface orders {
     item-type: option<string>,
     /// Application-defined data attached to this line item. Metadata fields are intended
     /// to store descriptive references or associations with an entity in another system or store brief
-    metadata: option<order-line-item-metadata>,
+    metadata: option<list<order-line-item-metadata-entry>>,
     /// The [CatalogModifier](https://developer.squareup.com/reference/square_2021-08-18/objects/CatalogModifier)s applied to this line item.
     modifiers: option<list<order-line-item-modifier>>,
     /// The name of the line item.
@@ -8883,27 +8755,10 @@ interface orders {
     uid: option<string>
   }
 
-  /// Application-defined data attached to this line item. Metadata fields are intended
-  /// to store descriptive references or associations with an entity in another system or store brief
-  /// information about the object. Square does not process this field; it only stores and returns it
-  /// in relevant API calls. Do not use metadata to store any sensitive information (such as personally
-  /// identifiable information or card details).
-  /// 
-  /// Keys written by applications must be 60 characters or less and must be in the character set
-  /// `[a-zA-Z0-9_-]`. Entries can also include metadata generated by Square. These keys are prefixed
-  /// with a namespace, separated from the key with a ':' character.
-  /// 
-  /// Values have a maximum length of 255 characters.
-  /// 
-  /// An application can have up to 10 entries per metadata field.
-  /// 
-  /// Entries written by applications are private and can only be read or modified by the same
-  /// application.
-  /// 
-  /// For more information, see [Metadata](https://developer.squareup.com/docs/build-basics/metadata).
-  record order-line-item-metadata {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record order-line-item-metadata-entry {
+    key: string,
+    value: string
   }
 
   /// A [CatalogModifier](https://developer.squareup.com/reference/square_2021-08-18/objects/CatalogModifier).
@@ -9000,27 +8855,10 @@ interface orders {
     name: string
   }
 
-  /// Application-defined data attached to this order. Metadata fields are intended
-  /// to store descriptive references or associations with an entity in another system or store brief
-  /// information about the object. Square does not process this field; it only stores and returns it
-  /// in relevant API calls. Do not use metadata to store any sensitive information (such as personally
-  /// identifiable information or card details).
-  /// 
-  /// Keys written by applications must be 60 characters or less and must be in the character set
-  /// `[a-zA-Z0-9_-]`. Entries can also include metadata generated by Square. These keys are prefixed
-  /// with a namespace, separated from the key with a ':' character.
-  /// 
-  /// Values have a maximum length of 255 characters.
-  /// 
-  /// An application can have up to 10 entries per metadata field.
-  /// 
-  /// Entries written by applications are private and can only be read or modified by the same
-  /// application.
-  /// 
-  /// For more information, see  [Metadata](https://developer.squareup.com/docs/build-basics/metadata).
-  record order-metadata {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record order-metadata-entry {
+    key: string,
+    value: string
   }
 
   /// A collection of various money amounts.
@@ -9277,7 +9115,7 @@ interface orders {
     catalog-version: option<s64>,
     /// Application-defined data attached to this service charge. Metadata fields are intended
     /// to store descriptive references or associations with an entity in another system or store brief
-    metadata: option<order-service-charge-metadata>,
+    metadata: option<list<order-service-charge-metadata-entry>>,
     /// The name of the service charge.
     name: option<string>,
     /// The service charge percentage as a string representation of a
@@ -9294,27 +9132,10 @@ interface orders {
     uid: option<string>
   }
 
-  /// Application-defined data attached to this service charge. Metadata fields are intended
-  /// to store descriptive references or associations with an entity in another system or store brief
-  /// information about the object. Square does not process this field; it only stores and returns it
-  /// in relevant API calls. Do not use metadata to store any sensitive information (such as personally
-  /// identifiable information or card details).
-  /// 
-  /// Keys written by applications must be 60 characters or less and must be in the character set
-  /// `[a-zA-Z0-9_-]`. Entries can also include metadata generated by Square. These keys are prefixed
-  /// with a namespace, separated from the key with a ':' character.
-  /// 
-  /// Values have a maximum length of 255 characters.
-  /// 
-  /// An application can have up to 10 entries per metadata field.
-  /// 
-  /// Entries written by applications are private and can only be read or modified by the same
-  /// application.
-  /// 
-  /// For more information, see [Metadata](https://developer.squareup.com/docs/build-basics/metadata).
-  record order-service-charge-metadata {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record order-service-charge-metadata-entry {
+    key: string,
+    value: string
   }
 
   /// Represents the origination details of an order.
@@ -9340,7 +9161,7 @@ interface orders {
     catalog-version: option<s64>,
     /// Application-defined data attached to this tax. Metadata fields are intended
     /// to store descriptive references or associations with an entity in another system or store brief
-    metadata: option<order-line-item-tax-metadata>,
+    metadata: option<list<order-line-item-tax-metadata-entry>>,
     /// The tax's name.
     name: option<string>,
     /// The percentage of the tax, as a string representation of a decimal
@@ -9355,27 +9176,10 @@ interface orders {
     uid: option<string>
   }
 
-  /// Application-defined data attached to this tax. Metadata fields are intended
-  /// to store descriptive references or associations with an entity in another system or store brief
-  /// information about the object. Square does not process this field; it only stores and returns it
-  /// in relevant API calls. Do not use metadata to store any sensitive information (such as personally
-  /// identifiable information or card details).
-  /// 
-  /// Keys written by applications must be 60 characters or less and must be in the character set
-  /// `[a-zA-Z0-9_-]`. Entries can also include metadata generated by Square. These keys are prefixed
-  /// with a namespace, separated from the key with a ':' character.
-  /// 
-  /// Values have a maximum length of 255 characters.
-  /// 
-  /// An application can have up to 10 entries per metadata field.
-  /// 
-  /// Entries written by applications are private and can only be read or modified by the same
-  /// application.
-  /// 
-  /// For more information, see [Metadata](https://developer.squareup.com/docs/build-basics/metadata).
-  record order-line-item-tax-metadata {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record order-line-item-tax-metadata-entry {
+    key: string,
+    value: string
   }
 
   /// Represents a tender (i.e., a method of payment) used in a Square transaction.
@@ -10791,6 +10595,14 @@ interface subscriptions {
 }
 
 interface team {
+  /// Represents a create request for a `TeamMember` object.
+  record create-team-member-request {
+    /// A unique string that identifies this `CreateTeamMember` request.
+    /// Keys can be any valid string, but must be unique for every request.
+    idempotency-key: option<string>,
+    team-member: option<member>
+  }
+
   /// A record representing an individual team member for a business.
   record member {
     assigned-locations: option<member-assigned-locations>,
@@ -10849,10 +10661,10 @@ interface team {
     field: option<string>
   }
 
-  /// The data used to create the `TeamMember` objects. Each key is the `idempotency_key` that maps to the `CreateTeamMemberRequest`.
-  record bulk-create-team-members-request-team-members {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record bulk-create-team-members-request-team-members-entry {
+    key: string,
+    value: create-team-member-request
   }
 
   /// Represents a response from a bulk create request containing the created `TeamMember` objects or error messages.
@@ -10860,19 +10672,24 @@ interface team {
     /// The errors that occurred during the request.
     errors: option<list<error>>,
     /// The successfully created `TeamMember` objects. Each key is the `idempotency_key` that maps to the `CreateTeamMemberRequest`.
-    team-members: option<bulk-create-team-members-response-team-members>
+    team-members: option<list<bulk-create-team-members-response-team-members-entry>>
   }
 
-  /// The successfully created `TeamMember` objects. Each key is the `idempotency_key` that maps to the `CreateTeamMemberRequest`.
-  record bulk-create-team-members-response-team-members {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record bulk-create-team-members-response-team-members-entry {
+    key: string,
+    value: create-team-member-response
   }
 
-  /// The data used to update the `TeamMember` objects. Each key is the `team_member_id` that maps to the `UpdateTeamMemberRequest`.
-  record bulk-update-team-members-request-team-members {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// Represents an update request for a `TeamMember` object.
+  record update-team-member-request {
+    team-member: option<member>
+  }
+
+  /// one entry of a string-keyed map (free-form object)
+  record bulk-update-team-members-request-team-members-entry {
+    key: string,
+    value: update-team-member-request
   }
 
   /// Represents a response from a bulk update request containing the updated `TeamMember` objects or error messages.
@@ -10880,13 +10697,20 @@ interface team {
     /// The errors that occurred during the request.
     errors: option<list<error>>,
     /// The successfully updated `TeamMember` objects. Each key is the `team_member_id` that maps to the `UpdateTeamMemberRequest`.
-    team-members: option<bulk-update-team-members-response-team-members>
+    team-members: option<list<bulk-update-team-members-response-team-members-entry>>
   }
 
-  /// The successfully updated `TeamMember` objects. Each key is the `team_member_id` that maps to the `UpdateTeamMemberRequest`.
-  record bulk-update-team-members-response-team-members {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// Represents a response from an update request containing the updated `TeamMember` object or error messages.
+  record update-team-member-response {
+    /// The errors that occurred during the request.
+    errors: option<list<error>>,
+    team-member: option<member>
+  }
+
+  /// one entry of a string-keyed map (free-form object)
+  record bulk-update-team-members-response-team-members-entry {
+    key: string,
+    value: update-team-member-response
   }
 
   /// Represents the parameters in a search for `TeamMember` objects.
@@ -10923,13 +10747,6 @@ interface team {
 
   /// Represents a response from a retrieve request containing a `TeamMember` object or error messages.
   record retrieve-team-member-response {
-    /// The errors that occurred during the request.
-    errors: option<list<error>>,
-    team-member: option<member>
-  }
-
-  /// Represents a response from an update request containing the updated `TeamMember` object or error messages.
-  record update-team-member-response {
     /// The errors that occurred during the request.
     errors: option<list<error>>,
     team-member: option<member>
@@ -11010,14 +10827,14 @@ interface team {
   /// BulkCreateTeamMembers
   record bulk-create-team-members-params {
     /// The data used to create the `TeamMember` objects. Each key is the `idempotency_key` that maps to the `CreateTeamMemberRequest`.
-    team-members: bulk-create-team-members-request-team-members
+    team-members: list<bulk-create-team-members-request-team-members-entry>
   }
   bulk-create-team-members: func(params: bulk-create-team-members-params) -> result<bulk-create-team-members-response, string>;
 
   /// BulkUpdateTeamMembers
   record bulk-update-team-members-params {
     /// The data used to update the `TeamMember` objects. Each key is the `team_member_id` that maps to the `UpdateTeamMemberRequest`.
-    team-members: bulk-update-team-members-request-team-members
+    team-members: list<bulk-update-team-members-request-team-members-entry>
   }
   bulk-update-team-members: func(params: bulk-update-team-members-params) -> result<bulk-update-team-members-response, string>;
 

@@ -54,12 +54,6 @@ fn iface_reisezentren__travel_center_type_op_enum__to_str(e: &iface_reisezentren
     }
 }
 
-fn iface_reisezentren__travel_center_list__to_json(p: &iface_reisezentren::TravelCenterList) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
 fn iface_reisezentren__travel_center__to_json(p: &iface_reisezentren::TravelCenter) -> Value {
     let mut m = Map::new();
     m.insert("address".into(), match (&p.address) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -76,19 +70,13 @@ fn iface_reisezentren__travel_center__to_json(p: &iface_reisezentren::TravelCent
 
 fn iface_reisezentren__travel_center_opening_times__to_json(p: &iface_reisezentren::TravelCenterOpeningTimes) -> Value {
     let mut m = Map::new();
-    m.insert("fri".into(), match (&p.fri) { Some(v) => iface_reisezentren__opening_time__to_json(v), None => Value::Null });
-    m.insert("mon".into(), match (&p.mon) { Some(v) => iface_reisezentren__opening_time__to_json(v), None => Value::Null });
-    m.insert("sat".into(), match (&p.sat) { Some(v) => iface_reisezentren__opening_time__to_json(v), None => Value::Null });
-    m.insert("sun".into(), match (&p.sun) { Some(v) => iface_reisezentren__opening_time__to_json(v), None => Value::Null });
-    m.insert("thu".into(), match (&p.thu) { Some(v) => iface_reisezentren__opening_time__to_json(v), None => Value::Null });
-    m.insert("tue".into(), match (&p.tue) { Some(v) => iface_reisezentren__opening_time__to_json(v), None => Value::Null });
-    m.insert("wed".into(), match (&p.wed) { Some(v) => iface_reisezentren__opening_time__to_json(v), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_reisezentren__opening_time__to_json(p: &iface_reisezentren::OpeningTime) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
+    m.insert("fri".into(), match (&p.fri) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("mon".into(), match (&p.mon) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("sat".into(), match (&p.sat) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("sun".into(), match (&p.sun) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("thu".into(), match (&p.thu) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("tue".into(), match (&p.tue) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("wed".into(), match (&p.wed) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -119,13 +107,6 @@ fn iface_reisezentren__get_reisezentren_id_params__to_json(p: &iface_reisezentre
     Value::Object(m)
 }
 
-fn iface_reisezentren__travel_center_list__from_json(v: &Value) -> Option<iface_reisezentren::TravelCenterList> {
-    let m = v.as_object()?;
-    Some(iface_reisezentren::TravelCenterList {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-    })
-}
-
 fn iface_reisezentren__travel_center__from_json(v: &Value) -> Option<iface_reisezentren::TravelCenter> {
     let m = v.as_object()?;
     Some(iface_reisezentren::TravelCenter {
@@ -144,20 +125,13 @@ fn iface_reisezentren__travel_center__from_json(v: &Value) -> Option<iface_reise
 fn iface_reisezentren__travel_center_opening_times__from_json(v: &Value) -> Option<iface_reisezentren::TravelCenterOpeningTimes> {
     let m = v.as_object()?;
     Some(iface_reisezentren::TravelCenterOpeningTimes {
-        fri: m.get("fri").filter(|v| !v.is_null()).and_then(|v| iface_reisezentren__opening_time__from_json(v)),
-        mon: m.get("mon").filter(|v| !v.is_null()).and_then(|v| iface_reisezentren__opening_time__from_json(v)),
-        sat: m.get("sat").filter(|v| !v.is_null()).and_then(|v| iface_reisezentren__opening_time__from_json(v)),
-        sun: m.get("sun").filter(|v| !v.is_null()).and_then(|v| iface_reisezentren__opening_time__from_json(v)),
-        thu: m.get("thu").filter(|v| !v.is_null()).and_then(|v| iface_reisezentren__opening_time__from_json(v)),
-        tue: m.get("tue").filter(|v| !v.is_null()).and_then(|v| iface_reisezentren__opening_time__from_json(v)),
-        wed: m.get("wed").filter(|v| !v.is_null()).and_then(|v| iface_reisezentren__opening_time__from_json(v)),
-    })
-}
-
-fn iface_reisezentren__opening_time__from_json(v: &Value) -> Option<iface_reisezentren::OpeningTime> {
-    let m = v.as_object()?;
-    Some(iface_reisezentren::OpeningTime {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        fri: m.get("fri").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        mon: m.get("mon").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        sat: m.get("sat").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        sun: m.get("sun").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        thu: m.get("thu").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        tue: m.get("tue").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        wed: m.get("wed").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
     })
 }
 
@@ -169,12 +143,12 @@ fn iface_reisezentren__travel_center_type_op_enum__from_str(s: &str) -> Option<i
     }
 }
 
-fn iface_reisezentren__get_reisezentren__ok(body: String) -> Result<iface_reisezentren::TravelCenterList, crate::runtime::DispatchError> {
+fn iface_reisezentren__get_reisezentren__ok(body: String) -> Result<Vec<iface_reisezentren::TravelCenter>, crate::runtime::DispatchError> {
     let v: Value = match serde_json::from_str(&body) {
         Ok(v) => v,
         Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
     };
-    match iface_reisezentren__travel_center_list__from_json(&v) {
+    match (&v).as_array().map(|a| a.iter().filter_map(|x| iface_reisezentren__travel_center__from_json(x)).collect()) {
         Some(x) => Ok(x),
         None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
@@ -249,7 +223,7 @@ fn iface_reisezentren__get_reisezentren_id__err(e: crate::runtime::DispatchError
 }
 
 impl iface_reisezentren::Guest for crate::Component {
-    fn get_reisezentren(params: iface_reisezentren::GetReisezentrenParams) -> Result<iface_reisezentren::TravelCenterList, iface_reisezentren::GetReisezentrenError> {
+    fn get_reisezentren(params: iface_reisezentren::GetReisezentrenParams) -> Result<Vec<iface_reisezentren::TravelCenter>, iface_reisezentren::GetReisezentrenError> {
         let json = iface_reisezentren__get_reisezentren_params__to_json(&params);
         match dispatch(&OP_REISEZENTREN_GET_REISEZENTREN, json).and_then(iface_reisezentren__get_reisezentren__ok) {
             Ok(v) => Ok(v),

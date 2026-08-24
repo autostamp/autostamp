@@ -35,7 +35,7 @@ const OP_DOCUMENTS_CREATE_DOCUMENT: OpSpec = OpSpec {
     method: "POST",
     path_template: "/documents",
     fields: &[
-        FieldSpec { snake: "value", wire: "value", location: FieldLocation::Body },
+        FieldSpec { snake: "body", wire: "body", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "BearerAuth", kind: AuthKind::Bearer },
@@ -202,7 +202,7 @@ fn iface_documents__list_documents_params__to_json(p: &iface_documents::ListDocu
 
 fn iface_documents__create_document_params__to_json(p: &iface_documents::CreateDocumentParams) -> Value {
     let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
+    m.insert("body".into(), Value::String((&p.body).clone()));
     Value::Object(m)
 }
 

@@ -11,8 +11,8 @@ triggered.
 
 | Setting | Value |
 | --- | --- |
-| Package | `autostamp:kubernetes@0.5.0` |
-| Published version | `0.5.0+kubernetes-unversioned` |
+| Package | `autostamp:kubernetes@0.6.0` |
+| Published version | `0.6.0+kubernetes-unversioned` |
 | Tag filter | all tags |
 | Operations generated | 833 |
 | Infer API-key credentials | enabled — not triggered |

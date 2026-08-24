@@ -302,9 +302,10 @@ fn iface_sip_connected_audio__assign_sip_trunks_response_sip_trunks_item__to_jso
     Value::Object(m)
 }
 
-fn iface_sip_connected_audio__delete_sip_trunk_response__to_json(p: &iface_sip_connected_audio::DeleteSipTrunkResponse) -> Value {
+fn iface_sip_connected_audio__delete_sip_trunk_response_entry__to_json(p: &iface_sip_connected_audio::DeleteSipTrunkResponseEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -526,10 +527,11 @@ fn iface_sip_connected_audio__assign_sip_trunks_response_sip_trunks_item__from_j
     })
 }
 
-fn iface_sip_connected_audio__delete_sip_trunk_response__from_json(v: &Value) -> Option<iface_sip_connected_audio::DeleteSipTrunkResponse> {
+fn iface_sip_connected_audio__delete_sip_trunk_response_entry__from_json(v: &Value) -> Option<iface_sip_connected_audio::DeleteSipTrunkResponseEntry> {
     let m = v.as_object()?;
-    Some(iface_sip_connected_audio::DeleteSipTrunkResponse {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_sip_connected_audio::DeleteSipTrunkResponseEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -765,12 +767,12 @@ fn iface_sip_connected_audio__assign_sip_trunks__err(e: crate::runtime::Dispatch
     }
 }
 
-fn iface_sip_connected_audio__delete_sip_trunk__ok(body: String) -> Result<iface_sip_connected_audio::DeleteSipTrunkResponse, crate::runtime::DispatchError> {
+fn iface_sip_connected_audio__delete_sip_trunk__ok(body: String) -> Result<Vec<iface_sip_connected_audio::DeleteSipTrunkResponseEntry>, crate::runtime::DispatchError> {
     let v: Value = match serde_json::from_str(&body) {
         Ok(v) => v,
         Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
     };
-    match iface_sip_connected_audio__delete_sip_trunk_response__from_json(&v) {
+    match (&v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_sip_connected_audio::DeleteSipTrunkResponseEntry { key: k.clone(), value: val })).collect()) {
         Some(x) => Ok(x),
         None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
@@ -886,7 +888,7 @@ impl iface_sip_connected_audio::Guest for crate::Component {
             Err(e) => Err(iface_sip_connected_audio__assign_sip_trunks__err(e)),
         }
     }
-    fn delete_sip_trunk(params: iface_sip_connected_audio::DeleteSipTrunkParams) -> Result<iface_sip_connected_audio::DeleteSipTrunkResponse, iface_sip_connected_audio::DeleteSipTrunkError> {
+    fn delete_sip_trunk(params: iface_sip_connected_audio::DeleteSipTrunkParams) -> Result<Vec<iface_sip_connected_audio::DeleteSipTrunkResponseEntry>, iface_sip_connected_audio::DeleteSipTrunkError> {
         let json = iface_sip_connected_audio__delete_sip_trunk_params__to_json(&params);
         match dispatch(&OP_SIP_CONNECTED_AUDIO_DELETE_SIP_TRUNK, json).and_then(iface_sip_connected_audio__delete_sip_trunk__ok) {
             Ok(v) => Ok(v),

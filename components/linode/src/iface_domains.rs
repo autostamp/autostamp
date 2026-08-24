@@ -215,12 +215,20 @@ fn iface_domains__domain_record_type_op_enum__to_str(e: &iface_domains::DomainRe
     }
 }
 
+fn iface_domains__domain_record_properties_tag__to_str(e: &iface_domains::DomainRecordPropertiesTag) -> &'static str {
+    match e {
+        iface_domains::DomainRecordPropertiesTag::Issue => "issue",
+        iface_domains::DomainRecordPropertiesTag::Issuewild => "issuewild",
+        iface_domains::DomainRecordPropertiesTag::Iodef => "iodef",
+    }
+}
+
 fn iface_domains__get_domains_response__to_json(p: &iface_domains::GetDomainsResponse) -> Value {
     let mut m = Map::new();
     m.insert("data".into(), match (&p.data) { Some(v) => Value::Array((v).iter().map(|v| iface_domains__domain__to_json(v)).collect()), None => Value::Null });
-    m.insert("page".into(), match (&p.page) { Some(v) => iface_domains__pagination_envelope_properties_page__to_json(v), None => Value::Null });
-    m.insert("pages".into(), match (&p.pages) { Some(v) => iface_domains__pagination_envelope_properties_pages__to_json(v), None => Value::Null });
-    m.insert("results".into(), match (&p.results) { Some(v) => iface_domains__pagination_envelope_properties_results__to_json(v), None => Value::Null });
+    m.insert("page".into(), match (&p.page) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("pages".into(), match (&p.pages) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("results".into(), match (&p.results) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
@@ -243,36 +251,19 @@ fn iface_domains__domain__to_json(p: &iface_domains::Domain) -> Value {
     Value::Object(m)
 }
 
-fn iface_domains__pagination_envelope_properties_page__to_json(p: &iface_domains::PaginationEnvelopePropertiesPage) -> Value {
+fn iface_domains__delete_domain_response_entry__to_json(p: &iface_domains::DeleteDomainResponseEntry) -> Value {
     let mut m = Map::new();
+    m.insert("key".into(), Value::String((&p.key).clone()));
     m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_domains__pagination_envelope_properties_pages__to_json(p: &iface_domains::PaginationEnvelopePropertiesPages) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_domains__pagination_envelope_properties_results__to_json(p: &iface_domains::PaginationEnvelopePropertiesResults) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_domains__delete_domain_response__to_json(p: &iface_domains::DeleteDomainResponse) -> Value {
-    let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
 fn iface_domains__get_domain_records_response__to_json(p: &iface_domains::GetDomainRecordsResponse) -> Value {
     let mut m = Map::new();
     m.insert("data".into(), match (&p.data) { Some(v) => Value::Array((v).iter().map(|v| iface_domains__domain_record__to_json(v)).collect()), None => Value::Null });
-    m.insert("page".into(), match (&p.page) { Some(v) => iface_domains__pagination_envelope_properties_page__to_json(v), None => Value::Null });
-    m.insert("pages".into(), match (&p.pages) { Some(v) => iface_domains__pagination_envelope_properties_pages__to_json(v), None => Value::Null });
-    m.insert("results".into(), match (&p.results) { Some(v) => iface_domains__pagination_envelope_properties_results__to_json(v), None => Value::Null });
+    m.insert("page".into(), match (&p.page) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("pages".into(), match (&p.pages) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("results".into(), match (&p.results) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
@@ -294,63 +285,10 @@ fn iface_domains__domain_record__to_json(p: &iface_domains::DomainRecord) -> Val
     Value::Object(m)
 }
 
-fn iface_domains__domain_record_properties_name__to_json(p: &iface_domains::DomainRecordPropertiesName) -> Value {
+fn iface_domains__delete_domain_record_response_entry__to_json(p: &iface_domains::DeleteDomainRecordResponseEntry) -> Value {
     let mut m = Map::new();
+    m.insert("key".into(), Value::String((&p.key).clone()));
     m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_domains__domain_record_properties_port__to_json(p: &iface_domains::DomainRecordPropertiesPort) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_domains__domain_record_properties_priority__to_json(p: &iface_domains::DomainRecordPropertiesPriority) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_domains__domain_record_properties_protocol__to_json(p: &iface_domains::DomainRecordPropertiesProtocol) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_domains__domain_record_properties_service__to_json(p: &iface_domains::DomainRecordPropertiesService) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_domains__domain_record_properties_tag__to_json(p: &iface_domains::DomainRecordPropertiesTag) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_domains__domain_record_properties_target__to_json(p: &iface_domains::DomainRecordPropertiesTarget) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_domains__domain_record_properties_ttl_sec__to_json(p: &iface_domains::DomainRecordPropertiesTtlSec) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_domains__domain_record_properties_weight__to_json(p: &iface_domains::DomainRecordPropertiesWeight) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_domains__delete_domain_record_response__to_json(p: &iface_domains::DeleteDomainRecordResponse) -> Value {
-    let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -445,15 +383,15 @@ fn iface_domains__update_domain_record_params__to_json(p: &iface_domains::Update
     let mut m = Map::new();
     m.insert("domain_id".into(), Value::String((&p.domain_id).clone()));
     m.insert("record_id".into(), Value::String((&p.record_id).clone()));
-    m.insert("name".into(), match (&p.name) { Some(v) => iface_domains__domain_record_properties_name__to_json(v), None => Value::Null });
-    m.insert("port".into(), match (&p.port) { Some(v) => iface_domains__domain_record_properties_port__to_json(v), None => Value::Null });
-    m.insert("priority".into(), match (&p.priority) { Some(v) => iface_domains__domain_record_properties_priority__to_json(v), None => Value::Null });
-    m.insert("protocol".into(), match (&p.protocol) { Some(v) => iface_domains__domain_record_properties_protocol__to_json(v), None => Value::Null });
-    m.insert("service".into(), match (&p.service) { Some(v) => iface_domains__domain_record_properties_service__to_json(v), None => Value::Null });
-    m.insert("tag".into(), match (&p.tag) { Some(v) => iface_domains__domain_record_properties_tag__to_json(v), None => Value::Null });
-    m.insert("target".into(), match (&p.target) { Some(v) => iface_domains__domain_record_properties_target__to_json(v), None => Value::Null });
-    m.insert("ttl_sec".into(), match (&p.ttl_sec) { Some(v) => iface_domains__domain_record_properties_ttl_sec__to_json(v), None => Value::Null });
-    m.insert("weight".into(), match (&p.weight) { Some(v) => iface_domains__domain_record_properties_weight__to_json(v), None => Value::Null });
+    m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("port".into(), match (&p.port) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("priority".into(), match (&p.priority) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("protocol".into(), match (&p.protocol) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("service".into(), match (&p.service) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("tag".into(), match (&p.tag) { Some(v) => Value::String(iface_domains__domain_record_properties_tag__to_str(v).into()), None => Value::Null });
+    m.insert("target".into(), match (&p.target) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("ttl_sec".into(), match (&p.ttl_sec) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("weight".into(), match (&p.weight) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
@@ -474,9 +412,9 @@ fn iface_domains__get_domains_response__from_json(v: &Value) -> Option<iface_dom
     let m = v.as_object()?;
     Some(iface_domains::GetDomainsResponse {
         data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_domains__domain__from_json(x)).collect())),
-        page: m.get("page").filter(|v| !v.is_null()).and_then(|v| iface_domains__pagination_envelope_properties_page__from_json(v)),
-        pages: m.get("pages").filter(|v| !v.is_null()).and_then(|v| iface_domains__pagination_envelope_properties_pages__from_json(v)),
-        results: m.get("results").filter(|v| !v.is_null()).and_then(|v| iface_domains__pagination_envelope_properties_results__from_json(v)),
+        page: m.get("page").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        pages: m.get("pages").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        results: m.get("results").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
     })
 }
 
@@ -500,31 +438,11 @@ fn iface_domains__domain__from_json(v: &Value) -> Option<iface_domains::Domain> 
     })
 }
 
-fn iface_domains__pagination_envelope_properties_page__from_json(v: &Value) -> Option<iface_domains::PaginationEnvelopePropertiesPage> {
+fn iface_domains__delete_domain_response_entry__from_json(v: &Value) -> Option<iface_domains::DeleteDomainResponseEntry> {
     let m = v.as_object()?;
-    Some(iface_domains::PaginationEnvelopePropertiesPage {
+    Some(iface_domains::DeleteDomainResponseEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-    })
-}
-
-fn iface_domains__pagination_envelope_properties_pages__from_json(v: &Value) -> Option<iface_domains::PaginationEnvelopePropertiesPages> {
-    let m = v.as_object()?;
-    Some(iface_domains::PaginationEnvelopePropertiesPages {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-    })
-}
-
-fn iface_domains__pagination_envelope_properties_results__from_json(v: &Value) -> Option<iface_domains::PaginationEnvelopePropertiesResults> {
-    let m = v.as_object()?;
-    Some(iface_domains::PaginationEnvelopePropertiesResults {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-    })
-}
-
-fn iface_domains__delete_domain_response__from_json(v: &Value) -> Option<iface_domains::DeleteDomainResponse> {
-    let m = v.as_object()?;
-    Some(iface_domains::DeleteDomainResponse {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
     })
 }
 
@@ -532,9 +450,9 @@ fn iface_domains__get_domain_records_response__from_json(v: &Value) -> Option<if
     let m = v.as_object()?;
     Some(iface_domains::GetDomainRecordsResponse {
         data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_domains__domain_record__from_json(x)).collect())),
-        page: m.get("page").filter(|v| !v.is_null()).and_then(|v| iface_domains__pagination_envelope_properties_page__from_json(v)),
-        pages: m.get("pages").filter(|v| !v.is_null()).and_then(|v| iface_domains__pagination_envelope_properties_pages__from_json(v)),
-        results: m.get("results").filter(|v| !v.is_null()).and_then(|v| iface_domains__pagination_envelope_properties_results__from_json(v)),
+        page: m.get("page").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        pages: m.get("pages").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        results: m.get("results").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
     })
 }
 
@@ -557,10 +475,11 @@ fn iface_domains__domain_record__from_json(v: &Value) -> Option<iface_domains::D
     })
 }
 
-fn iface_domains__delete_domain_record_response__from_json(v: &Value) -> Option<iface_domains::DeleteDomainRecordResponse> {
+fn iface_domains__delete_domain_record_response_entry__from_json(v: &Value) -> Option<iface_domains::DeleteDomainRecordResponseEntry> {
     let m = v.as_object()?;
-    Some(iface_domains::DeleteDomainRecordResponse {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_domains::DeleteDomainRecordResponseEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -701,12 +620,12 @@ fn iface_domains__update_domain__err(e: crate::runtime::DispatchError) -> String
     }
 }
 
-fn iface_domains__delete_domain__ok(body: String) -> Result<iface_domains::DeleteDomainResponse, crate::runtime::DispatchError> {
+fn iface_domains__delete_domain__ok(body: String) -> Result<Vec<iface_domains::DeleteDomainResponseEntry>, crate::runtime::DispatchError> {
     let v: Value = match serde_json::from_str(&body) {
         Ok(v) => v,
         Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
     };
-    match iface_domains__delete_domain_response__from_json(&v) {
+    match (&v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_domains::DeleteDomainResponseEntry { key: k.clone(), value: val })).collect()) {
         Some(x) => Ok(x),
         None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
@@ -809,12 +728,12 @@ fn iface_domains__update_domain_record__err(e: crate::runtime::DispatchError) ->
     }
 }
 
-fn iface_domains__delete_domain_record__ok(body: String) -> Result<iface_domains::DeleteDomainRecordResponse, crate::runtime::DispatchError> {
+fn iface_domains__delete_domain_record__ok(body: String) -> Result<Vec<iface_domains::DeleteDomainRecordResponseEntry>, crate::runtime::DispatchError> {
     let v: Value = match serde_json::from_str(&body) {
         Ok(v) => v,
         Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
     };
-    match iface_domains__delete_domain_record_response__from_json(&v) {
+    match (&v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_domains::DeleteDomainRecordResponseEntry { key: k.clone(), value: val })).collect()) {
         Some(x) => Ok(x),
         None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
@@ -881,7 +800,7 @@ impl iface_domains::Guest for crate::Component {
             Err(e) => Err(iface_domains__update_domain__err(e)),
         }
     }
-    fn delete_domain(params: iface_domains::DeleteDomainParams) -> Result<iface_domains::DeleteDomainResponse, String> {
+    fn delete_domain(params: iface_domains::DeleteDomainParams) -> Result<Vec<iface_domains::DeleteDomainResponseEntry>, String> {
         let json = iface_domains__delete_domain_params__to_json(&params);
         match dispatch(&OP_DOMAINS_DELETE_DOMAIN, json).and_then(iface_domains__delete_domain__ok) {
             Ok(v) => Ok(v),
@@ -923,7 +842,7 @@ impl iface_domains::Guest for crate::Component {
             Err(e) => Err(iface_domains__update_domain_record__err(e)),
         }
     }
-    fn delete_domain_record(params: iface_domains::DeleteDomainRecordParams) -> Result<iface_domains::DeleteDomainRecordResponse, String> {
+    fn delete_domain_record(params: iface_domains::DeleteDomainRecordParams) -> Result<Vec<iface_domains::DeleteDomainRecordResponseEntry>, String> {
         let json = iface_domains__delete_domain_record_params__to_json(&params);
         match dispatch(&OP_DOMAINS_DELETE_DOMAIN_RECORD, json).and_then(iface_domains__delete_domain_record__ok) {
             Ok(v) => Ok(v),

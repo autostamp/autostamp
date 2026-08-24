@@ -37,28 +37,30 @@ fn iface_order_order_id_refund__sales_data_creditmemo_creation_arguments_extensi
 fn iface_order_order_id_refund__sales_data_creditmemo_comment_creation_interface__to_json(p: &iface_order_order_id_refund::SalesDataCreditmemoCommentCreationInterface) -> Value {
     let mut m = Map::new();
     m.insert("comment".into(), Value::String((&p.comment).clone()));
-    m.insert("extension_attributes".into(), match (&p.extension_attributes) { Some(v) => iface_order_order_id_refund__sales_data_creditmemo_comment_creation_extension_interface__to_json(v), None => Value::Null });
+    m.insert("extension_attributes".into(), match (&p.extension_attributes) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("is_visible_on_front".into(), Value::Number(serde_json::Number::from(*(&p.is_visible_on_front))));
     Value::Object(m)
 }
 
-fn iface_order_order_id_refund__sales_data_creditmemo_comment_creation_extension_interface__to_json(p: &iface_order_order_id_refund::SalesDataCreditmemoCommentCreationExtensionInterface) -> Value {
+fn iface_order_order_id_refund__sales_data_creditmemo_comment_creation_extension_interface_entry__to_json(p: &iface_order_order_id_refund::SalesDataCreditmemoCommentCreationExtensionInterfaceEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
 fn iface_order_order_id_refund__sales_data_creditmemo_item_creation_interface__to_json(p: &iface_order_order_id_refund::SalesDataCreditmemoItemCreationInterface) -> Value {
     let mut m = Map::new();
-    m.insert("extension_attributes".into(), match (&p.extension_attributes) { Some(v) => iface_order_order_id_refund__sales_data_creditmemo_item_creation_extension_interface__to_json(v), None => Value::Null });
+    m.insert("extension_attributes".into(), match (&p.extension_attributes) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("order_item_id".into(), Value::Number(serde_json::Number::from(*(&p.order_item_id))));
     m.insert("qty".into(), serde_json::Number::from_f64(*(&p.qty)).map(Value::Number).unwrap_or(Value::Null));
     Value::Object(m)
 }
 
-fn iface_order_order_id_refund__sales_data_creditmemo_item_creation_extension_interface__to_json(p: &iface_order_order_id_refund::SalesDataCreditmemoItemCreationExtensionInterface) -> Value {
+fn iface_order_order_id_refund__sales_data_creditmemo_item_creation_extension_interface_entry__to_json(p: &iface_order_order_id_refund::SalesDataCreditmemoItemCreationExtensionInterfaceEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 

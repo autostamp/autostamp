@@ -24,6 +24,14 @@ fn iface_age_rating_declarations__age_rating_declaration_update_request_data_att
     }
 }
 
+fn iface_age_rating_declarations__kids_age_band__to_str(e: &iface_age_rating_declarations::KidsAgeBand) -> &'static str {
+    match e {
+        iface_age_rating_declarations::KidsAgeBand::FiveAndUnder => "FIVE_AND_UNDER",
+        iface_age_rating_declarations::KidsAgeBand::SixToEight => "SIX_TO_EIGHT",
+        iface_age_rating_declarations::KidsAgeBand::NineToEleven => "NINE_TO_ELEVEN",
+    }
+}
+
 fn iface_age_rating_declarations__age_rating_declaration_update_request_data_type_op_enum__to_str(e: &iface_age_rating_declarations::AgeRatingDeclarationUpdateRequestDataTypeOpEnum) -> &'static str {
     match e {
         iface_age_rating_declarations::AgeRatingDeclarationUpdateRequestDataTypeOpEnum::AgeRatingDeclarations => "ageRatingDeclarations",
@@ -46,7 +54,7 @@ fn iface_age_rating_declarations__age_rating_declaration_update_request_data_att
     m.insert("gamblingAndContests".into(), match (&p.gambling_and_contests) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     m.insert("gamblingSimulated".into(), match (&p.gambling_simulated) { Some(v) => Value::String(iface_age_rating_declarations__age_rating_declaration_update_request_data_attributes_alcohol_tobacco_or_drug_use_or_references_enum__to_str(v).into()), None => Value::Null });
     m.insert("horrorOrFearThemes".into(), match (&p.horror_or_fear_themes) { Some(v) => Value::String(iface_age_rating_declarations__age_rating_declaration_update_request_data_attributes_alcohol_tobacco_or_drug_use_or_references_enum__to_str(v).into()), None => Value::Null });
-    m.insert("kidsAgeBand".into(), match (&p.kids_age_band) { Some(v) => iface_age_rating_declarations__kids_age_band__to_json(v), None => Value::Null });
+    m.insert("kidsAgeBand".into(), match (&p.kids_age_band) { Some(v) => Value::String(iface_age_rating_declarations__kids_age_band__to_str(v).into()), None => Value::Null });
     m.insert("matureOrSuggestiveThemes".into(), match (&p.mature_or_suggestive_themes) { Some(v) => Value::String(iface_age_rating_declarations__age_rating_declaration_update_request_data_attributes_alcohol_tobacco_or_drug_use_or_references_enum__to_str(v).into()), None => Value::Null });
     m.insert("medicalOrTreatmentInformation".into(), match (&p.medical_or_treatment_information) { Some(v) => Value::String(iface_age_rating_declarations__age_rating_declaration_update_request_data_attributes_alcohol_tobacco_or_drug_use_or_references_enum__to_str(v).into()), None => Value::Null });
     m.insert("profanityOrCrudeHumor".into(), match (&p.profanity_or_crude_humor) { Some(v) => Value::String(iface_age_rating_declarations__age_rating_declaration_update_request_data_attributes_alcohol_tobacco_or_drug_use_or_references_enum__to_str(v).into()), None => Value::Null });
@@ -57,12 +65,6 @@ fn iface_age_rating_declarations__age_rating_declaration_update_request_data_att
     m.insert("violenceCartoonOrFantasy".into(), match (&p.violence_cartoon_or_fantasy) { Some(v) => Value::String(iface_age_rating_declarations__age_rating_declaration_update_request_data_attributes_alcohol_tobacco_or_drug_use_or_references_enum__to_str(v).into()), None => Value::Null });
     m.insert("violenceRealistic".into(), match (&p.violence_realistic) { Some(v) => Value::String(iface_age_rating_declarations__age_rating_declaration_update_request_data_attributes_alcohol_tobacco_or_drug_use_or_references_enum__to_str(v).into()), None => Value::Null });
     m.insert("violenceRealisticProlongedGraphicOrSadistic".into(), match (&p.violence_realistic_prolonged_graphic_or_sadistic) { Some(v) => Value::String(iface_age_rating_declarations__age_rating_declaration_update_request_data_attributes_alcohol_tobacco_or_drug_use_or_references_enum__to_str(v).into()), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_age_rating_declarations__kids_age_band__to_json(p: &iface_age_rating_declarations::KidsAgeBand) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -90,7 +92,7 @@ fn iface_age_rating_declarations__age_rating_declaration_attributes__to_json(p: 
     m.insert("gamblingAndContests".into(), match (&p.gambling_and_contests) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     m.insert("gamblingSimulated".into(), match (&p.gambling_simulated) { Some(v) => Value::String(iface_age_rating_declarations__age_rating_declaration_update_request_data_attributes_alcohol_tobacco_or_drug_use_or_references_enum__to_str(v).into()), None => Value::Null });
     m.insert("horrorOrFearThemes".into(), match (&p.horror_or_fear_themes) { Some(v) => Value::String(iface_age_rating_declarations__age_rating_declaration_update_request_data_attributes_alcohol_tobacco_or_drug_use_or_references_enum__to_str(v).into()), None => Value::Null });
-    m.insert("kidsAgeBand".into(), match (&p.kids_age_band) { Some(v) => iface_age_rating_declarations__kids_age_band__to_json(v), None => Value::Null });
+    m.insert("kidsAgeBand".into(), match (&p.kids_age_band) { Some(v) => Value::String(iface_age_rating_declarations__kids_age_band__to_str(v).into()), None => Value::Null });
     m.insert("matureOrSuggestiveThemes".into(), match (&p.mature_or_suggestive_themes) { Some(v) => Value::String(iface_age_rating_declarations__age_rating_declaration_update_request_data_attributes_alcohol_tobacco_or_drug_use_or_references_enum__to_str(v).into()), None => Value::Null });
     m.insert("medicalOrTreatmentInformation".into(), match (&p.medical_or_treatment_information) { Some(v) => Value::String(iface_age_rating_declarations__age_rating_declaration_update_request_data_attributes_alcohol_tobacco_or_drug_use_or_references_enum__to_str(v).into()), None => Value::Null });
     m.insert("profanityOrCrudeHumor".into(), match (&p.profanity_or_crude_humor) { Some(v) => Value::String(iface_age_rating_declarations__age_rating_declaration_update_request_data_attributes_alcohol_tobacco_or_drug_use_or_references_enum__to_str(v).into()), None => Value::Null });
@@ -123,13 +125,6 @@ fn iface_age_rating_declarations__update_instance_params__to_json(p: &iface_age_
     Value::Object(m)
 }
 
-fn iface_age_rating_declarations__kids_age_band__from_json(v: &Value) -> Option<iface_age_rating_declarations::KidsAgeBand> {
-    let m = v.as_object()?;
-    Some(iface_age_rating_declarations::KidsAgeBand {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-    })
-}
-
 fn iface_age_rating_declarations__age_rating_declaration_response__from_json(v: &Value) -> Option<iface_age_rating_declarations::AgeRatingDeclarationResponse> {
     let m = v.as_object()?;
     Some(iface_age_rating_declarations::AgeRatingDeclarationResponse {
@@ -157,7 +152,7 @@ fn iface_age_rating_declarations__age_rating_declaration_attributes__from_json(v
         gambling_and_contests: m.get("gamblingAndContests").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
         gambling_simulated: m.get("gamblingSimulated").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_age_rating_declarations__age_rating_declaration_update_request_data_attributes_alcohol_tobacco_or_drug_use_or_references_enum__from_str)),
         horror_or_fear_themes: m.get("horrorOrFearThemes").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_age_rating_declarations__age_rating_declaration_update_request_data_attributes_alcohol_tobacco_or_drug_use_or_references_enum__from_str)),
-        kids_age_band: m.get("kidsAgeBand").filter(|v| !v.is_null()).and_then(|v| iface_age_rating_declarations__kids_age_band__from_json(v)),
+        kids_age_band: m.get("kidsAgeBand").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_age_rating_declarations__kids_age_band__from_str)),
         mature_or_suggestive_themes: m.get("matureOrSuggestiveThemes").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_age_rating_declarations__age_rating_declaration_update_request_data_attributes_alcohol_tobacco_or_drug_use_or_references_enum__from_str)),
         medical_or_treatment_information: m.get("medicalOrTreatmentInformation").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_age_rating_declarations__age_rating_declaration_update_request_data_attributes_alcohol_tobacco_or_drug_use_or_references_enum__from_str)),
         profanity_or_crude_humor: m.get("profanityOrCrudeHumor").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_age_rating_declarations__age_rating_declaration_update_request_data_attributes_alcohol_tobacco_or_drug_use_or_references_enum__from_str)),
@@ -190,6 +185,15 @@ fn iface_age_rating_declarations__age_rating_declaration_update_request_data_att
         "NONE" => Some(iface_age_rating_declarations::AgeRatingDeclarationUpdateRequestDataAttributesAlcoholTobaccoOrDrugUseOrReferencesEnum::None),
         "INFREQUENT_OR_MILD" => Some(iface_age_rating_declarations::AgeRatingDeclarationUpdateRequestDataAttributesAlcoholTobaccoOrDrugUseOrReferencesEnum::InfrequentOrMild),
         "FREQUENT_OR_INTENSE" => Some(iface_age_rating_declarations::AgeRatingDeclarationUpdateRequestDataAttributesAlcoholTobaccoOrDrugUseOrReferencesEnum::FrequentOrIntense),
+        _ => None,
+    }
+}
+
+fn iface_age_rating_declarations__kids_age_band__from_str(s: &str) -> Option<iface_age_rating_declarations::KidsAgeBand> {
+    match s {
+        "FIVE_AND_UNDER" => Some(iface_age_rating_declarations::KidsAgeBand::FiveAndUnder),
+        "SIX_TO_EIGHT" => Some(iface_age_rating_declarations::KidsAgeBand::SixToEight),
+        "NINE_TO_ELEVEN" => Some(iface_age_rating_declarations::KidsAgeBand::NineToEleven),
         _ => None,
     }
 }

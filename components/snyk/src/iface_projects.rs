@@ -383,7 +383,7 @@ fn iface_projects__retrieve_a_single_project_response__to_json(p: &iface_project
     m.insert("lastTestedDate".into(), match (&p.last_tested_date) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("origin".into(), match (&p.origin) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("owner".into(), match (&p.owner) { Some(v) => iface_projects__retrieve_a_single_project_response_owner__to_json(v), None => Value::Null });
+    m.insert("owner".into(), match (&p.owner) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("readOnly".into(), match (&p.read_only) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     m.insert("remediation".into(), match (&p.remediation) { Some(v) => iface_projects__retrieve_a_single_project_response_remediation__to_json(v), None => Value::Null });
     m.insert("remoteRepoUrl".into(), match (&p.remote_repo_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -421,35 +421,39 @@ fn iface_projects__retrieve_a_single_project_response_issue_counts_by_severity__
     Value::Object(m)
 }
 
-fn iface_projects__retrieve_a_single_project_response_owner__to_json(p: &iface_projects::RetrieveASingleProjectResponseOwner) -> Value {
+fn iface_projects__retrieve_a_single_project_response_owner_entry__to_json(p: &iface_projects::RetrieveASingleProjectResponseOwnerEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
 fn iface_projects__retrieve_a_single_project_response_remediation__to_json(p: &iface_projects::RetrieveASingleProjectResponseRemediation) -> Value {
     let mut m = Map::new();
-    m.insert("patch".into(), match (&p.patch) { Some(v) => iface_projects__retrieve_a_single_project_response_remediation_patch__to_json(v), None => Value::Null });
-    m.insert("pin".into(), match (&p.pin) { Some(v) => iface_projects__retrieve_a_single_project_response_remediation_pin__to_json(v), None => Value::Null });
-    m.insert("upgrade".into(), match (&p.upgrade) { Some(v) => iface_projects__retrieve_a_single_project_response_remediation_upgrade__to_json(v), None => Value::Null });
+    m.insert("patch".into(), match (&p.patch) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
+    m.insert("pin".into(), match (&p.pin) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
+    m.insert("upgrade".into(), match (&p.upgrade) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_projects__retrieve_a_single_project_response_remediation_patch__to_json(p: &iface_projects::RetrieveASingleProjectResponseRemediationPatch) -> Value {
+fn iface_projects__retrieve_a_single_project_response_remediation_patch_entry__to_json(p: &iface_projects::RetrieveASingleProjectResponseRemediationPatchEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
-fn iface_projects__retrieve_a_single_project_response_remediation_pin__to_json(p: &iface_projects::RetrieveASingleProjectResponseRemediationPin) -> Value {
+fn iface_projects__retrieve_a_single_project_response_remediation_pin_entry__to_json(p: &iface_projects::RetrieveASingleProjectResponseRemediationPinEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
-fn iface_projects__retrieve_a_single_project_response_remediation_upgrade__to_json(p: &iface_projects::RetrieveASingleProjectResponseRemediationUpgrade) -> Value {
+fn iface_projects__retrieve_a_single_project_response_remediation_upgrade_entry__to_json(p: &iface_projects::RetrieveASingleProjectResponseRemediationUpgradeEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -478,7 +482,7 @@ fn iface_projects__update_a_project_response__to_json(p: &iface_projects::Update
     m.insert("lastTestedDate".into(), match (&p.last_tested_date) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("origin".into(), match (&p.origin) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("owner".into(), match (&p.owner) { Some(v) => iface_projects__update_a_project_response_owner__to_json(v), None => Value::Null });
+    m.insert("owner".into(), match (&p.owner) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("readOnly".into(), match (&p.read_only) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     m.insert("remediation".into(), match (&p.remediation) { Some(v) => iface_projects__update_a_project_response_remediation__to_json(v), None => Value::Null });
     m.insert("remoteRepoUrl".into(), match (&p.remote_repo_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -516,35 +520,39 @@ fn iface_projects__update_a_project_response_issue_counts_by_severity__to_json(p
     Value::Object(m)
 }
 
-fn iface_projects__update_a_project_response_owner__to_json(p: &iface_projects::UpdateAProjectResponseOwner) -> Value {
+fn iface_projects__update_a_project_response_owner_entry__to_json(p: &iface_projects::UpdateAProjectResponseOwnerEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
 fn iface_projects__update_a_project_response_remediation__to_json(p: &iface_projects::UpdateAProjectResponseRemediation) -> Value {
     let mut m = Map::new();
-    m.insert("patch".into(), match (&p.patch) { Some(v) => iface_projects__update_a_project_response_remediation_patch__to_json(v), None => Value::Null });
-    m.insert("pin".into(), match (&p.pin) { Some(v) => iface_projects__update_a_project_response_remediation_pin__to_json(v), None => Value::Null });
-    m.insert("upgrade".into(), match (&p.upgrade) { Some(v) => iface_projects__update_a_project_response_remediation_upgrade__to_json(v), None => Value::Null });
+    m.insert("patch".into(), match (&p.patch) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
+    m.insert("pin".into(), match (&p.pin) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
+    m.insert("upgrade".into(), match (&p.upgrade) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_projects__update_a_project_response_remediation_patch__to_json(p: &iface_projects::UpdateAProjectResponseRemediationPatch) -> Value {
+fn iface_projects__update_a_project_response_remediation_patch_entry__to_json(p: &iface_projects::UpdateAProjectResponseRemediationPatchEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
-fn iface_projects__update_a_project_response_remediation_pin__to_json(p: &iface_projects::UpdateAProjectResponseRemediationPin) -> Value {
+fn iface_projects__update_a_project_response_remediation_pin_entry__to_json(p: &iface_projects::UpdateAProjectResponseRemediationPinEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
-fn iface_projects__update_a_project_response_remediation_upgrade__to_json(p: &iface_projects::UpdateAProjectResponseRemediationUpgrade) -> Value {
+fn iface_projects__update_a_project_response_remediation_upgrade_entry__to_json(p: &iface_projects::UpdateAProjectResponseRemediationUpgradeEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -951,21 +959,23 @@ fn iface_projects__issue_id__to_json(p: &iface_projects::IssueId) -> Value {
 
 fn iface_projects__create_jira_issue_body_fields__to_json(p: &iface_projects::CreateJiraIssueBodyFields) -> Value {
     let mut m = Map::new();
-    m.insert("issuetype".into(), match (&p.issuetype) { Some(v) => iface_projects__create_jira_issue_body_fields_issuetype__to_json(v), None => Value::Null });
-    m.insert("project".into(), match (&p.project) { Some(v) => iface_projects__create_jira_issue_body_fields_project__to_json(v), None => Value::Null });
+    m.insert("issuetype".into(), match (&p.issuetype) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
+    m.insert("project".into(), match (&p.project) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("summary".into(), match (&p.summary) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_projects__create_jira_issue_body_fields_issuetype__to_json(p: &iface_projects::CreateJiraIssueBodyFieldsIssuetype) -> Value {
+fn iface_projects__create_jira_issue_body_fields_issuetype_entry__to_json(p: &iface_projects::CreateJiraIssueBodyFieldsIssuetypeEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
-fn iface_projects__create_jira_issue_body_fields_project__to_json(p: &iface_projects::CreateJiraIssueBodyFieldsProject) -> Value {
+fn iface_projects__create_jira_issue_body_fields_project_entry__to_json(p: &iface_projects::CreateJiraIssueBodyFieldsProjectEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -1152,7 +1162,7 @@ fn iface_projects__list_all_projects_response_projects_item__to_json(p: &iface_p
     m.insert("lastTestedDate".into(), match (&p.last_tested_date) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("origin".into(), match (&p.origin) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("owner".into(), match (&p.owner) { Some(v) => iface_projects__list_all_projects_response_projects_item_owner__to_json(v), None => Value::Null });
+    m.insert("owner".into(), match (&p.owner) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("readOnly".into(), match (&p.read_only) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     m.insert("remoteRepoUrl".into(), match (&p.remote_repo_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("tags".into(), match (&p.tags) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
@@ -1189,9 +1199,10 @@ fn iface_projects__list_all_projects_response_projects_item_issue_counts_by_seve
     Value::Object(m)
 }
 
-fn iface_projects__list_all_projects_response_projects_item_owner__to_json(p: &iface_projects::ListAllProjectsResponseProjectsItemOwner) -> Value {
+fn iface_projects__list_all_projects_response_projects_item_owner_entry__to_json(p: &iface_projects::ListAllProjectsResponseProjectsItemOwnerEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -1445,7 +1456,7 @@ fn iface_projects__retrieve_a_single_project_response__from_json(v: &Value) -> O
         last_tested_date: m.get("lastTestedDate").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         origin: m.get("origin").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        owner: m.get("owner").filter(|v| !v.is_null()).and_then(|v| iface_projects__retrieve_a_single_project_response_owner__from_json(v)),
+        owner: m.get("owner").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_projects::RetrieveASingleProjectResponseOwnerEntry { key: k.clone(), value: val })).collect())),
         read_only: m.get("readOnly").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
         remediation: m.get("remediation").filter(|v| !v.is_null()).and_then(|v| iface_projects__retrieve_a_single_project_response_remediation__from_json(v)),
         remote_repo_url: m.get("remoteRepoUrl").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
@@ -1486,40 +1497,44 @@ fn iface_projects__retrieve_a_single_project_response_issue_counts_by_severity__
     })
 }
 
-fn iface_projects__retrieve_a_single_project_response_owner__from_json(v: &Value) -> Option<iface_projects::RetrieveASingleProjectResponseOwner> {
+fn iface_projects__retrieve_a_single_project_response_owner_entry__from_json(v: &Value) -> Option<iface_projects::RetrieveASingleProjectResponseOwnerEntry> {
     let m = v.as_object()?;
-    Some(iface_projects::RetrieveASingleProjectResponseOwner {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_projects::RetrieveASingleProjectResponseOwnerEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
 fn iface_projects__retrieve_a_single_project_response_remediation__from_json(v: &Value) -> Option<iface_projects::RetrieveASingleProjectResponseRemediation> {
     let m = v.as_object()?;
     Some(iface_projects::RetrieveASingleProjectResponseRemediation {
-        patch: m.get("patch").filter(|v| !v.is_null()).and_then(|v| iface_projects__retrieve_a_single_project_response_remediation_patch__from_json(v)),
-        pin: m.get("pin").filter(|v| !v.is_null()).and_then(|v| iface_projects__retrieve_a_single_project_response_remediation_pin__from_json(v)),
-        upgrade: m.get("upgrade").filter(|v| !v.is_null()).and_then(|v| iface_projects__retrieve_a_single_project_response_remediation_upgrade__from_json(v)),
+        patch: m.get("patch").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_projects::RetrieveASingleProjectResponseRemediationPatchEntry { key: k.clone(), value: val })).collect())),
+        pin: m.get("pin").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_projects::RetrieveASingleProjectResponseRemediationPinEntry { key: k.clone(), value: val })).collect())),
+        upgrade: m.get("upgrade").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_projects::RetrieveASingleProjectResponseRemediationUpgradeEntry { key: k.clone(), value: val })).collect())),
     })
 }
 
-fn iface_projects__retrieve_a_single_project_response_remediation_patch__from_json(v: &Value) -> Option<iface_projects::RetrieveASingleProjectResponseRemediationPatch> {
+fn iface_projects__retrieve_a_single_project_response_remediation_patch_entry__from_json(v: &Value) -> Option<iface_projects::RetrieveASingleProjectResponseRemediationPatchEntry> {
     let m = v.as_object()?;
-    Some(iface_projects::RetrieveASingleProjectResponseRemediationPatch {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_projects::RetrieveASingleProjectResponseRemediationPatchEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
-fn iface_projects__retrieve_a_single_project_response_remediation_pin__from_json(v: &Value) -> Option<iface_projects::RetrieveASingleProjectResponseRemediationPin> {
+fn iface_projects__retrieve_a_single_project_response_remediation_pin_entry__from_json(v: &Value) -> Option<iface_projects::RetrieveASingleProjectResponseRemediationPinEntry> {
     let m = v.as_object()?;
-    Some(iface_projects::RetrieveASingleProjectResponseRemediationPin {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_projects::RetrieveASingleProjectResponseRemediationPinEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
-fn iface_projects__retrieve_a_single_project_response_remediation_upgrade__from_json(v: &Value) -> Option<iface_projects::RetrieveASingleProjectResponseRemediationUpgrade> {
+fn iface_projects__retrieve_a_single_project_response_remediation_upgrade_entry__from_json(v: &Value) -> Option<iface_projects::RetrieveASingleProjectResponseRemediationUpgradeEntry> {
     let m = v.as_object()?;
-    Some(iface_projects::RetrieveASingleProjectResponseRemediationUpgrade {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_projects::RetrieveASingleProjectResponseRemediationUpgradeEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -1543,7 +1558,7 @@ fn iface_projects__update_a_project_response__from_json(v: &Value) -> Option<ifa
         last_tested_date: m.get("lastTestedDate").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         origin: m.get("origin").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        owner: m.get("owner").filter(|v| !v.is_null()).and_then(|v| iface_projects__update_a_project_response_owner__from_json(v)),
+        owner: m.get("owner").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_projects::UpdateAProjectResponseOwnerEntry { key: k.clone(), value: val })).collect())),
         read_only: m.get("readOnly").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
         remediation: m.get("remediation").filter(|v| !v.is_null()).and_then(|v| iface_projects__update_a_project_response_remediation__from_json(v)),
         remote_repo_url: m.get("remoteRepoUrl").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
@@ -1584,40 +1599,44 @@ fn iface_projects__update_a_project_response_issue_counts_by_severity__from_json
     })
 }
 
-fn iface_projects__update_a_project_response_owner__from_json(v: &Value) -> Option<iface_projects::UpdateAProjectResponseOwner> {
+fn iface_projects__update_a_project_response_owner_entry__from_json(v: &Value) -> Option<iface_projects::UpdateAProjectResponseOwnerEntry> {
     let m = v.as_object()?;
-    Some(iface_projects::UpdateAProjectResponseOwner {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_projects::UpdateAProjectResponseOwnerEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
 fn iface_projects__update_a_project_response_remediation__from_json(v: &Value) -> Option<iface_projects::UpdateAProjectResponseRemediation> {
     let m = v.as_object()?;
     Some(iface_projects::UpdateAProjectResponseRemediation {
-        patch: m.get("patch").filter(|v| !v.is_null()).and_then(|v| iface_projects__update_a_project_response_remediation_patch__from_json(v)),
-        pin: m.get("pin").filter(|v| !v.is_null()).and_then(|v| iface_projects__update_a_project_response_remediation_pin__from_json(v)),
-        upgrade: m.get("upgrade").filter(|v| !v.is_null()).and_then(|v| iface_projects__update_a_project_response_remediation_upgrade__from_json(v)),
+        patch: m.get("patch").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_projects::UpdateAProjectResponseRemediationPatchEntry { key: k.clone(), value: val })).collect())),
+        pin: m.get("pin").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_projects::UpdateAProjectResponseRemediationPinEntry { key: k.clone(), value: val })).collect())),
+        upgrade: m.get("upgrade").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_projects::UpdateAProjectResponseRemediationUpgradeEntry { key: k.clone(), value: val })).collect())),
     })
 }
 
-fn iface_projects__update_a_project_response_remediation_patch__from_json(v: &Value) -> Option<iface_projects::UpdateAProjectResponseRemediationPatch> {
+fn iface_projects__update_a_project_response_remediation_patch_entry__from_json(v: &Value) -> Option<iface_projects::UpdateAProjectResponseRemediationPatchEntry> {
     let m = v.as_object()?;
-    Some(iface_projects::UpdateAProjectResponseRemediationPatch {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_projects::UpdateAProjectResponseRemediationPatchEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
-fn iface_projects__update_a_project_response_remediation_pin__from_json(v: &Value) -> Option<iface_projects::UpdateAProjectResponseRemediationPin> {
+fn iface_projects__update_a_project_response_remediation_pin_entry__from_json(v: &Value) -> Option<iface_projects::UpdateAProjectResponseRemediationPinEntry> {
     let m = v.as_object()?;
-    Some(iface_projects::UpdateAProjectResponseRemediationPin {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_projects::UpdateAProjectResponseRemediationPinEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
-fn iface_projects__update_a_project_response_remediation_upgrade__from_json(v: &Value) -> Option<iface_projects::UpdateAProjectResponseRemediationUpgrade> {
+fn iface_projects__update_a_project_response_remediation_upgrade_entry__from_json(v: &Value) -> Option<iface_projects::UpdateAProjectResponseRemediationUpgradeEntry> {
     let m = v.as_object()?;
-    Some(iface_projects::UpdateAProjectResponseRemediationUpgrade {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_projects::UpdateAProjectResponseRemediationUpgradeEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -2164,7 +2183,7 @@ fn iface_projects__list_all_projects_response_projects_item__from_json(v: &Value
         last_tested_date: m.get("lastTestedDate").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         origin: m.get("origin").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        owner: m.get("owner").filter(|v| !v.is_null()).and_then(|v| iface_projects__list_all_projects_response_projects_item_owner__from_json(v)),
+        owner: m.get("owner").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_projects::ListAllProjectsResponseProjectsItemOwnerEntry { key: k.clone(), value: val })).collect())),
         read_only: m.get("readOnly").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
         remote_repo_url: m.get("remoteRepoUrl").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         tags: m.get("tags").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
@@ -2204,10 +2223,11 @@ fn iface_projects__list_all_projects_response_projects_item_issue_counts_by_seve
     })
 }
 
-fn iface_projects__list_all_projects_response_projects_item_owner__from_json(v: &Value) -> Option<iface_projects::ListAllProjectsResponseProjectsItemOwner> {
+fn iface_projects__list_all_projects_response_projects_item_owner_entry__from_json(v: &Value) -> Option<iface_projects::ListAllProjectsResponseProjectsItemOwnerEntry> {
     let m = v.as_object()?;
-    Some(iface_projects::ListAllProjectsResponseProjectsItemOwner {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_projects::ListAllProjectsResponseProjectsItemOwnerEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 

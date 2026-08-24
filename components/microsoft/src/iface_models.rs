@@ -54,7 +54,7 @@ fn iface_models__domain_model_results__to_json(p: &iface_models::DomainModelResu
     let mut m = Map::new();
     m.insert("metadata".into(), match (&p.metadata) { Some(v) => iface_models__image_metadata__to_json(v), None => Value::Null });
     m.insert("requestId".into(), match (&p.request_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("result".into(), match (&p.result_op) { Some(v) => iface_models__domain_model_results_result_op__to_json(v), None => Value::Null });
+    m.insert("result".into(), match (&p.result_op) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -66,9 +66,10 @@ fn iface_models__image_metadata__to_json(p: &iface_models::ImageMetadata) -> Val
     Value::Object(m)
 }
 
-fn iface_models__domain_model_results_result_op__to_json(p: &iface_models::DomainModelResultsResultOp) -> Value {
+fn iface_models__domain_model_results_result_op_entry__to_json(p: &iface_models::DomainModelResultsResultOpEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -100,7 +101,7 @@ fn iface_models__domain_model_results__from_json(v: &Value) -> Option<iface_mode
     Some(iface_models::DomainModelResults {
         metadata: m.get("metadata").filter(|v| !v.is_null()).and_then(|v| iface_models__image_metadata__from_json(v)),
         request_id: m.get("requestId").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        result_op: m.get("result").filter(|v| !v.is_null()).and_then(|v| iface_models__domain_model_results_result_op__from_json(v)),
+        result_op: m.get("result").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_models::DomainModelResultsResultOpEntry { key: k.clone(), value: val })).collect())),
     })
 }
 
@@ -113,10 +114,11 @@ fn iface_models__image_metadata__from_json(v: &Value) -> Option<iface_models::Im
     })
 }
 
-fn iface_models__domain_model_results_result_op__from_json(v: &Value) -> Option<iface_models::DomainModelResultsResultOp> {
+fn iface_models__domain_model_results_result_op_entry__from_json(v: &Value) -> Option<iface_models::DomainModelResultsResultOpEntry> {
     let m = v.as_object()?;
-    Some(iface_models::DomainModelResultsResultOp {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_models::DomainModelResultsResultOpEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 

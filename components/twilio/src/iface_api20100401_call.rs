@@ -119,6 +119,19 @@ const OP_API20100401_CALL_DELETE_CALL: OpSpec = OpSpec {
     ],
 };
 
+fn iface_api20100401_call__call_enum_status__to_str(e: &iface_api20100401_call::CallEnumStatus) -> &'static str {
+    match e {
+        iface_api20100401_call::CallEnumStatus::Queued => "queued",
+        iface_api20100401_call::CallEnumStatus::Ringing => "ringing",
+        iface_api20100401_call::CallEnumStatus::InProgress => "in-progress",
+        iface_api20100401_call::CallEnumStatus::Completed => "completed",
+        iface_api20100401_call::CallEnumStatus::Busy => "busy",
+        iface_api20100401_call::CallEnumStatus::Failed => "failed",
+        iface_api20100401_call::CallEnumStatus::NoAnswer => "no-answer",
+        iface_api20100401_call::CallEnumStatus::Canceled => "canceled",
+    }
+}
+
 fn iface_api20100401_call__create_call_body_async_amd_status_callback_method_enum__to_str(e: &iface_api20100401_call::CreateCallBodyAsyncAmdStatusCallbackMethodEnum) -> &'static str {
     match e {
         iface_api20100401_call::CreateCallBodyAsyncAmdStatusCallbackMethodEnum::Head => "HEAD",
@@ -130,10 +143,11 @@ fn iface_api20100401_call__create_call_body_async_amd_status_callback_method_enu
     }
 }
 
-fn iface_api20100401_call__call_enum_status__to_json(p: &iface_api20100401_call::CallEnumStatus) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
+fn iface_api20100401_call__call_enum_update_status__to_str(e: &iface_api20100401_call::CallEnumUpdateStatus) -> &'static str {
+    match e {
+        iface_api20100401_call::CallEnumUpdateStatus::Canceled => "canceled",
+        iface_api20100401_call::CallEnumUpdateStatus::Completed => "completed",
+    }
 }
 
 fn iface_api20100401_call__list_call_response__to_json(p: &iface_api20100401_call::ListCallResponse) -> Value {
@@ -172,18 +186,12 @@ fn iface_api20100401_call__api_v2010_account_call__to_json(p: &iface_api20100401
     m.insert("queue_time".into(), match (&p.queue_time) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("sid".into(), match (&p.sid) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("start_time".into(), match (&p.start_time) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("status".into(), match (&p.status) { Some(v) => iface_api20100401_call__call_enum_status__to_json(v), None => Value::Null });
+    m.insert("status".into(), match (&p.status) { Some(v) => Value::String(iface_api20100401_call__call_enum_status__to_str(v).into()), None => Value::Null });
     m.insert("subresource_uris".into(), match (&p.subresource_uris) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("to".into(), match (&p.to) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("to_formatted".into(), match (&p.to_formatted) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("trunk_sid".into(), match (&p.trunk_sid) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("uri".into(), match (&p.uri) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_api20100401_call__call_enum_update_status__to_json(p: &iface_api20100401_call::CallEnumUpdateStatus) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -193,7 +201,7 @@ fn iface_api20100401_call__list_call_params__to_json(p: &iface_api20100401_call:
     m.insert("to".into(), match (&p.to) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("from".into(), match (&p.from_op) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("parent_call_sid".into(), match (&p.parent_call_sid) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("status".into(), match (&p.status) { Some(v) => iface_api20100401_call__call_enum_status__to_json(v), None => Value::Null });
+    m.insert("status".into(), match (&p.status) { Some(v) => Value::String(iface_api20100401_call__call_enum_status__to_str(v).into()), None => Value::Null });
     m.insert("start_time".into(), match (&p.start_time) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("start_time_v2".into(), match (&p.start_time_v2) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("start_time_v3".into(), match (&p.start_time_v3) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -261,7 +269,7 @@ fn iface_api20100401_call__update_call_params__to_json(p: &iface_api20100401_cal
     m.insert("fallback_method".into(), match (&p.fallback_method) { Some(v) => Value::String(iface_api20100401_call__create_call_body_async_amd_status_callback_method_enum__to_str(v).into()), None => Value::Null });
     m.insert("fallback_url".into(), match (&p.fallback_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("method".into(), match (&p.method) { Some(v) => Value::String(iface_api20100401_call__create_call_body_async_amd_status_callback_method_enum__to_str(v).into()), None => Value::Null });
-    m.insert("status".into(), match (&p.status) { Some(v) => iface_api20100401_call__call_enum_update_status__to_json(v), None => Value::Null });
+    m.insert("status".into(), match (&p.status) { Some(v) => Value::String(iface_api20100401_call__call_enum_update_status__to_str(v).into()), None => Value::Null });
     m.insert("status_callback".into(), match (&p.status_callback) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("status_callback_method".into(), match (&p.status_callback_method) { Some(v) => Value::String(iface_api20100401_call__create_call_body_async_amd_status_callback_method_enum__to_str(v).into()), None => Value::Null });
     m.insert("time_limit".into(), match (&p.time_limit) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
@@ -275,13 +283,6 @@ fn iface_api20100401_call__delete_call_params__to_json(p: &iface_api20100401_cal
     m.insert("account_sid".into(), Value::String((&p.account_sid).clone()));
     m.insert("sid".into(), Value::String((&p.sid).clone()));
     Value::Object(m)
-}
-
-fn iface_api20100401_call__call_enum_status__from_json(v: &Value) -> Option<iface_api20100401_call::CallEnumStatus> {
-    let m = v.as_object()?;
-    Some(iface_api20100401_call::CallEnumStatus {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-    })
 }
 
 fn iface_api20100401_call__list_call_response__from_json(v: &Value) -> Option<iface_api20100401_call::ListCallResponse> {
@@ -322,13 +323,27 @@ fn iface_api20100401_call__api_v2010_account_call__from_json(v: &Value) -> Optio
         queue_time: m.get("queue_time").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         sid: m.get("sid").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         start_time: m.get("start_time").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        status: m.get("status").filter(|v| !v.is_null()).and_then(|v| iface_api20100401_call__call_enum_status__from_json(v)),
+        status: m.get("status").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_api20100401_call__call_enum_status__from_str)),
         subresource_uris: m.get("subresource_uris").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         to: m.get("to").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         to_formatted: m.get("to_formatted").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         trunk_sid: m.get("trunk_sid").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         uri: m.get("uri").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
     })
+}
+
+fn iface_api20100401_call__call_enum_status__from_str(s: &str) -> Option<iface_api20100401_call::CallEnumStatus> {
+    match s {
+        "queued" => Some(iface_api20100401_call::CallEnumStatus::Queued),
+        "ringing" => Some(iface_api20100401_call::CallEnumStatus::Ringing),
+        "in-progress" => Some(iface_api20100401_call::CallEnumStatus::InProgress),
+        "completed" => Some(iface_api20100401_call::CallEnumStatus::Completed),
+        "busy" => Some(iface_api20100401_call::CallEnumStatus::Busy),
+        "failed" => Some(iface_api20100401_call::CallEnumStatus::Failed),
+        "no-answer" => Some(iface_api20100401_call::CallEnumStatus::NoAnswer),
+        "canceled" => Some(iface_api20100401_call::CallEnumStatus::Canceled),
+        _ => None,
+    }
 }
 
 fn iface_api20100401_call__list_call__ok(body: String) -> Result<iface_api20100401_call::ListCallResponse, crate::runtime::DispatchError> {

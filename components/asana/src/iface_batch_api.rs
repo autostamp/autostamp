@@ -36,16 +36,17 @@ fn iface_batch_api__batch_request__to_json(p: &iface_batch_api::BatchRequest) ->
 
 fn iface_batch_api__batch_request_action__to_json(p: &iface_batch_api::BatchRequestAction) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => iface_batch_api__batch_request_action_data__to_json(v), None => Value::Null });
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("method".into(), Value::String(iface_batch_api__batch_request_action_method_enum__to_str(&p.method).into()));
     m.insert("options".into(), match (&p.options) { Some(v) => iface_batch_api__batch_request_action_options__to_json(v), None => Value::Null });
     m.insert("relative_path".into(), Value::String((&p.relative_path).clone()));
     Value::Object(m)
 }
 
-fn iface_batch_api__batch_request_action_data__to_json(p: &iface_batch_api::BatchRequestActionData) -> Value {
+fn iface_batch_api__batch_request_action_data_entry__to_json(p: &iface_batch_api::BatchRequestActionDataEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -65,21 +66,23 @@ fn iface_batch_api__create_batch_request_response__to_json(p: &iface_batch_api::
 
 fn iface_batch_api__batch_response__to_json(p: &iface_batch_api::BatchResponse) -> Value {
     let mut m = Map::new();
-    m.insert("body".into(), match (&p.body) { Some(v) => iface_batch_api__batch_response_body__to_json(v), None => Value::Null });
-    m.insert("headers".into(), match (&p.headers) { Some(v) => iface_batch_api__batch_response_headers__to_json(v), None => Value::Null });
+    m.insert("body".into(), match (&p.body) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
+    m.insert("headers".into(), match (&p.headers) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("status_code".into(), match (&p.status_code) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_batch_api__batch_response_body__to_json(p: &iface_batch_api::BatchResponseBody) -> Value {
+fn iface_batch_api__batch_response_body_entry__to_json(p: &iface_batch_api::BatchResponseBodyEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
-fn iface_batch_api__batch_response_headers__to_json(p: &iface_batch_api::BatchResponseHeaders) -> Value {
+fn iface_batch_api__batch_response_headers_entry__to_json(p: &iface_batch_api::BatchResponseHeadersEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -101,23 +104,25 @@ fn iface_batch_api__create_batch_request_response__from_json(v: &Value) -> Optio
 fn iface_batch_api__batch_response__from_json(v: &Value) -> Option<iface_batch_api::BatchResponse> {
     let m = v.as_object()?;
     Some(iface_batch_api::BatchResponse {
-        body: m.get("body").filter(|v| !v.is_null()).and_then(|v| iface_batch_api__batch_response_body__from_json(v)),
-        headers: m.get("headers").filter(|v| !v.is_null()).and_then(|v| iface_batch_api__batch_response_headers__from_json(v)),
+        body: m.get("body").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_batch_api::BatchResponseBodyEntry { key: k.clone(), value: val })).collect())),
+        headers: m.get("headers").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_batch_api::BatchResponseHeadersEntry { key: k.clone(), value: val })).collect())),
         status_code: m.get("status_code").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
     })
 }
 
-fn iface_batch_api__batch_response_body__from_json(v: &Value) -> Option<iface_batch_api::BatchResponseBody> {
+fn iface_batch_api__batch_response_body_entry__from_json(v: &Value) -> Option<iface_batch_api::BatchResponseBodyEntry> {
     let m = v.as_object()?;
-    Some(iface_batch_api::BatchResponseBody {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_batch_api::BatchResponseBodyEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
-fn iface_batch_api__batch_response_headers__from_json(v: &Value) -> Option<iface_batch_api::BatchResponseHeaders> {
+fn iface_batch_api__batch_response_headers_entry__from_json(v: &Value) -> Option<iface_batch_api::BatchResponseHeadersEntry> {
     let m = v.as_object()?;
-    Some(iface_batch_api::BatchResponseHeaders {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_batch_api::BatchResponseHeadersEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 

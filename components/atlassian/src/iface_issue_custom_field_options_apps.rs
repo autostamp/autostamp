@@ -138,7 +138,7 @@ fn iface_issue_custom_field_options_apps__issue_field_option__to_json(p: &iface_
     let mut m = Map::new();
     m.insert("config".into(), match (&p.config) { Some(v) => iface_issue_custom_field_options_apps__issue_field_option_configuration__to_json(v), None => Value::Null });
     m.insert("id".into(), Value::Number(serde_json::Number::from(*(&p.id))));
-    m.insert("properties".into(), match (&p.properties) { Some(v) => iface_issue_custom_field_options_apps__issue_field_option_properties__to_json(v), None => Value::Null });
+    m.insert("properties".into(), match (&p.properties) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
@@ -171,15 +171,17 @@ fn iface_issue_custom_field_options_apps__project_scope_bean__to_json(p: &iface_
     Value::Object(m)
 }
 
-fn iface_issue_custom_field_options_apps__issue_field_option_properties__to_json(p: &iface_issue_custom_field_options_apps::IssueFieldOptionProperties) -> Value {
+fn iface_issue_custom_field_options_apps__issue_field_option_properties_entry__to_json(p: &iface_issue_custom_field_options_apps::IssueFieldOptionPropertiesEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
-fn iface_issue_custom_field_options_apps__issue_field_option_create_bean_properties__to_json(p: &iface_issue_custom_field_options_apps::IssueFieldOptionCreateBeanProperties) -> Value {
+fn iface_issue_custom_field_options_apps__issue_field_option_create_bean_properties_entry__to_json(p: &iface_issue_custom_field_options_apps::IssueFieldOptionCreateBeanPropertiesEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -195,7 +197,7 @@ fn iface_issue_custom_field_options_apps__create_issue_field_option_params__to_j
     let mut m = Map::new();
     m.insert("field_key".into(), Value::String((&p.field_key).clone()));
     m.insert("config".into(), match (&p.config) { Some(v) => iface_issue_custom_field_options_apps__issue_field_option_configuration__to_json(v), None => Value::Null });
-    m.insert("properties".into(), match (&p.properties) { Some(v) => iface_issue_custom_field_options_apps__issue_field_option_create_bean_properties__to_json(v), None => Value::Null });
+    m.insert("properties".into(), match (&p.properties) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
@@ -231,7 +233,7 @@ fn iface_issue_custom_field_options_apps__update_issue_field_option_params__to_j
     m.insert("option_id".into(), Value::String((&p.option_id).clone()));
     m.insert("config".into(), match (&p.config) { Some(v) => iface_issue_custom_field_options_apps__issue_field_option_configuration__to_json(v), None => Value::Null });
     m.insert("id".into(), Value::Number(serde_json::Number::from(*(&p.id))));
-    m.insert("properties".into(), match (&p.properties) { Some(v) => iface_issue_custom_field_options_apps__issue_field_option_properties__to_json(v), None => Value::Null });
+    m.insert("properties".into(), match (&p.properties) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
@@ -272,7 +274,7 @@ fn iface_issue_custom_field_options_apps__issue_field_option__from_json(v: &Valu
     Some(iface_issue_custom_field_options_apps::IssueFieldOption {
         config: m.get("config").filter(|v| !v.is_null()).and_then(|v| iface_issue_custom_field_options_apps__issue_field_option_configuration__from_json(v)),
         id: m.get("id").and_then(|v| (v).as_i64()).unwrap_or_default(),
-        properties: m.get("properties").filter(|v| !v.is_null()).and_then(|v| iface_issue_custom_field_options_apps__issue_field_option_properties__from_json(v)),
+        properties: m.get("properties").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_issue_custom_field_options_apps::IssueFieldOptionPropertiesEntry { key: k.clone(), value: val })).collect())),
         value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
@@ -309,10 +311,11 @@ fn iface_issue_custom_field_options_apps__project_scope_bean__from_json(v: &Valu
     })
 }
 
-fn iface_issue_custom_field_options_apps__issue_field_option_properties__from_json(v: &Value) -> Option<iface_issue_custom_field_options_apps::IssueFieldOptionProperties> {
+fn iface_issue_custom_field_options_apps__issue_field_option_properties_entry__from_json(v: &Value) -> Option<iface_issue_custom_field_options_apps::IssueFieldOptionPropertiesEntry> {
     let m = v.as_object()?;
-    Some(iface_issue_custom_field_options_apps::IssueFieldOptionProperties {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_issue_custom_field_options_apps::IssueFieldOptionPropertiesEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 

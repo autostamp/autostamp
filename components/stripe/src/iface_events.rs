@@ -74,20 +74,22 @@ fn iface_events__event__to_json(p: &iface_events::Event) -> Value {
 
 fn iface_events__notification_event_data__to_json(p: &iface_events::NotificationEventData) -> Value {
     let mut m = Map::new();
-    m.insert("object".into(), iface_events__notification_event_data_object__to_json(&p.object));
-    m.insert("previous_attributes".into(), match (&p.previous_attributes) { Some(v) => iface_events__notification_event_data_previous_attributes__to_json(v), None => Value::Null });
+    m.insert("object".into(), Value::Object((&p.object).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()));
+    m.insert("previous_attributes".into(), match (&p.previous_attributes) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_events__notification_event_data_object__to_json(p: &iface_events::NotificationEventDataObject) -> Value {
+fn iface_events__notification_event_data_object_entry__to_json(p: &iface_events::NotificationEventDataObjectEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
-fn iface_events__notification_event_data_previous_attributes__to_json(p: &iface_events::NotificationEventDataPreviousAttributes) -> Value {
+fn iface_events__notification_event_data_previous_attributes_entry__to_json(p: &iface_events::NotificationEventDataPreviousAttributesEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -142,22 +144,24 @@ fn iface_events__event__from_json(v: &Value) -> Option<iface_events::Event> {
 fn iface_events__notification_event_data__from_json(v: &Value) -> Option<iface_events::NotificationEventData> {
     let m = v.as_object()?;
     Some(iface_events::NotificationEventData {
-        object: match m.get("object").and_then(|v| iface_events__notification_event_data_object__from_json(v)) { Some(x) => x, None => return None },
-        previous_attributes: m.get("previous_attributes").filter(|v| !v.is_null()).and_then(|v| iface_events__notification_event_data_previous_attributes__from_json(v)),
+        object: m.get("object").and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_events::NotificationEventDataObjectEntry { key: k.clone(), value: val })).collect())).unwrap_or_default(),
+        previous_attributes: m.get("previous_attributes").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_events::NotificationEventDataPreviousAttributesEntry { key: k.clone(), value: val })).collect())),
     })
 }
 
-fn iface_events__notification_event_data_object__from_json(v: &Value) -> Option<iface_events::NotificationEventDataObject> {
+fn iface_events__notification_event_data_object_entry__from_json(v: &Value) -> Option<iface_events::NotificationEventDataObjectEntry> {
     let m = v.as_object()?;
-    Some(iface_events::NotificationEventDataObject {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_events::NotificationEventDataObjectEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
-fn iface_events__notification_event_data_previous_attributes__from_json(v: &Value) -> Option<iface_events::NotificationEventDataPreviousAttributes> {
+fn iface_events__notification_event_data_previous_attributes_entry__from_json(v: &Value) -> Option<iface_events::NotificationEventDataPreviousAttributesEntry> {
     let m = v.as_object()?;
-    Some(iface_events::NotificationEventDataPreviousAttributes {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_events::NotificationEventDataPreviousAttributesEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 

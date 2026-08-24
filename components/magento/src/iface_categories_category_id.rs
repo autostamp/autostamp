@@ -31,7 +31,7 @@ fn iface_categories_category_id__catalog_data_category_interface__to_json(p: &if
     m.insert("children".into(), match (&p.children) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("created_at".into(), match (&p.created_at) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("custom_attributes".into(), match (&p.custom_attributes) { Some(v) => Value::Array((v).iter().map(|v| iface_categories_category_id__framework_attribute_interface__to_json(v)).collect()), None => Value::Null });
-    m.insert("extension_attributes".into(), match (&p.extension_attributes) { Some(v) => iface_categories_category_id__catalog_data_category_extension_interface__to_json(v), None => Value::Null });
+    m.insert("extension_attributes".into(), match (&p.extension_attributes) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("id".into(), match (&p.id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("include_in_menu".into(), match (&p.include_in_menu) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     m.insert("is_active".into(), match (&p.is_active) { Some(v) => Value::Bool(*(v)), None => Value::Null });
@@ -51,9 +51,10 @@ fn iface_categories_category_id__framework_attribute_interface__to_json(p: &ifac
     Value::Object(m)
 }
 
-fn iface_categories_category_id__catalog_data_category_extension_interface__to_json(p: &iface_categories_category_id::CatalogDataCategoryExtensionInterface) -> Value {
+fn iface_categories_category_id__catalog_data_category_extension_interface_entry__to_json(p: &iface_categories_category_id::CatalogDataCategoryExtensionInterfaceEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -77,7 +78,7 @@ fn iface_categories_category_id__catalog_data_category_interface__from_json(v: &
         children: m.get("children").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         created_at: m.get("created_at").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         custom_attributes: m.get("custom_attributes").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_categories_category_id__framework_attribute_interface__from_json(x)).collect())),
-        extension_attributes: m.get("extension_attributes").filter(|v| !v.is_null()).and_then(|v| iface_categories_category_id__catalog_data_category_extension_interface__from_json(v)),
+        extension_attributes: m.get("extension_attributes").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_categories_category_id::CatalogDataCategoryExtensionInterfaceEntry { key: k.clone(), value: val })).collect())),
         id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
         include_in_menu: m.get("include_in_menu").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
         is_active: m.get("is_active").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
@@ -98,10 +99,11 @@ fn iface_categories_category_id__framework_attribute_interface__from_json(v: &Va
     })
 }
 
-fn iface_categories_category_id__catalog_data_category_extension_interface__from_json(v: &Value) -> Option<iface_categories_category_id::CatalogDataCategoryExtensionInterface> {
+fn iface_categories_category_id__catalog_data_category_extension_interface_entry__from_json(v: &Value) -> Option<iface_categories_category_id::CatalogDataCategoryExtensionInterfaceEntry> {
     let m = v.as_object()?;
-    Some(iface_categories_category_id::CatalogDataCategoryExtensionInterface {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_categories_category_id::CatalogDataCategoryExtensionInterfaceEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 

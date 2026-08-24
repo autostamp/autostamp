@@ -158,13 +158,14 @@ fn iface_workspaces__workspace_remove_user_request__to_json(p: &iface_workspaces
 
 fn iface_workspaces__remove_user_for_workspace_response__to_json(p: &iface_workspaces::RemoveUserForWorkspaceResponse) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => iface_workspaces__empty_response__to_json(v), None => Value::Null });
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_workspaces__empty_response__to_json(p: &iface_workspaces::EmptyResponse) -> Value {
+fn iface_workspaces__empty_response_entry__to_json(p: &iface_workspaces::EmptyResponseEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -286,14 +287,15 @@ fn iface_workspaces__user_base_response_photo__from_json(v: &Value) -> Option<if
 fn iface_workspaces__remove_user_for_workspace_response__from_json(v: &Value) -> Option<iface_workspaces::RemoveUserForWorkspaceResponse> {
     let m = v.as_object()?;
     Some(iface_workspaces::RemoveUserForWorkspaceResponse {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| iface_workspaces__empty_response__from_json(v)),
+        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_workspaces::EmptyResponseEntry { key: k.clone(), value: val })).collect())),
     })
 }
 
-fn iface_workspaces__empty_response__from_json(v: &Value) -> Option<iface_workspaces::EmptyResponse> {
+fn iface_workspaces__empty_response_entry__from_json(v: &Value) -> Option<iface_workspaces::EmptyResponseEntry> {
     let m = v.as_object()?;
-    Some(iface_workspaces::EmptyResponse {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_workspaces::EmptyResponseEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 

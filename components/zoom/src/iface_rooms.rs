@@ -275,15 +275,17 @@ fn iface_rooms__update_room_profile_body_basic__to_json(p: &iface_rooms::UpdateR
     Value::Object(m)
 }
 
-fn iface_rooms__update_room_profile_response__to_json(p: &iface_rooms::UpdateRoomProfileResponse) -> Value {
+fn iface_rooms__update_room_profile_response_entry__to_json(p: &iface_rooms::UpdateRoomProfileResponseEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
-fn iface_rooms__delete_a_zoom_room_response__to_json(p: &iface_rooms::DeleteAZoomRoomResponse) -> Value {
+fn iface_rooms__delete_a_zoom_room_response_entry__to_json(p: &iface_rooms::DeleteAZoomRoomResponseEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -469,17 +471,19 @@ fn iface_rooms__get_zr_profile_response_basic__from_json(v: &Value) -> Option<if
     })
 }
 
-fn iface_rooms__update_room_profile_response__from_json(v: &Value) -> Option<iface_rooms::UpdateRoomProfileResponse> {
+fn iface_rooms__update_room_profile_response_entry__from_json(v: &Value) -> Option<iface_rooms::UpdateRoomProfileResponseEntry> {
     let m = v.as_object()?;
-    Some(iface_rooms::UpdateRoomProfileResponse {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_rooms::UpdateRoomProfileResponseEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
-fn iface_rooms__delete_a_zoom_room_response__from_json(v: &Value) -> Option<iface_rooms::DeleteAZoomRoomResponse> {
+fn iface_rooms__delete_a_zoom_room_response_entry__from_json(v: &Value) -> Option<iface_rooms::DeleteAZoomRoomResponseEntry> {
     let m = v.as_object()?;
-    Some(iface_rooms::DeleteAZoomRoomResponse {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_rooms::DeleteAZoomRoomResponseEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -659,12 +663,12 @@ fn iface_rooms__get_zr_profile__err(e: crate::runtime::DispatchError) -> iface_r
     }
 }
 
-fn iface_rooms__update_room_profile__ok(body: String) -> Result<iface_rooms::UpdateRoomProfileResponse, crate::runtime::DispatchError> {
+fn iface_rooms__update_room_profile__ok(body: String) -> Result<Vec<iface_rooms::UpdateRoomProfileResponseEntry>, crate::runtime::DispatchError> {
     let v: Value = match serde_json::from_str(&body) {
         Ok(v) => v,
         Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
     };
-    match iface_rooms__update_room_profile_response__from_json(&v) {
+    match (&v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_rooms::UpdateRoomProfileResponseEntry { key: k.clone(), value: val })).collect()) {
         Some(x) => Ok(x),
         None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
@@ -681,12 +685,12 @@ fn iface_rooms__update_room_profile__err(e: crate::runtime::DispatchError) -> if
     }
 }
 
-fn iface_rooms__delete_a_zoom_room__ok(body: String) -> Result<iface_rooms::DeleteAZoomRoomResponse, crate::runtime::DispatchError> {
+fn iface_rooms__delete_a_zoom_room__ok(body: String) -> Result<Vec<iface_rooms::DeleteAZoomRoomResponseEntry>, crate::runtime::DispatchError> {
     let v: Value = match serde_json::from_str(&body) {
         Ok(v) => v,
         Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
     };
-    match iface_rooms__delete_a_zoom_room_response__from_json(&v) {
+    match (&v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_rooms::DeleteAZoomRoomResponseEntry { key: k.clone(), value: val })).collect()) {
         Some(x) => Ok(x),
         None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
@@ -811,14 +815,14 @@ impl iface_rooms::Guest for crate::Component {
             Err(e) => Err(iface_rooms__get_zr_profile__err(e)),
         }
     }
-    fn update_room_profile(params: iface_rooms::UpdateRoomProfileParams) -> Result<iface_rooms::UpdateRoomProfileResponse, iface_rooms::UpdateRoomProfileError> {
+    fn update_room_profile(params: iface_rooms::UpdateRoomProfileParams) -> Result<Vec<iface_rooms::UpdateRoomProfileResponseEntry>, iface_rooms::UpdateRoomProfileError> {
         let json = iface_rooms__update_room_profile_params__to_json(&params);
         match dispatch(&OP_ROOMS_UPDATE_ROOM_PROFILE, json).and_then(iface_rooms__update_room_profile__ok) {
             Ok(v) => Ok(v),
             Err(e) => Err(iface_rooms__update_room_profile__err(e)),
         }
     }
-    fn delete_a_zoom_room(params: iface_rooms::DeleteAZoomRoomParams) -> Result<iface_rooms::DeleteAZoomRoomResponse, iface_rooms::DeleteAZoomRoomError> {
+    fn delete_a_zoom_room(params: iface_rooms::DeleteAZoomRoomParams) -> Result<Vec<iface_rooms::DeleteAZoomRoomResponseEntry>, iface_rooms::DeleteAZoomRoomError> {
         let json = iface_rooms__delete_a_zoom_room_params__to_json(&params);
         match dispatch(&OP_ROOMS_DELETE_A_ZOOM_ROOM, json).and_then(iface_rooms__delete_a_zoom_room__ok) {
             Ok(v) => Ok(v),

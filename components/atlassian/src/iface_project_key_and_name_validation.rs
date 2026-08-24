@@ -40,14 +40,15 @@ const OP_PROJECT_KEY_AND_NAME_VALIDATION_GET_VALID_PROJECT_NAME: OpSpec = OpSpec
 fn iface_project_key_and_name_validation__error_collection__to_json(p: &iface_project_key_and_name_validation::ErrorCollection) -> Value {
     let mut m = Map::new();
     m.insert("errorMessages".into(), match (&p.error_messages) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
-    m.insert("errors".into(), match (&p.errors) { Some(v) => iface_project_key_and_name_validation__error_collection_errors__to_json(v), None => Value::Null });
+    m.insert("errors".into(), match (&p.errors) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("status".into(), match (&p.status) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_project_key_and_name_validation__error_collection_errors__to_json(p: &iface_project_key_and_name_validation::ErrorCollectionErrors) -> Value {
+fn iface_project_key_and_name_validation__error_collection_errors_entry__to_json(p: &iface_project_key_and_name_validation::ErrorCollectionErrorsEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -73,15 +74,16 @@ fn iface_project_key_and_name_validation__error_collection__from_json(v: &Value)
     let m = v.as_object()?;
     Some(iface_project_key_and_name_validation::ErrorCollection {
         error_messages: m.get("errorMessages").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
-        errors: m.get("errors").filter(|v| !v.is_null()).and_then(|v| iface_project_key_and_name_validation__error_collection_errors__from_json(v)),
+        errors: m.get("errors").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_project_key_and_name_validation::ErrorCollectionErrorsEntry { key: k.clone(), value: val })).collect())),
         status: m.get("status").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
     })
 }
 
-fn iface_project_key_and_name_validation__error_collection_errors__from_json(v: &Value) -> Option<iface_project_key_and_name_validation::ErrorCollectionErrors> {
+fn iface_project_key_and_name_validation__error_collection_errors_entry__from_json(v: &Value) -> Option<iface_project_key_and_name_validation::ErrorCollectionErrorsEntry> {
     let m = v.as_object()?;
-    Some(iface_project_key_and_name_validation::ErrorCollectionErrors {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_project_key_and_name_validation::ErrorCollectionErrorsEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 

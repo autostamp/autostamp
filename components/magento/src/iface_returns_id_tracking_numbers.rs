@@ -38,15 +38,16 @@ fn iface_returns_id_tracking_numbers__rma_data_track_interface__to_json(p: &ifac
     m.insert("carrier_code".into(), Value::String((&p.carrier_code).clone()));
     m.insert("carrier_title".into(), Value::String((&p.carrier_title).clone()));
     m.insert("entity_id".into(), Value::Number(serde_json::Number::from(*(&p.entity_id))));
-    m.insert("extension_attributes".into(), match (&p.extension_attributes) { Some(v) => iface_returns_id_tracking_numbers__rma_data_track_extension_interface__to_json(v), None => Value::Null });
+    m.insert("extension_attributes".into(), match (&p.extension_attributes) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("rma_entity_id".into(), Value::Number(serde_json::Number::from(*(&p.rma_entity_id))));
     m.insert("track_number".into(), Value::String((&p.track_number).clone()));
     Value::Object(m)
 }
 
-fn iface_returns_id_tracking_numbers__rma_data_track_extension_interface__to_json(p: &iface_returns_id_tracking_numbers::RmaDataTrackExtensionInterface) -> Value {
+fn iface_returns_id_tracking_numbers__rma_data_track_extension_interface_entry__to_json(p: &iface_returns_id_tracking_numbers::RmaDataTrackExtensionInterfaceEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -108,16 +109,17 @@ fn iface_returns_id_tracking_numbers__rma_data_track_interface__from_json(v: &Va
         carrier_code: m.get("carrier_code").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         carrier_title: m.get("carrier_title").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         entity_id: m.get("entity_id").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
-        extension_attributes: m.get("extension_attributes").filter(|v| !v.is_null()).and_then(|v| iface_returns_id_tracking_numbers__rma_data_track_extension_interface__from_json(v)),
+        extension_attributes: m.get("extension_attributes").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_returns_id_tracking_numbers::RmaDataTrackExtensionInterfaceEntry { key: k.clone(), value: val })).collect())),
         rma_entity_id: m.get("rma_entity_id").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
         track_number: m.get("track_number").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
-fn iface_returns_id_tracking_numbers__rma_data_track_extension_interface__from_json(v: &Value) -> Option<iface_returns_id_tracking_numbers::RmaDataTrackExtensionInterface> {
+fn iface_returns_id_tracking_numbers__rma_data_track_extension_interface_entry__from_json(v: &Value) -> Option<iface_returns_id_tracking_numbers::RmaDataTrackExtensionInterfaceEntry> {
     let m = v.as_object()?;
-    Some(iface_returns_id_tracking_numbers::RmaDataTrackExtensionInterface {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_returns_id_tracking_numbers::RmaDataTrackExtensionInterfaceEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
