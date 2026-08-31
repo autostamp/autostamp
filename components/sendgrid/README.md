@@ -20,8 +20,8 @@ triggered.
 
 | Setting | Value |
 | --- | --- |
-| Package | `autostamp:sendgrid@0.5.0` |
-| Published version | `0.5.0+sendgrid-1.0.0` |
+| Package | `autostamp:sendgrid@0.6.0` |
+| Published version | `0.6.0+sendgrid-1.0.0` |
 | Tag filter | all tags |
 | Operations generated | 334 |
 | Infer API-key credentials | enabled — not triggered |

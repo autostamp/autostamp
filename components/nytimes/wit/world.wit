@@ -6,7 +6,7 @@
 /// | Secret name | Applied to each request as |
 /// | --- | --- |
 /// | `apikey` | query `api-key` |
-package autostamp:nytimes@0.5.0;
+package autostamp:nytimes@0.6.0;
 
 interface archive {
   record get-year-month-json-response {

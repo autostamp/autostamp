@@ -88,7 +88,7 @@ fn iface_negotiable_quote_quote_id__quote_data_currency_interface__to_json(p: &i
     m.insert("base_currency_code".into(), match (&p.base_currency_code) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("base_to_global_rate".into(), match (&p.base_to_global_rate) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
     m.insert("base_to_quote_rate".into(), match (&p.base_to_quote_rate) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
-    m.insert("extension_attributes".into(), match (&p.extension_attributes) { Some(v) => iface_negotiable_quote_quote_id__quote_data_currency_extension_interface__to_json(v), None => Value::Null });
+    m.insert("extension_attributes".into(), match (&p.extension_attributes) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("global_currency_code".into(), match (&p.global_currency_code) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("quote_currency_code".into(), match (&p.quote_currency_code) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("store_currency_code".into(), match (&p.store_currency_code) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -97,9 +97,10 @@ fn iface_negotiable_quote_quote_id__quote_data_currency_interface__to_json(p: &i
     Value::Object(m)
 }
 
-fn iface_negotiable_quote_quote_id__quote_data_currency_extension_interface__to_json(p: &iface_negotiable_quote_quote_id::QuoteDataCurrencyExtensionInterface) -> Value {
+fn iface_negotiable_quote_quote_id__quote_data_currency_extension_interface_entry__to_json(p: &iface_negotiable_quote_quote_id::QuoteDataCurrencyExtensionInterfaceEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -140,7 +141,7 @@ fn iface_negotiable_quote_quote_id__customer_data_address_interface__to_json(p: 
     m.insert("customer_id".into(), match (&p.customer_id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("default_billing".into(), match (&p.default_billing) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     m.insert("default_shipping".into(), match (&p.default_shipping) { Some(v) => Value::Bool(*(v)), None => Value::Null });
-    m.insert("extension_attributes".into(), match (&p.extension_attributes) { Some(v) => iface_negotiable_quote_quote_id__customer_data_address_extension_interface__to_json(v), None => Value::Null });
+    m.insert("extension_attributes".into(), match (&p.extension_attributes) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("fax".into(), match (&p.fax) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("firstname".into(), match (&p.firstname) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("id".into(), match (&p.id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
@@ -157,24 +158,26 @@ fn iface_negotiable_quote_quote_id__customer_data_address_interface__to_json(p: 
     Value::Object(m)
 }
 
-fn iface_negotiable_quote_quote_id__customer_data_address_extension_interface__to_json(p: &iface_negotiable_quote_quote_id::CustomerDataAddressExtensionInterface) -> Value {
+fn iface_negotiable_quote_quote_id__customer_data_address_extension_interface_entry__to_json(p: &iface_negotiable_quote_quote_id::CustomerDataAddressExtensionInterfaceEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
 fn iface_negotiable_quote_quote_id__customer_data_region_interface__to_json(p: &iface_negotiable_quote_quote_id::CustomerDataRegionInterface) -> Value {
     let mut m = Map::new();
-    m.insert("extension_attributes".into(), match (&p.extension_attributes) { Some(v) => iface_negotiable_quote_quote_id__customer_data_region_extension_interface__to_json(v), None => Value::Null });
+    m.insert("extension_attributes".into(), match (&p.extension_attributes) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("region".into(), Value::String((&p.region).clone()));
     m.insert("region_code".into(), Value::String((&p.region_code).clone()));
     m.insert("region_id".into(), Value::Number(serde_json::Number::from(*(&p.region_id))));
     Value::Object(m)
 }
 
-fn iface_negotiable_quote_quote_id__customer_data_region_extension_interface__to_json(p: &iface_negotiable_quote_quote_id::CustomerDataRegionExtensionInterface) -> Value {
+fn iface_negotiable_quote_quote_id__customer_data_region_extension_interface_entry__to_json(p: &iface_negotiable_quote_quote_id::CustomerDataRegionExtensionInterfaceEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -191,16 +194,17 @@ fn iface_negotiable_quote_quote_id__company_data_company_customer_interface__to_
     let mut m = Map::new();
     m.insert("company_id".into(), match (&p.company_id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("customer_id".into(), match (&p.customer_id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    m.insert("extension_attributes".into(), match (&p.extension_attributes) { Some(v) => iface_negotiable_quote_quote_id__company_data_company_customer_extension_interface__to_json(v), None => Value::Null });
+    m.insert("extension_attributes".into(), match (&p.extension_attributes) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("job_title".into(), match (&p.job_title) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("status".into(), match (&p.status) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("telephone".into(), match (&p.telephone) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_negotiable_quote_quote_id__company_data_company_customer_extension_interface__to_json(p: &iface_negotiable_quote_quote_id::CompanyDataCompanyCustomerExtensionInterface) -> Value {
+fn iface_negotiable_quote_quote_id__company_data_company_customer_extension_interface_entry__to_json(p: &iface_negotiable_quote_quote_id::CompanyDataCompanyCustomerExtensionInterfaceEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -222,7 +226,7 @@ fn iface_negotiable_quote_quote_id__negotiable_quote_data_negotiable_quote_inter
     m.insert("deleted_sku".into(), Value::String((&p.deleted_sku).clone()));
     m.insert("email_notification_status".into(), Value::Number(serde_json::Number::from(*(&p.email_notification_status))));
     m.insert("expiration_period".into(), Value::String((&p.expiration_period).clone()));
-    m.insert("extension_attributes".into(), match (&p.extension_attributes) { Some(v) => iface_negotiable_quote_quote_id__negotiable_quote_data_negotiable_quote_extension_interface__to_json(v), None => Value::Null });
+    m.insert("extension_attributes".into(), match (&p.extension_attributes) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("has_unconfirmed_changes".into(), Value::Bool(*(&p.has_unconfirmed_changes)));
     m.insert("is_address_draft".into(), Value::Bool(*(&p.is_address_draft)));
     m.insert("is_customer_price_changed".into(), Value::Bool(*(&p.is_customer_price_changed)));
@@ -240,23 +244,25 @@ fn iface_negotiable_quote_quote_id__negotiable_quote_data_negotiable_quote_inter
     Value::Object(m)
 }
 
-fn iface_negotiable_quote_quote_id__negotiable_quote_data_negotiable_quote_extension_interface__to_json(p: &iface_negotiable_quote_quote_id::NegotiableQuoteDataNegotiableQuoteExtensionInterface) -> Value {
+fn iface_negotiable_quote_quote_id__negotiable_quote_data_negotiable_quote_extension_interface_entry__to_json(p: &iface_negotiable_quote_quote_id::NegotiableQuoteDataNegotiableQuoteExtensionInterfaceEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
 fn iface_negotiable_quote_quote_id__quote_data_shipping_assignment_interface__to_json(p: &iface_negotiable_quote_quote_id::QuoteDataShippingAssignmentInterface) -> Value {
     let mut m = Map::new();
-    m.insert("extension_attributes".into(), match (&p.extension_attributes) { Some(v) => iface_negotiable_quote_quote_id__quote_data_shipping_assignment_extension_interface__to_json(v), None => Value::Null });
+    m.insert("extension_attributes".into(), match (&p.extension_attributes) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("items".into(), Value::Array((&p.items).iter().map(|v| iface_negotiable_quote_quote_id__quote_data_cart_item_interface__to_json(v)).collect()));
     m.insert("shipping".into(), iface_negotiable_quote_quote_id__quote_data_shipping_interface__to_json(&p.shipping));
     Value::Object(m)
 }
 
-fn iface_negotiable_quote_quote_id__quote_data_shipping_assignment_extension_interface__to_json(p: &iface_negotiable_quote_quote_id::QuoteDataShippingAssignmentExtensionInterface) -> Value {
+fn iface_negotiable_quote_quote_id__quote_data_shipping_assignment_extension_interface_entry__to_json(p: &iface_negotiable_quote_quote_id::QuoteDataShippingAssignmentExtensionInterfaceEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -282,7 +288,7 @@ fn iface_negotiable_quote_quote_id__quote_data_cart_item_extension_interface__to
 
 fn iface_negotiable_quote_quote_id__negotiable_quote_data_negotiable_quote_item_interface__to_json(p: &iface_negotiable_quote_quote_id::NegotiableQuoteDataNegotiableQuoteItemInterface) -> Value {
     let mut m = Map::new();
-    m.insert("extension_attributes".into(), match (&p.extension_attributes) { Some(v) => iface_negotiable_quote_quote_id__negotiable_quote_data_negotiable_quote_item_extension_interface__to_json(v), None => Value::Null });
+    m.insert("extension_attributes".into(), match (&p.extension_attributes) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("item_id".into(), Value::Number(serde_json::Number::from(*(&p.item_id))));
     m.insert("original_discount_amount".into(), serde_json::Number::from_f64(*(&p.original_discount_amount)).map(Value::Number).unwrap_or(Value::Null));
     m.insert("original_price".into(), serde_json::Number::from_f64(*(&p.original_price)).map(Value::Number).unwrap_or(Value::Null));
@@ -290,9 +296,10 @@ fn iface_negotiable_quote_quote_id__negotiable_quote_data_negotiable_quote_item_
     Value::Object(m)
 }
 
-fn iface_negotiable_quote_quote_id__negotiable_quote_data_negotiable_quote_item_extension_interface__to_json(p: &iface_negotiable_quote_quote_id::NegotiableQuoteDataNegotiableQuoteItemExtensionInterface) -> Value {
+fn iface_negotiable_quote_quote_id__negotiable_quote_data_negotiable_quote_item_extension_interface_entry__to_json(p: &iface_negotiable_quote_quote_id::NegotiableQuoteDataNegotiableQuoteItemExtensionInterfaceEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -314,30 +321,32 @@ fn iface_negotiable_quote_quote_id__quote_data_product_option_extension_interfac
 
 fn iface_negotiable_quote_quote_id__bundle_data_bundle_option_interface__to_json(p: &iface_negotiable_quote_quote_id::BundleDataBundleOptionInterface) -> Value {
     let mut m = Map::new();
-    m.insert("extension_attributes".into(), match (&p.extension_attributes) { Some(v) => iface_negotiable_quote_quote_id__bundle_data_bundle_option_extension_interface__to_json(v), None => Value::Null });
+    m.insert("extension_attributes".into(), match (&p.extension_attributes) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("option_id".into(), Value::Number(serde_json::Number::from(*(&p.option_id))));
     m.insert("option_qty".into(), Value::Number(serde_json::Number::from(*(&p.option_qty))));
     m.insert("option_selections".into(), Value::Array((&p.option_selections).iter().map(|v| Value::Number(serde_json::Number::from(*(v)))).collect()));
     Value::Object(m)
 }
 
-fn iface_negotiable_quote_quote_id__bundle_data_bundle_option_extension_interface__to_json(p: &iface_negotiable_quote_quote_id::BundleDataBundleOptionExtensionInterface) -> Value {
+fn iface_negotiable_quote_quote_id__bundle_data_bundle_option_extension_interface_entry__to_json(p: &iface_negotiable_quote_quote_id::BundleDataBundleOptionExtensionInterfaceEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
 fn iface_negotiable_quote_quote_id__configurable_product_data_configurable_item_option_value_interface__to_json(p: &iface_negotiable_quote_quote_id::ConfigurableProductDataConfigurableItemOptionValueInterface) -> Value {
     let mut m = Map::new();
-    m.insert("extension_attributes".into(), match (&p.extension_attributes) { Some(v) => iface_negotiable_quote_quote_id__configurable_product_data_configurable_item_option_value_extension_interface__to_json(v), None => Value::Null });
+    m.insert("extension_attributes".into(), match (&p.extension_attributes) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("option_id".into(), Value::String((&p.option_id).clone()));
     m.insert("option_value".into(), match (&p.option_value) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_negotiable_quote_quote_id__configurable_product_data_configurable_item_option_value_extension_interface__to_json(p: &iface_negotiable_quote_quote_id::ConfigurableProductDataConfigurableItemOptionValueExtensionInterface) -> Value {
+fn iface_negotiable_quote_quote_id__configurable_product_data_configurable_item_option_value_extension_interface_entry__to_json(p: &iface_negotiable_quote_quote_id::ConfigurableProductDataConfigurableItemOptionValueExtensionInterfaceEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -372,7 +381,7 @@ fn iface_negotiable_quote_quote_id__downloadable_data_downloadable_option_interf
 fn iface_negotiable_quote_quote_id__gift_card_data_gift_card_option_interface__to_json(p: &iface_negotiable_quote_quote_id::GiftCardDataGiftCardOptionInterface) -> Value {
     let mut m = Map::new();
     m.insert("custom_giftcard_amount".into(), match (&p.custom_giftcard_amount) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
-    m.insert("extension_attributes".into(), match (&p.extension_attributes) { Some(v) => iface_negotiable_quote_quote_id__gift_card_data_gift_card_option_extension_interface__to_json(v), None => Value::Null });
+    m.insert("extension_attributes".into(), match (&p.extension_attributes) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("giftcard_amount".into(), Value::String((&p.giftcard_amount).clone()));
     m.insert("giftcard_message".into(), match (&p.giftcard_message) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("giftcard_recipient_email".into(), Value::String((&p.giftcard_recipient_email).clone()));
@@ -382,23 +391,25 @@ fn iface_negotiable_quote_quote_id__gift_card_data_gift_card_option_interface__t
     Value::Object(m)
 }
 
-fn iface_negotiable_quote_quote_id__gift_card_data_gift_card_option_extension_interface__to_json(p: &iface_negotiable_quote_quote_id::GiftCardDataGiftCardOptionExtensionInterface) -> Value {
+fn iface_negotiable_quote_quote_id__gift_card_data_gift_card_option_extension_interface_entry__to_json(p: &iface_negotiable_quote_quote_id::GiftCardDataGiftCardOptionExtensionInterfaceEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
 fn iface_negotiable_quote_quote_id__quote_data_shipping_interface__to_json(p: &iface_negotiable_quote_quote_id::QuoteDataShippingInterface) -> Value {
     let mut m = Map::new();
     m.insert("address".into(), iface_negotiable_quote_quote_id__quote_data_address_interface__to_json(&p.address));
-    m.insert("extension_attributes".into(), match (&p.extension_attributes) { Some(v) => iface_negotiable_quote_quote_id__quote_data_shipping_extension_interface__to_json(v), None => Value::Null });
+    m.insert("extension_attributes".into(), match (&p.extension_attributes) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("method".into(), Value::String((&p.method).clone()));
     Value::Object(m)
 }
 
-fn iface_negotiable_quote_quote_id__quote_data_shipping_extension_interface__to_json(p: &iface_negotiable_quote_quote_id::QuoteDataShippingExtensionInterface) -> Value {
+fn iface_negotiable_quote_quote_id__quote_data_shipping_extension_interface_entry__to_json(p: &iface_negotiable_quote_quote_id::QuoteDataShippingExtensionInterfaceEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 

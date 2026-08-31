@@ -18,7 +18,7 @@ fn iface_coupons_generate__sales_rule_data_coupon_generation_spec_interface__to_
     let mut m = Map::new();
     m.insert("delimiter".into(), match (&p.delimiter) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("delimiter_at_every".into(), match (&p.delimiter_at_every) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    m.insert("extension_attributes".into(), match (&p.extension_attributes) { Some(v) => iface_coupons_generate__sales_rule_data_coupon_generation_spec_extension_interface__to_json(v), None => Value::Null });
+    m.insert("extension_attributes".into(), match (&p.extension_attributes) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("format".into(), Value::String((&p.format).clone()));
     m.insert("length".into(), Value::Number(serde_json::Number::from(*(&p.length))));
     m.insert("prefix".into(), match (&p.prefix) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -28,9 +28,10 @@ fn iface_coupons_generate__sales_rule_data_coupon_generation_spec_interface__to_
     Value::Object(m)
 }
 
-fn iface_coupons_generate__sales_rule_data_coupon_generation_spec_extension_interface__to_json(p: &iface_coupons_generate::SalesRuleDataCouponGenerationSpecExtensionInterface) -> Value {
+fn iface_coupons_generate__sales_rule_data_coupon_generation_spec_extension_interface_entry__to_json(p: &iface_coupons_generate::SalesRuleDataCouponGenerationSpecExtensionInterfaceEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 

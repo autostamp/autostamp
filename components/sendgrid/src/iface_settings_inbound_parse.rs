@@ -68,9 +68,10 @@ fn iface_settings_inbound_parse__parse_setting__to_json(p: &iface_settings_inbou
     Value::Object(m)
 }
 
-fn iface_settings_inbound_parse__delete_user_webhooks_parse_settings_hostname_response__to_json(p: &iface_settings_inbound_parse::DeleteUserWebhooksParseSettingsHostnameResponse) -> Value {
+fn iface_settings_inbound_parse__delete_user_webhooks_parse_settings_hostname_response_entry__to_json(p: &iface_settings_inbound_parse::DeleteUserWebhooksParseSettingsHostnameResponseEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -119,10 +120,11 @@ fn iface_settings_inbound_parse__parse_setting__from_json(v: &Value) -> Option<i
     })
 }
 
-fn iface_settings_inbound_parse__delete_user_webhooks_parse_settings_hostname_response__from_json(v: &Value) -> Option<iface_settings_inbound_parse::DeleteUserWebhooksParseSettingsHostnameResponse> {
+fn iface_settings_inbound_parse__delete_user_webhooks_parse_settings_hostname_response_entry__from_json(v: &Value) -> Option<iface_settings_inbound_parse::DeleteUserWebhooksParseSettingsHostnameResponseEntry> {
     let m = v.as_object()?;
-    Some(iface_settings_inbound_parse::DeleteUserWebhooksParseSettingsHostnameResponse {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_settings_inbound_parse::DeleteUserWebhooksParseSettingsHostnameResponseEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -198,12 +200,12 @@ fn iface_settings_inbound_parse__patch_user_webhooks_parse_settings_hostname__er
     }
 }
 
-fn iface_settings_inbound_parse__delete_user_webhooks_parse_settings_hostname__ok(body: String) -> Result<iface_settings_inbound_parse::DeleteUserWebhooksParseSettingsHostnameResponse, crate::runtime::DispatchError> {
+fn iface_settings_inbound_parse__delete_user_webhooks_parse_settings_hostname__ok(body: String) -> Result<Vec<iface_settings_inbound_parse::DeleteUserWebhooksParseSettingsHostnameResponseEntry>, crate::runtime::DispatchError> {
     let v: Value = match serde_json::from_str(&body) {
         Ok(v) => v,
         Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
     };
-    match iface_settings_inbound_parse__delete_user_webhooks_parse_settings_hostname_response__from_json(&v) {
+    match (&v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_settings_inbound_parse::DeleteUserWebhooksParseSettingsHostnameResponseEntry { key: k.clone(), value: val })).collect()) {
         Some(x) => Ok(x),
         None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
@@ -244,7 +246,7 @@ impl iface_settings_inbound_parse::Guest for crate::Component {
             Err(e) => Err(iface_settings_inbound_parse__patch_user_webhooks_parse_settings_hostname__err(e)),
         }
     }
-    fn delete_user_webhooks_parse_settings_hostname(params: iface_settings_inbound_parse::DeleteUserWebhooksParseSettingsHostnameParams) -> Result<iface_settings_inbound_parse::DeleteUserWebhooksParseSettingsHostnameResponse, iface_settings_inbound_parse::DeleteUserWebhooksParseSettingsHostnameError> {
+    fn delete_user_webhooks_parse_settings_hostname(params: iface_settings_inbound_parse::DeleteUserWebhooksParseSettingsHostnameParams) -> Result<Vec<iface_settings_inbound_parse::DeleteUserWebhooksParseSettingsHostnameResponseEntry>, iface_settings_inbound_parse::DeleteUserWebhooksParseSettingsHostnameError> {
         let json = iface_settings_inbound_parse__delete_user_webhooks_parse_settings_hostname_params__to_json(&params);
         match dispatch(&OP_SETTINGS_INBOUND_PARSE_DELETE_USER_WEBHOOKS_PARSE_SETTINGS_HOSTNAME, json).and_then(iface_settings_inbound_parse__delete_user_webhooks_parse_settings_hostname__ok) {
             Ok(v) => Ok(v),

@@ -748,9 +748,10 @@ fn iface_recipes__compute_glycemic_load_response_ingredients_item__to_json(p: &i
     Value::Object(m)
 }
 
-fn iface_recipes__analyze_recipe_response__to_json(p: &iface_recipes::AnalyzeRecipeResponse) -> Value {
+fn iface_recipes__analyze_recipe_response_entry__to_json(p: &iface_recipes::AnalyzeRecipeResponseEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -861,7 +862,7 @@ fn iface_recipes__classify_cuisine_response__to_json(p: &iface_recipes::Classify
 fn iface_recipes__extract_recipe_from_website_response__to_json(p: &iface_recipes::ExtractRecipeFromWebsiteResponse) -> Value {
     let mut m = Map::new();
     m.insert("aggregateLikes".into(), Value::Number(serde_json::Number::from(*(&p.aggregate_likes))));
-    m.insert("analyzedInstructions".into(), Value::Array((&p.analyzed_instructions).iter().map(|v| iface_recipes__extract_recipe_from_website_response_analyzed_instructions_item__to_json(v)).collect()));
+    m.insert("analyzedInstructions".into(), Value::Array((&p.analyzed_instructions).iter().map(|v| Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect())).collect()));
     m.insert("cheap".into(), Value::Bool(*(&p.cheap)));
     m.insert("creditsText".into(), Value::String((&p.credits_text).clone()));
     m.insert("cuisines".into(), Value::Array((&p.cuisines).iter().map(|v| Value::String((v).clone())).collect()));
@@ -900,9 +901,10 @@ fn iface_recipes__extract_recipe_from_website_response__to_json(p: &iface_recipe
     Value::Object(m)
 }
 
-fn iface_recipes__extract_recipe_from_website_response_analyzed_instructions_item__to_json(p: &iface_recipes::ExtractRecipeFromWebsiteResponseAnalyzedInstructionsItem) -> Value {
+fn iface_recipes__extract_recipe_from_website_response_analyzed_instructions_item_entry__to_json(p: &iface_recipes::ExtractRecipeFromWebsiteResponseAnalyzedInstructionsItemEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -976,7 +978,7 @@ fn iface_recipes__search_recipes_by_ingredients_response_item__to_json(p: &iface
     m.insert("missedIngredientCount".into(), Value::Number(serde_json::Number::from(*(&p.missed_ingredient_count))));
     m.insert("missedIngredients".into(), Value::Array((&p.missed_ingredients).iter().map(|v| iface_recipes__search_recipes_by_ingredients_response_item_missed_ingredients_item__to_json(v)).collect()));
     m.insert("title".into(), Value::String((&p.title).clone()));
-    m.insert("unusedIngredients".into(), Value::Array((&p.unused_ingredients).iter().map(|v| iface_recipes__search_recipes_by_ingredients_response_item_unused_ingredients_item__to_json(v)).collect()));
+    m.insert("unusedIngredients".into(), Value::Array((&p.unused_ingredients).iter().map(|v| Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect())).collect()));
     m.insert("usedIngredientCount".into(), serde_json::Number::from_f64(*(&p.used_ingredient_count)).map(Value::Number).unwrap_or(Value::Null));
     m.insert("usedIngredients".into(), Value::Array((&p.used_ingredients).iter().map(|v| iface_recipes__search_recipes_by_ingredients_response_item_used_ingredients_item__to_json(v)).collect()));
     Value::Object(m)
@@ -998,9 +1000,10 @@ fn iface_recipes__search_recipes_by_ingredients_response_item_missed_ingredients
     Value::Object(m)
 }
 
-fn iface_recipes__search_recipes_by_ingredients_response_item_unused_ingredients_item__to_json(p: &iface_recipes::SearchRecipesByIngredientsResponseItemUnusedIngredientsItem) -> Value {
+fn iface_recipes__search_recipes_by_ingredients_response_item_unused_ingredients_item_entry__to_json(p: &iface_recipes::SearchRecipesByIngredientsResponseItemUnusedIngredientsItemEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -1328,7 +1331,7 @@ fn iface_recipes__get_random_recipes_response__to_json(p: &iface_recipes::GetRan
 fn iface_recipes__get_random_recipes_response_recipes_item__to_json(p: &iface_recipes::GetRandomRecipesResponseRecipesItem) -> Value {
     let mut m = Map::new();
     m.insert("aggregateLikes".into(), serde_json::Number::from_f64(*(&p.aggregate_likes)).map(Value::Number).unwrap_or(Value::Null));
-    m.insert("analyzedInstructions".into(), match (&p.analyzed_instructions) { Some(v) => Value::Array((v).iter().map(|v| iface_recipes__get_random_recipes_response_recipes_item_analyzed_instructions_item__to_json(v)).collect()), None => Value::Null });
+    m.insert("analyzedInstructions".into(), match (&p.analyzed_instructions) { Some(v) => Value::Array((v).iter().map(|v| Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect())).collect()), None => Value::Null });
     m.insert("cheap".into(), Value::Bool(*(&p.cheap)));
     m.insert("creditsText".into(), Value::String((&p.credits_text).clone()));
     m.insert("cuisines".into(), match (&p.cuisines) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
@@ -1367,9 +1370,10 @@ fn iface_recipes__get_random_recipes_response_recipes_item__to_json(p: &iface_re
     Value::Object(m)
 }
 
-fn iface_recipes__get_random_recipes_response_recipes_item_analyzed_instructions_item__to_json(p: &iface_recipes::GetRandomRecipesResponseRecipesItemAnalyzedInstructionsItem) -> Value {
+fn iface_recipes__get_random_recipes_response_recipes_item_analyzed_instructions_item_entry__to_json(p: &iface_recipes::GetRandomRecipesResponseRecipesItemAnalyzedInstructionsItemEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -1496,9 +1500,10 @@ fn iface_recipes__get_analyzed_recipe_instructions_response_parsed_instructions_
     Value::Object(m)
 }
 
-fn iface_recipes__create_recipe_card_get_response__to_json(p: &iface_recipes::CreateRecipeCardGetResponse) -> Value {
+fn iface_recipes__create_recipe_card_get_response_entry__to_json(p: &iface_recipes::CreateRecipeCardGetResponseEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -1515,16 +1520,17 @@ fn iface_recipes__get_recipe_equipment_by_id_response_equipment_item__to_json(p:
     Value::Object(m)
 }
 
-fn iface_recipes__equipment_by_id_image_response__to_json(p: &iface_recipes::EquipmentByIdImageResponse) -> Value {
+fn iface_recipes__equipment_by_id_image_response_entry__to_json(p: &iface_recipes::EquipmentByIdImageResponseEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
 fn iface_recipes__get_recipe_information_response__to_json(p: &iface_recipes::GetRecipeInformationResponse) -> Value {
     let mut m = Map::new();
     m.insert("aggregateLikes".into(), Value::Number(serde_json::Number::from(*(&p.aggregate_likes))));
-    m.insert("analyzedInstructions".into(), Value::Array((&p.analyzed_instructions).iter().map(|v| iface_recipes__get_recipe_information_response_analyzed_instructions_item__to_json(v)).collect()));
+    m.insert("analyzedInstructions".into(), Value::Array((&p.analyzed_instructions).iter().map(|v| Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect())).collect()));
     m.insert("cheap".into(), Value::Bool(*(&p.cheap)));
     m.insert("creditsText".into(), Value::String((&p.credits_text).clone()));
     m.insert("cuisines".into(), Value::Array((&p.cuisines).iter().map(|v| Value::String((v).clone())).collect()));
@@ -1563,9 +1569,10 @@ fn iface_recipes__get_recipe_information_response__to_json(p: &iface_recipes::Ge
     Value::Object(m)
 }
 
-fn iface_recipes__get_recipe_information_response_analyzed_instructions_item__to_json(p: &iface_recipes::GetRecipeInformationResponseAnalyzedInstructionsItem) -> Value {
+fn iface_recipes__get_recipe_information_response_analyzed_instructions_item_entry__to_json(p: &iface_recipes::GetRecipeInformationResponseAnalyzedInstructionsItemEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -1665,9 +1672,10 @@ fn iface_recipes__get_recipe_ingredients_by_id_response_ingredients_item_amount_
     Value::Object(m)
 }
 
-fn iface_recipes__recipe_nutrition_label_image_response__to_json(p: &iface_recipes::RecipeNutritionLabelImageResponse) -> Value {
+fn iface_recipes__recipe_nutrition_label_image_response_entry__to_json(p: &iface_recipes::RecipeNutritionLabelImageResponseEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -1700,9 +1708,10 @@ fn iface_recipes__get_recipe_nutrition_widget_by_id_response_good_item__to_json(
     Value::Object(m)
 }
 
-fn iface_recipes__recipe_nutrition_by_id_image_response__to_json(p: &iface_recipes::RecipeNutritionByIdImageResponse) -> Value {
+fn iface_recipes__recipe_nutrition_by_id_image_response_entry__to_json(p: &iface_recipes::RecipeNutritionByIdImageResponseEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -1744,9 +1753,10 @@ fn iface_recipes__get_recipe_price_breakdown_by_id_response_ingredients_item_amo
     Value::Object(m)
 }
 
-fn iface_recipes__price_breakdown_by_id_image_response__to_json(p: &iface_recipes::PriceBreakdownByIdImageResponse) -> Value {
+fn iface_recipes__price_breakdown_by_id_image_response_entry__to_json(p: &iface_recipes::PriceBreakdownByIdImageResponseEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -1781,9 +1791,10 @@ fn iface_recipes__get_recipe_taste_by_id_response__to_json(p: &iface_recipes::Ge
     Value::Object(m)
 }
 
-fn iface_recipes__recipe_taste_by_id_image_response__to_json(p: &iface_recipes::RecipeTasteByIdImageResponse) -> Value {
+fn iface_recipes__recipe_taste_by_id_image_response_entry__to_json(p: &iface_recipes::RecipeTasteByIdImageResponseEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -2293,10 +2304,11 @@ fn iface_recipes__compute_glycemic_load_response_ingredients_item__from_json(v: 
     })
 }
 
-fn iface_recipes__analyze_recipe_response__from_json(v: &Value) -> Option<iface_recipes::AnalyzeRecipeResponse> {
+fn iface_recipes__analyze_recipe_response_entry__from_json(v: &Value) -> Option<iface_recipes::AnalyzeRecipeResponseEntry> {
     let m = v.as_object()?;
-    Some(iface_recipes::AnalyzeRecipeResponse {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_recipes::AnalyzeRecipeResponseEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -2420,7 +2432,7 @@ fn iface_recipes__extract_recipe_from_website_response__from_json(v: &Value) -> 
     let m = v.as_object()?;
     Some(iface_recipes::ExtractRecipeFromWebsiteResponse {
         aggregate_likes: m.get("aggregateLikes").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
-        analyzed_instructions: m.get("analyzedInstructions").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_recipes__extract_recipe_from_website_response_analyzed_instructions_item__from_json(x)).collect())).unwrap_or_default(),
+        analyzed_instructions: m.get("analyzedInstructions").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_recipes::ExtractRecipeFromWebsiteResponseAnalyzedInstructionsItemEntry { key: k.clone(), value: val })).collect())).collect())).unwrap_or_default(),
         cheap: m.get("cheap").and_then(|v| (v).as_bool()).unwrap_or_default(),
         credits_text: m.get("creditsText").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         cuisines: m.get("cuisines").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())).unwrap_or_default(),
@@ -2459,10 +2471,11 @@ fn iface_recipes__extract_recipe_from_website_response__from_json(v: &Value) -> 
     })
 }
 
-fn iface_recipes__extract_recipe_from_website_response_analyzed_instructions_item__from_json(v: &Value) -> Option<iface_recipes::ExtractRecipeFromWebsiteResponseAnalyzedInstructionsItem> {
+fn iface_recipes__extract_recipe_from_website_response_analyzed_instructions_item_entry__from_json(v: &Value) -> Option<iface_recipes::ExtractRecipeFromWebsiteResponseAnalyzedInstructionsItemEntry> {
     let m = v.as_object()?;
-    Some(iface_recipes::ExtractRecipeFromWebsiteResponseAnalyzedInstructionsItem {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_recipes::ExtractRecipeFromWebsiteResponseAnalyzedInstructionsItemEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -2543,7 +2556,7 @@ fn iface_recipes__search_recipes_by_ingredients_response_item__from_json(v: &Val
         missed_ingredient_count: m.get("missedIngredientCount").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
         missed_ingredients: m.get("missedIngredients").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_recipes__search_recipes_by_ingredients_response_item_missed_ingredients_item__from_json(x)).collect())).unwrap_or_default(),
         title: m.get("title").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-        unused_ingredients: m.get("unusedIngredients").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_recipes__search_recipes_by_ingredients_response_item_unused_ingredients_item__from_json(x)).collect())).unwrap_or_default(),
+        unused_ingredients: m.get("unusedIngredients").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_recipes::SearchRecipesByIngredientsResponseItemUnusedIngredientsItemEntry { key: k.clone(), value: val })).collect())).collect())).unwrap_or_default(),
         used_ingredient_count: m.get("usedIngredientCount").and_then(|v| (v).as_f64()).unwrap_or_default(),
         used_ingredients: m.get("usedIngredients").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_recipes__search_recipes_by_ingredients_response_item_used_ingredients_item__from_json(x)).collect())).unwrap_or_default(),
     })
@@ -2566,10 +2579,11 @@ fn iface_recipes__search_recipes_by_ingredients_response_item_missed_ingredients
     })
 }
 
-fn iface_recipes__search_recipes_by_ingredients_response_item_unused_ingredients_item__from_json(v: &Value) -> Option<iface_recipes::SearchRecipesByIngredientsResponseItemUnusedIngredientsItem> {
+fn iface_recipes__search_recipes_by_ingredients_response_item_unused_ingredients_item_entry__from_json(v: &Value) -> Option<iface_recipes::SearchRecipesByIngredientsResponseItemUnusedIngredientsItemEntry> {
     let m = v.as_object()?;
-    Some(iface_recipes::SearchRecipesByIngredientsResponseItemUnusedIngredientsItem {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_recipes::SearchRecipesByIngredientsResponseItemUnusedIngredientsItemEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -2929,7 +2943,7 @@ fn iface_recipes__get_random_recipes_response_recipes_item__from_json(v: &Value)
     let m = v.as_object()?;
     Some(iface_recipes::GetRandomRecipesResponseRecipesItem {
         aggregate_likes: m.get("aggregateLikes").and_then(|v| (v).as_f64()).unwrap_or_default(),
-        analyzed_instructions: m.get("analyzedInstructions").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_recipes__get_random_recipes_response_recipes_item_analyzed_instructions_item__from_json(x)).collect())),
+        analyzed_instructions: m.get("analyzedInstructions").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_recipes::GetRandomRecipesResponseRecipesItemAnalyzedInstructionsItemEntry { key: k.clone(), value: val })).collect())).collect())),
         cheap: m.get("cheap").and_then(|v| (v).as_bool()).unwrap_or_default(),
         credits_text: m.get("creditsText").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         cuisines: m.get("cuisines").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
@@ -2968,10 +2982,11 @@ fn iface_recipes__get_random_recipes_response_recipes_item__from_json(v: &Value)
     })
 }
 
-fn iface_recipes__get_random_recipes_response_recipes_item_analyzed_instructions_item__from_json(v: &Value) -> Option<iface_recipes::GetRandomRecipesResponseRecipesItemAnalyzedInstructionsItem> {
+fn iface_recipes__get_random_recipes_response_recipes_item_analyzed_instructions_item_entry__from_json(v: &Value) -> Option<iface_recipes::GetRandomRecipesResponseRecipesItemAnalyzedInstructionsItemEntry> {
     let m = v.as_object()?;
-    Some(iface_recipes::GetRandomRecipesResponseRecipesItemAnalyzedInstructionsItem {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_recipes::GetRandomRecipesResponseRecipesItemAnalyzedInstructionsItemEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -3112,10 +3127,11 @@ fn iface_recipes__get_analyzed_recipe_instructions_response_parsed_instructions_
     })
 }
 
-fn iface_recipes__create_recipe_card_get_response__from_json(v: &Value) -> Option<iface_recipes::CreateRecipeCardGetResponse> {
+fn iface_recipes__create_recipe_card_get_response_entry__from_json(v: &Value) -> Option<iface_recipes::CreateRecipeCardGetResponseEntry> {
     let m = v.as_object()?;
-    Some(iface_recipes::CreateRecipeCardGetResponse {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_recipes::CreateRecipeCardGetResponseEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -3134,10 +3150,11 @@ fn iface_recipes__get_recipe_equipment_by_id_response_equipment_item__from_json(
     })
 }
 
-fn iface_recipes__equipment_by_id_image_response__from_json(v: &Value) -> Option<iface_recipes::EquipmentByIdImageResponse> {
+fn iface_recipes__equipment_by_id_image_response_entry__from_json(v: &Value) -> Option<iface_recipes::EquipmentByIdImageResponseEntry> {
     let m = v.as_object()?;
-    Some(iface_recipes::EquipmentByIdImageResponse {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_recipes::EquipmentByIdImageResponseEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -3145,7 +3162,7 @@ fn iface_recipes__get_recipe_information_response__from_json(v: &Value) -> Optio
     let m = v.as_object()?;
     Some(iface_recipes::GetRecipeInformationResponse {
         aggregate_likes: m.get("aggregateLikes").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
-        analyzed_instructions: m.get("analyzedInstructions").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_recipes__get_recipe_information_response_analyzed_instructions_item__from_json(x)).collect())).unwrap_or_default(),
+        analyzed_instructions: m.get("analyzedInstructions").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_recipes::GetRecipeInformationResponseAnalyzedInstructionsItemEntry { key: k.clone(), value: val })).collect())).collect())).unwrap_or_default(),
         cheap: m.get("cheap").and_then(|v| (v).as_bool()).unwrap_or_default(),
         credits_text: m.get("creditsText").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         cuisines: m.get("cuisines").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())).unwrap_or_default(),
@@ -3184,10 +3201,11 @@ fn iface_recipes__get_recipe_information_response__from_json(v: &Value) -> Optio
     })
 }
 
-fn iface_recipes__get_recipe_information_response_analyzed_instructions_item__from_json(v: &Value) -> Option<iface_recipes::GetRecipeInformationResponseAnalyzedInstructionsItem> {
+fn iface_recipes__get_recipe_information_response_analyzed_instructions_item_entry__from_json(v: &Value) -> Option<iface_recipes::GetRecipeInformationResponseAnalyzedInstructionsItemEntry> {
     let m = v.as_object()?;
-    Some(iface_recipes::GetRecipeInformationResponseAnalyzedInstructionsItem {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_recipes::GetRecipeInformationResponseAnalyzedInstructionsItemEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -3298,10 +3316,11 @@ fn iface_recipes__get_recipe_ingredients_by_id_response_ingredients_item_amount_
     })
 }
 
-fn iface_recipes__recipe_nutrition_label_image_response__from_json(v: &Value) -> Option<iface_recipes::RecipeNutritionLabelImageResponse> {
+fn iface_recipes__recipe_nutrition_label_image_response_entry__from_json(v: &Value) -> Option<iface_recipes::RecipeNutritionLabelImageResponseEntry> {
     let m = v.as_object()?;
-    Some(iface_recipes::RecipeNutritionLabelImageResponse {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_recipes::RecipeNutritionLabelImageResponseEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -3337,10 +3356,11 @@ fn iface_recipes__get_recipe_nutrition_widget_by_id_response_good_item__from_jso
     })
 }
 
-fn iface_recipes__recipe_nutrition_by_id_image_response__from_json(v: &Value) -> Option<iface_recipes::RecipeNutritionByIdImageResponse> {
+fn iface_recipes__recipe_nutrition_by_id_image_response_entry__from_json(v: &Value) -> Option<iface_recipes::RecipeNutritionByIdImageResponseEntry> {
     let m = v.as_object()?;
-    Some(iface_recipes::RecipeNutritionByIdImageResponse {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_recipes::RecipeNutritionByIdImageResponseEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -3387,10 +3407,11 @@ fn iface_recipes__get_recipe_price_breakdown_by_id_response_ingredients_item_amo
     })
 }
 
-fn iface_recipes__price_breakdown_by_id_image_response__from_json(v: &Value) -> Option<iface_recipes::PriceBreakdownByIdImageResponse> {
+fn iface_recipes__price_breakdown_by_id_image_response_entry__from_json(v: &Value) -> Option<iface_recipes::PriceBreakdownByIdImageResponseEntry> {
     let m = v.as_object()?;
-    Some(iface_recipes::PriceBreakdownByIdImageResponse {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_recipes::PriceBreakdownByIdImageResponseEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -3428,10 +3449,11 @@ fn iface_recipes__get_recipe_taste_by_id_response__from_json(v: &Value) -> Optio
     })
 }
 
-fn iface_recipes__recipe_taste_by_id_image_response__from_json(v: &Value) -> Option<iface_recipes::RecipeTasteByIdImageResponse> {
+fn iface_recipes__recipe_taste_by_id_image_response_entry__from_json(v: &Value) -> Option<iface_recipes::RecipeTasteByIdImageResponseEntry> {
     let m = v.as_object()?;
-    Some(iface_recipes::RecipeTasteByIdImageResponse {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_recipes::RecipeTasteByIdImageResponseEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -3458,12 +3480,12 @@ fn iface_recipes__compute_glycemic_load__err(e: crate::runtime::DispatchError) -
     }
 }
 
-fn iface_recipes__analyze_recipe__ok(body: String) -> Result<iface_recipes::AnalyzeRecipeResponse, crate::runtime::DispatchError> {
+fn iface_recipes__analyze_recipe__ok(body: String) -> Result<Vec<iface_recipes::AnalyzeRecipeResponseEntry>, crate::runtime::DispatchError> {
     let v: Value = match serde_json::from_str(&body) {
         Ok(v) => v,
         Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
     };
-    match iface_recipes__analyze_recipe_response__from_json(&v) {
+    match (&v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_recipes::AnalyzeRecipeResponseEntry { key: k.clone(), value: val })).collect()) {
         Some(x) => Ok(x),
         None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
@@ -3913,12 +3935,12 @@ fn iface_recipes__get_analyzed_recipe_instructions__err(e: crate::runtime::Dispa
     }
 }
 
-fn iface_recipes__create_recipe_card_get__ok(body: String) -> Result<iface_recipes::CreateRecipeCardGetResponse, crate::runtime::DispatchError> {
+fn iface_recipes__create_recipe_card_get__ok(body: String) -> Result<Vec<iface_recipes::CreateRecipeCardGetResponseEntry>, crate::runtime::DispatchError> {
     let v: Value = match serde_json::from_str(&body) {
         Ok(v) => v,
         Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
     };
-    match iface_recipes__create_recipe_card_get_response__from_json(&v) {
+    match (&v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_recipes::CreateRecipeCardGetResponseEntry { key: k.clone(), value: val })).collect()) {
         Some(x) => Ok(x),
         None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
@@ -3975,12 +3997,12 @@ fn iface_recipes__get_recipe_equipment_by_id__err(e: crate::runtime::DispatchErr
     }
 }
 
-fn iface_recipes__equipment_by_id_image__ok(body: String) -> Result<iface_recipes::EquipmentByIdImageResponse, crate::runtime::DispatchError> {
+fn iface_recipes__equipment_by_id_image__ok(body: String) -> Result<Vec<iface_recipes::EquipmentByIdImageResponseEntry>, crate::runtime::DispatchError> {
     let v: Value = match serde_json::from_str(&body) {
         Ok(v) => v,
         Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
     };
-    match iface_recipes__equipment_by_id_image_response__from_json(&v) {
+    match (&v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_recipes::EquipmentByIdImageResponseEntry { key: k.clone(), value: val })).collect()) {
         Some(x) => Ok(x),
         None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
@@ -4076,12 +4098,12 @@ fn iface_recipes__recipe_nutrition_label_widget__err(e: crate::runtime::Dispatch
     }
 }
 
-fn iface_recipes__recipe_nutrition_label_image__ok(body: String) -> Result<iface_recipes::RecipeNutritionLabelImageResponse, crate::runtime::DispatchError> {
+fn iface_recipes__recipe_nutrition_label_image__ok(body: String) -> Result<Vec<iface_recipes::RecipeNutritionLabelImageResponseEntry>, crate::runtime::DispatchError> {
     let v: Value = match serde_json::from_str(&body) {
         Ok(v) => v,
         Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
     };
-    match iface_recipes__recipe_nutrition_label_image_response__from_json(&v) {
+    match (&v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_recipes::RecipeNutritionLabelImageResponseEntry { key: k.clone(), value: val })).collect()) {
         Some(x) => Ok(x),
         None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
@@ -4138,12 +4160,12 @@ fn iface_recipes__get_recipe_nutrition_widget_by_id__err(e: crate::runtime::Disp
     }
 }
 
-fn iface_recipes__recipe_nutrition_by_id_image__ok(body: String) -> Result<iface_recipes::RecipeNutritionByIdImageResponse, crate::runtime::DispatchError> {
+fn iface_recipes__recipe_nutrition_by_id_image__ok(body: String) -> Result<Vec<iface_recipes::RecipeNutritionByIdImageResponseEntry>, crate::runtime::DispatchError> {
     let v: Value = match serde_json::from_str(&body) {
         Ok(v) => v,
         Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
     };
-    match iface_recipes__recipe_nutrition_by_id_image_response__from_json(&v) {
+    match (&v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_recipes::RecipeNutritionByIdImageResponseEntry { key: k.clone(), value: val })).collect()) {
         Some(x) => Ok(x),
         None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
@@ -4200,12 +4222,12 @@ fn iface_recipes__get_recipe_price_breakdown_by_id__err(e: crate::runtime::Dispa
     }
 }
 
-fn iface_recipes__price_breakdown_by_id_image__ok(body: String) -> Result<iface_recipes::PriceBreakdownByIdImageResponse, crate::runtime::DispatchError> {
+fn iface_recipes__price_breakdown_by_id_image__ok(body: String) -> Result<Vec<iface_recipes::PriceBreakdownByIdImageResponseEntry>, crate::runtime::DispatchError> {
     let v: Value = match serde_json::from_str(&body) {
         Ok(v) => v,
         Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
     };
-    match iface_recipes__price_breakdown_by_id_image_response__from_json(&v) {
+    match (&v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_recipes::PriceBreakdownByIdImageResponseEntry { key: k.clone(), value: val })).collect()) {
         Some(x) => Ok(x),
         None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
@@ -4308,12 +4330,12 @@ fn iface_recipes__get_recipe_taste_by_id__err(e: crate::runtime::DispatchError) 
     }
 }
 
-fn iface_recipes__recipe_taste_by_id_image__ok(body: String) -> Result<iface_recipes::RecipeTasteByIdImageResponse, crate::runtime::DispatchError> {
+fn iface_recipes__recipe_taste_by_id_image__ok(body: String) -> Result<Vec<iface_recipes::RecipeTasteByIdImageResponseEntry>, crate::runtime::DispatchError> {
     let v: Value = match serde_json::from_str(&body) {
         Ok(v) => v,
         Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
     };
-    match iface_recipes__recipe_taste_by_id_image_response__from_json(&v) {
+    match (&v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_recipes::RecipeTasteByIdImageResponseEntry { key: k.clone(), value: val })).collect()) {
         Some(x) => Ok(x),
         None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
@@ -4339,7 +4361,7 @@ impl iface_recipes::Guest for crate::Component {
             Err(e) => Err(iface_recipes__compute_glycemic_load__err(e)),
         }
     }
-    fn analyze_recipe(params: iface_recipes::AnalyzeRecipeParams) -> Result<iface_recipes::AnalyzeRecipeResponse, iface_recipes::AnalyzeRecipeError> {
+    fn analyze_recipe(params: iface_recipes::AnalyzeRecipeParams) -> Result<Vec<iface_recipes::AnalyzeRecipeResponseEntry>, iface_recipes::AnalyzeRecipeError> {
         let json = iface_recipes__analyze_recipe_params__to_json(&params);
         match dispatch(&OP_RECIPES_ANALYZE_RECIPE, json).and_then(iface_recipes__analyze_recipe__ok) {
             Ok(v) => Ok(v),
@@ -4486,7 +4508,7 @@ impl iface_recipes::Guest for crate::Component {
             Err(e) => Err(iface_recipes__get_analyzed_recipe_instructions__err(e)),
         }
     }
-    fn create_recipe_card_get(params: iface_recipes::CreateRecipeCardGetParams) -> Result<iface_recipes::CreateRecipeCardGetResponse, iface_recipes::CreateRecipeCardGetError> {
+    fn create_recipe_card_get(params: iface_recipes::CreateRecipeCardGetParams) -> Result<Vec<iface_recipes::CreateRecipeCardGetResponseEntry>, iface_recipes::CreateRecipeCardGetError> {
         let json = iface_recipes__create_recipe_card_get_params__to_json(&params);
         match dispatch(&OP_RECIPES_CREATE_RECIPE_CARD_GET, json).and_then(iface_recipes__create_recipe_card_get__ok) {
             Ok(v) => Ok(v),
@@ -4507,7 +4529,7 @@ impl iface_recipes::Guest for crate::Component {
             Err(e) => Err(iface_recipes__get_recipe_equipment_by_id__err(e)),
         }
     }
-    fn equipment_by_id_image(params: iface_recipes::EquipmentByIdImageParams) -> Result<iface_recipes::EquipmentByIdImageResponse, iface_recipes::EquipmentByIdImageError> {
+    fn equipment_by_id_image(params: iface_recipes::EquipmentByIdImageParams) -> Result<Vec<iface_recipes::EquipmentByIdImageResponseEntry>, iface_recipes::EquipmentByIdImageError> {
         let json = iface_recipes__equipment_by_id_image_params__to_json(&params);
         match dispatch(&OP_RECIPES_EQUIPMENT_BY_ID_IMAGE, json).and_then(iface_recipes__equipment_by_id_image__ok) {
             Ok(v) => Ok(v),
@@ -4542,7 +4564,7 @@ impl iface_recipes::Guest for crate::Component {
             Err(e) => Err(iface_recipes__recipe_nutrition_label_widget__err(e)),
         }
     }
-    fn recipe_nutrition_label_image(params: iface_recipes::RecipeNutritionLabelImageParams) -> Result<iface_recipes::RecipeNutritionLabelImageResponse, iface_recipes::RecipeNutritionLabelImageError> {
+    fn recipe_nutrition_label_image(params: iface_recipes::RecipeNutritionLabelImageParams) -> Result<Vec<iface_recipes::RecipeNutritionLabelImageResponseEntry>, iface_recipes::RecipeNutritionLabelImageError> {
         let json = iface_recipes__recipe_nutrition_label_image_params__to_json(&params);
         match dispatch(&OP_RECIPES_RECIPE_NUTRITION_LABEL_IMAGE, json).and_then(iface_recipes__recipe_nutrition_label_image__ok) {
             Ok(v) => Ok(v),
@@ -4563,7 +4585,7 @@ impl iface_recipes::Guest for crate::Component {
             Err(e) => Err(iface_recipes__get_recipe_nutrition_widget_by_id__err(e)),
         }
     }
-    fn recipe_nutrition_by_id_image(params: iface_recipes::RecipeNutritionByIdImageParams) -> Result<iface_recipes::RecipeNutritionByIdImageResponse, iface_recipes::RecipeNutritionByIdImageError> {
+    fn recipe_nutrition_by_id_image(params: iface_recipes::RecipeNutritionByIdImageParams) -> Result<Vec<iface_recipes::RecipeNutritionByIdImageResponseEntry>, iface_recipes::RecipeNutritionByIdImageError> {
         let json = iface_recipes__recipe_nutrition_by_id_image_params__to_json(&params);
         match dispatch(&OP_RECIPES_RECIPE_NUTRITION_BY_ID_IMAGE, json).and_then(iface_recipes__recipe_nutrition_by_id_image__ok) {
             Ok(v) => Ok(v),
@@ -4584,7 +4606,7 @@ impl iface_recipes::Guest for crate::Component {
             Err(e) => Err(iface_recipes__get_recipe_price_breakdown_by_id__err(e)),
         }
     }
-    fn price_breakdown_by_id_image(params: iface_recipes::PriceBreakdownByIdImageParams) -> Result<iface_recipes::PriceBreakdownByIdImageResponse, iface_recipes::PriceBreakdownByIdImageError> {
+    fn price_breakdown_by_id_image(params: iface_recipes::PriceBreakdownByIdImageParams) -> Result<Vec<iface_recipes::PriceBreakdownByIdImageResponseEntry>, iface_recipes::PriceBreakdownByIdImageError> {
         let json = iface_recipes__price_breakdown_by_id_image_params__to_json(&params);
         match dispatch(&OP_RECIPES_PRICE_BREAKDOWN_BY_ID_IMAGE, json).and_then(iface_recipes__price_breakdown_by_id_image__ok) {
             Ok(v) => Ok(v),
@@ -4619,7 +4641,7 @@ impl iface_recipes::Guest for crate::Component {
             Err(e) => Err(iface_recipes__get_recipe_taste_by_id__err(e)),
         }
     }
-    fn recipe_taste_by_id_image(params: iface_recipes::RecipeTasteByIdImageParams) -> Result<iface_recipes::RecipeTasteByIdImageResponse, iface_recipes::RecipeTasteByIdImageError> {
+    fn recipe_taste_by_id_image(params: iface_recipes::RecipeTasteByIdImageParams) -> Result<Vec<iface_recipes::RecipeTasteByIdImageResponseEntry>, iface_recipes::RecipeTasteByIdImageError> {
         let json = iface_recipes__recipe_taste_by_id_image_params__to_json(&params);
         match dispatch(&OP_RECIPES_RECIPE_TASTE_BY_ID_IMAGE, json).and_then(iface_recipes__recipe_taste_by_id_image__ok) {
             Ok(v) => Ok(v),

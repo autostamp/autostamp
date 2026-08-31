@@ -6,7 +6,7 @@
 /// | Secret name | Applied to each request as |
 /// | --- | --- |
 /// | `oauth2` | `Authorization: Bearer <secret>` |
-package autostamp:vimeo@0.5.0;
+package autostamp:vimeo@0.6.0;
 
 interface api-information {
   record endpoint {
@@ -2029,15 +2029,15 @@ interface categories-videos {
     /// 
     action: video-context-action-enum,
     /// The contextual resource: a user, group, or channel representation, or an object of a tag.
-    resource-op: video-context-resource-op,
+    resource-op: list<video-context-resource-op-entry>,
     /// The contextual resource type.
     resource-type: string
   }
 
-  /// The contextual resource: a user, group, or channel representation, or an object of a tag.
-  record video-context-resource-op {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record video-context-resource-op-entry {
+    key: string,
+    value: string
   }
 
   record embed-settings {
@@ -6436,15 +6436,15 @@ interface channels-videos {
     /// 
     action: video-context-action-enum,
     /// The contextual resource: a user, group, or channel representation, or an object of a tag.
-    resource-op: video-context-resource-op,
+    resource-op: list<video-context-resource-op-entry>,
     /// The contextual resource type.
     resource-type: string
   }
 
-  /// The contextual resource: a user, group, or channel representation, or an object of a tag.
-  record video-context-resource-op {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record video-context-resource-op-entry {
+    key: string,
+    value: string
   }
 
   record embed-settings {
@@ -9066,15 +9066,15 @@ interface videos-credits {
     /// 
     action: video-context-action-enum,
     /// The contextual resource: a user, group, or channel representation, or an object of a tag.
-    resource-op: video-context-resource-op,
+    resource-op: list<video-context-resource-op-entry>,
     /// The contextual resource type.
     resource-type: string
   }
 
-  /// The contextual resource: a user, group, or channel representation, or an object of a tag.
-  record video-context-resource-op {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record video-context-resource-op-entry {
+    key: string,
+    value: string
   }
 
   record embed-settings {
@@ -10496,15 +10496,15 @@ interface likes-essentials {
     /// 
     action: video-context-action-enum,
     /// The contextual resource: a user, group, or channel representation, or an object of a tag.
-    resource-op: video-context-resource-op,
+    resource-op: list<video-context-resource-op-entry>,
     /// The contextual resource type.
     resource-type: string
   }
 
-  /// The contextual resource: a user, group, or channel representation, or an object of a tag.
-  record video-context-resource-op {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record video-context-resource-op-entry {
+    key: string,
+    value: string
   }
 
   record embed-settings {
@@ -13811,15 +13811,15 @@ interface groups-videos {
     /// 
     action: video-context-action-enum,
     /// The contextual resource: a user, group, or channel representation, or an object of a tag.
-    resource-op: video-context-resource-op,
+    resource-op: list<video-context-resource-op-entry>,
     /// The contextual resource type.
     resource-type: string
   }
 
-  /// The contextual resource: a user, group, or channel representation, or an object of a tag.
-  record video-context-resource-op {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record video-context-resource-op-entry {
+    key: string,
+    value: string
   }
 
   record embed-settings {
@@ -16695,15 +16695,15 @@ interface albums-album-videos {
     /// 
     action: video-context-action-enum,
     /// The contextual resource: a user, group, or channel representation, or an object of a tag.
-    resource-op: video-context-resource-op,
+    resource-op: list<video-context-resource-op-entry>,
     /// The contextual resource type.
     resource-type: string
   }
 
-  /// The contextual resource: a user, group, or channel representation, or an object of a tag.
-  record video-context-resource-op {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record video-context-resource-op-entry {
+    key: string,
+    value: string
   }
 
   record embed-settings {
@@ -18422,15 +18422,15 @@ interface videos-essentials {
     /// 
     action: video-context-action-enum,
     /// The contextual resource: a user, group, or channel representation, or an object of a tag.
-    resource-op: video-context-resource-op,
+    resource-op: list<video-context-resource-op-entry>,
     /// The contextual resource type.
     resource-type: string
   }
 
-  /// The contextual resource: a user, group, or channel representation, or an object of a tag.
-  record video-context-resource-op {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record video-context-resource-op-entry {
+    key: string,
+    value: string
   }
 
   record embed-settings {
@@ -21021,15 +21021,15 @@ interface users-feed {
     /// 
     action: video-context-action-enum,
     /// The contextual resource: a user, group, or channel representation, or an object of a tag.
-    resource-op: video-context-resource-op,
+    resource-op: list<video-context-resource-op-entry>,
     /// The contextual resource type.
     resource-type: string
   }
 
-  /// The contextual resource: a user, group, or channel representation, or an object of a tag.
-  record video-context-resource-op {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record video-context-resource-op-entry {
+    key: string,
+    value: string
   }
 
   record embed-settings {
@@ -22880,15 +22880,15 @@ interface on-demand-essentials {
     /// 
     action: video-context-action-enum,
     /// The contextual resource: a user, group, or channel representation, or an object of a tag.
-    resource-op: video-context-resource-op,
+    resource-op: list<video-context-resource-op-entry>,
     /// The contextual resource type.
     resource-type: string
   }
 
-  /// The contextual resource: a user, group, or channel representation, or an object of a tag.
-  record video-context-resource-op {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record video-context-resource-op-entry {
+    key: string,
+    value: string
   }
 
   record embed-settings {
@@ -23963,7 +23963,7 @@ interface on-demand-essentials {
     /// Information on purchasing this video.
     buy: option<purchase-interaction-buy>,
     /// Information on renting this video.
-    rent: option<purchase-interaction-rent>,
+    rent: option<list<purchase-interaction-rent-entry>>,
     /// Information on subscribing to this video.
     subscribe: option<purchase-interaction-subscribe>
   }
@@ -23974,10 +23974,10 @@ interface on-demand-essentials {
     drm: option<bool>
   }
 
-  /// Information on renting this video.
-  record purchase-interaction-rent {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record purchase-interaction-rent-entry {
+    key: string,
+    value: string
   }
 
   /// Information on subscribing to this video.
@@ -24024,13 +24024,13 @@ interface on-demand-essentials {
     /// The product's rental period.
     period: option<string>,
     /// The accepted currencies and respective pricing for this product.
-    price: on-demand-page-subscription-price
+    price: list<on-demand-page-subscription-price-entry>
   }
 
-  /// The accepted currencies and respective pricing for this product.
-  record on-demand-page-subscription-price {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record on-demand-page-subscription-price-entry {
+    key: string,
+    value: string
   }
 
   record create-vod-alt1-body-buy {
@@ -24888,15 +24888,15 @@ interface on-demand-purchases-and-rentals {
     /// 
     action: video-context-action-enum,
     /// The contextual resource: a user, group, or channel representation, or an object of a tag.
-    resource-op: video-context-resource-op,
+    resource-op: list<video-context-resource-op-entry>,
     /// The contextual resource type.
     resource-type: string
   }
 
-  /// The contextual resource: a user, group, or channel representation, or an object of a tag.
-  record video-context-resource-op {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record video-context-resource-op-entry {
+    key: string,
+    value: string
   }
 
   record embed-settings {
@@ -25971,7 +25971,7 @@ interface on-demand-purchases-and-rentals {
     /// Information on purchasing this video.
     buy: option<purchase-interaction-buy>,
     /// Information on renting this video.
-    rent: option<purchase-interaction-rent>,
+    rent: option<list<purchase-interaction-rent-entry>>,
     /// Information on subscribing to this video.
     subscribe: option<purchase-interaction-subscribe>
   }
@@ -25982,10 +25982,10 @@ interface on-demand-purchases-and-rentals {
     drm: option<bool>
   }
 
-  /// Information on renting this video.
-  record purchase-interaction-rent {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record purchase-interaction-rent-entry {
+    key: string,
+    value: string
   }
 
   /// Information on subscribing to this video.
@@ -26032,13 +26032,13 @@ interface on-demand-purchases-and-rentals {
     /// The product's rental period.
     period: option<string>,
     /// The accepted currencies and respective pricing for this product.
-    price: on-demand-page-subscription-price
+    price: list<on-demand-page-subscription-price-entry>
   }
 
-  /// The accepted currencies and respective pricing for this product.
-  record on-demand-page-subscription-price {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record on-demand-page-subscription-price-entry {
+    key: string,
+    value: string
   }
 
   variant get-vod-purchases-error {
@@ -26670,15 +26670,15 @@ interface portfolios-videos {
     /// 
     action: video-context-action-enum,
     /// The contextual resource: a user, group, or channel representation, or an object of a tag.
-    resource-op: video-context-resource-op,
+    resource-op: list<video-context-resource-op-entry>,
     /// The contextual resource type.
     resource-type: string
   }
 
-  /// The contextual resource: a user, group, or channel representation, or an object of a tag.
-  record video-context-resource-op {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record video-context-resource-op-entry {
+    key: string,
+    value: string
   }
 
   record embed-settings {
@@ -28717,15 +28717,15 @@ interface embed-presets-videos {
     /// 
     action: video-context-action-enum,
     /// The contextual resource: a user, group, or channel representation, or an object of a tag.
-    resource-op: video-context-resource-op,
+    resource-op: list<video-context-resource-op-entry>,
     /// The contextual resource type.
     resource-type: string
   }
 
-  /// The contextual resource: a user, group, or channel representation, or an object of a tag.
-  record video-context-resource-op {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record video-context-resource-op-entry {
+    key: string,
+    value: string
   }
 
   record embed-settings {
@@ -30793,15 +30793,15 @@ interface projects-videos {
     /// 
     action: video-context-action-enum,
     /// The contextual resource: a user, group, or channel representation, or an object of a tag.
-    resource-op: video-context-resource-op,
+    resource-op: list<video-context-resource-op-entry>,
     /// The contextual resource type.
     resource-type: string
   }
 
-  /// The contextual resource: a user, group, or channel representation, or an object of a tag.
-  record video-context-resource-op {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record video-context-resource-op-entry {
+    key: string,
+    value: string
   }
 
   record embed-settings {
@@ -32385,15 +32385,15 @@ interface videos-upload {
     /// 
     action: video-context-action-enum,
     /// The contextual resource: a user, group, or channel representation, or an object of a tag.
-    resource-op: video-context-resource-op,
+    resource-op: list<video-context-resource-op-entry>,
     /// The contextual resource type.
     resource-type: string
   }
 
-  /// The contextual resource: a user, group, or channel representation, or an object of a tag.
-  record video-context-resource-op {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record video-context-resource-op-entry {
+    key: string,
+    value: string
   }
 
   record embed-settings {
@@ -33890,15 +33890,15 @@ interface users-watch-history {
     /// 
     action: video-context-action-enum,
     /// The contextual resource: a user, group, or channel representation, or an object of a tag.
-    resource-op: video-context-resource-op,
+    resource-op: list<video-context-resource-op-entry>,
     /// The contextual resource type.
     resource-type: string
   }
 
-  /// The contextual resource: a user, group, or channel representation, or an object of a tag.
-  record video-context-resource-op {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record video-context-resource-op-entry {
+    key: string,
+    value: string
   }
 
   record embed-settings {
@@ -35206,15 +35206,15 @@ interface watch-later-queue-essentials {
     /// 
     action: video-context-action-enum,
     /// The contextual resource: a user, group, or channel representation, or an object of a tag.
-    resource-op: video-context-resource-op,
+    resource-op: list<video-context-resource-op-entry>,
     /// The contextual resource type.
     resource-type: string
   }
 
-  /// The contextual resource: a user, group, or channel representation, or an object of a tag.
-  record video-context-resource-op {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record video-context-resource-op-entry {
+    key: string,
+    value: string
   }
 
   record embed-settings {
@@ -37347,15 +37347,15 @@ interface on-demand-genres {
     /// 
     action: video-context-action-enum,
     /// The contextual resource: a user, group, or channel representation, or an object of a tag.
-    resource-op: video-context-resource-op,
+    resource-op: list<video-context-resource-op-entry>,
     /// The contextual resource type.
     resource-type: string
   }
 
-  /// The contextual resource: a user, group, or channel representation, or an object of a tag.
-  record video-context-resource-op {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record video-context-resource-op-entry {
+    key: string,
+    value: string
   }
 
   record embed-settings {
@@ -38383,7 +38383,7 @@ interface on-demand-genres {
     /// Information on purchasing this video.
     buy: option<purchase-interaction-buy>,
     /// Information on renting this video.
-    rent: option<purchase-interaction-rent>,
+    rent: option<list<purchase-interaction-rent-entry>>,
     /// Information on subscribing to this video.
     subscribe: option<purchase-interaction-subscribe>
   }
@@ -38394,10 +38394,10 @@ interface on-demand-genres {
     drm: option<bool>
   }
 
-  /// Information on renting this video.
-  record purchase-interaction-rent {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record purchase-interaction-rent-entry {
+    key: string,
+    value: string
   }
 
   /// Information on subscribing to this video.
@@ -38444,13 +38444,13 @@ interface on-demand-genres {
     /// The product's rental period.
     period: option<string>,
     /// The accepted currencies and respective pricing for this product.
-    price: on-demand-page-subscription-price
+    price: list<on-demand-page-subscription-price-entry>
   }
 
-  /// The accepted currencies and respective pricing for this product.
-  record on-demand-page-subscription-price {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record on-demand-page-subscription-price-entry {
+    key: string,
+    value: string
   }
 
   variant get-vod-genre-error {
@@ -39918,15 +39918,15 @@ interface on-demand-seasons {
     /// 
     action: video-context-action-enum,
     /// The contextual resource: a user, group, or channel representation, or an object of a tag.
-    resource-op: video-context-resource-op,
+    resource-op: list<video-context-resource-op-entry>,
     /// The contextual resource type.
     resource-type: string
   }
 
-  /// The contextual resource: a user, group, or channel representation, or an object of a tag.
-  record video-context-resource-op {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record video-context-resource-op-entry {
+    key: string,
+    value: string
   }
 
   record embed-settings {
@@ -40871,15 +40871,15 @@ interface on-demand-videos {
     /// 
     action: video-context-action-enum,
     /// The contextual resource: a user, group, or channel representation, or an object of a tag.
-    resource-op: video-context-resource-op,
+    resource-op: list<video-context-resource-op-entry>,
     /// The contextual resource type.
     resource-type: string
   }
 
-  /// The contextual resource: a user, group, or channel representation, or an object of a tag.
-  record video-context-resource-op {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record video-context-resource-op-entry {
+    key: string,
+    value: string
   }
 
   record embed-settings {
@@ -41912,15 +41912,15 @@ interface on-demand-videos {
     /// Whether this On Demand video can be purchased.
     active: bool,
     /// A map of currency type to price.
-    price: on-demand-video-buy-price,
+    price: list<on-demand-video-buy-price-entry>,
     /// Whether this On Demand video has been purchased.
     purchased: option<bool>
   }
 
-  /// A map of currency type to price.
-  record on-demand-video-buy-price {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record on-demand-video-buy-price-entry {
+    key: string,
+    value: string
   }
 
   /// An object containing information about how the authenticated user can interact with this On Demand page.
@@ -41992,15 +41992,15 @@ interface on-demand-videos {
     /// Whether this On Demand video can be rented.
     active: bool,
     /// A map of currency type to price.
-    price: on-demand-video-rent-price,
+    price: list<on-demand-video-rent-price-entry>,
     /// Whether this On Demand video has been rented.
     purchased: option<bool>
   }
 
-  /// A map of currency type to price.
-  record on-demand-video-rent-price {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record on-demand-video-rent-price-entry {
+    key: string,
+    value: string
   }
 
   variant add-video-to-vod-error {
@@ -42462,15 +42462,15 @@ interface videos-tags {
     /// 
     action: video-context-action-enum,
     /// The contextual resource: a user, group, or channel representation, or an object of a tag.
-    resource-op: video-context-resource-op,
+    resource-op: list<video-context-resource-op-entry>,
     /// The contextual resource type.
     resource-type: string
   }
 
-  /// The contextual resource: a user, group, or channel representation, or an object of a tag.
-  record video-context-resource-op {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record video-context-resource-op-entry {
+    key: string,
+    value: string
   }
 
   record embed-settings {
@@ -44467,7 +44467,7 @@ interface videos-versions {
     /// The time in ISO 8601 format when the link to this video file expires.
     link-expiration-time: string,
     /// The URLs for logging events.
-    log: option<play-progressive-item-log>,
+    log: option<list<play-progressive-item-log-entry>>,
     /// The MD5 hash of the video file.
     md5: string,
     /// The file size in bytes of this video.
@@ -44479,10 +44479,10 @@ interface videos-versions {
     width: f64
   }
 
-  /// The URLs for logging events.
-  record play-progressive-item-log {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record play-progressive-item-log-entry {
+    key: string,
+    value: string
   }
 
   /// The upload information for this version.
@@ -45303,15 +45303,15 @@ interface videos-recommendations {
     /// 
     action: video-context-action-enum,
     /// The contextual resource: a user, group, or channel representation, or an object of a tag.
-    resource-op: video-context-resource-op,
+    resource-op: list<video-context-resource-op-entry>,
     /// The contextual resource type.
     resource-type: string
   }
 
-  /// The contextual resource: a user, group, or channel representation, or an object of a tag.
-  record video-context-resource-op {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record video-context-resource-op-entry {
+    key: string,
+    value: string
   }
 
   record embed-settings {

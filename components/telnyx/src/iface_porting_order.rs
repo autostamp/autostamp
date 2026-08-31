@@ -201,12 +201,44 @@ const OP_PORTING_ORDER_GET_PORTING_PHONE_NUMBERS: OpSpec = OpSpec {
     ],
 };
 
+fn iface_porting_order__type_op__to_str(e: &iface_porting_order::TypeOp) -> &'static str {
+    match e {
+        iface_porting_order::TypeOp::Full => "full",
+        iface_porting_order::TypeOp::Partial => "partial",
+    }
+}
+
 fn iface_porting_order__list_porting_orders_sort_enum__to_str(e: &iface_porting_order::ListPortingOrdersSortEnum) -> &'static str {
     match e {
         iface_porting_order::ListPortingOrdersSortEnum::CreatedAt => "created_at",
         iface_porting_order::ListPortingOrdersSortEnum::CreatedAtV2 => "-created_at",
         iface_porting_order::ListPortingOrdersSortEnum::ActivationSettingsFocDatetimeRequested => "activation_settings.foc_datetime_requested",
         iface_porting_order::ListPortingOrdersSortEnum::ActivationSettingsFocDatetimeRequestedV2 => "-activation_settings.foc_datetime_requested",
+    }
+}
+
+fn iface_porting_order__activation_status__to_str(e: &iface_porting_order::ActivationStatus) -> &'static str {
+    match e {
+        iface_porting_order::ActivationStatus::New => "New",
+        iface_porting_order::ActivationStatus::Pending => "Pending",
+        iface_porting_order::ActivationStatus::Conflict => "Conflict",
+        iface_porting_order::ActivationStatus::CancelPending => "Cancel Pending",
+        iface_porting_order::ActivationStatus::Failed => "Failed",
+        iface_porting_order::ActivationStatus::Concurred => "Concurred",
+        iface_porting_order::ActivationStatus::ActivateRdy => "Activate RDY",
+        iface_porting_order::ActivationStatus::DisconnectPending => "Disconnect Pending",
+        iface_porting_order::ActivationStatus::ConcurrenceSent => "Concurrence Sent",
+        iface_porting_order::ActivationStatus::Old => "Old",
+        iface_porting_order::ActivationStatus::Sending => "Sending",
+        iface_porting_order::ActivationStatus::Active => "Active",
+        iface_porting_order::ActivationStatus::Canceled => "Canceled",
+    }
+}
+
+fn iface_porting_order__remaining_numbers_action__to_str(e: &iface_porting_order::RemainingNumbersAction) -> &'static str {
+    match e {
+        iface_porting_order::RemainingNumbersAction::Keep => "keep",
+        iface_porting_order::RemainingNumbersAction::Disconnect => "disconnect",
     }
 }
 
@@ -273,6 +305,14 @@ fn iface_porting_order__porting_orders_comment_user_type_enum__to_str(e: &iface_
     }
 }
 
+fn iface_porting_order__portability_status__to_str(e: &iface_porting_order::PortabilityStatus) -> &'static str {
+    match e {
+        iface_porting_order::PortabilityStatus::Pending => "pending",
+        iface_porting_order::PortabilityStatus::Confirmed => "confirmed",
+        iface_porting_order::PortabilityStatus::Provisional => "provisional",
+    }
+}
+
 fn iface_porting_order__phone_number_regulatory_requirement_field_type_enum__to_str(e: &iface_porting_order::PhoneNumberRegulatoryRequirementFieldTypeEnum) -> &'static str {
     match e {
         iface_porting_order::PhoneNumberRegulatoryRequirementFieldTypeEnum::Textual => "textual",
@@ -288,12 +328,6 @@ fn iface_porting_order__phone_number_status_enum__to_str(e: &iface_porting_order
         iface_porting_order::PhoneNumberStatusEnum::Success => "success",
         iface_porting_order::PhoneNumberStatusEnum::Failure => "failure",
     }
-}
-
-fn iface_porting_order__type_op__to_json(p: &iface_porting_order::TypeOp) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
 }
 
 fn iface_porting_order__list_porting_orders_response__to_json(p: &iface_porting_order::ListPortingOrdersResponse) -> Value {
@@ -326,16 +360,10 @@ fn iface_porting_order__porting_order__to_json(p: &iface_porting_order::PortingO
 
 fn iface_porting_order__activation_settings__to_json(p: &iface_porting_order::ActivationSettings) -> Value {
     let mut m = Map::new();
-    m.insert("activation_status".into(), match (&p.activation_status) { Some(v) => iface_porting_order__activation_status__to_json(v), None => Value::Null });
+    m.insert("activation_status".into(), match (&p.activation_status) { Some(v) => Value::String(iface_porting_order__activation_status__to_str(v).into()), None => Value::Null });
     m.insert("fast_port_eligible".into(), match (&p.fast_port_eligible) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     m.insert("foc_datetime_actual".into(), match (&p.foc_datetime_actual) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("foc_datetime_requested".into(), match (&p.foc_datetime_requested) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_porting_order__activation_status__to_json(p: &iface_porting_order::ActivationStatus) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -372,14 +400,8 @@ fn iface_porting_order__end_user_location__to_json(p: &iface_porting_order::EndU
 fn iface_porting_order__misc__to_json(p: &iface_porting_order::Misc) -> Value {
     let mut m = Map::new();
     m.insert("new_billing_phone_number".into(), match (&p.new_billing_phone_number) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("remaining_numbers_action".into(), match (&p.remaining_numbers_action) { Some(v) => iface_porting_order__remaining_numbers_action__to_json(v), None => Value::Null });
-    m.insert("type".into(), match (&p.type_op) { Some(v) => iface_porting_order__type_op__to_json(v), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_porting_order__remaining_numbers_action__to_json(p: &iface_porting_order::RemainingNumbersAction) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
+    m.insert("remaining_numbers_action".into(), match (&p.remaining_numbers_action) { Some(v) => Value::String(iface_porting_order__remaining_numbers_action__to_str(v).into()), None => Value::Null });
+    m.insert("type".into(), match (&p.type_op) { Some(v) => Value::String(iface_porting_order__type_op__to_str(v).into()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -574,12 +596,6 @@ fn iface_porting_order__create_porting_order_comment_v2_response__to_json(p: &if
     Value::Object(m)
 }
 
-fn iface_porting_order__portability_status__to_json(p: &iface_porting_order::PortabilityStatus) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
 fn iface_porting_order__get_porting_phone_numbers_response__to_json(p: &iface_porting_order::GetPortingPhoneNumbersResponse) -> Value {
     let mut m = Map::new();
     m.insert("data".into(), match (&p.data) { Some(v) => Value::Array((v).iter().map(|v| iface_porting_order__phone_number__to_json(v)).collect()), None => Value::Null });
@@ -617,7 +633,7 @@ fn iface_porting_order__list_porting_orders_params__to_json(p: &iface_porting_or
     m.insert("filter_customer_reference".into(), match (&p.filter_customer_reference) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("filter_phone_numbers_country_code".into(), match (&p.filter_phone_numbers_country_code) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("filter_phone_numbers_carrier_name".into(), match (&p.filter_phone_numbers_carrier_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("filter_misc_type".into(), match (&p.filter_misc_type) { Some(v) => iface_porting_order__type_op__to_json(v), None => Value::Null });
+    m.insert("filter_misc_type".into(), match (&p.filter_misc_type) { Some(v) => Value::String(iface_porting_order__type_op__to_str(v).into()), None => Value::Null });
     m.insert("filter_end_user_admin_entity_name".into(), match (&p.filter_end_user_admin_entity_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("filter_end_user_admin_auth_person_name".into(), match (&p.filter_end_user_admin_auth_person_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("filter_activation_settings_fast_port_eligible".into(), match (&p.filter_activation_settings_fast_port_eligible) { Some(v) => Value::Bool(*(v)), None => Value::Null });
@@ -720,16 +736,9 @@ fn iface_porting_order__get_porting_phone_numbers_params__to_json(p: &iface_port
     m.insert("page_size".into(), match (&p.page_size) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("filter_porting_order_id".into(), match (&p.filter_porting_order_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("filter_phone_number".into(), match (&p.filter_phone_number) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("filter_activation_status".into(), match (&p.filter_activation_status) { Some(v) => iface_porting_order__activation_status__to_json(v), None => Value::Null });
-    m.insert("filter_portability_status".into(), match (&p.filter_portability_status) { Some(v) => iface_porting_order__portability_status__to_json(v), None => Value::Null });
+    m.insert("filter_activation_status".into(), match (&p.filter_activation_status) { Some(v) => Value::String(iface_porting_order__activation_status__to_str(v).into()), None => Value::Null });
+    m.insert("filter_portability_status".into(), match (&p.filter_portability_status) { Some(v) => Value::String(iface_porting_order__portability_status__to_str(v).into()), None => Value::Null });
     Value::Object(m)
-}
-
-fn iface_porting_order__type_op__from_json(v: &Value) -> Option<iface_porting_order::TypeOp> {
-    let m = v.as_object()?;
-    Some(iface_porting_order::TypeOp {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-    })
 }
 
 fn iface_porting_order__list_porting_orders_response__from_json(v: &Value) -> Option<iface_porting_order::ListPortingOrdersResponse> {
@@ -765,17 +774,10 @@ fn iface_porting_order__porting_order__from_json(v: &Value) -> Option<iface_port
 fn iface_porting_order__activation_settings__from_json(v: &Value) -> Option<iface_porting_order::ActivationSettings> {
     let m = v.as_object()?;
     Some(iface_porting_order::ActivationSettings {
-        activation_status: m.get("activation_status").filter(|v| !v.is_null()).and_then(|v| iface_porting_order__activation_status__from_json(v)),
+        activation_status: m.get("activation_status").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_porting_order__activation_status__from_str)),
         fast_port_eligible: m.get("fast_port_eligible").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
         foc_datetime_actual: m.get("foc_datetime_actual").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         foc_datetime_requested: m.get("foc_datetime_requested").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-    })
-}
-
-fn iface_porting_order__activation_status__from_json(v: &Value) -> Option<iface_porting_order::ActivationStatus> {
-    let m = v.as_object()?;
-    Some(iface_porting_order::ActivationStatus {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -816,15 +818,8 @@ fn iface_porting_order__misc__from_json(v: &Value) -> Option<iface_porting_order
     let m = v.as_object()?;
     Some(iface_porting_order::Misc {
         new_billing_phone_number: m.get("new_billing_phone_number").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        remaining_numbers_action: m.get("remaining_numbers_action").filter(|v| !v.is_null()).and_then(|v| iface_porting_order__remaining_numbers_action__from_json(v)),
-        type_op: m.get("type").filter(|v| !v.is_null()).and_then(|v| iface_porting_order__type_op__from_json(v)),
-    })
-}
-
-fn iface_porting_order__remaining_numbers_action__from_json(v: &Value) -> Option<iface_porting_order::RemainingNumbersAction> {
-    let m = v.as_object()?;
-    Some(iface_porting_order::RemainingNumbersAction {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        remaining_numbers_action: m.get("remaining_numbers_action").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_porting_order__remaining_numbers_action__from_str)),
+        type_op: m.get("type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_porting_order__type_op__from_str)),
     })
 }
 
@@ -1060,6 +1055,41 @@ fn iface_porting_order__phone_number_regulatory_requirement__from_json(v: &Value
         requirement_id: m.get("requirement_id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         field_value: m.get("field_value").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
     })
+}
+
+fn iface_porting_order__type_op__from_str(s: &str) -> Option<iface_porting_order::TypeOp> {
+    match s {
+        "full" => Some(iface_porting_order::TypeOp::Full),
+        "partial" => Some(iface_porting_order::TypeOp::Partial),
+        _ => None,
+    }
+}
+
+fn iface_porting_order__activation_status__from_str(s: &str) -> Option<iface_porting_order::ActivationStatus> {
+    match s {
+        "New" => Some(iface_porting_order::ActivationStatus::New),
+        "Pending" => Some(iface_porting_order::ActivationStatus::Pending),
+        "Conflict" => Some(iface_porting_order::ActivationStatus::Conflict),
+        "Cancel Pending" => Some(iface_porting_order::ActivationStatus::CancelPending),
+        "Failed" => Some(iface_porting_order::ActivationStatus::Failed),
+        "Concurred" => Some(iface_porting_order::ActivationStatus::Concurred),
+        "Activate RDY" => Some(iface_porting_order::ActivationStatus::ActivateRdy),
+        "Disconnect Pending" => Some(iface_porting_order::ActivationStatus::DisconnectPending),
+        "Concurrence Sent" => Some(iface_porting_order::ActivationStatus::ConcurrenceSent),
+        "Old" => Some(iface_porting_order::ActivationStatus::Old),
+        "Sending" => Some(iface_porting_order::ActivationStatus::Sending),
+        "Active" => Some(iface_porting_order::ActivationStatus::Active),
+        "Canceled" => Some(iface_porting_order::ActivationStatus::Canceled),
+        _ => None,
+    }
+}
+
+fn iface_porting_order__remaining_numbers_action__from_str(s: &str) -> Option<iface_porting_order::RemainingNumbersAction> {
+    match s {
+        "keep" => Some(iface_porting_order::RemainingNumbersAction::Keep),
+        "disconnect" => Some(iface_porting_order::RemainingNumbersAction::Disconnect),
+        _ => None,
+    }
 }
 
 fn iface_porting_order__requirement_field_type_enum__from_str(s: &str) -> Option<iface_porting_order::RequirementFieldTypeEnum> {

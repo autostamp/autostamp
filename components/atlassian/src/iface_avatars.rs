@@ -128,13 +128,14 @@ fn iface_avatars__avatar__to_json(p: &iface_avatars::Avatar) -> Value {
     m.insert("isSelected".into(), match (&p.is_selected) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     m.insert("isSystemAvatar".into(), match (&p.is_system_avatar) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     m.insert("owner".into(), match (&p.owner) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("urls".into(), match (&p.urls) { Some(v) => iface_avatars__avatar_urls__to_json(v), None => Value::Null });
+    m.insert("urls".into(), match (&p.urls) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_avatars__avatar_urls__to_json(p: &iface_avatars::AvatarUrls) -> Value {
+fn iface_avatars__avatar_urls_entry__to_json(p: &iface_avatars::AvatarUrlsEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -145,21 +146,24 @@ fn iface_avatars__avatars__to_json(p: &iface_avatars::Avatars) -> Value {
     Value::Object(m)
 }
 
-fn iface_avatars__get_avatar_image_by_type_response__to_json(p: &iface_avatars::GetAvatarImageByTypeResponse) -> Value {
+fn iface_avatars__get_avatar_image_by_type_response_entry__to_json(p: &iface_avatars::GetAvatarImageByTypeResponseEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
-fn iface_avatars__get_avatar_image_by_id_response__to_json(p: &iface_avatars::GetAvatarImageByIdResponse) -> Value {
+fn iface_avatars__get_avatar_image_by_id_response_entry__to_json(p: &iface_avatars::GetAvatarImageByIdResponseEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
-fn iface_avatars__get_avatar_image_by_owner_response__to_json(p: &iface_avatars::GetAvatarImageByOwnerResponse) -> Value {
+fn iface_avatars__get_avatar_image_by_owner_response_entry__to_json(p: &iface_avatars::GetAvatarImageByOwnerResponseEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -237,14 +241,15 @@ fn iface_avatars__avatar__from_json(v: &Value) -> Option<iface_avatars::Avatar> 
         is_selected: m.get("isSelected").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
         is_system_avatar: m.get("isSystemAvatar").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
         owner: m.get("owner").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        urls: m.get("urls").filter(|v| !v.is_null()).and_then(|v| iface_avatars__avatar_urls__from_json(v)),
+        urls: m.get("urls").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_avatars::AvatarUrlsEntry { key: k.clone(), value: val })).collect())),
     })
 }
 
-fn iface_avatars__avatar_urls__from_json(v: &Value) -> Option<iface_avatars::AvatarUrls> {
+fn iface_avatars__avatar_urls_entry__from_json(v: &Value) -> Option<iface_avatars::AvatarUrlsEntry> {
     let m = v.as_object()?;
-    Some(iface_avatars::AvatarUrls {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_avatars::AvatarUrlsEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -256,24 +261,27 @@ fn iface_avatars__avatars__from_json(v: &Value) -> Option<iface_avatars::Avatars
     })
 }
 
-fn iface_avatars__get_avatar_image_by_type_response__from_json(v: &Value) -> Option<iface_avatars::GetAvatarImageByTypeResponse> {
+fn iface_avatars__get_avatar_image_by_type_response_entry__from_json(v: &Value) -> Option<iface_avatars::GetAvatarImageByTypeResponseEntry> {
     let m = v.as_object()?;
-    Some(iface_avatars::GetAvatarImageByTypeResponse {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_avatars::GetAvatarImageByTypeResponseEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
-fn iface_avatars__get_avatar_image_by_id_response__from_json(v: &Value) -> Option<iface_avatars::GetAvatarImageByIdResponse> {
+fn iface_avatars__get_avatar_image_by_id_response_entry__from_json(v: &Value) -> Option<iface_avatars::GetAvatarImageByIdResponseEntry> {
     let m = v.as_object()?;
-    Some(iface_avatars::GetAvatarImageByIdResponse {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_avatars::GetAvatarImageByIdResponseEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
-fn iface_avatars__get_avatar_image_by_owner_response__from_json(v: &Value) -> Option<iface_avatars::GetAvatarImageByOwnerResponse> {
+fn iface_avatars__get_avatar_image_by_owner_response_entry__from_json(v: &Value) -> Option<iface_avatars::GetAvatarImageByOwnerResponseEntry> {
     let m = v.as_object()?;
-    Some(iface_avatars::GetAvatarImageByOwnerResponse {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_avatars::GetAvatarImageByOwnerResponseEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -361,12 +369,12 @@ fn iface_avatars__delete_avatar__err(e: crate::runtime::DispatchError) -> iface_
     }
 }
 
-fn iface_avatars__get_avatar_image_by_type__ok(body: String) -> Result<iface_avatars::GetAvatarImageByTypeResponse, crate::runtime::DispatchError> {
+fn iface_avatars__get_avatar_image_by_type__ok(body: String) -> Result<Vec<iface_avatars::GetAvatarImageByTypeResponseEntry>, crate::runtime::DispatchError> {
     let v: Value = match serde_json::from_str(&body) {
         Ok(v) => v,
         Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
     };
-    match iface_avatars__get_avatar_image_by_type_response__from_json(&v) {
+    match (&v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_avatars::GetAvatarImageByTypeResponseEntry { key: k.clone(), value: val })).collect()) {
         Some(x) => Ok(x),
         None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
@@ -384,12 +392,12 @@ fn iface_avatars__get_avatar_image_by_type__err(e: crate::runtime::DispatchError
     }
 }
 
-fn iface_avatars__get_avatar_image_by_id__ok(body: String) -> Result<iface_avatars::GetAvatarImageByIdResponse, crate::runtime::DispatchError> {
+fn iface_avatars__get_avatar_image_by_id__ok(body: String) -> Result<Vec<iface_avatars::GetAvatarImageByIdResponseEntry>, crate::runtime::DispatchError> {
     let v: Value = match serde_json::from_str(&body) {
         Ok(v) => v,
         Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
     };
-    match iface_avatars__get_avatar_image_by_id_response__from_json(&v) {
+    match (&v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_avatars::GetAvatarImageByIdResponseEntry { key: k.clone(), value: val })).collect()) {
         Some(x) => Ok(x),
         None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
@@ -408,12 +416,12 @@ fn iface_avatars__get_avatar_image_by_id__err(e: crate::runtime::DispatchError) 
     }
 }
 
-fn iface_avatars__get_avatar_image_by_owner__ok(body: String) -> Result<iface_avatars::GetAvatarImageByOwnerResponse, crate::runtime::DispatchError> {
+fn iface_avatars__get_avatar_image_by_owner__ok(body: String) -> Result<Vec<iface_avatars::GetAvatarImageByOwnerResponseEntry>, crate::runtime::DispatchError> {
     let v: Value = match serde_json::from_str(&body) {
         Ok(v) => v,
         Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
     };
-    match iface_avatars__get_avatar_image_by_owner_response__from_json(&v) {
+    match (&v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_avatars::GetAvatarImageByOwnerResponseEntry { key: k.clone(), value: val })).collect()) {
         Some(x) => Ok(x),
         None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
@@ -461,21 +469,21 @@ impl iface_avatars::Guest for crate::Component {
             Err(e) => Err(iface_avatars__delete_avatar__err(e)),
         }
     }
-    fn get_avatar_image_by_type(params: iface_avatars::GetAvatarImageByTypeParams) -> Result<iface_avatars::GetAvatarImageByTypeResponse, iface_avatars::GetAvatarImageByTypeError> {
+    fn get_avatar_image_by_type(params: iface_avatars::GetAvatarImageByTypeParams) -> Result<Vec<iface_avatars::GetAvatarImageByTypeResponseEntry>, iface_avatars::GetAvatarImageByTypeError> {
         let json = iface_avatars__get_avatar_image_by_type_params__to_json(&params);
         match dispatch(&OP_AVATARS_GET_AVATAR_IMAGE_BY_TYPE, json).and_then(iface_avatars__get_avatar_image_by_type__ok) {
             Ok(v) => Ok(v),
             Err(e) => Err(iface_avatars__get_avatar_image_by_type__err(e)),
         }
     }
-    fn get_avatar_image_by_id(params: iface_avatars::GetAvatarImageByIdParams) -> Result<iface_avatars::GetAvatarImageByIdResponse, iface_avatars::GetAvatarImageByIdError> {
+    fn get_avatar_image_by_id(params: iface_avatars::GetAvatarImageByIdParams) -> Result<Vec<iface_avatars::GetAvatarImageByIdResponseEntry>, iface_avatars::GetAvatarImageByIdError> {
         let json = iface_avatars__get_avatar_image_by_id_params__to_json(&params);
         match dispatch(&OP_AVATARS_GET_AVATAR_IMAGE_BY_ID, json).and_then(iface_avatars__get_avatar_image_by_id__ok) {
             Ok(v) => Ok(v),
             Err(e) => Err(iface_avatars__get_avatar_image_by_id__err(e)),
         }
     }
-    fn get_avatar_image_by_owner(params: iface_avatars::GetAvatarImageByOwnerParams) -> Result<iface_avatars::GetAvatarImageByOwnerResponse, iface_avatars::GetAvatarImageByOwnerError> {
+    fn get_avatar_image_by_owner(params: iface_avatars::GetAvatarImageByOwnerParams) -> Result<Vec<iface_avatars::GetAvatarImageByOwnerResponseEntry>, iface_avatars::GetAvatarImageByOwnerError> {
         let json = iface_avatars__get_avatar_image_by_owner_params__to_json(&params);
         match dispatch(&OP_AVATARS_GET_AVATAR_IMAGE_BY_OWNER, json).and_then(iface_avatars__get_avatar_image_by_owner__ok) {
             Ok(v) => Ok(v),

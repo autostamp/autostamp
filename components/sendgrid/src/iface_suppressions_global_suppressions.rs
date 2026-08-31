@@ -67,9 +67,10 @@ fn iface_suppressions_global_suppressions__get_asm_suppressions_global_email_res
     Value::Object(m)
 }
 
-fn iface_suppressions_global_suppressions__delete_asm_suppressions_global_email_response__to_json(p: &iface_suppressions_global_suppressions::DeleteAsmSuppressionsGlobalEmailResponse) -> Value {
+fn iface_suppressions_global_suppressions__delete_asm_suppressions_global_email_response_entry__to_json(p: &iface_suppressions_global_suppressions::DeleteAsmSuppressionsGlobalEmailResponseEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -125,10 +126,11 @@ fn iface_suppressions_global_suppressions__get_asm_suppressions_global_email_res
     })
 }
 
-fn iface_suppressions_global_suppressions__delete_asm_suppressions_global_email_response__from_json(v: &Value) -> Option<iface_suppressions_global_suppressions::DeleteAsmSuppressionsGlobalEmailResponse> {
+fn iface_suppressions_global_suppressions__delete_asm_suppressions_global_email_response_entry__from_json(v: &Value) -> Option<iface_suppressions_global_suppressions::DeleteAsmSuppressionsGlobalEmailResponseEntry> {
     let m = v.as_object()?;
-    Some(iface_suppressions_global_suppressions::DeleteAsmSuppressionsGlobalEmailResponse {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_suppressions_global_suppressions::DeleteAsmSuppressionsGlobalEmailResponseEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -176,12 +178,12 @@ fn iface_suppressions_global_suppressions__get_asm_suppressions_global_email__er
     }
 }
 
-fn iface_suppressions_global_suppressions__delete_asm_suppressions_global_email__ok(body: String) -> Result<iface_suppressions_global_suppressions::DeleteAsmSuppressionsGlobalEmailResponse, crate::runtime::DispatchError> {
+fn iface_suppressions_global_suppressions__delete_asm_suppressions_global_email__ok(body: String) -> Result<Vec<iface_suppressions_global_suppressions::DeleteAsmSuppressionsGlobalEmailResponseEntry>, crate::runtime::DispatchError> {
     let v: Value = match serde_json::from_str(&body) {
         Ok(v) => v,
         Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
     };
-    match iface_suppressions_global_suppressions__delete_asm_suppressions_global_email_response__from_json(&v) {
+    match (&v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_suppressions_global_suppressions::DeleteAsmSuppressionsGlobalEmailResponseEntry { key: k.clone(), value: val })).collect()) {
         Some(x) => Ok(x),
         None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
@@ -227,7 +229,7 @@ impl iface_suppressions_global_suppressions::Guest for crate::Component {
             Err(e) => Err(iface_suppressions_global_suppressions__get_asm_suppressions_global_email__err(e)),
         }
     }
-    fn delete_asm_suppressions_global_email(params: iface_suppressions_global_suppressions::DeleteAsmSuppressionsGlobalEmailParams) -> Result<iface_suppressions_global_suppressions::DeleteAsmSuppressionsGlobalEmailResponse, String> {
+    fn delete_asm_suppressions_global_email(params: iface_suppressions_global_suppressions::DeleteAsmSuppressionsGlobalEmailParams) -> Result<Vec<iface_suppressions_global_suppressions::DeleteAsmSuppressionsGlobalEmailResponseEntry>, String> {
         let json = iface_suppressions_global_suppressions__delete_asm_suppressions_global_email_params__to_json(&params);
         match dispatch(&OP_SUPPRESSIONS_GLOBAL_SUPPRESSIONS_DELETE_ASM_SUPPRESSIONS_GLOBAL_EMAIL, json).and_then(iface_suppressions_global_suppressions__delete_asm_suppressions_global_email__ok) {
             Ok(v) => Ok(v),

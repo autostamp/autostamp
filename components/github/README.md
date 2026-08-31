@@ -11,8 +11,8 @@ triggered.
 
 | Setting | Value |
 | --- | --- |
-| Package | `autostamp:github@0.5.0` |
-| Published version | `0.5.0+github-1.1.4` |
+| Package | `autostamp:github@0.6.0` |
+| Published version | `0.6.0+github-1.1.4` |
 | Tag filter | all tags |
 | Operations generated | 845 |
 | Infer API-key credentials | enabled — not triggered |

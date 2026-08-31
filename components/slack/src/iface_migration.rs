@@ -22,27 +22,16 @@ fn iface_migration__exchange_response__to_json(p: &iface_migration::ExchangeResp
     let mut m = Map::new();
     m.insert("enterprise_id".into(), Value::String((&p.enterprise_id).clone()));
     m.insert("invalid_user_ids".into(), match (&p.invalid_user_ids) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
-    m.insert("ok".into(), iface_migration__defs_ok_true__to_json(&p.ok));
-    m.insert("team_id".into(), iface_migration__defs_team__to_json(&p.team_id));
-    m.insert("user_id_map".into(), match (&p.user_id_map) { Some(v) => iface_migration__exchange_response_user_id_map__to_json(v), None => Value::Null });
+    m.insert("ok".into(), Value::Bool(*(&p.ok)));
+    m.insert("team_id".into(), Value::String((&p.team_id).clone()));
+    m.insert("user_id_map".into(), match (&p.user_id_map) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_migration__defs_ok_true__to_json(p: &iface_migration::DefsOkTrue) -> Value {
+fn iface_migration__exchange_response_user_id_map_entry__to_json(p: &iface_migration::ExchangeResponseUserIdMapEntry) -> Value {
     let mut m = Map::new();
+    m.insert("key".into(), Value::String((&p.key).clone()));
     m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_migration__defs_team__to_json(p: &iface_migration::DefsTeam) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_migration__exchange_response_user_id_map__to_json(p: &iface_migration::ExchangeResponseUserIdMap) -> Value {
-    let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -60,30 +49,17 @@ fn iface_migration__exchange_response__from_json(v: &Value) -> Option<iface_migr
     Some(iface_migration::ExchangeResponse {
         enterprise_id: m.get("enterprise_id").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         invalid_user_ids: m.get("invalid_user_ids").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
-        ok: match m.get("ok").and_then(|v| iface_migration__defs_ok_true__from_json(v)) { Some(x) => x, None => return None },
-        team_id: match m.get("team_id").and_then(|v| iface_migration__defs_team__from_json(v)) { Some(x) => x, None => return None },
-        user_id_map: m.get("user_id_map").filter(|v| !v.is_null()).and_then(|v| iface_migration__exchange_response_user_id_map__from_json(v)),
+        ok: m.get("ok").and_then(|v| (v).as_bool()).unwrap_or_default(),
+        team_id: m.get("team_id").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        user_id_map: m.get("user_id_map").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_migration::ExchangeResponseUserIdMapEntry { key: k.clone(), value: val })).collect())),
     })
 }
 
-fn iface_migration__defs_ok_true__from_json(v: &Value) -> Option<iface_migration::DefsOkTrue> {
+fn iface_migration__exchange_response_user_id_map_entry__from_json(v: &Value) -> Option<iface_migration::ExchangeResponseUserIdMapEntry> {
     let m = v.as_object()?;
-    Some(iface_migration::DefsOkTrue {
+    Some(iface_migration::ExchangeResponseUserIdMapEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-    })
-}
-
-fn iface_migration__defs_team__from_json(v: &Value) -> Option<iface_migration::DefsTeam> {
-    let m = v.as_object()?;
-    Some(iface_migration::DefsTeam {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-    })
-}
-
-fn iface_migration__exchange_response_user_id_map__from_json(v: &Value) -> Option<iface_migration::ExchangeResponseUserIdMap> {
-    let m = v.as_object()?;
-    Some(iface_migration::ExchangeResponseUserIdMap {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
     })
 }
 

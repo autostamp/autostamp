@@ -564,16 +564,17 @@ fn iface_subscriptions__put_sc_update_type__to_json(p: &iface_subscriptions::Put
     Value::Object(m)
 }
 
-fn iface_subscriptions__subscription_object_custom_fields__to_json(p: &iface_subscriptions::SubscriptionObjectCustomFields) -> Value {
+fn iface_subscriptions__subscription_object_custom_fields_entry__to_json(p: &iface_subscriptions::SubscriptionObjectCustomFieldsEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
 fn iface_subscriptions__put_subscription_patch_request_type_rate_plans_item__to_json(p: &iface_subscriptions::PutSubscriptionPatchRequestTypeRatePlansItem) -> Value {
     let mut m = Map::new();
     m.insert("charges".into(), match (&p.charges) { Some(v) => Value::Array((v).iter().map(|v| iface_subscriptions__put_subscription_patch_request_type_rate_plans_item_charges_item__to_json(v)).collect()), None => Value::Null });
-    m.insert("customFields".into(), match (&p.custom_fields) { Some(v) => iface_subscriptions__rate_plan_object_custom_fields__to_json(v), None => Value::Null });
+    m.insert("customFields".into(), match (&p.custom_fields) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("ratePlanId".into(), Value::String((&p.rate_plan_id).clone()));
     Value::Object(m)
 }
@@ -582,19 +583,21 @@ fn iface_subscriptions__put_subscription_patch_request_type_rate_plans_item_char
     let mut m = Map::new();
     m.insert("chargeId".into(), match (&p.charge_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("chargeNumber".into(), match (&p.charge_number) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("customFields".into(), match (&p.custom_fields) { Some(v) => iface_subscriptions__rate_plan_charge_object_custom_fields__to_json(v), None => Value::Null });
+    m.insert("customFields".into(), match (&p.custom_fields) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_subscriptions__rate_plan_charge_object_custom_fields__to_json(p: &iface_subscriptions::RatePlanChargeObjectCustomFields) -> Value {
+fn iface_subscriptions__rate_plan_charge_object_custom_fields_entry__to_json(p: &iface_subscriptions::RatePlanChargeObjectCustomFieldsEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
-fn iface_subscriptions__rate_plan_object_custom_fields__to_json(p: &iface_subscriptions::RatePlanObjectCustomFields) -> Value {
+fn iface_subscriptions__rate_plan_object_custom_fields_entry__to_json(p: &iface_subscriptions::RatePlanObjectCustomFieldsEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -907,7 +910,7 @@ fn iface_subscriptions__put_update_subscription_custom_fields_of_a_specified_ver
     m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("subscription_number".into(), Value::String((&p.subscription_number).clone()));
     m.insert("version".into(), Value::String((&p.version).clone()));
-    m.insert("custom_fields".into(), match (&p.custom_fields) { Some(v) => iface_subscriptions__subscription_object_custom_fields__to_json(v), None => Value::Null });
+    m.insert("custom_fields".into(), match (&p.custom_fields) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("rate_plans".into(), match (&p.rate_plans) { Some(v) => Value::Array((v).iter().map(|v| iface_subscriptions__put_subscription_patch_request_type_rate_plans_item__to_json(v)).collect()), None => Value::Null });
     Value::Object(m)
 }

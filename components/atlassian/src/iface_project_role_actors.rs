@@ -189,9 +189,10 @@ fn iface_project_role_actors__updated_project_category__to_json(p: &iface_projec
     Value::Object(m)
 }
 
-fn iface_project_role_actors__update_bean_categorised_actors__to_json(p: &iface_project_role_actors::UpdateBeanCategorisedActors) -> Value {
+fn iface_project_role_actors__update_bean_categorised_actors_entry__to_json(p: &iface_project_role_actors::UpdateBeanCategorisedActorsEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::Array((&p.value).iter().map(|v| Value::String((v).clone())).collect()));
     Value::Object(m)
 }
 
@@ -209,7 +210,7 @@ fn iface_project_role_actors__set_actors_params__to_json(p: &iface_project_role_
     let mut m = Map::new();
     m.insert("project_id_or_key".into(), Value::String((&p.project_id_or_key).clone()));
     m.insert("id".into(), Value::String((&p.id).clone()));
-    m.insert("categorised_actors".into(), match (&p.categorised_actors) { Some(v) => iface_project_role_actors__update_bean_categorised_actors__to_json(v), None => Value::Null });
+    m.insert("categorised_actors".into(), match (&p.categorised_actors) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::Array((&e.value).iter().map(|v| Value::String((v).clone())).collect()))).collect()), None => Value::Null });
     m.insert("id_v2".into(), match (&p.id_v2) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }

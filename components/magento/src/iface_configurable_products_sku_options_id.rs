@@ -41,7 +41,7 @@ const OP_CONFIGURABLE_PRODUCTS_SKU_OPTIONS_ID_CONFIGURABLE_PRODUCT_OPTION_REPOSI
 fn iface_configurable_products_sku_options_id__configurable_product_data_option_interface__to_json(p: &iface_configurable_products_sku_options_id::ConfigurableProductDataOptionInterface) -> Value {
     let mut m = Map::new();
     m.insert("attribute_id".into(), match (&p.attribute_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("extension_attributes".into(), match (&p.extension_attributes) { Some(v) => iface_configurable_products_sku_options_id__configurable_product_data_option_extension_interface__to_json(v), None => Value::Null });
+    m.insert("extension_attributes".into(), match (&p.extension_attributes) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("id".into(), match (&p.id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("is_use_default".into(), match (&p.is_use_default) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     m.insert("label".into(), match (&p.label) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -51,22 +51,24 @@ fn iface_configurable_products_sku_options_id__configurable_product_data_option_
     Value::Object(m)
 }
 
-fn iface_configurable_products_sku_options_id__configurable_product_data_option_extension_interface__to_json(p: &iface_configurable_products_sku_options_id::ConfigurableProductDataOptionExtensionInterface) -> Value {
+fn iface_configurable_products_sku_options_id__configurable_product_data_option_extension_interface_entry__to_json(p: &iface_configurable_products_sku_options_id::ConfigurableProductDataOptionExtensionInterfaceEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
 fn iface_configurable_products_sku_options_id__configurable_product_data_option_value_interface__to_json(p: &iface_configurable_products_sku_options_id::ConfigurableProductDataOptionValueInterface) -> Value {
     let mut m = Map::new();
-    m.insert("extension_attributes".into(), match (&p.extension_attributes) { Some(v) => iface_configurable_products_sku_options_id__configurable_product_data_option_value_extension_interface__to_json(v), None => Value::Null });
+    m.insert("extension_attributes".into(), match (&p.extension_attributes) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("value_index".into(), Value::Number(serde_json::Number::from(*(&p.value_index))));
     Value::Object(m)
 }
 
-fn iface_configurable_products_sku_options_id__configurable_product_data_option_value_extension_interface__to_json(p: &iface_configurable_products_sku_options_id::ConfigurableProductDataOptionValueExtensionInterface) -> Value {
+fn iface_configurable_products_sku_options_id__configurable_product_data_option_value_extension_interface_entry__to_json(p: &iface_configurable_products_sku_options_id::ConfigurableProductDataOptionValueExtensionInterfaceEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -96,7 +98,7 @@ fn iface_configurable_products_sku_options_id__configurable_product_data_option_
     let m = v.as_object()?;
     Some(iface_configurable_products_sku_options_id::ConfigurableProductDataOptionInterface {
         attribute_id: m.get("attribute_id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        extension_attributes: m.get("extension_attributes").filter(|v| !v.is_null()).and_then(|v| iface_configurable_products_sku_options_id__configurable_product_data_option_extension_interface__from_json(v)),
+        extension_attributes: m.get("extension_attributes").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_configurable_products_sku_options_id::ConfigurableProductDataOptionExtensionInterfaceEntry { key: k.clone(), value: val })).collect())),
         id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
         is_use_default: m.get("is_use_default").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
         label: m.get("label").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
@@ -106,25 +108,27 @@ fn iface_configurable_products_sku_options_id__configurable_product_data_option_
     })
 }
 
-fn iface_configurable_products_sku_options_id__configurable_product_data_option_extension_interface__from_json(v: &Value) -> Option<iface_configurable_products_sku_options_id::ConfigurableProductDataOptionExtensionInterface> {
+fn iface_configurable_products_sku_options_id__configurable_product_data_option_extension_interface_entry__from_json(v: &Value) -> Option<iface_configurable_products_sku_options_id::ConfigurableProductDataOptionExtensionInterfaceEntry> {
     let m = v.as_object()?;
-    Some(iface_configurable_products_sku_options_id::ConfigurableProductDataOptionExtensionInterface {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_configurable_products_sku_options_id::ConfigurableProductDataOptionExtensionInterfaceEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
 fn iface_configurable_products_sku_options_id__configurable_product_data_option_value_interface__from_json(v: &Value) -> Option<iface_configurable_products_sku_options_id::ConfigurableProductDataOptionValueInterface> {
     let m = v.as_object()?;
     Some(iface_configurable_products_sku_options_id::ConfigurableProductDataOptionValueInterface {
-        extension_attributes: m.get("extension_attributes").filter(|v| !v.is_null()).and_then(|v| iface_configurable_products_sku_options_id__configurable_product_data_option_value_extension_interface__from_json(v)),
+        extension_attributes: m.get("extension_attributes").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_configurable_products_sku_options_id::ConfigurableProductDataOptionValueExtensionInterfaceEntry { key: k.clone(), value: val })).collect())),
         value_index: m.get("value_index").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
     })
 }
 
-fn iface_configurable_products_sku_options_id__configurable_product_data_option_value_extension_interface__from_json(v: &Value) -> Option<iface_configurable_products_sku_options_id::ConfigurableProductDataOptionValueExtensionInterface> {
+fn iface_configurable_products_sku_options_id__configurable_product_data_option_value_extension_interface_entry__from_json(v: &Value) -> Option<iface_configurable_products_sku_options_id::ConfigurableProductDataOptionValueExtensionInterfaceEntry> {
     let m = v.as_object()?;
-    Some(iface_configurable_products_sku_options_id::ConfigurableProductDataOptionValueExtensionInterface {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_configurable_products_sku_options_id::ConfigurableProductDataOptionValueExtensionInterfaceEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 

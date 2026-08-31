@@ -233,15 +233,65 @@ fn iface_ips__delete_response__to_json(p: &iface_ips::DeleteResponse) -> Value {
     Value::Object(m)
 }
 
-fn iface_ips__list_pools_response__to_json(p: &iface_ips::ListPoolsResponse) -> Value {
+fn iface_ips__list_pools_response_item__to_json(p: &iface_ips::ListPoolsResponseItem) -> Value {
     let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
+    m.insert("created_at".into(), match (&p.created_at) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("ips".into(), match (&p.ips) { Some(v) => Value::Array((v).iter().map(|v| iface_ips__list_pools_response_item_ips_item__to_json(v)).collect()), None => Value::Null });
+    m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_ips__list_response__to_json(p: &iface_ips::ListResponse) -> Value {
+fn iface_ips__list_pools_response_item_ips_item__to_json(p: &iface_ips::ListPoolsResponseItemIpsItem) -> Value {
     let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
+    m.insert("created_at".into(), match (&p.created_at) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("custom_dns".into(), match (&p.custom_dns) { Some(v) => iface_ips__list_pools_response_item_ips_item_custom_dns__to_json(v), None => Value::Null });
+    m.insert("domain".into(), match (&p.domain) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("ip".into(), match (&p.ip) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("pool".into(), match (&p.pool) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("warmup".into(), match (&p.warmup) { Some(v) => iface_ips__list_pools_response_item_ips_item_warmup__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_ips__list_pools_response_item_ips_item_custom_dns__to_json(p: &iface_ips::ListPoolsResponseItemIpsItemCustomDns) -> Value {
+    let mut m = Map::new();
+    m.insert("enabled".into(), match (&p.enabled) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("error".into(), match (&p.error) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("valid".into(), match (&p.valid) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_ips__list_pools_response_item_ips_item_warmup__to_json(p: &iface_ips::ListPoolsResponseItemIpsItemWarmup) -> Value {
+    let mut m = Map::new();
+    m.insert("end_at".into(), match (&p.end_at) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("start_at".into(), match (&p.start_at) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("warming_up".into(), match (&p.warming_up) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_ips__list_response_item__to_json(p: &iface_ips::ListResponseItem) -> Value {
+    let mut m = Map::new();
+    m.insert("created_at".into(), match (&p.created_at) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("custom_dns".into(), match (&p.custom_dns) { Some(v) => iface_ips__list_response_item_custom_dns__to_json(v), None => Value::Null });
+    m.insert("domain".into(), match (&p.domain) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("ip".into(), match (&p.ip) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("pool".into(), match (&p.pool) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("warmup".into(), match (&p.warmup) { Some(v) => iface_ips__list_response_item_warmup__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_ips__list_response_item_custom_dns__to_json(p: &iface_ips::ListResponseItemCustomDns) -> Value {
+    let mut m = Map::new();
+    m.insert("enabled".into(), match (&p.enabled) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("error".into(), match (&p.error) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("valid".into(), match (&p.valid) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_ips__list_response_item_warmup__to_json(p: &iface_ips::ListResponseItemWarmup) -> Value {
+    let mut m = Map::new();
+    m.insert("end_at".into(), match (&p.end_at) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("start_at".into(), match (&p.start_at) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("warming_up".into(), match (&p.warming_up) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     Value::Object(m)
 }
 
@@ -438,17 +488,72 @@ fn iface_ips__delete_response__from_json(v: &Value) -> Option<iface_ips::DeleteR
     })
 }
 
-fn iface_ips__list_pools_response__from_json(v: &Value) -> Option<iface_ips::ListPoolsResponse> {
+fn iface_ips__list_pools_response_item__from_json(v: &Value) -> Option<iface_ips::ListPoolsResponseItem> {
     let m = v.as_object()?;
-    Some(iface_ips::ListPoolsResponse {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    Some(iface_ips::ListPoolsResponseItem {
+        created_at: m.get("created_at").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        ips: m.get("ips").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_ips__list_pools_response_item_ips_item__from_json(x)).collect())),
+        name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
     })
 }
 
-fn iface_ips__list_response__from_json(v: &Value) -> Option<iface_ips::ListResponse> {
+fn iface_ips__list_pools_response_item_ips_item__from_json(v: &Value) -> Option<iface_ips::ListPoolsResponseItemIpsItem> {
     let m = v.as_object()?;
-    Some(iface_ips::ListResponse {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    Some(iface_ips::ListPoolsResponseItemIpsItem {
+        created_at: m.get("created_at").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        custom_dns: m.get("custom_dns").filter(|v| !v.is_null()).and_then(|v| iface_ips__list_pools_response_item_ips_item_custom_dns__from_json(v)),
+        domain: m.get("domain").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        ip: m.get("ip").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        pool: m.get("pool").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        warmup: m.get("warmup").filter(|v| !v.is_null()).and_then(|v| iface_ips__list_pools_response_item_ips_item_warmup__from_json(v)),
+    })
+}
+
+fn iface_ips__list_pools_response_item_ips_item_custom_dns__from_json(v: &Value) -> Option<iface_ips::ListPoolsResponseItemIpsItemCustomDns> {
+    let m = v.as_object()?;
+    Some(iface_ips::ListPoolsResponseItemIpsItemCustomDns {
+        enabled: m.get("enabled").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        error: m.get("error").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        valid: m.get("valid").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+    })
+}
+
+fn iface_ips__list_pools_response_item_ips_item_warmup__from_json(v: &Value) -> Option<iface_ips::ListPoolsResponseItemIpsItemWarmup> {
+    let m = v.as_object()?;
+    Some(iface_ips::ListPoolsResponseItemIpsItemWarmup {
+        end_at: m.get("end_at").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        start_at: m.get("start_at").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        warming_up: m.get("warming_up").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+    })
+}
+
+fn iface_ips__list_response_item__from_json(v: &Value) -> Option<iface_ips::ListResponseItem> {
+    let m = v.as_object()?;
+    Some(iface_ips::ListResponseItem {
+        created_at: m.get("created_at").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        custom_dns: m.get("custom_dns").filter(|v| !v.is_null()).and_then(|v| iface_ips__list_response_item_custom_dns__from_json(v)),
+        domain: m.get("domain").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        ip: m.get("ip").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        pool: m.get("pool").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        warmup: m.get("warmup").filter(|v| !v.is_null()).and_then(|v| iface_ips__list_response_item_warmup__from_json(v)),
+    })
+}
+
+fn iface_ips__list_response_item_custom_dns__from_json(v: &Value) -> Option<iface_ips::ListResponseItemCustomDns> {
+    let m = v.as_object()?;
+    Some(iface_ips::ListResponseItemCustomDns {
+        enabled: m.get("enabled").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        error: m.get("error").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        valid: m.get("valid").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+    })
+}
+
+fn iface_ips__list_response_item_warmup__from_json(v: &Value) -> Option<iface_ips::ListResponseItemWarmup> {
+    let m = v.as_object()?;
+    Some(iface_ips::ListResponseItemWarmup {
+        end_at: m.get("end_at").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        start_at: m.get("start_at").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        warming_up: m.get("warming_up").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
     })
 }
 
@@ -567,12 +672,12 @@ fn iface_ips__post_ips_info_json__err(e: crate::runtime::DispatchError) -> Strin
     }
 }
 
-fn iface_ips__post_ips_list_pools_json__ok(body: String) -> Result<iface_ips::ListPoolsResponse, crate::runtime::DispatchError> {
+fn iface_ips__post_ips_list_pools_json__ok(body: String) -> Result<Vec<iface_ips::ListPoolsResponseItem>, crate::runtime::DispatchError> {
     let v: Value = match serde_json::from_str(&body) {
         Ok(v) => v,
         Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
     };
-    match iface_ips__list_pools_response__from_json(&v) {
+    match (&v).as_array().map(|a| a.iter().filter_map(|x| iface_ips__list_pools_response_item__from_json(x)).collect()) {
         Some(x) => Ok(x),
         None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
@@ -585,12 +690,12 @@ fn iface_ips__post_ips_list_pools_json__err(e: crate::runtime::DispatchError) ->
     }
 }
 
-fn iface_ips__post_ips_list_json__ok(body: String) -> Result<iface_ips::ListResponse, crate::runtime::DispatchError> {
+fn iface_ips__post_ips_list_json__ok(body: String) -> Result<Vec<iface_ips::ListResponseItem>, crate::runtime::DispatchError> {
     let v: Value = match serde_json::from_str(&body) {
         Ok(v) => v,
         Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
     };
-    match iface_ips__list_response__from_json(&v) {
+    match (&v).as_array().map(|a| a.iter().filter_map(|x| iface_ips__list_response_item__from_json(x)).collect()) {
         Some(x) => Ok(x),
         None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
@@ -736,14 +841,14 @@ impl iface_ips::Guest for crate::Component {
             Err(e) => Err(iface_ips__post_ips_info_json__err(e)),
         }
     }
-    fn post_ips_list_pools_json(params: iface_ips::PostIpsListPoolsJsonParams) -> Result<iface_ips::ListPoolsResponse, String> {
+    fn post_ips_list_pools_json(params: iface_ips::PostIpsListPoolsJsonParams) -> Result<Vec<iface_ips::ListPoolsResponseItem>, String> {
         let json = iface_ips__post_ips_list_pools_json_params__to_json(&params);
         match dispatch(&OP_IPS_POST_IPS_LIST_POOLS_JSON, json).and_then(iface_ips__post_ips_list_pools_json__ok) {
             Ok(v) => Ok(v),
             Err(e) => Err(iface_ips__post_ips_list_pools_json__err(e)),
         }
     }
-    fn post_ips_list_json(params: iface_ips::PostIpsListJsonParams) -> Result<iface_ips::ListResponse, String> {
+    fn post_ips_list_json(params: iface_ips::PostIpsListJsonParams) -> Result<Vec<iface_ips::ListResponseItem>, String> {
         let json = iface_ips__post_ips_list_json_params__to_json(&params);
         match dispatch(&OP_IPS_POST_IPS_LIST_JSON, json).and_then(iface_ips__post_ips_list_json__ok) {
             Ok(v) => Ok(v),

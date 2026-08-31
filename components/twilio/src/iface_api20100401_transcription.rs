@@ -83,6 +83,22 @@ const OP_API20100401_TRANSCRIPTION_DELETE_TRANSCRIPTION: OpSpec = OpSpec {
     ],
 };
 
+fn iface_api20100401_transcription__recording_transcription_enum_status__to_str(e: &iface_api20100401_transcription::RecordingTranscriptionEnumStatus) -> &'static str {
+    match e {
+        iface_api20100401_transcription::RecordingTranscriptionEnumStatus::InProgress => "in-progress",
+        iface_api20100401_transcription::RecordingTranscriptionEnumStatus::Completed => "completed",
+        iface_api20100401_transcription::RecordingTranscriptionEnumStatus::Failed => "failed",
+    }
+}
+
+fn iface_api20100401_transcription__transcription_enum_status__to_str(e: &iface_api20100401_transcription::TranscriptionEnumStatus) -> &'static str {
+    match e {
+        iface_api20100401_transcription::TranscriptionEnumStatus::InProgress => "in-progress",
+        iface_api20100401_transcription::TranscriptionEnumStatus::Completed => "completed",
+        iface_api20100401_transcription::TranscriptionEnumStatus::Failed => "failed",
+    }
+}
+
 fn iface_api20100401_transcription__list_recording_transcription_response__to_json(p: &iface_api20100401_transcription::ListRecordingTranscriptionResponse) -> Value {
     let mut m = Map::new();
     m.insert("end".into(), match (&p.end) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
@@ -108,16 +124,10 @@ fn iface_api20100401_transcription__api_v2010_account_recording_recording_transc
     m.insert("price_unit".into(), match (&p.price_unit) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("recording_sid".into(), match (&p.recording_sid) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("sid".into(), match (&p.sid) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("status".into(), match (&p.status) { Some(v) => iface_api20100401_transcription__recording_transcription_enum_status__to_json(v), None => Value::Null });
+    m.insert("status".into(), match (&p.status) { Some(v) => Value::String(iface_api20100401_transcription__recording_transcription_enum_status__to_str(v).into()), None => Value::Null });
     m.insert("transcription_text".into(), match (&p.transcription_text) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("type".into(), match (&p.type_op) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("uri".into(), match (&p.uri) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_api20100401_transcription__recording_transcription_enum_status__to_json(p: &iface_api20100401_transcription::RecordingTranscriptionEnumStatus) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -146,16 +156,10 @@ fn iface_api20100401_transcription__api_v2010_account_transcription__to_json(p: 
     m.insert("price_unit".into(), match (&p.price_unit) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("recording_sid".into(), match (&p.recording_sid) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("sid".into(), match (&p.sid) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("status".into(), match (&p.status) { Some(v) => iface_api20100401_transcription__transcription_enum_status__to_json(v), None => Value::Null });
+    m.insert("status".into(), match (&p.status) { Some(v) => Value::String(iface_api20100401_transcription__transcription_enum_status__to_str(v).into()), None => Value::Null });
     m.insert("transcription_text".into(), match (&p.transcription_text) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("type".into(), match (&p.type_op) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("uri".into(), match (&p.uri) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_api20100401_transcription__transcription_enum_status__to_json(p: &iface_api20100401_transcription::TranscriptionEnumStatus) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -235,17 +239,10 @@ fn iface_api20100401_transcription__api_v2010_account_recording_recording_transc
         price_unit: m.get("price_unit").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         recording_sid: m.get("recording_sid").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         sid: m.get("sid").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        status: m.get("status").filter(|v| !v.is_null()).and_then(|v| iface_api20100401_transcription__recording_transcription_enum_status__from_json(v)),
+        status: m.get("status").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_api20100401_transcription__recording_transcription_enum_status__from_str)),
         transcription_text: m.get("transcription_text").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         type_op: m.get("type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         uri: m.get("uri").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-    })
-}
-
-fn iface_api20100401_transcription__recording_transcription_enum_status__from_json(v: &Value) -> Option<iface_api20100401_transcription::RecordingTranscriptionEnumStatus> {
-    let m = v.as_object()?;
-    Some(iface_api20100401_transcription::RecordingTranscriptionEnumStatus {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -276,18 +273,29 @@ fn iface_api20100401_transcription__api_v2010_account_transcription__from_json(v
         price_unit: m.get("price_unit").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         recording_sid: m.get("recording_sid").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         sid: m.get("sid").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        status: m.get("status").filter(|v| !v.is_null()).and_then(|v| iface_api20100401_transcription__transcription_enum_status__from_json(v)),
+        status: m.get("status").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_api20100401_transcription__transcription_enum_status__from_str)),
         transcription_text: m.get("transcription_text").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         type_op: m.get("type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         uri: m.get("uri").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
     })
 }
 
-fn iface_api20100401_transcription__transcription_enum_status__from_json(v: &Value) -> Option<iface_api20100401_transcription::TranscriptionEnumStatus> {
-    let m = v.as_object()?;
-    Some(iface_api20100401_transcription::TranscriptionEnumStatus {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-    })
+fn iface_api20100401_transcription__recording_transcription_enum_status__from_str(s: &str) -> Option<iface_api20100401_transcription::RecordingTranscriptionEnumStatus> {
+    match s {
+        "in-progress" => Some(iface_api20100401_transcription::RecordingTranscriptionEnumStatus::InProgress),
+        "completed" => Some(iface_api20100401_transcription::RecordingTranscriptionEnumStatus::Completed),
+        "failed" => Some(iface_api20100401_transcription::RecordingTranscriptionEnumStatus::Failed),
+        _ => None,
+    }
+}
+
+fn iface_api20100401_transcription__transcription_enum_status__from_str(s: &str) -> Option<iface_api20100401_transcription::TranscriptionEnumStatus> {
+    match s {
+        "in-progress" => Some(iface_api20100401_transcription::TranscriptionEnumStatus::InProgress),
+        "completed" => Some(iface_api20100401_transcription::TranscriptionEnumStatus::Completed),
+        "failed" => Some(iface_api20100401_transcription::TranscriptionEnumStatus::Failed),
+        _ => None,
+    }
 }
 
 fn iface_api20100401_transcription__list_recording_transcription__ok(body: String) -> Result<iface_api20100401_transcription::ListRecordingTranscriptionResponse, crate::runtime::DispatchError> {

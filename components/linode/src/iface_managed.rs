@@ -338,9 +338,9 @@ fn iface_managed__service_status_enum__to_str(e: &iface_managed::ServiceStatusEn
 fn iface_managed__get_managed_contacts_response__to_json(p: &iface_managed::GetManagedContactsResponse) -> Value {
     let mut m = Map::new();
     m.insert("data".into(), match (&p.data) { Some(v) => Value::Array((v).iter().map(|v| iface_managed__contact__to_json(v)).collect()), None => Value::Null });
-    m.insert("page".into(), match (&p.page) { Some(v) => iface_managed__pagination_envelope_properties_page__to_json(v), None => Value::Null });
-    m.insert("pages".into(), match (&p.pages) { Some(v) => iface_managed__pagination_envelope_properties_pages__to_json(v), None => Value::Null });
-    m.insert("results".into(), match (&p.results) { Some(v) => iface_managed__pagination_envelope_properties_results__to_json(v), None => Value::Null });
+    m.insert("page".into(), match (&p.page) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("pages".into(), match (&p.pages) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("results".into(), match (&p.results) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
@@ -362,36 +362,19 @@ fn iface_managed__contact_phone__to_json(p: &iface_managed::ContactPhone) -> Val
     Value::Object(m)
 }
 
-fn iface_managed__pagination_envelope_properties_page__to_json(p: &iface_managed::PaginationEnvelopePropertiesPage) -> Value {
+fn iface_managed__delete_managed_contact_response_entry__to_json(p: &iface_managed::DeleteManagedContactResponseEntry) -> Value {
     let mut m = Map::new();
+    m.insert("key".into(), Value::String((&p.key).clone()));
     m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_managed__pagination_envelope_properties_pages__to_json(p: &iface_managed::PaginationEnvelopePropertiesPages) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_managed__pagination_envelope_properties_results__to_json(p: &iface_managed::PaginationEnvelopePropertiesResults) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_managed__delete_managed_contact_response__to_json(p: &iface_managed::DeleteManagedContactResponse) -> Value {
-    let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
 fn iface_managed__get_managed_credentials_response__to_json(p: &iface_managed::GetManagedCredentialsResponse) -> Value {
     let mut m = Map::new();
     m.insert("data".into(), match (&p.data) { Some(v) => Value::Array((v).iter().map(|v| iface_managed__credential__to_json(v)).collect()), None => Value::Null });
-    m.insert("page".into(), match (&p.page) { Some(v) => iface_managed__pagination_envelope_properties_page__to_json(v), None => Value::Null });
-    m.insert("pages".into(), match (&p.pages) { Some(v) => iface_managed__pagination_envelope_properties_pages__to_json(v), None => Value::Null });
-    m.insert("results".into(), match (&p.results) { Some(v) => iface_managed__pagination_envelope_properties_results__to_json(v), None => Value::Null });
+    m.insert("page".into(), match (&p.page) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("pages".into(), match (&p.pages) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("results".into(), match (&p.results) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
@@ -409,24 +392,26 @@ fn iface_managed__view_managed_ssh_key_response__to_json(p: &iface_managed::View
     Value::Object(m)
 }
 
-fn iface_managed__delete_managed_credential_response__to_json(p: &iface_managed::DeleteManagedCredentialResponse) -> Value {
+fn iface_managed__delete_managed_credential_response_entry__to_json(p: &iface_managed::DeleteManagedCredentialResponseEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
-fn iface_managed__update_managed_credential_username_password_response__to_json(p: &iface_managed::UpdateManagedCredentialUsernamePasswordResponse) -> Value {
+fn iface_managed__update_managed_credential_username_password_response_entry__to_json(p: &iface_managed::UpdateManagedCredentialUsernamePasswordResponseEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
 fn iface_managed__get_managed_issues_response__to_json(p: &iface_managed::GetManagedIssuesResponse) -> Value {
     let mut m = Map::new();
     m.insert("data".into(), match (&p.data) { Some(v) => Value::Array((v).iter().map(|v| iface_managed__issue__to_json(v)).collect()), None => Value::Null });
-    m.insert("page".into(), match (&p.page) { Some(v) => iface_managed__pagination_envelope_properties_page__to_json(v), None => Value::Null });
-    m.insert("pages".into(), match (&p.pages) { Some(v) => iface_managed__pagination_envelope_properties_pages__to_json(v), None => Value::Null });
-    m.insert("results".into(), match (&p.results) { Some(v) => iface_managed__pagination_envelope_properties_results__to_json(v), None => Value::Null });
+    m.insert("page".into(), match (&p.page) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("pages".into(), match (&p.pages) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("results".into(), match (&p.results) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
@@ -451,9 +436,9 @@ fn iface_managed__issue_entity__to_json(p: &iface_managed::IssueEntity) -> Value
 fn iface_managed__get_managed_linode_settings_response__to_json(p: &iface_managed::GetManagedLinodeSettingsResponse) -> Value {
     let mut m = Map::new();
     m.insert("data".into(), match (&p.data) { Some(v) => Value::Array((v).iter().map(|v| iface_managed__linode_settings__to_json(v)).collect()), None => Value::Null });
-    m.insert("page".into(), match (&p.page) { Some(v) => iface_managed__pagination_envelope_properties_page__to_json(v), None => Value::Null });
-    m.insert("pages".into(), match (&p.pages) { Some(v) => iface_managed__pagination_envelope_properties_pages__to_json(v), None => Value::Null });
-    m.insert("results".into(), match (&p.results) { Some(v) => iface_managed__pagination_envelope_properties_results__to_json(v), None => Value::Null });
+    m.insert("page".into(), match (&p.page) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("pages".into(), match (&p.pages) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("results".into(), match (&p.results) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
@@ -478,9 +463,9 @@ fn iface_managed__linode_settings_ssh__to_json(p: &iface_managed::LinodeSettings
 fn iface_managed__get_managed_services_response__to_json(p: &iface_managed::GetManagedServicesResponse) -> Value {
     let mut m = Map::new();
     m.insert("data".into(), match (&p.data) { Some(v) => Value::Array((v).iter().map(|v| iface_managed__service__to_json(v)).collect()), None => Value::Null });
-    m.insert("page".into(), match (&p.page) { Some(v) => iface_managed__pagination_envelope_properties_page__to_json(v), None => Value::Null });
-    m.insert("pages".into(), match (&p.pages) { Some(v) => iface_managed__pagination_envelope_properties_pages__to_json(v), None => Value::Null });
-    m.insert("results".into(), match (&p.results) { Some(v) => iface_managed__pagination_envelope_properties_results__to_json(v), None => Value::Null });
+    m.insert("page".into(), match (&p.page) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("pages".into(), match (&p.pages) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("results".into(), match (&p.results) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
@@ -502,9 +487,10 @@ fn iface_managed__service__to_json(p: &iface_managed::Service) -> Value {
     Value::Object(m)
 }
 
-fn iface_managed__delete_managed_service_response__to_json(p: &iface_managed::DeleteManagedServiceResponse) -> Value {
+fn iface_managed__delete_managed_service_response_entry__to_json(p: &iface_managed::DeleteManagedServiceResponseEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -687,9 +673,9 @@ fn iface_managed__get_managed_contacts_response__from_json(v: &Value) -> Option<
     let m = v.as_object()?;
     Some(iface_managed::GetManagedContactsResponse {
         data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_managed__contact__from_json(x)).collect())),
-        page: m.get("page").filter(|v| !v.is_null()).and_then(|v| iface_managed__pagination_envelope_properties_page__from_json(v)),
-        pages: m.get("pages").filter(|v| !v.is_null()).and_then(|v| iface_managed__pagination_envelope_properties_pages__from_json(v)),
-        results: m.get("results").filter(|v| !v.is_null()).and_then(|v| iface_managed__pagination_envelope_properties_results__from_json(v)),
+        page: m.get("page").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        pages: m.get("pages").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        results: m.get("results").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
     })
 }
 
@@ -713,31 +699,11 @@ fn iface_managed__contact_phone__from_json(v: &Value) -> Option<iface_managed::C
     })
 }
 
-fn iface_managed__pagination_envelope_properties_page__from_json(v: &Value) -> Option<iface_managed::PaginationEnvelopePropertiesPage> {
+fn iface_managed__delete_managed_contact_response_entry__from_json(v: &Value) -> Option<iface_managed::DeleteManagedContactResponseEntry> {
     let m = v.as_object()?;
-    Some(iface_managed::PaginationEnvelopePropertiesPage {
+    Some(iface_managed::DeleteManagedContactResponseEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-    })
-}
-
-fn iface_managed__pagination_envelope_properties_pages__from_json(v: &Value) -> Option<iface_managed::PaginationEnvelopePropertiesPages> {
-    let m = v.as_object()?;
-    Some(iface_managed::PaginationEnvelopePropertiesPages {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-    })
-}
-
-fn iface_managed__pagination_envelope_properties_results__from_json(v: &Value) -> Option<iface_managed::PaginationEnvelopePropertiesResults> {
-    let m = v.as_object()?;
-    Some(iface_managed::PaginationEnvelopePropertiesResults {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-    })
-}
-
-fn iface_managed__delete_managed_contact_response__from_json(v: &Value) -> Option<iface_managed::DeleteManagedContactResponse> {
-    let m = v.as_object()?;
-    Some(iface_managed::DeleteManagedContactResponse {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
     })
 }
 
@@ -745,9 +711,9 @@ fn iface_managed__get_managed_credentials_response__from_json(v: &Value) -> Opti
     let m = v.as_object()?;
     Some(iface_managed::GetManagedCredentialsResponse {
         data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_managed__credential__from_json(x)).collect())),
-        page: m.get("page").filter(|v| !v.is_null()).and_then(|v| iface_managed__pagination_envelope_properties_page__from_json(v)),
-        pages: m.get("pages").filter(|v| !v.is_null()).and_then(|v| iface_managed__pagination_envelope_properties_pages__from_json(v)),
-        results: m.get("results").filter(|v| !v.is_null()).and_then(|v| iface_managed__pagination_envelope_properties_results__from_json(v)),
+        page: m.get("page").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        pages: m.get("pages").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        results: m.get("results").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
     })
 }
 
@@ -767,17 +733,19 @@ fn iface_managed__view_managed_ssh_key_response__from_json(v: &Value) -> Option<
     })
 }
 
-fn iface_managed__delete_managed_credential_response__from_json(v: &Value) -> Option<iface_managed::DeleteManagedCredentialResponse> {
+fn iface_managed__delete_managed_credential_response_entry__from_json(v: &Value) -> Option<iface_managed::DeleteManagedCredentialResponseEntry> {
     let m = v.as_object()?;
-    Some(iface_managed::DeleteManagedCredentialResponse {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_managed::DeleteManagedCredentialResponseEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
-fn iface_managed__update_managed_credential_username_password_response__from_json(v: &Value) -> Option<iface_managed::UpdateManagedCredentialUsernamePasswordResponse> {
+fn iface_managed__update_managed_credential_username_password_response_entry__from_json(v: &Value) -> Option<iface_managed::UpdateManagedCredentialUsernamePasswordResponseEntry> {
     let m = v.as_object()?;
-    Some(iface_managed::UpdateManagedCredentialUsernamePasswordResponse {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_managed::UpdateManagedCredentialUsernamePasswordResponseEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -785,9 +753,9 @@ fn iface_managed__get_managed_issues_response__from_json(v: &Value) -> Option<if
     let m = v.as_object()?;
     Some(iface_managed::GetManagedIssuesResponse {
         data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_managed__issue__from_json(x)).collect())),
-        page: m.get("page").filter(|v| !v.is_null()).and_then(|v| iface_managed__pagination_envelope_properties_page__from_json(v)),
-        pages: m.get("pages").filter(|v| !v.is_null()).and_then(|v| iface_managed__pagination_envelope_properties_pages__from_json(v)),
-        results: m.get("results").filter(|v| !v.is_null()).and_then(|v| iface_managed__pagination_envelope_properties_results__from_json(v)),
+        page: m.get("page").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        pages: m.get("pages").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        results: m.get("results").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
     })
 }
 
@@ -815,9 +783,9 @@ fn iface_managed__get_managed_linode_settings_response__from_json(v: &Value) -> 
     let m = v.as_object()?;
     Some(iface_managed::GetManagedLinodeSettingsResponse {
         data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_managed__linode_settings__from_json(x)).collect())),
-        page: m.get("page").filter(|v| !v.is_null()).and_then(|v| iface_managed__pagination_envelope_properties_page__from_json(v)),
-        pages: m.get("pages").filter(|v| !v.is_null()).and_then(|v| iface_managed__pagination_envelope_properties_pages__from_json(v)),
-        results: m.get("results").filter(|v| !v.is_null()).and_then(|v| iface_managed__pagination_envelope_properties_results__from_json(v)),
+        page: m.get("page").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        pages: m.get("pages").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        results: m.get("results").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
     })
 }
 
@@ -845,9 +813,9 @@ fn iface_managed__get_managed_services_response__from_json(v: &Value) -> Option<
     let m = v.as_object()?;
     Some(iface_managed::GetManagedServicesResponse {
         data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_managed__service__from_json(x)).collect())),
-        page: m.get("page").filter(|v| !v.is_null()).and_then(|v| iface_managed__pagination_envelope_properties_page__from_json(v)),
-        pages: m.get("pages").filter(|v| !v.is_null()).and_then(|v| iface_managed__pagination_envelope_properties_pages__from_json(v)),
-        results: m.get("results").filter(|v| !v.is_null()).and_then(|v| iface_managed__pagination_envelope_properties_results__from_json(v)),
+        page: m.get("page").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        pages: m.get("pages").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        results: m.get("results").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
     })
 }
 
@@ -870,10 +838,11 @@ fn iface_managed__service__from_json(v: &Value) -> Option<iface_managed::Service
     })
 }
 
-fn iface_managed__delete_managed_service_response__from_json(v: &Value) -> Option<iface_managed::DeleteManagedServiceResponse> {
+fn iface_managed__delete_managed_service_response_entry__from_json(v: &Value) -> Option<iface_managed::DeleteManagedServiceResponseEntry> {
     let m = v.as_object()?;
-    Some(iface_managed::DeleteManagedServiceResponse {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_managed::DeleteManagedServiceResponseEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -981,12 +950,12 @@ fn iface_managed__update_managed_contact__err(e: crate::runtime::DispatchError) 
     }
 }
 
-fn iface_managed__delete_managed_contact__ok(body: String) -> Result<iface_managed::DeleteManagedContactResponse, crate::runtime::DispatchError> {
+fn iface_managed__delete_managed_contact__ok(body: String) -> Result<Vec<iface_managed::DeleteManagedContactResponseEntry>, crate::runtime::DispatchError> {
     let v: Value = match serde_json::from_str(&body) {
         Ok(v) => v,
         Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
     };
-    match iface_managed__delete_managed_contact_response__from_json(&v) {
+    match (&v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_managed::DeleteManagedContactResponseEntry { key: k.clone(), value: val })).collect()) {
         Some(x) => Ok(x),
         None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
@@ -1089,12 +1058,12 @@ fn iface_managed__update_managed_credential__err(e: crate::runtime::DispatchErro
     }
 }
 
-fn iface_managed__delete_managed_credential__ok(body: String) -> Result<iface_managed::DeleteManagedCredentialResponse, crate::runtime::DispatchError> {
+fn iface_managed__delete_managed_credential__ok(body: String) -> Result<Vec<iface_managed::DeleteManagedCredentialResponseEntry>, crate::runtime::DispatchError> {
     let v: Value = match serde_json::from_str(&body) {
         Ok(v) => v,
         Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
     };
-    match iface_managed__delete_managed_credential_response__from_json(&v) {
+    match (&v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_managed::DeleteManagedCredentialResponseEntry { key: k.clone(), value: val })).collect()) {
         Some(x) => Ok(x),
         None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
@@ -1107,12 +1076,12 @@ fn iface_managed__delete_managed_credential__err(e: crate::runtime::DispatchErro
     }
 }
 
-fn iface_managed__update_managed_credential_username_password__ok(body: String) -> Result<iface_managed::UpdateManagedCredentialUsernamePasswordResponse, crate::runtime::DispatchError> {
+fn iface_managed__update_managed_credential_username_password__ok(body: String) -> Result<Vec<iface_managed::UpdateManagedCredentialUsernamePasswordResponseEntry>, crate::runtime::DispatchError> {
     let v: Value = match serde_json::from_str(&body) {
         Ok(v) => v,
         Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
     };
-    match iface_managed__update_managed_credential_username_password_response__from_json(&v) {
+    match (&v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_managed::UpdateManagedCredentialUsernamePasswordResponseEntry { key: k.clone(), value: val })).collect()) {
         Some(x) => Ok(x),
         None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
@@ -1287,12 +1256,12 @@ fn iface_managed__update_managed_service__err(e: crate::runtime::DispatchError) 
     }
 }
 
-fn iface_managed__delete_managed_service__ok(body: String) -> Result<iface_managed::DeleteManagedServiceResponse, crate::runtime::DispatchError> {
+fn iface_managed__delete_managed_service__ok(body: String) -> Result<Vec<iface_managed::DeleteManagedServiceResponseEntry>, crate::runtime::DispatchError> {
     let v: Value = match serde_json::from_str(&body) {
         Ok(v) => v,
         Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
     };
-    match iface_managed__delete_managed_service_response__from_json(&v) {
+    match (&v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_managed::DeleteManagedServiceResponseEntry { key: k.clone(), value: val })).collect()) {
         Some(x) => Ok(x),
         None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
@@ -1388,7 +1357,7 @@ impl iface_managed::Guest for crate::Component {
             Err(e) => Err(iface_managed__update_managed_contact__err(e)),
         }
     }
-    fn delete_managed_contact(params: iface_managed::DeleteManagedContactParams) -> Result<iface_managed::DeleteManagedContactResponse, String> {
+    fn delete_managed_contact(params: iface_managed::DeleteManagedContactParams) -> Result<Vec<iface_managed::DeleteManagedContactResponseEntry>, String> {
         let json = iface_managed__delete_managed_contact_params__to_json(&params);
         match dispatch(&OP_MANAGED_DELETE_MANAGED_CONTACT, json).and_then(iface_managed__delete_managed_contact__ok) {
             Ok(v) => Ok(v),
@@ -1429,14 +1398,14 @@ impl iface_managed::Guest for crate::Component {
             Err(e) => Err(iface_managed__update_managed_credential__err(e)),
         }
     }
-    fn delete_managed_credential(params: iface_managed::DeleteManagedCredentialParams) -> Result<iface_managed::DeleteManagedCredentialResponse, String> {
+    fn delete_managed_credential(params: iface_managed::DeleteManagedCredentialParams) -> Result<Vec<iface_managed::DeleteManagedCredentialResponseEntry>, String> {
         let json = iface_managed__delete_managed_credential_params__to_json(&params);
         match dispatch(&OP_MANAGED_DELETE_MANAGED_CREDENTIAL, json).and_then(iface_managed__delete_managed_credential__ok) {
             Ok(v) => Ok(v),
             Err(e) => Err(iface_managed__delete_managed_credential__err(e)),
         }
     }
-    fn update_managed_credential_username_password(params: iface_managed::UpdateManagedCredentialUsernamePasswordParams) -> Result<iface_managed::UpdateManagedCredentialUsernamePasswordResponse, String> {
+    fn update_managed_credential_username_password(params: iface_managed::UpdateManagedCredentialUsernamePasswordParams) -> Result<Vec<iface_managed::UpdateManagedCredentialUsernamePasswordResponseEntry>, String> {
         let json = iface_managed__update_managed_credential_username_password_params__to_json(&params);
         match dispatch(&OP_MANAGED_UPDATE_MANAGED_CREDENTIAL_USERNAME_PASSWORD, json).and_then(iface_managed__update_managed_credential_username_password__ok) {
             Ok(v) => Ok(v),
@@ -1505,7 +1474,7 @@ impl iface_managed::Guest for crate::Component {
             Err(e) => Err(iface_managed__update_managed_service__err(e)),
         }
     }
-    fn delete_managed_service(params: iface_managed::DeleteManagedServiceParams) -> Result<iface_managed::DeleteManagedServiceResponse, String> {
+    fn delete_managed_service(params: iface_managed::DeleteManagedServiceParams) -> Result<Vec<iface_managed::DeleteManagedServiceResponseEntry>, String> {
         let json = iface_managed__delete_managed_service_params__to_json(&params);
         match dispatch(&OP_MANAGED_DELETE_MANAGED_SERVICE, json).and_then(iface_managed__delete_managed_service__ok) {
             Ok(v) => Ok(v),

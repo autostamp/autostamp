@@ -811,7 +811,7 @@ fn iface_accounts__account__to_json(p: &iface_accounts::Account) -> Value {
     m.insert("future_requirements".into(), match (&p.future_requirements) { Some(v) => iface_accounts__account_future_requirements__to_json(v), None => Value::Null });
     m.insert("id".into(), Value::String((&p.id).clone()));
     m.insert("individual".into(), match (&p.individual) { Some(v) => iface_accounts__person__to_json(v), None => Value::Null });
-    m.insert("metadata".into(), match (&p.metadata) { Some(v) => iface_accounts__account_metadata__to_json(v), None => Value::Null });
+    m.insert("metadata".into(), match (&p.metadata) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("object".into(), Value::String(iface_accounts__account_object_enum__to_str(&p.object).into()));
     m.insert("payouts_enabled".into(), match (&p.payouts_enabled) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     m.insert("requirements".into(), match (&p.requirements) { Some(v) => iface_accounts__account_requirements__to_json(v), None => Value::Null });
@@ -961,7 +961,7 @@ fn iface_accounts__person__to_json(p: &iface_accounts::Person) -> Value {
     m.insert("last_name_kana".into(), match (&p.last_name_kana) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("last_name_kanji".into(), match (&p.last_name_kanji) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("maiden_name".into(), match (&p.maiden_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("metadata".into(), match (&p.metadata) { Some(v) => iface_accounts__person_metadata__to_json(v), None => Value::Null });
+    m.insert("metadata".into(), match (&p.metadata) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("nationality".into(), match (&p.nationality) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("object".into(), Value::String(iface_accounts__person_object_enum__to_str(&p.object).into()));
     m.insert("phone".into(), match (&p.phone) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -982,9 +982,10 @@ fn iface_accounts__legal_entity_dob__to_json(p: &iface_accounts::LegalEntityDob)
     Value::Object(m)
 }
 
-fn iface_accounts__person_metadata__to_json(p: &iface_accounts::PersonMetadata) -> Value {
+fn iface_accounts__person_metadata_entry__to_json(p: &iface_accounts::PersonMetadataEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -1018,9 +1019,10 @@ fn iface_accounts__legal_entity_person_verification_document__to_json(p: &iface_
     Value::Object(m)
 }
 
-fn iface_accounts__account_metadata__to_json(p: &iface_accounts::AccountMetadata) -> Value {
+fn iface_accounts__account_metadata_entry__to_json(p: &iface_accounts::AccountMetadataEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -2254,14 +2256,9 @@ fn iface_accounts__deleted_account__to_json(p: &iface_accounts::DeletedAccount) 
     Value::Object(m)
 }
 
-fn iface_accounts__post_accounts_account_bank_accounts_body_metadata__to_json(p: &iface_accounts::PostAccountsAccountBankAccountsBodyMetadata) -> Value {
+fn iface_accounts__post_accounts_account_bank_accounts_body_metadata_entry__to_json(p: &iface_accounts::PostAccountsAccountBankAccountsBodyMetadataEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_accounts__external_account__to_json(p: &iface_accounts::ExternalAccount) -> Value {
-    let mut m = Map::new();
+    m.insert("key".into(), Value::String((&p.key).clone()));
     m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
@@ -2275,12 +2272,6 @@ fn iface_accounts__post_accounts_account_bank_accounts_id_body_documents__to_jso
 fn iface_accounts__post_accounts_account_bank_accounts_id_body_documents_bank_account_ownership_verification__to_json(p: &iface_accounts::PostAccountsAccountBankAccountsIdBodyDocumentsBankAccountOwnershipVerification) -> Value {
     let mut m = Map::new();
     m.insert("files".into(), match (&p.files) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_accounts__deleted_external_account__to_json(p: &iface_accounts::DeletedExternalAccount) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -2341,9 +2332,10 @@ fn iface_accounts__get_accounts_account_external_accounts_response__to_json(p: &
     Value::Object(m)
 }
 
-fn iface_accounts__post_accounts_account_external_accounts_body_metadata__to_json(p: &iface_accounts::PostAccountsAccountExternalAccountsBodyMetadata) -> Value {
+fn iface_accounts__post_accounts_account_external_accounts_body_metadata_entry__to_json(p: &iface_accounts::PostAccountsAccountExternalAccountsBodyMetadataEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -2884,7 +2876,7 @@ fn iface_accounts__post_accounts_account_bank_accounts_params__to_json(p: &iface
     m.insert("default_for_currency".into(), match (&p.default_for_currency) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     m.insert("expand".into(), match (&p.expand) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
     m.insert("external_account".into(), match (&p.external_account) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("metadata".into(), match (&p.metadata) { Some(v) => iface_accounts__post_accounts_account_bank_accounts_body_metadata__to_json(v), None => Value::Null });
+    m.insert("metadata".into(), match (&p.metadata) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -2972,7 +2964,7 @@ fn iface_accounts__post_accounts_account_external_accounts_params__to_json(p: &i
     m.insert("default_for_currency".into(), match (&p.default_for_currency) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     m.insert("expand".into(), match (&p.expand) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
     m.insert("external_account".into(), match (&p.external_account) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("metadata".into(), match (&p.metadata) { Some(v) => iface_accounts__post_accounts_account_external_accounts_body_metadata__to_json(v), None => Value::Null });
+    m.insert("metadata".into(), match (&p.metadata) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -3251,7 +3243,7 @@ fn iface_accounts__account__from_json(v: &Value) -> Option<iface_accounts::Accou
         future_requirements: m.get("future_requirements").filter(|v| !v.is_null()).and_then(|v| iface_accounts__account_future_requirements__from_json(v)),
         id: m.get("id").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         individual: m.get("individual").filter(|v| !v.is_null()).and_then(|v| iface_accounts__person__from_json(v)),
-        metadata: m.get("metadata").filter(|v| !v.is_null()).and_then(|v| iface_accounts__account_metadata__from_json(v)),
+        metadata: m.get("metadata").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_accounts::AccountMetadataEntry { key: k.clone(), value: val })).collect())),
         object: match m.get("object").and_then(|v| (v).as_str().and_then(iface_accounts__account_object_enum__from_str)) { Some(x) => x, None => return None },
         payouts_enabled: m.get("payouts_enabled").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
         requirements: m.get("requirements").filter(|v| !v.is_null()).and_then(|v| iface_accounts__account_requirements__from_json(v)),
@@ -3410,7 +3402,7 @@ fn iface_accounts__person__from_json(v: &Value) -> Option<iface_accounts::Person
         last_name_kana: m.get("last_name_kana").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         last_name_kanji: m.get("last_name_kanji").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         maiden_name: m.get("maiden_name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        metadata: m.get("metadata").filter(|v| !v.is_null()).and_then(|v| iface_accounts__person_metadata__from_json(v)),
+        metadata: m.get("metadata").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_accounts::PersonMetadataEntry { key: k.clone(), value: val })).collect())),
         nationality: m.get("nationality").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         object: match m.get("object").and_then(|v| (v).as_str().and_then(iface_accounts__person_object_enum__from_str)) { Some(x) => x, None => return None },
         phone: m.get("phone").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
@@ -3432,10 +3424,11 @@ fn iface_accounts__legal_entity_dob__from_json(v: &Value) -> Option<iface_accoun
     })
 }
 
-fn iface_accounts__person_metadata__from_json(v: &Value) -> Option<iface_accounts::PersonMetadata> {
+fn iface_accounts__person_metadata_entry__from_json(v: &Value) -> Option<iface_accounts::PersonMetadataEntry> {
     let m = v.as_object()?;
-    Some(iface_accounts::PersonMetadata {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_accounts::PersonMetadataEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -3472,10 +3465,11 @@ fn iface_accounts__legal_entity_person_verification_document__from_json(v: &Valu
     })
 }
 
-fn iface_accounts__account_metadata__from_json(v: &Value) -> Option<iface_accounts::AccountMetadata> {
+fn iface_accounts__account_metadata_entry__from_json(v: &Value) -> Option<iface_accounts::AccountMetadataEntry> {
     let m = v.as_object()?;
-    Some(iface_accounts::AccountMetadata {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_accounts::AccountMetadataEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -3509,20 +3503,6 @@ fn iface_accounts__deleted_account__from_json(v: &Value) -> Option<iface_account
         deleted: m.get("deleted").and_then(|v| (v).as_bool()).unwrap_or_default(),
         id: m.get("id").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         object: match m.get("object").and_then(|v| (v).as_str().and_then(iface_accounts__account_object_enum__from_str)) { Some(x) => x, None => return None },
-    })
-}
-
-fn iface_accounts__external_account__from_json(v: &Value) -> Option<iface_accounts::ExternalAccount> {
-    let m = v.as_object()?;
-    Some(iface_accounts::ExternalAccount {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-    })
-}
-
-fn iface_accounts__deleted_external_account__from_json(v: &Value) -> Option<iface_accounts::DeletedExternalAccount> {
-    let m = v.as_object()?;
-    Some(iface_accounts::DeletedExternalAccount {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -3887,15 +3867,8 @@ fn iface_accounts__delete_accounts_account__err(e: crate::runtime::DispatchError
     }
 }
 
-fn iface_accounts__post_accounts_account_bank_accounts__ok(body: String) -> Result<iface_accounts::ExternalAccount, crate::runtime::DispatchError> {
-    let v: Value = match serde_json::from_str(&body) {
-        Ok(v) => v,
-        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
-    };
-    match iface_accounts__external_account__from_json(&v) {
-        Some(x) => Ok(x),
-        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
-    }
+fn iface_accounts__post_accounts_account_bank_accounts__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
 }
 
 fn iface_accounts__post_accounts_account_bank_accounts__err(e: crate::runtime::DispatchError) -> String {
@@ -3905,15 +3878,8 @@ fn iface_accounts__post_accounts_account_bank_accounts__err(e: crate::runtime::D
     }
 }
 
-fn iface_accounts__get_accounts_account_bank_accounts_id__ok(body: String) -> Result<iface_accounts::ExternalAccount, crate::runtime::DispatchError> {
-    let v: Value = match serde_json::from_str(&body) {
-        Ok(v) => v,
-        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
-    };
-    match iface_accounts__external_account__from_json(&v) {
-        Some(x) => Ok(x),
-        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
-    }
+fn iface_accounts__get_accounts_account_bank_accounts_id__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
 }
 
 fn iface_accounts__get_accounts_account_bank_accounts_id__err(e: crate::runtime::DispatchError) -> String {
@@ -3923,15 +3889,8 @@ fn iface_accounts__get_accounts_account_bank_accounts_id__err(e: crate::runtime:
     }
 }
 
-fn iface_accounts__post_accounts_account_bank_accounts_id__ok(body: String) -> Result<iface_accounts::ExternalAccount, crate::runtime::DispatchError> {
-    let v: Value = match serde_json::from_str(&body) {
-        Ok(v) => v,
-        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
-    };
-    match iface_accounts__external_account__from_json(&v) {
-        Some(x) => Ok(x),
-        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
-    }
+fn iface_accounts__post_accounts_account_bank_accounts_id__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
 }
 
 fn iface_accounts__post_accounts_account_bank_accounts_id__err(e: crate::runtime::DispatchError) -> String {
@@ -3941,15 +3900,8 @@ fn iface_accounts__post_accounts_account_bank_accounts_id__err(e: crate::runtime
     }
 }
 
-fn iface_accounts__delete_accounts_account_bank_accounts_id__ok(body: String) -> Result<iface_accounts::DeletedExternalAccount, crate::runtime::DispatchError> {
-    let v: Value = match serde_json::from_str(&body) {
-        Ok(v) => v,
-        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
-    };
-    match iface_accounts__deleted_external_account__from_json(&v) {
-        Some(x) => Ok(x),
-        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
-    }
+fn iface_accounts__delete_accounts_account_bank_accounts_id__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
 }
 
 fn iface_accounts__delete_accounts_account_bank_accounts_id__err(e: crate::runtime::DispatchError) -> String {
@@ -4031,15 +3983,8 @@ fn iface_accounts__get_accounts_account_external_accounts__err(e: crate::runtime
     }
 }
 
-fn iface_accounts__post_accounts_account_external_accounts__ok(body: String) -> Result<iface_accounts::ExternalAccount, crate::runtime::DispatchError> {
-    let v: Value = match serde_json::from_str(&body) {
-        Ok(v) => v,
-        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
-    };
-    match iface_accounts__external_account__from_json(&v) {
-        Some(x) => Ok(x),
-        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
-    }
+fn iface_accounts__post_accounts_account_external_accounts__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
 }
 
 fn iface_accounts__post_accounts_account_external_accounts__err(e: crate::runtime::DispatchError) -> String {
@@ -4049,15 +3994,8 @@ fn iface_accounts__post_accounts_account_external_accounts__err(e: crate::runtim
     }
 }
 
-fn iface_accounts__get_accounts_account_external_accounts_id__ok(body: String) -> Result<iface_accounts::ExternalAccount, crate::runtime::DispatchError> {
-    let v: Value = match serde_json::from_str(&body) {
-        Ok(v) => v,
-        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
-    };
-    match iface_accounts__external_account__from_json(&v) {
-        Some(x) => Ok(x),
-        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
-    }
+fn iface_accounts__get_accounts_account_external_accounts_id__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
 }
 
 fn iface_accounts__get_accounts_account_external_accounts_id__err(e: crate::runtime::DispatchError) -> String {
@@ -4067,15 +4005,8 @@ fn iface_accounts__get_accounts_account_external_accounts_id__err(e: crate::runt
     }
 }
 
-fn iface_accounts__post_accounts_account_external_accounts_id__ok(body: String) -> Result<iface_accounts::ExternalAccount, crate::runtime::DispatchError> {
-    let v: Value = match serde_json::from_str(&body) {
-        Ok(v) => v,
-        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
-    };
-    match iface_accounts__external_account__from_json(&v) {
-        Some(x) => Ok(x),
-        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
-    }
+fn iface_accounts__post_accounts_account_external_accounts_id__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
 }
 
 fn iface_accounts__post_accounts_account_external_accounts_id__err(e: crate::runtime::DispatchError) -> String {
@@ -4085,15 +4016,8 @@ fn iface_accounts__post_accounts_account_external_accounts_id__err(e: crate::run
     }
 }
 
-fn iface_accounts__delete_accounts_account_external_accounts_id__ok(body: String) -> Result<iface_accounts::DeletedExternalAccount, crate::runtime::DispatchError> {
-    let v: Value = match serde_json::from_str(&body) {
-        Ok(v) => v,
-        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
-    };
-    match iface_accounts__deleted_external_account__from_json(&v) {
-        Some(x) => Ok(x),
-        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
-    }
+fn iface_accounts__delete_accounts_account_external_accounts_id__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
 }
 
 fn iface_accounts__delete_accounts_account_external_accounts_id__err(e: crate::runtime::DispatchError) -> String {
@@ -4355,28 +4279,28 @@ impl iface_accounts::Guest for crate::Component {
             Err(e) => Err(iface_accounts__delete_accounts_account__err(e)),
         }
     }
-    fn post_accounts_account_bank_accounts(params: iface_accounts::PostAccountsAccountBankAccountsParams) -> Result<iface_accounts::ExternalAccount, String> {
+    fn post_accounts_account_bank_accounts(params: iface_accounts::PostAccountsAccountBankAccountsParams) -> Result<String, String> {
         let json = iface_accounts__post_accounts_account_bank_accounts_params__to_json(&params);
         match dispatch(&OP_ACCOUNTS_POST_ACCOUNTS_ACCOUNT_BANK_ACCOUNTS, json).and_then(iface_accounts__post_accounts_account_bank_accounts__ok) {
             Ok(v) => Ok(v),
             Err(e) => Err(iface_accounts__post_accounts_account_bank_accounts__err(e)),
         }
     }
-    fn get_accounts_account_bank_accounts_id(params: iface_accounts::GetAccountsAccountBankAccountsIdParams) -> Result<iface_accounts::ExternalAccount, String> {
+    fn get_accounts_account_bank_accounts_id(params: iface_accounts::GetAccountsAccountBankAccountsIdParams) -> Result<String, String> {
         let json = iface_accounts__get_accounts_account_bank_accounts_id_params__to_json(&params);
         match dispatch(&OP_ACCOUNTS_GET_ACCOUNTS_ACCOUNT_BANK_ACCOUNTS_ID, json).and_then(iface_accounts__get_accounts_account_bank_accounts_id__ok) {
             Ok(v) => Ok(v),
             Err(e) => Err(iface_accounts__get_accounts_account_bank_accounts_id__err(e)),
         }
     }
-    fn post_accounts_account_bank_accounts_id(params: iface_accounts::PostAccountsAccountBankAccountsIdParams) -> Result<iface_accounts::ExternalAccount, String> {
+    fn post_accounts_account_bank_accounts_id(params: iface_accounts::PostAccountsAccountBankAccountsIdParams) -> Result<String, String> {
         let json = iface_accounts__post_accounts_account_bank_accounts_id_params__to_json(&params);
         match dispatch(&OP_ACCOUNTS_POST_ACCOUNTS_ACCOUNT_BANK_ACCOUNTS_ID, json).and_then(iface_accounts__post_accounts_account_bank_accounts_id__ok) {
             Ok(v) => Ok(v),
             Err(e) => Err(iface_accounts__post_accounts_account_bank_accounts_id__err(e)),
         }
     }
-    fn delete_accounts_account_bank_accounts_id(params: iface_accounts::DeleteAccountsAccountBankAccountsIdParams) -> Result<iface_accounts::DeletedExternalAccount, String> {
+    fn delete_accounts_account_bank_accounts_id(params: iface_accounts::DeleteAccountsAccountBankAccountsIdParams) -> Result<String, String> {
         let json = iface_accounts__delete_accounts_account_bank_accounts_id_params__to_json(&params);
         match dispatch(&OP_ACCOUNTS_DELETE_ACCOUNTS_ACCOUNT_BANK_ACCOUNTS_ID, json).and_then(iface_accounts__delete_accounts_account_bank_accounts_id__ok) {
             Ok(v) => Ok(v),
@@ -4411,28 +4335,28 @@ impl iface_accounts::Guest for crate::Component {
             Err(e) => Err(iface_accounts__get_accounts_account_external_accounts__err(e)),
         }
     }
-    fn post_accounts_account_external_accounts(params: iface_accounts::PostAccountsAccountExternalAccountsParams) -> Result<iface_accounts::ExternalAccount, String> {
+    fn post_accounts_account_external_accounts(params: iface_accounts::PostAccountsAccountExternalAccountsParams) -> Result<String, String> {
         let json = iface_accounts__post_accounts_account_external_accounts_params__to_json(&params);
         match dispatch(&OP_ACCOUNTS_POST_ACCOUNTS_ACCOUNT_EXTERNAL_ACCOUNTS, json).and_then(iface_accounts__post_accounts_account_external_accounts__ok) {
             Ok(v) => Ok(v),
             Err(e) => Err(iface_accounts__post_accounts_account_external_accounts__err(e)),
         }
     }
-    fn get_accounts_account_external_accounts_id(params: iface_accounts::GetAccountsAccountExternalAccountsIdParams) -> Result<iface_accounts::ExternalAccount, String> {
+    fn get_accounts_account_external_accounts_id(params: iface_accounts::GetAccountsAccountExternalAccountsIdParams) -> Result<String, String> {
         let json = iface_accounts__get_accounts_account_external_accounts_id_params__to_json(&params);
         match dispatch(&OP_ACCOUNTS_GET_ACCOUNTS_ACCOUNT_EXTERNAL_ACCOUNTS_ID, json).and_then(iface_accounts__get_accounts_account_external_accounts_id__ok) {
             Ok(v) => Ok(v),
             Err(e) => Err(iface_accounts__get_accounts_account_external_accounts_id__err(e)),
         }
     }
-    fn post_accounts_account_external_accounts_id(params: iface_accounts::PostAccountsAccountExternalAccountsIdParams) -> Result<iface_accounts::ExternalAccount, String> {
+    fn post_accounts_account_external_accounts_id(params: iface_accounts::PostAccountsAccountExternalAccountsIdParams) -> Result<String, String> {
         let json = iface_accounts__post_accounts_account_external_accounts_id_params__to_json(&params);
         match dispatch(&OP_ACCOUNTS_POST_ACCOUNTS_ACCOUNT_EXTERNAL_ACCOUNTS_ID, json).and_then(iface_accounts__post_accounts_account_external_accounts_id__ok) {
             Ok(v) => Ok(v),
             Err(e) => Err(iface_accounts__post_accounts_account_external_accounts_id__err(e)),
         }
     }
-    fn delete_accounts_account_external_accounts_id(params: iface_accounts::DeleteAccountsAccountExternalAccountsIdParams) -> Result<iface_accounts::DeletedExternalAccount, String> {
+    fn delete_accounts_account_external_accounts_id(params: iface_accounts::DeleteAccountsAccountExternalAccountsIdParams) -> Result<String, String> {
         let json = iface_accounts__delete_accounts_account_external_accounts_id_params__to_json(&params);
         match dispatch(&OP_ACCOUNTS_DELETE_ACCOUNTS_ACCOUNT_EXTERNAL_ACCOUNTS_ID, json).and_then(iface_accounts__delete_accounts_account_external_accounts_id__ok) {
             Ok(v) => Ok(v),

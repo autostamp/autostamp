@@ -56,7 +56,7 @@ fn iface_submission__submission__to_json(p: &iface_submission::Submission) -> Va
     m.insert("body".into(), match (&p.body) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("company".into(), match (&p.company) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("created_at".into(), match (&p.created_at) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("data".into(), match (&p.data) { Some(v) => iface_submission__submission_data__to_json(v), None => Value::Null });
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("email".into(), match (&p.email) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("first_name".into(), match (&p.first_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -68,9 +68,10 @@ fn iface_submission__submission__to_json(p: &iface_submission::Submission) -> Va
     Value::Object(m)
 }
 
-fn iface_submission__submission_data__to_json(p: &iface_submission::SubmissionData) -> Value {
+fn iface_submission__submission_data_entry__to_json(p: &iface_submission::SubmissionDataEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -111,7 +112,7 @@ fn iface_submission__submission__from_json(v: &Value) -> Option<iface_submission
         body: m.get("body").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         company: m.get("company").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         created_at: m.get("created_at").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| iface_submission__submission_data__from_json(v)),
+        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_submission::SubmissionDataEntry { key: k.clone(), value: val })).collect())),
         email: m.get("email").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         first_name: m.get("first_name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
@@ -123,10 +124,11 @@ fn iface_submission__submission__from_json(v: &Value) -> Option<iface_submission
     })
 }
 
-fn iface_submission__submission_data__from_json(v: &Value) -> Option<iface_submission::SubmissionData> {
+fn iface_submission__submission_data_entry__from_json(v: &Value) -> Option<iface_submission::SubmissionDataEntry> {
     let m = v.as_object()?;
-    Some(iface_submission::SubmissionData {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_submission::SubmissionDataEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
