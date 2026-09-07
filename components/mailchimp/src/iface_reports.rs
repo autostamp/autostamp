@@ -833,7 +833,7 @@ fn iface_reports__get_reports_id_abuse_reports_id_response_abuse_reports_item__t
     m.insert("id".into(), match (&p.id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("list_id".into(), match (&p.list_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("list_is_active".into(), match (&p.list_is_active) { Some(v) => Value::Bool(*(v)), None => Value::Null });
-    m.insert("merge_fields".into(), match (&p.merge_fields) { Some(v) => iface_reports__get_reports_id_abuse_reports_id_response_abuse_reports_item_merge_fields__to_json(v), None => Value::Null });
+    m.insert("merge_fields".into(), match (&p.merge_fields) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("vip".into(), match (&p.vip) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     Value::Object(m)
 }
@@ -848,9 +848,10 @@ fn iface_reports__get_reports_id_abuse_reports_id_response_abuse_reports_item_li
     Value::Object(m)
 }
 
-fn iface_reports__get_reports_id_abuse_reports_id_response_abuse_reports_item_merge_fields__to_json(p: &iface_reports::GetReportsIdAbuseReportsIdResponseAbuseReportsItemMergeFields) -> Value {
+fn iface_reports__get_reports_id_abuse_reports_id_response_abuse_reports_item_merge_fields_entry__to_json(p: &iface_reports::GetReportsIdAbuseReportsIdResponseAbuseReportsItemMergeFieldsEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -864,7 +865,7 @@ fn iface_reports__get_reports_id_abuse_reports_id_id_response__to_json(p: &iface
     m.insert("id".into(), match (&p.id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("list_id".into(), match (&p.list_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("list_is_active".into(), match (&p.list_is_active) { Some(v) => Value::Bool(*(v)), None => Value::Null });
-    m.insert("merge_fields".into(), match (&p.merge_fields) { Some(v) => iface_reports__get_reports_id_abuse_reports_id_id_response_merge_fields__to_json(v), None => Value::Null });
+    m.insert("merge_fields".into(), match (&p.merge_fields) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("vip".into(), match (&p.vip) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     Value::Object(m)
 }
@@ -879,9 +880,10 @@ fn iface_reports__get_reports_id_abuse_reports_id_id_response_links_item__to_jso
     Value::Object(m)
 }
 
-fn iface_reports__get_reports_id_abuse_reports_id_id_response_merge_fields__to_json(p: &iface_reports::GetReportsIdAbuseReportsIdIdResponseMergeFields) -> Value {
+fn iface_reports__get_reports_id_abuse_reports_id_id_response_merge_fields_entry__to_json(p: &iface_reports::GetReportsIdAbuseReportsIdIdResponseMergeFieldsEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -1070,7 +1072,7 @@ fn iface_reports__get_reports_id_click_details_id_members_response_members_item_
     m.insert("email_id".into(), match (&p.email_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("list_id".into(), match (&p.list_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("list_is_active".into(), match (&p.list_is_active) { Some(v) => Value::Bool(*(v)), None => Value::Null });
-    m.insert("merge_fields".into(), match (&p.merge_fields) { Some(v) => iface_reports__get_reports_id_click_details_id_members_response_members_item_merge_fields__to_json(v), None => Value::Null });
+    m.insert("merge_fields".into(), match (&p.merge_fields) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("url_id".into(), match (&p.url_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("vip".into(), match (&p.vip) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     Value::Object(m)
@@ -1086,9 +1088,10 @@ fn iface_reports__get_reports_id_click_details_id_members_response_members_item_
     Value::Object(m)
 }
 
-fn iface_reports__get_reports_id_click_details_id_members_response_members_item_merge_fields__to_json(p: &iface_reports::GetReportsIdClickDetailsIdMembersResponseMembersItemMergeFields) -> Value {
+fn iface_reports__get_reports_id_click_details_id_members_response_members_item_merge_fields_entry__to_json(p: &iface_reports::GetReportsIdClickDetailsIdMembersResponseMembersItemMergeFieldsEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -1102,7 +1105,7 @@ fn iface_reports__get_reports_id_click_details_id_members_id_response__to_json(p
     m.insert("email_id".into(), match (&p.email_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("list_id".into(), match (&p.list_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("list_is_active".into(), match (&p.list_is_active) { Some(v) => Value::Bool(*(v)), None => Value::Null });
-    m.insert("merge_fields".into(), match (&p.merge_fields) { Some(v) => iface_reports__get_reports_id_click_details_id_members_id_response_merge_fields__to_json(v), None => Value::Null });
+    m.insert("merge_fields".into(), match (&p.merge_fields) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("url_id".into(), match (&p.url_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("vip".into(), match (&p.vip) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     Value::Object(m)
@@ -1118,9 +1121,10 @@ fn iface_reports__get_reports_id_click_details_id_members_id_response_links_item
     Value::Object(m)
 }
 
-fn iface_reports__get_reports_id_click_details_id_members_id_response_merge_fields__to_json(p: &iface_reports::GetReportsIdClickDetailsIdMembersIdResponseMergeFields) -> Value {
+fn iface_reports__get_reports_id_click_details_id_members_id_response_merge_fields_entry__to_json(p: &iface_reports::GetReportsIdClickDetailsIdMembersIdResponseMergeFieldsEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -1399,7 +1403,7 @@ fn iface_reports__get_reports_id_open_details_response_members_item__to_json(p: 
     m.insert("email_id".into(), match (&p.email_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("list_id".into(), match (&p.list_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("list_is_active".into(), match (&p.list_is_active) { Some(v) => Value::Bool(*(v)), None => Value::Null });
-    m.insert("merge_fields".into(), match (&p.merge_fields) { Some(v) => iface_reports__get_reports_id_open_details_response_members_item_merge_fields__to_json(v), None => Value::Null });
+    m.insert("merge_fields".into(), match (&p.merge_fields) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("opens".into(), match (&p.opens) { Some(v) => Value::Array((v).iter().map(|v| iface_reports__get_reports_id_open_details_response_members_item_opens_item__to_json(v)).collect()), None => Value::Null });
     m.insert("opens_count".into(), match (&p.opens_count) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("vip".into(), match (&p.vip) { Some(v) => Value::Bool(*(v)), None => Value::Null });
@@ -1416,9 +1420,10 @@ fn iface_reports__get_reports_id_open_details_response_members_item_links_item__
     Value::Object(m)
 }
 
-fn iface_reports__get_reports_id_open_details_response_members_item_merge_fields__to_json(p: &iface_reports::GetReportsIdOpenDetailsResponseMembersItemMergeFields) -> Value {
+fn iface_reports__get_reports_id_open_details_response_members_item_merge_fields_entry__to_json(p: &iface_reports::GetReportsIdOpenDetailsResponseMembersItemMergeFieldsEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -1437,7 +1442,7 @@ fn iface_reports__get_reports_id_open_details_id_members_id_response__to_json(p:
     m.insert("email_id".into(), match (&p.email_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("list_id".into(), match (&p.list_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("list_is_active".into(), match (&p.list_is_active) { Some(v) => Value::Bool(*(v)), None => Value::Null });
-    m.insert("merge_fields".into(), match (&p.merge_fields) { Some(v) => iface_reports__get_reports_id_open_details_id_members_id_response_merge_fields__to_json(v), None => Value::Null });
+    m.insert("merge_fields".into(), match (&p.merge_fields) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("opens".into(), match (&p.opens) { Some(v) => Value::Array((v).iter().map(|v| iface_reports__get_reports_id_open_details_id_members_id_response_opens_item__to_json(v)).collect()), None => Value::Null });
     m.insert("opens_count".into(), match (&p.opens_count) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("vip".into(), match (&p.vip) { Some(v) => Value::Bool(*(v)), None => Value::Null });
@@ -1454,9 +1459,10 @@ fn iface_reports__get_reports_id_open_details_id_members_id_response_links_item_
     Value::Object(m)
 }
 
-fn iface_reports__get_reports_id_open_details_id_members_id_response_merge_fields__to_json(p: &iface_reports::GetReportsIdOpenDetailsIdMembersIdResponseMergeFields) -> Value {
+fn iface_reports__get_reports_id_open_details_id_members_id_response_merge_fields_entry__to_json(p: &iface_reports::GetReportsIdOpenDetailsIdMembersIdResponseMergeFieldsEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -1496,7 +1502,7 @@ fn iface_reports__get_reports_id_sent_to_response_sent_to_item__to_json(p: &ifac
     m.insert("last_open".into(), match (&p.last_open) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("list_id".into(), match (&p.list_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("list_is_active".into(), match (&p.list_is_active) { Some(v) => Value::Bool(*(v)), None => Value::Null });
-    m.insert("merge_fields".into(), match (&p.merge_fields) { Some(v) => iface_reports__get_reports_id_sent_to_response_sent_to_item_merge_fields__to_json(v), None => Value::Null });
+    m.insert("merge_fields".into(), match (&p.merge_fields) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("open_count".into(), match (&p.open_count) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("status".into(), match (&p.status) { Some(v) => Value::String(iface_reports__get_reports_id_sent_to_response_sent_to_item_status_enum__to_str(v).into()), None => Value::Null });
     m.insert("vip".into(), match (&p.vip) { Some(v) => Value::Bool(*(v)), None => Value::Null });
@@ -1513,9 +1519,10 @@ fn iface_reports__get_reports_id_sent_to_response_sent_to_item_links_item__to_js
     Value::Object(m)
 }
 
-fn iface_reports__get_reports_id_sent_to_response_sent_to_item_merge_fields__to_json(p: &iface_reports::GetReportsIdSentToResponseSentToItemMergeFields) -> Value {
+fn iface_reports__get_reports_id_sent_to_response_sent_to_item_merge_fields_entry__to_json(p: &iface_reports::GetReportsIdSentToResponseSentToItemMergeFieldsEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -1530,7 +1537,7 @@ fn iface_reports__get_reports_id_sent_to_id_response__to_json(p: &iface_reports:
     m.insert("last_open".into(), match (&p.last_open) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("list_id".into(), match (&p.list_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("list_is_active".into(), match (&p.list_is_active) { Some(v) => Value::Bool(*(v)), None => Value::Null });
-    m.insert("merge_fields".into(), match (&p.merge_fields) { Some(v) => iface_reports__get_reports_id_sent_to_id_response_merge_fields__to_json(v), None => Value::Null });
+    m.insert("merge_fields".into(), match (&p.merge_fields) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("open_count".into(), match (&p.open_count) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("status".into(), match (&p.status) { Some(v) => Value::String(iface_reports__get_reports_id_sent_to_response_sent_to_item_status_enum__to_str(v).into()), None => Value::Null });
     m.insert("vip".into(), match (&p.vip) { Some(v) => Value::Bool(*(v)), None => Value::Null });
@@ -1547,9 +1554,10 @@ fn iface_reports__get_reports_id_sent_to_id_response_links_item__to_json(p: &ifa
     Value::Object(m)
 }
 
-fn iface_reports__get_reports_id_sent_to_id_response_merge_fields__to_json(p: &iface_reports::GetReportsIdSentToIdResponseMergeFields) -> Value {
+fn iface_reports__get_reports_id_sent_to_id_response_merge_fields_entry__to_json(p: &iface_reports::GetReportsIdSentToIdResponseMergeFieldsEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -1787,7 +1795,7 @@ fn iface_reports__get_reports_id_unsubscribed_response_unsubscribes_item__to_jso
     m.insert("email_id".into(), match (&p.email_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("list_id".into(), match (&p.list_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("list_is_active".into(), match (&p.list_is_active) { Some(v) => Value::Bool(*(v)), None => Value::Null });
-    m.insert("merge_fields".into(), match (&p.merge_fields) { Some(v) => iface_reports__get_reports_id_unsubscribed_response_unsubscribes_item_merge_fields__to_json(v), None => Value::Null });
+    m.insert("merge_fields".into(), match (&p.merge_fields) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("reason".into(), match (&p.reason) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("timestamp".into(), match (&p.timestamp) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("vip".into(), match (&p.vip) { Some(v) => Value::Bool(*(v)), None => Value::Null });
@@ -1804,9 +1812,10 @@ fn iface_reports__get_reports_id_unsubscribed_response_unsubscribes_item_links_i
     Value::Object(m)
 }
 
-fn iface_reports__get_reports_id_unsubscribed_response_unsubscribes_item_merge_fields__to_json(p: &iface_reports::GetReportsIdUnsubscribedResponseUnsubscribesItemMergeFields) -> Value {
+fn iface_reports__get_reports_id_unsubscribed_response_unsubscribes_item_merge_fields_entry__to_json(p: &iface_reports::GetReportsIdUnsubscribedResponseUnsubscribesItemMergeFieldsEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -1818,7 +1827,7 @@ fn iface_reports__get_reports_id_unsubscribed_id_response__to_json(p: &iface_rep
     m.insert("email_id".into(), match (&p.email_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("list_id".into(), match (&p.list_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("list_is_active".into(), match (&p.list_is_active) { Some(v) => Value::Bool(*(v)), None => Value::Null });
-    m.insert("merge_fields".into(), match (&p.merge_fields) { Some(v) => iface_reports__get_reports_id_unsubscribed_id_response_merge_fields__to_json(v), None => Value::Null });
+    m.insert("merge_fields".into(), match (&p.merge_fields) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("reason".into(), match (&p.reason) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("timestamp".into(), match (&p.timestamp) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("vip".into(), match (&p.vip) { Some(v) => Value::Bool(*(v)), None => Value::Null });
@@ -1835,9 +1844,10 @@ fn iface_reports__get_reports_id_unsubscribed_id_response_links_item__to_json(p:
     Value::Object(m)
 }
 
-fn iface_reports__get_reports_id_unsubscribed_id_response_merge_fields__to_json(p: &iface_reports::GetReportsIdUnsubscribedIdResponseMergeFields) -> Value {
+fn iface_reports__get_reports_id_unsubscribed_id_response_merge_fields_entry__to_json(p: &iface_reports::GetReportsIdUnsubscribedIdResponseMergeFieldsEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -2516,7 +2526,7 @@ fn iface_reports__get_reports_id_abuse_reports_id_response_abuse_reports_item__f
         id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
         list_id: m.get("list_id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         list_is_active: m.get("list_is_active").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
-        merge_fields: m.get("merge_fields").filter(|v| !v.is_null()).and_then(|v| iface_reports__get_reports_id_abuse_reports_id_response_abuse_reports_item_merge_fields__from_json(v)),
+        merge_fields: m.get("merge_fields").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_reports::GetReportsIdAbuseReportsIdResponseAbuseReportsItemMergeFieldsEntry { key: k.clone(), value: val })).collect())),
         vip: m.get("vip").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
     })
 }
@@ -2532,10 +2542,11 @@ fn iface_reports__get_reports_id_abuse_reports_id_response_abuse_reports_item_li
     })
 }
 
-fn iface_reports__get_reports_id_abuse_reports_id_response_abuse_reports_item_merge_fields__from_json(v: &Value) -> Option<iface_reports::GetReportsIdAbuseReportsIdResponseAbuseReportsItemMergeFields> {
+fn iface_reports__get_reports_id_abuse_reports_id_response_abuse_reports_item_merge_fields_entry__from_json(v: &Value) -> Option<iface_reports::GetReportsIdAbuseReportsIdResponseAbuseReportsItemMergeFieldsEntry> {
     let m = v.as_object()?;
-    Some(iface_reports::GetReportsIdAbuseReportsIdResponseAbuseReportsItemMergeFields {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_reports::GetReportsIdAbuseReportsIdResponseAbuseReportsItemMergeFieldsEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -2550,7 +2561,7 @@ fn iface_reports__get_reports_id_abuse_reports_id_id_response__from_json(v: &Val
         id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
         list_id: m.get("list_id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         list_is_active: m.get("list_is_active").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
-        merge_fields: m.get("merge_fields").filter(|v| !v.is_null()).and_then(|v| iface_reports__get_reports_id_abuse_reports_id_id_response_merge_fields__from_json(v)),
+        merge_fields: m.get("merge_fields").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_reports::GetReportsIdAbuseReportsIdIdResponseMergeFieldsEntry { key: k.clone(), value: val })).collect())),
         vip: m.get("vip").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
     })
 }
@@ -2566,10 +2577,11 @@ fn iface_reports__get_reports_id_abuse_reports_id_id_response_links_item__from_j
     })
 }
 
-fn iface_reports__get_reports_id_abuse_reports_id_id_response_merge_fields__from_json(v: &Value) -> Option<iface_reports::GetReportsIdAbuseReportsIdIdResponseMergeFields> {
+fn iface_reports__get_reports_id_abuse_reports_id_id_response_merge_fields_entry__from_json(v: &Value) -> Option<iface_reports::GetReportsIdAbuseReportsIdIdResponseMergeFieldsEntry> {
     let m = v.as_object()?;
-    Some(iface_reports::GetReportsIdAbuseReportsIdIdResponseMergeFields {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_reports::GetReportsIdAbuseReportsIdIdResponseMergeFieldsEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -2777,7 +2789,7 @@ fn iface_reports__get_reports_id_click_details_id_members_response_members_item_
         email_id: m.get("email_id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         list_id: m.get("list_id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         list_is_active: m.get("list_is_active").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
-        merge_fields: m.get("merge_fields").filter(|v| !v.is_null()).and_then(|v| iface_reports__get_reports_id_click_details_id_members_response_members_item_merge_fields__from_json(v)),
+        merge_fields: m.get("merge_fields").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_reports::GetReportsIdClickDetailsIdMembersResponseMembersItemMergeFieldsEntry { key: k.clone(), value: val })).collect())),
         url_id: m.get("url_id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         vip: m.get("vip").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
     })
@@ -2794,10 +2806,11 @@ fn iface_reports__get_reports_id_click_details_id_members_response_members_item_
     })
 }
 
-fn iface_reports__get_reports_id_click_details_id_members_response_members_item_merge_fields__from_json(v: &Value) -> Option<iface_reports::GetReportsIdClickDetailsIdMembersResponseMembersItemMergeFields> {
+fn iface_reports__get_reports_id_click_details_id_members_response_members_item_merge_fields_entry__from_json(v: &Value) -> Option<iface_reports::GetReportsIdClickDetailsIdMembersResponseMembersItemMergeFieldsEntry> {
     let m = v.as_object()?;
-    Some(iface_reports::GetReportsIdClickDetailsIdMembersResponseMembersItemMergeFields {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_reports::GetReportsIdClickDetailsIdMembersResponseMembersItemMergeFieldsEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -2812,7 +2825,7 @@ fn iface_reports__get_reports_id_click_details_id_members_id_response__from_json
         email_id: m.get("email_id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         list_id: m.get("list_id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         list_is_active: m.get("list_is_active").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
-        merge_fields: m.get("merge_fields").filter(|v| !v.is_null()).and_then(|v| iface_reports__get_reports_id_click_details_id_members_id_response_merge_fields__from_json(v)),
+        merge_fields: m.get("merge_fields").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_reports::GetReportsIdClickDetailsIdMembersIdResponseMergeFieldsEntry { key: k.clone(), value: val })).collect())),
         url_id: m.get("url_id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         vip: m.get("vip").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
     })
@@ -2829,10 +2842,11 @@ fn iface_reports__get_reports_id_click_details_id_members_id_response_links_item
     })
 }
 
-fn iface_reports__get_reports_id_click_details_id_members_id_response_merge_fields__from_json(v: &Value) -> Option<iface_reports::GetReportsIdClickDetailsIdMembersIdResponseMergeFields> {
+fn iface_reports__get_reports_id_click_details_id_members_id_response_merge_fields_entry__from_json(v: &Value) -> Option<iface_reports::GetReportsIdClickDetailsIdMembersIdResponseMergeFieldsEntry> {
     let m = v.as_object()?;
-    Some(iface_reports::GetReportsIdClickDetailsIdMembersIdResponseMergeFields {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_reports::GetReportsIdClickDetailsIdMembersIdResponseMergeFieldsEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -3138,7 +3152,7 @@ fn iface_reports__get_reports_id_open_details_response_members_item__from_json(v
         email_id: m.get("email_id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         list_id: m.get("list_id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         list_is_active: m.get("list_is_active").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
-        merge_fields: m.get("merge_fields").filter(|v| !v.is_null()).and_then(|v| iface_reports__get_reports_id_open_details_response_members_item_merge_fields__from_json(v)),
+        merge_fields: m.get("merge_fields").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_reports::GetReportsIdOpenDetailsResponseMembersItemMergeFieldsEntry { key: k.clone(), value: val })).collect())),
         opens: m.get("opens").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_reports__get_reports_id_open_details_response_members_item_opens_item__from_json(x)).collect())),
         opens_count: m.get("opens_count").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
         vip: m.get("vip").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
@@ -3156,10 +3170,11 @@ fn iface_reports__get_reports_id_open_details_response_members_item_links_item__
     })
 }
 
-fn iface_reports__get_reports_id_open_details_response_members_item_merge_fields__from_json(v: &Value) -> Option<iface_reports::GetReportsIdOpenDetailsResponseMembersItemMergeFields> {
+fn iface_reports__get_reports_id_open_details_response_members_item_merge_fields_entry__from_json(v: &Value) -> Option<iface_reports::GetReportsIdOpenDetailsResponseMembersItemMergeFieldsEntry> {
     let m = v.as_object()?;
-    Some(iface_reports::GetReportsIdOpenDetailsResponseMembersItemMergeFields {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_reports::GetReportsIdOpenDetailsResponseMembersItemMergeFieldsEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -3180,7 +3195,7 @@ fn iface_reports__get_reports_id_open_details_id_members_id_response__from_json(
         email_id: m.get("email_id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         list_id: m.get("list_id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         list_is_active: m.get("list_is_active").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
-        merge_fields: m.get("merge_fields").filter(|v| !v.is_null()).and_then(|v| iface_reports__get_reports_id_open_details_id_members_id_response_merge_fields__from_json(v)),
+        merge_fields: m.get("merge_fields").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_reports::GetReportsIdOpenDetailsIdMembersIdResponseMergeFieldsEntry { key: k.clone(), value: val })).collect())),
         opens: m.get("opens").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_reports__get_reports_id_open_details_id_members_id_response_opens_item__from_json(x)).collect())),
         opens_count: m.get("opens_count").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
         vip: m.get("vip").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
@@ -3198,10 +3213,11 @@ fn iface_reports__get_reports_id_open_details_id_members_id_response_links_item_
     })
 }
 
-fn iface_reports__get_reports_id_open_details_id_members_id_response_merge_fields__from_json(v: &Value) -> Option<iface_reports::GetReportsIdOpenDetailsIdMembersIdResponseMergeFields> {
+fn iface_reports__get_reports_id_open_details_id_members_id_response_merge_fields_entry__from_json(v: &Value) -> Option<iface_reports::GetReportsIdOpenDetailsIdMembersIdResponseMergeFieldsEntry> {
     let m = v.as_object()?;
-    Some(iface_reports::GetReportsIdOpenDetailsIdMembersIdResponseMergeFields {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_reports::GetReportsIdOpenDetailsIdMembersIdResponseMergeFieldsEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -3245,7 +3261,7 @@ fn iface_reports__get_reports_id_sent_to_response_sent_to_item__from_json(v: &Va
         last_open: m.get("last_open").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         list_id: m.get("list_id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         list_is_active: m.get("list_is_active").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
-        merge_fields: m.get("merge_fields").filter(|v| !v.is_null()).and_then(|v| iface_reports__get_reports_id_sent_to_response_sent_to_item_merge_fields__from_json(v)),
+        merge_fields: m.get("merge_fields").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_reports::GetReportsIdSentToResponseSentToItemMergeFieldsEntry { key: k.clone(), value: val })).collect())),
         open_count: m.get("open_count").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
         status: m.get("status").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_reports__get_reports_id_sent_to_response_sent_to_item_status_enum__from_str)),
         vip: m.get("vip").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
@@ -3263,10 +3279,11 @@ fn iface_reports__get_reports_id_sent_to_response_sent_to_item_links_item__from_
     })
 }
 
-fn iface_reports__get_reports_id_sent_to_response_sent_to_item_merge_fields__from_json(v: &Value) -> Option<iface_reports::GetReportsIdSentToResponseSentToItemMergeFields> {
+fn iface_reports__get_reports_id_sent_to_response_sent_to_item_merge_fields_entry__from_json(v: &Value) -> Option<iface_reports::GetReportsIdSentToResponseSentToItemMergeFieldsEntry> {
     let m = v.as_object()?;
-    Some(iface_reports::GetReportsIdSentToResponseSentToItemMergeFields {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_reports::GetReportsIdSentToResponseSentToItemMergeFieldsEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -3282,7 +3299,7 @@ fn iface_reports__get_reports_id_sent_to_id_response__from_json(v: &Value) -> Op
         last_open: m.get("last_open").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         list_id: m.get("list_id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         list_is_active: m.get("list_is_active").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
-        merge_fields: m.get("merge_fields").filter(|v| !v.is_null()).and_then(|v| iface_reports__get_reports_id_sent_to_id_response_merge_fields__from_json(v)),
+        merge_fields: m.get("merge_fields").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_reports::GetReportsIdSentToIdResponseMergeFieldsEntry { key: k.clone(), value: val })).collect())),
         open_count: m.get("open_count").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
         status: m.get("status").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_reports__get_reports_id_sent_to_response_sent_to_item_status_enum__from_str)),
         vip: m.get("vip").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
@@ -3300,10 +3317,11 @@ fn iface_reports__get_reports_id_sent_to_id_response_links_item__from_json(v: &V
     })
 }
 
-fn iface_reports__get_reports_id_sent_to_id_response_merge_fields__from_json(v: &Value) -> Option<iface_reports::GetReportsIdSentToIdResponseMergeFields> {
+fn iface_reports__get_reports_id_sent_to_id_response_merge_fields_entry__from_json(v: &Value) -> Option<iface_reports::GetReportsIdSentToIdResponseMergeFieldsEntry> {
     let m = v.as_object()?;
-    Some(iface_reports::GetReportsIdSentToIdResponseMergeFields {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_reports::GetReportsIdSentToIdResponseMergeFieldsEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -3563,7 +3581,7 @@ fn iface_reports__get_reports_id_unsubscribed_response_unsubscribes_item__from_j
         email_id: m.get("email_id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         list_id: m.get("list_id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         list_is_active: m.get("list_is_active").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
-        merge_fields: m.get("merge_fields").filter(|v| !v.is_null()).and_then(|v| iface_reports__get_reports_id_unsubscribed_response_unsubscribes_item_merge_fields__from_json(v)),
+        merge_fields: m.get("merge_fields").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_reports::GetReportsIdUnsubscribedResponseUnsubscribesItemMergeFieldsEntry { key: k.clone(), value: val })).collect())),
         reason: m.get("reason").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         timestamp: m.get("timestamp").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         vip: m.get("vip").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
@@ -3581,10 +3599,11 @@ fn iface_reports__get_reports_id_unsubscribed_response_unsubscribes_item_links_i
     })
 }
 
-fn iface_reports__get_reports_id_unsubscribed_response_unsubscribes_item_merge_fields__from_json(v: &Value) -> Option<iface_reports::GetReportsIdUnsubscribedResponseUnsubscribesItemMergeFields> {
+fn iface_reports__get_reports_id_unsubscribed_response_unsubscribes_item_merge_fields_entry__from_json(v: &Value) -> Option<iface_reports::GetReportsIdUnsubscribedResponseUnsubscribesItemMergeFieldsEntry> {
     let m = v.as_object()?;
-    Some(iface_reports::GetReportsIdUnsubscribedResponseUnsubscribesItemMergeFields {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_reports::GetReportsIdUnsubscribedResponseUnsubscribesItemMergeFieldsEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -3597,7 +3616,7 @@ fn iface_reports__get_reports_id_unsubscribed_id_response__from_json(v: &Value) 
         email_id: m.get("email_id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         list_id: m.get("list_id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         list_is_active: m.get("list_is_active").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
-        merge_fields: m.get("merge_fields").filter(|v| !v.is_null()).and_then(|v| iface_reports__get_reports_id_unsubscribed_id_response_merge_fields__from_json(v)),
+        merge_fields: m.get("merge_fields").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_reports::GetReportsIdUnsubscribedIdResponseMergeFieldsEntry { key: k.clone(), value: val })).collect())),
         reason: m.get("reason").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         timestamp: m.get("timestamp").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         vip: m.get("vip").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
@@ -3615,10 +3634,11 @@ fn iface_reports__get_reports_id_unsubscribed_id_response_links_item__from_json(
     })
 }
 
-fn iface_reports__get_reports_id_unsubscribed_id_response_merge_fields__from_json(v: &Value) -> Option<iface_reports::GetReportsIdUnsubscribedIdResponseMergeFields> {
+fn iface_reports__get_reports_id_unsubscribed_id_response_merge_fields_entry__from_json(v: &Value) -> Option<iface_reports::GetReportsIdUnsubscribedIdResponseMergeFieldsEntry> {
     let m = v.as_object()?;
-    Some(iface_reports::GetReportsIdUnsubscribedIdResponseMergeFields {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_reports::GetReportsIdUnsubscribedIdResponseMergeFieldsEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 

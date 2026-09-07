@@ -66,9 +66,10 @@ fn iface_bounces_api__bounce_response__to_json(p: &iface_bounces_api::BounceResp
     Value::Object(m)
 }
 
-fn iface_bounces_api__delete_suppression_bounces_email_response__to_json(p: &iface_bounces_api::DeleteSuppressionBouncesEmailResponse) -> Value {
+fn iface_bounces_api__delete_suppression_bounces_email_response_entry__to_json(p: &iface_bounces_api::DeleteSuppressionBouncesEmailResponseEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -115,10 +116,11 @@ fn iface_bounces_api__bounce_response__from_json(v: &Value) -> Option<iface_boun
     })
 }
 
-fn iface_bounces_api__delete_suppression_bounces_email_response__from_json(v: &Value) -> Option<iface_bounces_api::DeleteSuppressionBouncesEmailResponse> {
+fn iface_bounces_api__delete_suppression_bounces_email_response_entry__from_json(v: &Value) -> Option<iface_bounces_api::DeleteSuppressionBouncesEmailResponseEntry> {
     let m = v.as_object()?;
-    Some(iface_bounces_api::DeleteSuppressionBouncesEmailResponse {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_bounces_api::DeleteSuppressionBouncesEmailResponseEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -175,12 +177,12 @@ fn iface_bounces_api__get_suppression_bounces_email__err(e: crate::runtime::Disp
     }
 }
 
-fn iface_bounces_api__delete_suppression_bounces_email__ok(body: String) -> Result<iface_bounces_api::DeleteSuppressionBouncesEmailResponse, crate::runtime::DispatchError> {
+fn iface_bounces_api__delete_suppression_bounces_email__ok(body: String) -> Result<Vec<iface_bounces_api::DeleteSuppressionBouncesEmailResponseEntry>, crate::runtime::DispatchError> {
     let v: Value = match serde_json::from_str(&body) {
         Ok(v) => v,
         Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
     };
-    match iface_bounces_api__delete_suppression_bounces_email_response__from_json(&v) {
+    match (&v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_bounces_api::DeleteSuppressionBouncesEmailResponseEntry { key: k.clone(), value: val })).collect()) {
         Some(x) => Ok(x),
         None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
@@ -218,7 +220,7 @@ impl iface_bounces_api::Guest for crate::Component {
             Err(e) => Err(iface_bounces_api__get_suppression_bounces_email__err(e)),
         }
     }
-    fn delete_suppression_bounces_email(params: iface_bounces_api::DeleteSuppressionBouncesEmailParams) -> Result<iface_bounces_api::DeleteSuppressionBouncesEmailResponse, iface_bounces_api::DeleteSuppressionBouncesEmailError> {
+    fn delete_suppression_bounces_email(params: iface_bounces_api::DeleteSuppressionBouncesEmailParams) -> Result<Vec<iface_bounces_api::DeleteSuppressionBouncesEmailResponseEntry>, iface_bounces_api::DeleteSuppressionBouncesEmailError> {
         let json = iface_bounces_api__delete_suppression_bounces_email_params__to_json(&params);
         match dispatch(&OP_BOUNCES_API_DELETE_SUPPRESSION_BOUNCES_EMAIL, json).and_then(iface_bounces_api__delete_suppression_bounces_email__ok) {
             Ok(v) => Ok(v),

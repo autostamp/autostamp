@@ -46,14 +46,15 @@ fn iface_institutions__integration_retrieve__to_json(p: &iface_institutions::Int
     m.insert("logo".into(), Value::String((&p.logo).clone()));
     m.insert("name".into(), Value::String((&p.name).clone()));
     m.insert("supported_features".into(), Value::Array((&p.supported_features).iter().map(|v| Value::String((v).clone())).collect()));
-    m.insert("supported_payments".into(), iface_institutions__integration_retrieve_supported_payments__to_json(&p.supported_payments));
+    m.insert("supported_payments".into(), Value::Object((&p.supported_payments).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()));
     m.insert("transaction_total_days".into(), match (&p.transaction_total_days) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_institutions__integration_retrieve_supported_payments__to_json(p: &iface_institutions::IntegrationRetrieveSupportedPayments) -> Value {
+fn iface_institutions__integration_retrieve_supported_payments_entry__to_json(p: &iface_institutions::IntegrationRetrieveSupportedPaymentsEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -91,15 +92,16 @@ fn iface_institutions__integration_retrieve__from_json(v: &Value) -> Option<ifac
         logo: m.get("logo").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         name: m.get("name").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         supported_features: m.get("supported_features").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())).unwrap_or_default(),
-        supported_payments: match m.get("supported_payments").and_then(|v| iface_institutions__integration_retrieve_supported_payments__from_json(v)) { Some(x) => x, None => return None },
+        supported_payments: m.get("supported_payments").and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_institutions::IntegrationRetrieveSupportedPaymentsEntry { key: k.clone(), value: val })).collect())).unwrap_or_default(),
         transaction_total_days: m.get("transaction_total_days").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
     })
 }
 
-fn iface_institutions__integration_retrieve_supported_payments__from_json(v: &Value) -> Option<iface_institutions::IntegrationRetrieveSupportedPayments> {
+fn iface_institutions__integration_retrieve_supported_payments_entry__from_json(v: &Value) -> Option<iface_institutions::IntegrationRetrieveSupportedPaymentsEntry> {
     let m = v.as_object()?;
-    Some(iface_institutions::IntegrationRetrieveSupportedPayments {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_institutions::IntegrationRetrieveSupportedPaymentsEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 

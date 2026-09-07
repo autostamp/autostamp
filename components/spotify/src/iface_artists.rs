@@ -189,7 +189,7 @@ fn iface_artists__track_object__to_json(p: &iface_artists::TrackObject) -> Value
     m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("is_local".into(), match (&p.is_local) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     m.insert("is_playable".into(), match (&p.is_playable) { Some(v) => Value::Bool(*(v)), None => Value::Null });
-    m.insert("linked_from".into(), match (&p.linked_from) { Some(v) => iface_artists__track_object_linked_from__to_json(v), None => Value::Null });
+    m.insert("linked_from".into(), match (&p.linked_from) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("popularity".into(), match (&p.popularity) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("preview_url".into(), match (&p.preview_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -257,9 +257,10 @@ fn iface_artists__simplified_artist_object__to_json(p: &iface_artists::Simplifie
     Value::Object(m)
 }
 
-fn iface_artists__track_object_linked_from__to_json(p: &iface_artists::TrackObjectLinkedFrom) -> Value {
+fn iface_artists__track_object_linked_from_entry__to_json(p: &iface_artists::TrackObjectLinkedFromEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -387,7 +388,7 @@ fn iface_artists__track_object__from_json(v: &Value) -> Option<iface_artists::Tr
         id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         is_local: m.get("is_local").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
         is_playable: m.get("is_playable").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
-        linked_from: m.get("linked_from").filter(|v| !v.is_null()).and_then(|v| iface_artists__track_object_linked_from__from_json(v)),
+        linked_from: m.get("linked_from").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_artists::TrackObjectLinkedFromEntry { key: k.clone(), value: val })).collect())),
         name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         popularity: m.get("popularity").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
         preview_url: m.get("preview_url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
@@ -460,10 +461,11 @@ fn iface_artists__simplified_artist_object__from_json(v: &Value) -> Option<iface
     })
 }
 
-fn iface_artists__track_object_linked_from__from_json(v: &Value) -> Option<iface_artists::TrackObjectLinkedFrom> {
+fn iface_artists__track_object_linked_from_entry__from_json(v: &Value) -> Option<iface_artists::TrackObjectLinkedFromEntry> {
     let m = v.as_object()?;
-    Some(iface_artists::TrackObjectLinkedFrom {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_artists::TrackObjectLinkedFromEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 

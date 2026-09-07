@@ -6,7 +6,7 @@
 /// | Secret name | Applied to each request as |
 /// | --- | --- |
 /// | `OAuth2Security` | `Authorization: Bearer <secret>` |
-package autostamp:box-api@0.5.0;
+package autostamp:box-api@0.6.0;
 
 interface authorization {
   enum get-authorize-response-type-enum {
@@ -1021,7 +1021,7 @@ interface events {
   record event {
     /// This object provides additional information about the event if available.
     /// 
-    additional-details: option<event-additional-details>,
+    additional-details: option<list<event-additional-details-entry>>,
     /// When the event object was created
     created-at: option<string>,
     created-by: option<event-created-by>,
@@ -1038,15 +1038,10 @@ interface events {
     type-op: option<string>
   }
 
-  /// This object provides additional information about the event if available.
-  /// 
-  /// This can include how a user performed an event as well as additional
-  /// information to correlate an event to external KeySafe logs. Not all events
-  /// have an `additional_details` object.  This object is only available in the
-  /// Enterprise Events.
-  record event-additional-details {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record event-additional-details-entry {
+    key: string,
+    value: string
   }
 
   record event-created-by {
@@ -2242,11 +2237,10 @@ interface shared-links-files {
     data: option<string>
   }
 
-  /// By setting this value to `null`, the shared link
-  /// is removed from the file.
-  record remove-shared-link-body-shared-link {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record remove-shared-link-body-shared-link-entry {
+    key: string,
+    value: string
   }
 
   /// The settings for the shared link to update.
@@ -2354,7 +2348,7 @@ interface shared-links-files {
     fields: string,
     /// By setting this value to `null`, the shared link
     /// is removed from the file.
-    shared-link: option<remove-shared-link-body-shared-link>
+    shared-link: option<list<remove-shared-link-body-shared-link-entry>>
   }
   remove-shared-link: func(params: remove-shared-link-params) -> result<file-full, remove-shared-link-error>;
 
@@ -2439,6 +2433,12 @@ interface metadata-instances-files {
     data: option<string>
   }
 
+  /// one entry of a string-keyed map (free-form object)
+  record post-files-id-metadata-id-id-body-entry {
+    key: string,
+    value: string
+  }
+
   /// A [JSON-Patch](https://tools.ietf.org/html/rfc6902) operation for a
   /// change to make to the metadata instance.
   record put-files-id-metadata-id-id-body-item {
@@ -2518,8 +2518,7 @@ interface metadata-instances-files {
     scope: string,
     /// The name of the metadata template
     template-key: string,
-    /// JSON-encoded free-form object payload
-    data: option<string>
+    body: option<list<post-files-id-metadata-id-id-body-entry>>
   }
   post-files-id-metadata-id-id: func(params: post-files-id-metadata-id-id-params) -> result<metadata, post-files-id-metadata-id-id-error>;
 
@@ -3994,11 +3993,10 @@ interface shared-links-folders {
     data: option<string>
   }
 
-  /// By setting this value to `null`, the shared link
-  /// is removed from the folder.
-  record remove-shared-link-body-shared-link {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record remove-shared-link-body-shared-link-entry {
+    key: string,
+    value: string
   }
 
   /// The settings for the shared link to update.
@@ -4106,7 +4104,7 @@ interface shared-links-folders {
     fields: string,
     /// By setting this value to `null`, the shared link
     /// is removed from the folder.
-    shared-link: option<remove-shared-link-body-shared-link>
+    shared-link: option<list<remove-shared-link-body-shared-link-entry>>
   }
   remove-shared-link: func(params: remove-shared-link-params) -> result<folder-full, remove-shared-link-error>;
 
@@ -4162,6 +4160,12 @@ interface metadata-instances-folders {
   record metadata {
     /// JSON-encoded free-form object payload
     data: option<string>
+  }
+
+  /// one entry of a string-keyed map (free-form object)
+  record post-folders-id-metadata-id-id-body-entry {
+    key: string,
+    value: string
   }
 
   /// A [JSON-Patch](https://tools.ietf.org/html/rfc6902) operation for a
@@ -4243,8 +4247,7 @@ interface metadata-instances-folders {
     scope: string,
     /// The name of the metadata template
     template-key: string,
-    /// JSON-encoded free-form object payload
-    data: option<string>
+    body: option<list<post-folders-id-metadata-id-id-body-entry>>
   }
   post-folders-id-metadata-id-id: func(params: post-folders-id-metadata-id-id-params) -> result<metadata, post-folders-id-metadata-id-id-error>;
 
@@ -4471,19 +4474,10 @@ interface group-memberships {
     group-membership,
   }
 
-  /// Custom configuration for the permissions an admin
-  /// if a group will receive. This option has no effect
-  /// on members with a role of `member`.
-  /// 
-  /// Setting these permissions overwrites the default
-  /// access levels of an admin.
-  /// 
-  /// Specifying a value of "null" for this object will disable
-  /// all configurable permissions. Specifying permissions will set
-  /// them accordingly, omitted permissions will be enabled by default.
-  record post-group-memberships-body-configurable-permissions {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record post-group-memberships-body-configurable-permissions-entry {
+    key: string,
+    value: bool
   }
 
   /// The group to add the user to.
@@ -4525,19 +4519,10 @@ interface group-memberships {
     data: option<string>
   }
 
-  /// Custom configuration for the permissions an admin
-  /// if a group will receive. This option has no effect
-  /// on members with a role of `member`.
-  /// 
-  /// Setting these permissions overwrites the default
-  /// access levels of an admin.
-  /// 
-  /// Specifying a value of "null" for this object will disable
-  /// all configurable permissions. Specifying permissions will set
-  /// them accordingly, omitted permissions will be enabled by default.
-  record put-group-memberships-id-body-configurable-permissions {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record put-group-memberships-id-body-configurable-permissions-entry {
+    key: string,
+    value: bool
   }
 
   /// A list of group memberships.
@@ -4558,7 +4543,7 @@ interface group-memberships {
     fields: option<list<string>>,
     /// Custom configuration for the permissions an admin
     /// if a group will receive. This option has no effect
-    configurable-permissions: option<post-group-memberships-body-configurable-permissions>,
+    configurable-permissions: option<list<post-group-memberships-body-configurable-permissions-entry>>,
     /// The group to add the user to.
     group: post-group-memberships-body-group,
     /// The role of the user in the group.
@@ -4587,7 +4572,7 @@ interface group-memberships {
     fields: option<list<string>>,
     /// Custom configuration for the permissions an admin
     /// if a group will receive. This option has no effect
-    configurable-permissions: option<put-group-memberships-id-body-configurable-permissions>,
+    configurable-permissions: option<list<put-group-memberships-id-body-configurable-permissions-entry>>,
     /// The role of the user in the group.
     role: option<post-group-memberships-body-role-enum>
   }
@@ -5279,12 +5264,10 @@ interface search {
     field-key: option<string>
   }
 
-  /// Set of arguments corresponding to the parameters specified in the
-  /// `query`. The type of each parameter used in the `query_params` must match
-  /// the type of the corresponding metadata template field.
-  record metadata-query-query-params {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record metadata-query-query-params-entry {
+    key: string,
+    value: string
   }
 
   /// A page of files and folders that matched the metadata query.
@@ -5380,7 +5363,7 @@ interface search {
     query: option<string>,
     /// Set of arguments corresponding to the parameters specified in the
     /// `query`. The type of each parameter used in the `query_params` must match
-    query-params: option<metadata-query-query-params>
+    query-params: option<list<metadata-query-query-params-entry>>
   }
   post-metadata-queries-execute-read: func(params: post-metadata-queries-execute-read-params) -> result<metadata-query-results, post-metadata-queries-execute-read-error>;
 
@@ -5561,7 +5544,7 @@ interface metadata-templates {
   record put-metadata-templates-id-id-schema-body-item {
     /// The data for the operation. This will vary depending on the
     /// operation being performed.
-    data: option<put-metadata-templates-id-id-schema-body-item-data>,
+    data: option<list<put-metadata-templates-id-id-schema-body-item-data-entry>>,
     /// For operations that affect a single `enum` option this defines
     /// the key of the option that is affected.
     enum-option-key: option<string>,
@@ -5585,11 +5568,10 @@ interface metadata-templates {
     op: put-metadata-templates-id-id-schema-body-item-op-enum
   }
 
-  /// The data for the operation. This will vary depending on the
-  /// operation being performed.
-  record put-metadata-templates-id-id-schema-body-item-data {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record put-metadata-templates-id-id-schema-body-item-data-entry {
+    key: string,
+    value: string
   }
 
   variant get-metadata-templates-error {
@@ -6442,11 +6424,10 @@ interface shared-links-web-links {
     can-preview: option<bool>
   }
 
-  /// By setting this value to `null`, the shared link
-  /// is removed from the web link.
-  record remove-shared-link-body-shared-link {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record remove-shared-link-body-shared-link-entry {
+    key: string,
+    value: string
   }
 
   /// The settings for the shared link to update.
@@ -6564,7 +6545,7 @@ interface shared-links-web-links {
     fields: string,
     /// By setting this value to `null`, the shared link
     /// is removed from the web link.
-    shared-link: option<remove-shared-link-body-shared-link>
+    shared-link: option<list<remove-shared-link-body-shared-link-entry>>
   }
   remove-shared-link: func(params: remove-shared-link-params) -> result<web-link, remove-shared-link-error>;
 

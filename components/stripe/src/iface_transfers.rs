@@ -175,7 +175,7 @@ fn iface_transfers__transfer__to_json(p: &iface_transfers::Transfer) -> Value {
     m.insert("destination_payment".into(), match (&p.destination_payment) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("id".into(), Value::String((&p.id).clone()));
     m.insert("livemode".into(), Value::Bool(*(&p.livemode)));
-    m.insert("metadata".into(), iface_transfers__transfer_metadata__to_json(&p.metadata));
+    m.insert("metadata".into(), Value::Object((&p.metadata).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()));
     m.insert("object".into(), Value::String(iface_transfers__transfer_object_enum__to_str(&p.object).into()));
     m.insert("reversals".into(), iface_transfers__transfer_reversals__to_json(&p.reversals));
     m.insert("reversed".into(), Value::Bool(*(&p.reversed)));
@@ -185,9 +185,10 @@ fn iface_transfers__transfer__to_json(p: &iface_transfers::Transfer) -> Value {
     Value::Object(m)
 }
 
-fn iface_transfers__transfer_metadata__to_json(p: &iface_transfers::TransferMetadata) -> Value {
+fn iface_transfers__transfer_metadata_entry__to_json(p: &iface_transfers::TransferMetadataEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -208,22 +209,24 @@ fn iface_transfers__transfer_reversal__to_json(p: &iface_transfers::TransferReve
     m.insert("currency".into(), Value::String((&p.currency).clone()));
     m.insert("destination_payment_refund".into(), match (&p.destination_payment_refund) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("id".into(), Value::String((&p.id).clone()));
-    m.insert("metadata".into(), match (&p.metadata) { Some(v) => iface_transfers__transfer_reversal_metadata__to_json(v), None => Value::Null });
+    m.insert("metadata".into(), match (&p.metadata) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("object".into(), Value::String(iface_transfers__transfer_reversal_object_enum__to_str(&p.object).into()));
     m.insert("source_refund".into(), match (&p.source_refund) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("transfer".into(), Value::String((&p.transfer).clone()));
     Value::Object(m)
 }
 
-fn iface_transfers__transfer_reversal_metadata__to_json(p: &iface_transfers::TransferReversalMetadata) -> Value {
+fn iface_transfers__transfer_reversal_metadata_entry__to_json(p: &iface_transfers::TransferReversalMetadataEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
-fn iface_transfers__post_transfers_body_metadata__to_json(p: &iface_transfers::PostTransfersBodyMetadata) -> Value {
+fn iface_transfers__post_transfers_body_metadata_entry__to_json(p: &iface_transfers::PostTransfersBodyMetadataEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -256,7 +259,7 @@ fn iface_transfers__post_transfers_params__to_json(p: &iface_transfers::PostTran
     m.insert("description".into(), match (&p.description) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("destination".into(), Value::String((&p.destination).clone()));
     m.insert("expand".into(), match (&p.expand) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
-    m.insert("metadata".into(), match (&p.metadata) { Some(v) => iface_transfers__post_transfers_body_metadata__to_json(v), None => Value::Null });
+    m.insert("metadata".into(), match (&p.metadata) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("source_transaction".into(), match (&p.source_transaction) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("source_type".into(), match (&p.source_type) { Some(v) => Value::String(iface_transfers__post_transfers_body_source_type_enum__to_str(v).into()), None => Value::Null });
     m.insert("transfer_group".into(), match (&p.transfer_group) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -343,7 +346,7 @@ fn iface_transfers__transfer__from_json(v: &Value) -> Option<iface_transfers::Tr
         destination_payment: m.get("destination_payment").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         id: m.get("id").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         livemode: m.get("livemode").and_then(|v| (v).as_bool()).unwrap_or_default(),
-        metadata: match m.get("metadata").and_then(|v| iface_transfers__transfer_metadata__from_json(v)) { Some(x) => x, None => return None },
+        metadata: m.get("metadata").and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_transfers::TransferMetadataEntry { key: k.clone(), value: val })).collect())).unwrap_or_default(),
         object: match m.get("object").and_then(|v| (v).as_str().and_then(iface_transfers__transfer_object_enum__from_str)) { Some(x) => x, None => return None },
         reversals: match m.get("reversals").and_then(|v| iface_transfers__transfer_reversals__from_json(v)) { Some(x) => x, None => return None },
         reversed: m.get("reversed").and_then(|v| (v).as_bool()).unwrap_or_default(),
@@ -353,10 +356,11 @@ fn iface_transfers__transfer__from_json(v: &Value) -> Option<iface_transfers::Tr
     })
 }
 
-fn iface_transfers__transfer_metadata__from_json(v: &Value) -> Option<iface_transfers::TransferMetadata> {
+fn iface_transfers__transfer_metadata_entry__from_json(v: &Value) -> Option<iface_transfers::TransferMetadataEntry> {
     let m = v.as_object()?;
-    Some(iface_transfers::TransferMetadata {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_transfers::TransferMetadataEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -379,17 +383,18 @@ fn iface_transfers__transfer_reversal__from_json(v: &Value) -> Option<iface_tran
         currency: m.get("currency").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         destination_payment_refund: m.get("destination_payment_refund").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         id: m.get("id").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-        metadata: m.get("metadata").filter(|v| !v.is_null()).and_then(|v| iface_transfers__transfer_reversal_metadata__from_json(v)),
+        metadata: m.get("metadata").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_transfers::TransferReversalMetadataEntry { key: k.clone(), value: val })).collect())),
         object: match m.get("object").and_then(|v| (v).as_str().and_then(iface_transfers__transfer_reversal_object_enum__from_str)) { Some(x) => x, None => return None },
         source_refund: m.get("source_refund").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         transfer: m.get("transfer").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
-fn iface_transfers__transfer_reversal_metadata__from_json(v: &Value) -> Option<iface_transfers::TransferReversalMetadata> {
+fn iface_transfers__transfer_reversal_metadata_entry__from_json(v: &Value) -> Option<iface_transfers::TransferReversalMetadataEntry> {
     let m = v.as_object()?;
-    Some(iface_transfers::TransferReversalMetadata {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_transfers::TransferReversalMetadataEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 

@@ -78,6 +78,53 @@ fn iface_computer_vision__get_similar_images_license_item_enum__to_str(e: &iface
     }
 }
 
+fn iface_computer_vision__language__to_str(e: &iface_computer_vision::Language) -> &'static str {
+    match e {
+        iface_computer_vision::Language::Ar => "ar",
+        iface_computer_vision::Language::Bg => "bg",
+        iface_computer_vision::Language::Bn => "bn",
+        iface_computer_vision::Language::Cs => "cs",
+        iface_computer_vision::Language::Da => "da",
+        iface_computer_vision::Language::De => "de",
+        iface_computer_vision::Language::El => "el",
+        iface_computer_vision::Language::En => "en",
+        iface_computer_vision::Language::Es => "es",
+        iface_computer_vision::Language::Fi => "fi",
+        iface_computer_vision::Language::Fr => "fr",
+        iface_computer_vision::Language::Gu => "gu",
+        iface_computer_vision::Language::He => "he",
+        iface_computer_vision::Language::Hi => "hi",
+        iface_computer_vision::Language::Hr => "hr",
+        iface_computer_vision::Language::Hu => "hu",
+        iface_computer_vision::Language::Id => "id",
+        iface_computer_vision::Language::It => "it",
+        iface_computer_vision::Language::Ja => "ja",
+        iface_computer_vision::Language::Kn => "kn",
+        iface_computer_vision::Language::Ko => "ko",
+        iface_computer_vision::Language::Ml => "ml",
+        iface_computer_vision::Language::Mr => "mr",
+        iface_computer_vision::Language::Nb => "nb",
+        iface_computer_vision::Language::Nl => "nl",
+        iface_computer_vision::Language::Or => "or",
+        iface_computer_vision::Language::Pl => "pl",
+        iface_computer_vision::Language::Pt => "pt",
+        iface_computer_vision::Language::Ro => "ro",
+        iface_computer_vision::Language::Ru => "ru",
+        iface_computer_vision::Language::Sk => "sk",
+        iface_computer_vision::Language::Sl => "sl",
+        iface_computer_vision::Language::Sv => "sv",
+        iface_computer_vision::Language::Ta => "ta",
+        iface_computer_vision::Language::Te => "te",
+        iface_computer_vision::Language::Th => "th",
+        iface_computer_vision::Language::Tr => "tr",
+        iface_computer_vision::Language::Uk => "uk",
+        iface_computer_vision::Language::Ur => "ur",
+        iface_computer_vision::Language::Vi => "vi",
+        iface_computer_vision::Language::Zh => "zh",
+        iface_computer_vision::Language::ZhHant => "zh-Hant",
+    }
+}
+
 fn iface_computer_vision__get_similar_images_view_enum__to_str(e: &iface_computer_vision::GetSimilarImagesViewEnum) -> &'static str {
     match e {
         iface_computer_vision::GetSimilarImagesViewEnum::Minimal => "minimal",
@@ -103,20 +150,15 @@ fn iface_computer_vision__error__to_json(p: &iface_computer_vision::Error) -> Va
     let mut m = Map::new();
     m.insert("code".into(), match (&p.code) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("items".into(), match (&p.items) { Some(v) => Value::Array((v).iter().map(|v| iface_computer_vision__error_items_item__to_json(v)).collect()), None => Value::Null });
+    m.insert("items".into(), match (&p.items) { Some(v) => Value::Array((v).iter().map(|v| Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect())).collect()), None => Value::Null });
     m.insert("message".into(), Value::String((&p.message).clone()));
     m.insert("path".into(), match (&p.path) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_computer_vision__error_items_item__to_json(p: &iface_computer_vision::ErrorItemsItem) -> Value {
+fn iface_computer_vision__error_items_item_entry__to_json(p: &iface_computer_vision::ErrorItemsItemEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_computer_vision__language__to_json(p: &iface_computer_vision::Language) -> Value {
-    let mut m = Map::new();
+    m.insert("key".into(), Value::String((&p.key).clone()));
     m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
@@ -129,7 +171,7 @@ fn iface_computer_vision__image_search_results__to_json(p: &iface_computer_visio
     m.insert("page".into(), match (&p.page) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("per_page".into(), match (&p.per_page) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("search_id".into(), Value::String((&p.search_id).clone()));
-    m.insert("spellcheck_info".into(), match (&p.spellcheck_info) { Some(v) => iface_computer_vision__image_search_results_spellcheck_info__to_json(v), None => Value::Null });
+    m.insert("spellcheck_info".into(), match (&p.spellcheck_info) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("total_count".into(), Value::Number(serde_json::Number::from(*(&p.total_count))));
     Value::Object(m)
 }
@@ -240,9 +282,10 @@ fn iface_computer_vision__insights_label_performance_item__to_json(p: &iface_com
     Value::Object(m)
 }
 
-fn iface_computer_vision__image_search_results_spellcheck_info__to_json(p: &iface_computer_vision::ImageSearchResultsSpellcheckInfo) -> Value {
+fn iface_computer_vision__image_search_results_spellcheck_info_entry__to_json(p: &iface_computer_vision::ImageSearchResultsSpellcheckInfoEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -343,7 +386,7 @@ fn iface_computer_vision__get_similar_images_params__to_json(p: &iface_computer_
     m.insert("asset_id".into(), Value::String((&p.asset_id).clone()));
     m.insert("license".into(), match (&p.license) { Some(v) => Value::Array((v).iter().map(|v| Value::String(iface_computer_vision__get_similar_images_license_item_enum__to_str(v).into())).collect()), None => Value::Null });
     m.insert("safe".into(), match (&p.safe) { Some(v) => Value::Bool(*(v)), None => Value::Null });
-    m.insert("language".into(), match (&p.language) { Some(v) => iface_computer_vision__language__to_json(v), None => Value::Null });
+    m.insert("language".into(), match (&p.language) { Some(v) => Value::String(iface_computer_vision__language__to_str(v).into()), None => Value::Null });
     m.insert("page".into(), match (&p.page) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("per_page".into(), match (&p.per_page) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("view".into(), match (&p.view) { Some(v) => Value::String(iface_computer_vision__get_similar_images_view_enum__to_str(v).into()), None => Value::Null });
@@ -355,7 +398,7 @@ fn iface_computer_vision__get_similar_videos_params__to_json(p: &iface_computer_
     m.insert("asset_id".into(), Value::String((&p.asset_id).clone()));
     m.insert("license".into(), match (&p.license) { Some(v) => Value::Array((v).iter().map(|v| Value::String(iface_computer_vision__get_similar_images_license_item_enum__to_str(v).into())).collect()), None => Value::Null });
     m.insert("safe".into(), match (&p.safe) { Some(v) => Value::Bool(*(v)), None => Value::Null });
-    m.insert("language".into(), match (&p.language) { Some(v) => iface_computer_vision__language__to_json(v), None => Value::Null });
+    m.insert("language".into(), match (&p.language) { Some(v) => Value::String(iface_computer_vision__language__to_str(v).into()), None => Value::Null });
     m.insert("page".into(), match (&p.page) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("per_page".into(), match (&p.per_page) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("view".into(), match (&p.view) { Some(v) => Value::String(iface_computer_vision__get_similar_images_view_enum__to_str(v).into()), None => Value::Null });
@@ -389,16 +432,17 @@ fn iface_computer_vision__error__from_json(v: &Value) -> Option<iface_computer_v
     Some(iface_computer_vision::Error {
         code: m.get("code").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        items: m.get("items").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_computer_vision__error_items_item__from_json(x)).collect())),
+        items: m.get("items").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_computer_vision::ErrorItemsItemEntry { key: k.clone(), value: val })).collect())).collect())),
         message: m.get("message").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         path: m.get("path").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
     })
 }
 
-fn iface_computer_vision__error_items_item__from_json(v: &Value) -> Option<iface_computer_vision::ErrorItemsItem> {
+fn iface_computer_vision__error_items_item_entry__from_json(v: &Value) -> Option<iface_computer_vision::ErrorItemsItemEntry> {
     let m = v.as_object()?;
-    Some(iface_computer_vision::ErrorItemsItem {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_computer_vision::ErrorItemsItemEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -411,7 +455,7 @@ fn iface_computer_vision__image_search_results__from_json(v: &Value) -> Option<i
         page: m.get("page").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
         per_page: m.get("per_page").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
         search_id: m.get("search_id").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-        spellcheck_info: m.get("spellcheck_info").filter(|v| !v.is_null()).and_then(|v| iface_computer_vision__image_search_results_spellcheck_info__from_json(v)),
+        spellcheck_info: m.get("spellcheck_info").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_computer_vision::ImageSearchResultsSpellcheckInfoEntry { key: k.clone(), value: val })).collect())),
         total_count: m.get("total_count").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
     })
 }
@@ -533,10 +577,11 @@ fn iface_computer_vision__insights_label_performance_item__from_json(v: &Value) 
     })
 }
 
-fn iface_computer_vision__image_search_results_spellcheck_info__from_json(v: &Value) -> Option<iface_computer_vision::ImageSearchResultsSpellcheckInfo> {
+fn iface_computer_vision__image_search_results_spellcheck_info_entry__from_json(v: &Value) -> Option<iface_computer_vision::ImageSearchResultsSpellcheckInfoEntry> {
     let m = v.as_object()?;
-    Some(iface_computer_vision::ImageSearchResultsSpellcheckInfo {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_computer_vision::ImageSearchResultsSpellcheckInfoEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 

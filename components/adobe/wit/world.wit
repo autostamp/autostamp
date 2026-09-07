@@ -6,7 +6,7 @@
 /// | Secret name | Applied to each request as |
 /// | --- | --- |
 /// | `aemAuth` | `Authorization: Basic base64(<secret>)` |
-package autostamp:adobe@0.5.0;
+package autostamp:adobe@0.6.0;
 
 interface cq {
   record post-cq-actions-params {

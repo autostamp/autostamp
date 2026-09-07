@@ -1007,7 +1007,7 @@ fn iface_issuing__authorization__to_json(p: &iface_issuing::Authorization) -> Va
     m.insert("merchant_amount".into(), Value::Number(serde_json::Number::from(*(&p.merchant_amount))));
     m.insert("merchant_currency".into(), Value::String((&p.merchant_currency).clone()));
     m.insert("merchant_data".into(), iface_issuing__authorization_merchant_data__to_json(&p.merchant_data));
-    m.insert("metadata".into(), iface_issuing__authorization_metadata__to_json(&p.metadata));
+    m.insert("metadata".into(), Value::Object((&p.metadata).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()));
     m.insert("network_data".into(), match (&p.network_data) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("object".into(), Value::String(iface_issuing__authorization_object_enum__to_str(&p.object).into()));
     m.insert("pending_request".into(), match (&p.pending_request) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -1064,7 +1064,7 @@ fn iface_issuing__card__to_json(p: &iface_issuing::Card) -> Value {
     m.insert("id".into(), Value::String((&p.id).clone()));
     m.insert("last4".into(), Value::String((&p.last4).clone()));
     m.insert("livemode".into(), Value::Bool(*(&p.livemode)));
-    m.insert("metadata".into(), iface_issuing__card_metadata__to_json(&p.metadata));
+    m.insert("metadata".into(), Value::Object((&p.metadata).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()));
     m.insert("number".into(), match (&p.number) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("object".into(), Value::String(iface_issuing__card_object_enum__to_str(&p.object).into()));
     m.insert("replaced_by".into(), match (&p.replaced_by) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -1087,7 +1087,7 @@ fn iface_issuing__cardholder__to_json(p: &iface_issuing::Cardholder) -> Value {
     m.insert("id".into(), Value::String((&p.id).clone()));
     m.insert("individual".into(), match (&p.individual) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("livemode".into(), Value::Bool(*(&p.livemode)));
-    m.insert("metadata".into(), iface_issuing__cardholder_metadata__to_json(&p.metadata));
+    m.insert("metadata".into(), Value::Object((&p.metadata).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()));
     m.insert("name".into(), Value::String((&p.name).clone()));
     m.insert("object".into(), Value::String(iface_issuing__cardholder_object_enum__to_str(&p.object).into()));
     m.insert("phone_number".into(), match (&p.phone_number) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -1115,9 +1115,10 @@ fn iface_issuing__address__to_json(p: &iface_issuing::Address) -> Value {
     Value::Object(m)
 }
 
-fn iface_issuing__cardholder_metadata__to_json(p: &iface_issuing::CardholderMetadata) -> Value {
+fn iface_issuing__cardholder_metadata_entry__to_json(p: &iface_issuing::CardholderMetadataEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -1128,9 +1129,10 @@ fn iface_issuing__cardholder_requirements__to_json(p: &iface_issuing::Cardholder
     Value::Object(m)
 }
 
-fn iface_issuing__card_metadata__to_json(p: &iface_issuing::CardMetadata) -> Value {
+fn iface_issuing__card_metadata_entry__to_json(p: &iface_issuing::CardMetadataEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -1164,9 +1166,10 @@ fn iface_issuing__authorization_merchant_data__to_json(p: &iface_issuing::Author
     Value::Object(m)
 }
 
-fn iface_issuing__authorization_metadata__to_json(p: &iface_issuing::AuthorizationMetadata) -> Value {
+fn iface_issuing__authorization_metadata_entry__to_json(p: &iface_issuing::AuthorizationMetadataEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -1200,7 +1203,7 @@ fn iface_issuing__transaction__to_json(p: &iface_issuing::Transaction) -> Value 
     m.insert("merchant_amount".into(), Value::Number(serde_json::Number::from(*(&p.merchant_amount))));
     m.insert("merchant_currency".into(), Value::String((&p.merchant_currency).clone()));
     m.insert("merchant_data".into(), iface_issuing__authorization_merchant_data__to_json(&p.merchant_data));
-    m.insert("metadata".into(), iface_issuing__transaction_metadata__to_json(&p.metadata));
+    m.insert("metadata".into(), Value::Object((&p.metadata).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()));
     m.insert("object".into(), Value::String(iface_issuing__transaction_object_enum__to_str(&p.object).into()));
     m.insert("purchase_details".into(), match (&p.purchase_details) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("treasury".into(), match (&p.treasury) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -1209,9 +1212,10 @@ fn iface_issuing__transaction__to_json(p: &iface_issuing::Transaction) -> Value 
     Value::Object(m)
 }
 
-fn iface_issuing__transaction_metadata__to_json(p: &iface_issuing::TransactionMetadata) -> Value {
+fn iface_issuing__transaction_metadata_entry__to_json(p: &iface_issuing::TransactionMetadataEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -1301,9 +1305,10 @@ fn iface_issuing__post_issuing_cardholders_body_individual_verification_document
     Value::Object(m)
 }
 
-fn iface_issuing__post_issuing_cardholders_body_metadata__to_json(p: &iface_issuing::PostIssuingCardholdersBodyMetadata) -> Value {
+fn iface_issuing__post_issuing_cardholders_body_metadata_entry__to_json(p: &iface_issuing::PostIssuingCardholdersBodyMetadataEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -1392,9 +1397,10 @@ fn iface_issuing__post_issuing_cardholders_cardholder_body_individual_verificati
     Value::Object(m)
 }
 
-fn iface_issuing__post_issuing_cardholders_cardholder_body_metadata__to_json(p: &iface_issuing::PostIssuingCardholdersCardholderBodyMetadata) -> Value {
+fn iface_issuing__post_issuing_cardholders_cardholder_body_metadata_entry__to_json(p: &iface_issuing::PostIssuingCardholdersCardholderBodyMetadataEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -1424,9 +1430,10 @@ fn iface_issuing__get_issuing_cards_response__to_json(p: &iface_issuing::GetIssu
     Value::Object(m)
 }
 
-fn iface_issuing__post_issuing_cards_body_metadata__to_json(p: &iface_issuing::PostIssuingCardsBodyMetadata) -> Value {
+fn iface_issuing__post_issuing_cards_body_metadata_entry__to_json(p: &iface_issuing::PostIssuingCardsBodyMetadataEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -1515,7 +1522,7 @@ fn iface_issuing__dispute__to_json(p: &iface_issuing::Dispute) -> Value {
     m.insert("evidence".into(), iface_issuing__dispute_evidence__to_json(&p.evidence));
     m.insert("id".into(), Value::String((&p.id).clone()));
     m.insert("livemode".into(), Value::Bool(*(&p.livemode)));
-    m.insert("metadata".into(), iface_issuing__dispute_metadata__to_json(&p.metadata));
+    m.insert("metadata".into(), Value::Object((&p.metadata).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()));
     m.insert("object".into(), Value::String(iface_issuing__dispute_object_enum__to_str(&p.object).into()));
     m.insert("status".into(), Value::String(iface_issuing__get_issuing_disputes_status_enum__to_str(&p.status).into()));
     m.insert("transaction".into(), Value::String((&p.transaction).clone()));
@@ -1609,9 +1616,10 @@ fn iface_issuing__dispute_service_not_as_described_evidence__to_json(p: &iface_i
     Value::Object(m)
 }
 
-fn iface_issuing__dispute_metadata__to_json(p: &iface_issuing::DisputeMetadata) -> Value {
+fn iface_issuing__dispute_metadata_entry__to_json(p: &iface_issuing::DisputeMetadataEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -1628,9 +1636,10 @@ fn iface_issuing__post_issuing_disputes_body_evidence__to_json(p: &iface_issuing
     Value::Object(m)
 }
 
-fn iface_issuing__post_issuing_disputes_body_metadata__to_json(p: &iface_issuing::PostIssuingDisputesBodyMetadata) -> Value {
+fn iface_issuing__post_issuing_disputes_body_metadata_entry__to_json(p: &iface_issuing::PostIssuingDisputesBodyMetadataEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -1671,7 +1680,7 @@ fn iface_issuing__settlement__to_json(p: &iface_issuing::Settlement) -> Value {
     m.insert("id".into(), Value::String((&p.id).clone()));
     m.insert("interchange_fees".into(), Value::Number(serde_json::Number::from(*(&p.interchange_fees))));
     m.insert("livemode".into(), Value::Bool(*(&p.livemode)));
-    m.insert("metadata".into(), iface_issuing__settlement_metadata__to_json(&p.metadata));
+    m.insert("metadata".into(), Value::Object((&p.metadata).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()));
     m.insert("net_total".into(), Value::Number(serde_json::Number::from(*(&p.net_total))));
     m.insert("network".into(), Value::String(iface_issuing__settlement_network_enum__to_str(&p.network).into()));
     m.insert("network_fees".into(), Value::Number(serde_json::Number::from(*(&p.network_fees))));
@@ -1683,15 +1692,17 @@ fn iface_issuing__settlement__to_json(p: &iface_issuing::Settlement) -> Value {
     Value::Object(m)
 }
 
-fn iface_issuing__settlement_metadata__to_json(p: &iface_issuing::SettlementMetadata) -> Value {
+fn iface_issuing__settlement_metadata_entry__to_json(p: &iface_issuing::SettlementMetadataEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
-fn iface_issuing__post_issuing_settlements_settlement_body_metadata__to_json(p: &iface_issuing::PostIssuingSettlementsSettlementBodyMetadata) -> Value {
+fn iface_issuing__post_issuing_settlements_settlement_body_metadata_entry__to_json(p: &iface_issuing::PostIssuingSettlementsSettlementBodyMetadataEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -1773,7 +1784,7 @@ fn iface_issuing__post_issuing_cardholders_params__to_json(p: &iface_issuing::Po
     m.insert("email".into(), match (&p.email) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("expand".into(), match (&p.expand) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
     m.insert("individual".into(), match (&p.individual) { Some(v) => iface_issuing__post_issuing_cardholders_body_individual__to_json(v), None => Value::Null });
-    m.insert("metadata".into(), match (&p.metadata) { Some(v) => iface_issuing__post_issuing_cardholders_body_metadata__to_json(v), None => Value::Null });
+    m.insert("metadata".into(), match (&p.metadata) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("name".into(), Value::String((&p.name).clone()));
     m.insert("phone_number".into(), match (&p.phone_number) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("spending_controls".into(), match (&p.spending_controls) { Some(v) => iface_issuing__post_issuing_cardholders_body_spending_controls__to_json(v), None => Value::Null });
@@ -1798,7 +1809,7 @@ fn iface_issuing__post_issuing_cardholders_cardholder_params__to_json(p: &iface_
     m.insert("email".into(), match (&p.email) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("expand".into(), match (&p.expand) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
     m.insert("individual".into(), match (&p.individual) { Some(v) => iface_issuing__post_issuing_cardholders_cardholder_body_individual__to_json(v), None => Value::Null });
-    m.insert("metadata".into(), match (&p.metadata) { Some(v) => iface_issuing__post_issuing_cardholders_cardholder_body_metadata__to_json(v), None => Value::Null });
+    m.insert("metadata".into(), match (&p.metadata) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("phone_number".into(), match (&p.phone_number) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("spending_controls".into(), match (&p.spending_controls) { Some(v) => iface_issuing__post_issuing_cardholders_cardholder_body_spending_controls__to_json(v), None => Value::Null });
     m.insert("status".into(), match (&p.status) { Some(v) => Value::String(iface_issuing__post_issuing_cardholders_body_status_enum__to_str(v).into()), None => Value::Null });
@@ -1828,7 +1839,7 @@ fn iface_issuing__post_issuing_cards_params__to_json(p: &iface_issuing::PostIssu
     m.insert("currency".into(), Value::String((&p.currency).clone()));
     m.insert("expand".into(), match (&p.expand) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
     m.insert("financial_account".into(), match (&p.financial_account) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("metadata".into(), match (&p.metadata) { Some(v) => iface_issuing__post_issuing_cards_body_metadata__to_json(v), None => Value::Null });
+    m.insert("metadata".into(), match (&p.metadata) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("replacement_for".into(), match (&p.replacement_for) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("replacement_reason".into(), match (&p.replacement_reason) { Some(v) => Value::String(iface_issuing__card_replacement_reason_enum__to_str(v).into()), None => Value::Null });
     m.insert("shipping".into(), match (&p.shipping) { Some(v) => iface_issuing__post_issuing_cards_body_shipping__to_json(v), None => Value::Null });
@@ -1876,7 +1887,7 @@ fn iface_issuing__post_issuing_disputes_params__to_json(p: &iface_issuing::PostI
     m.insert("amount".into(), match (&p.amount) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("evidence".into(), match (&p.evidence) { Some(v) => iface_issuing__post_issuing_disputes_body_evidence__to_json(v), None => Value::Null });
     m.insert("expand".into(), match (&p.expand) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
-    m.insert("metadata".into(), match (&p.metadata) { Some(v) => iface_issuing__post_issuing_disputes_body_metadata__to_json(v), None => Value::Null });
+    m.insert("metadata".into(), match (&p.metadata) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("transaction".into(), match (&p.transaction) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("treasury".into(), match (&p.treasury) { Some(v) => iface_issuing__post_issuing_disputes_body_treasury__to_json(v), None => Value::Null });
     Value::Object(m)
@@ -1931,7 +1942,7 @@ fn iface_issuing__post_issuing_settlements_settlement_params__to_json(p: &iface_
     let mut m = Map::new();
     m.insert("settlement".into(), Value::String((&p.settlement).clone()));
     m.insert("expand".into(), match (&p.expand) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
-    m.insert("metadata".into(), match (&p.metadata) { Some(v) => iface_issuing__post_issuing_settlements_settlement_body_metadata__to_json(v), None => Value::Null });
+    m.insert("metadata".into(), match (&p.metadata) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -1992,7 +2003,7 @@ fn iface_issuing__authorization__from_json(v: &Value) -> Option<iface_issuing::A
         merchant_amount: m.get("merchant_amount").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
         merchant_currency: m.get("merchant_currency").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         merchant_data: match m.get("merchant_data").and_then(|v| iface_issuing__authorization_merchant_data__from_json(v)) { Some(x) => x, None => return None },
-        metadata: match m.get("metadata").and_then(|v| iface_issuing__authorization_metadata__from_json(v)) { Some(x) => x, None => return None },
+        metadata: m.get("metadata").and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_issuing::AuthorizationMetadataEntry { key: k.clone(), value: val })).collect())).unwrap_or_default(),
         network_data: m.get("network_data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         object: match m.get("object").and_then(|v| (v).as_str().and_then(iface_issuing__authorization_object_enum__from_str)) { Some(x) => x, None => return None },
         pending_request: m.get("pending_request").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
@@ -2052,7 +2063,7 @@ fn iface_issuing__card__from_json(v: &Value) -> Option<iface_issuing::Card> {
         id: m.get("id").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         last4: m.get("last4").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         livemode: m.get("livemode").and_then(|v| (v).as_bool()).unwrap_or_default(),
-        metadata: match m.get("metadata").and_then(|v| iface_issuing__card_metadata__from_json(v)) { Some(x) => x, None => return None },
+        metadata: m.get("metadata").and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_issuing::CardMetadataEntry { key: k.clone(), value: val })).collect())).unwrap_or_default(),
         number: m.get("number").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         object: match m.get("object").and_then(|v| (v).as_str().and_then(iface_issuing__card_object_enum__from_str)) { Some(x) => x, None => return None },
         replaced_by: m.get("replaced_by").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
@@ -2076,7 +2087,7 @@ fn iface_issuing__cardholder__from_json(v: &Value) -> Option<iface_issuing::Card
         id: m.get("id").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         individual: m.get("individual").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         livemode: m.get("livemode").and_then(|v| (v).as_bool()).unwrap_or_default(),
-        metadata: match m.get("metadata").and_then(|v| iface_issuing__cardholder_metadata__from_json(v)) { Some(x) => x, None => return None },
+        metadata: m.get("metadata").and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_issuing::CardholderMetadataEntry { key: k.clone(), value: val })).collect())).unwrap_or_default(),
         name: m.get("name").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         object: match m.get("object").and_then(|v| (v).as_str().and_then(iface_issuing__cardholder_object_enum__from_str)) { Some(x) => x, None => return None },
         phone_number: m.get("phone_number").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
@@ -2106,10 +2117,11 @@ fn iface_issuing__address__from_json(v: &Value) -> Option<iface_issuing::Address
     })
 }
 
-fn iface_issuing__cardholder_metadata__from_json(v: &Value) -> Option<iface_issuing::CardholderMetadata> {
+fn iface_issuing__cardholder_metadata_entry__from_json(v: &Value) -> Option<iface_issuing::CardholderMetadataEntry> {
     let m = v.as_object()?;
-    Some(iface_issuing::CardholderMetadata {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_issuing::CardholderMetadataEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -2121,10 +2133,11 @@ fn iface_issuing__cardholder_requirements__from_json(v: &Value) -> Option<iface_
     })
 }
 
-fn iface_issuing__card_metadata__from_json(v: &Value) -> Option<iface_issuing::CardMetadata> {
+fn iface_issuing__card_metadata_entry__from_json(v: &Value) -> Option<iface_issuing::CardMetadataEntry> {
     let m = v.as_object()?;
-    Some(iface_issuing::CardMetadata {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_issuing::CardMetadataEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -2161,10 +2174,11 @@ fn iface_issuing__authorization_merchant_data__from_json(v: &Value) -> Option<if
     })
 }
 
-fn iface_issuing__authorization_metadata__from_json(v: &Value) -> Option<iface_issuing::AuthorizationMetadata> {
+fn iface_issuing__authorization_metadata_entry__from_json(v: &Value) -> Option<iface_issuing::AuthorizationMetadataEntry> {
     let m = v.as_object()?;
-    Some(iface_issuing::AuthorizationMetadata {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_issuing::AuthorizationMetadataEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -2200,7 +2214,7 @@ fn iface_issuing__transaction__from_json(v: &Value) -> Option<iface_issuing::Tra
         merchant_amount: m.get("merchant_amount").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
         merchant_currency: m.get("merchant_currency").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         merchant_data: match m.get("merchant_data").and_then(|v| iface_issuing__authorization_merchant_data__from_json(v)) { Some(x) => x, None => return None },
-        metadata: match m.get("metadata").and_then(|v| iface_issuing__transaction_metadata__from_json(v)) { Some(x) => x, None => return None },
+        metadata: m.get("metadata").and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_issuing::TransactionMetadataEntry { key: k.clone(), value: val })).collect())).unwrap_or_default(),
         object: match m.get("object").and_then(|v| (v).as_str().and_then(iface_issuing__transaction_object_enum__from_str)) { Some(x) => x, None => return None },
         purchase_details: m.get("purchase_details").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         treasury: m.get("treasury").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
@@ -2209,10 +2223,11 @@ fn iface_issuing__transaction__from_json(v: &Value) -> Option<iface_issuing::Tra
     })
 }
 
-fn iface_issuing__transaction_metadata__from_json(v: &Value) -> Option<iface_issuing::TransactionMetadata> {
+fn iface_issuing__transaction_metadata_entry__from_json(v: &Value) -> Option<iface_issuing::TransactionMetadataEntry> {
     let m = v.as_object()?;
-    Some(iface_issuing::TransactionMetadata {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_issuing::TransactionMetadataEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -2266,7 +2281,7 @@ fn iface_issuing__dispute__from_json(v: &Value) -> Option<iface_issuing::Dispute
         evidence: match m.get("evidence").and_then(|v| iface_issuing__dispute_evidence__from_json(v)) { Some(x) => x, None => return None },
         id: m.get("id").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         livemode: m.get("livemode").and_then(|v| (v).as_bool()).unwrap_or_default(),
-        metadata: match m.get("metadata").and_then(|v| iface_issuing__dispute_metadata__from_json(v)) { Some(x) => x, None => return None },
+        metadata: m.get("metadata").and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_issuing::DisputeMetadataEntry { key: k.clone(), value: val })).collect())).unwrap_or_default(),
         object: match m.get("object").and_then(|v| (v).as_str().and_then(iface_issuing__dispute_object_enum__from_str)) { Some(x) => x, None => return None },
         status: match m.get("status").and_then(|v| (v).as_str().and_then(iface_issuing__get_issuing_disputes_status_enum__from_str)) { Some(x) => x, None => return None },
         transaction: m.get("transaction").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
@@ -2368,10 +2383,11 @@ fn iface_issuing__dispute_service_not_as_described_evidence__from_json(v: &Value
     })
 }
 
-fn iface_issuing__dispute_metadata__from_json(v: &Value) -> Option<iface_issuing::DisputeMetadata> {
+fn iface_issuing__dispute_metadata_entry__from_json(v: &Value) -> Option<iface_issuing::DisputeMetadataEntry> {
     let m = v.as_object()?;
-    Some(iface_issuing::DisputeMetadata {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_issuing::DisputeMetadataEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -2395,7 +2411,7 @@ fn iface_issuing__settlement__from_json(v: &Value) -> Option<iface_issuing::Sett
         id: m.get("id").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         interchange_fees: m.get("interchange_fees").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
         livemode: m.get("livemode").and_then(|v| (v).as_bool()).unwrap_or_default(),
-        metadata: match m.get("metadata").and_then(|v| iface_issuing__settlement_metadata__from_json(v)) { Some(x) => x, None => return None },
+        metadata: m.get("metadata").and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_issuing::SettlementMetadataEntry { key: k.clone(), value: val })).collect())).unwrap_or_default(),
         net_total: m.get("net_total").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
         network: match m.get("network").and_then(|v| (v).as_str().and_then(iface_issuing__settlement_network_enum__from_str)) { Some(x) => x, None => return None },
         network_fees: m.get("network_fees").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
@@ -2407,10 +2423,11 @@ fn iface_issuing__settlement__from_json(v: &Value) -> Option<iface_issuing::Sett
     })
 }
 
-fn iface_issuing__settlement_metadata__from_json(v: &Value) -> Option<iface_issuing::SettlementMetadata> {
+fn iface_issuing__settlement_metadata_entry__from_json(v: &Value) -> Option<iface_issuing::SettlementMetadataEntry> {
     let m = v.as_object()?;
-    Some(iface_issuing::SettlementMetadata {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_issuing::SettlementMetadataEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 

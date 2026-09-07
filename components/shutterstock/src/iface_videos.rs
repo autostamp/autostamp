@@ -315,6 +315,53 @@ fn iface_videos__get_video_list_view_enum__to_str(e: &iface_videos::GetVideoList
     }
 }
 
+fn iface_videos__language__to_str(e: &iface_videos::Language) -> &'static str {
+    match e {
+        iface_videos::Language::Ar => "ar",
+        iface_videos::Language::Bg => "bg",
+        iface_videos::Language::Bn => "bn",
+        iface_videos::Language::Cs => "cs",
+        iface_videos::Language::Da => "da",
+        iface_videos::Language::De => "de",
+        iface_videos::Language::El => "el",
+        iface_videos::Language::En => "en",
+        iface_videos::Language::Es => "es",
+        iface_videos::Language::Fi => "fi",
+        iface_videos::Language::Fr => "fr",
+        iface_videos::Language::Gu => "gu",
+        iface_videos::Language::He => "he",
+        iface_videos::Language::Hi => "hi",
+        iface_videos::Language::Hr => "hr",
+        iface_videos::Language::Hu => "hu",
+        iface_videos::Language::Id => "id",
+        iface_videos::Language::It => "it",
+        iface_videos::Language::Ja => "ja",
+        iface_videos::Language::Kn => "kn",
+        iface_videos::Language::Ko => "ko",
+        iface_videos::Language::Ml => "ml",
+        iface_videos::Language::Mr => "mr",
+        iface_videos::Language::Nb => "nb",
+        iface_videos::Language::Nl => "nl",
+        iface_videos::Language::Or => "or",
+        iface_videos::Language::Pl => "pl",
+        iface_videos::Language::Pt => "pt",
+        iface_videos::Language::Ro => "ro",
+        iface_videos::Language::Ru => "ru",
+        iface_videos::Language::Sk => "sk",
+        iface_videos::Language::Sl => "sl",
+        iface_videos::Language::Sv => "sv",
+        iface_videos::Language::Ta => "ta",
+        iface_videos::Language::Te => "te",
+        iface_videos::Language::Th => "th",
+        iface_videos::Language::Tr => "tr",
+        iface_videos::Language::Uk => "uk",
+        iface_videos::Language::Ur => "ur",
+        iface_videos::Language::Vi => "vi",
+        iface_videos::Language::Zh => "zh",
+        iface_videos::Language::ZhHant => "zh-Hant",
+    }
+}
+
 fn iface_videos__get_video_collection_list_embed_item_enum__to_str(e: &iface_videos::GetVideoCollectionListEmbedItemEnum) -> &'static str {
     match e {
         iface_videos::GetVideoCollectionListEmbedItemEnum::ShareCode => "share_code",
@@ -523,20 +570,15 @@ fn iface_videos__error__to_json(p: &iface_videos::Error) -> Value {
     let mut m = Map::new();
     m.insert("code".into(), match (&p.code) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("items".into(), match (&p.items) { Some(v) => Value::Array((v).iter().map(|v| iface_videos__error_items_item__to_json(v)).collect()), None => Value::Null });
+    m.insert("items".into(), match (&p.items) { Some(v) => Value::Array((v).iter().map(|v| Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect())).collect()), None => Value::Null });
     m.insert("message".into(), Value::String((&p.message).clone()));
     m.insert("path".into(), match (&p.path) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_videos__error_items_item__to_json(p: &iface_videos::ErrorItemsItem) -> Value {
+fn iface_videos__error_items_item_entry__to_json(p: &iface_videos::ErrorItemsItemEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_videos__language__to_json(p: &iface_videos::Language) -> Value {
-    let mut m = Map::new();
+    m.insert("key".into(), Value::String((&p.key).clone()));
     m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
@@ -663,7 +705,7 @@ fn iface_videos__download_history__to_json(p: &iface_videos::DownloadHistory) ->
     m.insert("image".into(), match (&p.image) { Some(v) => iface_videos__download_history_media_details__to_json(v), None => Value::Null });
     m.insert("is_downloadable".into(), match (&p.is_downloadable) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     m.insert("license".into(), Value::String((&p.license).clone()));
-    m.insert("metadata".into(), match (&p.metadata) { Some(v) => iface_videos__download_history_metadata__to_json(v), None => Value::Null });
+    m.insert("metadata".into(), match (&p.metadata) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("revshare".into(), match (&p.revshare) { Some(v) => iface_videos__download_history_revshare_details__to_json(v), None => Value::Null });
     m.insert("subscription_id".into(), match (&p.subscription_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("user".into(), match (&p.user) { Some(v) => iface_videos__download_history_user_details__to_json(v), None => Value::Null });
@@ -685,9 +727,10 @@ fn iface_videos__download_history_format_details__to_json(p: &iface_videos::Down
     Value::Object(m)
 }
 
-fn iface_videos__download_history_metadata__to_json(p: &iface_videos::DownloadHistoryMetadata) -> Value {
+fn iface_videos__download_history_metadata_entry__to_json(p: &iface_videos::DownloadHistoryMetadataEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -708,7 +751,7 @@ fn iface_videos__license_video__to_json(p: &iface_videos::LicenseVideo) -> Value
     let mut m = Map::new();
     m.insert("auth_cookie".into(), match (&p.auth_cookie) { Some(v) => iface_videos__cookie__to_json(v), None => Value::Null });
     m.insert("editorial_acknowledgement".into(), match (&p.editorial_acknowledgement) { Some(v) => Value::Bool(*(v)), None => Value::Null });
-    m.insert("metadata".into(), match (&p.metadata) { Some(v) => iface_videos__license_request_metadata__to_json(v), None => Value::Null });
+    m.insert("metadata".into(), match (&p.metadata) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("price".into(), match (&p.price) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
     m.insert("search_id".into(), match (&p.search_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("show_modal".into(), match (&p.show_modal) { Some(v) => Value::Bool(*(v)), None => Value::Null });
@@ -725,9 +768,10 @@ fn iface_videos__cookie__to_json(p: &iface_videos::Cookie) -> Value {
     Value::Object(m)
 }
 
-fn iface_videos__license_request_metadata__to_json(p: &iface_videos::LicenseRequestMetadata) -> Value {
+fn iface_videos__license_request_metadata_entry__to_json(p: &iface_videos::LicenseRequestMetadataEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -806,7 +850,7 @@ fn iface_videos__get_video_list_params__to_json(p: &iface_videos::GetVideoListPa
 
 fn iface_videos__list_video_categories_params__to_json(p: &iface_videos::ListVideoCategoriesParams) -> Value {
     let mut m = Map::new();
-    m.insert("language".into(), match (&p.language) { Some(v) => iface_videos__language__to_json(v), None => Value::Null });
+    m.insert("language".into(), match (&p.language) { Some(v) => Value::String(iface_videos__language__to_str(v).into()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -940,7 +984,7 @@ fn iface_videos__search_videos_params__to_json(p: &iface_videos::SearchVideosPar
     m.insert("fps_from".into(), match (&p.fps_from) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
     m.insert("fps_to".into(), match (&p.fps_to) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
     m.insert("keyword_safe_search".into(), match (&p.keyword_safe_search) { Some(v) => Value::Bool(*(v)), None => Value::Null });
-    m.insert("language".into(), match (&p.language) { Some(v) => iface_videos__language__to_json(v), None => Value::Null });
+    m.insert("language".into(), match (&p.language) { Some(v) => Value::String(iface_videos__language__to_str(v).into()), None => Value::Null });
     m.insert("license".into(), match (&p.license) { Some(v) => Value::Array((v).iter().map(|v| Value::String(iface_videos__search_videos_license_item_enum__to_str(v).into())).collect()), None => Value::Null });
     m.insert("model".into(), match (&p.model) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
     m.insert("page".into(), match (&p.page) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
@@ -979,7 +1023,7 @@ fn iface_videos__get_updated_videos_params__to_json(p: &iface_videos::GetUpdated
 fn iface_videos__get_video_params__to_json(p: &iface_videos::GetVideoParams) -> Value {
     let mut m = Map::new();
     m.insert("id".into(), Value::String((&p.id).clone()));
-    m.insert("language".into(), match (&p.language) { Some(v) => iface_videos__language__to_json(v), None => Value::Null });
+    m.insert("language".into(), match (&p.language) { Some(v) => Value::String(iface_videos__language__to_str(v).into()), None => Value::Null });
     m.insert("view".into(), match (&p.view) { Some(v) => Value::String(iface_videos__get_video_list_view_enum__to_str(v).into()), None => Value::Null });
     m.insert("search_id".into(), match (&p.search_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
@@ -988,7 +1032,7 @@ fn iface_videos__get_video_params__to_json(p: &iface_videos::GetVideoParams) -> 
 fn iface_videos__find_similar_videos_params__to_json(p: &iface_videos::FindSimilarVideosParams) -> Value {
     let mut m = Map::new();
     m.insert("id".into(), Value::String((&p.id).clone()));
-    m.insert("language".into(), match (&p.language) { Some(v) => iface_videos__language__to_json(v), None => Value::Null });
+    m.insert("language".into(), match (&p.language) { Some(v) => Value::String(iface_videos__language__to_str(v).into()), None => Value::Null });
     m.insert("page".into(), match (&p.page) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("per_page".into(), match (&p.per_page) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("view".into(), match (&p.view) { Some(v) => Value::String(iface_videos__get_video_list_view_enum__to_str(v).into()), None => Value::Null });
@@ -1102,16 +1146,17 @@ fn iface_videos__error__from_json(v: &Value) -> Option<iface_videos::Error> {
     Some(iface_videos::Error {
         code: m.get("code").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        items: m.get("items").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_videos__error_items_item__from_json(x)).collect())),
+        items: m.get("items").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_videos::ErrorItemsItemEntry { key: k.clone(), value: val })).collect())).collect())),
         message: m.get("message").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         path: m.get("path").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
     })
 }
 
-fn iface_videos__error_items_item__from_json(v: &Value) -> Option<iface_videos::ErrorItemsItem> {
+fn iface_videos__error_items_item_entry__from_json(v: &Value) -> Option<iface_videos::ErrorItemsItemEntry> {
     let m = v.as_object()?;
-    Some(iface_videos::ErrorItemsItem {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_videos::ErrorItemsItemEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -1249,7 +1294,7 @@ fn iface_videos__download_history__from_json(v: &Value) -> Option<iface_videos::
         image: m.get("image").filter(|v| !v.is_null()).and_then(|v| iface_videos__download_history_media_details__from_json(v)),
         is_downloadable: m.get("is_downloadable").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
         license: m.get("license").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-        metadata: m.get("metadata").filter(|v| !v.is_null()).and_then(|v| iface_videos__download_history_metadata__from_json(v)),
+        metadata: m.get("metadata").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_videos::DownloadHistoryMetadataEntry { key: k.clone(), value: val })).collect())),
         revshare: m.get("revshare").filter(|v| !v.is_null()).and_then(|v| iface_videos__download_history_revshare_details__from_json(v)),
         subscription_id: m.get("subscription_id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         user: m.get("user").filter(|v| !v.is_null()).and_then(|v| iface_videos__download_history_user_details__from_json(v)),
@@ -1273,10 +1318,11 @@ fn iface_videos__download_history_format_details__from_json(v: &Value) -> Option
     })
 }
 
-fn iface_videos__download_history_metadata__from_json(v: &Value) -> Option<iface_videos::DownloadHistoryMetadata> {
+fn iface_videos__download_history_metadata_entry__from_json(v: &Value) -> Option<iface_videos::DownloadHistoryMetadataEntry> {
     let m = v.as_object()?;
-    Some(iface_videos::DownloadHistoryMetadata {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_videos::DownloadHistoryMetadataEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 

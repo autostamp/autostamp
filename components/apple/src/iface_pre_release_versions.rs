@@ -161,6 +161,14 @@ fn iface_pre_release_versions__get_collection_fields_apps_item_enum__to_str(e: &
     }
 }
 
+fn iface_pre_release_versions__platform__to_str(e: &iface_pre_release_versions::Platform) -> &'static str {
+    match e {
+        iface_pre_release_versions::Platform::Ios => "IOS",
+        iface_pre_release_versions::Platform::MacOs => "MAC_OS",
+        iface_pre_release_versions::Platform::TvOs => "TV_OS",
+    }
+}
+
 fn iface_pre_release_versions__prerelease_version_relationships_app_data_type_op_enum__to_str(e: &iface_pre_release_versions::PrereleaseVersionRelationshipsAppDataTypeOpEnum) -> &'static str {
     match e {
         iface_pre_release_versions::PrereleaseVersionRelationshipsAppDataTypeOpEnum::Apps => "apps",
@@ -315,14 +323,8 @@ fn iface_pre_release_versions__prerelease_version__to_json(p: &iface_pre_release
 
 fn iface_pre_release_versions__prerelease_version_attributes__to_json(p: &iface_pre_release_versions::PrereleaseVersionAttributes) -> Value {
     let mut m = Map::new();
-    m.insert("platform".into(), match (&p.platform) { Some(v) => iface_pre_release_versions__platform__to_json(v), None => Value::Null });
+    m.insert("platform".into(), match (&p.platform) { Some(v) => Value::String(iface_pre_release_versions__platform__to_str(v).into()), None => Value::Null });
     m.insert("version".into(), match (&p.version) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_pre_release_versions__platform__to_json(p: &iface_pre_release_versions::Platform) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -1084,15 +1086,8 @@ fn iface_pre_release_versions__prerelease_version__from_json(v: &Value) -> Optio
 fn iface_pre_release_versions__prerelease_version_attributes__from_json(v: &Value) -> Option<iface_pre_release_versions::PrereleaseVersionAttributes> {
     let m = v.as_object()?;
     Some(iface_pre_release_versions::PrereleaseVersionAttributes {
-        platform: m.get("platform").filter(|v| !v.is_null()).and_then(|v| iface_pre_release_versions__platform__from_json(v)),
+        platform: m.get("platform").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_pre_release_versions__platform__from_str)),
         version: m.get("version").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-    })
-}
-
-fn iface_pre_release_versions__platform__from_json(v: &Value) -> Option<iface_pre_release_versions::Platform> {
-    let m = v.as_object()?;
-    Some(iface_pre_release_versions::Platform {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -1883,6 +1878,15 @@ fn iface_pre_release_versions__get_collection_filter_builds_processing_state_ite
         "FAILED" => Some(iface_pre_release_versions::GetCollectionFilterBuildsProcessingStateItemEnum::Failed),
         "INVALID" => Some(iface_pre_release_versions::GetCollectionFilterBuildsProcessingStateItemEnum::Invalid),
         "VALID" => Some(iface_pre_release_versions::GetCollectionFilterBuildsProcessingStateItemEnum::Valid),
+        _ => None,
+    }
+}
+
+fn iface_pre_release_versions__platform__from_str(s: &str) -> Option<iface_pre_release_versions::Platform> {
+    match s {
+        "IOS" => Some(iface_pre_release_versions::Platform::Ios),
+        "MAC_OS" => Some(iface_pre_release_versions::Platform::MacOs),
+        "TV_OS" => Some(iface_pre_release_versions::Platform::TvOs),
         _ => None,
     }
 }

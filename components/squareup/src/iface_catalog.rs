@@ -192,7 +192,7 @@ fn iface_catalog__object__to_json(p: &iface_catalog::Object) -> Value {
     m.insert("catalog_v1_ids".into(), match (&p.catalog_v1_ids) { Some(v) => Value::Array((v).iter().map(|v| iface_catalog__v1_id__to_json(v)).collect()), None => Value::Null });
     m.insert("category_data".into(), match (&p.category_data) { Some(v) => iface_catalog__category__to_json(v), None => Value::Null });
     m.insert("custom_attribute_definition_data".into(), match (&p.custom_attribute_definition_data) { Some(v) => iface_catalog__custom_attribute_definition__to_json(v), None => Value::Null });
-    m.insert("custom_attribute_values".into(), match (&p.custom_attribute_values) { Some(v) => iface_catalog__object_custom_attribute_values__to_json(v), None => Value::Null });
+    m.insert("custom_attribute_values".into(), match (&p.custom_attribute_values) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), iface_catalog__custom_attribute_value__to_json(&e.value))).collect()), None => Value::Null });
     m.insert("discount_data".into(), match (&p.discount_data) { Some(v) => iface_catalog__discount__to_json(v), None => Value::Null });
     m.insert("id".into(), Value::String((&p.id).clone()));
     m.insert("image_data".into(), match (&p.image_data) { Some(v) => iface_catalog__image__to_json(v), None => Value::Null });
@@ -283,9 +283,23 @@ fn iface_catalog__custom_attribute_definition_string_config__to_json(p: &iface_c
     Value::Object(m)
 }
 
-fn iface_catalog__object_custom_attribute_values__to_json(p: &iface_catalog::ObjectCustomAttributeValues) -> Value {
+fn iface_catalog__custom_attribute_value__to_json(p: &iface_catalog::CustomAttributeValue) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("boolean_value".into(), match (&p.boolean_value) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("custom_attribute_definition_id".into(), match (&p.custom_attribute_definition_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), match (&p.key) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("number_value".into(), match (&p.number_value) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("selection_uid_values".into(), match (&p.selection_uid_values) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("string_value".into(), match (&p.string_value) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("type".into(), match (&p.type_op) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_catalog__object_custom_attribute_values_entry__to_json(p: &iface_catalog::ObjectCustomAttributeValuesEntry) -> Value {
+    let mut m = Map::new();
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), iface_catalog__custom_attribute_value__to_json(&p.value));
     Value::Object(m)
 }
 
@@ -907,7 +921,7 @@ fn iface_catalog__object__from_json(v: &Value) -> Option<iface_catalog::Object> 
         catalog_v1_ids: m.get("catalog_v1_ids").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_catalog__v1_id__from_json(x)).collect())),
         category_data: m.get("category_data").filter(|v| !v.is_null()).and_then(|v| iface_catalog__category__from_json(v)),
         custom_attribute_definition_data: m.get("custom_attribute_definition_data").filter(|v| !v.is_null()).and_then(|v| iface_catalog__custom_attribute_definition__from_json(v)),
-        custom_attribute_values: m.get("custom_attribute_values").filter(|v| !v.is_null()).and_then(|v| iface_catalog__object_custom_attribute_values__from_json(v)),
+        custom_attribute_values: m.get("custom_attribute_values").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| (iface_catalog__custom_attribute_value__from_json(x)).map(|val| iface_catalog::ObjectCustomAttributeValuesEntry { key: k.clone(), value: val })).collect())),
         discount_data: m.get("discount_data").filter(|v| !v.is_null()).and_then(|v| iface_catalog__discount__from_json(v)),
         id: m.get("id").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         image_data: m.get("image_data").filter(|v| !v.is_null()).and_then(|v| iface_catalog__image__from_json(v)),
@@ -1006,10 +1020,25 @@ fn iface_catalog__custom_attribute_definition_string_config__from_json(v: &Value
     })
 }
 
-fn iface_catalog__object_custom_attribute_values__from_json(v: &Value) -> Option<iface_catalog::ObjectCustomAttributeValues> {
+fn iface_catalog__custom_attribute_value__from_json(v: &Value) -> Option<iface_catalog::CustomAttributeValue> {
     let m = v.as_object()?;
-    Some(iface_catalog::ObjectCustomAttributeValues {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_catalog::CustomAttributeValue {
+        boolean_value: m.get("boolean_value").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        custom_attribute_definition_id: m.get("custom_attribute_definition_id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        key: m.get("key").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        number_value: m.get("number_value").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        selection_uid_values: m.get("selection_uid_values").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        string_value: m.get("string_value").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        type_op: m.get("type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_catalog__object_custom_attribute_values_entry__from_json(v: &Value) -> Option<iface_catalog::ObjectCustomAttributeValuesEntry> {
+    let m = v.as_object()?;
+    Some(iface_catalog::ObjectCustomAttributeValuesEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: match m.get("value").and_then(|v| iface_catalog__custom_attribute_value__from_json(v)) { Some(x) => x, None => return None },
     })
 }
 

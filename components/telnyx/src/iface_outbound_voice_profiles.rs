@@ -126,6 +126,28 @@ fn iface_outbound_voice_profiles__outbound_call_recording_call_recording_type_en
     }
 }
 
+fn iface_outbound_voice_profiles__service_plan__to_str(e: &iface_outbound_voice_profiles::ServicePlan) -> &'static str {
+    match e {
+        iface_outbound_voice_profiles::ServicePlan::Us => "us",
+        iface_outbound_voice_profiles::ServicePlan::International => "international",
+        iface_outbound_voice_profiles::ServicePlan::Global => "global",
+    }
+}
+
+fn iface_outbound_voice_profiles__traffic_type__to_str(e: &iface_outbound_voice_profiles::TrafficType) -> &'static str {
+    match e {
+        iface_outbound_voice_profiles::TrafficType::Conversational => "conversational",
+        iface_outbound_voice_profiles::TrafficType::ShortDuration => "short_duration",
+    }
+}
+
+fn iface_outbound_voice_profiles__usage_payment_method__to_str(e: &iface_outbound_voice_profiles::UsagePaymentMethod) -> &'static str {
+    match e {
+        iface_outbound_voice_profiles::UsagePaymentMethod::Tariff => "tariff",
+        iface_outbound_voice_profiles::UsagePaymentMethod::RateDeck => "rate-deck",
+    }
+}
+
 fn iface_outbound_voice_profiles__list_outbound_voice_profiles_response__to_json(p: &iface_outbound_voice_profiles::ListOutboundVoiceProfilesResponse) -> Value {
     let mut m = Map::new();
     m.insert("data".into(), match (&p.data) { Some(v) => Value::Array((v).iter().map(|v| iface_outbound_voice_profiles__outbound_voice_profile__to_json(v)).collect()), None => Value::Null });
@@ -147,11 +169,11 @@ fn iface_outbound_voice_profiles__outbound_voice_profile__to_json(p: &iface_outb
     m.insert("max_destination_rate".into(), match (&p.max_destination_rate) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
     m.insert("name".into(), Value::String((&p.name).clone()));
     m.insert("record_type".into(), match (&p.record_type) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("service_plan".into(), match (&p.service_plan) { Some(v) => iface_outbound_voice_profiles__service_plan__to_json(v), None => Value::Null });
+    m.insert("service_plan".into(), match (&p.service_plan) { Some(v) => Value::String(iface_outbound_voice_profiles__service_plan__to_str(v).into()), None => Value::Null });
     m.insert("tags".into(), match (&p.tags) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
-    m.insert("traffic_type".into(), match (&p.traffic_type) { Some(v) => iface_outbound_voice_profiles__traffic_type__to_json(v), None => Value::Null });
+    m.insert("traffic_type".into(), match (&p.traffic_type) { Some(v) => Value::String(iface_outbound_voice_profiles__traffic_type__to_str(v).into()), None => Value::Null });
     m.insert("updated_at".into(), match (&p.updated_at) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("usage_payment_method".into(), match (&p.usage_payment_method) { Some(v) => iface_outbound_voice_profiles__usage_payment_method__to_json(v), None => Value::Null });
+    m.insert("usage_payment_method".into(), match (&p.usage_payment_method) { Some(v) => Value::String(iface_outbound_voice_profiles__usage_payment_method__to_str(v).into()), None => Value::Null });
     m.insert("whitelisted_destinations".into(), match (&p.whitelisted_destinations) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
     Value::Object(m)
 }
@@ -162,24 +184,6 @@ fn iface_outbound_voice_profiles__outbound_call_recording__to_json(p: &iface_out
     m.insert("call_recording_channels".into(), match (&p.call_recording_channels) { Some(v) => Value::String(iface_outbound_voice_profiles__outbound_call_recording_call_recording_channels_enum__to_str(v).into()), None => Value::Null });
     m.insert("call_recording_format".into(), match (&p.call_recording_format) { Some(v) => Value::String(iface_outbound_voice_profiles__outbound_call_recording_call_recording_format_enum__to_str(v).into()), None => Value::Null });
     m.insert("call_recording_type".into(), match (&p.call_recording_type) { Some(v) => Value::String(iface_outbound_voice_profiles__outbound_call_recording_call_recording_type_enum__to_str(v).into()), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_outbound_voice_profiles__service_plan__to_json(p: &iface_outbound_voice_profiles::ServicePlan) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_outbound_voice_profiles__traffic_type__to_json(p: &iface_outbound_voice_profiles::TrafficType) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_outbound_voice_profiles__usage_payment_method__to_json(p: &iface_outbound_voice_profiles::UsagePaymentMethod) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -235,10 +239,10 @@ fn iface_outbound_voice_profiles__create_outbound_voice_profile_params__to_json(
     m.insert("enabled".into(), match (&p.enabled) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     m.insert("max_destination_rate".into(), match (&p.max_destination_rate) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
     m.insert("name".into(), Value::String((&p.name).clone()));
-    m.insert("service_plan".into(), match (&p.service_plan) { Some(v) => iface_outbound_voice_profiles__service_plan__to_json(v), None => Value::Null });
+    m.insert("service_plan".into(), match (&p.service_plan) { Some(v) => Value::String(iface_outbound_voice_profiles__service_plan__to_str(v).into()), None => Value::Null });
     m.insert("tags".into(), match (&p.tags) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
-    m.insert("traffic_type".into(), match (&p.traffic_type) { Some(v) => iface_outbound_voice_profiles__traffic_type__to_json(v), None => Value::Null });
-    m.insert("usage_payment_method".into(), match (&p.usage_payment_method) { Some(v) => iface_outbound_voice_profiles__usage_payment_method__to_json(v), None => Value::Null });
+    m.insert("traffic_type".into(), match (&p.traffic_type) { Some(v) => Value::String(iface_outbound_voice_profiles__traffic_type__to_str(v).into()), None => Value::Null });
+    m.insert("usage_payment_method".into(), match (&p.usage_payment_method) { Some(v) => Value::String(iface_outbound_voice_profiles__usage_payment_method__to_str(v).into()), None => Value::Null });
     m.insert("whitelisted_destinations".into(), match (&p.whitelisted_destinations) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
     Value::Object(m)
 }
@@ -260,10 +264,10 @@ fn iface_outbound_voice_profiles__update_outbound_voice_profile_params__to_json(
     m.insert("enabled".into(), match (&p.enabled) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     m.insert("max_destination_rate".into(), match (&p.max_destination_rate) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
     m.insert("name".into(), Value::String((&p.name).clone()));
-    m.insert("service_plan".into(), match (&p.service_plan) { Some(v) => iface_outbound_voice_profiles__service_plan__to_json(v), None => Value::Null });
+    m.insert("service_plan".into(), match (&p.service_plan) { Some(v) => Value::String(iface_outbound_voice_profiles__service_plan__to_str(v).into()), None => Value::Null });
     m.insert("tags".into(), match (&p.tags) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
-    m.insert("traffic_type".into(), match (&p.traffic_type) { Some(v) => iface_outbound_voice_profiles__traffic_type__to_json(v), None => Value::Null });
-    m.insert("usage_payment_method".into(), match (&p.usage_payment_method) { Some(v) => iface_outbound_voice_profiles__usage_payment_method__to_json(v), None => Value::Null });
+    m.insert("traffic_type".into(), match (&p.traffic_type) { Some(v) => Value::String(iface_outbound_voice_profiles__traffic_type__to_str(v).into()), None => Value::Null });
+    m.insert("usage_payment_method".into(), match (&p.usage_payment_method) { Some(v) => Value::String(iface_outbound_voice_profiles__usage_payment_method__to_str(v).into()), None => Value::Null });
     m.insert("whitelisted_destinations".into(), match (&p.whitelisted_destinations) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
     Value::Object(m)
 }
@@ -297,11 +301,11 @@ fn iface_outbound_voice_profiles__outbound_voice_profile__from_json(v: &Value) -
         max_destination_rate: m.get("max_destination_rate").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
         name: m.get("name").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         record_type: m.get("record_type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        service_plan: m.get("service_plan").filter(|v| !v.is_null()).and_then(|v| iface_outbound_voice_profiles__service_plan__from_json(v)),
+        service_plan: m.get("service_plan").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_outbound_voice_profiles__service_plan__from_str)),
         tags: m.get("tags").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
-        traffic_type: m.get("traffic_type").filter(|v| !v.is_null()).and_then(|v| iface_outbound_voice_profiles__traffic_type__from_json(v)),
+        traffic_type: m.get("traffic_type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_outbound_voice_profiles__traffic_type__from_str)),
         updated_at: m.get("updated_at").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        usage_payment_method: m.get("usage_payment_method").filter(|v| !v.is_null()).and_then(|v| iface_outbound_voice_profiles__usage_payment_method__from_json(v)),
+        usage_payment_method: m.get("usage_payment_method").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_outbound_voice_profiles__usage_payment_method__from_str)),
         whitelisted_destinations: m.get("whitelisted_destinations").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
     })
 }
@@ -313,27 +317,6 @@ fn iface_outbound_voice_profiles__outbound_call_recording__from_json(v: &Value) 
         call_recording_channels: m.get("call_recording_channels").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_outbound_voice_profiles__outbound_call_recording_call_recording_channels_enum__from_str)),
         call_recording_format: m.get("call_recording_format").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_outbound_voice_profiles__outbound_call_recording_call_recording_format_enum__from_str)),
         call_recording_type: m.get("call_recording_type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_outbound_voice_profiles__outbound_call_recording_call_recording_type_enum__from_str)),
-    })
-}
-
-fn iface_outbound_voice_profiles__service_plan__from_json(v: &Value) -> Option<iface_outbound_voice_profiles::ServicePlan> {
-    let m = v.as_object()?;
-    Some(iface_outbound_voice_profiles::ServicePlan {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-    })
-}
-
-fn iface_outbound_voice_profiles__traffic_type__from_json(v: &Value) -> Option<iface_outbound_voice_profiles::TrafficType> {
-    let m = v.as_object()?;
-    Some(iface_outbound_voice_profiles::TrafficType {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-    })
-}
-
-fn iface_outbound_voice_profiles__usage_payment_method__from_json(v: &Value) -> Option<iface_outbound_voice_profiles::UsagePaymentMethod> {
-    let m = v.as_object()?;
-    Some(iface_outbound_voice_profiles::UsagePaymentMethod {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -396,6 +379,31 @@ fn iface_outbound_voice_profiles__outbound_call_recording_call_recording_type_en
         "all" => Some(iface_outbound_voice_profiles::OutboundCallRecordingCallRecordingTypeEnum::All),
         "none" => Some(iface_outbound_voice_profiles::OutboundCallRecordingCallRecordingTypeEnum::None),
         "by_caller_phone_number" => Some(iface_outbound_voice_profiles::OutboundCallRecordingCallRecordingTypeEnum::ByCallerPhoneNumber),
+        _ => None,
+    }
+}
+
+fn iface_outbound_voice_profiles__service_plan__from_str(s: &str) -> Option<iface_outbound_voice_profiles::ServicePlan> {
+    match s {
+        "us" => Some(iface_outbound_voice_profiles::ServicePlan::Us),
+        "international" => Some(iface_outbound_voice_profiles::ServicePlan::International),
+        "global" => Some(iface_outbound_voice_profiles::ServicePlan::Global),
+        _ => None,
+    }
+}
+
+fn iface_outbound_voice_profiles__traffic_type__from_str(s: &str) -> Option<iface_outbound_voice_profiles::TrafficType> {
+    match s {
+        "conversational" => Some(iface_outbound_voice_profiles::TrafficType::Conversational),
+        "short_duration" => Some(iface_outbound_voice_profiles::TrafficType::ShortDuration),
+        _ => None,
+    }
+}
+
+fn iface_outbound_voice_profiles__usage_payment_method__from_str(s: &str) -> Option<iface_outbound_voice_profiles::UsagePaymentMethod> {
+    match s {
+        "tariff" => Some(iface_outbound_voice_profiles::UsagePaymentMethod::Tariff),
+        "rate-deck" => Some(iface_outbound_voice_profiles::UsagePaymentMethod::RateDeck),
         _ => None,
     }
 }

@@ -297,15 +297,16 @@ fn iface_orders_id__tax_data_order_tax_details_applied_tax_extension_interface__
 fn iface_orders_id__tax_data_applied_tax_rate_interface__to_json(p: &iface_orders_id::TaxDataAppliedTaxRateInterface) -> Value {
     let mut m = Map::new();
     m.insert("code".into(), match (&p.code) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("extension_attributes".into(), match (&p.extension_attributes) { Some(v) => iface_orders_id__tax_data_applied_tax_rate_extension_interface__to_json(v), None => Value::Null });
+    m.insert("extension_attributes".into(), match (&p.extension_attributes) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("percent".into(), match (&p.percent) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
     m.insert("title".into(), match (&p.title) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_orders_id__tax_data_applied_tax_rate_extension_interface__to_json(p: &iface_orders_id::TaxDataAppliedTaxRateExtensionInterface) -> Value {
+fn iface_orders_id__tax_data_applied_tax_rate_extension_interface_entry__to_json(p: &iface_orders_id::TaxDataAppliedTaxRateExtensionInterfaceEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -313,14 +314,15 @@ fn iface_orders_id__company_data_company_order_interface__to_json(p: &iface_orde
     let mut m = Map::new();
     m.insert("company_id".into(), match (&p.company_id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("company_name".into(), match (&p.company_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("extension_attributes".into(), match (&p.extension_attributes) { Some(v) => iface_orders_id__company_data_company_order_extension_interface__to_json(v), None => Value::Null });
+    m.insert("extension_attributes".into(), match (&p.extension_attributes) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("order_id".into(), match (&p.order_id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_orders_id__company_data_company_order_extension_interface__to_json(p: &iface_orders_id::CompanyDataCompanyOrderExtensionInterface) -> Value {
+fn iface_orders_id__company_data_company_order_extension_interface_entry__to_json(p: &iface_orders_id::CompanyDataCompanyOrderExtensionInterfaceEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -358,15 +360,16 @@ fn iface_orders_id__tax_data_order_tax_details_item_interface__to_json(p: &iface
     let mut m = Map::new();
     m.insert("applied_taxes".into(), match (&p.applied_taxes) { Some(v) => Value::Array((v).iter().map(|v| iface_orders_id__tax_data_order_tax_details_applied_tax_interface__to_json(v)).collect()), None => Value::Null });
     m.insert("associated_item_id".into(), match (&p.associated_item_id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    m.insert("extension_attributes".into(), match (&p.extension_attributes) { Some(v) => iface_orders_id__tax_data_order_tax_details_item_extension_interface__to_json(v), None => Value::Null });
+    m.insert("extension_attributes".into(), match (&p.extension_attributes) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("item_id".into(), match (&p.item_id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("type".into(), match (&p.type_op) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_orders_id__tax_data_order_tax_details_item_extension_interface__to_json(p: &iface_orders_id::TaxDataOrderTaxDetailsItemExtensionInterface) -> Value {
+fn iface_orders_id__tax_data_order_tax_details_item_extension_interface_entry__to_json(p: &iface_orders_id::TaxDataOrderTaxDetailsItemExtensionInterfaceEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -379,16 +382,17 @@ fn iface_orders_id__payment_data_payment_additional_info_interface__to_json(p: &
 
 fn iface_orders_id__sales_data_shipping_assignment_interface__to_json(p: &iface_orders_id::SalesDataShippingAssignmentInterface) -> Value {
     let mut m = Map::new();
-    m.insert("extension_attributes".into(), match (&p.extension_attributes) { Some(v) => iface_orders_id__sales_data_shipping_assignment_extension_interface__to_json(v), None => Value::Null });
+    m.insert("extension_attributes".into(), match (&p.extension_attributes) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("items".into(), Value::Array((&p.items).iter().map(|v| iface_orders_id__sales_data_order_item_interface__to_json(v)).collect()));
     m.insert("shipping".into(), iface_orders_id__sales_data_shipping_interface__to_json(&p.shipping));
     m.insert("stock_id".into(), match (&p.stock_id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_orders_id__sales_data_shipping_assignment_extension_interface__to_json(p: &iface_orders_id::SalesDataShippingAssignmentExtensionInterface) -> Value {
+fn iface_orders_id__sales_data_shipping_assignment_extension_interface_entry__to_json(p: &iface_orders_id::SalesDataShippingAssignmentExtensionInterfaceEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -532,30 +536,32 @@ fn iface_orders_id__catalog_data_product_option_extension_interface__to_json(p: 
 
 fn iface_orders_id__bundle_data_bundle_option_interface__to_json(p: &iface_orders_id::BundleDataBundleOptionInterface) -> Value {
     let mut m = Map::new();
-    m.insert("extension_attributes".into(), match (&p.extension_attributes) { Some(v) => iface_orders_id__bundle_data_bundle_option_extension_interface__to_json(v), None => Value::Null });
+    m.insert("extension_attributes".into(), match (&p.extension_attributes) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("option_id".into(), Value::Number(serde_json::Number::from(*(&p.option_id))));
     m.insert("option_qty".into(), Value::Number(serde_json::Number::from(*(&p.option_qty))));
     m.insert("option_selections".into(), Value::Array((&p.option_selections).iter().map(|v| Value::Number(serde_json::Number::from(*(v)))).collect()));
     Value::Object(m)
 }
 
-fn iface_orders_id__bundle_data_bundle_option_extension_interface__to_json(p: &iface_orders_id::BundleDataBundleOptionExtensionInterface) -> Value {
+fn iface_orders_id__bundle_data_bundle_option_extension_interface_entry__to_json(p: &iface_orders_id::BundleDataBundleOptionExtensionInterfaceEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
 fn iface_orders_id__configurable_product_data_configurable_item_option_value_interface__to_json(p: &iface_orders_id::ConfigurableProductDataConfigurableItemOptionValueInterface) -> Value {
     let mut m = Map::new();
-    m.insert("extension_attributes".into(), match (&p.extension_attributes) { Some(v) => iface_orders_id__configurable_product_data_configurable_item_option_value_extension_interface__to_json(v), None => Value::Null });
+    m.insert("extension_attributes".into(), match (&p.extension_attributes) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("option_id".into(), Value::String((&p.option_id).clone()));
     m.insert("option_value".into(), match (&p.option_value) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_orders_id__configurable_product_data_configurable_item_option_value_extension_interface__to_json(p: &iface_orders_id::ConfigurableProductDataConfigurableItemOptionValueExtensionInterface) -> Value {
+fn iface_orders_id__configurable_product_data_configurable_item_option_value_extension_interface_entry__to_json(p: &iface_orders_id::ConfigurableProductDataConfigurableItemOptionValueExtensionInterfaceEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -590,7 +596,7 @@ fn iface_orders_id__downloadable_data_downloadable_option_interface__to_json(p: 
 fn iface_orders_id__gift_card_data_gift_card_option_interface__to_json(p: &iface_orders_id::GiftCardDataGiftCardOptionInterface) -> Value {
     let mut m = Map::new();
     m.insert("custom_giftcard_amount".into(), match (&p.custom_giftcard_amount) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
-    m.insert("extension_attributes".into(), match (&p.extension_attributes) { Some(v) => iface_orders_id__gift_card_data_gift_card_option_extension_interface__to_json(v), None => Value::Null });
+    m.insert("extension_attributes".into(), match (&p.extension_attributes) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("giftcard_amount".into(), Value::String((&p.giftcard_amount).clone()));
     m.insert("giftcard_message".into(), match (&p.giftcard_message) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("giftcard_recipient_email".into(), Value::String((&p.giftcard_recipient_email).clone()));
@@ -600,9 +606,10 @@ fn iface_orders_id__gift_card_data_gift_card_option_interface__to_json(p: &iface
     Value::Object(m)
 }
 
-fn iface_orders_id__gift_card_data_gift_card_option_extension_interface__to_json(p: &iface_orders_id::GiftCardDataGiftCardOptionExtensionInterface) -> Value {
+fn iface_orders_id__gift_card_data_gift_card_option_extension_interface_entry__to_json(p: &iface_orders_id::GiftCardDataGiftCardOptionExtensionInterfaceEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -655,7 +662,7 @@ fn iface_orders_id__sales_data_total_interface__to_json(p: &iface_orders_id::Sal
     m.insert("base_shipping_refunded".into(), match (&p.base_shipping_refunded) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
     m.insert("base_shipping_tax_amount".into(), match (&p.base_shipping_tax_amount) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
     m.insert("base_shipping_tax_refunded".into(), match (&p.base_shipping_tax_refunded) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
-    m.insert("extension_attributes".into(), match (&p.extension_attributes) { Some(v) => iface_orders_id__sales_data_total_extension_interface__to_json(v), None => Value::Null });
+    m.insert("extension_attributes".into(), match (&p.extension_attributes) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("shipping_amount".into(), match (&p.shipping_amount) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
     m.insert("shipping_canceled".into(), match (&p.shipping_canceled) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
     m.insert("shipping_discount_amount".into(), match (&p.shipping_discount_amount) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
@@ -668,9 +675,10 @@ fn iface_orders_id__sales_data_total_interface__to_json(p: &iface_orders_id::Sal
     Value::Object(m)
 }
 
-fn iface_orders_id__sales_data_total_extension_interface__to_json(p: &iface_orders_id::SalesDataTotalExtensionInterface) -> Value {
+fn iface_orders_id__sales_data_total_extension_interface_entry__to_json(p: &iface_orders_id::SalesDataTotalExtensionInterfaceEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -762,7 +770,7 @@ fn iface_orders_id__sales_data_order_status_history_interface__to_json(p: &iface
     m.insert("created_at".into(), match (&p.created_at) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("entity_id".into(), match (&p.entity_id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("entity_name".into(), match (&p.entity_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("extension_attributes".into(), match (&p.extension_attributes) { Some(v) => iface_orders_id__sales_data_order_status_history_extension_interface__to_json(v), None => Value::Null });
+    m.insert("extension_attributes".into(), match (&p.extension_attributes) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("is_customer_notified".into(), Value::Number(serde_json::Number::from(*(&p.is_customer_notified))));
     m.insert("is_visible_on_front".into(), Value::Number(serde_json::Number::from(*(&p.is_visible_on_front))));
     m.insert("parent_id".into(), Value::Number(serde_json::Number::from(*(&p.parent_id))));
@@ -770,9 +778,10 @@ fn iface_orders_id__sales_data_order_status_history_interface__to_json(p: &iface
     Value::Object(m)
 }
 
-fn iface_orders_id__sales_data_order_status_history_extension_interface__to_json(p: &iface_orders_id::SalesDataOrderStatusHistoryExtensionInterface) -> Value {
+fn iface_orders_id__sales_data_order_status_history_extension_interface_entry__to_json(p: &iface_orders_id::SalesDataOrderStatusHistoryExtensionInterfaceEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -1073,16 +1082,17 @@ fn iface_orders_id__tax_data_applied_tax_rate_interface__from_json(v: &Value) ->
     let m = v.as_object()?;
     Some(iface_orders_id::TaxDataAppliedTaxRateInterface {
         code: m.get("code").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        extension_attributes: m.get("extension_attributes").filter(|v| !v.is_null()).and_then(|v| iface_orders_id__tax_data_applied_tax_rate_extension_interface__from_json(v)),
+        extension_attributes: m.get("extension_attributes").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_orders_id::TaxDataAppliedTaxRateExtensionInterfaceEntry { key: k.clone(), value: val })).collect())),
         percent: m.get("percent").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
         title: m.get("title").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
     })
 }
 
-fn iface_orders_id__tax_data_applied_tax_rate_extension_interface__from_json(v: &Value) -> Option<iface_orders_id::TaxDataAppliedTaxRateExtensionInterface> {
+fn iface_orders_id__tax_data_applied_tax_rate_extension_interface_entry__from_json(v: &Value) -> Option<iface_orders_id::TaxDataAppliedTaxRateExtensionInterfaceEntry> {
     let m = v.as_object()?;
-    Some(iface_orders_id::TaxDataAppliedTaxRateExtensionInterface {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_orders_id::TaxDataAppliedTaxRateExtensionInterfaceEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -1091,15 +1101,16 @@ fn iface_orders_id__company_data_company_order_interface__from_json(v: &Value) -
     Some(iface_orders_id::CompanyDataCompanyOrderInterface {
         company_id: m.get("company_id").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
         company_name: m.get("company_name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        extension_attributes: m.get("extension_attributes").filter(|v| !v.is_null()).and_then(|v| iface_orders_id__company_data_company_order_extension_interface__from_json(v)),
+        extension_attributes: m.get("extension_attributes").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_orders_id::CompanyDataCompanyOrderExtensionInterfaceEntry { key: k.clone(), value: val })).collect())),
         order_id: m.get("order_id").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
     })
 }
 
-fn iface_orders_id__company_data_company_order_extension_interface__from_json(v: &Value) -> Option<iface_orders_id::CompanyDataCompanyOrderExtensionInterface> {
+fn iface_orders_id__company_data_company_order_extension_interface_entry__from_json(v: &Value) -> Option<iface_orders_id::CompanyDataCompanyOrderExtensionInterfaceEntry> {
     let m = v.as_object()?;
-    Some(iface_orders_id::CompanyDataCompanyOrderExtensionInterface {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_orders_id::CompanyDataCompanyOrderExtensionInterfaceEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -1141,16 +1152,17 @@ fn iface_orders_id__tax_data_order_tax_details_item_interface__from_json(v: &Val
     Some(iface_orders_id::TaxDataOrderTaxDetailsItemInterface {
         applied_taxes: m.get("applied_taxes").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_orders_id__tax_data_order_tax_details_applied_tax_interface__from_json(x)).collect())),
         associated_item_id: m.get("associated_item_id").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
-        extension_attributes: m.get("extension_attributes").filter(|v| !v.is_null()).and_then(|v| iface_orders_id__tax_data_order_tax_details_item_extension_interface__from_json(v)),
+        extension_attributes: m.get("extension_attributes").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_orders_id::TaxDataOrderTaxDetailsItemExtensionInterfaceEntry { key: k.clone(), value: val })).collect())),
         item_id: m.get("item_id").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
         type_op: m.get("type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
     })
 }
 
-fn iface_orders_id__tax_data_order_tax_details_item_extension_interface__from_json(v: &Value) -> Option<iface_orders_id::TaxDataOrderTaxDetailsItemExtensionInterface> {
+fn iface_orders_id__tax_data_order_tax_details_item_extension_interface_entry__from_json(v: &Value) -> Option<iface_orders_id::TaxDataOrderTaxDetailsItemExtensionInterfaceEntry> {
     let m = v.as_object()?;
-    Some(iface_orders_id::TaxDataOrderTaxDetailsItemExtensionInterface {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_orders_id::TaxDataOrderTaxDetailsItemExtensionInterfaceEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -1165,17 +1177,18 @@ fn iface_orders_id__payment_data_payment_additional_info_interface__from_json(v:
 fn iface_orders_id__sales_data_shipping_assignment_interface__from_json(v: &Value) -> Option<iface_orders_id::SalesDataShippingAssignmentInterface> {
     let m = v.as_object()?;
     Some(iface_orders_id::SalesDataShippingAssignmentInterface {
-        extension_attributes: m.get("extension_attributes").filter(|v| !v.is_null()).and_then(|v| iface_orders_id__sales_data_shipping_assignment_extension_interface__from_json(v)),
+        extension_attributes: m.get("extension_attributes").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_orders_id::SalesDataShippingAssignmentExtensionInterfaceEntry { key: k.clone(), value: val })).collect())),
         items: m.get("items").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_orders_id__sales_data_order_item_interface__from_json(x)).collect())).unwrap_or_default(),
         shipping: match m.get("shipping").and_then(|v| iface_orders_id__sales_data_shipping_interface__from_json(v)) { Some(x) => x, None => return None },
         stock_id: m.get("stock_id").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
     })
 }
 
-fn iface_orders_id__sales_data_shipping_assignment_extension_interface__from_json(v: &Value) -> Option<iface_orders_id::SalesDataShippingAssignmentExtensionInterface> {
+fn iface_orders_id__sales_data_shipping_assignment_extension_interface_entry__from_json(v: &Value) -> Option<iface_orders_id::SalesDataShippingAssignmentExtensionInterfaceEntry> {
     let m = v.as_object()?;
-    Some(iface_orders_id::SalesDataShippingAssignmentExtensionInterface {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_orders_id::SalesDataShippingAssignmentExtensionInterfaceEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -1324,33 +1337,35 @@ fn iface_orders_id__catalog_data_product_option_extension_interface__from_json(v
 fn iface_orders_id__bundle_data_bundle_option_interface__from_json(v: &Value) -> Option<iface_orders_id::BundleDataBundleOptionInterface> {
     let m = v.as_object()?;
     Some(iface_orders_id::BundleDataBundleOptionInterface {
-        extension_attributes: m.get("extension_attributes").filter(|v| !v.is_null()).and_then(|v| iface_orders_id__bundle_data_bundle_option_extension_interface__from_json(v)),
+        extension_attributes: m.get("extension_attributes").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_orders_id::BundleDataBundleOptionExtensionInterfaceEntry { key: k.clone(), value: val })).collect())),
         option_id: m.get("option_id").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
         option_qty: m.get("option_qty").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
         option_selections: m.get("option_selections").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_i64().map(|n| n as i32)).collect())).unwrap_or_default(),
     })
 }
 
-fn iface_orders_id__bundle_data_bundle_option_extension_interface__from_json(v: &Value) -> Option<iface_orders_id::BundleDataBundleOptionExtensionInterface> {
+fn iface_orders_id__bundle_data_bundle_option_extension_interface_entry__from_json(v: &Value) -> Option<iface_orders_id::BundleDataBundleOptionExtensionInterfaceEntry> {
     let m = v.as_object()?;
-    Some(iface_orders_id::BundleDataBundleOptionExtensionInterface {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_orders_id::BundleDataBundleOptionExtensionInterfaceEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
 fn iface_orders_id__configurable_product_data_configurable_item_option_value_interface__from_json(v: &Value) -> Option<iface_orders_id::ConfigurableProductDataConfigurableItemOptionValueInterface> {
     let m = v.as_object()?;
     Some(iface_orders_id::ConfigurableProductDataConfigurableItemOptionValueInterface {
-        extension_attributes: m.get("extension_attributes").filter(|v| !v.is_null()).and_then(|v| iface_orders_id__configurable_product_data_configurable_item_option_value_extension_interface__from_json(v)),
+        extension_attributes: m.get("extension_attributes").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_orders_id::ConfigurableProductDataConfigurableItemOptionValueExtensionInterfaceEntry { key: k.clone(), value: val })).collect())),
         option_id: m.get("option_id").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         option_value: m.get("option_value").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
     })
 }
 
-fn iface_orders_id__configurable_product_data_configurable_item_option_value_extension_interface__from_json(v: &Value) -> Option<iface_orders_id::ConfigurableProductDataConfigurableItemOptionValueExtensionInterface> {
+fn iface_orders_id__configurable_product_data_configurable_item_option_value_extension_interface_entry__from_json(v: &Value) -> Option<iface_orders_id::ConfigurableProductDataConfigurableItemOptionValueExtensionInterfaceEntry> {
     let m = v.as_object()?;
-    Some(iface_orders_id::ConfigurableProductDataConfigurableItemOptionValueExtensionInterface {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_orders_id::ConfigurableProductDataConfigurableItemOptionValueExtensionInterfaceEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -1390,7 +1405,7 @@ fn iface_orders_id__gift_card_data_gift_card_option_interface__from_json(v: &Val
     let m = v.as_object()?;
     Some(iface_orders_id::GiftCardDataGiftCardOptionInterface {
         custom_giftcard_amount: m.get("custom_giftcard_amount").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
-        extension_attributes: m.get("extension_attributes").filter(|v| !v.is_null()).and_then(|v| iface_orders_id__gift_card_data_gift_card_option_extension_interface__from_json(v)),
+        extension_attributes: m.get("extension_attributes").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_orders_id::GiftCardDataGiftCardOptionExtensionInterfaceEntry { key: k.clone(), value: val })).collect())),
         giftcard_amount: m.get("giftcard_amount").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         giftcard_message: m.get("giftcard_message").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         giftcard_recipient_email: m.get("giftcard_recipient_email").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
@@ -1400,10 +1415,11 @@ fn iface_orders_id__gift_card_data_gift_card_option_interface__from_json(v: &Val
     })
 }
 
-fn iface_orders_id__gift_card_data_gift_card_option_extension_interface__from_json(v: &Value) -> Option<iface_orders_id::GiftCardDataGiftCardOptionExtensionInterface> {
+fn iface_orders_id__gift_card_data_gift_card_option_extension_interface_entry__from_json(v: &Value) -> Option<iface_orders_id::GiftCardDataGiftCardOptionExtensionInterfaceEntry> {
     let m = v.as_object()?;
-    Some(iface_orders_id::GiftCardDataGiftCardOptionExtensionInterface {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_orders_id::GiftCardDataGiftCardOptionExtensionInterfaceEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -1461,7 +1477,7 @@ fn iface_orders_id__sales_data_total_interface__from_json(v: &Value) -> Option<i
         base_shipping_refunded: m.get("base_shipping_refunded").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
         base_shipping_tax_amount: m.get("base_shipping_tax_amount").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
         base_shipping_tax_refunded: m.get("base_shipping_tax_refunded").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
-        extension_attributes: m.get("extension_attributes").filter(|v| !v.is_null()).and_then(|v| iface_orders_id__sales_data_total_extension_interface__from_json(v)),
+        extension_attributes: m.get("extension_attributes").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_orders_id::SalesDataTotalExtensionInterfaceEntry { key: k.clone(), value: val })).collect())),
         shipping_amount: m.get("shipping_amount").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
         shipping_canceled: m.get("shipping_canceled").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
         shipping_discount_amount: m.get("shipping_discount_amount").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
@@ -1474,10 +1490,11 @@ fn iface_orders_id__sales_data_total_interface__from_json(v: &Value) -> Option<i
     })
 }
 
-fn iface_orders_id__sales_data_total_extension_interface__from_json(v: &Value) -> Option<iface_orders_id::SalesDataTotalExtensionInterface> {
+fn iface_orders_id__sales_data_total_extension_interface_entry__from_json(v: &Value) -> Option<iface_orders_id::SalesDataTotalExtensionInterfaceEntry> {
     let m = v.as_object()?;
-    Some(iface_orders_id::SalesDataTotalExtensionInterface {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_orders_id::SalesDataTotalExtensionInterfaceEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -1573,7 +1590,7 @@ fn iface_orders_id__sales_data_order_status_history_interface__from_json(v: &Val
         created_at: m.get("created_at").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         entity_id: m.get("entity_id").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
         entity_name: m.get("entity_name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        extension_attributes: m.get("extension_attributes").filter(|v| !v.is_null()).and_then(|v| iface_orders_id__sales_data_order_status_history_extension_interface__from_json(v)),
+        extension_attributes: m.get("extension_attributes").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_orders_id::SalesDataOrderStatusHistoryExtensionInterfaceEntry { key: k.clone(), value: val })).collect())),
         is_customer_notified: m.get("is_customer_notified").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
         is_visible_on_front: m.get("is_visible_on_front").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
         parent_id: m.get("parent_id").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
@@ -1581,10 +1598,11 @@ fn iface_orders_id__sales_data_order_status_history_interface__from_json(v: &Val
     })
 }
 
-fn iface_orders_id__sales_data_order_status_history_extension_interface__from_json(v: &Value) -> Option<iface_orders_id::SalesDataOrderStatusHistoryExtensionInterface> {
+fn iface_orders_id__sales_data_order_status_history_extension_interface_entry__from_json(v: &Value) -> Option<iface_orders_id::SalesDataOrderStatusHistoryExtensionInterfaceEntry> {
     let m = v.as_object()?;
-    Some(iface_orders_id::SalesDataOrderStatusHistoryExtensionInterface {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_orders_id::SalesDataOrderStatusHistoryExtensionInterfaceEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 

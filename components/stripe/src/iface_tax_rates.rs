@@ -123,7 +123,7 @@ fn iface_tax_rates__tax_rate__to_json(p: &iface_tax_rates::TaxRate) -> Value {
     m.insert("inclusive".into(), Value::Bool(*(&p.inclusive)));
     m.insert("jurisdiction".into(), match (&p.jurisdiction) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("livemode".into(), Value::Bool(*(&p.livemode)));
-    m.insert("metadata".into(), match (&p.metadata) { Some(v) => iface_tax_rates__tax_rate_metadata__to_json(v), None => Value::Null });
+    m.insert("metadata".into(), match (&p.metadata) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("object".into(), Value::String(iface_tax_rates__tax_rate_object_enum__to_str(&p.object).into()));
     m.insert("percentage".into(), serde_json::Number::from_f64(*(&p.percentage)).map(Value::Number).unwrap_or(Value::Null));
     m.insert("state".into(), match (&p.state) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -131,15 +131,17 @@ fn iface_tax_rates__tax_rate__to_json(p: &iface_tax_rates::TaxRate) -> Value {
     Value::Object(m)
 }
 
-fn iface_tax_rates__tax_rate_metadata__to_json(p: &iface_tax_rates::TaxRateMetadata) -> Value {
+fn iface_tax_rates__tax_rate_metadata_entry__to_json(p: &iface_tax_rates::TaxRateMetadataEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
-fn iface_tax_rates__post_tax_rates_body_metadata__to_json(p: &iface_tax_rates::PostTaxRatesBodyMetadata) -> Value {
+fn iface_tax_rates__post_tax_rates_body_metadata_entry__to_json(p: &iface_tax_rates::PostTaxRatesBodyMetadataEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -165,7 +167,7 @@ fn iface_tax_rates__post_tax_rates_params__to_json(p: &iface_tax_rates::PostTaxR
     m.insert("expand".into(), match (&p.expand) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
     m.insert("inclusive".into(), Value::Bool(*(&p.inclusive)));
     m.insert("jurisdiction".into(), match (&p.jurisdiction) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("metadata".into(), match (&p.metadata) { Some(v) => iface_tax_rates__post_tax_rates_body_metadata__to_json(v), None => Value::Null });
+    m.insert("metadata".into(), match (&p.metadata) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("percentage".into(), serde_json::Number::from_f64(*(&p.percentage)).map(Value::Number).unwrap_or(Value::Null));
     m.insert("state".into(), match (&p.state) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("tax_type".into(), match (&p.tax_type) { Some(v) => Value::String(iface_tax_rates__tax_rate_tax_type_enum__to_str(v).into()), None => Value::Null });
@@ -217,7 +219,7 @@ fn iface_tax_rates__tax_rate__from_json(v: &Value) -> Option<iface_tax_rates::Ta
         inclusive: m.get("inclusive").and_then(|v| (v).as_bool()).unwrap_or_default(),
         jurisdiction: m.get("jurisdiction").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         livemode: m.get("livemode").and_then(|v| (v).as_bool()).unwrap_or_default(),
-        metadata: m.get("metadata").filter(|v| !v.is_null()).and_then(|v| iface_tax_rates__tax_rate_metadata__from_json(v)),
+        metadata: m.get("metadata").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_tax_rates::TaxRateMetadataEntry { key: k.clone(), value: val })).collect())),
         object: match m.get("object").and_then(|v| (v).as_str().and_then(iface_tax_rates__tax_rate_object_enum__from_str)) { Some(x) => x, None => return None },
         percentage: m.get("percentage").and_then(|v| (v).as_f64()).unwrap_or_default(),
         state: m.get("state").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
@@ -225,10 +227,11 @@ fn iface_tax_rates__tax_rate__from_json(v: &Value) -> Option<iface_tax_rates::Ta
     })
 }
 
-fn iface_tax_rates__tax_rate_metadata__from_json(v: &Value) -> Option<iface_tax_rates::TaxRateMetadata> {
+fn iface_tax_rates__tax_rate_metadata_entry__from_json(v: &Value) -> Option<iface_tax_rates::TaxRateMetadataEntry> {
     let m = v.as_object()?;
-    Some(iface_tax_rates::TaxRateMetadata {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_tax_rates::TaxRateMetadataEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 

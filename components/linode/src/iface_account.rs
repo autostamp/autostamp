@@ -1011,9 +1011,10 @@ fn iface_account__credit_card__to_json(p: &iface_account::CreditCard) -> Value {
     Value::Object(m)
 }
 
-fn iface_account__create_credit_card_response__to_json(p: &iface_account::CreateCreditCardResponse) -> Value {
+fn iface_account__create_credit_card_response_entry__to_json(p: &iface_account::CreateCreditCardResponseEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -1050,24 +1051,26 @@ fn iface_account__entity_transfer_properties_entities__to_json(p: &iface_account
     Value::Object(m)
 }
 
-fn iface_account__delete_entity_transfer_response__to_json(p: &iface_account::DeleteEntityTransferResponse) -> Value {
+fn iface_account__delete_entity_transfer_response_entry__to_json(p: &iface_account::DeleteEntityTransferResponseEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
-fn iface_account__accept_entity_transfer_response__to_json(p: &iface_account::AcceptEntityTransferResponse) -> Value {
+fn iface_account__accept_entity_transfer_response_entry__to_json(p: &iface_account::AcceptEntityTransferResponseEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
 fn iface_account__get_events_response__to_json(p: &iface_account::GetEventsResponse) -> Value {
     let mut m = Map::new();
     m.insert("data".into(), match (&p.data) { Some(v) => Value::Array((v).iter().map(|v| iface_account__event__to_json(v)).collect()), None => Value::Null });
-    m.insert("page".into(), match (&p.page) { Some(v) => iface_account__pagination_envelope_properties_page__to_json(v), None => Value::Null });
-    m.insert("pages".into(), match (&p.pages) { Some(v) => iface_account__pagination_envelope_properties_pages__to_json(v), None => Value::Null });
-    m.insert("results".into(), match (&p.results) { Some(v) => iface_account__pagination_envelope_properties_results__to_json(v), None => Value::Null });
+    m.insert("page".into(), match (&p.page) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("pages".into(), match (&p.pages) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("results".into(), match (&p.results) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
@@ -1108,42 +1111,26 @@ fn iface_account__event_secondary_entity__to_json(p: &iface_account::EventSecond
     Value::Object(m)
 }
 
-fn iface_account__pagination_envelope_properties_page__to_json(p: &iface_account::PaginationEnvelopePropertiesPage) -> Value {
+fn iface_account__event_read_response_entry__to_json(p: &iface_account::EventReadResponseEntry) -> Value {
     let mut m = Map::new();
+    m.insert("key".into(), Value::String((&p.key).clone()));
     m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
-fn iface_account__pagination_envelope_properties_pages__to_json(p: &iface_account::PaginationEnvelopePropertiesPages) -> Value {
+fn iface_account__event_seen_response_entry__to_json(p: &iface_account::EventSeenResponseEntry) -> Value {
     let mut m = Map::new();
+    m.insert("key".into(), Value::String((&p.key).clone()));
     m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_account__pagination_envelope_properties_results__to_json(p: &iface_account::PaginationEnvelopePropertiesResults) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_account__event_read_response__to_json(p: &iface_account::EventReadResponse) -> Value {
-    let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_account__event_seen_response__to_json(p: &iface_account::EventSeenResponse) -> Value {
-    let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
 fn iface_account__get_invoices_response__to_json(p: &iface_account::GetInvoicesResponse) -> Value {
     let mut m = Map::new();
     m.insert("data".into(), match (&p.data) { Some(v) => Value::Array((v).iter().map(|v| iface_account__invoice__to_json(v)).collect()), None => Value::Null });
-    m.insert("page".into(), match (&p.page) { Some(v) => iface_account__pagination_envelope_properties_page__to_json(v), None => Value::Null });
-    m.insert("pages".into(), match (&p.pages) { Some(v) => iface_account__pagination_envelope_properties_pages__to_json(v), None => Value::Null });
-    m.insert("results".into(), match (&p.results) { Some(v) => iface_account__pagination_envelope_properties_results__to_json(v), None => Value::Null });
+    m.insert("page".into(), match (&p.page) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("pages".into(), match (&p.pages) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("results".into(), match (&p.results) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
@@ -1169,9 +1156,9 @@ fn iface_account__invoice_tax_summary_item__to_json(p: &iface_account::InvoiceTa
 fn iface_account__get_invoice_items_response__to_json(p: &iface_account::GetInvoiceItemsResponse) -> Value {
     let mut m = Map::new();
     m.insert("data".into(), match (&p.data) { Some(v) => Value::Array((v).iter().map(|v| iface_account__invoice_item__to_json(v)).collect()), None => Value::Null });
-    m.insert("page".into(), match (&p.page) { Some(v) => iface_account__pagination_envelope_properties_page__to_json(v), None => Value::Null });
-    m.insert("pages".into(), match (&p.pages) { Some(v) => iface_account__pagination_envelope_properties_pages__to_json(v), None => Value::Null });
-    m.insert("results".into(), match (&p.results) { Some(v) => iface_account__pagination_envelope_properties_results__to_json(v), None => Value::Null });
+    m.insert("page".into(), match (&p.page) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("pages".into(), match (&p.pages) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("results".into(), match (&p.results) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
@@ -1192,9 +1179,9 @@ fn iface_account__invoice_item__to_json(p: &iface_account::InvoiceItem) -> Value
 fn iface_account__get_account_logins_response__to_json(p: &iface_account::GetAccountLoginsResponse) -> Value {
     let mut m = Map::new();
     m.insert("data".into(), match (&p.data) { Some(v) => Value::Array((v).iter().map(|v| iface_account__login__to_json(v)).collect()), None => Value::Null });
-    m.insert("page".into(), match (&p.page) { Some(v) => iface_account__pagination_envelope_properties_page__to_json(v), None => Value::Null });
-    m.insert("pages".into(), match (&p.pages) { Some(v) => iface_account__pagination_envelope_properties_pages__to_json(v), None => Value::Null });
-    m.insert("results".into(), match (&p.results) { Some(v) => iface_account__pagination_envelope_properties_results__to_json(v), None => Value::Null });
+    m.insert("page".into(), match (&p.page) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("pages".into(), match (&p.pages) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("results".into(), match (&p.results) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
@@ -1212,9 +1199,9 @@ fn iface_account__login__to_json(p: &iface_account::Login) -> Value {
 fn iface_account__get_maintenance_response__to_json(p: &iface_account::GetMaintenanceResponse) -> Value {
     let mut m = Map::new();
     m.insert("data".into(), match (&p.data) { Some(v) => Value::Array((v).iter().map(|v| iface_account__maintenance__to_json(v)).collect()), None => Value::Null });
-    m.insert("page".into(), match (&p.page) { Some(v) => iface_account__pagination_envelope_properties_page__to_json(v), None => Value::Null });
-    m.insert("pages".into(), match (&p.pages) { Some(v) => iface_account__pagination_envelope_properties_pages__to_json(v), None => Value::Null });
-    m.insert("results".into(), match (&p.results) { Some(v) => iface_account__pagination_envelope_properties_results__to_json(v), None => Value::Null });
+    m.insert("page".into(), match (&p.page) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("pages".into(), match (&p.pages) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("results".into(), match (&p.results) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
@@ -1240,9 +1227,9 @@ fn iface_account__maintenance_entity__to_json(p: &iface_account::MaintenanceEnti
 fn iface_account__get_notifications_response__to_json(p: &iface_account::GetNotificationsResponse) -> Value {
     let mut m = Map::new();
     m.insert("data".into(), match (&p.data) { Some(v) => Value::Array((v).iter().map(|v| iface_account__notification__to_json(v)).collect()), None => Value::Null });
-    m.insert("page".into(), match (&p.page) { Some(v) => iface_account__pagination_envelope_properties_page__to_json(v), None => Value::Null });
-    m.insert("pages".into(), match (&p.pages) { Some(v) => iface_account__pagination_envelope_properties_pages__to_json(v), None => Value::Null });
-    m.insert("results".into(), match (&p.results) { Some(v) => iface_account__pagination_envelope_properties_results__to_json(v), None => Value::Null });
+    m.insert("page".into(), match (&p.page) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("pages".into(), match (&p.pages) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("results".into(), match (&p.results) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
@@ -1271,9 +1258,9 @@ fn iface_account__notification_entity__to_json(p: &iface_account::NotificationEn
 fn iface_account__get_clients_response__to_json(p: &iface_account::GetClientsResponse) -> Value {
     let mut m = Map::new();
     m.insert("data".into(), match (&p.data) { Some(v) => Value::Array((v).iter().map(|v| iface_account__o_auth_client__to_json(v)).collect()), None => Value::Null });
-    m.insert("page".into(), match (&p.page) { Some(v) => iface_account__pagination_envelope_properties_page__to_json(v), None => Value::Null });
-    m.insert("pages".into(), match (&p.pages) { Some(v) => iface_account__pagination_envelope_properties_pages__to_json(v), None => Value::Null });
-    m.insert("results".into(), match (&p.results) { Some(v) => iface_account__pagination_envelope_properties_results__to_json(v), None => Value::Null });
+    m.insert("page".into(), match (&p.page) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("pages".into(), match (&p.pages) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("results".into(), match (&p.results) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
@@ -1289,24 +1276,26 @@ fn iface_account__o_auth_client__to_json(p: &iface_account::OAuthClient) -> Valu
     Value::Object(m)
 }
 
-fn iface_account__delete_client_response__to_json(p: &iface_account::DeleteClientResponse) -> Value {
+fn iface_account__delete_client_response_entry__to_json(p: &iface_account::DeleteClientResponseEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
-fn iface_account__set_client_thumbnail_response__to_json(p: &iface_account::SetClientThumbnailResponse) -> Value {
+fn iface_account__set_client_thumbnail_response_entry__to_json(p: &iface_account::SetClientThumbnailResponseEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
 fn iface_account__get_payment_methods_response__to_json(p: &iface_account::GetPaymentMethodsResponse) -> Value {
     let mut m = Map::new();
     m.insert("data".into(), match (&p.data) { Some(v) => Value::Array((v).iter().map(|v| iface_account__payment_method__to_json(v)).collect()), None => Value::Null });
-    m.insert("page".into(), match (&p.page) { Some(v) => iface_account__pagination_envelope_properties_page__to_json(v), None => Value::Null });
-    m.insert("pages".into(), match (&p.pages) { Some(v) => iface_account__pagination_envelope_properties_pages__to_json(v), None => Value::Null });
-    m.insert("results".into(), match (&p.results) { Some(v) => iface_account__pagination_envelope_properties_results__to_json(v), None => Value::Null });
+    m.insert("page".into(), match (&p.page) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("pages".into(), match (&p.pages) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("results".into(), match (&p.results) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
@@ -1320,36 +1309,33 @@ fn iface_account__payment_method__to_json(p: &iface_account::PaymentMethod) -> V
     Value::Object(m)
 }
 
-fn iface_account__payment_method_properties_is_default__to_json(p: &iface_account::PaymentMethodPropertiesIsDefault) -> Value {
+fn iface_account__create_payment_method_response_entry__to_json(p: &iface_account::CreatePaymentMethodResponseEntry) -> Value {
     let mut m = Map::new();
+    m.insert("key".into(), Value::String((&p.key).clone()));
     m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
-fn iface_account__create_payment_method_response__to_json(p: &iface_account::CreatePaymentMethodResponse) -> Value {
+fn iface_account__delete_payment_method_response_entry__to_json(p: &iface_account::DeletePaymentMethodResponseEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
-fn iface_account__delete_payment_method_response__to_json(p: &iface_account::DeletePaymentMethodResponse) -> Value {
+fn iface_account__make_payment_method_default_response_entry__to_json(p: &iface_account::MakePaymentMethodDefaultResponseEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_account__make_payment_method_default_response__to_json(p: &iface_account::MakePaymentMethodDefaultResponse) -> Value {
-    let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
 fn iface_account__get_payments_response__to_json(p: &iface_account::GetPaymentsResponse) -> Value {
     let mut m = Map::new();
     m.insert("data".into(), match (&p.data) { Some(v) => Value::Array((v).iter().map(|v| iface_account__payment__to_json(v)).collect()), None => Value::Null });
-    m.insert("page".into(), match (&p.page) { Some(v) => iface_account__pagination_envelope_properties_page__to_json(v), None => Value::Null });
-    m.insert("pages".into(), match (&p.pages) { Some(v) => iface_account__pagination_envelope_properties_pages__to_json(v), None => Value::Null });
-    m.insert("results".into(), match (&p.results) { Some(v) => iface_account__pagination_envelope_properties_results__to_json(v), None => Value::Null });
+    m.insert("page".into(), match (&p.page) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("pages".into(), match (&p.pages) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("results".into(), match (&p.results) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
@@ -1368,18 +1354,19 @@ fn iface_account__create_pay_pal_payment_response__to_json(p: &iface_account::Cr
     Value::Object(m)
 }
 
-fn iface_account__execute_pay_pal_payment_response__to_json(p: &iface_account::ExecutePayPalPaymentResponse) -> Value {
+fn iface_account__execute_pay_pal_payment_response_entry__to_json(p: &iface_account::ExecutePayPalPaymentResponseEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
 fn iface_account__get_service_transfers_response__to_json(p: &iface_account::GetServiceTransfersResponse) -> Value {
     let mut m = Map::new();
     m.insert("data".into(), match (&p.data) { Some(v) => Value::Array((v).iter().map(|v| iface_account__service_transfer__to_json(v)).collect()), None => Value::Null });
-    m.insert("page".into(), match (&p.page) { Some(v) => iface_account__pagination_envelope_properties_page__to_json(v), None => Value::Null });
-    m.insert("pages".into(), match (&p.pages) { Some(v) => iface_account__pagination_envelope_properties_pages__to_json(v), None => Value::Null });
-    m.insert("results".into(), match (&p.results) { Some(v) => iface_account__pagination_envelope_properties_results__to_json(v), None => Value::Null });
+    m.insert("page".into(), match (&p.page) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("pages".into(), match (&p.pages) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("results".into(), match (&p.results) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
@@ -1407,15 +1394,17 @@ fn iface_account__service_transfer_properties_entities__to_json(p: &iface_accoun
     Value::Object(m)
 }
 
-fn iface_account__delete_service_transfer_response__to_json(p: &iface_account::DeleteServiceTransferResponse) -> Value {
+fn iface_account__delete_service_transfer_response_entry__to_json(p: &iface_account::DeleteServiceTransferResponseEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
-fn iface_account__accept_service_transfer_response__to_json(p: &iface_account::AcceptServiceTransferResponse) -> Value {
+fn iface_account__accept_service_transfer_response_entry__to_json(p: &iface_account::AcceptServiceTransferResponseEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -1429,9 +1418,10 @@ fn iface_account__settings__to_json(p: &iface_account::Settings) -> Value {
     Value::Object(m)
 }
 
-fn iface_account__enable_account_managed_response__to_json(p: &iface_account::EnableAccountManagedResponse) -> Value {
+fn iface_account__enable_account_managed_response_entry__to_json(p: &iface_account::EnableAccountManagedResponseEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -1446,9 +1436,9 @@ fn iface_account__transfer__to_json(p: &iface_account::Transfer) -> Value {
 fn iface_account__get_users_response__to_json(p: &iface_account::GetUsersResponse) -> Value {
     let mut m = Map::new();
     m.insert("data".into(), match (&p.data) { Some(v) => Value::Array((v).iter().map(|v| iface_account__user__to_json(v)).collect()), None => Value::Null });
-    m.insert("page".into(), match (&p.page) { Some(v) => iface_account__pagination_envelope_properties_page__to_json(v), None => Value::Null });
-    m.insert("pages".into(), match (&p.pages) { Some(v) => iface_account__pagination_envelope_properties_pages__to_json(v), None => Value::Null });
-    m.insert("results".into(), match (&p.results) { Some(v) => iface_account__pagination_envelope_properties_results__to_json(v), None => Value::Null });
+    m.insert("page".into(), match (&p.page) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("pages".into(), match (&p.pages) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("results".into(), match (&p.results) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
@@ -1462,9 +1452,10 @@ fn iface_account__user__to_json(p: &iface_account::User) -> Value {
     Value::Object(m)
 }
 
-fn iface_account__delete_user_response__to_json(p: &iface_account::DeleteUserResponse) -> Value {
+fn iface_account__delete_user_response_entry__to_json(p: &iface_account::DeleteUserResponseEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -1697,7 +1688,7 @@ fn iface_account__get_payment_methods_params__to_json(p: &iface_account::GetPaym
 fn iface_account__create_payment_method_params__to_json(p: &iface_account::CreatePaymentMethodParams) -> Value {
     let mut m = Map::new();
     m.insert("data".into(), iface_account__credit_card__to_json(&p.data));
-    m.insert("is_default".into(), iface_account__payment_method_properties_is_default__to_json(&p.is_default));
+    m.insert("is_default".into(), Value::Bool(*(&p.is_default)));
     m.insert("type".into(), Value::String(iface_account__create_payment_method_body_type_op_enum__to_str(&p.type_op).into()));
     Value::Object(m)
 }
@@ -1915,10 +1906,11 @@ fn iface_account__cancel_account_response__from_json(v: &Value) -> Option<iface_
     })
 }
 
-fn iface_account__create_credit_card_response__from_json(v: &Value) -> Option<iface_account::CreateCreditCardResponse> {
+fn iface_account__create_credit_card_response_entry__from_json(v: &Value) -> Option<iface_account::CreateCreditCardResponseEntry> {
     let m = v.as_object()?;
-    Some(iface_account::CreateCreditCardResponse {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_account::CreateCreditCardResponseEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -1952,17 +1944,19 @@ fn iface_account__entity_transfer_entities__from_json(v: &Value) -> Option<iface
     })
 }
 
-fn iface_account__delete_entity_transfer_response__from_json(v: &Value) -> Option<iface_account::DeleteEntityTransferResponse> {
+fn iface_account__delete_entity_transfer_response_entry__from_json(v: &Value) -> Option<iface_account::DeleteEntityTransferResponseEntry> {
     let m = v.as_object()?;
-    Some(iface_account::DeleteEntityTransferResponse {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_account::DeleteEntityTransferResponseEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
-fn iface_account__accept_entity_transfer_response__from_json(v: &Value) -> Option<iface_account::AcceptEntityTransferResponse> {
+fn iface_account__accept_entity_transfer_response_entry__from_json(v: &Value) -> Option<iface_account::AcceptEntityTransferResponseEntry> {
     let m = v.as_object()?;
-    Some(iface_account::AcceptEntityTransferResponse {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_account::AcceptEntityTransferResponseEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -1970,9 +1964,9 @@ fn iface_account__get_events_response__from_json(v: &Value) -> Option<iface_acco
     let m = v.as_object()?;
     Some(iface_account::GetEventsResponse {
         data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_account__event__from_json(x)).collect())),
-        page: m.get("page").filter(|v| !v.is_null()).and_then(|v| iface_account__pagination_envelope_properties_page__from_json(v)),
-        pages: m.get("pages").filter(|v| !v.is_null()).and_then(|v| iface_account__pagination_envelope_properties_pages__from_json(v)),
-        results: m.get("results").filter(|v| !v.is_null()).and_then(|v| iface_account__pagination_envelope_properties_results__from_json(v)),
+        page: m.get("page").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        pages: m.get("pages").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        results: m.get("results").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
     })
 }
 
@@ -2016,38 +2010,19 @@ fn iface_account__event_secondary_entity__from_json(v: &Value) -> Option<iface_a
     })
 }
 
-fn iface_account__pagination_envelope_properties_page__from_json(v: &Value) -> Option<iface_account::PaginationEnvelopePropertiesPage> {
+fn iface_account__event_read_response_entry__from_json(v: &Value) -> Option<iface_account::EventReadResponseEntry> {
     let m = v.as_object()?;
-    Some(iface_account::PaginationEnvelopePropertiesPage {
+    Some(iface_account::EventReadResponseEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
-fn iface_account__pagination_envelope_properties_pages__from_json(v: &Value) -> Option<iface_account::PaginationEnvelopePropertiesPages> {
+fn iface_account__event_seen_response_entry__from_json(v: &Value) -> Option<iface_account::EventSeenResponseEntry> {
     let m = v.as_object()?;
-    Some(iface_account::PaginationEnvelopePropertiesPages {
+    Some(iface_account::EventSeenResponseEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-    })
-}
-
-fn iface_account__pagination_envelope_properties_results__from_json(v: &Value) -> Option<iface_account::PaginationEnvelopePropertiesResults> {
-    let m = v.as_object()?;
-    Some(iface_account::PaginationEnvelopePropertiesResults {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-    })
-}
-
-fn iface_account__event_read_response__from_json(v: &Value) -> Option<iface_account::EventReadResponse> {
-    let m = v.as_object()?;
-    Some(iface_account::EventReadResponse {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-    })
-}
-
-fn iface_account__event_seen_response__from_json(v: &Value) -> Option<iface_account::EventSeenResponse> {
-    let m = v.as_object()?;
-    Some(iface_account::EventSeenResponse {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
     })
 }
 
@@ -2055,9 +2030,9 @@ fn iface_account__get_invoices_response__from_json(v: &Value) -> Option<iface_ac
     let m = v.as_object()?;
     Some(iface_account::GetInvoicesResponse {
         data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_account__invoice__from_json(x)).collect())),
-        page: m.get("page").filter(|v| !v.is_null()).and_then(|v| iface_account__pagination_envelope_properties_page__from_json(v)),
-        pages: m.get("pages").filter(|v| !v.is_null()).and_then(|v| iface_account__pagination_envelope_properties_pages__from_json(v)),
-        results: m.get("results").filter(|v| !v.is_null()).and_then(|v| iface_account__pagination_envelope_properties_results__from_json(v)),
+        page: m.get("page").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        pages: m.get("pages").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        results: m.get("results").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
     })
 }
 
@@ -2086,9 +2061,9 @@ fn iface_account__get_invoice_items_response__from_json(v: &Value) -> Option<ifa
     let m = v.as_object()?;
     Some(iface_account::GetInvoiceItemsResponse {
         data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_account__invoice_item__from_json(x)).collect())),
-        page: m.get("page").filter(|v| !v.is_null()).and_then(|v| iface_account__pagination_envelope_properties_page__from_json(v)),
-        pages: m.get("pages").filter(|v| !v.is_null()).and_then(|v| iface_account__pagination_envelope_properties_pages__from_json(v)),
-        results: m.get("results").filter(|v| !v.is_null()).and_then(|v| iface_account__pagination_envelope_properties_results__from_json(v)),
+        page: m.get("page").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        pages: m.get("pages").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        results: m.get("results").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
     })
 }
 
@@ -2111,9 +2086,9 @@ fn iface_account__get_account_logins_response__from_json(v: &Value) -> Option<if
     let m = v.as_object()?;
     Some(iface_account::GetAccountLoginsResponse {
         data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_account__login__from_json(x)).collect())),
-        page: m.get("page").filter(|v| !v.is_null()).and_then(|v| iface_account__pagination_envelope_properties_page__from_json(v)),
-        pages: m.get("pages").filter(|v| !v.is_null()).and_then(|v| iface_account__pagination_envelope_properties_pages__from_json(v)),
-        results: m.get("results").filter(|v| !v.is_null()).and_then(|v| iface_account__pagination_envelope_properties_results__from_json(v)),
+        page: m.get("page").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        pages: m.get("pages").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        results: m.get("results").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
     })
 }
 
@@ -2133,9 +2108,9 @@ fn iface_account__get_maintenance_response__from_json(v: &Value) -> Option<iface
     let m = v.as_object()?;
     Some(iface_account::GetMaintenanceResponse {
         data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_account__maintenance__from_json(x)).collect())),
-        page: m.get("page").filter(|v| !v.is_null()).and_then(|v| iface_account__pagination_envelope_properties_page__from_json(v)),
-        pages: m.get("pages").filter(|v| !v.is_null()).and_then(|v| iface_account__pagination_envelope_properties_pages__from_json(v)),
-        results: m.get("results").filter(|v| !v.is_null()).and_then(|v| iface_account__pagination_envelope_properties_results__from_json(v)),
+        page: m.get("page").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        pages: m.get("pages").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        results: m.get("results").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
     })
 }
 
@@ -2164,9 +2139,9 @@ fn iface_account__get_notifications_response__from_json(v: &Value) -> Option<ifa
     let m = v.as_object()?;
     Some(iface_account::GetNotificationsResponse {
         data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_account__notification__from_json(x)).collect())),
-        page: m.get("page").filter(|v| !v.is_null()).and_then(|v| iface_account__pagination_envelope_properties_page__from_json(v)),
-        pages: m.get("pages").filter(|v| !v.is_null()).and_then(|v| iface_account__pagination_envelope_properties_pages__from_json(v)),
-        results: m.get("results").filter(|v| !v.is_null()).and_then(|v| iface_account__pagination_envelope_properties_results__from_json(v)),
+        page: m.get("page").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        pages: m.get("pages").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        results: m.get("results").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
     })
 }
 
@@ -2198,9 +2173,9 @@ fn iface_account__get_clients_response__from_json(v: &Value) -> Option<iface_acc
     let m = v.as_object()?;
     Some(iface_account::GetClientsResponse {
         data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_account__o_auth_client__from_json(x)).collect())),
-        page: m.get("page").filter(|v| !v.is_null()).and_then(|v| iface_account__pagination_envelope_properties_page__from_json(v)),
-        pages: m.get("pages").filter(|v| !v.is_null()).and_then(|v| iface_account__pagination_envelope_properties_pages__from_json(v)),
-        results: m.get("results").filter(|v| !v.is_null()).and_then(|v| iface_account__pagination_envelope_properties_results__from_json(v)),
+        page: m.get("page").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        pages: m.get("pages").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        results: m.get("results").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
     })
 }
 
@@ -2217,17 +2192,19 @@ fn iface_account__o_auth_client__from_json(v: &Value) -> Option<iface_account::O
     })
 }
 
-fn iface_account__delete_client_response__from_json(v: &Value) -> Option<iface_account::DeleteClientResponse> {
+fn iface_account__delete_client_response_entry__from_json(v: &Value) -> Option<iface_account::DeleteClientResponseEntry> {
     let m = v.as_object()?;
-    Some(iface_account::DeleteClientResponse {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_account::DeleteClientResponseEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
-fn iface_account__set_client_thumbnail_response__from_json(v: &Value) -> Option<iface_account::SetClientThumbnailResponse> {
+fn iface_account__set_client_thumbnail_response_entry__from_json(v: &Value) -> Option<iface_account::SetClientThumbnailResponseEntry> {
     let m = v.as_object()?;
-    Some(iface_account::SetClientThumbnailResponse {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_account::SetClientThumbnailResponseEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -2235,9 +2212,9 @@ fn iface_account__get_payment_methods_response__from_json(v: &Value) -> Option<i
     let m = v.as_object()?;
     Some(iface_account::GetPaymentMethodsResponse {
         data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_account__payment_method__from_json(x)).collect())),
-        page: m.get("page").filter(|v| !v.is_null()).and_then(|v| iface_account__pagination_envelope_properties_page__from_json(v)),
-        pages: m.get("pages").filter(|v| !v.is_null()).and_then(|v| iface_account__pagination_envelope_properties_pages__from_json(v)),
-        results: m.get("results").filter(|v| !v.is_null()).and_then(|v| iface_account__pagination_envelope_properties_results__from_json(v)),
+        page: m.get("page").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        pages: m.get("pages").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        results: m.get("results").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
     })
 }
 
@@ -2252,24 +2229,27 @@ fn iface_account__payment_method__from_json(v: &Value) -> Option<iface_account::
     })
 }
 
-fn iface_account__create_payment_method_response__from_json(v: &Value) -> Option<iface_account::CreatePaymentMethodResponse> {
+fn iface_account__create_payment_method_response_entry__from_json(v: &Value) -> Option<iface_account::CreatePaymentMethodResponseEntry> {
     let m = v.as_object()?;
-    Some(iface_account::CreatePaymentMethodResponse {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_account::CreatePaymentMethodResponseEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
-fn iface_account__delete_payment_method_response__from_json(v: &Value) -> Option<iface_account::DeletePaymentMethodResponse> {
+fn iface_account__delete_payment_method_response_entry__from_json(v: &Value) -> Option<iface_account::DeletePaymentMethodResponseEntry> {
     let m = v.as_object()?;
-    Some(iface_account::DeletePaymentMethodResponse {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_account::DeletePaymentMethodResponseEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
-fn iface_account__make_payment_method_default_response__from_json(v: &Value) -> Option<iface_account::MakePaymentMethodDefaultResponse> {
+fn iface_account__make_payment_method_default_response_entry__from_json(v: &Value) -> Option<iface_account::MakePaymentMethodDefaultResponseEntry> {
     let m = v.as_object()?;
-    Some(iface_account::MakePaymentMethodDefaultResponse {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_account::MakePaymentMethodDefaultResponseEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -2277,9 +2257,9 @@ fn iface_account__get_payments_response__from_json(v: &Value) -> Option<iface_ac
     let m = v.as_object()?;
     Some(iface_account::GetPaymentsResponse {
         data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_account__payment__from_json(x)).collect())),
-        page: m.get("page").filter(|v| !v.is_null()).and_then(|v| iface_account__pagination_envelope_properties_page__from_json(v)),
-        pages: m.get("pages").filter(|v| !v.is_null()).and_then(|v| iface_account__pagination_envelope_properties_pages__from_json(v)),
-        results: m.get("results").filter(|v| !v.is_null()).and_then(|v| iface_account__pagination_envelope_properties_results__from_json(v)),
+        page: m.get("page").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        pages: m.get("pages").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        results: m.get("results").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
     })
 }
 
@@ -2300,10 +2280,11 @@ fn iface_account__create_pay_pal_payment_response__from_json(v: &Value) -> Optio
     })
 }
 
-fn iface_account__execute_pay_pal_payment_response__from_json(v: &Value) -> Option<iface_account::ExecutePayPalPaymentResponse> {
+fn iface_account__execute_pay_pal_payment_response_entry__from_json(v: &Value) -> Option<iface_account::ExecutePayPalPaymentResponseEntry> {
     let m = v.as_object()?;
-    Some(iface_account::ExecutePayPalPaymentResponse {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_account::ExecutePayPalPaymentResponseEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -2311,9 +2292,9 @@ fn iface_account__get_service_transfers_response__from_json(v: &Value) -> Option
     let m = v.as_object()?;
     Some(iface_account::GetServiceTransfersResponse {
         data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_account__service_transfer__from_json(x)).collect())),
-        page: m.get("page").filter(|v| !v.is_null()).and_then(|v| iface_account__pagination_envelope_properties_page__from_json(v)),
-        pages: m.get("pages").filter(|v| !v.is_null()).and_then(|v| iface_account__pagination_envelope_properties_pages__from_json(v)),
-        results: m.get("results").filter(|v| !v.is_null()).and_then(|v| iface_account__pagination_envelope_properties_results__from_json(v)),
+        page: m.get("page").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        pages: m.get("pages").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        results: m.get("results").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
     })
 }
 
@@ -2337,17 +2318,19 @@ fn iface_account__service_transfer_entities__from_json(v: &Value) -> Option<ifac
     })
 }
 
-fn iface_account__delete_service_transfer_response__from_json(v: &Value) -> Option<iface_account::DeleteServiceTransferResponse> {
+fn iface_account__delete_service_transfer_response_entry__from_json(v: &Value) -> Option<iface_account::DeleteServiceTransferResponseEntry> {
     let m = v.as_object()?;
-    Some(iface_account::DeleteServiceTransferResponse {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_account::DeleteServiceTransferResponseEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
-fn iface_account__accept_service_transfer_response__from_json(v: &Value) -> Option<iface_account::AcceptServiceTransferResponse> {
+fn iface_account__accept_service_transfer_response_entry__from_json(v: &Value) -> Option<iface_account::AcceptServiceTransferResponseEntry> {
     let m = v.as_object()?;
-    Some(iface_account::AcceptServiceTransferResponse {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_account::AcceptServiceTransferResponseEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -2362,10 +2345,11 @@ fn iface_account__settings__from_json(v: &Value) -> Option<iface_account::Settin
     })
 }
 
-fn iface_account__enable_account_managed_response__from_json(v: &Value) -> Option<iface_account::EnableAccountManagedResponse> {
+fn iface_account__enable_account_managed_response_entry__from_json(v: &Value) -> Option<iface_account::EnableAccountManagedResponseEntry> {
     let m = v.as_object()?;
-    Some(iface_account::EnableAccountManagedResponse {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_account::EnableAccountManagedResponseEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -2382,9 +2366,9 @@ fn iface_account__get_users_response__from_json(v: &Value) -> Option<iface_accou
     let m = v.as_object()?;
     Some(iface_account::GetUsersResponse {
         data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_account__user__from_json(x)).collect())),
-        page: m.get("page").filter(|v| !v.is_null()).and_then(|v| iface_account__pagination_envelope_properties_page__from_json(v)),
-        pages: m.get("pages").filter(|v| !v.is_null()).and_then(|v| iface_account__pagination_envelope_properties_pages__from_json(v)),
-        results: m.get("results").filter(|v| !v.is_null()).and_then(|v| iface_account__pagination_envelope_properties_results__from_json(v)),
+        page: m.get("page").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        pages: m.get("pages").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        results: m.get("results").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
     })
 }
 
@@ -2399,10 +2383,11 @@ fn iface_account__user__from_json(v: &Value) -> Option<iface_account::User> {
     })
 }
 
-fn iface_account__delete_user_response__from_json(v: &Value) -> Option<iface_account::DeleteUserResponse> {
+fn iface_account__delete_user_response_entry__from_json(v: &Value) -> Option<iface_account::DeleteUserResponseEntry> {
     let m = v.as_object()?;
-    Some(iface_account::DeleteUserResponse {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_account::DeleteUserResponseEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -2800,12 +2785,12 @@ fn iface_account__cancel_account__err(e: crate::runtime::DispatchError) -> iface
     }
 }
 
-fn iface_account__create_credit_card__ok(body: String) -> Result<iface_account::CreateCreditCardResponse, crate::runtime::DispatchError> {
+fn iface_account__create_credit_card__ok(body: String) -> Result<Vec<iface_account::CreateCreditCardResponseEntry>, crate::runtime::DispatchError> {
     let v: Value = match serde_json::from_str(&body) {
         Ok(v) => v,
         Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
     };
-    match iface_account__create_credit_card_response__from_json(&v) {
+    match (&v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_account::CreateCreditCardResponseEntry { key: k.clone(), value: val })).collect()) {
         Some(x) => Ok(x),
         None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
@@ -2872,12 +2857,12 @@ fn iface_account__get_entity_transfer__err(e: crate::runtime::DispatchError) -> 
     }
 }
 
-fn iface_account__delete_entity_transfer__ok(body: String) -> Result<iface_account::DeleteEntityTransferResponse, crate::runtime::DispatchError> {
+fn iface_account__delete_entity_transfer__ok(body: String) -> Result<Vec<iface_account::DeleteEntityTransferResponseEntry>, crate::runtime::DispatchError> {
     let v: Value = match serde_json::from_str(&body) {
         Ok(v) => v,
         Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
     };
-    match iface_account__delete_entity_transfer_response__from_json(&v) {
+    match (&v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_account::DeleteEntityTransferResponseEntry { key: k.clone(), value: val })).collect()) {
         Some(x) => Ok(x),
         None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
@@ -2890,12 +2875,12 @@ fn iface_account__delete_entity_transfer__err(e: crate::runtime::DispatchError) 
     }
 }
 
-fn iface_account__accept_entity_transfer__ok(body: String) -> Result<iface_account::AcceptEntityTransferResponse, crate::runtime::DispatchError> {
+fn iface_account__accept_entity_transfer__ok(body: String) -> Result<Vec<iface_account::AcceptEntityTransferResponseEntry>, crate::runtime::DispatchError> {
     let v: Value = match serde_json::from_str(&body) {
         Ok(v) => v,
         Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
     };
-    match iface_account__accept_entity_transfer_response__from_json(&v) {
+    match (&v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_account::AcceptEntityTransferResponseEntry { key: k.clone(), value: val })).collect()) {
         Some(x) => Ok(x),
         None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
@@ -2944,12 +2929,12 @@ fn iface_account__get_event__err(e: crate::runtime::DispatchError) -> String {
     }
 }
 
-fn iface_account__event_read__ok(body: String) -> Result<iface_account::EventReadResponse, crate::runtime::DispatchError> {
+fn iface_account__event_read__ok(body: String) -> Result<Vec<iface_account::EventReadResponseEntry>, crate::runtime::DispatchError> {
     let v: Value = match serde_json::from_str(&body) {
         Ok(v) => v,
         Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
     };
-    match iface_account__event_read_response__from_json(&v) {
+    match (&v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_account::EventReadResponseEntry { key: k.clone(), value: val })).collect()) {
         Some(x) => Ok(x),
         None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
@@ -2962,12 +2947,12 @@ fn iface_account__event_read__err(e: crate::runtime::DispatchError) -> String {
     }
 }
 
-fn iface_account__event_seen__ok(body: String) -> Result<iface_account::EventSeenResponse, crate::runtime::DispatchError> {
+fn iface_account__event_seen__ok(body: String) -> Result<Vec<iface_account::EventSeenResponseEntry>, crate::runtime::DispatchError> {
     let v: Value = match serde_json::from_str(&body) {
         Ok(v) => v,
         Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
     };
-    match iface_account__event_seen_response__from_json(&v) {
+    match (&v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_account::EventSeenResponseEntry { key: k.clone(), value: val })).collect()) {
         Some(x) => Ok(x),
         None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
@@ -3178,12 +3163,12 @@ fn iface_account__update_client__err(e: crate::runtime::DispatchError) -> String
     }
 }
 
-fn iface_account__delete_client__ok(body: String) -> Result<iface_account::DeleteClientResponse, crate::runtime::DispatchError> {
+fn iface_account__delete_client__ok(body: String) -> Result<Vec<iface_account::DeleteClientResponseEntry>, crate::runtime::DispatchError> {
     let v: Value = match serde_json::from_str(&body) {
         Ok(v) => v,
         Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
     };
-    match iface_account__delete_client_response__from_json(&v) {
+    match (&v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_account::DeleteClientResponseEntry { key: k.clone(), value: val })).collect()) {
         Some(x) => Ok(x),
         None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
@@ -3225,12 +3210,12 @@ fn iface_account__get_client_thumbnail__err(e: crate::runtime::DispatchError) ->
     }
 }
 
-fn iface_account__set_client_thumbnail__ok(body: String) -> Result<iface_account::SetClientThumbnailResponse, crate::runtime::DispatchError> {
+fn iface_account__set_client_thumbnail__ok(body: String) -> Result<Vec<iface_account::SetClientThumbnailResponseEntry>, crate::runtime::DispatchError> {
     let v: Value = match serde_json::from_str(&body) {
         Ok(v) => v,
         Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
     };
-    match iface_account__set_client_thumbnail_response__from_json(&v) {
+    match (&v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_account::SetClientThumbnailResponseEntry { key: k.clone(), value: val })).collect()) {
         Some(x) => Ok(x),
         None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
@@ -3261,12 +3246,12 @@ fn iface_account__get_payment_methods__err(e: crate::runtime::DispatchError) -> 
     }
 }
 
-fn iface_account__create_payment_method__ok(body: String) -> Result<iface_account::CreatePaymentMethodResponse, crate::runtime::DispatchError> {
+fn iface_account__create_payment_method__ok(body: String) -> Result<Vec<iface_account::CreatePaymentMethodResponseEntry>, crate::runtime::DispatchError> {
     let v: Value = match serde_json::from_str(&body) {
         Ok(v) => v,
         Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
     };
-    match iface_account__create_payment_method_response__from_json(&v) {
+    match (&v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_account::CreatePaymentMethodResponseEntry { key: k.clone(), value: val })).collect()) {
         Some(x) => Ok(x),
         None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
@@ -3297,12 +3282,12 @@ fn iface_account__get_payment_method__err(e: crate::runtime::DispatchError) -> S
     }
 }
 
-fn iface_account__delete_payment_method__ok(body: String) -> Result<iface_account::DeletePaymentMethodResponse, crate::runtime::DispatchError> {
+fn iface_account__delete_payment_method__ok(body: String) -> Result<Vec<iface_account::DeletePaymentMethodResponseEntry>, crate::runtime::DispatchError> {
     let v: Value = match serde_json::from_str(&body) {
         Ok(v) => v,
         Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
     };
-    match iface_account__delete_payment_method_response__from_json(&v) {
+    match (&v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_account::DeletePaymentMethodResponseEntry { key: k.clone(), value: val })).collect()) {
         Some(x) => Ok(x),
         None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
@@ -3315,12 +3300,12 @@ fn iface_account__delete_payment_method__err(e: crate::runtime::DispatchError) -
     }
 }
 
-fn iface_account__make_payment_method_default__ok(body: String) -> Result<iface_account::MakePaymentMethodDefaultResponse, crate::runtime::DispatchError> {
+fn iface_account__make_payment_method_default__ok(body: String) -> Result<Vec<iface_account::MakePaymentMethodDefaultResponseEntry>, crate::runtime::DispatchError> {
     let v: Value = match serde_json::from_str(&body) {
         Ok(v) => v,
         Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
     };
-    match iface_account__make_payment_method_default_response__from_json(&v) {
+    match (&v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_account::MakePaymentMethodDefaultResponseEntry { key: k.clone(), value: val })).collect()) {
         Some(x) => Ok(x),
         None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
@@ -3387,12 +3372,12 @@ fn iface_account__create_pay_pal_payment__err(e: crate::runtime::DispatchError) 
     }
 }
 
-fn iface_account__execute_pay_pal_payment__ok(body: String) -> Result<iface_account::ExecutePayPalPaymentResponse, crate::runtime::DispatchError> {
+fn iface_account__execute_pay_pal_payment__ok(body: String) -> Result<Vec<iface_account::ExecutePayPalPaymentResponseEntry>, crate::runtime::DispatchError> {
     let v: Value = match serde_json::from_str(&body) {
         Ok(v) => v,
         Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
     };
-    match iface_account__execute_pay_pal_payment_response__from_json(&v) {
+    match (&v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_account::ExecutePayPalPaymentResponseEntry { key: k.clone(), value: val })).collect()) {
         Some(x) => Ok(x),
         None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
@@ -3495,12 +3480,12 @@ fn iface_account__get_service_transfer__err(e: crate::runtime::DispatchError) ->
     }
 }
 
-fn iface_account__delete_service_transfer__ok(body: String) -> Result<iface_account::DeleteServiceTransferResponse, crate::runtime::DispatchError> {
+fn iface_account__delete_service_transfer__ok(body: String) -> Result<Vec<iface_account::DeleteServiceTransferResponseEntry>, crate::runtime::DispatchError> {
     let v: Value = match serde_json::from_str(&body) {
         Ok(v) => v,
         Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
     };
-    match iface_account__delete_service_transfer_response__from_json(&v) {
+    match (&v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_account::DeleteServiceTransferResponseEntry { key: k.clone(), value: val })).collect()) {
         Some(x) => Ok(x),
         None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
@@ -3513,12 +3498,12 @@ fn iface_account__delete_service_transfer__err(e: crate::runtime::DispatchError)
     }
 }
 
-fn iface_account__accept_service_transfer__ok(body: String) -> Result<iface_account::AcceptServiceTransferResponse, crate::runtime::DispatchError> {
+fn iface_account__accept_service_transfer__ok(body: String) -> Result<Vec<iface_account::AcceptServiceTransferResponseEntry>, crate::runtime::DispatchError> {
     let v: Value = match serde_json::from_str(&body) {
         Ok(v) => v,
         Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
     };
-    match iface_account__accept_service_transfer_response__from_json(&v) {
+    match (&v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_account::AcceptServiceTransferResponseEntry { key: k.clone(), value: val })).collect()) {
         Some(x) => Ok(x),
         None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
@@ -3567,12 +3552,12 @@ fn iface_account__update_account_settings__err(e: crate::runtime::DispatchError)
     }
 }
 
-fn iface_account__enable_account_managed__ok(body: String) -> Result<iface_account::EnableAccountManagedResponse, crate::runtime::DispatchError> {
+fn iface_account__enable_account_managed__ok(body: String) -> Result<Vec<iface_account::EnableAccountManagedResponseEntry>, crate::runtime::DispatchError> {
     let v: Value = match serde_json::from_str(&body) {
         Ok(v) => v,
         Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
     };
-    match iface_account__enable_account_managed_response__from_json(&v) {
+    match (&v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_account::EnableAccountManagedResponseEntry { key: k.clone(), value: val })).collect()) {
         Some(x) => Ok(x),
         None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
@@ -3675,12 +3660,12 @@ fn iface_account__update_user__err(e: crate::runtime::DispatchError) -> String {
     }
 }
 
-fn iface_account__delete_user__ok(body: String) -> Result<iface_account::DeleteUserResponse, crate::runtime::DispatchError> {
+fn iface_account__delete_user__ok(body: String) -> Result<Vec<iface_account::DeleteUserResponseEntry>, crate::runtime::DispatchError> {
     let v: Value = match serde_json::from_str(&body) {
         Ok(v) => v,
         Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
     };
-    match iface_account__delete_user_response__from_json(&v) {
+    match (&v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_account::DeleteUserResponseEntry { key: k.clone(), value: val })).collect()) {
         Some(x) => Ok(x),
         None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
@@ -3750,7 +3735,7 @@ impl iface_account::Guest for crate::Component {
             Err(e) => Err(iface_account__cancel_account__err(e)),
         }
     }
-    fn create_credit_card(params: iface_account::CreateCreditCardParams) -> Result<iface_account::CreateCreditCardResponse, String> {
+    fn create_credit_card(params: iface_account::CreateCreditCardParams) -> Result<Vec<iface_account::CreateCreditCardResponseEntry>, String> {
         let json = iface_account__create_credit_card_params__to_json(&params);
         match dispatch(&OP_ACCOUNT_CREATE_CREDIT_CARD, json).and_then(iface_account__create_credit_card__ok) {
             Ok(v) => Ok(v),
@@ -3778,14 +3763,14 @@ impl iface_account::Guest for crate::Component {
             Err(e) => Err(iface_account__get_entity_transfer__err(e)),
         }
     }
-    fn delete_entity_transfer(params: iface_account::DeleteEntityTransferParams) -> Result<iface_account::DeleteEntityTransferResponse, String> {
+    fn delete_entity_transfer(params: iface_account::DeleteEntityTransferParams) -> Result<Vec<iface_account::DeleteEntityTransferResponseEntry>, String> {
         let json = iface_account__delete_entity_transfer_params__to_json(&params);
         match dispatch(&OP_ACCOUNT_DELETE_ENTITY_TRANSFER, json).and_then(iface_account__delete_entity_transfer__ok) {
             Ok(v) => Ok(v),
             Err(e) => Err(iface_account__delete_entity_transfer__err(e)),
         }
     }
-    fn accept_entity_transfer(params: iface_account::AcceptEntityTransferParams) -> Result<iface_account::AcceptEntityTransferResponse, String> {
+    fn accept_entity_transfer(params: iface_account::AcceptEntityTransferParams) -> Result<Vec<iface_account::AcceptEntityTransferResponseEntry>, String> {
         let json = iface_account__accept_entity_transfer_params__to_json(&params);
         match dispatch(&OP_ACCOUNT_ACCEPT_ENTITY_TRANSFER, json).and_then(iface_account__accept_entity_transfer__ok) {
             Ok(v) => Ok(v),
@@ -3806,14 +3791,14 @@ impl iface_account::Guest for crate::Component {
             Err(e) => Err(iface_account__get_event__err(e)),
         }
     }
-    fn event_read(params: iface_account::EventReadParams) -> Result<iface_account::EventReadResponse, String> {
+    fn event_read(params: iface_account::EventReadParams) -> Result<Vec<iface_account::EventReadResponseEntry>, String> {
         let json = iface_account__event_read_params__to_json(&params);
         match dispatch(&OP_ACCOUNT_EVENT_READ, json).and_then(iface_account__event_read__ok) {
             Ok(v) => Ok(v),
             Err(e) => Err(iface_account__event_read__err(e)),
         }
     }
-    fn event_seen(params: iface_account::EventSeenParams) -> Result<iface_account::EventSeenResponse, String> {
+    fn event_seen(params: iface_account::EventSeenParams) -> Result<Vec<iface_account::EventSeenResponseEntry>, String> {
         let json = iface_account__event_seen_params__to_json(&params);
         match dispatch(&OP_ACCOUNT_EVENT_SEEN, json).and_then(iface_account__event_seen__ok) {
             Ok(v) => Ok(v),
@@ -3894,7 +3879,7 @@ impl iface_account::Guest for crate::Component {
             Err(e) => Err(iface_account__update_client__err(e)),
         }
     }
-    fn delete_client(params: iface_account::DeleteClientParams) -> Result<iface_account::DeleteClientResponse, String> {
+    fn delete_client(params: iface_account::DeleteClientParams) -> Result<Vec<iface_account::DeleteClientResponseEntry>, String> {
         let json = iface_account__delete_client_params__to_json(&params);
         match dispatch(&OP_ACCOUNT_DELETE_CLIENT, json).and_then(iface_account__delete_client__ok) {
             Ok(v) => Ok(v),
@@ -3915,7 +3900,7 @@ impl iface_account::Guest for crate::Component {
             Err(e) => Err(iface_account__get_client_thumbnail__err(e)),
         }
     }
-    fn set_client_thumbnail(params: iface_account::SetClientThumbnailParams) -> Result<iface_account::SetClientThumbnailResponse, String> {
+    fn set_client_thumbnail(params: iface_account::SetClientThumbnailParams) -> Result<Vec<iface_account::SetClientThumbnailResponseEntry>, String> {
         let json = iface_account__set_client_thumbnail_params__to_json(&params);
         match dispatch(&OP_ACCOUNT_SET_CLIENT_THUMBNAIL, json).and_then(iface_account__set_client_thumbnail__ok) {
             Ok(v) => Ok(v),
@@ -3929,7 +3914,7 @@ impl iface_account::Guest for crate::Component {
             Err(e) => Err(iface_account__get_payment_methods__err(e)),
         }
     }
-    fn create_payment_method(params: iface_account::CreatePaymentMethodParams) -> Result<iface_account::CreatePaymentMethodResponse, String> {
+    fn create_payment_method(params: iface_account::CreatePaymentMethodParams) -> Result<Vec<iface_account::CreatePaymentMethodResponseEntry>, String> {
         let json = iface_account__create_payment_method_params__to_json(&params);
         match dispatch(&OP_ACCOUNT_CREATE_PAYMENT_METHOD, json).and_then(iface_account__create_payment_method__ok) {
             Ok(v) => Ok(v),
@@ -3943,14 +3928,14 @@ impl iface_account::Guest for crate::Component {
             Err(e) => Err(iface_account__get_payment_method__err(e)),
         }
     }
-    fn delete_payment_method(params: iface_account::DeletePaymentMethodParams) -> Result<iface_account::DeletePaymentMethodResponse, String> {
+    fn delete_payment_method(params: iface_account::DeletePaymentMethodParams) -> Result<Vec<iface_account::DeletePaymentMethodResponseEntry>, String> {
         let json = iface_account__delete_payment_method_params__to_json(&params);
         match dispatch(&OP_ACCOUNT_DELETE_PAYMENT_METHOD, json).and_then(iface_account__delete_payment_method__ok) {
             Ok(v) => Ok(v),
             Err(e) => Err(iface_account__delete_payment_method__err(e)),
         }
     }
-    fn make_payment_method_default(params: iface_account::MakePaymentMethodDefaultParams) -> Result<iface_account::MakePaymentMethodDefaultResponse, String> {
+    fn make_payment_method_default(params: iface_account::MakePaymentMethodDefaultParams) -> Result<Vec<iface_account::MakePaymentMethodDefaultResponseEntry>, String> {
         let json = iface_account__make_payment_method_default_params__to_json(&params);
         match dispatch(&OP_ACCOUNT_MAKE_PAYMENT_METHOD_DEFAULT, json).and_then(iface_account__make_payment_method_default__ok) {
             Ok(v) => Ok(v),
@@ -3978,7 +3963,7 @@ impl iface_account::Guest for crate::Component {
             Err(e) => Err(iface_account__create_pay_pal_payment__err(e)),
         }
     }
-    fn execute_pay_pal_payment(params: iface_account::ExecutePayPalPaymentParams) -> Result<iface_account::ExecutePayPalPaymentResponse, String> {
+    fn execute_pay_pal_payment(params: iface_account::ExecutePayPalPaymentParams) -> Result<Vec<iface_account::ExecutePayPalPaymentResponseEntry>, String> {
         let json = iface_account__execute_pay_pal_payment_params__to_json(&params);
         match dispatch(&OP_ACCOUNT_EXECUTE_PAY_PAL_PAYMENT, json).and_then(iface_account__execute_pay_pal_payment__ok) {
             Ok(v) => Ok(v),
@@ -4020,14 +4005,14 @@ impl iface_account::Guest for crate::Component {
             Err(e) => Err(iface_account__get_service_transfer__err(e)),
         }
     }
-    fn delete_service_transfer(params: iface_account::DeleteServiceTransferParams) -> Result<iface_account::DeleteServiceTransferResponse, String> {
+    fn delete_service_transfer(params: iface_account::DeleteServiceTransferParams) -> Result<Vec<iface_account::DeleteServiceTransferResponseEntry>, String> {
         let json = iface_account__delete_service_transfer_params__to_json(&params);
         match dispatch(&OP_ACCOUNT_DELETE_SERVICE_TRANSFER, json).and_then(iface_account__delete_service_transfer__ok) {
             Ok(v) => Ok(v),
             Err(e) => Err(iface_account__delete_service_transfer__err(e)),
         }
     }
-    fn accept_service_transfer(params: iface_account::AcceptServiceTransferParams) -> Result<iface_account::AcceptServiceTransferResponse, String> {
+    fn accept_service_transfer(params: iface_account::AcceptServiceTransferParams) -> Result<Vec<iface_account::AcceptServiceTransferResponseEntry>, String> {
         let json = iface_account__accept_service_transfer_params__to_json(&params);
         match dispatch(&OP_ACCOUNT_ACCEPT_SERVICE_TRANSFER, json).and_then(iface_account__accept_service_transfer__ok) {
             Ok(v) => Ok(v),
@@ -4047,7 +4032,7 @@ impl iface_account::Guest for crate::Component {
             Err(e) => Err(iface_account__update_account_settings__err(e)),
         }
     }
-    fn enable_account_managed() -> Result<iface_account::EnableAccountManagedResponse, String> {
+    fn enable_account_managed() -> Result<Vec<iface_account::EnableAccountManagedResponseEntry>, String> {
         match dispatch(&OP_ACCOUNT_ENABLE_ACCOUNT_MANAGED, Value::Object(Map::new())).and_then(iface_account__enable_account_managed__ok) {
             Ok(v) => Ok(v),
             Err(e) => Err(iface_account__enable_account_managed__err(e)),
@@ -4087,7 +4072,7 @@ impl iface_account::Guest for crate::Component {
             Err(e) => Err(iface_account__update_user__err(e)),
         }
     }
-    fn delete_user(params: iface_account::DeleteUserParams) -> Result<iface_account::DeleteUserResponse, String> {
+    fn delete_user(params: iface_account::DeleteUserParams) -> Result<Vec<iface_account::DeleteUserResponseEntry>, String> {
         let json = iface_account__delete_user_params__to_json(&params);
         match dispatch(&OP_ACCOUNT_DELETE_USER, json).and_then(iface_account__delete_user__ok) {
             Ok(v) => Ok(v),

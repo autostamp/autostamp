@@ -165,7 +165,7 @@ fn iface_invoiceitems__invoiceitem__to_json(p: &iface_invoiceitems::Invoiceitem)
     m.insert("id".into(), Value::String((&p.id).clone()));
     m.insert("invoice".into(), match (&p.invoice) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("livemode".into(), Value::Bool(*(&p.livemode)));
-    m.insert("metadata".into(), match (&p.metadata) { Some(v) => iface_invoiceitems__invoiceitem_metadata__to_json(v), None => Value::Null });
+    m.insert("metadata".into(), match (&p.metadata) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("object".into(), Value::String(iface_invoiceitems__invoiceitem_object_enum__to_str(&p.object).into()));
     m.insert("period".into(), iface_invoiceitems__invoice_line_item_period__to_json(&p.period));
     m.insert("price".into(), match (&p.price) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -180,9 +180,10 @@ fn iface_invoiceitems__invoiceitem__to_json(p: &iface_invoiceitems::Invoiceitem)
     Value::Object(m)
 }
 
-fn iface_invoiceitems__invoiceitem_metadata__to_json(p: &iface_invoiceitems::InvoiceitemMetadata) -> Value {
+fn iface_invoiceitems__invoiceitem_metadata_entry__to_json(p: &iface_invoiceitems::InvoiceitemMetadataEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -204,7 +205,7 @@ fn iface_invoiceitems__tax_rate__to_json(p: &iface_invoiceitems::TaxRate) -> Val
     m.insert("inclusive".into(), Value::Bool(*(&p.inclusive)));
     m.insert("jurisdiction".into(), match (&p.jurisdiction) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("livemode".into(), Value::Bool(*(&p.livemode)));
-    m.insert("metadata".into(), match (&p.metadata) { Some(v) => iface_invoiceitems__tax_rate_metadata__to_json(v), None => Value::Null });
+    m.insert("metadata".into(), match (&p.metadata) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("object".into(), Value::String(iface_invoiceitems__tax_rate_object_enum__to_str(&p.object).into()));
     m.insert("percentage".into(), serde_json::Number::from_f64(*(&p.percentage)).map(Value::Number).unwrap_or(Value::Null));
     m.insert("state".into(), match (&p.state) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -212,9 +213,10 @@ fn iface_invoiceitems__tax_rate__to_json(p: &iface_invoiceitems::TaxRate) -> Val
     Value::Object(m)
 }
 
-fn iface_invoiceitems__tax_rate_metadata__to_json(p: &iface_invoiceitems::TaxRateMetadata) -> Value {
+fn iface_invoiceitems__tax_rate_metadata_entry__to_json(p: &iface_invoiceitems::TaxRateMetadataEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -357,7 +359,7 @@ fn iface_invoiceitems__invoiceitem__from_json(v: &Value) -> Option<iface_invoice
         id: m.get("id").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         invoice: m.get("invoice").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         livemode: m.get("livemode").and_then(|v| (v).as_bool()).unwrap_or_default(),
-        metadata: m.get("metadata").filter(|v| !v.is_null()).and_then(|v| iface_invoiceitems__invoiceitem_metadata__from_json(v)),
+        metadata: m.get("metadata").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_invoiceitems::InvoiceitemMetadataEntry { key: k.clone(), value: val })).collect())),
         object: match m.get("object").and_then(|v| (v).as_str().and_then(iface_invoiceitems__invoiceitem_object_enum__from_str)) { Some(x) => x, None => return None },
         period: match m.get("period").and_then(|v| iface_invoiceitems__invoice_line_item_period__from_json(v)) { Some(x) => x, None => return None },
         price: m.get("price").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
@@ -372,10 +374,11 @@ fn iface_invoiceitems__invoiceitem__from_json(v: &Value) -> Option<iface_invoice
     })
 }
 
-fn iface_invoiceitems__invoiceitem_metadata__from_json(v: &Value) -> Option<iface_invoiceitems::InvoiceitemMetadata> {
+fn iface_invoiceitems__invoiceitem_metadata_entry__from_json(v: &Value) -> Option<iface_invoiceitems::InvoiceitemMetadataEntry> {
     let m = v.as_object()?;
-    Some(iface_invoiceitems::InvoiceitemMetadata {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_invoiceitems::InvoiceitemMetadataEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -399,7 +402,7 @@ fn iface_invoiceitems__tax_rate__from_json(v: &Value) -> Option<iface_invoiceite
         inclusive: m.get("inclusive").and_then(|v| (v).as_bool()).unwrap_or_default(),
         jurisdiction: m.get("jurisdiction").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         livemode: m.get("livemode").and_then(|v| (v).as_bool()).unwrap_or_default(),
-        metadata: m.get("metadata").filter(|v| !v.is_null()).and_then(|v| iface_invoiceitems__tax_rate_metadata__from_json(v)),
+        metadata: m.get("metadata").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_invoiceitems::TaxRateMetadataEntry { key: k.clone(), value: val })).collect())),
         object: match m.get("object").and_then(|v| (v).as_str().and_then(iface_invoiceitems__tax_rate_object_enum__from_str)) { Some(x) => x, None => return None },
         percentage: m.get("percentage").and_then(|v| (v).as_f64()).unwrap_or_default(),
         state: m.get("state").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
@@ -407,10 +410,11 @@ fn iface_invoiceitems__tax_rate__from_json(v: &Value) -> Option<iface_invoiceite
     })
 }
 
-fn iface_invoiceitems__tax_rate_metadata__from_json(v: &Value) -> Option<iface_invoiceitems::TaxRateMetadata> {
+fn iface_invoiceitems__tax_rate_metadata_entry__from_json(v: &Value) -> Option<iface_invoiceitems::TaxRateMetadataEntry> {
     let m = v.as_object()?;
-    Some(iface_invoiceitems::TaxRateMetadata {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_invoiceitems::TaxRateMetadataEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 

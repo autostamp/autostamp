@@ -23,7 +23,7 @@ fn iface_negotiable_carts_cart_id_estimate_shipping_methods_by_address_id__quote
     m.insert("carrier_code".into(), Value::String((&p.carrier_code).clone()));
     m.insert("carrier_title".into(), match (&p.carrier_title) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("error_message".into(), Value::String((&p.error_message).clone()));
-    m.insert("extension_attributes".into(), match (&p.extension_attributes) { Some(v) => iface_negotiable_carts_cart_id_estimate_shipping_methods_by_address_id__quote_data_shipping_method_extension_interface__to_json(v), None => Value::Null });
+    m.insert("extension_attributes".into(), match (&p.extension_attributes) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("method_code".into(), Value::String((&p.method_code).clone()));
     m.insert("method_title".into(), match (&p.method_title) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("price_excl_tax".into(), serde_json::Number::from_f64(*(&p.price_excl_tax)).map(Value::Number).unwrap_or(Value::Null));
@@ -31,9 +31,10 @@ fn iface_negotiable_carts_cart_id_estimate_shipping_methods_by_address_id__quote
     Value::Object(m)
 }
 
-fn iface_negotiable_carts_cart_id_estimate_shipping_methods_by_address_id__quote_data_shipping_method_extension_interface__to_json(p: &iface_negotiable_carts_cart_id_estimate_shipping_methods_by_address_id::QuoteDataShippingMethodExtensionInterface) -> Value {
+fn iface_negotiable_carts_cart_id_estimate_shipping_methods_by_address_id__quote_data_shipping_method_extension_interface_entry__to_json(p: &iface_negotiable_carts_cart_id_estimate_shipping_methods_by_address_id::QuoteDataShippingMethodExtensionInterfaceEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -53,7 +54,7 @@ fn iface_negotiable_carts_cart_id_estimate_shipping_methods_by_address_id__quote
         carrier_code: m.get("carrier_code").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         carrier_title: m.get("carrier_title").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         error_message: m.get("error_message").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-        extension_attributes: m.get("extension_attributes").filter(|v| !v.is_null()).and_then(|v| iface_negotiable_carts_cart_id_estimate_shipping_methods_by_address_id__quote_data_shipping_method_extension_interface__from_json(v)),
+        extension_attributes: m.get("extension_attributes").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_negotiable_carts_cart_id_estimate_shipping_methods_by_address_id::QuoteDataShippingMethodExtensionInterfaceEntry { key: k.clone(), value: val })).collect())),
         method_code: m.get("method_code").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         method_title: m.get("method_title").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         price_excl_tax: m.get("price_excl_tax").and_then(|v| (v).as_f64()).unwrap_or_default(),
@@ -61,10 +62,11 @@ fn iface_negotiable_carts_cart_id_estimate_shipping_methods_by_address_id__quote
     })
 }
 
-fn iface_negotiable_carts_cart_id_estimate_shipping_methods_by_address_id__quote_data_shipping_method_extension_interface__from_json(v: &Value) -> Option<iface_negotiable_carts_cart_id_estimate_shipping_methods_by_address_id::QuoteDataShippingMethodExtensionInterface> {
+fn iface_negotiable_carts_cart_id_estimate_shipping_methods_by_address_id__quote_data_shipping_method_extension_interface_entry__from_json(v: &Value) -> Option<iface_negotiable_carts_cart_id_estimate_shipping_methods_by_address_id::QuoteDataShippingMethodExtensionInterfaceEntry> {
     let m = v.as_object()?;
-    Some(iface_negotiable_carts_cart_id_estimate_shipping_methods_by_address_id::QuoteDataShippingMethodExtensionInterface {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_negotiable_carts_cart_id_estimate_shipping_methods_by_address_id::QuoteDataShippingMethodExtensionInterfaceEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
