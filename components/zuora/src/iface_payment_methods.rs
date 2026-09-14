@@ -468,9 +468,10 @@ fn iface_payment_methods__post_payment_method_decryption_card_holder_info__to_js
     Value::Object(m)
 }
 
-fn iface_payment_methods__post_payment_method_decryption_payment_token__to_json(p: &iface_payment_methods::PostPaymentMethodDecryptionPaymentToken) -> Value {
+fn iface_payment_methods__post_payment_method_decryption_payment_token_entry__to_json(p: &iface_payment_methods::PostPaymentMethodDecryptionPaymentTokenEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -672,7 +673,7 @@ fn iface_payment_methods__post_payment_methods_decryption_params__to_json(p: &if
     m.insert("mit_profile_action".into(), match (&p.mit_profile_action) { Some(v) => Value::String(iface_payment_methods__post_payment_method_request_mit_profile_action_enum__to_str(v).into()), None => Value::Null });
     m.insert("mit_profile_type".into(), match (&p.mit_profile_type) { Some(v) => Value::String(iface_payment_methods__post_payment_method_decryption_mit_profile_type_enum__to_str(v).into()), None => Value::Null });
     m.insert("payment_gateway".into(), match (&p.payment_gateway) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("payment_token".into(), iface_payment_methods__post_payment_method_decryption_payment_token__to_json(&p.payment_token));
+    m.insert("payment_token".into(), Value::Object((&p.payment_token).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()));
     m.insert("process_payment".into(), match (&p.process_payment) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     Value::Object(m)
 }

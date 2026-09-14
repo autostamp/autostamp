@@ -63,13 +63,14 @@ fn iface_marked_episodes__marked_episode__to_json(p: &iface_marked_episodes::Mar
 
 fn iface_marked_episodes__marked_episode_embedded__to_json(p: &iface_marked_episodes::MarkedEpisodeEmbedded) -> Value {
     let mut m = Map::new();
-    m.insert("episode".into(), match (&p.episode) { Some(v) => iface_marked_episodes__episode__to_json(v), None => Value::Null });
+    m.insert("episode".into(), match (&p.episode) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_marked_episodes__episode__to_json(p: &iface_marked_episodes::Episode) -> Value {
+fn iface_marked_episodes__episode_entry__to_json(p: &iface_marked_episodes::EpisodeEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -120,14 +121,15 @@ fn iface_marked_episodes__marked_episode__from_json(v: &Value) -> Option<iface_m
 fn iface_marked_episodes__marked_episode_embedded__from_json(v: &Value) -> Option<iface_marked_episodes::MarkedEpisodeEmbedded> {
     let m = v.as_object()?;
     Some(iface_marked_episodes::MarkedEpisodeEmbedded {
-        episode: m.get("episode").filter(|v| !v.is_null()).and_then(|v| iface_marked_episodes__episode__from_json(v)),
+        episode: m.get("episode").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_marked_episodes::EpisodeEntry { key: k.clone(), value: val })).collect())),
     })
 }
 
-fn iface_marked_episodes__episode__from_json(v: &Value) -> Option<iface_marked_episodes::Episode> {
+fn iface_marked_episodes__episode_entry__from_json(v: &Value) -> Option<iface_marked_episodes::EpisodeEntry> {
     let m = v.as_object()?;
-    Some(iface_marked_episodes::Episode {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_marked_episodes::EpisodeEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 

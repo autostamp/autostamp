@@ -20,8 +20,8 @@ triggered.
 
 | Setting | Value |
 | --- | --- |
-| Package | `autostamp:vimeo@0.5.0` |
-| Published version | `0.5.0+vimeo-3.4` |
+| Package | `autostamp:vimeo@0.6.0` |
+| Published version | `0.6.0+vimeo-3.4` |
 | Tag filter | all tags |
 | Operations generated | 326 |
 | Infer API-key credentials | enabled — not triggered |

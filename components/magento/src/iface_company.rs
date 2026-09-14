@@ -76,14 +76,15 @@ fn iface_company__data_company_extension_interface__to_json(p: &iface_company::D
 fn iface_company__negotiable_quote_data_company_quote_config_interface__to_json(p: &iface_company::NegotiableQuoteDataCompanyQuoteConfigInterface) -> Value {
     let mut m = Map::new();
     m.insert("company_id".into(), match (&p.company_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("extension_attributes".into(), match (&p.extension_attributes) { Some(v) => iface_company__negotiable_quote_data_company_quote_config_extension_interface__to_json(v), None => Value::Null });
+    m.insert("extension_attributes".into(), match (&p.extension_attributes) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("is_quote_enabled".into(), Value::Bool(*(&p.is_quote_enabled)));
     Value::Object(m)
 }
 
-fn iface_company__negotiable_quote_data_company_quote_config_extension_interface__to_json(p: &iface_company::NegotiableQuoteDataCompanyQuoteConfigExtensionInterface) -> Value {
+fn iface_company__negotiable_quote_data_company_quote_config_extension_interface_entry__to_json(p: &iface_company::NegotiableQuoteDataCompanyQuoteConfigExtensionInterfaceEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -185,15 +186,16 @@ fn iface_company__negotiable_quote_data_company_quote_config_interface__from_jso
     let m = v.as_object()?;
     Some(iface_company::NegotiableQuoteDataCompanyQuoteConfigInterface {
         company_id: m.get("company_id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        extension_attributes: m.get("extension_attributes").filter(|v| !v.is_null()).and_then(|v| iface_company__negotiable_quote_data_company_quote_config_extension_interface__from_json(v)),
+        extension_attributes: m.get("extension_attributes").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_company::NegotiableQuoteDataCompanyQuoteConfigExtensionInterfaceEntry { key: k.clone(), value: val })).collect())),
         is_quote_enabled: m.get("is_quote_enabled").and_then(|v| (v).as_bool()).unwrap_or_default(),
     })
 }
 
-fn iface_company__negotiable_quote_data_company_quote_config_extension_interface__from_json(v: &Value) -> Option<iface_company::NegotiableQuoteDataCompanyQuoteConfigExtensionInterface> {
+fn iface_company__negotiable_quote_data_company_quote_config_extension_interface_entry__from_json(v: &Value) -> Option<iface_company::NegotiableQuoteDataCompanyQuoteConfigExtensionInterfaceEntry> {
     let m = v.as_object()?;
-    Some(iface_company::NegotiableQuoteDataCompanyQuoteConfigExtensionInterface {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_company::NegotiableQuoteDataCompanyQuoteConfigExtensionInterfaceEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 

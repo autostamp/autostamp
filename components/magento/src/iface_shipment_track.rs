@@ -20,7 +20,7 @@ fn iface_shipment_track__sales_data_shipment_track_interface__to_json(p: &iface_
     m.insert("created_at".into(), match (&p.created_at) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("description".into(), Value::String((&p.description).clone()));
     m.insert("entity_id".into(), match (&p.entity_id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    m.insert("extension_attributes".into(), match (&p.extension_attributes) { Some(v) => iface_shipment_track__sales_data_shipment_track_extension_interface__to_json(v), None => Value::Null });
+    m.insert("extension_attributes".into(), match (&p.extension_attributes) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("order_id".into(), Value::Number(serde_json::Number::from(*(&p.order_id))));
     m.insert("parent_id".into(), Value::Number(serde_json::Number::from(*(&p.parent_id))));
     m.insert("qty".into(), serde_json::Number::from_f64(*(&p.qty)).map(Value::Number).unwrap_or(Value::Null));
@@ -31,9 +31,10 @@ fn iface_shipment_track__sales_data_shipment_track_interface__to_json(p: &iface_
     Value::Object(m)
 }
 
-fn iface_shipment_track__sales_data_shipment_track_extension_interface__to_json(p: &iface_shipment_track::SalesDataShipmentTrackExtensionInterface) -> Value {
+fn iface_shipment_track__sales_data_shipment_track_extension_interface_entry__to_json(p: &iface_shipment_track::SalesDataShipmentTrackExtensionInterfaceEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -50,7 +51,7 @@ fn iface_shipment_track__sales_data_shipment_track_interface__from_json(v: &Valu
         created_at: m.get("created_at").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         description: m.get("description").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         entity_id: m.get("entity_id").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
-        extension_attributes: m.get("extension_attributes").filter(|v| !v.is_null()).and_then(|v| iface_shipment_track__sales_data_shipment_track_extension_interface__from_json(v)),
+        extension_attributes: m.get("extension_attributes").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_shipment_track::SalesDataShipmentTrackExtensionInterfaceEntry { key: k.clone(), value: val })).collect())),
         order_id: m.get("order_id").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
         parent_id: m.get("parent_id").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
         qty: m.get("qty").and_then(|v| (v).as_f64()).unwrap_or_default(),
@@ -61,10 +62,11 @@ fn iface_shipment_track__sales_data_shipment_track_interface__from_json(v: &Valu
     })
 }
 
-fn iface_shipment_track__sales_data_shipment_track_extension_interface__from_json(v: &Value) -> Option<iface_shipment_track::SalesDataShipmentTrackExtensionInterface> {
+fn iface_shipment_track__sales_data_shipment_track_extension_interface_entry__from_json(v: &Value) -> Option<iface_shipment_track::SalesDataShipmentTrackExtensionInterfaceEntry> {
     let m = v.as_object()?;
-    Some(iface_shipment_track::SalesDataShipmentTrackExtensionInterface {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_shipment_track::SalesDataShipmentTrackExtensionInterfaceEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 

@@ -247,9 +247,10 @@ fn iface_road__tfl_api_presentation_entities_street_segment__to_json(p: &iface_r
     Value::Object(m)
 }
 
-fn iface_road__system_object__to_json(p: &iface_road::SystemObject) -> Value {
+fn iface_road__system_object_entry__to_json(p: &iface_road::SystemObjectEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -449,10 +450,11 @@ fn iface_road__tfl_api_presentation_entities_street_segment__from_json(v: &Value
     })
 }
 
-fn iface_road__system_object__from_json(v: &Value) -> Option<iface_road::SystemObject> {
+fn iface_road__system_object_entry__from_json(v: &Value) -> Option<iface_road::SystemObjectEntry> {
     let m = v.as_object()?;
-    Some(iface_road::SystemObject {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_road::SystemObjectEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -540,12 +542,12 @@ fn iface_road__disruption_by_id__err(e: crate::runtime::DispatchError) -> String
     }
 }
 
-fn iface_road__disrupted_streets__ok(body: String) -> Result<iface_road::SystemObject, crate::runtime::DispatchError> {
+fn iface_road__disrupted_streets__ok(body: String) -> Result<Vec<iface_road::SystemObjectEntry>, crate::runtime::DispatchError> {
     let v: Value = match serde_json::from_str(&body) {
         Ok(v) => v,
         Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
     };
-    match iface_road__system_object__from_json(&v) {
+    match (&v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_road::SystemObjectEntry { key: k.clone(), value: val })).collect()) {
         Some(x) => Ok(x),
         None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
@@ -638,7 +640,7 @@ impl iface_road::Guest for crate::Component {
             Err(e) => Err(iface_road__disruption_by_id__err(e)),
         }
     }
-    fn disrupted_streets(params: iface_road::DisruptedStreetsParams) -> Result<iface_road::SystemObject, String> {
+    fn disrupted_streets(params: iface_road::DisruptedStreetsParams) -> Result<Vec<iface_road::SystemObjectEntry>, String> {
         let json = iface_road__disrupted_streets_params__to_json(&params);
         match dispatch(&OP_ROAD_DISRUPTED_STREETS, json).and_then(iface_road__disrupted_streets__ok) {
             Ok(v) => Ok(v),

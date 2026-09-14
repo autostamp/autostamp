@@ -120,6 +120,24 @@ fn iface_app_encryption_declarations__get_collection_fields_apps_item_enum__to_s
     }
 }
 
+fn iface_app_encryption_declarations__app_encryption_declaration_state__to_str(e: &iface_app_encryption_declarations::AppEncryptionDeclarationState) -> &'static str {
+    match e {
+        iface_app_encryption_declarations::AppEncryptionDeclarationState::InReview => "IN_REVIEW",
+        iface_app_encryption_declarations::AppEncryptionDeclarationState::Approved => "APPROVED",
+        iface_app_encryption_declarations::AppEncryptionDeclarationState::Rejected => "REJECTED",
+        iface_app_encryption_declarations::AppEncryptionDeclarationState::Invalid => "INVALID",
+        iface_app_encryption_declarations::AppEncryptionDeclarationState::Expired => "EXPIRED",
+    }
+}
+
+fn iface_app_encryption_declarations__platform__to_str(e: &iface_app_encryption_declarations::Platform) -> &'static str {
+    match e {
+        iface_app_encryption_declarations::Platform::Ios => "IOS",
+        iface_app_encryption_declarations::Platform::MacOs => "MAC_OS",
+        iface_app_encryption_declarations::Platform::TvOs => "TV_OS",
+    }
+}
+
 fn iface_app_encryption_declarations__app_encryption_declaration_relationships_app_data_type_op_enum__to_str(e: &iface_app_encryption_declarations::AppEncryptionDeclarationRelationshipsAppDataTypeOpEnum) -> &'static str {
     match e {
         iface_app_encryption_declarations::AppEncryptionDeclarationRelationshipsAppDataTypeOpEnum::Apps => "apps",
@@ -244,7 +262,7 @@ fn iface_app_encryption_declarations__app_encryption_declaration__to_json(p: &if
 
 fn iface_app_encryption_declarations__app_encryption_declaration_attributes__to_json(p: &iface_app_encryption_declarations::AppEncryptionDeclarationAttributes) -> Value {
     let mut m = Map::new();
-    m.insert("appEncryptionDeclarationState".into(), match (&p.app_encryption_declaration_state) { Some(v) => iface_app_encryption_declarations__app_encryption_declaration_state__to_json(v), None => Value::Null });
+    m.insert("appEncryptionDeclarationState".into(), match (&p.app_encryption_declaration_state) { Some(v) => Value::String(iface_app_encryption_declarations__app_encryption_declaration_state__to_str(v).into()), None => Value::Null });
     m.insert("availableOnFrenchStore".into(), match (&p.available_on_french_store) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     m.insert("codeValue".into(), match (&p.code_value) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("containsProprietaryCryptography".into(), match (&p.contains_proprietary_cryptography) { Some(v) => Value::Bool(*(v)), None => Value::Null });
@@ -253,21 +271,9 @@ fn iface_app_encryption_declarations__app_encryption_declaration_attributes__to_
     m.insert("documentType".into(), match (&p.document_type) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("documentUrl".into(), match (&p.document_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("exempt".into(), match (&p.exempt) { Some(v) => Value::Bool(*(v)), None => Value::Null });
-    m.insert("platform".into(), match (&p.platform) { Some(v) => iface_app_encryption_declarations__platform__to_json(v), None => Value::Null });
+    m.insert("platform".into(), match (&p.platform) { Some(v) => Value::String(iface_app_encryption_declarations__platform__to_str(v).into()), None => Value::Null });
     m.insert("uploadedDate".into(), match (&p.uploaded_date) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("usesEncryption".into(), match (&p.uses_encryption) { Some(v) => Value::Bool(*(v)), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_app_encryption_declarations__app_encryption_declaration_state__to_json(p: &iface_app_encryption_declarations::AppEncryptionDeclarationState) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_app_encryption_declarations__platform__to_json(p: &iface_app_encryption_declarations::Platform) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -758,7 +764,7 @@ fn iface_app_encryption_declarations__app_encryption_declaration__from_json(v: &
 fn iface_app_encryption_declarations__app_encryption_declaration_attributes__from_json(v: &Value) -> Option<iface_app_encryption_declarations::AppEncryptionDeclarationAttributes> {
     let m = v.as_object()?;
     Some(iface_app_encryption_declarations::AppEncryptionDeclarationAttributes {
-        app_encryption_declaration_state: m.get("appEncryptionDeclarationState").filter(|v| !v.is_null()).and_then(|v| iface_app_encryption_declarations__app_encryption_declaration_state__from_json(v)),
+        app_encryption_declaration_state: m.get("appEncryptionDeclarationState").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_app_encryption_declarations__app_encryption_declaration_state__from_str)),
         available_on_french_store: m.get("availableOnFrenchStore").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
         code_value: m.get("codeValue").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         contains_proprietary_cryptography: m.get("containsProprietaryCryptography").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
@@ -767,23 +773,9 @@ fn iface_app_encryption_declarations__app_encryption_declaration_attributes__fro
         document_type: m.get("documentType").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         document_url: m.get("documentUrl").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         exempt: m.get("exempt").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
-        platform: m.get("platform").filter(|v| !v.is_null()).and_then(|v| iface_app_encryption_declarations__platform__from_json(v)),
+        platform: m.get("platform").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_app_encryption_declarations__platform__from_str)),
         uploaded_date: m.get("uploadedDate").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         uses_encryption: m.get("usesEncryption").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
-    })
-}
-
-fn iface_app_encryption_declarations__app_encryption_declaration_state__from_json(v: &Value) -> Option<iface_app_encryption_declarations::AppEncryptionDeclarationState> {
-    let m = v.as_object()?;
-    Some(iface_app_encryption_declarations::AppEncryptionDeclarationState {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-    })
-}
-
-fn iface_app_encryption_declarations__platform__from_json(v: &Value) -> Option<iface_app_encryption_declarations::Platform> {
-    let m = v.as_object()?;
-    Some(iface_app_encryption_declarations::Platform {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -1262,6 +1254,26 @@ fn iface_app_encryption_declarations__app_response__from_json(v: &Value) -> Opti
         included: m.get("included").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
         links: match m.get("links").and_then(|v| iface_app_encryption_declarations__document_links__from_json(v)) { Some(x) => x, None => return None },
     })
+}
+
+fn iface_app_encryption_declarations__app_encryption_declaration_state__from_str(s: &str) -> Option<iface_app_encryption_declarations::AppEncryptionDeclarationState> {
+    match s {
+        "IN_REVIEW" => Some(iface_app_encryption_declarations::AppEncryptionDeclarationState::InReview),
+        "APPROVED" => Some(iface_app_encryption_declarations::AppEncryptionDeclarationState::Approved),
+        "REJECTED" => Some(iface_app_encryption_declarations::AppEncryptionDeclarationState::Rejected),
+        "INVALID" => Some(iface_app_encryption_declarations::AppEncryptionDeclarationState::Invalid),
+        "EXPIRED" => Some(iface_app_encryption_declarations::AppEncryptionDeclarationState::Expired),
+        _ => None,
+    }
+}
+
+fn iface_app_encryption_declarations__platform__from_str(s: &str) -> Option<iface_app_encryption_declarations::Platform> {
+    match s {
+        "IOS" => Some(iface_app_encryption_declarations::Platform::Ios),
+        "MAC_OS" => Some(iface_app_encryption_declarations::Platform::MacOs),
+        "TV_OS" => Some(iface_app_encryption_declarations::Platform::TvOs),
+        _ => None,
+    }
 }
 
 fn iface_app_encryption_declarations__app_encryption_declaration_relationships_app_data_type_op_enum__from_str(s: &str) -> Option<iface_app_encryption_declarations::AppEncryptionDeclarationRelationshipsAppDataTypeOpEnum> {

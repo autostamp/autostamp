@@ -98,6 +98,35 @@ fn iface_build_beta_details__get_collection_fields_builds_item_enum__to_str(e: &
     }
 }
 
+fn iface_build_beta_details__external_beta_state__to_str(e: &iface_build_beta_details::ExternalBetaState) -> &'static str {
+    match e {
+        iface_build_beta_details::ExternalBetaState::Processing => "PROCESSING",
+        iface_build_beta_details::ExternalBetaState::ProcessingException => "PROCESSING_EXCEPTION",
+        iface_build_beta_details::ExternalBetaState::MissingExportCompliance => "MISSING_EXPORT_COMPLIANCE",
+        iface_build_beta_details::ExternalBetaState::ReadyForBetaTesting => "READY_FOR_BETA_TESTING",
+        iface_build_beta_details::ExternalBetaState::InBetaTesting => "IN_BETA_TESTING",
+        iface_build_beta_details::ExternalBetaState::Expired => "EXPIRED",
+        iface_build_beta_details::ExternalBetaState::ReadyForBetaSubmission => "READY_FOR_BETA_SUBMISSION",
+        iface_build_beta_details::ExternalBetaState::InExportComplianceReview => "IN_EXPORT_COMPLIANCE_REVIEW",
+        iface_build_beta_details::ExternalBetaState::WaitingForBetaReview => "WAITING_FOR_BETA_REVIEW",
+        iface_build_beta_details::ExternalBetaState::InBetaReview => "IN_BETA_REVIEW",
+        iface_build_beta_details::ExternalBetaState::BetaRejected => "BETA_REJECTED",
+        iface_build_beta_details::ExternalBetaState::BetaApproved => "BETA_APPROVED",
+    }
+}
+
+fn iface_build_beta_details__internal_beta_state__to_str(e: &iface_build_beta_details::InternalBetaState) -> &'static str {
+    match e {
+        iface_build_beta_details::InternalBetaState::Processing => "PROCESSING",
+        iface_build_beta_details::InternalBetaState::ProcessingException => "PROCESSING_EXCEPTION",
+        iface_build_beta_details::InternalBetaState::MissingExportCompliance => "MISSING_EXPORT_COMPLIANCE",
+        iface_build_beta_details::InternalBetaState::ReadyForBetaTesting => "READY_FOR_BETA_TESTING",
+        iface_build_beta_details::InternalBetaState::InBetaTesting => "IN_BETA_TESTING",
+        iface_build_beta_details::InternalBetaState::Expired => "EXPIRED",
+        iface_build_beta_details::InternalBetaState::InExportComplianceReview => "IN_EXPORT_COMPLIANCE_REVIEW",
+    }
+}
+
 fn iface_build_beta_details__build_beta_detail_relationships_build_data_type_op_enum__to_str(e: &iface_build_beta_details::BuildBetaDetailRelationshipsBuildDataTypeOpEnum) -> &'static str {
     match e {
         iface_build_beta_details::BuildBetaDetailRelationshipsBuildDataTypeOpEnum::Builds => "builds",
@@ -189,20 +218,8 @@ fn iface_build_beta_details__build_beta_detail__to_json(p: &iface_build_beta_det
 fn iface_build_beta_details__build_beta_detail_attributes__to_json(p: &iface_build_beta_details::BuildBetaDetailAttributes) -> Value {
     let mut m = Map::new();
     m.insert("autoNotifyEnabled".into(), match (&p.auto_notify_enabled) { Some(v) => Value::Bool(*(v)), None => Value::Null });
-    m.insert("externalBuildState".into(), match (&p.external_build_state) { Some(v) => iface_build_beta_details__external_beta_state__to_json(v), None => Value::Null });
-    m.insert("internalBuildState".into(), match (&p.internal_build_state) { Some(v) => iface_build_beta_details__internal_beta_state__to_json(v), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_build_beta_details__external_beta_state__to_json(p: &iface_build_beta_details::ExternalBetaState) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_build_beta_details__internal_beta_state__to_json(p: &iface_build_beta_details::InternalBetaState) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
+    m.insert("externalBuildState".into(), match (&p.external_build_state) { Some(v) => Value::String(iface_build_beta_details__external_beta_state__to_str(v).into()), None => Value::Null });
+    m.insert("internalBuildState".into(), match (&p.internal_build_state) { Some(v) => Value::String(iface_build_beta_details__internal_beta_state__to_str(v).into()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -592,22 +609,8 @@ fn iface_build_beta_details__build_beta_detail_attributes__from_json(v: &Value) 
     let m = v.as_object()?;
     Some(iface_build_beta_details::BuildBetaDetailAttributes {
         auto_notify_enabled: m.get("autoNotifyEnabled").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
-        external_build_state: m.get("externalBuildState").filter(|v| !v.is_null()).and_then(|v| iface_build_beta_details__external_beta_state__from_json(v)),
-        internal_build_state: m.get("internalBuildState").filter(|v| !v.is_null()).and_then(|v| iface_build_beta_details__internal_beta_state__from_json(v)),
-    })
-}
-
-fn iface_build_beta_details__external_beta_state__from_json(v: &Value) -> Option<iface_build_beta_details::ExternalBetaState> {
-    let m = v.as_object()?;
-    Some(iface_build_beta_details::ExternalBetaState {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-    })
-}
-
-fn iface_build_beta_details__internal_beta_state__from_json(v: &Value) -> Option<iface_build_beta_details::InternalBetaState> {
-    let m = v.as_object()?;
-    Some(iface_build_beta_details::InternalBetaState {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        external_build_state: m.get("externalBuildState").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_build_beta_details__external_beta_state__from_str)),
+        internal_build_state: m.get("internalBuildState").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_build_beta_details__internal_beta_state__from_str)),
     })
 }
 
@@ -964,6 +967,37 @@ fn iface_build_beta_details__build_response__from_json(v: &Value) -> Option<ifac
         included: m.get("included").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
         links: match m.get("links").and_then(|v| iface_build_beta_details__document_links__from_json(v)) { Some(x) => x, None => return None },
     })
+}
+
+fn iface_build_beta_details__external_beta_state__from_str(s: &str) -> Option<iface_build_beta_details::ExternalBetaState> {
+    match s {
+        "PROCESSING" => Some(iface_build_beta_details::ExternalBetaState::Processing),
+        "PROCESSING_EXCEPTION" => Some(iface_build_beta_details::ExternalBetaState::ProcessingException),
+        "MISSING_EXPORT_COMPLIANCE" => Some(iface_build_beta_details::ExternalBetaState::MissingExportCompliance),
+        "READY_FOR_BETA_TESTING" => Some(iface_build_beta_details::ExternalBetaState::ReadyForBetaTesting),
+        "IN_BETA_TESTING" => Some(iface_build_beta_details::ExternalBetaState::InBetaTesting),
+        "EXPIRED" => Some(iface_build_beta_details::ExternalBetaState::Expired),
+        "READY_FOR_BETA_SUBMISSION" => Some(iface_build_beta_details::ExternalBetaState::ReadyForBetaSubmission),
+        "IN_EXPORT_COMPLIANCE_REVIEW" => Some(iface_build_beta_details::ExternalBetaState::InExportComplianceReview),
+        "WAITING_FOR_BETA_REVIEW" => Some(iface_build_beta_details::ExternalBetaState::WaitingForBetaReview),
+        "IN_BETA_REVIEW" => Some(iface_build_beta_details::ExternalBetaState::InBetaReview),
+        "BETA_REJECTED" => Some(iface_build_beta_details::ExternalBetaState::BetaRejected),
+        "BETA_APPROVED" => Some(iface_build_beta_details::ExternalBetaState::BetaApproved),
+        _ => None,
+    }
+}
+
+fn iface_build_beta_details__internal_beta_state__from_str(s: &str) -> Option<iface_build_beta_details::InternalBetaState> {
+    match s {
+        "PROCESSING" => Some(iface_build_beta_details::InternalBetaState::Processing),
+        "PROCESSING_EXCEPTION" => Some(iface_build_beta_details::InternalBetaState::ProcessingException),
+        "MISSING_EXPORT_COMPLIANCE" => Some(iface_build_beta_details::InternalBetaState::MissingExportCompliance),
+        "READY_FOR_BETA_TESTING" => Some(iface_build_beta_details::InternalBetaState::ReadyForBetaTesting),
+        "IN_BETA_TESTING" => Some(iface_build_beta_details::InternalBetaState::InBetaTesting),
+        "EXPIRED" => Some(iface_build_beta_details::InternalBetaState::Expired),
+        "IN_EXPORT_COMPLIANCE_REVIEW" => Some(iface_build_beta_details::InternalBetaState::InExportComplianceReview),
+        _ => None,
+    }
 }
 
 fn iface_build_beta_details__build_beta_detail_relationships_build_data_type_op_enum__from_str(s: &str) -> Option<iface_build_beta_details::BuildBetaDetailRelationshipsBuildDataTypeOpEnum> {

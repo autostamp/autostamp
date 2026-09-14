@@ -69,18 +69,6 @@ fn iface_namespaces__year_model__to_json(p: &iface_namespaces::YearModel) -> Val
     Value::Object(m)
 }
 
-fn iface_namespaces__timespan_data__to_json(p: &iface_namespaces::TimespanData) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_namespaces__timespan_model__to_json(p: &iface_namespaces::TimespanModel) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
 fn iface_namespaces__response_data__to_json(p: &iface_namespaces::ResponseData) -> Value {
     let mut m = Map::new();
     m.insert("data".into(), match (&p.data) { Some(v) => Value::Array((v).iter().map(|v| iface_namespaces__response_data_file__to_json(v)).collect()), None => Value::Null });
@@ -141,20 +129,6 @@ fn iface_namespaces__year_model__from_json(v: &Value) -> Option<iface_namespaces
     })
 }
 
-fn iface_namespaces__timespan_data__from_json(v: &Value) -> Option<iface_namespaces::TimespanData> {
-    let m = v.as_object()?;
-    Some(iface_namespaces::TimespanData {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-    })
-}
-
-fn iface_namespaces__timespan_model__from_json(v: &Value) -> Option<iface_namespaces::TimespanModel> {
-    let m = v.as_object()?;
-    Some(iface_namespaces::TimespanModel {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-    })
-}
-
 fn iface_namespaces__response_data__from_json(v: &Value) -> Option<iface_namespaces::ResponseData> {
     let m = v.as_object()?;
     Some(iface_namespaces::ResponseData {
@@ -188,15 +162,8 @@ fn iface_namespaces__get_namespace_years__err(e: crate::runtime::DispatchError) 
     }
 }
 
-fn iface_namespaces__get_namespace_timespans__ok(body: String) -> Result<iface_namespaces::TimespanData, crate::runtime::DispatchError> {
-    let v: Value = match serde_json::from_str(&body) {
-        Ok(v) => v,
-        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
-    };
-    match iface_namespaces__timespan_data__from_json(&v) {
-        Some(x) => Ok(x),
-        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
-    }
+fn iface_namespaces__get_namespace_timespans__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
 }
 
 fn iface_namespaces__get_namespace_timespans__err(e: crate::runtime::DispatchError) -> String {
@@ -206,15 +173,8 @@ fn iface_namespaces__get_namespace_timespans__err(e: crate::runtime::DispatchErr
     }
 }
 
-fn iface_namespaces__get_namespace_timespan_metadata__ok(body: String) -> Result<iface_namespaces::TimespanModel, crate::runtime::DispatchError> {
-    let v: Value = match serde_json::from_str(&body) {
-        Ok(v) => v,
-        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
-    };
-    match iface_namespaces__timespan_model__from_json(&v) {
-        Some(x) => Ok(x),
-        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
-    }
+fn iface_namespaces__get_namespace_timespan_metadata__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
 }
 
 fn iface_namespaces__get_namespace_timespan_metadata__err(e: crate::runtime::DispatchError) -> iface_namespaces::GetNamespaceTimespanMetadataError {
@@ -253,14 +213,14 @@ impl iface_namespaces::Guest for crate::Component {
             Err(e) => Err(iface_namespaces__get_namespace_years__err(e)),
         }
     }
-    fn get_namespace_timespans(params: iface_namespaces::GetNamespaceTimespansParams) -> Result<iface_namespaces::TimespanData, String> {
+    fn get_namespace_timespans(params: iface_namespaces::GetNamespaceTimespansParams) -> Result<String, String> {
         let json = iface_namespaces__get_namespace_timespans_params__to_json(&params);
         match dispatch(&OP_NAMESPACES_GET_NAMESPACE_TIMESPANS, json).and_then(iface_namespaces__get_namespace_timespans__ok) {
             Ok(v) => Ok(v),
             Err(e) => Err(iface_namespaces__get_namespace_timespans__err(e)),
         }
     }
-    fn get_namespace_timespan_metadata(params: iface_namespaces::GetNamespaceTimespanMetadataParams) -> Result<iface_namespaces::TimespanModel, iface_namespaces::GetNamespaceTimespanMetadataError> {
+    fn get_namespace_timespan_metadata(params: iface_namespaces::GetNamespaceTimespanMetadataParams) -> Result<String, iface_namespaces::GetNamespaceTimespanMetadataError> {
         let json = iface_namespaces__get_namespace_timespan_metadata_params__to_json(&params);
         match dispatch(&OP_NAMESPACES_GET_NAMESPACE_TIMESPAN_METADATA, json).and_then(iface_namespaces__get_namespace_timespan_metadata__ok) {
             Ok(v) => Ok(v),

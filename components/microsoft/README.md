@@ -20,8 +20,8 @@ triggered.
 
 | Setting | Value |
 | --- | --- |
-| Package | `autostamp:microsoft@0.5.0` |
-| Published version | `0.5.0+microsoft-2.0` |
+| Package | `autostamp:microsoft@0.6.0` |
+| Published version | `0.6.0+microsoft-2.0` |
 | Tag filter | all tags |
 | Operations generated | 9 |
 | Infer API-key credentials | enabled — not triggered |

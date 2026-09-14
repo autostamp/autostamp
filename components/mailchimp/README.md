@@ -20,8 +20,8 @@ triggered.
 
 | Setting | Value |
 | --- | --- |
-| Package | `autostamp:mailchimp@0.5.0` |
-| Published version | `0.5.0+mailchimp-3.0.55` |
+| Package | `autostamp:mailchimp@0.6.0` |
+| Published version | `0.6.0+mailchimp-3.0.55` |
 | Tag filter | all tags |
 | Operations generated | 272 |
 | Infer API-key credentials | enabled — not triggered |

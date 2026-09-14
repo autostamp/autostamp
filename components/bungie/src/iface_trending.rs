@@ -41,15 +41,16 @@ fn iface_trending__get_trending_categories_response__to_json(p: &iface_trending:
     m.insert("ErrorCode".into(), match (&p.error_code) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("ErrorStatus".into(), match (&p.error_status) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("Message".into(), match (&p.message) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("MessageData".into(), match (&p.message_data) { Some(v) => iface_trending__get_trending_categories_response_message_data__to_json(v), None => Value::Null });
+    m.insert("MessageData".into(), match (&p.message_data) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("Response".into(), match (&p.response) { Some(v) => iface_trending__trending_categories__to_json(v), None => Value::Null });
     m.insert("ThrottleSeconds".into(), match (&p.throttle_seconds) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_trending__get_trending_categories_response_message_data__to_json(p: &iface_trending::GetTrendingCategoriesResponseMessageData) -> Value {
+fn iface_trending__get_trending_categories_response_message_data_entry__to_json(p: &iface_trending::GetTrendingCategoriesResponseMessageDataEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -112,15 +113,16 @@ fn iface_trending__get_trending_category_response__to_json(p: &iface_trending::G
     m.insert("ErrorCode".into(), match (&p.error_code) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("ErrorStatus".into(), match (&p.error_status) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("Message".into(), match (&p.message) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("MessageData".into(), match (&p.message_data) { Some(v) => iface_trending__get_trending_category_response_message_data__to_json(v), None => Value::Null });
+    m.insert("MessageData".into(), match (&p.message_data) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("Response".into(), match (&p.response) { Some(v) => iface_trending__search_result_of_trending_entry__to_json(v), None => Value::Null });
     m.insert("ThrottleSeconds".into(), match (&p.throttle_seconds) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_trending__get_trending_category_response_message_data__to_json(p: &iface_trending::GetTrendingCategoryResponseMessageData) -> Value {
+fn iface_trending__get_trending_category_response_message_data_entry__to_json(p: &iface_trending::GetTrendingCategoryResponseMessageDataEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -130,15 +132,16 @@ fn iface_trending__get_trending_entry_detail_response__to_json(p: &iface_trendin
     m.insert("ErrorCode".into(), match (&p.error_code) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("ErrorStatus".into(), match (&p.error_status) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("Message".into(), match (&p.message) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("MessageData".into(), match (&p.message_data) { Some(v) => iface_trending__get_trending_entry_detail_response_message_data__to_json(v), None => Value::Null });
+    m.insert("MessageData".into(), match (&p.message_data) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("Response".into(), match (&p.response) { Some(v) => iface_trending__trending_detail__to_json(v), None => Value::Null });
     m.insert("ThrottleSeconds".into(), match (&p.throttle_seconds) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_trending__get_trending_entry_detail_response_message_data__to_json(p: &iface_trending::GetTrendingEntryDetailResponseMessageData) -> Value {
+fn iface_trending__get_trending_entry_detail_response_message_data_entry__to_json(p: &iface_trending::GetTrendingEntryDetailResponseMessageDataEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -229,7 +232,7 @@ fn iface_trending__content_content_item_public_contract__to_json(p: &iface_trend
     m.insert("hasAgeGate".into(), match (&p.has_age_gate) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     m.insert("minimumAge".into(), match (&p.minimum_age) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("modifyDate".into(), match (&p.modify_date) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("properties".into(), match (&p.properties) { Some(v) => iface_trending__content_content_item_public_contract_properties__to_json(v), None => Value::Null });
+    m.insert("properties".into(), match (&p.properties) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::Object((&e.value).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()))).collect()), None => Value::Null });
     m.insert("ratingImagePath".into(), match (&p.rating_image_path) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("representations".into(), match (&p.representations) { Some(v) => Value::Array((v).iter().map(|v| iface_trending__content_content_representation__to_json(v)).collect()), None => Value::Null });
     m.insert("tags".into(), match (&p.tags) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
@@ -299,9 +302,17 @@ fn iface_trending__content_comment_summary__to_json(p: &iface_trending::ContentC
     Value::Object(m)
 }
 
-fn iface_trending__content_content_item_public_contract_properties__to_json(p: &iface_trending::ContentContentItemPublicContractProperties) -> Value {
+fn iface_trending__content_content_item_public_contract_properties_value_entry__to_json(p: &iface_trending::ContentContentItemPublicContractPropertiesValueEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
+}
+
+fn iface_trending__content_content_item_public_contract_properties_entry__to_json(p: &iface_trending::ContentContentItemPublicContractPropertiesEntry) -> Value {
+    let mut m = Map::new();
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::Object((&p.value).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()));
     Value::Object(m)
 }
 
@@ -340,16 +351,17 @@ fn iface_trending__get_trending_categories_response__from_json(v: &Value) -> Opt
         error_code: m.get("ErrorCode").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
         error_status: m.get("ErrorStatus").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         message: m.get("Message").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        message_data: m.get("MessageData").filter(|v| !v.is_null()).and_then(|v| iface_trending__get_trending_categories_response_message_data__from_json(v)),
+        message_data: m.get("MessageData").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_trending::GetTrendingCategoriesResponseMessageDataEntry { key: k.clone(), value: val })).collect())),
         response: m.get("Response").filter(|v| !v.is_null()).and_then(|v| iface_trending__trending_categories__from_json(v)),
         throttle_seconds: m.get("ThrottleSeconds").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
     })
 }
 
-fn iface_trending__get_trending_categories_response_message_data__from_json(v: &Value) -> Option<iface_trending::GetTrendingCategoriesResponseMessageData> {
+fn iface_trending__get_trending_categories_response_message_data_entry__from_json(v: &Value) -> Option<iface_trending::GetTrendingCategoriesResponseMessageDataEntry> {
     let m = v.as_object()?;
-    Some(iface_trending::GetTrendingCategoriesResponseMessageData {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_trending::GetTrendingCategoriesResponseMessageDataEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -418,16 +430,17 @@ fn iface_trending__get_trending_category_response__from_json(v: &Value) -> Optio
         error_code: m.get("ErrorCode").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
         error_status: m.get("ErrorStatus").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         message: m.get("Message").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        message_data: m.get("MessageData").filter(|v| !v.is_null()).and_then(|v| iface_trending__get_trending_category_response_message_data__from_json(v)),
+        message_data: m.get("MessageData").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_trending::GetTrendingCategoryResponseMessageDataEntry { key: k.clone(), value: val })).collect())),
         response: m.get("Response").filter(|v| !v.is_null()).and_then(|v| iface_trending__search_result_of_trending_entry__from_json(v)),
         throttle_seconds: m.get("ThrottleSeconds").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
     })
 }
 
-fn iface_trending__get_trending_category_response_message_data__from_json(v: &Value) -> Option<iface_trending::GetTrendingCategoryResponseMessageData> {
+fn iface_trending__get_trending_category_response_message_data_entry__from_json(v: &Value) -> Option<iface_trending::GetTrendingCategoryResponseMessageDataEntry> {
     let m = v.as_object()?;
-    Some(iface_trending::GetTrendingCategoryResponseMessageData {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_trending::GetTrendingCategoryResponseMessageDataEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -438,16 +451,17 @@ fn iface_trending__get_trending_entry_detail_response__from_json(v: &Value) -> O
         error_code: m.get("ErrorCode").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
         error_status: m.get("ErrorStatus").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         message: m.get("Message").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        message_data: m.get("MessageData").filter(|v| !v.is_null()).and_then(|v| iface_trending__get_trending_entry_detail_response_message_data__from_json(v)),
+        message_data: m.get("MessageData").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_trending::GetTrendingEntryDetailResponseMessageDataEntry { key: k.clone(), value: val })).collect())),
         response: m.get("Response").filter(|v| !v.is_null()).and_then(|v| iface_trending__trending_detail__from_json(v)),
         throttle_seconds: m.get("ThrottleSeconds").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
     })
 }
 
-fn iface_trending__get_trending_entry_detail_response_message_data__from_json(v: &Value) -> Option<iface_trending::GetTrendingEntryDetailResponseMessageData> {
+fn iface_trending__get_trending_entry_detail_response_message_data_entry__from_json(v: &Value) -> Option<iface_trending::GetTrendingEntryDetailResponseMessageDataEntry> {
     let m = v.as_object()?;
-    Some(iface_trending::GetTrendingEntryDetailResponseMessageData {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_trending::GetTrendingEntryDetailResponseMessageDataEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -547,7 +561,7 @@ fn iface_trending__content_content_item_public_contract__from_json(v: &Value) ->
         has_age_gate: m.get("hasAgeGate").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
         minimum_age: m.get("minimumAge").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
         modify_date: m.get("modifyDate").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        properties: m.get("properties").filter(|v| !v.is_null()).and_then(|v| iface_trending__content_content_item_public_contract_properties__from_json(v)),
+        properties: m.get("properties").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_trending::ContentContentItemPublicContractPropertiesValueEntry { key: k.clone(), value: val })).collect())).map(|val| iface_trending::ContentContentItemPublicContractPropertiesEntry { key: k.clone(), value: val })).collect())),
         rating_image_path: m.get("ratingImagePath").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         representations: m.get("representations").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_trending__content_content_representation__from_json(x)).collect())),
         tags: m.get("tags").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
@@ -621,10 +635,19 @@ fn iface_trending__content_comment_summary__from_json(v: &Value) -> Option<iface
     })
 }
 
-fn iface_trending__content_content_item_public_contract_properties__from_json(v: &Value) -> Option<iface_trending::ContentContentItemPublicContractProperties> {
+fn iface_trending__content_content_item_public_contract_properties_value_entry__from_json(v: &Value) -> Option<iface_trending::ContentContentItemPublicContractPropertiesValueEntry> {
     let m = v.as_object()?;
-    Some(iface_trending::ContentContentItemPublicContractProperties {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_trending::ContentContentItemPublicContractPropertiesValueEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_trending__content_content_item_public_contract_properties_entry__from_json(v: &Value) -> Option<iface_trending::ContentContentItemPublicContractPropertiesEntry> {
+    let m = v.as_object()?;
+    Some(iface_trending::ContentContentItemPublicContractPropertiesEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_trending::ContentContentItemPublicContractPropertiesValueEntry { key: k.clone(), value: val })).collect())).unwrap_or_default(),
     })
 }
 

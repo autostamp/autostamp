@@ -39,7 +39,7 @@ fn iface_orders_id_comments__sales_data_order_status_history_interface__to_json(
     m.insert("created_at".into(), match (&p.created_at) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("entity_id".into(), match (&p.entity_id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("entity_name".into(), match (&p.entity_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("extension_attributes".into(), match (&p.extension_attributes) { Some(v) => iface_orders_id_comments__sales_data_order_status_history_extension_interface__to_json(v), None => Value::Null });
+    m.insert("extension_attributes".into(), match (&p.extension_attributes) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("is_customer_notified".into(), Value::Number(serde_json::Number::from(*(&p.is_customer_notified))));
     m.insert("is_visible_on_front".into(), Value::Number(serde_json::Number::from(*(&p.is_visible_on_front))));
     m.insert("parent_id".into(), Value::Number(serde_json::Number::from(*(&p.parent_id))));
@@ -47,9 +47,10 @@ fn iface_orders_id_comments__sales_data_order_status_history_interface__to_json(
     Value::Object(m)
 }
 
-fn iface_orders_id_comments__sales_data_order_status_history_extension_interface__to_json(p: &iface_orders_id_comments::SalesDataOrderStatusHistoryExtensionInterface) -> Value {
+fn iface_orders_id_comments__sales_data_order_status_history_extension_interface_entry__to_json(p: &iface_orders_id_comments::SalesDataOrderStatusHistoryExtensionInterfaceEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -112,7 +113,7 @@ fn iface_orders_id_comments__sales_data_order_status_history_interface__from_jso
         created_at: m.get("created_at").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         entity_id: m.get("entity_id").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
         entity_name: m.get("entity_name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        extension_attributes: m.get("extension_attributes").filter(|v| !v.is_null()).and_then(|v| iface_orders_id_comments__sales_data_order_status_history_extension_interface__from_json(v)),
+        extension_attributes: m.get("extension_attributes").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_orders_id_comments::SalesDataOrderStatusHistoryExtensionInterfaceEntry { key: k.clone(), value: val })).collect())),
         is_customer_notified: m.get("is_customer_notified").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
         is_visible_on_front: m.get("is_visible_on_front").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
         parent_id: m.get("parent_id").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
@@ -120,10 +121,11 @@ fn iface_orders_id_comments__sales_data_order_status_history_interface__from_jso
     })
 }
 
-fn iface_orders_id_comments__sales_data_order_status_history_extension_interface__from_json(v: &Value) -> Option<iface_orders_id_comments::SalesDataOrderStatusHistoryExtensionInterface> {
+fn iface_orders_id_comments__sales_data_order_status_history_extension_interface_entry__from_json(v: &Value) -> Option<iface_orders_id_comments::SalesDataOrderStatusHistoryExtensionInterfaceEntry> {
     let m = v.as_object()?;
-    Some(iface_orders_id_comments::SalesDataOrderStatusHistoryExtensionInterface {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_orders_id_comments::SalesDataOrderStatusHistoryExtensionInterfaceEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 

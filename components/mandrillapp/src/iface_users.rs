@@ -163,9 +163,20 @@ fn iface_users__ping2_response__to_json(p: &iface_users::Ping2Response) -> Value
     Value::Object(m)
 }
 
-fn iface_users__senders__to_json(p: &iface_users::Senders) -> Value {
+fn iface_users__senders_item__to_json(p: &iface_users::SendersItem) -> Value {
     let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
+    m.insert("address".into(), match (&p.address) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("clicks".into(), match (&p.clicks) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("complaints".into(), match (&p.complaints) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("created_at".into(), match (&p.created_at) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("hard_bounces".into(), match (&p.hard_bounces) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("opens".into(), match (&p.opens) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("rejects".into(), match (&p.rejects) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("sent".into(), match (&p.sent) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("soft_bounces".into(), match (&p.soft_bounces) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("unique_clicks".into(), match (&p.unique_clicks) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("unique_opens".into(), match (&p.unique_opens) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("unsubs".into(), match (&p.unsubs) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
@@ -321,10 +332,21 @@ fn iface_users__ping2_response__from_json(v: &Value) -> Option<iface_users::Ping
     })
 }
 
-fn iface_users__senders__from_json(v: &Value) -> Option<iface_users::Senders> {
+fn iface_users__senders_item__from_json(v: &Value) -> Option<iface_users::SendersItem> {
     let m = v.as_object()?;
-    Some(iface_users::Senders {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    Some(iface_users::SendersItem {
+        address: m.get("address").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        clicks: m.get("clicks").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        complaints: m.get("complaints").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        created_at: m.get("created_at").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        hard_bounces: m.get("hard_bounces").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        opens: m.get("opens").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        rejects: m.get("rejects").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        sent: m.get("sent").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        soft_bounces: m.get("soft_bounces").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        unique_clicks: m.get("unique_clicks").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        unique_opens: m.get("unique_opens").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        unsubs: m.get("unsubs").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
     })
 }
 
@@ -375,12 +397,12 @@ fn iface_users__post_users_ping2_json__err(e: crate::runtime::DispatchError) -> 
     }
 }
 
-fn iface_users__post_users_senders_json__ok(body: String) -> Result<iface_users::Senders, crate::runtime::DispatchError> {
+fn iface_users__post_users_senders_json__ok(body: String) -> Result<Vec<iface_users::SendersItem>, crate::runtime::DispatchError> {
     let v: Value = match serde_json::from_str(&body) {
         Ok(v) => v,
         Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
     };
-    match iface_users__senders__from_json(&v) {
+    match (&v).as_array().map(|a| a.iter().filter_map(|x| iface_users__senders_item__from_json(x)).collect()) {
         Some(x) => Ok(x),
         None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
@@ -415,7 +437,7 @@ impl iface_users::Guest for crate::Component {
             Err(e) => Err(iface_users__post_users_ping2_json__err(e)),
         }
     }
-    fn post_users_senders_json(params: iface_users::PostUsersSendersJsonParams) -> Result<iface_users::Senders, String> {
+    fn post_users_senders_json(params: iface_users::PostUsersSendersJsonParams) -> Result<Vec<iface_users::SendersItem>, String> {
         let json = iface_users__post_users_senders_json_params__to_json(&params);
         match dispatch(&OP_USERS_POST_USERS_SENDERS_JSON, json).and_then(iface_users__post_users_senders_json__ok) {
             Ok(v) => Ok(v),

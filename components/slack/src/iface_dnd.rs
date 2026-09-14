@@ -64,13 +64,7 @@ const OP_DND_TEAM_INFO: OpSpec = OpSpec {
 
 fn iface_dnd__end_dnd_response__to_json(p: &iface_dnd::EndDndResponse) -> Value {
     let mut m = Map::new();
-    m.insert("ok".into(), iface_dnd__defs_ok_true__to_json(&p.ok));
-    Value::Object(m)
-}
-
-fn iface_dnd__defs_ok_true__to_json(p: &iface_dnd::DefsOkTrue) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
+    m.insert("ok".into(), Value::Bool(*(&p.ok)));
     Value::Object(m)
 }
 
@@ -79,7 +73,7 @@ fn iface_dnd__end_snooze_response__to_json(p: &iface_dnd::EndSnoozeResponse) -> 
     m.insert("dnd_enabled".into(), Value::Bool(*(&p.dnd_enabled)));
     m.insert("next_dnd_end_ts".into(), Value::Number(serde_json::Number::from(*(&p.next_dnd_end_ts))));
     m.insert("next_dnd_start_ts".into(), Value::Number(serde_json::Number::from(*(&p.next_dnd_start_ts))));
-    m.insert("ok".into(), iface_dnd__defs_ok_true__to_json(&p.ok));
+    m.insert("ok".into(), Value::Bool(*(&p.ok)));
     m.insert("snooze_enabled".into(), Value::Bool(*(&p.snooze_enabled)));
     Value::Object(m)
 }
@@ -89,7 +83,7 @@ fn iface_dnd__info_response__to_json(p: &iface_dnd::InfoResponse) -> Value {
     m.insert("dnd_enabled".into(), Value::Bool(*(&p.dnd_enabled)));
     m.insert("next_dnd_end_ts".into(), Value::Number(serde_json::Number::from(*(&p.next_dnd_end_ts))));
     m.insert("next_dnd_start_ts".into(), Value::Number(serde_json::Number::from(*(&p.next_dnd_start_ts))));
-    m.insert("ok".into(), iface_dnd__defs_ok_true__to_json(&p.ok));
+    m.insert("ok".into(), Value::Bool(*(&p.ok)));
     m.insert("snooze_enabled".into(), match (&p.snooze_enabled) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     m.insert("snooze_endtime".into(), match (&p.snooze_endtime) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("snooze_remaining".into(), match (&p.snooze_remaining) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
@@ -98,7 +92,7 @@ fn iface_dnd__info_response__to_json(p: &iface_dnd::InfoResponse) -> Value {
 
 fn iface_dnd__set_snooze_response__to_json(p: &iface_dnd::SetSnoozeResponse) -> Value {
     let mut m = Map::new();
-    m.insert("ok".into(), iface_dnd__defs_ok_true__to_json(&p.ok));
+    m.insert("ok".into(), Value::Bool(*(&p.ok)));
     m.insert("snooze_enabled".into(), Value::Bool(*(&p.snooze_enabled)));
     m.insert("snooze_endtime".into(), Value::Number(serde_json::Number::from(*(&p.snooze_endtime))));
     m.insert("snooze_remaining".into(), Value::Number(serde_json::Number::from(*(&p.snooze_remaining))));
@@ -107,7 +101,7 @@ fn iface_dnd__set_snooze_response__to_json(p: &iface_dnd::SetSnoozeResponse) -> 
 
 fn iface_dnd__team_info_response__to_json(p: &iface_dnd::TeamInfoResponse) -> Value {
     let mut m = Map::new();
-    m.insert("ok".into(), iface_dnd__defs_ok_true__to_json(&p.ok));
+    m.insert("ok".into(), Value::Bool(*(&p.ok)));
     Value::Object(m)
 }
 
@@ -147,14 +141,7 @@ fn iface_dnd__team_info_params__to_json(p: &iface_dnd::TeamInfoParams) -> Value 
 fn iface_dnd__end_dnd_response__from_json(v: &Value) -> Option<iface_dnd::EndDndResponse> {
     let m = v.as_object()?;
     Some(iface_dnd::EndDndResponse {
-        ok: match m.get("ok").and_then(|v| iface_dnd__defs_ok_true__from_json(v)) { Some(x) => x, None => return None },
-    })
-}
-
-fn iface_dnd__defs_ok_true__from_json(v: &Value) -> Option<iface_dnd::DefsOkTrue> {
-    let m = v.as_object()?;
-    Some(iface_dnd::DefsOkTrue {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        ok: m.get("ok").and_then(|v| (v).as_bool()).unwrap_or_default(),
     })
 }
 
@@ -164,7 +151,7 @@ fn iface_dnd__end_snooze_response__from_json(v: &Value) -> Option<iface_dnd::End
         dnd_enabled: m.get("dnd_enabled").and_then(|v| (v).as_bool()).unwrap_or_default(),
         next_dnd_end_ts: m.get("next_dnd_end_ts").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
         next_dnd_start_ts: m.get("next_dnd_start_ts").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
-        ok: match m.get("ok").and_then(|v| iface_dnd__defs_ok_true__from_json(v)) { Some(x) => x, None => return None },
+        ok: m.get("ok").and_then(|v| (v).as_bool()).unwrap_or_default(),
         snooze_enabled: m.get("snooze_enabled").and_then(|v| (v).as_bool()).unwrap_or_default(),
     })
 }
@@ -175,7 +162,7 @@ fn iface_dnd__info_response__from_json(v: &Value) -> Option<iface_dnd::InfoRespo
         dnd_enabled: m.get("dnd_enabled").and_then(|v| (v).as_bool()).unwrap_or_default(),
         next_dnd_end_ts: m.get("next_dnd_end_ts").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
         next_dnd_start_ts: m.get("next_dnd_start_ts").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
-        ok: match m.get("ok").and_then(|v| iface_dnd__defs_ok_true__from_json(v)) { Some(x) => x, None => return None },
+        ok: m.get("ok").and_then(|v| (v).as_bool()).unwrap_or_default(),
         snooze_enabled: m.get("snooze_enabled").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
         snooze_endtime: m.get("snooze_endtime").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
         snooze_remaining: m.get("snooze_remaining").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
@@ -185,7 +172,7 @@ fn iface_dnd__info_response__from_json(v: &Value) -> Option<iface_dnd::InfoRespo
 fn iface_dnd__set_snooze_response__from_json(v: &Value) -> Option<iface_dnd::SetSnoozeResponse> {
     let m = v.as_object()?;
     Some(iface_dnd::SetSnoozeResponse {
-        ok: match m.get("ok").and_then(|v| iface_dnd__defs_ok_true__from_json(v)) { Some(x) => x, None => return None },
+        ok: m.get("ok").and_then(|v| (v).as_bool()).unwrap_or_default(),
         snooze_enabled: m.get("snooze_enabled").and_then(|v| (v).as_bool()).unwrap_or_default(),
         snooze_endtime: m.get("snooze_endtime").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
         snooze_remaining: m.get("snooze_remaining").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
@@ -195,7 +182,7 @@ fn iface_dnd__set_snooze_response__from_json(v: &Value) -> Option<iface_dnd::Set
 fn iface_dnd__team_info_response__from_json(v: &Value) -> Option<iface_dnd::TeamInfoResponse> {
     let m = v.as_object()?;
     Some(iface_dnd::TeamInfoResponse {
-        ok: match m.get("ok").and_then(|v| iface_dnd__defs_ok_true__from_json(v)) { Some(x) => x, None => return None },
+        ok: m.get("ok").and_then(|v| (v).as_bool()).unwrap_or_default(),
     })
 }
 

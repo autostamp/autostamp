@@ -20,7 +20,7 @@ fn iface_products_product_sku_stock_items_item_id__catalog_inventory_data_stock_
     let mut m = Map::new();
     m.insert("backorders".into(), Value::Number(serde_json::Number::from(*(&p.backorders))));
     m.insert("enable_qty_increments".into(), Value::Bool(*(&p.enable_qty_increments)));
-    m.insert("extension_attributes".into(), match (&p.extension_attributes) { Some(v) => iface_products_product_sku_stock_items_item_id__catalog_inventory_data_stock_item_extension_interface__to_json(v), None => Value::Null });
+    m.insert("extension_attributes".into(), match (&p.extension_attributes) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("is_decimal_divided".into(), Value::Bool(*(&p.is_decimal_divided)));
     m.insert("is_in_stock".into(), Value::Bool(*(&p.is_in_stock)));
     m.insert("is_qty_decimal".into(), Value::Bool(*(&p.is_qty_decimal)));
@@ -48,9 +48,10 @@ fn iface_products_product_sku_stock_items_item_id__catalog_inventory_data_stock_
     Value::Object(m)
 }
 
-fn iface_products_product_sku_stock_items_item_id__catalog_inventory_data_stock_item_extension_interface__to_json(p: &iface_products_product_sku_stock_items_item_id::CatalogInventoryDataStockItemExtensionInterface) -> Value {
+fn iface_products_product_sku_stock_items_item_id__catalog_inventory_data_stock_item_extension_interface_entry__to_json(p: &iface_products_product_sku_stock_items_item_id::CatalogInventoryDataStockItemExtensionInterfaceEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 

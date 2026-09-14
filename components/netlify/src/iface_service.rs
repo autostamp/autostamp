@@ -39,7 +39,7 @@ fn iface_service__service__to_json(p: &iface_service::Service) -> Value {
     m.insert("created_at".into(), match (&p.created_at) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("description".into(), match (&p.description) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("environments".into(), match (&p.environments) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
-    m.insert("events".into(), match (&p.events) { Some(v) => Value::Array((v).iter().map(|v| iface_service__service_events_item__to_json(v)).collect()), None => Value::Null });
+    m.insert("events".into(), match (&p.events) { Some(v) => Value::Array((v).iter().map(|v| Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect())).collect()), None => Value::Null });
     m.insert("icon".into(), match (&p.icon) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("long_description".into(), match (&p.long_description) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -52,15 +52,17 @@ fn iface_service__service__to_json(p: &iface_service::Service) -> Value {
     Value::Object(m)
 }
 
-fn iface_service__service_events_item__to_json(p: &iface_service::ServiceEventsItem) -> Value {
+fn iface_service__service_events_item_entry__to_json(p: &iface_service::ServiceEventsItemEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
-fn iface_service__show_service_manifest_response__to_json(p: &iface_service::ShowServiceManifestResponse) -> Value {
+fn iface_service__show_service_manifest_response_entry__to_json(p: &iface_service::ShowServiceManifestResponseEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -88,7 +90,7 @@ fn iface_service__service__from_json(v: &Value) -> Option<iface_service::Service
         created_at: m.get("created_at").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         description: m.get("description").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         environments: m.get("environments").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
-        events: m.get("events").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_service__service_events_item__from_json(x)).collect())),
+        events: m.get("events").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_service::ServiceEventsItemEntry { key: k.clone(), value: val })).collect())).collect())),
         icon: m.get("icon").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         long_description: m.get("long_description").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
@@ -101,17 +103,19 @@ fn iface_service__service__from_json(v: &Value) -> Option<iface_service::Service
     })
 }
 
-fn iface_service__service_events_item__from_json(v: &Value) -> Option<iface_service::ServiceEventsItem> {
+fn iface_service__service_events_item_entry__from_json(v: &Value) -> Option<iface_service::ServiceEventsItemEntry> {
     let m = v.as_object()?;
-    Some(iface_service::ServiceEventsItem {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_service::ServiceEventsItemEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
-fn iface_service__show_service_manifest_response__from_json(v: &Value) -> Option<iface_service::ShowServiceManifestResponse> {
+fn iface_service__show_service_manifest_response_entry__from_json(v: &Value) -> Option<iface_service::ShowServiceManifestResponseEntry> {
     let m = v.as_object()?;
-    Some(iface_service::ShowServiceManifestResponse {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_service::ShowServiceManifestResponseEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -151,12 +155,12 @@ fn iface_service__show_service__err(e: crate::runtime::DispatchError) -> String 
     }
 }
 
-fn iface_service__show_service_manifest__ok(body: String) -> Result<iface_service::ShowServiceManifestResponse, crate::runtime::DispatchError> {
+fn iface_service__show_service_manifest__ok(body: String) -> Result<Vec<iface_service::ShowServiceManifestResponseEntry>, crate::runtime::DispatchError> {
     let v: Value = match serde_json::from_str(&body) {
         Ok(v) => v,
         Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
     };
-    match iface_service__show_service_manifest_response__from_json(&v) {
+    match (&v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_service::ShowServiceManifestResponseEntry { key: k.clone(), value: val })).collect()) {
         Some(x) => Ok(x),
         None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
@@ -184,7 +188,7 @@ impl iface_service::Guest for crate::Component {
             Err(e) => Err(iface_service__show_service__err(e)),
         }
     }
-    fn show_service_manifest(params: iface_service::ShowServiceManifestParams) -> Result<iface_service::ShowServiceManifestResponse, String> {
+    fn show_service_manifest(params: iface_service::ShowServiceManifestParams) -> Result<Vec<iface_service::ShowServiceManifestResponseEntry>, String> {
         let json = iface_service__show_service_manifest_params__to_json(&params);
         match dispatch(&OP_SERVICE_SHOW_SERVICE_MANIFEST, json).and_then(iface_service__show_service_manifest__ok) {
             Ok(v) => Ok(v),

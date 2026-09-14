@@ -138,7 +138,7 @@ fn iface_refunds__refund__to_json(p: &iface_refunds::Refund) -> Value {
     m.insert("failure_reason".into(), match (&p.failure_reason) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("id".into(), Value::String((&p.id).clone()));
     m.insert("instructions_email".into(), match (&p.instructions_email) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("metadata".into(), match (&p.metadata) { Some(v) => iface_refunds__refund_metadata__to_json(v), None => Value::Null });
+    m.insert("metadata".into(), match (&p.metadata) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("next_action".into(), match (&p.next_action) { Some(v) => iface_refunds__refund_next_action__to_json(v), None => Value::Null });
     m.insert("object".into(), Value::String(iface_refunds__refund_object_enum__to_str(&p.object).into()));
     m.insert("payment_intent".into(), match (&p.payment_intent) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -150,9 +150,10 @@ fn iface_refunds__refund__to_json(p: &iface_refunds::Refund) -> Value {
     Value::Object(m)
 }
 
-fn iface_refunds__refund_metadata__to_json(p: &iface_refunds::RefundMetadata) -> Value {
+fn iface_refunds__refund_metadata_entry__to_json(p: &iface_refunds::RefundMetadataEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -239,7 +240,7 @@ fn iface_refunds__refund__from_json(v: &Value) -> Option<iface_refunds::Refund> 
         failure_reason: m.get("failure_reason").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         id: m.get("id").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         instructions_email: m.get("instructions_email").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        metadata: m.get("metadata").filter(|v| !v.is_null()).and_then(|v| iface_refunds__refund_metadata__from_json(v)),
+        metadata: m.get("metadata").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_refunds::RefundMetadataEntry { key: k.clone(), value: val })).collect())),
         next_action: m.get("next_action").filter(|v| !v.is_null()).and_then(|v| iface_refunds__refund_next_action__from_json(v)),
         object: match m.get("object").and_then(|v| (v).as_str().and_then(iface_refunds__refund_object_enum__from_str)) { Some(x) => x, None => return None },
         payment_intent: m.get("payment_intent").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
@@ -251,10 +252,11 @@ fn iface_refunds__refund__from_json(v: &Value) -> Option<iface_refunds::Refund> 
     })
 }
 
-fn iface_refunds__refund_metadata__from_json(v: &Value) -> Option<iface_refunds::RefundMetadata> {
+fn iface_refunds__refund_metadata_entry__from_json(v: &Value) -> Option<iface_refunds::RefundMetadataEntry> {
     let m = v.as_object()?;
-    Some(iface_refunds::RefundMetadata {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_refunds::RefundMetadataEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 

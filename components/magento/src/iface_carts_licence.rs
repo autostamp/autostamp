@@ -19,7 +19,7 @@ fn iface_carts_licence__checkout_agreements_data_agreement_interface__to_json(p:
     m.insert("checkbox_text".into(), Value::String((&p.checkbox_text).clone()));
     m.insert("content".into(), Value::String((&p.content).clone()));
     m.insert("content_height".into(), match (&p.content_height) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("extension_attributes".into(), match (&p.extension_attributes) { Some(v) => iface_carts_licence__checkout_agreements_data_agreement_extension_interface__to_json(v), None => Value::Null });
+    m.insert("extension_attributes".into(), match (&p.extension_attributes) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("is_active".into(), Value::Bool(*(&p.is_active)));
     m.insert("is_html".into(), Value::Bool(*(&p.is_html)));
     m.insert("mode".into(), Value::Number(serde_json::Number::from(*(&p.mode))));
@@ -27,9 +27,10 @@ fn iface_carts_licence__checkout_agreements_data_agreement_interface__to_json(p:
     Value::Object(m)
 }
 
-fn iface_carts_licence__checkout_agreements_data_agreement_extension_interface__to_json(p: &iface_carts_licence::CheckoutAgreementsDataAgreementExtensionInterface) -> Value {
+fn iface_carts_licence__checkout_agreements_data_agreement_extension_interface_entry__to_json(p: &iface_carts_licence::CheckoutAgreementsDataAgreementExtensionInterfaceEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -40,7 +41,7 @@ fn iface_carts_licence__checkout_agreements_data_agreement_interface__from_json(
         checkbox_text: m.get("checkbox_text").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         content: m.get("content").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         content_height: m.get("content_height").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        extension_attributes: m.get("extension_attributes").filter(|v| !v.is_null()).and_then(|v| iface_carts_licence__checkout_agreements_data_agreement_extension_interface__from_json(v)),
+        extension_attributes: m.get("extension_attributes").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_carts_licence::CheckoutAgreementsDataAgreementExtensionInterfaceEntry { key: k.clone(), value: val })).collect())),
         is_active: m.get("is_active").and_then(|v| (v).as_bool()).unwrap_or_default(),
         is_html: m.get("is_html").and_then(|v| (v).as_bool()).unwrap_or_default(),
         mode: m.get("mode").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
@@ -48,10 +49,11 @@ fn iface_carts_licence__checkout_agreements_data_agreement_interface__from_json(
     })
 }
 
-fn iface_carts_licence__checkout_agreements_data_agreement_extension_interface__from_json(v: &Value) -> Option<iface_carts_licence::CheckoutAgreementsDataAgreementExtensionInterface> {
+fn iface_carts_licence__checkout_agreements_data_agreement_extension_interface_entry__from_json(v: &Value) -> Option<iface_carts_licence::CheckoutAgreementsDataAgreementExtensionInterfaceEntry> {
     let m = v.as_object()?;
-    Some(iface_carts_licence::CheckoutAgreementsDataAgreementExtensionInterface {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_carts_licence::CheckoutAgreementsDataAgreementExtensionInterfaceEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 

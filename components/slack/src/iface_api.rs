@@ -18,13 +18,7 @@ const OP_API_TEST: OpSpec = OpSpec {
 
 fn iface_api__test_response__to_json(p: &iface_api::TestResponse) -> Value {
     let mut m = Map::new();
-    m.insert("ok".into(), iface_api__defs_ok_true__to_json(&p.ok));
-    Value::Object(m)
-}
-
-fn iface_api__defs_ok_true__to_json(p: &iface_api::DefsOkTrue) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
+    m.insert("ok".into(), Value::Bool(*(&p.ok)));
     Value::Object(m)
 }
 
@@ -38,14 +32,7 @@ fn iface_api__test_params__to_json(p: &iface_api::TestParams) -> Value {
 fn iface_api__test_response__from_json(v: &Value) -> Option<iface_api::TestResponse> {
     let m = v.as_object()?;
     Some(iface_api::TestResponse {
-        ok: match m.get("ok").and_then(|v| iface_api__defs_ok_true__from_json(v)) { Some(x) => x, None => return None },
-    })
-}
-
-fn iface_api__defs_ok_true__from_json(v: &Value) -> Option<iface_api::DefsOkTrue> {
-    let m = v.as_object()?;
-    Some(iface_api::DefsOkTrue {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        ok: m.get("ok").and_then(|v| (v).as_bool()).unwrap_or_default(),
     })
 }
 
