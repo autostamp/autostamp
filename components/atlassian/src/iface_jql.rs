@@ -179,14 +179,15 @@ fn iface_jql__sanitized_jql_query__to_json(p: &iface_jql::SanitizedJqlQuery) -> 
 fn iface_jql__error_collection__to_json(p: &iface_jql::ErrorCollection) -> Value {
     let mut m = Map::new();
     m.insert("errorMessages".into(), match (&p.error_messages) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
-    m.insert("errors".into(), match (&p.errors) { Some(v) => iface_jql__error_collection_errors__to_json(v), None => Value::Null });
+    m.insert("errors".into(), match (&p.errors) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("status".into(), match (&p.status) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_jql__error_collection_errors__to_json(p: &iface_jql::ErrorCollectionErrors) -> Value {
+fn iface_jql__error_collection_errors_entry__to_json(p: &iface_jql::ErrorCollectionErrorsEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -319,15 +320,16 @@ fn iface_jql__error_collection__from_json(v: &Value) -> Option<iface_jql::ErrorC
     let m = v.as_object()?;
     Some(iface_jql::ErrorCollection {
         error_messages: m.get("errorMessages").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
-        errors: m.get("errors").filter(|v| !v.is_null()).and_then(|v| iface_jql__error_collection_errors__from_json(v)),
+        errors: m.get("errors").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_jql::ErrorCollectionErrorsEntry { key: k.clone(), value: val })).collect())),
         status: m.get("status").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
     })
 }
 
-fn iface_jql__error_collection_errors__from_json(v: &Value) -> Option<iface_jql::ErrorCollectionErrors> {
+fn iface_jql__error_collection_errors_entry__from_json(v: &Value) -> Option<iface_jql::ErrorCollectionErrorsEntry> {
     let m = v.as_object()?;
-    Some(iface_jql::ErrorCollectionErrors {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_jql::ErrorCollectionErrorsEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 

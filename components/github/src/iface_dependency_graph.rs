@@ -36,9 +36,56 @@ const OP_DEPENDENCY_GRAPH_CREATE_REPOSITORY_SNAPSHOT: OpSpec = OpSpec {
     ],
 };
 
-fn iface_dependency_graph__diff__to_json(p: &iface_dependency_graph::Diff) -> Value {
+fn iface_dependency_graph__diff_item_change_type_enum__to_str(e: &iface_dependency_graph::DiffItemChangeTypeEnum) -> &'static str {
+    match e {
+        iface_dependency_graph::DiffItemChangeTypeEnum::Added => "added",
+        iface_dependency_graph::DiffItemChangeTypeEnum::Removed => "removed",
+    }
+}
+
+fn iface_dependency_graph__diff_item_scope_enum__to_str(e: &iface_dependency_graph::DiffItemScopeEnum) -> &'static str {
+    match e {
+        iface_dependency_graph::DiffItemScopeEnum::Unknown => "unknown",
+        iface_dependency_graph::DiffItemScopeEnum::Runtime => "runtime",
+        iface_dependency_graph::DiffItemScopeEnum::Development => "development",
+    }
+}
+
+fn iface_dependency_graph__dependency_relationship_enum__to_str(e: &iface_dependency_graph::DependencyRelationshipEnum) -> &'static str {
+    match e {
+        iface_dependency_graph::DependencyRelationshipEnum::Direct => "direct",
+        iface_dependency_graph::DependencyRelationshipEnum::Indirect => "indirect",
+    }
+}
+
+fn iface_dependency_graph__dependency_scope_enum__to_str(e: &iface_dependency_graph::DependencyScopeEnum) -> &'static str {
+    match e {
+        iface_dependency_graph::DependencyScopeEnum::Runtime => "runtime",
+        iface_dependency_graph::DependencyScopeEnum::Development => "development",
+    }
+}
+
+fn iface_dependency_graph__diff_item__to_json(p: &iface_dependency_graph::DiffItem) -> Value {
     let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
+    m.insert("change_type".into(), Value::String(iface_dependency_graph__diff_item_change_type_enum__to_str(&p.change_type).into()));
+    m.insert("ecosystem".into(), Value::String((&p.ecosystem).clone()));
+    m.insert("license".into(), Value::String((&p.license).clone()));
+    m.insert("manifest".into(), Value::String((&p.manifest).clone()));
+    m.insert("name".into(), Value::String((&p.name).clone()));
+    m.insert("package_url".into(), Value::String((&p.package_url).clone()));
+    m.insert("scope".into(), Value::String(iface_dependency_graph__diff_item_scope_enum__to_str(&p.scope).into()));
+    m.insert("source_repository_url".into(), Value::String((&p.source_repository_url).clone()));
+    m.insert("version".into(), Value::String((&p.version).clone()));
+    m.insert("vulnerabilities".into(), Value::Array((&p.vulnerabilities).iter().map(|v| iface_dependency_graph__diff_item_vulnerabilities_item__to_json(v)).collect()));
+    Value::Object(m)
+}
+
+fn iface_dependency_graph__diff_item_vulnerabilities_item__to_json(p: &iface_dependency_graph::DiffItemVulnerabilitiesItem) -> Value {
+    let mut m = Map::new();
+    m.insert("advisory_ghsa_id".into(), Value::String((&p.advisory_ghsa_id).clone()));
+    m.insert("advisory_summary".into(), Value::String((&p.advisory_summary).clone()));
+    m.insert("advisory_url".into(), Value::String((&p.advisory_url).clone()));
+    m.insert("severity".into(), Value::String((&p.severity).clone()));
     Value::Object(m)
 }
 
@@ -58,15 +105,63 @@ fn iface_dependency_graph__snapshot_job__to_json(p: &iface_dependency_graph::Sna
     Value::Object(m)
 }
 
-fn iface_dependency_graph__snapshot_manifests__to_json(p: &iface_dependency_graph::SnapshotManifests) -> Value {
+fn iface_dependency_graph__manifest__to_json(p: &iface_dependency_graph::Manifest) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("file".into(), match (&p.file) { Some(v) => iface_dependency_graph__manifest_file__to_json(v), None => Value::Null });
+    m.insert("metadata".into(), match (&p.metadata) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
+    m.insert("name".into(), Value::String((&p.name).clone()));
+    m.insert("resolved".into(), match (&p.resolved) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), iface_dependency_graph__dependency__to_json(&e.value))).collect()), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_dependency_graph__metadata__to_json(p: &iface_dependency_graph::Metadata) -> Value {
+fn iface_dependency_graph__manifest_file__to_json(p: &iface_dependency_graph::ManifestFile) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("source_location".into(), match (&p.source_location) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_dependency_graph__metadata_entry__to_json(p: &iface_dependency_graph::MetadataEntry) -> Value {
+    let mut m = Map::new();
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
+}
+
+fn iface_dependency_graph__dependency__to_json(p: &iface_dependency_graph::Dependency) -> Value {
+    let mut m = Map::new();
+    m.insert("dependencies".into(), match (&p.dependencies) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("metadata".into(), match (&p.metadata) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
+    m.insert("package_url".into(), match (&p.package_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("relationship".into(), match (&p.relationship) { Some(v) => Value::String(iface_dependency_graph__dependency_relationship_enum__to_str(v).into()), None => Value::Null });
+    m.insert("scope".into(), match (&p.scope) { Some(v) => Value::String(iface_dependency_graph__dependency_scope_enum__to_str(v).into()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_dependency_graph__metadata_entry_v2__to_json(p: &iface_dependency_graph::MetadataEntryV2) -> Value {
+    let mut m = Map::new();
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
+}
+
+fn iface_dependency_graph__manifest_resolved_entry__to_json(p: &iface_dependency_graph::ManifestResolvedEntry) -> Value {
+    let mut m = Map::new();
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), iface_dependency_graph__dependency__to_json(&p.value));
+    Value::Object(m)
+}
+
+fn iface_dependency_graph__snapshot_manifests_entry__to_json(p: &iface_dependency_graph::SnapshotManifestsEntry) -> Value {
+    let mut m = Map::new();
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), iface_dependency_graph__manifest__to_json(&p.value));
+    Value::Object(m)
+}
+
+fn iface_dependency_graph__metadata_entry_v3__to_json(p: &iface_dependency_graph::MetadataEntryV3) -> Value {
+    let mut m = Map::new();
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -94,8 +189,8 @@ fn iface_dependency_graph__create_repository_snapshot_params__to_json(p: &iface_
     m.insert("repo".into(), Value::String((&p.repo).clone()));
     m.insert("detector".into(), iface_dependency_graph__snapshot_detector__to_json(&p.detector));
     m.insert("job".into(), iface_dependency_graph__snapshot_job__to_json(&p.job));
-    m.insert("manifests".into(), match (&p.manifests) { Some(v) => iface_dependency_graph__snapshot_manifests__to_json(v), None => Value::Null });
-    m.insert("metadata".into(), match (&p.metadata) { Some(v) => iface_dependency_graph__metadata__to_json(v), None => Value::Null });
+    m.insert("manifests".into(), match (&p.manifests) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), iface_dependency_graph__manifest__to_json(&e.value))).collect()), None => Value::Null });
+    m.insert("metadata".into(), match (&p.metadata) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("ref".into(), Value::String((&p.ref_).clone()));
     m.insert("scanned".into(), Value::String((&p.scanned).clone()));
     m.insert("sha".into(), Value::String((&p.sha).clone()));
@@ -103,10 +198,29 @@ fn iface_dependency_graph__create_repository_snapshot_params__to_json(p: &iface_
     Value::Object(m)
 }
 
-fn iface_dependency_graph__diff__from_json(v: &Value) -> Option<iface_dependency_graph::Diff> {
+fn iface_dependency_graph__diff_item__from_json(v: &Value) -> Option<iface_dependency_graph::DiffItem> {
     let m = v.as_object()?;
-    Some(iface_dependency_graph::Diff {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    Some(iface_dependency_graph::DiffItem {
+        change_type: match m.get("change_type").and_then(|v| (v).as_str().and_then(iface_dependency_graph__diff_item_change_type_enum__from_str)) { Some(x) => x, None => return None },
+        ecosystem: m.get("ecosystem").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        license: m.get("license").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        manifest: m.get("manifest").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        name: m.get("name").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        package_url: m.get("package_url").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        scope: match m.get("scope").and_then(|v| (v).as_str().and_then(iface_dependency_graph__diff_item_scope_enum__from_str)) { Some(x) => x, None => return None },
+        source_repository_url: m.get("source_repository_url").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        version: m.get("version").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        vulnerabilities: m.get("vulnerabilities").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_dependency_graph__diff_item_vulnerabilities_item__from_json(x)).collect())).unwrap_or_default(),
+    })
+}
+
+fn iface_dependency_graph__diff_item_vulnerabilities_item__from_json(v: &Value) -> Option<iface_dependency_graph::DiffItemVulnerabilitiesItem> {
+    let m = v.as_object()?;
+    Some(iface_dependency_graph::DiffItemVulnerabilitiesItem {
+        advisory_ghsa_id: m.get("advisory_ghsa_id").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        advisory_summary: m.get("advisory_summary").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        advisory_url: m.get("advisory_url").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        severity: m.get("severity").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -120,12 +234,29 @@ fn iface_dependency_graph__create_repository_snapshot_response__from_json(v: &Va
     })
 }
 
-fn iface_dependency_graph__diff_range__ok(body: String) -> Result<iface_dependency_graph::Diff, crate::runtime::DispatchError> {
+fn iface_dependency_graph__diff_item_change_type_enum__from_str(s: &str) -> Option<iface_dependency_graph::DiffItemChangeTypeEnum> {
+    match s {
+        "added" => Some(iface_dependency_graph::DiffItemChangeTypeEnum::Added),
+        "removed" => Some(iface_dependency_graph::DiffItemChangeTypeEnum::Removed),
+        _ => None,
+    }
+}
+
+fn iface_dependency_graph__diff_item_scope_enum__from_str(s: &str) -> Option<iface_dependency_graph::DiffItemScopeEnum> {
+    match s {
+        "unknown" => Some(iface_dependency_graph::DiffItemScopeEnum::Unknown),
+        "runtime" => Some(iface_dependency_graph::DiffItemScopeEnum::Runtime),
+        "development" => Some(iface_dependency_graph::DiffItemScopeEnum::Development),
+        _ => None,
+    }
+}
+
+fn iface_dependency_graph__diff_range__ok(body: String) -> Result<Vec<iface_dependency_graph::DiffItem>, crate::runtime::DispatchError> {
     let v: Value = match serde_json::from_str(&body) {
         Ok(v) => v,
         Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
     };
-    match iface_dependency_graph__diff__from_json(&v) {
+    match (&v).as_array().map(|a| a.iter().filter_map(|x| iface_dependency_graph__diff_item__from_json(x)).collect()) {
         Some(x) => Ok(x),
         None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
@@ -161,7 +292,7 @@ fn iface_dependency_graph__create_repository_snapshot__err(e: crate::runtime::Di
 }
 
 impl iface_dependency_graph::Guest for crate::Component {
-    fn diff_range(params: iface_dependency_graph::DiffRangeParams) -> Result<iface_dependency_graph::Diff, iface_dependency_graph::DiffRangeError> {
+    fn diff_range(params: iface_dependency_graph::DiffRangeParams) -> Result<Vec<iface_dependency_graph::DiffItem>, iface_dependency_graph::DiffRangeError> {
         let json = iface_dependency_graph__diff_range_params__to_json(&params);
         match dispatch(&OP_DEPENDENCY_GRAPH_DIFF_RANGE, json).and_then(iface_dependency_graph__diff_range__ok) {
             Ok(v) => Ok(v),

@@ -19,13 +19,7 @@ const OP_FILES_COMMENTS_DELETE: OpSpec = OpSpec {
 
 fn iface_files_comments__delete_response__to_json(p: &iface_files_comments::DeleteResponse) -> Value {
     let mut m = Map::new();
-    m.insert("ok".into(), iface_files_comments__defs_ok_true__to_json(&p.ok));
-    Value::Object(m)
-}
-
-fn iface_files_comments__defs_ok_true__to_json(p: &iface_files_comments::DefsOkTrue) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
+    m.insert("ok".into(), Value::Bool(*(&p.ok)));
     Value::Object(m)
 }
 
@@ -40,14 +34,7 @@ fn iface_files_comments__delete_params__to_json(p: &iface_files_comments::Delete
 fn iface_files_comments__delete_response__from_json(v: &Value) -> Option<iface_files_comments::DeleteResponse> {
     let m = v.as_object()?;
     Some(iface_files_comments::DeleteResponse {
-        ok: match m.get("ok").and_then(|v| iface_files_comments__defs_ok_true__from_json(v)) { Some(x) => x, None => return None },
-    })
-}
-
-fn iface_files_comments__defs_ok_true__from_json(v: &Value) -> Option<iface_files_comments::DefsOkTrue> {
-    let m = v.as_object()?;
-    Some(iface_files_comments::DefsOkTrue {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        ok: m.get("ok").and_then(|v| (v).as_bool()).unwrap_or_default(),
     })
 }
 

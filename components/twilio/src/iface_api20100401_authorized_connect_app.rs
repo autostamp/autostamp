@@ -30,6 +30,13 @@ const OP_API20100401_AUTHORIZED_CONNECT_APP_FETCH_AUTHORIZED_CONNECT_APP: OpSpec
     ],
 };
 
+fn iface_api20100401_authorized_connect_app__authorized_connect_app_enum_permission__to_str(e: &iface_api20100401_authorized_connect_app::AuthorizedConnectAppEnumPermission) -> &'static str {
+    match e {
+        iface_api20100401_authorized_connect_app::AuthorizedConnectAppEnumPermission::GetAll => "get-all",
+        iface_api20100401_authorized_connect_app::AuthorizedConnectAppEnumPermission::PostAll => "post-all",
+    }
+}
+
 fn iface_api20100401_authorized_connect_app__list_authorized_connect_app_response__to_json(p: &iface_api20100401_authorized_connect_app::ListAuthorizedConnectAppResponse) -> Value {
     let mut m = Map::new();
     m.insert("authorized_connect_apps".into(), match (&p.authorized_connect_apps) { Some(v) => Value::Array((v).iter().map(|v| iface_api20100401_authorized_connect_app__api_v2010_account_authorized_connect_app__to_json(v)).collect()), None => Value::Null });
@@ -52,14 +59,8 @@ fn iface_api20100401_authorized_connect_app__api_v2010_account_authorized_connec
     m.insert("connect_app_friendly_name".into(), match (&p.connect_app_friendly_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("connect_app_homepage_url".into(), match (&p.connect_app_homepage_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("connect_app_sid".into(), match (&p.connect_app_sid) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("permissions".into(), match (&p.permissions) { Some(v) => Value::Array((v).iter().map(|v| iface_api20100401_authorized_connect_app__authorized_connect_app_enum_permission__to_json(v)).collect()), None => Value::Null });
+    m.insert("permissions".into(), match (&p.permissions) { Some(v) => Value::Array((v).iter().map(|v| Value::String(iface_api20100401_authorized_connect_app__authorized_connect_app_enum_permission__to_str(v).into())).collect()), None => Value::Null });
     m.insert("uri".into(), match (&p.uri) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_api20100401_authorized_connect_app__authorized_connect_app_enum_permission__to_json(p: &iface_api20100401_authorized_connect_app::AuthorizedConnectAppEnumPermission) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -103,16 +104,17 @@ fn iface_api20100401_authorized_connect_app__api_v2010_account_authorized_connec
         connect_app_friendly_name: m.get("connect_app_friendly_name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         connect_app_homepage_url: m.get("connect_app_homepage_url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         connect_app_sid: m.get("connect_app_sid").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        permissions: m.get("permissions").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_api20100401_authorized_connect_app__authorized_connect_app_enum_permission__from_json(x)).collect())),
+        permissions: m.get("permissions").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().and_then(iface_api20100401_authorized_connect_app__authorized_connect_app_enum_permission__from_str)).collect())),
         uri: m.get("uri").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
     })
 }
 
-fn iface_api20100401_authorized_connect_app__authorized_connect_app_enum_permission__from_json(v: &Value) -> Option<iface_api20100401_authorized_connect_app::AuthorizedConnectAppEnumPermission> {
-    let m = v.as_object()?;
-    Some(iface_api20100401_authorized_connect_app::AuthorizedConnectAppEnumPermission {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-    })
+fn iface_api20100401_authorized_connect_app__authorized_connect_app_enum_permission__from_str(s: &str) -> Option<iface_api20100401_authorized_connect_app::AuthorizedConnectAppEnumPermission> {
+    match s {
+        "get-all" => Some(iface_api20100401_authorized_connect_app::AuthorizedConnectAppEnumPermission::GetAll),
+        "post-all" => Some(iface_api20100401_authorized_connect_app::AuthorizedConnectAppEnumPermission::PostAll),
+        _ => None,
+    }
 }
 
 fn iface_api20100401_authorized_connect_app__list_authorized_connect_app__ok(body: String) -> Result<iface_api20100401_authorized_connect_app::ListAuthorizedConnectAppResponse, crate::runtime::DispatchError> {

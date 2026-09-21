@@ -27,18 +27,6 @@ const OP_ORDER_MARGIN_REQUIREMENTS_POST_ACCOUNTS_ACCOUNT_ORDER_IMPACT: OpSpec = 
     ],
 };
 
-fn iface_order_margin_requirements__order_type__to_json(p: &iface_order_margin_requirements::OrderType) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_order_margin_requirements__time_in_force__to_json(p: &iface_order_margin_requirements::TimeInForce) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
 fn iface_order_margin_requirements__post_accounts_account_order_impact_response__to_json(p: &iface_order_margin_requirements::PostAccountsAccountOrderImpactResponse) -> Value {
     let mut m = Map::new();
     m.insert("Commission".into(), match (&p.commission) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
@@ -63,12 +51,12 @@ fn iface_order_margin_requirements__post_accounts_account_order_impact_params__t
     m.insert("customer_order_id".into(), match (&p.customer_order_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("instrument_type".into(), match (&p.instrument_type) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("listing_exchange".into(), match (&p.listing_exchange) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("order_type".into(), match (&p.order_type) { Some(v) => iface_order_margin_requirements__order_type__to_json(v), None => Value::Null });
+    m.insert("order_type".into(), match (&p.order_type) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
     m.insert("price".into(), match (&p.price) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
     m.insert("quantity".into(), match (&p.quantity) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
     m.insert("side".into(), match (&p.side) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
     m.insert("ticker".into(), match (&p.ticker) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("time_in_force".into(), match (&p.time_in_force) { Some(v) => iface_order_margin_requirements__time_in_force__to_json(v), None => Value::Null });
+    m.insert("time_in_force".into(), match (&p.time_in_force) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
     Value::Object(m)
 }
 

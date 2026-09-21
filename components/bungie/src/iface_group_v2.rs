@@ -402,21 +402,23 @@ fn iface_group_v2__get_available_avatars_response__to_json(p: &iface_group_v2::G
     m.insert("ErrorCode".into(), match (&p.error_code) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("ErrorStatus".into(), match (&p.error_status) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("Message".into(), match (&p.message) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("MessageData".into(), match (&p.message_data) { Some(v) => iface_group_v2__get_available_avatars_response_message_data__to_json(v), None => Value::Null });
-    m.insert("Response".into(), match (&p.response) { Some(v) => iface_group_v2__get_available_avatars_response_response__to_json(v), None => Value::Null });
+    m.insert("MessageData".into(), match (&p.message_data) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
+    m.insert("Response".into(), match (&p.response) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("ThrottleSeconds".into(), match (&p.throttle_seconds) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_group_v2__get_available_avatars_response_message_data__to_json(p: &iface_group_v2::GetAvailableAvatarsResponseMessageData) -> Value {
+fn iface_group_v2__get_available_avatars_response_message_data_entry__to_json(p: &iface_group_v2::GetAvailableAvatarsResponseMessageDataEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
-fn iface_group_v2__get_available_avatars_response_response__to_json(p: &iface_group_v2::GetAvailableAvatarsResponseResponse) -> Value {
+fn iface_group_v2__get_available_avatars_response_response_entry__to_json(p: &iface_group_v2::GetAvailableAvatarsResponseResponseEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -426,15 +428,16 @@ fn iface_group_v2__get_available_themes_response__to_json(p: &iface_group_v2::Ge
     m.insert("ErrorCode".into(), match (&p.error_code) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("ErrorStatus".into(), match (&p.error_status) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("Message".into(), match (&p.message) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("MessageData".into(), match (&p.message_data) { Some(v) => iface_group_v2__get_available_themes_response_message_data__to_json(v), None => Value::Null });
+    m.insert("MessageData".into(), match (&p.message_data) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("Response".into(), match (&p.response) { Some(v) => Value::Array((v).iter().map(|v| iface_group_v2__config_group_theme__to_json(v)).collect()), None => Value::Null });
     m.insert("ThrottleSeconds".into(), match (&p.throttle_seconds) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_group_v2__get_available_themes_response_message_data__to_json(p: &iface_group_v2::GetAvailableThemesResponseMessageData) -> Value {
+fn iface_group_v2__get_available_themes_response_message_data_entry__to_json(p: &iface_group_v2::GetAvailableThemesResponseMessageDataEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -452,15 +455,16 @@ fn iface_group_v2__get_user_clan_invite_setting_response__to_json(p: &iface_grou
     m.insert("ErrorCode".into(), match (&p.error_code) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("ErrorStatus".into(), match (&p.error_status) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("Message".into(), match (&p.message) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("MessageData".into(), match (&p.message_data) { Some(v) => iface_group_v2__get_user_clan_invite_setting_response_message_data__to_json(v), None => Value::Null });
+    m.insert("MessageData".into(), match (&p.message_data) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("Response".into(), match (&p.response) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     m.insert("ThrottleSeconds".into(), match (&p.throttle_seconds) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_group_v2__get_user_clan_invite_setting_response_message_data__to_json(p: &iface_group_v2::GetUserClanInviteSettingResponseMessageData) -> Value {
+fn iface_group_v2__get_user_clan_invite_setting_response_message_data_entry__to_json(p: &iface_group_v2::GetUserClanInviteSettingResponseMessageDataEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -470,15 +474,16 @@ fn iface_group_v2__get_group_by_name_response__to_json(p: &iface_group_v2::GetGr
     m.insert("ErrorCode".into(), match (&p.error_code) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("ErrorStatus".into(), match (&p.error_status) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("Message".into(), match (&p.message) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("MessageData".into(), match (&p.message_data) { Some(v) => iface_group_v2__get_group_by_name_response_message_data__to_json(v), None => Value::Null });
+    m.insert("MessageData".into(), match (&p.message_data) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("Response".into(), match (&p.response) { Some(v) => iface_group_v2__groups_v2_group_response__to_json(v), None => Value::Null });
     m.insert("ThrottleSeconds".into(), match (&p.throttle_seconds) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_group_v2__get_group_by_name_response_message_data__to_json(p: &iface_group_v2::GetGroupByNameResponseMessageData) -> Value {
+fn iface_group_v2__get_group_by_name_response_message_data_entry__to_json(p: &iface_group_v2::GetGroupByNameResponseMessageDataEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -486,98 +491,13 @@ fn iface_group_v2__groups_v2_group_response__to_json(p: &iface_group_v2::GroupsV
     let mut m = Map::new();
     m.insert("allianceStatus".into(), match (&p.alliance_status) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("alliedIds".into(), match (&p.allied_ids) { Some(v) => Value::Array((v).iter().map(|v| Value::Number(serde_json::Number::from(*(v)))).collect()), None => Value::Null });
-    m.insert("currentUserMemberMap".into(), match (&p.current_user_member_map) { Some(v) => iface_group_v2__groups_v2_group_response_current_user_member_map__to_json(v), None => Value::Null });
+    m.insert("currentUserMemberMap".into(), match (&p.current_user_member_map) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), iface_group_v2__groups_v2_group_member__to_json(&e.value))).collect()), None => Value::Null });
     m.insert("currentUserMembershipsInactiveForDestiny".into(), match (&p.current_user_memberships_inactive_for_destiny) { Some(v) => Value::Bool(*(v)), None => Value::Null });
-    m.insert("currentUserPotentialMemberMap".into(), match (&p.current_user_potential_member_map) { Some(v) => iface_group_v2__groups_v2_group_response_current_user_potential_member_map__to_json(v), None => Value::Null });
+    m.insert("currentUserPotentialMemberMap".into(), match (&p.current_user_potential_member_map) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), iface_group_v2__groups_v2_group_potential_member__to_json(&e.value))).collect()), None => Value::Null });
     m.insert("detail".into(), match (&p.detail) { Some(v) => iface_group_v2__groups_v2_group_v2__to_json(v), None => Value::Null });
     m.insert("founder".into(), match (&p.founder) { Some(v) => iface_group_v2__groups_v2_group_member__to_json(v), None => Value::Null });
     m.insert("groupJoinInviteCount".into(), match (&p.group_join_invite_count) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("parentGroup".into(), match (&p.parent_group) { Some(v) => iface_group_v2__groups_v2_group_v2__to_json(v), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_group_v2__groups_v2_group_response_current_user_member_map__to_json(p: &iface_group_v2::GroupsV2GroupResponseCurrentUserMemberMap) -> Value {
-    let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_group_v2__groups_v2_group_response_current_user_potential_member_map__to_json(p: &iface_group_v2::GroupsV2GroupResponseCurrentUserPotentialMemberMap) -> Value {
-    let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_group_v2__groups_v2_group_v2__to_json(p: &iface_group_v2::GroupsV2GroupV2) -> Value {
-    let mut m = Map::new();
-    m.insert("about".into(), match (&p.about) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("allowChat".into(), match (&p.allow_chat) { Some(v) => Value::Bool(*(v)), None => Value::Null });
-    m.insert("avatarImageIndex".into(), match (&p.avatar_image_index) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    m.insert("avatarPath".into(), match (&p.avatar_path) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("banExpireDate".into(), match (&p.ban_expire_date) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("bannerPath".into(), match (&p.banner_path) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("chatSecurity".into(), match (&p.chat_security) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    m.insert("clanInfo".into(), match (&p.clan_info) { Some(v) => iface_group_v2__groups_v2_group_v2_clan_info_and_investment__to_json(v), None => Value::Null });
-    m.insert("conversationId".into(), match (&p.conversation_id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    m.insert("creationDate".into(), match (&p.creation_date) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("defaultPublicity".into(), match (&p.default_publicity) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    m.insert("enableInvitationMessagingForAdmins".into(), match (&p.enable_invitation_messaging_for_admins) { Some(v) => Value::Bool(*(v)), None => Value::Null });
-    m.insert("features".into(), match (&p.features) { Some(v) => iface_group_v2__groups_v2_group_features__to_json(v), None => Value::Null });
-    m.insert("groupId".into(), match (&p.group_id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    m.insert("groupType".into(), match (&p.group_type) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    m.insert("homepage".into(), match (&p.homepage) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    m.insert("isDefaultPostPublic".into(), match (&p.is_default_post_public) { Some(v) => Value::Bool(*(v)), None => Value::Null });
-    m.insert("isPublic".into(), match (&p.is_public) { Some(v) => Value::Bool(*(v)), None => Value::Null });
-    m.insert("isPublicTopicAdminOnly".into(), match (&p.is_public_topic_admin_only) { Some(v) => Value::Bool(*(v)), None => Value::Null });
-    m.insert("locale".into(), match (&p.locale) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("memberCount".into(), match (&p.member_count) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    m.insert("membershipIdCreated".into(), match (&p.membership_id_created) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    m.insert("membershipOption".into(), match (&p.membership_option) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    m.insert("modificationDate".into(), match (&p.modification_date) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("motto".into(), match (&p.motto) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("tags".into(), match (&p.tags) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
-    m.insert("theme".into(), match (&p.theme) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_group_v2__groups_v2_group_v2_clan_info_and_investment__to_json(p: &iface_group_v2::GroupsV2GroupV2ClanInfoAndInvestment) -> Value {
-    let mut m = Map::new();
-    m.insert("clanBannerData".into(), match (&p.clan_banner_data) { Some(v) => iface_group_v2__groups_v2_clan_banner__to_json(v), None => Value::Null });
-    m.insert("clanCallsign".into(), match (&p.clan_callsign) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("d2ClanProgressions".into(), match (&p.d2_clan_progressions) { Some(v) => iface_group_v2__groups_v2_group_v2_clan_info_and_investment_d2_clan_progressions__to_json(v), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_group_v2__groups_v2_clan_banner__to_json(p: &iface_group_v2::GroupsV2ClanBanner) -> Value {
-    let mut m = Map::new();
-    m.insert("decalBackgroundColorId".into(), match (&p.decal_background_color_id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    m.insert("decalColorId".into(), match (&p.decal_color_id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    m.insert("decalId".into(), match (&p.decal_id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    m.insert("gonfalonColorId".into(), match (&p.gonfalon_color_id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    m.insert("gonfalonDetailColorId".into(), match (&p.gonfalon_detail_color_id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    m.insert("gonfalonDetailId".into(), match (&p.gonfalon_detail_id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    m.insert("gonfalonId".into(), match (&p.gonfalon_id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_group_v2__groups_v2_group_v2_clan_info_and_investment_d2_clan_progressions__to_json(p: &iface_group_v2::GroupsV2GroupV2ClanInfoAndInvestmentD2ClanProgressions) -> Value {
-    let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_group_v2__groups_v2_group_features__to_json(p: &iface_group_v2::GroupsV2GroupFeatures) -> Value {
-    let mut m = Map::new();
-    m.insert("capabilities".into(), match (&p.capabilities) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    m.insert("hostGuidedGamePermissionOverride".into(), match (&p.host_guided_game_permission_override) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    m.insert("invitePermissionOverride".into(), match (&p.invite_permission_override) { Some(v) => Value::Bool(*(v)), None => Value::Null });
-    m.insert("joinLevel".into(), match (&p.join_level) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    m.insert("maximumMembers".into(), match (&p.maximum_members) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    m.insert("maximumMembershipsOfGroupType".into(), match (&p.maximum_memberships_of_group_type) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    m.insert("membershipTypes".into(), match (&p.membership_types) { Some(v) => Value::Array((v).iter().map(|v| Value::Number(serde_json::Number::from(*(v)))).collect()), None => Value::Null });
-    m.insert("updateBannerPermissionOverride".into(), match (&p.update_banner_permission_override) { Some(v) => Value::Bool(*(v)), None => Value::Null });
-    m.insert("updateCulturePermissionOverride".into(), match (&p.update_culture_permission_override) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     Value::Object(m)
 }
 
@@ -625,21 +545,146 @@ fn iface_group_v2__groups_v2_group_user_info_card__to_json(p: &iface_group_v2::G
     Value::Object(m)
 }
 
+fn iface_group_v2__groups_v2_group_response_current_user_member_map_entry__to_json(p: &iface_group_v2::GroupsV2GroupResponseCurrentUserMemberMapEntry) -> Value {
+    let mut m = Map::new();
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), iface_group_v2__groups_v2_group_member__to_json(&p.value));
+    Value::Object(m)
+}
+
+fn iface_group_v2__groups_v2_group_potential_member__to_json(p: &iface_group_v2::GroupsV2GroupPotentialMember) -> Value {
+    let mut m = Map::new();
+    m.insert("bungieNetUserInfo".into(), match (&p.bungie_net_user_info) { Some(v) => iface_group_v2__user_user_info_card__to_json(v), None => Value::Null });
+    m.insert("destinyUserInfo".into(), match (&p.destiny_user_info) { Some(v) => iface_group_v2__groups_v2_group_user_info_card__to_json(v), None => Value::Null });
+    m.insert("groupId".into(), match (&p.group_id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("joinDate".into(), match (&p.join_date) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("potentialStatus".into(), match (&p.potential_status) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_group_v2__groups_v2_group_response_current_user_potential_member_map_entry__to_json(p: &iface_group_v2::GroupsV2GroupResponseCurrentUserPotentialMemberMapEntry) -> Value {
+    let mut m = Map::new();
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), iface_group_v2__groups_v2_group_potential_member__to_json(&p.value));
+    Value::Object(m)
+}
+
+fn iface_group_v2__groups_v2_group_v2__to_json(p: &iface_group_v2::GroupsV2GroupV2) -> Value {
+    let mut m = Map::new();
+    m.insert("about".into(), match (&p.about) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("allowChat".into(), match (&p.allow_chat) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("avatarImageIndex".into(), match (&p.avatar_image_index) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("avatarPath".into(), match (&p.avatar_path) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("banExpireDate".into(), match (&p.ban_expire_date) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("bannerPath".into(), match (&p.banner_path) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("chatSecurity".into(), match (&p.chat_security) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("clanInfo".into(), match (&p.clan_info) { Some(v) => iface_group_v2__groups_v2_group_v2_clan_info_and_investment__to_json(v), None => Value::Null });
+    m.insert("conversationId".into(), match (&p.conversation_id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("creationDate".into(), match (&p.creation_date) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("defaultPublicity".into(), match (&p.default_publicity) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("enableInvitationMessagingForAdmins".into(), match (&p.enable_invitation_messaging_for_admins) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("features".into(), match (&p.features) { Some(v) => iface_group_v2__groups_v2_group_features__to_json(v), None => Value::Null });
+    m.insert("groupId".into(), match (&p.group_id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("groupType".into(), match (&p.group_type) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("homepage".into(), match (&p.homepage) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("isDefaultPostPublic".into(), match (&p.is_default_post_public) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("isPublic".into(), match (&p.is_public) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("isPublicTopicAdminOnly".into(), match (&p.is_public_topic_admin_only) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("locale".into(), match (&p.locale) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("memberCount".into(), match (&p.member_count) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("membershipIdCreated".into(), match (&p.membership_id_created) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("membershipOption".into(), match (&p.membership_option) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("modificationDate".into(), match (&p.modification_date) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("motto".into(), match (&p.motto) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("tags".into(), match (&p.tags) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("theme".into(), match (&p.theme) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_group_v2__groups_v2_group_v2_clan_info_and_investment__to_json(p: &iface_group_v2::GroupsV2GroupV2ClanInfoAndInvestment) -> Value {
+    let mut m = Map::new();
+    m.insert("clanBannerData".into(), match (&p.clan_banner_data) { Some(v) => iface_group_v2__groups_v2_clan_banner__to_json(v), None => Value::Null });
+    m.insert("clanCallsign".into(), match (&p.clan_callsign) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("d2ClanProgressions".into(), match (&p.d2_clan_progressions) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), iface_group_v2__destiny_destiny_progression__to_json(&e.value))).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_group_v2__groups_v2_clan_banner__to_json(p: &iface_group_v2::GroupsV2ClanBanner) -> Value {
+    let mut m = Map::new();
+    m.insert("decalBackgroundColorId".into(), match (&p.decal_background_color_id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("decalColorId".into(), match (&p.decal_color_id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("decalId".into(), match (&p.decal_id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("gonfalonColorId".into(), match (&p.gonfalon_color_id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("gonfalonDetailColorId".into(), match (&p.gonfalon_detail_color_id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("gonfalonDetailId".into(), match (&p.gonfalon_detail_id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("gonfalonId".into(), match (&p.gonfalon_id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_group_v2__destiny_destiny_progression__to_json(p: &iface_group_v2::DestinyDestinyProgression) -> Value {
+    let mut m = Map::new();
+    m.insert("currentProgress".into(), match (&p.current_progress) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("currentResetCount".into(), match (&p.current_reset_count) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("dailyLimit".into(), match (&p.daily_limit) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("dailyProgress".into(), match (&p.daily_progress) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("level".into(), match (&p.level) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("levelCap".into(), match (&p.level_cap) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("nextLevelAt".into(), match (&p.next_level_at) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("progressToNextLevel".into(), match (&p.progress_to_next_level) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("progressionHash".into(), match (&p.progression_hash) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("rewardItemStates".into(), match (&p.reward_item_states) { Some(v) => Value::Array((v).iter().map(|v| Value::Number(serde_json::Number::from(*(v)))).collect()), None => Value::Null });
+    m.insert("seasonResets".into(), match (&p.season_resets) { Some(v) => Value::Array((v).iter().map(|v| iface_group_v2__destiny_destiny_progression_reset_entry__to_json(v)).collect()), None => Value::Null });
+    m.insert("stepIndex".into(), match (&p.step_index) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("weeklyLimit".into(), match (&p.weekly_limit) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("weeklyProgress".into(), match (&p.weekly_progress) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_group_v2__destiny_destiny_progression_reset_entry__to_json(p: &iface_group_v2::DestinyDestinyProgressionResetEntry) -> Value {
+    let mut m = Map::new();
+    m.insert("resets".into(), match (&p.resets) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("season".into(), match (&p.season) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_group_v2__groups_v2_group_v2_clan_info_and_investment_d2_clan_progressions_entry__to_json(p: &iface_group_v2::GroupsV2GroupV2ClanInfoAndInvestmentD2ClanProgressionsEntry) -> Value {
+    let mut m = Map::new();
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), iface_group_v2__destiny_destiny_progression__to_json(&p.value));
+    Value::Object(m)
+}
+
+fn iface_group_v2__groups_v2_group_features__to_json(p: &iface_group_v2::GroupsV2GroupFeatures) -> Value {
+    let mut m = Map::new();
+    m.insert("capabilities".into(), match (&p.capabilities) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("hostGuidedGamePermissionOverride".into(), match (&p.host_guided_game_permission_override) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("invitePermissionOverride".into(), match (&p.invite_permission_override) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("joinLevel".into(), match (&p.join_level) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("maximumMembers".into(), match (&p.maximum_members) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("maximumMembershipsOfGroupType".into(), match (&p.maximum_memberships_of_group_type) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("membershipTypes".into(), match (&p.membership_types) { Some(v) => Value::Array((v).iter().map(|v| Value::Number(serde_json::Number::from(*(v)))).collect()), None => Value::Null });
+    m.insert("updateBannerPermissionOverride".into(), match (&p.update_banner_permission_override) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("updateCulturePermissionOverride".into(), match (&p.update_culture_permission_override) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    Value::Object(m)
+}
+
 fn iface_group_v2__get_group_by_name_v2_response__to_json(p: &iface_group_v2::GetGroupByNameV2Response) -> Value {
     let mut m = Map::new();
     m.insert("DetailedErrorTrace".into(), match (&p.detailed_error_trace) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("ErrorCode".into(), match (&p.error_code) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("ErrorStatus".into(), match (&p.error_status) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("Message".into(), match (&p.message) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("MessageData".into(), match (&p.message_data) { Some(v) => iface_group_v2__get_group_by_name_v2_response_message_data__to_json(v), None => Value::Null });
+    m.insert("MessageData".into(), match (&p.message_data) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("Response".into(), match (&p.response) { Some(v) => iface_group_v2__groups_v2_group_response__to_json(v), None => Value::Null });
     m.insert("ThrottleSeconds".into(), match (&p.throttle_seconds) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_group_v2__get_group_by_name_v2_response_message_data__to_json(p: &iface_group_v2::GetGroupByNameV2ResponseMessageData) -> Value {
+fn iface_group_v2__get_group_by_name_v2_response_message_data_entry__to_json(p: &iface_group_v2::GetGroupByNameV2ResponseMessageDataEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -649,15 +694,16 @@ fn iface_group_v2__get_recommended_groups_response__to_json(p: &iface_group_v2::
     m.insert("ErrorCode".into(), match (&p.error_code) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("ErrorStatus".into(), match (&p.error_status) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("Message".into(), match (&p.message) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("MessageData".into(), match (&p.message_data) { Some(v) => iface_group_v2__get_recommended_groups_response_message_data__to_json(v), None => Value::Null });
+    m.insert("MessageData".into(), match (&p.message_data) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("Response".into(), match (&p.response) { Some(v) => Value::Array((v).iter().map(|v| iface_group_v2__groups_v2_group_v2_card__to_json(v)).collect()), None => Value::Null });
     m.insert("ThrottleSeconds".into(), match (&p.throttle_seconds) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_group_v2__get_recommended_groups_response_message_data__to_json(p: &iface_group_v2::GetRecommendedGroupsResponseMessageData) -> Value {
+fn iface_group_v2__get_recommended_groups_response_message_data_entry__to_json(p: &iface_group_v2::GetRecommendedGroupsResponseMessageDataEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -692,15 +738,16 @@ fn iface_group_v2__recover_group_for_founder_response__to_json(p: &iface_group_v
     m.insert("ErrorCode".into(), match (&p.error_code) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("ErrorStatus".into(), match (&p.error_status) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("Message".into(), match (&p.message) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("MessageData".into(), match (&p.message_data) { Some(v) => iface_group_v2__recover_group_for_founder_response_message_data__to_json(v), None => Value::Null });
+    m.insert("MessageData".into(), match (&p.message_data) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("Response".into(), match (&p.response) { Some(v) => iface_group_v2__groups_v2_group_membership_search_response__to_json(v), None => Value::Null });
     m.insert("ThrottleSeconds".into(), match (&p.throttle_seconds) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_group_v2__recover_group_for_founder_response_message_data__to_json(p: &iface_group_v2::RecoverGroupForFounderResponseMessageData) -> Value {
+fn iface_group_v2__recover_group_for_founder_response_message_data_entry__to_json(p: &iface_group_v2::RecoverGroupForFounderResponseMessageDataEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -736,15 +783,16 @@ fn iface_group_v2__group_search_response__to_json(p: &iface_group_v2::GroupSearc
     m.insert("ErrorCode".into(), match (&p.error_code) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("ErrorStatus".into(), match (&p.error_status) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("Message".into(), match (&p.message) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("MessageData".into(), match (&p.message_data) { Some(v) => iface_group_v2__group_search_response_message_data__to_json(v), None => Value::Null });
+    m.insert("MessageData".into(), match (&p.message_data) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("Response".into(), match (&p.response) { Some(v) => iface_group_v2__groups_v2_group_search_response__to_json(v), None => Value::Null });
     m.insert("ThrottleSeconds".into(), match (&p.throttle_seconds) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_group_v2__group_search_response_message_data__to_json(p: &iface_group_v2::GroupSearchResponseMessageData) -> Value {
+fn iface_group_v2__group_search_response_message_data_entry__to_json(p: &iface_group_v2::GroupSearchResponseMessageDataEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -765,15 +813,16 @@ fn iface_group_v2__get_potential_groups_for_member_response__to_json(p: &iface_g
     m.insert("ErrorCode".into(), match (&p.error_code) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("ErrorStatus".into(), match (&p.error_status) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("Message".into(), match (&p.message) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("MessageData".into(), match (&p.message_data) { Some(v) => iface_group_v2__get_potential_groups_for_member_response_message_data__to_json(v), None => Value::Null });
+    m.insert("MessageData".into(), match (&p.message_data) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("Response".into(), match (&p.response) { Some(v) => iface_group_v2__groups_v2_group_potential_membership_search_response__to_json(v), None => Value::Null });
     m.insert("ThrottleSeconds".into(), match (&p.throttle_seconds) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_group_v2__get_potential_groups_for_member_response_message_data__to_json(p: &iface_group_v2::GetPotentialGroupsForMemberResponseMessageData) -> Value {
+fn iface_group_v2__get_potential_groups_for_member_response_message_data_entry__to_json(p: &iface_group_v2::GetPotentialGroupsForMemberResponseMessageDataEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -795,37 +844,28 @@ fn iface_group_v2__groups_v2_group_potential_membership__to_json(p: &iface_group
     Value::Object(m)
 }
 
-fn iface_group_v2__groups_v2_group_potential_member__to_json(p: &iface_group_v2::GroupsV2GroupPotentialMember) -> Value {
-    let mut m = Map::new();
-    m.insert("bungieNetUserInfo".into(), match (&p.bungie_net_user_info) { Some(v) => iface_group_v2__user_user_info_card__to_json(v), None => Value::Null });
-    m.insert("destinyUserInfo".into(), match (&p.destiny_user_info) { Some(v) => iface_group_v2__groups_v2_group_user_info_card__to_json(v), None => Value::Null });
-    m.insert("groupId".into(), match (&p.group_id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    m.insert("joinDate".into(), match (&p.join_date) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("potentialStatus".into(), match (&p.potential_status) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    Value::Object(m)
-}
-
 fn iface_group_v2__get_groups_for_member_response__to_json(p: &iface_group_v2::GetGroupsForMemberResponse) -> Value {
     let mut m = Map::new();
     m.insert("DetailedErrorTrace".into(), match (&p.detailed_error_trace) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("ErrorCode".into(), match (&p.error_code) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("ErrorStatus".into(), match (&p.error_status) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("Message".into(), match (&p.message) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("MessageData".into(), match (&p.message_data) { Some(v) => iface_group_v2__get_groups_for_member_response_message_data__to_json(v), None => Value::Null });
+    m.insert("MessageData".into(), match (&p.message_data) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("Response".into(), match (&p.response) { Some(v) => iface_group_v2__groups_v2_get_groups_for_member_response__to_json(v), None => Value::Null });
     m.insert("ThrottleSeconds".into(), match (&p.throttle_seconds) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_group_v2__get_groups_for_member_response_message_data__to_json(p: &iface_group_v2::GetGroupsForMemberResponseMessageData) -> Value {
+fn iface_group_v2__get_groups_for_member_response_message_data_entry__to_json(p: &iface_group_v2::GetGroupsForMemberResponseMessageDataEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
 fn iface_group_v2__groups_v2_get_groups_for_member_response__to_json(p: &iface_group_v2::GroupsV2GetGroupsForMemberResponse) -> Value {
     let mut m = Map::new();
-    m.insert("areAllMembershipsInactive".into(), match (&p.are_all_memberships_inactive) { Some(v) => iface_group_v2__groups_v2_get_groups_for_member_response_are_all_memberships_inactive__to_json(v), None => Value::Null });
+    m.insert("areAllMembershipsInactive".into(), match (&p.are_all_memberships_inactive) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::Bool(*(&e.value)))).collect()), None => Value::Null });
     m.insert("hasMore".into(), match (&p.has_more) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     m.insert("query".into(), match (&p.query) { Some(v) => iface_group_v2__queries_paged_query__to_json(v), None => Value::Null });
     m.insert("replacementContinuationToken".into(), match (&p.replacement_continuation_token) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -835,9 +875,10 @@ fn iface_group_v2__groups_v2_get_groups_for_member_response__to_json(p: &iface_g
     Value::Object(m)
 }
 
-fn iface_group_v2__groups_v2_get_groups_for_member_response_are_all_memberships_inactive__to_json(p: &iface_group_v2::GroupsV2GetGroupsForMemberResponseAreAllMembershipsInactive) -> Value {
+fn iface_group_v2__groups_v2_get_groups_for_member_response_are_all_memberships_inactive_entry__to_json(p: &iface_group_v2::GroupsV2GetGroupsForMemberResponseAreAllMembershipsInactiveEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::Bool(*(&p.value)));
     Value::Object(m)
 }
 
@@ -847,15 +888,16 @@ fn iface_group_v2__get_group_response__to_json(p: &iface_group_v2::GetGroupRespo
     m.insert("ErrorCode".into(), match (&p.error_code) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("ErrorStatus".into(), match (&p.error_status) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("Message".into(), match (&p.message) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("MessageData".into(), match (&p.message_data) { Some(v) => iface_group_v2__get_group_response_message_data__to_json(v), None => Value::Null });
+    m.insert("MessageData".into(), match (&p.message_data) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("Response".into(), match (&p.response) { Some(v) => iface_group_v2__groups_v2_group_response__to_json(v), None => Value::Null });
     m.insert("ThrottleSeconds".into(), match (&p.throttle_seconds) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_group_v2__get_group_response_message_data__to_json(p: &iface_group_v2::GetGroupResponseMessageData) -> Value {
+fn iface_group_v2__get_group_response_message_data_entry__to_json(p: &iface_group_v2::GetGroupResponseMessageDataEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -865,15 +907,16 @@ fn iface_group_v2__abdicate_foundership_response__to_json(p: &iface_group_v2::Ab
     m.insert("ErrorCode".into(), match (&p.error_code) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("ErrorStatus".into(), match (&p.error_status) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("Message".into(), match (&p.message) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("MessageData".into(), match (&p.message_data) { Some(v) => iface_group_v2__abdicate_foundership_response_message_data__to_json(v), None => Value::Null });
+    m.insert("MessageData".into(), match (&p.message_data) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("Response".into(), match (&p.response) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     m.insert("ThrottleSeconds".into(), match (&p.throttle_seconds) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_group_v2__abdicate_foundership_response_message_data__to_json(p: &iface_group_v2::AbdicateFoundershipResponseMessageData) -> Value {
+fn iface_group_v2__abdicate_foundership_response_message_data_entry__to_json(p: &iface_group_v2::AbdicateFoundershipResponseMessageDataEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -883,15 +926,16 @@ fn iface_group_v2__get_admins_and_founder_of_group_response__to_json(p: &iface_g
     m.insert("ErrorCode".into(), match (&p.error_code) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("ErrorStatus".into(), match (&p.error_status) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("Message".into(), match (&p.message) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("MessageData".into(), match (&p.message_data) { Some(v) => iface_group_v2__get_admins_and_founder_of_group_response_message_data__to_json(v), None => Value::Null });
+    m.insert("MessageData".into(), match (&p.message_data) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("Response".into(), match (&p.response) { Some(v) => iface_group_v2__search_result_of_group_member__to_json(v), None => Value::Null });
     m.insert("ThrottleSeconds".into(), match (&p.throttle_seconds) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_group_v2__get_admins_and_founder_of_group_response_message_data__to_json(p: &iface_group_v2::GetAdminsAndFounderOfGroupResponseMessageData) -> Value {
+fn iface_group_v2__get_admins_and_founder_of_group_response_message_data_entry__to_json(p: &iface_group_v2::GetAdminsAndFounderOfGroupResponseMessageDataEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -912,15 +956,16 @@ fn iface_group_v2__get_banned_members_of_group_response__to_json(p: &iface_group
     m.insert("ErrorCode".into(), match (&p.error_code) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("ErrorStatus".into(), match (&p.error_status) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("Message".into(), match (&p.message) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("MessageData".into(), match (&p.message_data) { Some(v) => iface_group_v2__get_banned_members_of_group_response_message_data__to_json(v), None => Value::Null });
+    m.insert("MessageData".into(), match (&p.message_data) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("Response".into(), match (&p.response) { Some(v) => iface_group_v2__search_result_of_group_ban__to_json(v), None => Value::Null });
     m.insert("ThrottleSeconds".into(), match (&p.throttle_seconds) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_group_v2__get_banned_members_of_group_response_message_data__to_json(p: &iface_group_v2::GetBannedMembersOfGroupResponseMessageData) -> Value {
+fn iface_group_v2__get_banned_members_of_group_response_message_data_entry__to_json(p: &iface_group_v2::GetBannedMembersOfGroupResponseMessageDataEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -954,15 +999,16 @@ fn iface_group_v2__edit_group_response__to_json(p: &iface_group_v2::EditGroupRes
     m.insert("ErrorCode".into(), match (&p.error_code) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("ErrorStatus".into(), match (&p.error_status) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("Message".into(), match (&p.message) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("MessageData".into(), match (&p.message_data) { Some(v) => iface_group_v2__edit_group_response_message_data__to_json(v), None => Value::Null });
+    m.insert("MessageData".into(), match (&p.message_data) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("Response".into(), match (&p.response) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("ThrottleSeconds".into(), match (&p.throttle_seconds) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_group_v2__edit_group_response_message_data__to_json(p: &iface_group_v2::EditGroupResponseMessageData) -> Value {
+fn iface_group_v2__edit_group_response_message_data_entry__to_json(p: &iface_group_v2::EditGroupResponseMessageDataEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -972,15 +1018,16 @@ fn iface_group_v2__edit_clan_banner_response__to_json(p: &iface_group_v2::EditCl
     m.insert("ErrorCode".into(), match (&p.error_code) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("ErrorStatus".into(), match (&p.error_status) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("Message".into(), match (&p.message) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("MessageData".into(), match (&p.message_data) { Some(v) => iface_group_v2__edit_clan_banner_response_message_data__to_json(v), None => Value::Null });
+    m.insert("MessageData".into(), match (&p.message_data) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("Response".into(), match (&p.response) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("ThrottleSeconds".into(), match (&p.throttle_seconds) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_group_v2__edit_clan_banner_response_message_data__to_json(p: &iface_group_v2::EditClanBannerResponseMessageData) -> Value {
+fn iface_group_v2__edit_clan_banner_response_message_data_entry__to_json(p: &iface_group_v2::EditClanBannerResponseMessageDataEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -990,15 +1037,16 @@ fn iface_group_v2__edit_founder_options_response__to_json(p: &iface_group_v2::Ed
     m.insert("ErrorCode".into(), match (&p.error_code) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("ErrorStatus".into(), match (&p.error_status) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("Message".into(), match (&p.message) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("MessageData".into(), match (&p.message_data) { Some(v) => iface_group_v2__edit_founder_options_response_message_data__to_json(v), None => Value::Null });
+    m.insert("MessageData".into(), match (&p.message_data) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("Response".into(), match (&p.response) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("ThrottleSeconds".into(), match (&p.throttle_seconds) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_group_v2__edit_founder_options_response_message_data__to_json(p: &iface_group_v2::EditFounderOptionsResponseMessageData) -> Value {
+fn iface_group_v2__edit_founder_options_response_message_data_entry__to_json(p: &iface_group_v2::EditFounderOptionsResponseMessageDataEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -1008,15 +1056,16 @@ fn iface_group_v2__get_members_of_group_response__to_json(p: &iface_group_v2::Ge
     m.insert("ErrorCode".into(), match (&p.error_code) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("ErrorStatus".into(), match (&p.error_status) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("Message".into(), match (&p.message) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("MessageData".into(), match (&p.message_data) { Some(v) => iface_group_v2__get_members_of_group_response_message_data__to_json(v), None => Value::Null });
+    m.insert("MessageData".into(), match (&p.message_data) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("Response".into(), match (&p.response) { Some(v) => iface_group_v2__search_result_of_group_member__to_json(v), None => Value::Null });
     m.insert("ThrottleSeconds".into(), match (&p.throttle_seconds) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_group_v2__get_members_of_group_response_message_data__to_json(p: &iface_group_v2::GetMembersOfGroupResponseMessageData) -> Value {
+fn iface_group_v2__get_members_of_group_response_message_data_entry__to_json(p: &iface_group_v2::GetMembersOfGroupResponseMessageDataEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -1026,15 +1075,16 @@ fn iface_group_v2__approve_pending_response__to_json(p: &iface_group_v2::Approve
     m.insert("ErrorCode".into(), match (&p.error_code) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("ErrorStatus".into(), match (&p.error_status) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("Message".into(), match (&p.message) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("MessageData".into(), match (&p.message_data) { Some(v) => iface_group_v2__approve_pending_response_message_data__to_json(v), None => Value::Null });
+    m.insert("MessageData".into(), match (&p.message_data) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("Response".into(), match (&p.response) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     m.insert("ThrottleSeconds".into(), match (&p.throttle_seconds) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_group_v2__approve_pending_response_message_data__to_json(p: &iface_group_v2::ApprovePendingResponseMessageData) -> Value {
+fn iface_group_v2__approve_pending_response_message_data_entry__to_json(p: &iface_group_v2::ApprovePendingResponseMessageDataEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -1044,15 +1094,16 @@ fn iface_group_v2__approve_all_pending_response__to_json(p: &iface_group_v2::App
     m.insert("ErrorCode".into(), match (&p.error_code) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("ErrorStatus".into(), match (&p.error_status) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("Message".into(), match (&p.message) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("MessageData".into(), match (&p.message_data) { Some(v) => iface_group_v2__approve_all_pending_response_message_data__to_json(v), None => Value::Null });
+    m.insert("MessageData".into(), match (&p.message_data) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("Response".into(), match (&p.response) { Some(v) => Value::Array((v).iter().map(|v| iface_group_v2__entities_entity_action_result__to_json(v)).collect()), None => Value::Null });
     m.insert("ThrottleSeconds".into(), match (&p.throttle_seconds) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_group_v2__approve_all_pending_response_message_data__to_json(p: &iface_group_v2::ApproveAllPendingResponseMessageData) -> Value {
+fn iface_group_v2__approve_all_pending_response_message_data_entry__to_json(p: &iface_group_v2::ApproveAllPendingResponseMessageDataEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -1069,15 +1120,16 @@ fn iface_group_v2__approve_pending_for_list_response__to_json(p: &iface_group_v2
     m.insert("ErrorCode".into(), match (&p.error_code) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("ErrorStatus".into(), match (&p.error_status) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("Message".into(), match (&p.message) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("MessageData".into(), match (&p.message_data) { Some(v) => iface_group_v2__approve_pending_for_list_response_message_data__to_json(v), None => Value::Null });
+    m.insert("MessageData".into(), match (&p.message_data) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("Response".into(), match (&p.response) { Some(v) => Value::Array((v).iter().map(|v| iface_group_v2__entities_entity_action_result__to_json(v)).collect()), None => Value::Null });
     m.insert("ThrottleSeconds".into(), match (&p.throttle_seconds) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_group_v2__approve_pending_for_list_response_message_data__to_json(p: &iface_group_v2::ApprovePendingForListResponseMessageData) -> Value {
+fn iface_group_v2__approve_pending_for_list_response_message_data_entry__to_json(p: &iface_group_v2::ApprovePendingForListResponseMessageDataEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -1087,15 +1139,16 @@ fn iface_group_v2__deny_all_pending_response__to_json(p: &iface_group_v2::DenyAl
     m.insert("ErrorCode".into(), match (&p.error_code) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("ErrorStatus".into(), match (&p.error_status) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("Message".into(), match (&p.message) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("MessageData".into(), match (&p.message_data) { Some(v) => iface_group_v2__deny_all_pending_response_message_data__to_json(v), None => Value::Null });
+    m.insert("MessageData".into(), match (&p.message_data) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("Response".into(), match (&p.response) { Some(v) => Value::Array((v).iter().map(|v| iface_group_v2__entities_entity_action_result__to_json(v)).collect()), None => Value::Null });
     m.insert("ThrottleSeconds".into(), match (&p.throttle_seconds) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_group_v2__deny_all_pending_response_message_data__to_json(p: &iface_group_v2::DenyAllPendingResponseMessageData) -> Value {
+fn iface_group_v2__deny_all_pending_response_message_data_entry__to_json(p: &iface_group_v2::DenyAllPendingResponseMessageDataEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -1105,15 +1158,16 @@ fn iface_group_v2__deny_pending_for_list_response__to_json(p: &iface_group_v2::D
     m.insert("ErrorCode".into(), match (&p.error_code) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("ErrorStatus".into(), match (&p.error_status) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("Message".into(), match (&p.message) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("MessageData".into(), match (&p.message_data) { Some(v) => iface_group_v2__deny_pending_for_list_response_message_data__to_json(v), None => Value::Null });
+    m.insert("MessageData".into(), match (&p.message_data) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("Response".into(), match (&p.response) { Some(v) => Value::Array((v).iter().map(|v| iface_group_v2__entities_entity_action_result__to_json(v)).collect()), None => Value::Null });
     m.insert("ThrottleSeconds".into(), match (&p.throttle_seconds) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_group_v2__deny_pending_for_list_response_message_data__to_json(p: &iface_group_v2::DenyPendingForListResponseMessageData) -> Value {
+fn iface_group_v2__deny_pending_for_list_response_message_data_entry__to_json(p: &iface_group_v2::DenyPendingForListResponseMessageDataEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -1123,15 +1177,16 @@ fn iface_group_v2__individual_group_invite_response__to_json(p: &iface_group_v2:
     m.insert("ErrorCode".into(), match (&p.error_code) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("ErrorStatus".into(), match (&p.error_status) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("Message".into(), match (&p.message) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("MessageData".into(), match (&p.message_data) { Some(v) => iface_group_v2__individual_group_invite_response_message_data__to_json(v), None => Value::Null });
+    m.insert("MessageData".into(), match (&p.message_data) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("Response".into(), match (&p.response) { Some(v) => iface_group_v2__groups_v2_group_application_response__to_json(v), None => Value::Null });
     m.insert("ThrottleSeconds".into(), match (&p.throttle_seconds) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_group_v2__individual_group_invite_response_message_data__to_json(p: &iface_group_v2::IndividualGroupInviteResponseMessageData) -> Value {
+fn iface_group_v2__individual_group_invite_response_message_data_entry__to_json(p: &iface_group_v2::IndividualGroupInviteResponseMessageDataEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -1147,15 +1202,16 @@ fn iface_group_v2__individual_group_invite_cancel_response__to_json(p: &iface_gr
     m.insert("ErrorCode".into(), match (&p.error_code) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("ErrorStatus".into(), match (&p.error_status) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("Message".into(), match (&p.message) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("MessageData".into(), match (&p.message_data) { Some(v) => iface_group_v2__individual_group_invite_cancel_response_message_data__to_json(v), None => Value::Null });
+    m.insert("MessageData".into(), match (&p.message_data) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("Response".into(), match (&p.response) { Some(v) => iface_group_v2__groups_v2_group_application_response__to_json(v), None => Value::Null });
     m.insert("ThrottleSeconds".into(), match (&p.throttle_seconds) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_group_v2__individual_group_invite_cancel_response_message_data__to_json(p: &iface_group_v2::IndividualGroupInviteCancelResponseMessageData) -> Value {
+fn iface_group_v2__individual_group_invite_cancel_response_message_data_entry__to_json(p: &iface_group_v2::IndividualGroupInviteCancelResponseMessageDataEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -1165,15 +1221,16 @@ fn iface_group_v2__get_invited_individuals_response__to_json(p: &iface_group_v2:
     m.insert("ErrorCode".into(), match (&p.error_code) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("ErrorStatus".into(), match (&p.error_status) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("Message".into(), match (&p.message) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("MessageData".into(), match (&p.message_data) { Some(v) => iface_group_v2__get_invited_individuals_response_message_data__to_json(v), None => Value::Null });
+    m.insert("MessageData".into(), match (&p.message_data) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("Response".into(), match (&p.response) { Some(v) => iface_group_v2__search_result_of_group_member_application__to_json(v), None => Value::Null });
     m.insert("ThrottleSeconds".into(), match (&p.throttle_seconds) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_group_v2__get_invited_individuals_response_message_data__to_json(p: &iface_group_v2::GetInvitedIndividualsResponseMessageData) -> Value {
+fn iface_group_v2__get_invited_individuals_response_message_data_entry__to_json(p: &iface_group_v2::GetInvitedIndividualsResponseMessageDataEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -1208,15 +1265,16 @@ fn iface_group_v2__get_pending_memberships_response__to_json(p: &iface_group_v2:
     m.insert("ErrorCode".into(), match (&p.error_code) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("ErrorStatus".into(), match (&p.error_status) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("Message".into(), match (&p.message) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("MessageData".into(), match (&p.message_data) { Some(v) => iface_group_v2__get_pending_memberships_response_message_data__to_json(v), None => Value::Null });
+    m.insert("MessageData".into(), match (&p.message_data) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("Response".into(), match (&p.response) { Some(v) => iface_group_v2__search_result_of_group_member_application__to_json(v), None => Value::Null });
     m.insert("ThrottleSeconds".into(), match (&p.throttle_seconds) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_group_v2__get_pending_memberships_response_message_data__to_json(p: &iface_group_v2::GetPendingMembershipsResponseMessageData) -> Value {
+fn iface_group_v2__get_pending_memberships_response_message_data_entry__to_json(p: &iface_group_v2::GetPendingMembershipsResponseMessageDataEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -1226,15 +1284,16 @@ fn iface_group_v2__ban_member_response__to_json(p: &iface_group_v2::BanMemberRes
     m.insert("ErrorCode".into(), match (&p.error_code) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("ErrorStatus".into(), match (&p.error_status) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("Message".into(), match (&p.message) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("MessageData".into(), match (&p.message_data) { Some(v) => iface_group_v2__ban_member_response_message_data__to_json(v), None => Value::Null });
+    m.insert("MessageData".into(), match (&p.message_data) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("Response".into(), match (&p.response) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("ThrottleSeconds".into(), match (&p.throttle_seconds) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_group_v2__ban_member_response_message_data__to_json(p: &iface_group_v2::BanMemberResponseMessageData) -> Value {
+fn iface_group_v2__ban_member_response_message_data_entry__to_json(p: &iface_group_v2::BanMemberResponseMessageDataEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -1244,15 +1303,16 @@ fn iface_group_v2__kick_member_response__to_json(p: &iface_group_v2::KickMemberR
     m.insert("ErrorCode".into(), match (&p.error_code) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("ErrorStatus".into(), match (&p.error_status) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("Message".into(), match (&p.message) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("MessageData".into(), match (&p.message_data) { Some(v) => iface_group_v2__kick_member_response_message_data__to_json(v), None => Value::Null });
+    m.insert("MessageData".into(), match (&p.message_data) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("Response".into(), match (&p.response) { Some(v) => iface_group_v2__groups_v2_group_member_leave_result__to_json(v), None => Value::Null });
     m.insert("ThrottleSeconds".into(), match (&p.throttle_seconds) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_group_v2__kick_member_response_message_data__to_json(p: &iface_group_v2::KickMemberResponseMessageData) -> Value {
+fn iface_group_v2__kick_member_response_message_data_entry__to_json(p: &iface_group_v2::KickMemberResponseMessageDataEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -1269,15 +1329,16 @@ fn iface_group_v2__edit_group_membership_response__to_json(p: &iface_group_v2::E
     m.insert("ErrorCode".into(), match (&p.error_code) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("ErrorStatus".into(), match (&p.error_status) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("Message".into(), match (&p.message) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("MessageData".into(), match (&p.message_data) { Some(v) => iface_group_v2__edit_group_membership_response_message_data__to_json(v), None => Value::Null });
+    m.insert("MessageData".into(), match (&p.message_data) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("Response".into(), match (&p.response) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("ThrottleSeconds".into(), match (&p.throttle_seconds) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_group_v2__edit_group_membership_response_message_data__to_json(p: &iface_group_v2::EditGroupMembershipResponseMessageData) -> Value {
+fn iface_group_v2__edit_group_membership_response_message_data_entry__to_json(p: &iface_group_v2::EditGroupMembershipResponseMessageDataEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -1287,15 +1348,16 @@ fn iface_group_v2__unban_member_response__to_json(p: &iface_group_v2::UnbanMembe
     m.insert("ErrorCode".into(), match (&p.error_code) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("ErrorStatus".into(), match (&p.error_status) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("Message".into(), match (&p.message) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("MessageData".into(), match (&p.message_data) { Some(v) => iface_group_v2__unban_member_response_message_data__to_json(v), None => Value::Null });
+    m.insert("MessageData".into(), match (&p.message_data) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("Response".into(), match (&p.response) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("ThrottleSeconds".into(), match (&p.throttle_seconds) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_group_v2__unban_member_response_message_data__to_json(p: &iface_group_v2::UnbanMemberResponseMessageData) -> Value {
+fn iface_group_v2__unban_member_response_message_data_entry__to_json(p: &iface_group_v2::UnbanMemberResponseMessageDataEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -1305,15 +1367,16 @@ fn iface_group_v2__get_group_optional_conversations_response__to_json(p: &iface_
     m.insert("ErrorCode".into(), match (&p.error_code) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("ErrorStatus".into(), match (&p.error_status) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("Message".into(), match (&p.message) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("MessageData".into(), match (&p.message_data) { Some(v) => iface_group_v2__get_group_optional_conversations_response_message_data__to_json(v), None => Value::Null });
+    m.insert("MessageData".into(), match (&p.message_data) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("Response".into(), match (&p.response) { Some(v) => Value::Array((v).iter().map(|v| iface_group_v2__groups_v2_group_optional_conversation__to_json(v)).collect()), None => Value::Null });
     m.insert("ThrottleSeconds".into(), match (&p.throttle_seconds) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_group_v2__get_group_optional_conversations_response_message_data__to_json(p: &iface_group_v2::GetGroupOptionalConversationsResponseMessageData) -> Value {
+fn iface_group_v2__get_group_optional_conversations_response_message_data_entry__to_json(p: &iface_group_v2::GetGroupOptionalConversationsResponseMessageDataEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -1333,15 +1396,16 @@ fn iface_group_v2__add_optional_conversation_response__to_json(p: &iface_group_v
     m.insert("ErrorCode".into(), match (&p.error_code) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("ErrorStatus".into(), match (&p.error_status) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("Message".into(), match (&p.message) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("MessageData".into(), match (&p.message_data) { Some(v) => iface_group_v2__add_optional_conversation_response_message_data__to_json(v), None => Value::Null });
+    m.insert("MessageData".into(), match (&p.message_data) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("Response".into(), match (&p.response) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("ThrottleSeconds".into(), match (&p.throttle_seconds) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_group_v2__add_optional_conversation_response_message_data__to_json(p: &iface_group_v2::AddOptionalConversationResponseMessageData) -> Value {
+fn iface_group_v2__add_optional_conversation_response_message_data_entry__to_json(p: &iface_group_v2::AddOptionalConversationResponseMessageDataEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -1351,15 +1415,16 @@ fn iface_group_v2__edit_optional_conversation_response__to_json(p: &iface_group_
     m.insert("ErrorCode".into(), match (&p.error_code) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("ErrorStatus".into(), match (&p.error_status) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("Message".into(), match (&p.message) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("MessageData".into(), match (&p.message_data) { Some(v) => iface_group_v2__edit_optional_conversation_response_message_data__to_json(v), None => Value::Null });
+    m.insert("MessageData".into(), match (&p.message_data) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("Response".into(), match (&p.response) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("ThrottleSeconds".into(), match (&p.throttle_seconds) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_group_v2__edit_optional_conversation_response_message_data__to_json(p: &iface_group_v2::EditOptionalConversationResponseMessageData) -> Value {
+fn iface_group_v2__edit_optional_conversation_response_message_data_entry__to_json(p: &iface_group_v2::EditOptionalConversationResponseMessageDataEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -1585,23 +1650,25 @@ fn iface_group_v2__get_available_avatars_response__from_json(v: &Value) -> Optio
         error_code: m.get("ErrorCode").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
         error_status: m.get("ErrorStatus").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         message: m.get("Message").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        message_data: m.get("MessageData").filter(|v| !v.is_null()).and_then(|v| iface_group_v2__get_available_avatars_response_message_data__from_json(v)),
-        response: m.get("Response").filter(|v| !v.is_null()).and_then(|v| iface_group_v2__get_available_avatars_response_response__from_json(v)),
+        message_data: m.get("MessageData").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_group_v2::GetAvailableAvatarsResponseMessageDataEntry { key: k.clone(), value: val })).collect())),
+        response: m.get("Response").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_group_v2::GetAvailableAvatarsResponseResponseEntry { key: k.clone(), value: val })).collect())),
         throttle_seconds: m.get("ThrottleSeconds").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
     })
 }
 
-fn iface_group_v2__get_available_avatars_response_message_data__from_json(v: &Value) -> Option<iface_group_v2::GetAvailableAvatarsResponseMessageData> {
+fn iface_group_v2__get_available_avatars_response_message_data_entry__from_json(v: &Value) -> Option<iface_group_v2::GetAvailableAvatarsResponseMessageDataEntry> {
     let m = v.as_object()?;
-    Some(iface_group_v2::GetAvailableAvatarsResponseMessageData {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_group_v2::GetAvailableAvatarsResponseMessageDataEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
-fn iface_group_v2__get_available_avatars_response_response__from_json(v: &Value) -> Option<iface_group_v2::GetAvailableAvatarsResponseResponse> {
+fn iface_group_v2__get_available_avatars_response_response_entry__from_json(v: &Value) -> Option<iface_group_v2::GetAvailableAvatarsResponseResponseEntry> {
     let m = v.as_object()?;
-    Some(iface_group_v2::GetAvailableAvatarsResponseResponse {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_group_v2::GetAvailableAvatarsResponseResponseEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -1612,16 +1679,17 @@ fn iface_group_v2__get_available_themes_response__from_json(v: &Value) -> Option
         error_code: m.get("ErrorCode").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
         error_status: m.get("ErrorStatus").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         message: m.get("Message").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        message_data: m.get("MessageData").filter(|v| !v.is_null()).and_then(|v| iface_group_v2__get_available_themes_response_message_data__from_json(v)),
+        message_data: m.get("MessageData").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_group_v2::GetAvailableThemesResponseMessageDataEntry { key: k.clone(), value: val })).collect())),
         response: m.get("Response").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_group_v2__config_group_theme__from_json(x)).collect())),
         throttle_seconds: m.get("ThrottleSeconds").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
     })
 }
 
-fn iface_group_v2__get_available_themes_response_message_data__from_json(v: &Value) -> Option<iface_group_v2::GetAvailableThemesResponseMessageData> {
+fn iface_group_v2__get_available_themes_response_message_data_entry__from_json(v: &Value) -> Option<iface_group_v2::GetAvailableThemesResponseMessageDataEntry> {
     let m = v.as_object()?;
-    Some(iface_group_v2::GetAvailableThemesResponseMessageData {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_group_v2::GetAvailableThemesResponseMessageDataEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -1641,16 +1709,17 @@ fn iface_group_v2__get_user_clan_invite_setting_response__from_json(v: &Value) -
         error_code: m.get("ErrorCode").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
         error_status: m.get("ErrorStatus").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         message: m.get("Message").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        message_data: m.get("MessageData").filter(|v| !v.is_null()).and_then(|v| iface_group_v2__get_user_clan_invite_setting_response_message_data__from_json(v)),
+        message_data: m.get("MessageData").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_group_v2::GetUserClanInviteSettingResponseMessageDataEntry { key: k.clone(), value: val })).collect())),
         response: m.get("Response").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
         throttle_seconds: m.get("ThrottleSeconds").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
     })
 }
 
-fn iface_group_v2__get_user_clan_invite_setting_response_message_data__from_json(v: &Value) -> Option<iface_group_v2::GetUserClanInviteSettingResponseMessageData> {
+fn iface_group_v2__get_user_clan_invite_setting_response_message_data_entry__from_json(v: &Value) -> Option<iface_group_v2::GetUserClanInviteSettingResponseMessageDataEntry> {
     let m = v.as_object()?;
-    Some(iface_group_v2::GetUserClanInviteSettingResponseMessageData {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_group_v2::GetUserClanInviteSettingResponseMessageDataEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -1661,16 +1730,17 @@ fn iface_group_v2__get_group_by_name_response__from_json(v: &Value) -> Option<if
         error_code: m.get("ErrorCode").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
         error_status: m.get("ErrorStatus").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         message: m.get("Message").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        message_data: m.get("MessageData").filter(|v| !v.is_null()).and_then(|v| iface_group_v2__get_group_by_name_response_message_data__from_json(v)),
+        message_data: m.get("MessageData").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_group_v2::GetGroupByNameResponseMessageDataEntry { key: k.clone(), value: val })).collect())),
         response: m.get("Response").filter(|v| !v.is_null()).and_then(|v| iface_group_v2__groups_v2_group_response__from_json(v)),
         throttle_seconds: m.get("ThrottleSeconds").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
     })
 }
 
-fn iface_group_v2__get_group_by_name_response_message_data__from_json(v: &Value) -> Option<iface_group_v2::GetGroupByNameResponseMessageData> {
+fn iface_group_v2__get_group_by_name_response_message_data_entry__from_json(v: &Value) -> Option<iface_group_v2::GetGroupByNameResponseMessageDataEntry> {
     let m = v.as_object()?;
-    Some(iface_group_v2::GetGroupByNameResponseMessageData {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_group_v2::GetGroupByNameResponseMessageDataEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -1679,105 +1749,13 @@ fn iface_group_v2__groups_v2_group_response__from_json(v: &Value) -> Option<ifac
     Some(iface_group_v2::GroupsV2GroupResponse {
         alliance_status: m.get("allianceStatus").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
         allied_ids: m.get("alliedIds").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_i64()).collect())),
-        current_user_member_map: m.get("currentUserMemberMap").filter(|v| !v.is_null()).and_then(|v| iface_group_v2__groups_v2_group_response_current_user_member_map__from_json(v)),
+        current_user_member_map: m.get("currentUserMemberMap").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| (iface_group_v2__groups_v2_group_member__from_json(x)).map(|val| iface_group_v2::GroupsV2GroupResponseCurrentUserMemberMapEntry { key: k.clone(), value: val })).collect())),
         current_user_memberships_inactive_for_destiny: m.get("currentUserMembershipsInactiveForDestiny").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
-        current_user_potential_member_map: m.get("currentUserPotentialMemberMap").filter(|v| !v.is_null()).and_then(|v| iface_group_v2__groups_v2_group_response_current_user_potential_member_map__from_json(v)),
+        current_user_potential_member_map: m.get("currentUserPotentialMemberMap").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| (iface_group_v2__groups_v2_group_potential_member__from_json(x)).map(|val| iface_group_v2::GroupsV2GroupResponseCurrentUserPotentialMemberMapEntry { key: k.clone(), value: val })).collect())),
         detail: m.get("detail").filter(|v| !v.is_null()).and_then(|v| iface_group_v2__groups_v2_group_v2__from_json(v)),
         founder: m.get("founder").filter(|v| !v.is_null()).and_then(|v| iface_group_v2__groups_v2_group_member__from_json(v)),
         group_join_invite_count: m.get("groupJoinInviteCount").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
         parent_group: m.get("parentGroup").filter(|v| !v.is_null()).and_then(|v| iface_group_v2__groups_v2_group_v2__from_json(v)),
-    })
-}
-
-fn iface_group_v2__groups_v2_group_response_current_user_member_map__from_json(v: &Value) -> Option<iface_group_v2::GroupsV2GroupResponseCurrentUserMemberMap> {
-    let m = v.as_object()?;
-    Some(iface_group_v2::GroupsV2GroupResponseCurrentUserMemberMap {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-    })
-}
-
-fn iface_group_v2__groups_v2_group_response_current_user_potential_member_map__from_json(v: &Value) -> Option<iface_group_v2::GroupsV2GroupResponseCurrentUserPotentialMemberMap> {
-    let m = v.as_object()?;
-    Some(iface_group_v2::GroupsV2GroupResponseCurrentUserPotentialMemberMap {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-    })
-}
-
-fn iface_group_v2__groups_v2_group_v2__from_json(v: &Value) -> Option<iface_group_v2::GroupsV2GroupV2> {
-    let m = v.as_object()?;
-    Some(iface_group_v2::GroupsV2GroupV2 {
-        about: m.get("about").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        allow_chat: m.get("allowChat").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
-        avatar_image_index: m.get("avatarImageIndex").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
-        avatar_path: m.get("avatarPath").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        ban_expire_date: m.get("banExpireDate").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        banner_path: m.get("bannerPath").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        chat_security: m.get("chatSecurity").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
-        clan_info: m.get("clanInfo").filter(|v| !v.is_null()).and_then(|v| iface_group_v2__groups_v2_group_v2_clan_info_and_investment__from_json(v)),
-        conversation_id: m.get("conversationId").filter(|v| !v.is_null()).and_then(|v| (v).as_i64()),
-        creation_date: m.get("creationDate").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        default_publicity: m.get("defaultPublicity").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
-        enable_invitation_messaging_for_admins: m.get("enableInvitationMessagingForAdmins").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
-        features: m.get("features").filter(|v| !v.is_null()).and_then(|v| iface_group_v2__groups_v2_group_features__from_json(v)),
-        group_id: m.get("groupId").filter(|v| !v.is_null()).and_then(|v| (v).as_i64()),
-        group_type: m.get("groupType").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
-        homepage: m.get("homepage").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
-        is_default_post_public: m.get("isDefaultPostPublic").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
-        is_public: m.get("isPublic").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
-        is_public_topic_admin_only: m.get("isPublicTopicAdminOnly").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
-        locale: m.get("locale").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        member_count: m.get("memberCount").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
-        membership_id_created: m.get("membershipIdCreated").filter(|v| !v.is_null()).and_then(|v| (v).as_i64()),
-        membership_option: m.get("membershipOption").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
-        modification_date: m.get("modificationDate").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        motto: m.get("motto").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        tags: m.get("tags").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
-        theme: m.get("theme").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-    })
-}
-
-fn iface_group_v2__groups_v2_group_v2_clan_info_and_investment__from_json(v: &Value) -> Option<iface_group_v2::GroupsV2GroupV2ClanInfoAndInvestment> {
-    let m = v.as_object()?;
-    Some(iface_group_v2::GroupsV2GroupV2ClanInfoAndInvestment {
-        clan_banner_data: m.get("clanBannerData").filter(|v| !v.is_null()).and_then(|v| iface_group_v2__groups_v2_clan_banner__from_json(v)),
-        clan_callsign: m.get("clanCallsign").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        d2_clan_progressions: m.get("d2ClanProgressions").filter(|v| !v.is_null()).and_then(|v| iface_group_v2__groups_v2_group_v2_clan_info_and_investment_d2_clan_progressions__from_json(v)),
-    })
-}
-
-fn iface_group_v2__groups_v2_clan_banner__from_json(v: &Value) -> Option<iface_group_v2::GroupsV2ClanBanner> {
-    let m = v.as_object()?;
-    Some(iface_group_v2::GroupsV2ClanBanner {
-        decal_background_color_id: m.get("decalBackgroundColorId").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
-        decal_color_id: m.get("decalColorId").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
-        decal_id: m.get("decalId").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
-        gonfalon_color_id: m.get("gonfalonColorId").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
-        gonfalon_detail_color_id: m.get("gonfalonDetailColorId").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
-        gonfalon_detail_id: m.get("gonfalonDetailId").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
-        gonfalon_id: m.get("gonfalonId").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
-    })
-}
-
-fn iface_group_v2__groups_v2_group_v2_clan_info_and_investment_d2_clan_progressions__from_json(v: &Value) -> Option<iface_group_v2::GroupsV2GroupV2ClanInfoAndInvestmentD2ClanProgressions> {
-    let m = v.as_object()?;
-    Some(iface_group_v2::GroupsV2GroupV2ClanInfoAndInvestmentD2ClanProgressions {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-    })
-}
-
-fn iface_group_v2__groups_v2_group_features__from_json(v: &Value) -> Option<iface_group_v2::GroupsV2GroupFeatures> {
-    let m = v.as_object()?;
-    Some(iface_group_v2::GroupsV2GroupFeatures {
-        capabilities: m.get("capabilities").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
-        host_guided_game_permission_override: m.get("hostGuidedGamePermissionOverride").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
-        invite_permission_override: m.get("invitePermissionOverride").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
-        join_level: m.get("joinLevel").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
-        maximum_members: m.get("maximumMembers").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
-        maximum_memberships_of_group_type: m.get("maximumMembershipsOfGroupType").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
-        membership_types: m.get("membershipTypes").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_i64().map(|n| n as i32)).collect())),
-        update_banner_permission_override: m.get("updateBannerPermissionOverride").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
-        update_culture_permission_override: m.get("updateCulturePermissionOverride").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
     })
 }
 
@@ -1828,6 +1806,140 @@ fn iface_group_v2__groups_v2_group_user_info_card__from_json(v: &Value) -> Optio
     })
 }
 
+fn iface_group_v2__groups_v2_group_response_current_user_member_map_entry__from_json(v: &Value) -> Option<iface_group_v2::GroupsV2GroupResponseCurrentUserMemberMapEntry> {
+    let m = v.as_object()?;
+    Some(iface_group_v2::GroupsV2GroupResponseCurrentUserMemberMapEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: match m.get("value").and_then(|v| iface_group_v2__groups_v2_group_member__from_json(v)) { Some(x) => x, None => return None },
+    })
+}
+
+fn iface_group_v2__groups_v2_group_potential_member__from_json(v: &Value) -> Option<iface_group_v2::GroupsV2GroupPotentialMember> {
+    let m = v.as_object()?;
+    Some(iface_group_v2::GroupsV2GroupPotentialMember {
+        bungie_net_user_info: m.get("bungieNetUserInfo").filter(|v| !v.is_null()).and_then(|v| iface_group_v2__user_user_info_card__from_json(v)),
+        destiny_user_info: m.get("destinyUserInfo").filter(|v| !v.is_null()).and_then(|v| iface_group_v2__groups_v2_group_user_info_card__from_json(v)),
+        group_id: m.get("groupId").filter(|v| !v.is_null()).and_then(|v| (v).as_i64()),
+        join_date: m.get("joinDate").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        potential_status: m.get("potentialStatus").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+    })
+}
+
+fn iface_group_v2__groups_v2_group_response_current_user_potential_member_map_entry__from_json(v: &Value) -> Option<iface_group_v2::GroupsV2GroupResponseCurrentUserPotentialMemberMapEntry> {
+    let m = v.as_object()?;
+    Some(iface_group_v2::GroupsV2GroupResponseCurrentUserPotentialMemberMapEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: match m.get("value").and_then(|v| iface_group_v2__groups_v2_group_potential_member__from_json(v)) { Some(x) => x, None => return None },
+    })
+}
+
+fn iface_group_v2__groups_v2_group_v2__from_json(v: &Value) -> Option<iface_group_v2::GroupsV2GroupV2> {
+    let m = v.as_object()?;
+    Some(iface_group_v2::GroupsV2GroupV2 {
+        about: m.get("about").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        allow_chat: m.get("allowChat").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        avatar_image_index: m.get("avatarImageIndex").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        avatar_path: m.get("avatarPath").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        ban_expire_date: m.get("banExpireDate").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        banner_path: m.get("bannerPath").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        chat_security: m.get("chatSecurity").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        clan_info: m.get("clanInfo").filter(|v| !v.is_null()).and_then(|v| iface_group_v2__groups_v2_group_v2_clan_info_and_investment__from_json(v)),
+        conversation_id: m.get("conversationId").filter(|v| !v.is_null()).and_then(|v| (v).as_i64()),
+        creation_date: m.get("creationDate").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        default_publicity: m.get("defaultPublicity").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        enable_invitation_messaging_for_admins: m.get("enableInvitationMessagingForAdmins").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        features: m.get("features").filter(|v| !v.is_null()).and_then(|v| iface_group_v2__groups_v2_group_features__from_json(v)),
+        group_id: m.get("groupId").filter(|v| !v.is_null()).and_then(|v| (v).as_i64()),
+        group_type: m.get("groupType").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        homepage: m.get("homepage").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        is_default_post_public: m.get("isDefaultPostPublic").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        is_public: m.get("isPublic").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        is_public_topic_admin_only: m.get("isPublicTopicAdminOnly").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        locale: m.get("locale").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        member_count: m.get("memberCount").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        membership_id_created: m.get("membershipIdCreated").filter(|v| !v.is_null()).and_then(|v| (v).as_i64()),
+        membership_option: m.get("membershipOption").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        modification_date: m.get("modificationDate").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        motto: m.get("motto").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        tags: m.get("tags").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        theme: m.get("theme").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_group_v2__groups_v2_group_v2_clan_info_and_investment__from_json(v: &Value) -> Option<iface_group_v2::GroupsV2GroupV2ClanInfoAndInvestment> {
+    let m = v.as_object()?;
+    Some(iface_group_v2::GroupsV2GroupV2ClanInfoAndInvestment {
+        clan_banner_data: m.get("clanBannerData").filter(|v| !v.is_null()).and_then(|v| iface_group_v2__groups_v2_clan_banner__from_json(v)),
+        clan_callsign: m.get("clanCallsign").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        d2_clan_progressions: m.get("d2ClanProgressions").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| (iface_group_v2__destiny_destiny_progression__from_json(x)).map(|val| iface_group_v2::GroupsV2GroupV2ClanInfoAndInvestmentD2ClanProgressionsEntry { key: k.clone(), value: val })).collect())),
+    })
+}
+
+fn iface_group_v2__groups_v2_clan_banner__from_json(v: &Value) -> Option<iface_group_v2::GroupsV2ClanBanner> {
+    let m = v.as_object()?;
+    Some(iface_group_v2::GroupsV2ClanBanner {
+        decal_background_color_id: m.get("decalBackgroundColorId").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        decal_color_id: m.get("decalColorId").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        decal_id: m.get("decalId").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        gonfalon_color_id: m.get("gonfalonColorId").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        gonfalon_detail_color_id: m.get("gonfalonDetailColorId").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        gonfalon_detail_id: m.get("gonfalonDetailId").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        gonfalon_id: m.get("gonfalonId").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+    })
+}
+
+fn iface_group_v2__destiny_destiny_progression__from_json(v: &Value) -> Option<iface_group_v2::DestinyDestinyProgression> {
+    let m = v.as_object()?;
+    Some(iface_group_v2::DestinyDestinyProgression {
+        current_progress: m.get("currentProgress").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        current_reset_count: m.get("currentResetCount").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        daily_limit: m.get("dailyLimit").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        daily_progress: m.get("dailyProgress").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        level: m.get("level").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        level_cap: m.get("levelCap").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        next_level_at: m.get("nextLevelAt").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        progress_to_next_level: m.get("progressToNextLevel").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        progression_hash: m.get("progressionHash").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        reward_item_states: m.get("rewardItemStates").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_i64().map(|n| n as i32)).collect())),
+        season_resets: m.get("seasonResets").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_group_v2__destiny_destiny_progression_reset_entry__from_json(x)).collect())),
+        step_index: m.get("stepIndex").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        weekly_limit: m.get("weeklyLimit").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        weekly_progress: m.get("weeklyProgress").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+    })
+}
+
+fn iface_group_v2__destiny_destiny_progression_reset_entry__from_json(v: &Value) -> Option<iface_group_v2::DestinyDestinyProgressionResetEntry> {
+    let m = v.as_object()?;
+    Some(iface_group_v2::DestinyDestinyProgressionResetEntry {
+        resets: m.get("resets").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        season: m.get("season").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+    })
+}
+
+fn iface_group_v2__groups_v2_group_v2_clan_info_and_investment_d2_clan_progressions_entry__from_json(v: &Value) -> Option<iface_group_v2::GroupsV2GroupV2ClanInfoAndInvestmentD2ClanProgressionsEntry> {
+    let m = v.as_object()?;
+    Some(iface_group_v2::GroupsV2GroupV2ClanInfoAndInvestmentD2ClanProgressionsEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: match m.get("value").and_then(|v| iface_group_v2__destiny_destiny_progression__from_json(v)) { Some(x) => x, None => return None },
+    })
+}
+
+fn iface_group_v2__groups_v2_group_features__from_json(v: &Value) -> Option<iface_group_v2::GroupsV2GroupFeatures> {
+    let m = v.as_object()?;
+    Some(iface_group_v2::GroupsV2GroupFeatures {
+        capabilities: m.get("capabilities").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        host_guided_game_permission_override: m.get("hostGuidedGamePermissionOverride").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        invite_permission_override: m.get("invitePermissionOverride").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        join_level: m.get("joinLevel").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        maximum_members: m.get("maximumMembers").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        maximum_memberships_of_group_type: m.get("maximumMembershipsOfGroupType").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        membership_types: m.get("membershipTypes").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_i64().map(|n| n as i32)).collect())),
+        update_banner_permission_override: m.get("updateBannerPermissionOverride").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        update_culture_permission_override: m.get("updateCulturePermissionOverride").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+    })
+}
+
 fn iface_group_v2__get_group_by_name_v2_response__from_json(v: &Value) -> Option<iface_group_v2::GetGroupByNameV2Response> {
     let m = v.as_object()?;
     Some(iface_group_v2::GetGroupByNameV2Response {
@@ -1835,16 +1947,17 @@ fn iface_group_v2__get_group_by_name_v2_response__from_json(v: &Value) -> Option
         error_code: m.get("ErrorCode").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
         error_status: m.get("ErrorStatus").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         message: m.get("Message").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        message_data: m.get("MessageData").filter(|v| !v.is_null()).and_then(|v| iface_group_v2__get_group_by_name_v2_response_message_data__from_json(v)),
+        message_data: m.get("MessageData").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_group_v2::GetGroupByNameV2ResponseMessageDataEntry { key: k.clone(), value: val })).collect())),
         response: m.get("Response").filter(|v| !v.is_null()).and_then(|v| iface_group_v2__groups_v2_group_response__from_json(v)),
         throttle_seconds: m.get("ThrottleSeconds").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
     })
 }
 
-fn iface_group_v2__get_group_by_name_v2_response_message_data__from_json(v: &Value) -> Option<iface_group_v2::GetGroupByNameV2ResponseMessageData> {
+fn iface_group_v2__get_group_by_name_v2_response_message_data_entry__from_json(v: &Value) -> Option<iface_group_v2::GetGroupByNameV2ResponseMessageDataEntry> {
     let m = v.as_object()?;
-    Some(iface_group_v2::GetGroupByNameV2ResponseMessageData {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_group_v2::GetGroupByNameV2ResponseMessageDataEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -1855,16 +1968,17 @@ fn iface_group_v2__get_recommended_groups_response__from_json(v: &Value) -> Opti
         error_code: m.get("ErrorCode").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
         error_status: m.get("ErrorStatus").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         message: m.get("Message").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        message_data: m.get("MessageData").filter(|v| !v.is_null()).and_then(|v| iface_group_v2__get_recommended_groups_response_message_data__from_json(v)),
+        message_data: m.get("MessageData").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_group_v2::GetRecommendedGroupsResponseMessageDataEntry { key: k.clone(), value: val })).collect())),
         response: m.get("Response").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_group_v2__groups_v2_group_v2_card__from_json(x)).collect())),
         throttle_seconds: m.get("ThrottleSeconds").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
     })
 }
 
-fn iface_group_v2__get_recommended_groups_response_message_data__from_json(v: &Value) -> Option<iface_group_v2::GetRecommendedGroupsResponseMessageData> {
+fn iface_group_v2__get_recommended_groups_response_message_data_entry__from_json(v: &Value) -> Option<iface_group_v2::GetRecommendedGroupsResponseMessageDataEntry> {
     let m = v.as_object()?;
-    Some(iface_group_v2::GetRecommendedGroupsResponseMessageData {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_group_v2::GetRecommendedGroupsResponseMessageDataEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -1902,16 +2016,17 @@ fn iface_group_v2__recover_group_for_founder_response__from_json(v: &Value) -> O
         error_code: m.get("ErrorCode").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
         error_status: m.get("ErrorStatus").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         message: m.get("Message").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        message_data: m.get("MessageData").filter(|v| !v.is_null()).and_then(|v| iface_group_v2__recover_group_for_founder_response_message_data__from_json(v)),
+        message_data: m.get("MessageData").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_group_v2::RecoverGroupForFounderResponseMessageDataEntry { key: k.clone(), value: val })).collect())),
         response: m.get("Response").filter(|v| !v.is_null()).and_then(|v| iface_group_v2__groups_v2_group_membership_search_response__from_json(v)),
         throttle_seconds: m.get("ThrottleSeconds").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
     })
 }
 
-fn iface_group_v2__recover_group_for_founder_response_message_data__from_json(v: &Value) -> Option<iface_group_v2::RecoverGroupForFounderResponseMessageData> {
+fn iface_group_v2__recover_group_for_founder_response_message_data_entry__from_json(v: &Value) -> Option<iface_group_v2::RecoverGroupForFounderResponseMessageDataEntry> {
     let m = v.as_object()?;
-    Some(iface_group_v2::RecoverGroupForFounderResponseMessageData {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_group_v2::RecoverGroupForFounderResponseMessageDataEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -1951,16 +2066,17 @@ fn iface_group_v2__group_search_response__from_json(v: &Value) -> Option<iface_g
         error_code: m.get("ErrorCode").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
         error_status: m.get("ErrorStatus").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         message: m.get("Message").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        message_data: m.get("MessageData").filter(|v| !v.is_null()).and_then(|v| iface_group_v2__group_search_response_message_data__from_json(v)),
+        message_data: m.get("MessageData").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_group_v2::GroupSearchResponseMessageDataEntry { key: k.clone(), value: val })).collect())),
         response: m.get("Response").filter(|v| !v.is_null()).and_then(|v| iface_group_v2__groups_v2_group_search_response__from_json(v)),
         throttle_seconds: m.get("ThrottleSeconds").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
     })
 }
 
-fn iface_group_v2__group_search_response_message_data__from_json(v: &Value) -> Option<iface_group_v2::GroupSearchResponseMessageData> {
+fn iface_group_v2__group_search_response_message_data_entry__from_json(v: &Value) -> Option<iface_group_v2::GroupSearchResponseMessageDataEntry> {
     let m = v.as_object()?;
-    Some(iface_group_v2::GroupSearchResponseMessageData {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_group_v2::GroupSearchResponseMessageDataEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -1983,16 +2099,17 @@ fn iface_group_v2__get_potential_groups_for_member_response__from_json(v: &Value
         error_code: m.get("ErrorCode").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
         error_status: m.get("ErrorStatus").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         message: m.get("Message").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        message_data: m.get("MessageData").filter(|v| !v.is_null()).and_then(|v| iface_group_v2__get_potential_groups_for_member_response_message_data__from_json(v)),
+        message_data: m.get("MessageData").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_group_v2::GetPotentialGroupsForMemberResponseMessageDataEntry { key: k.clone(), value: val })).collect())),
         response: m.get("Response").filter(|v| !v.is_null()).and_then(|v| iface_group_v2__groups_v2_group_potential_membership_search_response__from_json(v)),
         throttle_seconds: m.get("ThrottleSeconds").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
     })
 }
 
-fn iface_group_v2__get_potential_groups_for_member_response_message_data__from_json(v: &Value) -> Option<iface_group_v2::GetPotentialGroupsForMemberResponseMessageData> {
+fn iface_group_v2__get_potential_groups_for_member_response_message_data_entry__from_json(v: &Value) -> Option<iface_group_v2::GetPotentialGroupsForMemberResponseMessageDataEntry> {
     let m = v.as_object()?;
-    Some(iface_group_v2::GetPotentialGroupsForMemberResponseMessageData {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_group_v2::GetPotentialGroupsForMemberResponseMessageDataEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -2016,17 +2133,6 @@ fn iface_group_v2__groups_v2_group_potential_membership__from_json(v: &Value) ->
     })
 }
 
-fn iface_group_v2__groups_v2_group_potential_member__from_json(v: &Value) -> Option<iface_group_v2::GroupsV2GroupPotentialMember> {
-    let m = v.as_object()?;
-    Some(iface_group_v2::GroupsV2GroupPotentialMember {
-        bungie_net_user_info: m.get("bungieNetUserInfo").filter(|v| !v.is_null()).and_then(|v| iface_group_v2__user_user_info_card__from_json(v)),
-        destiny_user_info: m.get("destinyUserInfo").filter(|v| !v.is_null()).and_then(|v| iface_group_v2__groups_v2_group_user_info_card__from_json(v)),
-        group_id: m.get("groupId").filter(|v| !v.is_null()).and_then(|v| (v).as_i64()),
-        join_date: m.get("joinDate").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        potential_status: m.get("potentialStatus").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
-    })
-}
-
 fn iface_group_v2__get_groups_for_member_response__from_json(v: &Value) -> Option<iface_group_v2::GetGroupsForMemberResponse> {
     let m = v.as_object()?;
     Some(iface_group_v2::GetGroupsForMemberResponse {
@@ -2034,23 +2140,24 @@ fn iface_group_v2__get_groups_for_member_response__from_json(v: &Value) -> Optio
         error_code: m.get("ErrorCode").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
         error_status: m.get("ErrorStatus").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         message: m.get("Message").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        message_data: m.get("MessageData").filter(|v| !v.is_null()).and_then(|v| iface_group_v2__get_groups_for_member_response_message_data__from_json(v)),
+        message_data: m.get("MessageData").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_group_v2::GetGroupsForMemberResponseMessageDataEntry { key: k.clone(), value: val })).collect())),
         response: m.get("Response").filter(|v| !v.is_null()).and_then(|v| iface_group_v2__groups_v2_get_groups_for_member_response__from_json(v)),
         throttle_seconds: m.get("ThrottleSeconds").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
     })
 }
 
-fn iface_group_v2__get_groups_for_member_response_message_data__from_json(v: &Value) -> Option<iface_group_v2::GetGroupsForMemberResponseMessageData> {
+fn iface_group_v2__get_groups_for_member_response_message_data_entry__from_json(v: &Value) -> Option<iface_group_v2::GetGroupsForMemberResponseMessageDataEntry> {
     let m = v.as_object()?;
-    Some(iface_group_v2::GetGroupsForMemberResponseMessageData {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_group_v2::GetGroupsForMemberResponseMessageDataEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
 fn iface_group_v2__groups_v2_get_groups_for_member_response__from_json(v: &Value) -> Option<iface_group_v2::GroupsV2GetGroupsForMemberResponse> {
     let m = v.as_object()?;
     Some(iface_group_v2::GroupsV2GetGroupsForMemberResponse {
-        are_all_memberships_inactive: m.get("areAllMembershipsInactive").filter(|v| !v.is_null()).and_then(|v| iface_group_v2__groups_v2_get_groups_for_member_response_are_all_memberships_inactive__from_json(v)),
+        are_all_memberships_inactive: m.get("areAllMembershipsInactive").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_bool()).map(|val| iface_group_v2::GroupsV2GetGroupsForMemberResponseAreAllMembershipsInactiveEntry { key: k.clone(), value: val })).collect())),
         has_more: m.get("hasMore").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
         query: m.get("query").filter(|v| !v.is_null()).and_then(|v| iface_group_v2__queries_paged_query__from_json(v)),
         replacement_continuation_token: m.get("replacementContinuationToken").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
@@ -2060,10 +2167,11 @@ fn iface_group_v2__groups_v2_get_groups_for_member_response__from_json(v: &Value
     })
 }
 
-fn iface_group_v2__groups_v2_get_groups_for_member_response_are_all_memberships_inactive__from_json(v: &Value) -> Option<iface_group_v2::GroupsV2GetGroupsForMemberResponseAreAllMembershipsInactive> {
+fn iface_group_v2__groups_v2_get_groups_for_member_response_are_all_memberships_inactive_entry__from_json(v: &Value) -> Option<iface_group_v2::GroupsV2GetGroupsForMemberResponseAreAllMembershipsInactiveEntry> {
     let m = v.as_object()?;
-    Some(iface_group_v2::GroupsV2GetGroupsForMemberResponseAreAllMembershipsInactive {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_group_v2::GroupsV2GetGroupsForMemberResponseAreAllMembershipsInactiveEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_bool()).unwrap_or_default(),
     })
 }
 
@@ -2074,16 +2182,17 @@ fn iface_group_v2__get_group_response__from_json(v: &Value) -> Option<iface_grou
         error_code: m.get("ErrorCode").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
         error_status: m.get("ErrorStatus").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         message: m.get("Message").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        message_data: m.get("MessageData").filter(|v| !v.is_null()).and_then(|v| iface_group_v2__get_group_response_message_data__from_json(v)),
+        message_data: m.get("MessageData").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_group_v2::GetGroupResponseMessageDataEntry { key: k.clone(), value: val })).collect())),
         response: m.get("Response").filter(|v| !v.is_null()).and_then(|v| iface_group_v2__groups_v2_group_response__from_json(v)),
         throttle_seconds: m.get("ThrottleSeconds").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
     })
 }
 
-fn iface_group_v2__get_group_response_message_data__from_json(v: &Value) -> Option<iface_group_v2::GetGroupResponseMessageData> {
+fn iface_group_v2__get_group_response_message_data_entry__from_json(v: &Value) -> Option<iface_group_v2::GetGroupResponseMessageDataEntry> {
     let m = v.as_object()?;
-    Some(iface_group_v2::GetGroupResponseMessageData {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_group_v2::GetGroupResponseMessageDataEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -2094,16 +2203,17 @@ fn iface_group_v2__abdicate_foundership_response__from_json(v: &Value) -> Option
         error_code: m.get("ErrorCode").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
         error_status: m.get("ErrorStatus").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         message: m.get("Message").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        message_data: m.get("MessageData").filter(|v| !v.is_null()).and_then(|v| iface_group_v2__abdicate_foundership_response_message_data__from_json(v)),
+        message_data: m.get("MessageData").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_group_v2::AbdicateFoundershipResponseMessageDataEntry { key: k.clone(), value: val })).collect())),
         response: m.get("Response").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
         throttle_seconds: m.get("ThrottleSeconds").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
     })
 }
 
-fn iface_group_v2__abdicate_foundership_response_message_data__from_json(v: &Value) -> Option<iface_group_v2::AbdicateFoundershipResponseMessageData> {
+fn iface_group_v2__abdicate_foundership_response_message_data_entry__from_json(v: &Value) -> Option<iface_group_v2::AbdicateFoundershipResponseMessageDataEntry> {
     let m = v.as_object()?;
-    Some(iface_group_v2::AbdicateFoundershipResponseMessageData {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_group_v2::AbdicateFoundershipResponseMessageDataEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -2114,16 +2224,17 @@ fn iface_group_v2__get_admins_and_founder_of_group_response__from_json(v: &Value
         error_code: m.get("ErrorCode").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
         error_status: m.get("ErrorStatus").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         message: m.get("Message").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        message_data: m.get("MessageData").filter(|v| !v.is_null()).and_then(|v| iface_group_v2__get_admins_and_founder_of_group_response_message_data__from_json(v)),
+        message_data: m.get("MessageData").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_group_v2::GetAdminsAndFounderOfGroupResponseMessageDataEntry { key: k.clone(), value: val })).collect())),
         response: m.get("Response").filter(|v| !v.is_null()).and_then(|v| iface_group_v2__search_result_of_group_member__from_json(v)),
         throttle_seconds: m.get("ThrottleSeconds").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
     })
 }
 
-fn iface_group_v2__get_admins_and_founder_of_group_response_message_data__from_json(v: &Value) -> Option<iface_group_v2::GetAdminsAndFounderOfGroupResponseMessageData> {
+fn iface_group_v2__get_admins_and_founder_of_group_response_message_data_entry__from_json(v: &Value) -> Option<iface_group_v2::GetAdminsAndFounderOfGroupResponseMessageDataEntry> {
     let m = v.as_object()?;
-    Some(iface_group_v2::GetAdminsAndFounderOfGroupResponseMessageData {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_group_v2::GetAdminsAndFounderOfGroupResponseMessageDataEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -2146,16 +2257,17 @@ fn iface_group_v2__get_banned_members_of_group_response__from_json(v: &Value) ->
         error_code: m.get("ErrorCode").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
         error_status: m.get("ErrorStatus").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         message: m.get("Message").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        message_data: m.get("MessageData").filter(|v| !v.is_null()).and_then(|v| iface_group_v2__get_banned_members_of_group_response_message_data__from_json(v)),
+        message_data: m.get("MessageData").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_group_v2::GetBannedMembersOfGroupResponseMessageDataEntry { key: k.clone(), value: val })).collect())),
         response: m.get("Response").filter(|v| !v.is_null()).and_then(|v| iface_group_v2__search_result_of_group_ban__from_json(v)),
         throttle_seconds: m.get("ThrottleSeconds").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
     })
 }
 
-fn iface_group_v2__get_banned_members_of_group_response_message_data__from_json(v: &Value) -> Option<iface_group_v2::GetBannedMembersOfGroupResponseMessageData> {
+fn iface_group_v2__get_banned_members_of_group_response_message_data_entry__from_json(v: &Value) -> Option<iface_group_v2::GetBannedMembersOfGroupResponseMessageDataEntry> {
     let m = v.as_object()?;
-    Some(iface_group_v2::GetBannedMembersOfGroupResponseMessageData {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_group_v2::GetBannedMembersOfGroupResponseMessageDataEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -2192,16 +2304,17 @@ fn iface_group_v2__edit_group_response__from_json(v: &Value) -> Option<iface_gro
         error_code: m.get("ErrorCode").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
         error_status: m.get("ErrorStatus").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         message: m.get("Message").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        message_data: m.get("MessageData").filter(|v| !v.is_null()).and_then(|v| iface_group_v2__edit_group_response_message_data__from_json(v)),
+        message_data: m.get("MessageData").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_group_v2::EditGroupResponseMessageDataEntry { key: k.clone(), value: val })).collect())),
         response: m.get("Response").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
         throttle_seconds: m.get("ThrottleSeconds").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
     })
 }
 
-fn iface_group_v2__edit_group_response_message_data__from_json(v: &Value) -> Option<iface_group_v2::EditGroupResponseMessageData> {
+fn iface_group_v2__edit_group_response_message_data_entry__from_json(v: &Value) -> Option<iface_group_v2::EditGroupResponseMessageDataEntry> {
     let m = v.as_object()?;
-    Some(iface_group_v2::EditGroupResponseMessageData {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_group_v2::EditGroupResponseMessageDataEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -2212,16 +2325,17 @@ fn iface_group_v2__edit_clan_banner_response__from_json(v: &Value) -> Option<ifa
         error_code: m.get("ErrorCode").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
         error_status: m.get("ErrorStatus").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         message: m.get("Message").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        message_data: m.get("MessageData").filter(|v| !v.is_null()).and_then(|v| iface_group_v2__edit_clan_banner_response_message_data__from_json(v)),
+        message_data: m.get("MessageData").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_group_v2::EditClanBannerResponseMessageDataEntry { key: k.clone(), value: val })).collect())),
         response: m.get("Response").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
         throttle_seconds: m.get("ThrottleSeconds").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
     })
 }
 
-fn iface_group_v2__edit_clan_banner_response_message_data__from_json(v: &Value) -> Option<iface_group_v2::EditClanBannerResponseMessageData> {
+fn iface_group_v2__edit_clan_banner_response_message_data_entry__from_json(v: &Value) -> Option<iface_group_v2::EditClanBannerResponseMessageDataEntry> {
     let m = v.as_object()?;
-    Some(iface_group_v2::EditClanBannerResponseMessageData {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_group_v2::EditClanBannerResponseMessageDataEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -2232,16 +2346,17 @@ fn iface_group_v2__edit_founder_options_response__from_json(v: &Value) -> Option
         error_code: m.get("ErrorCode").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
         error_status: m.get("ErrorStatus").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         message: m.get("Message").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        message_data: m.get("MessageData").filter(|v| !v.is_null()).and_then(|v| iface_group_v2__edit_founder_options_response_message_data__from_json(v)),
+        message_data: m.get("MessageData").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_group_v2::EditFounderOptionsResponseMessageDataEntry { key: k.clone(), value: val })).collect())),
         response: m.get("Response").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
         throttle_seconds: m.get("ThrottleSeconds").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
     })
 }
 
-fn iface_group_v2__edit_founder_options_response_message_data__from_json(v: &Value) -> Option<iface_group_v2::EditFounderOptionsResponseMessageData> {
+fn iface_group_v2__edit_founder_options_response_message_data_entry__from_json(v: &Value) -> Option<iface_group_v2::EditFounderOptionsResponseMessageDataEntry> {
     let m = v.as_object()?;
-    Some(iface_group_v2::EditFounderOptionsResponseMessageData {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_group_v2::EditFounderOptionsResponseMessageDataEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -2252,16 +2367,17 @@ fn iface_group_v2__get_members_of_group_response__from_json(v: &Value) -> Option
         error_code: m.get("ErrorCode").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
         error_status: m.get("ErrorStatus").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         message: m.get("Message").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        message_data: m.get("MessageData").filter(|v| !v.is_null()).and_then(|v| iface_group_v2__get_members_of_group_response_message_data__from_json(v)),
+        message_data: m.get("MessageData").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_group_v2::GetMembersOfGroupResponseMessageDataEntry { key: k.clone(), value: val })).collect())),
         response: m.get("Response").filter(|v| !v.is_null()).and_then(|v| iface_group_v2__search_result_of_group_member__from_json(v)),
         throttle_seconds: m.get("ThrottleSeconds").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
     })
 }
 
-fn iface_group_v2__get_members_of_group_response_message_data__from_json(v: &Value) -> Option<iface_group_v2::GetMembersOfGroupResponseMessageData> {
+fn iface_group_v2__get_members_of_group_response_message_data_entry__from_json(v: &Value) -> Option<iface_group_v2::GetMembersOfGroupResponseMessageDataEntry> {
     let m = v.as_object()?;
-    Some(iface_group_v2::GetMembersOfGroupResponseMessageData {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_group_v2::GetMembersOfGroupResponseMessageDataEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -2272,16 +2388,17 @@ fn iface_group_v2__approve_pending_response__from_json(v: &Value) -> Option<ifac
         error_code: m.get("ErrorCode").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
         error_status: m.get("ErrorStatus").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         message: m.get("Message").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        message_data: m.get("MessageData").filter(|v| !v.is_null()).and_then(|v| iface_group_v2__approve_pending_response_message_data__from_json(v)),
+        message_data: m.get("MessageData").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_group_v2::ApprovePendingResponseMessageDataEntry { key: k.clone(), value: val })).collect())),
         response: m.get("Response").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
         throttle_seconds: m.get("ThrottleSeconds").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
     })
 }
 
-fn iface_group_v2__approve_pending_response_message_data__from_json(v: &Value) -> Option<iface_group_v2::ApprovePendingResponseMessageData> {
+fn iface_group_v2__approve_pending_response_message_data_entry__from_json(v: &Value) -> Option<iface_group_v2::ApprovePendingResponseMessageDataEntry> {
     let m = v.as_object()?;
-    Some(iface_group_v2::ApprovePendingResponseMessageData {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_group_v2::ApprovePendingResponseMessageDataEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -2292,16 +2409,17 @@ fn iface_group_v2__approve_all_pending_response__from_json(v: &Value) -> Option<
         error_code: m.get("ErrorCode").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
         error_status: m.get("ErrorStatus").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         message: m.get("Message").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        message_data: m.get("MessageData").filter(|v| !v.is_null()).and_then(|v| iface_group_v2__approve_all_pending_response_message_data__from_json(v)),
+        message_data: m.get("MessageData").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_group_v2::ApproveAllPendingResponseMessageDataEntry { key: k.clone(), value: val })).collect())),
         response: m.get("Response").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_group_v2__entities_entity_action_result__from_json(x)).collect())),
         throttle_seconds: m.get("ThrottleSeconds").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
     })
 }
 
-fn iface_group_v2__approve_all_pending_response_message_data__from_json(v: &Value) -> Option<iface_group_v2::ApproveAllPendingResponseMessageData> {
+fn iface_group_v2__approve_all_pending_response_message_data_entry__from_json(v: &Value) -> Option<iface_group_v2::ApproveAllPendingResponseMessageDataEntry> {
     let m = v.as_object()?;
-    Some(iface_group_v2::ApproveAllPendingResponseMessageData {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_group_v2::ApproveAllPendingResponseMessageDataEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -2320,16 +2438,17 @@ fn iface_group_v2__approve_pending_for_list_response__from_json(v: &Value) -> Op
         error_code: m.get("ErrorCode").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
         error_status: m.get("ErrorStatus").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         message: m.get("Message").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        message_data: m.get("MessageData").filter(|v| !v.is_null()).and_then(|v| iface_group_v2__approve_pending_for_list_response_message_data__from_json(v)),
+        message_data: m.get("MessageData").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_group_v2::ApprovePendingForListResponseMessageDataEntry { key: k.clone(), value: val })).collect())),
         response: m.get("Response").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_group_v2__entities_entity_action_result__from_json(x)).collect())),
         throttle_seconds: m.get("ThrottleSeconds").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
     })
 }
 
-fn iface_group_v2__approve_pending_for_list_response_message_data__from_json(v: &Value) -> Option<iface_group_v2::ApprovePendingForListResponseMessageData> {
+fn iface_group_v2__approve_pending_for_list_response_message_data_entry__from_json(v: &Value) -> Option<iface_group_v2::ApprovePendingForListResponseMessageDataEntry> {
     let m = v.as_object()?;
-    Some(iface_group_v2::ApprovePendingForListResponseMessageData {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_group_v2::ApprovePendingForListResponseMessageDataEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -2340,16 +2459,17 @@ fn iface_group_v2__deny_all_pending_response__from_json(v: &Value) -> Option<ifa
         error_code: m.get("ErrorCode").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
         error_status: m.get("ErrorStatus").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         message: m.get("Message").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        message_data: m.get("MessageData").filter(|v| !v.is_null()).and_then(|v| iface_group_v2__deny_all_pending_response_message_data__from_json(v)),
+        message_data: m.get("MessageData").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_group_v2::DenyAllPendingResponseMessageDataEntry { key: k.clone(), value: val })).collect())),
         response: m.get("Response").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_group_v2__entities_entity_action_result__from_json(x)).collect())),
         throttle_seconds: m.get("ThrottleSeconds").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
     })
 }
 
-fn iface_group_v2__deny_all_pending_response_message_data__from_json(v: &Value) -> Option<iface_group_v2::DenyAllPendingResponseMessageData> {
+fn iface_group_v2__deny_all_pending_response_message_data_entry__from_json(v: &Value) -> Option<iface_group_v2::DenyAllPendingResponseMessageDataEntry> {
     let m = v.as_object()?;
-    Some(iface_group_v2::DenyAllPendingResponseMessageData {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_group_v2::DenyAllPendingResponseMessageDataEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -2360,16 +2480,17 @@ fn iface_group_v2__deny_pending_for_list_response__from_json(v: &Value) -> Optio
         error_code: m.get("ErrorCode").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
         error_status: m.get("ErrorStatus").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         message: m.get("Message").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        message_data: m.get("MessageData").filter(|v| !v.is_null()).and_then(|v| iface_group_v2__deny_pending_for_list_response_message_data__from_json(v)),
+        message_data: m.get("MessageData").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_group_v2::DenyPendingForListResponseMessageDataEntry { key: k.clone(), value: val })).collect())),
         response: m.get("Response").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_group_v2__entities_entity_action_result__from_json(x)).collect())),
         throttle_seconds: m.get("ThrottleSeconds").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
     })
 }
 
-fn iface_group_v2__deny_pending_for_list_response_message_data__from_json(v: &Value) -> Option<iface_group_v2::DenyPendingForListResponseMessageData> {
+fn iface_group_v2__deny_pending_for_list_response_message_data_entry__from_json(v: &Value) -> Option<iface_group_v2::DenyPendingForListResponseMessageDataEntry> {
     let m = v.as_object()?;
-    Some(iface_group_v2::DenyPendingForListResponseMessageData {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_group_v2::DenyPendingForListResponseMessageDataEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -2380,16 +2501,17 @@ fn iface_group_v2__individual_group_invite_response__from_json(v: &Value) -> Opt
         error_code: m.get("ErrorCode").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
         error_status: m.get("ErrorStatus").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         message: m.get("Message").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        message_data: m.get("MessageData").filter(|v| !v.is_null()).and_then(|v| iface_group_v2__individual_group_invite_response_message_data__from_json(v)),
+        message_data: m.get("MessageData").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_group_v2::IndividualGroupInviteResponseMessageDataEntry { key: k.clone(), value: val })).collect())),
         response: m.get("Response").filter(|v| !v.is_null()).and_then(|v| iface_group_v2__groups_v2_group_application_response__from_json(v)),
         throttle_seconds: m.get("ThrottleSeconds").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
     })
 }
 
-fn iface_group_v2__individual_group_invite_response_message_data__from_json(v: &Value) -> Option<iface_group_v2::IndividualGroupInviteResponseMessageData> {
+fn iface_group_v2__individual_group_invite_response_message_data_entry__from_json(v: &Value) -> Option<iface_group_v2::IndividualGroupInviteResponseMessageDataEntry> {
     let m = v.as_object()?;
-    Some(iface_group_v2::IndividualGroupInviteResponseMessageData {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_group_v2::IndividualGroupInviteResponseMessageDataEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -2407,16 +2529,17 @@ fn iface_group_v2__individual_group_invite_cancel_response__from_json(v: &Value)
         error_code: m.get("ErrorCode").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
         error_status: m.get("ErrorStatus").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         message: m.get("Message").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        message_data: m.get("MessageData").filter(|v| !v.is_null()).and_then(|v| iface_group_v2__individual_group_invite_cancel_response_message_data__from_json(v)),
+        message_data: m.get("MessageData").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_group_v2::IndividualGroupInviteCancelResponseMessageDataEntry { key: k.clone(), value: val })).collect())),
         response: m.get("Response").filter(|v| !v.is_null()).and_then(|v| iface_group_v2__groups_v2_group_application_response__from_json(v)),
         throttle_seconds: m.get("ThrottleSeconds").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
     })
 }
 
-fn iface_group_v2__individual_group_invite_cancel_response_message_data__from_json(v: &Value) -> Option<iface_group_v2::IndividualGroupInviteCancelResponseMessageData> {
+fn iface_group_v2__individual_group_invite_cancel_response_message_data_entry__from_json(v: &Value) -> Option<iface_group_v2::IndividualGroupInviteCancelResponseMessageDataEntry> {
     let m = v.as_object()?;
-    Some(iface_group_v2::IndividualGroupInviteCancelResponseMessageData {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_group_v2::IndividualGroupInviteCancelResponseMessageDataEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -2427,16 +2550,17 @@ fn iface_group_v2__get_invited_individuals_response__from_json(v: &Value) -> Opt
         error_code: m.get("ErrorCode").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
         error_status: m.get("ErrorStatus").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         message: m.get("Message").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        message_data: m.get("MessageData").filter(|v| !v.is_null()).and_then(|v| iface_group_v2__get_invited_individuals_response_message_data__from_json(v)),
+        message_data: m.get("MessageData").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_group_v2::GetInvitedIndividualsResponseMessageDataEntry { key: k.clone(), value: val })).collect())),
         response: m.get("Response").filter(|v| !v.is_null()).and_then(|v| iface_group_v2__search_result_of_group_member_application__from_json(v)),
         throttle_seconds: m.get("ThrottleSeconds").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
     })
 }
 
-fn iface_group_v2__get_invited_individuals_response_message_data__from_json(v: &Value) -> Option<iface_group_v2::GetInvitedIndividualsResponseMessageData> {
+fn iface_group_v2__get_invited_individuals_response_message_data_entry__from_json(v: &Value) -> Option<iface_group_v2::GetInvitedIndividualsResponseMessageDataEntry> {
     let m = v.as_object()?;
-    Some(iface_group_v2::GetInvitedIndividualsResponseMessageData {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_group_v2::GetInvitedIndividualsResponseMessageDataEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -2474,16 +2598,17 @@ fn iface_group_v2__get_pending_memberships_response__from_json(v: &Value) -> Opt
         error_code: m.get("ErrorCode").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
         error_status: m.get("ErrorStatus").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         message: m.get("Message").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        message_data: m.get("MessageData").filter(|v| !v.is_null()).and_then(|v| iface_group_v2__get_pending_memberships_response_message_data__from_json(v)),
+        message_data: m.get("MessageData").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_group_v2::GetPendingMembershipsResponseMessageDataEntry { key: k.clone(), value: val })).collect())),
         response: m.get("Response").filter(|v| !v.is_null()).and_then(|v| iface_group_v2__search_result_of_group_member_application__from_json(v)),
         throttle_seconds: m.get("ThrottleSeconds").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
     })
 }
 
-fn iface_group_v2__get_pending_memberships_response_message_data__from_json(v: &Value) -> Option<iface_group_v2::GetPendingMembershipsResponseMessageData> {
+fn iface_group_v2__get_pending_memberships_response_message_data_entry__from_json(v: &Value) -> Option<iface_group_v2::GetPendingMembershipsResponseMessageDataEntry> {
     let m = v.as_object()?;
-    Some(iface_group_v2::GetPendingMembershipsResponseMessageData {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_group_v2::GetPendingMembershipsResponseMessageDataEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -2494,16 +2619,17 @@ fn iface_group_v2__ban_member_response__from_json(v: &Value) -> Option<iface_gro
         error_code: m.get("ErrorCode").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
         error_status: m.get("ErrorStatus").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         message: m.get("Message").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        message_data: m.get("MessageData").filter(|v| !v.is_null()).and_then(|v| iface_group_v2__ban_member_response_message_data__from_json(v)),
+        message_data: m.get("MessageData").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_group_v2::BanMemberResponseMessageDataEntry { key: k.clone(), value: val })).collect())),
         response: m.get("Response").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
         throttle_seconds: m.get("ThrottleSeconds").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
     })
 }
 
-fn iface_group_v2__ban_member_response_message_data__from_json(v: &Value) -> Option<iface_group_v2::BanMemberResponseMessageData> {
+fn iface_group_v2__ban_member_response_message_data_entry__from_json(v: &Value) -> Option<iface_group_v2::BanMemberResponseMessageDataEntry> {
     let m = v.as_object()?;
-    Some(iface_group_v2::BanMemberResponseMessageData {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_group_v2::BanMemberResponseMessageDataEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -2514,16 +2640,17 @@ fn iface_group_v2__kick_member_response__from_json(v: &Value) -> Option<iface_gr
         error_code: m.get("ErrorCode").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
         error_status: m.get("ErrorStatus").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         message: m.get("Message").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        message_data: m.get("MessageData").filter(|v| !v.is_null()).and_then(|v| iface_group_v2__kick_member_response_message_data__from_json(v)),
+        message_data: m.get("MessageData").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_group_v2::KickMemberResponseMessageDataEntry { key: k.clone(), value: val })).collect())),
         response: m.get("Response").filter(|v| !v.is_null()).and_then(|v| iface_group_v2__groups_v2_group_member_leave_result__from_json(v)),
         throttle_seconds: m.get("ThrottleSeconds").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
     })
 }
 
-fn iface_group_v2__kick_member_response_message_data__from_json(v: &Value) -> Option<iface_group_v2::KickMemberResponseMessageData> {
+fn iface_group_v2__kick_member_response_message_data_entry__from_json(v: &Value) -> Option<iface_group_v2::KickMemberResponseMessageDataEntry> {
     let m = v.as_object()?;
-    Some(iface_group_v2::KickMemberResponseMessageData {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_group_v2::KickMemberResponseMessageDataEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -2542,16 +2669,17 @@ fn iface_group_v2__edit_group_membership_response__from_json(v: &Value) -> Optio
         error_code: m.get("ErrorCode").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
         error_status: m.get("ErrorStatus").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         message: m.get("Message").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        message_data: m.get("MessageData").filter(|v| !v.is_null()).and_then(|v| iface_group_v2__edit_group_membership_response_message_data__from_json(v)),
+        message_data: m.get("MessageData").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_group_v2::EditGroupMembershipResponseMessageDataEntry { key: k.clone(), value: val })).collect())),
         response: m.get("Response").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
         throttle_seconds: m.get("ThrottleSeconds").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
     })
 }
 
-fn iface_group_v2__edit_group_membership_response_message_data__from_json(v: &Value) -> Option<iface_group_v2::EditGroupMembershipResponseMessageData> {
+fn iface_group_v2__edit_group_membership_response_message_data_entry__from_json(v: &Value) -> Option<iface_group_v2::EditGroupMembershipResponseMessageDataEntry> {
     let m = v.as_object()?;
-    Some(iface_group_v2::EditGroupMembershipResponseMessageData {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_group_v2::EditGroupMembershipResponseMessageDataEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -2562,16 +2690,17 @@ fn iface_group_v2__unban_member_response__from_json(v: &Value) -> Option<iface_g
         error_code: m.get("ErrorCode").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
         error_status: m.get("ErrorStatus").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         message: m.get("Message").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        message_data: m.get("MessageData").filter(|v| !v.is_null()).and_then(|v| iface_group_v2__unban_member_response_message_data__from_json(v)),
+        message_data: m.get("MessageData").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_group_v2::UnbanMemberResponseMessageDataEntry { key: k.clone(), value: val })).collect())),
         response: m.get("Response").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
         throttle_seconds: m.get("ThrottleSeconds").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
     })
 }
 
-fn iface_group_v2__unban_member_response_message_data__from_json(v: &Value) -> Option<iface_group_v2::UnbanMemberResponseMessageData> {
+fn iface_group_v2__unban_member_response_message_data_entry__from_json(v: &Value) -> Option<iface_group_v2::UnbanMemberResponseMessageDataEntry> {
     let m = v.as_object()?;
-    Some(iface_group_v2::UnbanMemberResponseMessageData {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_group_v2::UnbanMemberResponseMessageDataEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -2582,16 +2711,17 @@ fn iface_group_v2__get_group_optional_conversations_response__from_json(v: &Valu
         error_code: m.get("ErrorCode").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
         error_status: m.get("ErrorStatus").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         message: m.get("Message").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        message_data: m.get("MessageData").filter(|v| !v.is_null()).and_then(|v| iface_group_v2__get_group_optional_conversations_response_message_data__from_json(v)),
+        message_data: m.get("MessageData").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_group_v2::GetGroupOptionalConversationsResponseMessageDataEntry { key: k.clone(), value: val })).collect())),
         response: m.get("Response").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_group_v2__groups_v2_group_optional_conversation__from_json(x)).collect())),
         throttle_seconds: m.get("ThrottleSeconds").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
     })
 }
 
-fn iface_group_v2__get_group_optional_conversations_response_message_data__from_json(v: &Value) -> Option<iface_group_v2::GetGroupOptionalConversationsResponseMessageData> {
+fn iface_group_v2__get_group_optional_conversations_response_message_data_entry__from_json(v: &Value) -> Option<iface_group_v2::GetGroupOptionalConversationsResponseMessageDataEntry> {
     let m = v.as_object()?;
-    Some(iface_group_v2::GetGroupOptionalConversationsResponseMessageData {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_group_v2::GetGroupOptionalConversationsResponseMessageDataEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -2613,16 +2743,17 @@ fn iface_group_v2__add_optional_conversation_response__from_json(v: &Value) -> O
         error_code: m.get("ErrorCode").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
         error_status: m.get("ErrorStatus").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         message: m.get("Message").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        message_data: m.get("MessageData").filter(|v| !v.is_null()).and_then(|v| iface_group_v2__add_optional_conversation_response_message_data__from_json(v)),
+        message_data: m.get("MessageData").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_group_v2::AddOptionalConversationResponseMessageDataEntry { key: k.clone(), value: val })).collect())),
         response: m.get("Response").filter(|v| !v.is_null()).and_then(|v| (v).as_i64()),
         throttle_seconds: m.get("ThrottleSeconds").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
     })
 }
 
-fn iface_group_v2__add_optional_conversation_response_message_data__from_json(v: &Value) -> Option<iface_group_v2::AddOptionalConversationResponseMessageData> {
+fn iface_group_v2__add_optional_conversation_response_message_data_entry__from_json(v: &Value) -> Option<iface_group_v2::AddOptionalConversationResponseMessageDataEntry> {
     let m = v.as_object()?;
-    Some(iface_group_v2::AddOptionalConversationResponseMessageData {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_group_v2::AddOptionalConversationResponseMessageDataEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -2633,16 +2764,17 @@ fn iface_group_v2__edit_optional_conversation_response__from_json(v: &Value) -> 
         error_code: m.get("ErrorCode").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
         error_status: m.get("ErrorStatus").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         message: m.get("Message").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        message_data: m.get("MessageData").filter(|v| !v.is_null()).and_then(|v| iface_group_v2__edit_optional_conversation_response_message_data__from_json(v)),
+        message_data: m.get("MessageData").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_group_v2::EditOptionalConversationResponseMessageDataEntry { key: k.clone(), value: val })).collect())),
         response: m.get("Response").filter(|v| !v.is_null()).and_then(|v| (v).as_i64()),
         throttle_seconds: m.get("ThrottleSeconds").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
     })
 }
 
-fn iface_group_v2__edit_optional_conversation_response_message_data__from_json(v: &Value) -> Option<iface_group_v2::EditOptionalConversationResponseMessageData> {
+fn iface_group_v2__edit_optional_conversation_response_message_data_entry__from_json(v: &Value) -> Option<iface_group_v2::EditOptionalConversationResponseMessageDataEntry> {
     let m = v.as_object()?;
-    Some(iface_group_v2::EditOptionalConversationResponseMessageData {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_group_v2::EditOptionalConversationResponseMessageDataEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 

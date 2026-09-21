@@ -175,14 +175,15 @@ fn iface_customer_metrics__stream_by_sdk_links_metadata__to_json(p: &iface_custo
 fn iface_customer_metrics__ma_uby_category__to_json(p: &iface_customer_metrics::MaUbyCategory) -> Value {
     let mut m = Map::new();
     m.insert("_links".into(), match (&p.links) { Some(v) => iface_customer_metrics__stream_by_sdk_links__to_json(v), None => Value::Null });
-    m.insert("metadata".into(), match (&p.metadata) { Some(v) => Value::Array((v).iter().map(|v| iface_customer_metrics__mau_metadata__to_json(v)).collect()), None => Value::Null });
+    m.insert("metadata".into(), match (&p.metadata) { Some(v) => Value::Array((v).iter().map(|v| Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect())).collect()), None => Value::Null });
     m.insert("series".into(), match (&p.series) { Some(v) => Value::Array((v).iter().map(|v| iface_customer_metrics__stream_usage_series__to_json(v)).collect()), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_customer_metrics__mau_metadata__to_json(p: &iface_customer_metrics::MauMetadata) -> Value {
+fn iface_customer_metrics__mau_metadata_entry__to_json(p: &iface_customer_metrics::MauMetadataEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -341,15 +342,16 @@ fn iface_customer_metrics__ma_uby_category__from_json(v: &Value) -> Option<iface
     let m = v.as_object()?;
     Some(iface_customer_metrics::MaUbyCategory {
         links: m.get("_links").filter(|v| !v.is_null()).and_then(|v| iface_customer_metrics__stream_by_sdk_links__from_json(v)),
-        metadata: m.get("metadata").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_customer_metrics__mau_metadata__from_json(x)).collect())),
+        metadata: m.get("metadata").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_customer_metrics::MauMetadataEntry { key: k.clone(), value: val })).collect())).collect())),
         series: m.get("series").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_customer_metrics__stream_usage_series__from_json(x)).collect())),
     })
 }
 
-fn iface_customer_metrics__mau_metadata__from_json(v: &Value) -> Option<iface_customer_metrics::MauMetadata> {
+fn iface_customer_metrics__mau_metadata_entry__from_json(v: &Value) -> Option<iface_customer_metrics::MauMetadataEntry> {
     let m = v.as_object()?;
-    Some(iface_customer_metrics::MauMetadata {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_customer_metrics::MauMetadataEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 

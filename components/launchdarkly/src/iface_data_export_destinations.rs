@@ -94,7 +94,7 @@ fn iface_data_export_destinations__destination__to_json(p: &iface_data_export_de
     let mut m = Map::new();
     m.insert("_id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("_links".into(), match (&p.links) { Some(v) => iface_data_export_destinations__links__to_json(v), None => Value::Null });
-    m.insert("config".into(), match (&p.config) { Some(v) => iface_data_export_destinations__destination_config__to_json(v), None => Value::Null });
+    m.insert("config".into(), match (&p.config) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("kind".into(), match (&p.kind) { Some(v) => Value::String(iface_data_export_destinations__destination_kind_enum__to_str(v).into()), None => Value::Null });
     m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("on".into(), match (&p.on) { Some(v) => Value::Bool(*(v)), None => Value::Null });
@@ -102,9 +102,10 @@ fn iface_data_export_destinations__destination__to_json(p: &iface_data_export_de
     Value::Object(m)
 }
 
-fn iface_data_export_destinations__destination_config__to_json(p: &iface_data_export_destinations::DestinationConfig) -> Value {
+fn iface_data_export_destinations__destination_config_entry__to_json(p: &iface_data_export_destinations::DestinationConfigEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -168,7 +169,7 @@ fn iface_data_export_destinations__destination__from_json(v: &Value) -> Option<i
     Some(iface_data_export_destinations::Destination {
         id: m.get("_id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         links: m.get("_links").filter(|v| !v.is_null()).and_then(|v| iface_data_export_destinations__links__from_json(v)),
-        config: m.get("config").filter(|v| !v.is_null()).and_then(|v| iface_data_export_destinations__destination_config__from_json(v)),
+        config: m.get("config").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_data_export_destinations::DestinationConfigEntry { key: k.clone(), value: val })).collect())),
         kind: m.get("kind").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_data_export_destinations__destination_kind_enum__from_str)),
         name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         on: m.get("on").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
@@ -176,10 +177,11 @@ fn iface_data_export_destinations__destination__from_json(v: &Value) -> Option<i
     })
 }
 
-fn iface_data_export_destinations__destination_config__from_json(v: &Value) -> Option<iface_data_export_destinations::DestinationConfig> {
+fn iface_data_export_destinations__destination_config_entry__from_json(v: &Value) -> Option<iface_data_export_destinations::DestinationConfigEntry> {
     let m = v.as_object()?;
-    Some(iface_data_export_destinations::DestinationConfig {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_data_export_destinations::DestinationConfigEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 

@@ -6,7 +6,7 @@
 /// | Secret name | Applied to each request as |
 /// | --- | --- |
 /// | `bearer_auth` | `Authorization: Bearer <secret>` |
-package autostamp:digitalocean@0.5.0;
+package autostamp:digitalocean@0.6.0;
 
 interface v1-click-applications {
   enum one-clicks-list-type-op-enum {
@@ -641,7 +641,7 @@ interface apps {
     reason: option<list-op-response-apps-item-active-deployment-progress-steps-item-reason>,
     started-at: option<string>,
     status: option<list-op-response-apps-item-active-deployment-progress-steps-item-status-enum>,
-    steps: option<list<list-op-response-apps-item-active-deployment-progress-steps-item-steps-item>>
+    steps: option<list<list<list-op-response-apps-item-active-deployment-progress-steps-item-steps-item-entry>>>
   }
 
   record list-op-response-apps-item-active-deployment-progress-steps-item-reason {
@@ -649,9 +649,10 @@ interface apps {
     message: option<string>
   }
 
-  record list-op-response-apps-item-active-deployment-progress-steps-item-steps-item {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record list-op-response-apps-item-active-deployment-progress-steps-item-steps-item-entry {
+    key: string,
+    value: string
   }
 
   record list-op-response-apps-item-active-deployment-progress-summary-steps-item {
@@ -664,7 +665,7 @@ interface apps {
     reason: option<list-op-response-apps-item-active-deployment-progress-summary-steps-item-reason>,
     started-at: option<string>,
     status: option<list-op-response-apps-item-active-deployment-progress-steps-item-status-enum>,
-    steps: option<list<list-op-response-apps-item-active-deployment-progress-summary-steps-item-steps-item>>
+    steps: option<list<list<list-op-response-apps-item-active-deployment-progress-summary-steps-item-steps-item-entry>>>
   }
 
   record list-op-response-apps-item-active-deployment-progress-summary-steps-item-reason {
@@ -672,9 +673,10 @@ interface apps {
     message: option<string>
   }
 
-  record list-op-response-apps-item-active-deployment-progress-summary-steps-item-steps-item {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record list-op-response-apps-item-active-deployment-progress-summary-steps-item-steps-item-entry {
+    key: string,
+    value: string
   }
 
   record list-op-response-apps-item-active-deployment-services-item {
@@ -1235,12 +1237,13 @@ interface apps {
   }
 
   record list-op-response-apps-item-domains-item-progress {
-    steps: option<list<list-op-response-apps-item-domains-item-progress-steps-item>>
+    steps: option<list<list<list-op-response-apps-item-domains-item-progress-steps-item-entry>>>
   }
 
-  record list-op-response-apps-item-domains-item-progress-steps-item {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record list-op-response-apps-item-domains-item-progress-steps-item-entry {
+    key: string,
+    value: string
   }
 
   record list-op-response-apps-item-domains-item-spec {
@@ -1315,7 +1318,7 @@ interface apps {
     reason: option<list-op-response-apps-item-in-progress-deployment-progress-steps-item-reason>,
     started-at: option<string>,
     status: option<list-op-response-apps-item-active-deployment-progress-steps-item-status-enum>,
-    steps: option<list<list-op-response-apps-item-in-progress-deployment-progress-steps-item-steps-item>>
+    steps: option<list<list<list-op-response-apps-item-in-progress-deployment-progress-steps-item-steps-item-entry>>>
   }
 
   record list-op-response-apps-item-in-progress-deployment-progress-steps-item-reason {
@@ -1323,9 +1326,10 @@ interface apps {
     message: option<string>
   }
 
-  record list-op-response-apps-item-in-progress-deployment-progress-steps-item-steps-item {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record list-op-response-apps-item-in-progress-deployment-progress-steps-item-steps-item-entry {
+    key: string,
+    value: string
   }
 
   record list-op-response-apps-item-in-progress-deployment-progress-summary-steps-item {
@@ -1338,7 +1342,7 @@ interface apps {
     reason: option<list-op-response-apps-item-in-progress-deployment-progress-summary-steps-item-reason>,
     started-at: option<string>,
     status: option<list-op-response-apps-item-active-deployment-progress-steps-item-status-enum>,
-    steps: option<list<list-op-response-apps-item-in-progress-deployment-progress-summary-steps-item-steps-item>>
+    steps: option<list<list<list-op-response-apps-item-in-progress-deployment-progress-summary-steps-item-steps-item-entry>>>
   }
 
   record list-op-response-apps-item-in-progress-deployment-progress-summary-steps-item-reason {
@@ -1346,9 +1350,10 @@ interface apps {
     message: option<string>
   }
 
-  record list-op-response-apps-item-in-progress-deployment-progress-summary-steps-item-steps-item {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record list-op-response-apps-item-in-progress-deployment-progress-summary-steps-item-steps-item-entry {
+    key: string,
+    value: string
   }
 
   record list-op-response-apps-item-in-progress-deployment-services-item {
@@ -1950,7 +1955,7 @@ interface apps {
     reason: option<list-op-response-apps-item-pending-deployment-progress-steps-item-reason>,
     started-at: option<string>,
     status: option<list-op-response-apps-item-active-deployment-progress-steps-item-status-enum>,
-    steps: option<list<list-op-response-apps-item-pending-deployment-progress-steps-item-steps-item>>
+    steps: option<list<list<list-op-response-apps-item-pending-deployment-progress-steps-item-steps-item-entry>>>
   }
 
   record list-op-response-apps-item-pending-deployment-progress-steps-item-reason {
@@ -1958,9 +1963,10 @@ interface apps {
     message: option<string>
   }
 
-  record list-op-response-apps-item-pending-deployment-progress-steps-item-steps-item {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record list-op-response-apps-item-pending-deployment-progress-steps-item-steps-item-entry {
+    key: string,
+    value: string
   }
 
   record list-op-response-apps-item-pending-deployment-progress-summary-steps-item {
@@ -1973,7 +1979,7 @@ interface apps {
     reason: option<list-op-response-apps-item-pending-deployment-progress-summary-steps-item-reason>,
     started-at: option<string>,
     status: option<list-op-response-apps-item-active-deployment-progress-steps-item-status-enum>,
-    steps: option<list<list-op-response-apps-item-pending-deployment-progress-summary-steps-item-steps-item>>
+    steps: option<list<list<list-op-response-apps-item-pending-deployment-progress-summary-steps-item-steps-item-entry>>>
   }
 
   record list-op-response-apps-item-pending-deployment-progress-summary-steps-item-reason {
@@ -1981,9 +1987,10 @@ interface apps {
     message: option<string>
   }
 
-  record list-op-response-apps-item-pending-deployment-progress-summary-steps-item-steps-item {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record list-op-response-apps-item-pending-deployment-progress-summary-steps-item-steps-item-entry {
+    key: string,
+    value: string
   }
 
   record list-op-response-apps-item-pending-deployment-services-item {
@@ -2585,7 +2592,7 @@ interface apps {
     reason: option<list-op-response-apps-item-pinned-deployment-progress-steps-item-reason>,
     started-at: option<string>,
     status: option<list-op-response-apps-item-active-deployment-progress-steps-item-status-enum>,
-    steps: option<list<list-op-response-apps-item-pinned-deployment-progress-steps-item-steps-item>>
+    steps: option<list<list<list-op-response-apps-item-pinned-deployment-progress-steps-item-steps-item-entry>>>
   }
 
   record list-op-response-apps-item-pinned-deployment-progress-steps-item-reason {
@@ -2593,9 +2600,10 @@ interface apps {
     message: option<string>
   }
 
-  record list-op-response-apps-item-pinned-deployment-progress-steps-item-steps-item {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record list-op-response-apps-item-pinned-deployment-progress-steps-item-steps-item-entry {
+    key: string,
+    value: string
   }
 
   record list-op-response-apps-item-pinned-deployment-progress-summary-steps-item {
@@ -2608,7 +2616,7 @@ interface apps {
     reason: option<list-op-response-apps-item-pinned-deployment-progress-summary-steps-item-reason>,
     started-at: option<string>,
     status: option<list-op-response-apps-item-active-deployment-progress-steps-item-status-enum>,
-    steps: option<list<list-op-response-apps-item-pinned-deployment-progress-summary-steps-item-steps-item>>
+    steps: option<list<list<list-op-response-apps-item-pinned-deployment-progress-summary-steps-item-steps-item-entry>>>
   }
 
   record list-op-response-apps-item-pinned-deployment-progress-summary-steps-item-reason {
@@ -2616,9 +2624,10 @@ interface apps {
     message: option<string>
   }
 
-  record list-op-response-apps-item-pinned-deployment-progress-summary-steps-item-steps-item {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record list-op-response-apps-item-pinned-deployment-progress-summary-steps-item-steps-item-entry {
+    key: string,
+    value: string
   }
 
   record list-op-response-apps-item-pinned-deployment-services-item {
@@ -4333,7 +4342,7 @@ interface apps {
     reason: option<create-response-app-active-deployment-progress-steps-item-reason>,
     started-at: option<string>,
     status: option<list-op-response-apps-item-active-deployment-progress-steps-item-status-enum>,
-    steps: option<list<create-response-app-active-deployment-progress-steps-item-steps-item>>
+    steps: option<list<list<create-response-app-active-deployment-progress-steps-item-steps-item-entry>>>
   }
 
   record create-response-app-active-deployment-progress-steps-item-reason {
@@ -4341,9 +4350,10 @@ interface apps {
     message: option<string>
   }
 
-  record create-response-app-active-deployment-progress-steps-item-steps-item {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record create-response-app-active-deployment-progress-steps-item-steps-item-entry {
+    key: string,
+    value: string
   }
 
   record create-response-app-active-deployment-progress-summary-steps-item {
@@ -4356,7 +4366,7 @@ interface apps {
     reason: option<create-response-app-active-deployment-progress-summary-steps-item-reason>,
     started-at: option<string>,
     status: option<list-op-response-apps-item-active-deployment-progress-steps-item-status-enum>,
-    steps: option<list<create-response-app-active-deployment-progress-summary-steps-item-steps-item>>
+    steps: option<list<list<create-response-app-active-deployment-progress-summary-steps-item-steps-item-entry>>>
   }
 
   record create-response-app-active-deployment-progress-summary-steps-item-reason {
@@ -4364,9 +4374,10 @@ interface apps {
     message: option<string>
   }
 
-  record create-response-app-active-deployment-progress-summary-steps-item-steps-item {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record create-response-app-active-deployment-progress-summary-steps-item-steps-item-entry {
+    key: string,
+    value: string
   }
 
   record create-response-app-active-deployment-services-item {
@@ -4927,12 +4938,13 @@ interface apps {
   }
 
   record create-response-app-domains-item-progress {
-    steps: option<list<create-response-app-domains-item-progress-steps-item>>
+    steps: option<list<list<create-response-app-domains-item-progress-steps-item-entry>>>
   }
 
-  record create-response-app-domains-item-progress-steps-item {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record create-response-app-domains-item-progress-steps-item-entry {
+    key: string,
+    value: string
   }
 
   record create-response-app-domains-item-spec {
@@ -5007,7 +5019,7 @@ interface apps {
     reason: option<create-response-app-in-progress-deployment-progress-steps-item-reason>,
     started-at: option<string>,
     status: option<list-op-response-apps-item-active-deployment-progress-steps-item-status-enum>,
-    steps: option<list<create-response-app-in-progress-deployment-progress-steps-item-steps-item>>
+    steps: option<list<list<create-response-app-in-progress-deployment-progress-steps-item-steps-item-entry>>>
   }
 
   record create-response-app-in-progress-deployment-progress-steps-item-reason {
@@ -5015,9 +5027,10 @@ interface apps {
     message: option<string>
   }
 
-  record create-response-app-in-progress-deployment-progress-steps-item-steps-item {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record create-response-app-in-progress-deployment-progress-steps-item-steps-item-entry {
+    key: string,
+    value: string
   }
 
   record create-response-app-in-progress-deployment-progress-summary-steps-item {
@@ -5030,7 +5043,7 @@ interface apps {
     reason: option<create-response-app-in-progress-deployment-progress-summary-steps-item-reason>,
     started-at: option<string>,
     status: option<list-op-response-apps-item-active-deployment-progress-steps-item-status-enum>,
-    steps: option<list<create-response-app-in-progress-deployment-progress-summary-steps-item-steps-item>>
+    steps: option<list<list<create-response-app-in-progress-deployment-progress-summary-steps-item-steps-item-entry>>>
   }
 
   record create-response-app-in-progress-deployment-progress-summary-steps-item-reason {
@@ -5038,9 +5051,10 @@ interface apps {
     message: option<string>
   }
 
-  record create-response-app-in-progress-deployment-progress-summary-steps-item-steps-item {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record create-response-app-in-progress-deployment-progress-summary-steps-item-steps-item-entry {
+    key: string,
+    value: string
   }
 
   record create-response-app-in-progress-deployment-services-item {
@@ -5642,7 +5656,7 @@ interface apps {
     reason: option<create-response-app-pending-deployment-progress-steps-item-reason>,
     started-at: option<string>,
     status: option<list-op-response-apps-item-active-deployment-progress-steps-item-status-enum>,
-    steps: option<list<create-response-app-pending-deployment-progress-steps-item-steps-item>>
+    steps: option<list<list<create-response-app-pending-deployment-progress-steps-item-steps-item-entry>>>
   }
 
   record create-response-app-pending-deployment-progress-steps-item-reason {
@@ -5650,9 +5664,10 @@ interface apps {
     message: option<string>
   }
 
-  record create-response-app-pending-deployment-progress-steps-item-steps-item {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record create-response-app-pending-deployment-progress-steps-item-steps-item-entry {
+    key: string,
+    value: string
   }
 
   record create-response-app-pending-deployment-progress-summary-steps-item {
@@ -5665,7 +5680,7 @@ interface apps {
     reason: option<create-response-app-pending-deployment-progress-summary-steps-item-reason>,
     started-at: option<string>,
     status: option<list-op-response-apps-item-active-deployment-progress-steps-item-status-enum>,
-    steps: option<list<create-response-app-pending-deployment-progress-summary-steps-item-steps-item>>
+    steps: option<list<list<create-response-app-pending-deployment-progress-summary-steps-item-steps-item-entry>>>
   }
 
   record create-response-app-pending-deployment-progress-summary-steps-item-reason {
@@ -5673,9 +5688,10 @@ interface apps {
     message: option<string>
   }
 
-  record create-response-app-pending-deployment-progress-summary-steps-item-steps-item {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record create-response-app-pending-deployment-progress-summary-steps-item-steps-item-entry {
+    key: string,
+    value: string
   }
 
   record create-response-app-pending-deployment-services-item {
@@ -6277,7 +6293,7 @@ interface apps {
     reason: option<create-response-app-pinned-deployment-progress-steps-item-reason>,
     started-at: option<string>,
     status: option<list-op-response-apps-item-active-deployment-progress-steps-item-status-enum>,
-    steps: option<list<create-response-app-pinned-deployment-progress-steps-item-steps-item>>
+    steps: option<list<list<create-response-app-pinned-deployment-progress-steps-item-steps-item-entry>>>
   }
 
   record create-response-app-pinned-deployment-progress-steps-item-reason {
@@ -6285,9 +6301,10 @@ interface apps {
     message: option<string>
   }
 
-  record create-response-app-pinned-deployment-progress-steps-item-steps-item {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record create-response-app-pinned-deployment-progress-steps-item-steps-item-entry {
+    key: string,
+    value: string
   }
 
   record create-response-app-pinned-deployment-progress-summary-steps-item {
@@ -6300,7 +6317,7 @@ interface apps {
     reason: option<create-response-app-pinned-deployment-progress-summary-steps-item-reason>,
     started-at: option<string>,
     status: option<list-op-response-apps-item-active-deployment-progress-steps-item-status-enum>,
-    steps: option<list<create-response-app-pinned-deployment-progress-summary-steps-item-steps-item>>
+    steps: option<list<list<create-response-app-pinned-deployment-progress-summary-steps-item-steps-item-entry>>>
   }
 
   record create-response-app-pinned-deployment-progress-summary-steps-item-reason {
@@ -6308,9 +6325,10 @@ interface apps {
     message: option<string>
   }
 
-  record create-response-app-pinned-deployment-progress-summary-steps-item-steps-item {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record create-response-app-pinned-deployment-progress-summary-steps-item-steps-item-entry {
+    key: string,
+    value: string
   }
 
   record create-response-app-pinned-deployment-services-item {
@@ -8736,7 +8754,7 @@ interface apps {
     reason: option<list-deployments-response-deployments-item-progress-steps-item-reason>,
     started-at: option<string>,
     status: option<list-op-response-apps-item-active-deployment-progress-steps-item-status-enum>,
-    steps: option<list<list-deployments-response-deployments-item-progress-steps-item-steps-item>>
+    steps: option<list<list<list-deployments-response-deployments-item-progress-steps-item-steps-item-entry>>>
   }
 
   record list-deployments-response-deployments-item-progress-steps-item-reason {
@@ -8744,9 +8762,10 @@ interface apps {
     message: option<string>
   }
 
-  record list-deployments-response-deployments-item-progress-steps-item-steps-item {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record list-deployments-response-deployments-item-progress-steps-item-steps-item-entry {
+    key: string,
+    value: string
   }
 
   record list-deployments-response-deployments-item-progress-summary-steps-item {
@@ -8759,7 +8778,7 @@ interface apps {
     reason: option<list-deployments-response-deployments-item-progress-summary-steps-item-reason>,
     started-at: option<string>,
     status: option<list-op-response-apps-item-active-deployment-progress-steps-item-status-enum>,
-    steps: option<list<list-deployments-response-deployments-item-progress-summary-steps-item-steps-item>>
+    steps: option<list<list<list-deployments-response-deployments-item-progress-summary-steps-item-steps-item-entry>>>
   }
 
   record list-deployments-response-deployments-item-progress-summary-steps-item-reason {
@@ -8767,9 +8786,10 @@ interface apps {
     message: option<string>
   }
 
-  record list-deployments-response-deployments-item-progress-summary-steps-item-steps-item {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record list-deployments-response-deployments-item-progress-summary-steps-item-steps-item-entry {
+    key: string,
+    value: string
   }
 
   record list-deployments-response-deployments-item-services-item {
@@ -9384,7 +9404,7 @@ interface apps {
     reason: option<create-deployment-response-deployment-progress-steps-item-reason>,
     started-at: option<string>,
     status: option<list-op-response-apps-item-active-deployment-progress-steps-item-status-enum>,
-    steps: option<list<create-deployment-response-deployment-progress-steps-item-steps-item>>
+    steps: option<list<list<create-deployment-response-deployment-progress-steps-item-steps-item-entry>>>
   }
 
   record create-deployment-response-deployment-progress-steps-item-reason {
@@ -9392,9 +9412,10 @@ interface apps {
     message: option<string>
   }
 
-  record create-deployment-response-deployment-progress-steps-item-steps-item {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record create-deployment-response-deployment-progress-steps-item-steps-item-entry {
+    key: string,
+    value: string
   }
 
   record create-deployment-response-deployment-progress-summary-steps-item {
@@ -9407,7 +9428,7 @@ interface apps {
     reason: option<create-deployment-response-deployment-progress-summary-steps-item-reason>,
     started-at: option<string>,
     status: option<list-op-response-apps-item-active-deployment-progress-steps-item-status-enum>,
-    steps: option<list<create-deployment-response-deployment-progress-summary-steps-item-steps-item>>
+    steps: option<list<list<create-deployment-response-deployment-progress-summary-steps-item-steps-item-entry>>>
   }
 
   record create-deployment-response-deployment-progress-summary-steps-item-reason {
@@ -9415,9 +9436,10 @@ interface apps {
     message: option<string>
   }
 
-  record create-deployment-response-deployment-progress-summary-steps-item-steps-item {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record create-deployment-response-deployment-progress-summary-steps-item-steps-item-entry {
+    key: string,
+    value: string
   }
 
   record create-deployment-response-deployment-services-item {
@@ -10023,7 +10045,7 @@ interface apps {
     reason: option<get-deployment-response-deployment-progress-steps-item-reason>,
     started-at: option<string>,
     status: option<list-op-response-apps-item-active-deployment-progress-steps-item-status-enum>,
-    steps: option<list<get-deployment-response-deployment-progress-steps-item-steps-item>>
+    steps: option<list<list<get-deployment-response-deployment-progress-steps-item-steps-item-entry>>>
   }
 
   record get-deployment-response-deployment-progress-steps-item-reason {
@@ -10031,9 +10053,10 @@ interface apps {
     message: option<string>
   }
 
-  record get-deployment-response-deployment-progress-steps-item-steps-item {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record get-deployment-response-deployment-progress-steps-item-steps-item-entry {
+    key: string,
+    value: string
   }
 
   record get-deployment-response-deployment-progress-summary-steps-item {
@@ -10046,7 +10069,7 @@ interface apps {
     reason: option<get-deployment-response-deployment-progress-summary-steps-item-reason>,
     started-at: option<string>,
     status: option<list-op-response-apps-item-active-deployment-progress-steps-item-status-enum>,
-    steps: option<list<get-deployment-response-deployment-progress-summary-steps-item-steps-item>>
+    steps: option<list<list<get-deployment-response-deployment-progress-summary-steps-item-steps-item-entry>>>
   }
 
   record get-deployment-response-deployment-progress-summary-steps-item-reason {
@@ -10054,9 +10077,10 @@ interface apps {
     message: option<string>
   }
 
-  record get-deployment-response-deployment-progress-summary-steps-item-steps-item {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record get-deployment-response-deployment-progress-summary-steps-item-steps-item-entry {
+    key: string,
+    value: string
   }
 
   record get-deployment-response-deployment-services-item {
@@ -10662,7 +10686,7 @@ interface apps {
     reason: option<cancel-deployment-response-deployment-progress-steps-item-reason>,
     started-at: option<string>,
     status: option<list-op-response-apps-item-active-deployment-progress-steps-item-status-enum>,
-    steps: option<list<cancel-deployment-response-deployment-progress-steps-item-steps-item>>
+    steps: option<list<list<cancel-deployment-response-deployment-progress-steps-item-steps-item-entry>>>
   }
 
   record cancel-deployment-response-deployment-progress-steps-item-reason {
@@ -10670,9 +10694,10 @@ interface apps {
     message: option<string>
   }
 
-  record cancel-deployment-response-deployment-progress-steps-item-steps-item {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record cancel-deployment-response-deployment-progress-steps-item-steps-item-entry {
+    key: string,
+    value: string
   }
 
   record cancel-deployment-response-deployment-progress-summary-steps-item {
@@ -10685,7 +10710,7 @@ interface apps {
     reason: option<cancel-deployment-response-deployment-progress-summary-steps-item-reason>,
     started-at: option<string>,
     status: option<list-op-response-apps-item-active-deployment-progress-steps-item-status-enum>,
-    steps: option<list<cancel-deployment-response-deployment-progress-summary-steps-item-steps-item>>
+    steps: option<list<list<cancel-deployment-response-deployment-progress-summary-steps-item-steps-item-entry>>>
   }
 
   record cancel-deployment-response-deployment-progress-summary-steps-item-reason {
@@ -10693,9 +10718,10 @@ interface apps {
     message: option<string>
   }
 
-  record cancel-deployment-response-deployment-progress-summary-steps-item-steps-item {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record cancel-deployment-response-deployment-progress-summary-steps-item-steps-item-entry {
+    key: string,
+    value: string
   }
 
   record cancel-deployment-response-deployment-services-item {
@@ -11334,7 +11360,7 @@ interface apps {
     reason: option<create-rollback-response-deployment-progress-steps-item-reason>,
     started-at: option<string>,
     status: option<list-op-response-apps-item-active-deployment-progress-steps-item-status-enum>,
-    steps: option<list<create-rollback-response-deployment-progress-steps-item-steps-item>>
+    steps: option<list<list<create-rollback-response-deployment-progress-steps-item-steps-item-entry>>>
   }
 
   record create-rollback-response-deployment-progress-steps-item-reason {
@@ -11342,9 +11368,10 @@ interface apps {
     message: option<string>
   }
 
-  record create-rollback-response-deployment-progress-steps-item-steps-item {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record create-rollback-response-deployment-progress-steps-item-steps-item-entry {
+    key: string,
+    value: string
   }
 
   record create-rollback-response-deployment-progress-summary-steps-item {
@@ -11357,7 +11384,7 @@ interface apps {
     reason: option<create-rollback-response-deployment-progress-summary-steps-item-reason>,
     started-at: option<string>,
     status: option<list-op-response-apps-item-active-deployment-progress-steps-item-status-enum>,
-    steps: option<list<create-rollback-response-deployment-progress-summary-steps-item-steps-item>>
+    steps: option<list<list<create-rollback-response-deployment-progress-summary-steps-item-steps-item-entry>>>
   }
 
   record create-rollback-response-deployment-progress-summary-steps-item-reason {
@@ -11365,9 +11392,10 @@ interface apps {
     message: option<string>
   }
 
-  record create-rollback-response-deployment-progress-summary-steps-item-steps-item {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record create-rollback-response-deployment-progress-summary-steps-item-steps-item-entry {
+    key: string,
+    value: string
   }
 
   record create-rollback-response-deployment-services-item {
@@ -11973,7 +12001,7 @@ interface apps {
     reason: option<revert-rollback-response-deployment-progress-steps-item-reason>,
     started-at: option<string>,
     status: option<list-op-response-apps-item-active-deployment-progress-steps-item-status-enum>,
-    steps: option<list<revert-rollback-response-deployment-progress-steps-item-steps-item>>
+    steps: option<list<list<revert-rollback-response-deployment-progress-steps-item-steps-item-entry>>>
   }
 
   record revert-rollback-response-deployment-progress-steps-item-reason {
@@ -11981,9 +12009,10 @@ interface apps {
     message: option<string>
   }
 
-  record revert-rollback-response-deployment-progress-steps-item-steps-item {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record revert-rollback-response-deployment-progress-steps-item-steps-item-entry {
+    key: string,
+    value: string
   }
 
   record revert-rollback-response-deployment-progress-summary-steps-item {
@@ -11996,7 +12025,7 @@ interface apps {
     reason: option<revert-rollback-response-deployment-progress-summary-steps-item-reason>,
     started-at: option<string>,
     status: option<list-op-response-apps-item-active-deployment-progress-steps-item-status-enum>,
-    steps: option<list<revert-rollback-response-deployment-progress-summary-steps-item-steps-item>>
+    steps: option<list<list<revert-rollback-response-deployment-progress-summary-steps-item-steps-item-entry>>>
   }
 
   record revert-rollback-response-deployment-progress-summary-steps-item-reason {
@@ -12004,9 +12033,10 @@ interface apps {
     message: option<string>
   }
 
-  record revert-rollback-response-deployment-progress-summary-steps-item-steps-item {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record revert-rollback-response-deployment-progress-summary-steps-item-steps-item-entry {
+    key: string,
+    value: string
   }
 
   record revert-rollback-response-deployment-services-item {
@@ -12662,7 +12692,7 @@ interface apps {
     reason: option<get-response-app-active-deployment-progress-steps-item-reason>,
     started-at: option<string>,
     status: option<list-op-response-apps-item-active-deployment-progress-steps-item-status-enum>,
-    steps: option<list<get-response-app-active-deployment-progress-steps-item-steps-item>>
+    steps: option<list<list<get-response-app-active-deployment-progress-steps-item-steps-item-entry>>>
   }
 
   record get-response-app-active-deployment-progress-steps-item-reason {
@@ -12670,9 +12700,10 @@ interface apps {
     message: option<string>
   }
 
-  record get-response-app-active-deployment-progress-steps-item-steps-item {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record get-response-app-active-deployment-progress-steps-item-steps-item-entry {
+    key: string,
+    value: string
   }
 
   record get-response-app-active-deployment-progress-summary-steps-item {
@@ -12685,7 +12716,7 @@ interface apps {
     reason: option<get-response-app-active-deployment-progress-summary-steps-item-reason>,
     started-at: option<string>,
     status: option<list-op-response-apps-item-active-deployment-progress-steps-item-status-enum>,
-    steps: option<list<get-response-app-active-deployment-progress-summary-steps-item-steps-item>>
+    steps: option<list<list<get-response-app-active-deployment-progress-summary-steps-item-steps-item-entry>>>
   }
 
   record get-response-app-active-deployment-progress-summary-steps-item-reason {
@@ -12693,9 +12724,10 @@ interface apps {
     message: option<string>
   }
 
-  record get-response-app-active-deployment-progress-summary-steps-item-steps-item {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record get-response-app-active-deployment-progress-summary-steps-item-steps-item-entry {
+    key: string,
+    value: string
   }
 
   record get-response-app-active-deployment-services-item {
@@ -13256,12 +13288,13 @@ interface apps {
   }
 
   record get-response-app-domains-item-progress {
-    steps: option<list<get-response-app-domains-item-progress-steps-item>>
+    steps: option<list<list<get-response-app-domains-item-progress-steps-item-entry>>>
   }
 
-  record get-response-app-domains-item-progress-steps-item {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record get-response-app-domains-item-progress-steps-item-entry {
+    key: string,
+    value: string
   }
 
   record get-response-app-domains-item-spec {
@@ -13336,7 +13369,7 @@ interface apps {
     reason: option<get-response-app-in-progress-deployment-progress-steps-item-reason>,
     started-at: option<string>,
     status: option<list-op-response-apps-item-active-deployment-progress-steps-item-status-enum>,
-    steps: option<list<get-response-app-in-progress-deployment-progress-steps-item-steps-item>>
+    steps: option<list<list<get-response-app-in-progress-deployment-progress-steps-item-steps-item-entry>>>
   }
 
   record get-response-app-in-progress-deployment-progress-steps-item-reason {
@@ -13344,9 +13377,10 @@ interface apps {
     message: option<string>
   }
 
-  record get-response-app-in-progress-deployment-progress-steps-item-steps-item {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record get-response-app-in-progress-deployment-progress-steps-item-steps-item-entry {
+    key: string,
+    value: string
   }
 
   record get-response-app-in-progress-deployment-progress-summary-steps-item {
@@ -13359,7 +13393,7 @@ interface apps {
     reason: option<get-response-app-in-progress-deployment-progress-summary-steps-item-reason>,
     started-at: option<string>,
     status: option<list-op-response-apps-item-active-deployment-progress-steps-item-status-enum>,
-    steps: option<list<get-response-app-in-progress-deployment-progress-summary-steps-item-steps-item>>
+    steps: option<list<list<get-response-app-in-progress-deployment-progress-summary-steps-item-steps-item-entry>>>
   }
 
   record get-response-app-in-progress-deployment-progress-summary-steps-item-reason {
@@ -13367,9 +13401,10 @@ interface apps {
     message: option<string>
   }
 
-  record get-response-app-in-progress-deployment-progress-summary-steps-item-steps-item {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record get-response-app-in-progress-deployment-progress-summary-steps-item-steps-item-entry {
+    key: string,
+    value: string
   }
 
   record get-response-app-in-progress-deployment-services-item {
@@ -13971,7 +14006,7 @@ interface apps {
     reason: option<get-response-app-pending-deployment-progress-steps-item-reason>,
     started-at: option<string>,
     status: option<list-op-response-apps-item-active-deployment-progress-steps-item-status-enum>,
-    steps: option<list<get-response-app-pending-deployment-progress-steps-item-steps-item>>
+    steps: option<list<list<get-response-app-pending-deployment-progress-steps-item-steps-item-entry>>>
   }
 
   record get-response-app-pending-deployment-progress-steps-item-reason {
@@ -13979,9 +14014,10 @@ interface apps {
     message: option<string>
   }
 
-  record get-response-app-pending-deployment-progress-steps-item-steps-item {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record get-response-app-pending-deployment-progress-steps-item-steps-item-entry {
+    key: string,
+    value: string
   }
 
   record get-response-app-pending-deployment-progress-summary-steps-item {
@@ -13994,7 +14030,7 @@ interface apps {
     reason: option<get-response-app-pending-deployment-progress-summary-steps-item-reason>,
     started-at: option<string>,
     status: option<list-op-response-apps-item-active-deployment-progress-steps-item-status-enum>,
-    steps: option<list<get-response-app-pending-deployment-progress-summary-steps-item-steps-item>>
+    steps: option<list<list<get-response-app-pending-deployment-progress-summary-steps-item-steps-item-entry>>>
   }
 
   record get-response-app-pending-deployment-progress-summary-steps-item-reason {
@@ -14002,9 +14038,10 @@ interface apps {
     message: option<string>
   }
 
-  record get-response-app-pending-deployment-progress-summary-steps-item-steps-item {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record get-response-app-pending-deployment-progress-summary-steps-item-steps-item-entry {
+    key: string,
+    value: string
   }
 
   record get-response-app-pending-deployment-services-item {
@@ -14606,7 +14643,7 @@ interface apps {
     reason: option<get-response-app-pinned-deployment-progress-steps-item-reason>,
     started-at: option<string>,
     status: option<list-op-response-apps-item-active-deployment-progress-steps-item-status-enum>,
-    steps: option<list<get-response-app-pinned-deployment-progress-steps-item-steps-item>>
+    steps: option<list<list<get-response-app-pinned-deployment-progress-steps-item-steps-item-entry>>>
   }
 
   record get-response-app-pinned-deployment-progress-steps-item-reason {
@@ -14614,9 +14651,10 @@ interface apps {
     message: option<string>
   }
 
-  record get-response-app-pinned-deployment-progress-steps-item-steps-item {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record get-response-app-pinned-deployment-progress-steps-item-steps-item-entry {
+    key: string,
+    value: string
   }
 
   record get-response-app-pinned-deployment-progress-summary-steps-item {
@@ -14629,7 +14667,7 @@ interface apps {
     reason: option<get-response-app-pinned-deployment-progress-summary-steps-item-reason>,
     started-at: option<string>,
     status: option<list-op-response-apps-item-active-deployment-progress-steps-item-status-enum>,
-    steps: option<list<get-response-app-pinned-deployment-progress-summary-steps-item-steps-item>>
+    steps: option<list<list<get-response-app-pinned-deployment-progress-summary-steps-item-steps-item-entry>>>
   }
 
   record get-response-app-pinned-deployment-progress-summary-steps-item-reason {
@@ -14637,9 +14675,10 @@ interface apps {
     message: option<string>
   }
 
-  record get-response-app-pinned-deployment-progress-summary-steps-item-steps-item {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record get-response-app-pinned-deployment-progress-summary-steps-item-steps-item-entry {
+    key: string,
+    value: string
   }
 
   record get-response-app-pinned-deployment-services-item {
@@ -16345,7 +16384,7 @@ interface apps {
     reason: option<update-response-app-active-deployment-progress-steps-item-reason>,
     started-at: option<string>,
     status: option<list-op-response-apps-item-active-deployment-progress-steps-item-status-enum>,
-    steps: option<list<update-response-app-active-deployment-progress-steps-item-steps-item>>
+    steps: option<list<list<update-response-app-active-deployment-progress-steps-item-steps-item-entry>>>
   }
 
   record update-response-app-active-deployment-progress-steps-item-reason {
@@ -16353,9 +16392,10 @@ interface apps {
     message: option<string>
   }
 
-  record update-response-app-active-deployment-progress-steps-item-steps-item {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record update-response-app-active-deployment-progress-steps-item-steps-item-entry {
+    key: string,
+    value: string
   }
 
   record update-response-app-active-deployment-progress-summary-steps-item {
@@ -16368,7 +16408,7 @@ interface apps {
     reason: option<update-response-app-active-deployment-progress-summary-steps-item-reason>,
     started-at: option<string>,
     status: option<list-op-response-apps-item-active-deployment-progress-steps-item-status-enum>,
-    steps: option<list<update-response-app-active-deployment-progress-summary-steps-item-steps-item>>
+    steps: option<list<list<update-response-app-active-deployment-progress-summary-steps-item-steps-item-entry>>>
   }
 
   record update-response-app-active-deployment-progress-summary-steps-item-reason {
@@ -16376,9 +16416,10 @@ interface apps {
     message: option<string>
   }
 
-  record update-response-app-active-deployment-progress-summary-steps-item-steps-item {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record update-response-app-active-deployment-progress-summary-steps-item-steps-item-entry {
+    key: string,
+    value: string
   }
 
   record update-response-app-active-deployment-services-item {
@@ -16939,12 +16980,13 @@ interface apps {
   }
 
   record update-response-app-domains-item-progress {
-    steps: option<list<update-response-app-domains-item-progress-steps-item>>
+    steps: option<list<list<update-response-app-domains-item-progress-steps-item-entry>>>
   }
 
-  record update-response-app-domains-item-progress-steps-item {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record update-response-app-domains-item-progress-steps-item-entry {
+    key: string,
+    value: string
   }
 
   record update-response-app-domains-item-spec {
@@ -17019,7 +17061,7 @@ interface apps {
     reason: option<update-response-app-in-progress-deployment-progress-steps-item-reason>,
     started-at: option<string>,
     status: option<list-op-response-apps-item-active-deployment-progress-steps-item-status-enum>,
-    steps: option<list<update-response-app-in-progress-deployment-progress-steps-item-steps-item>>
+    steps: option<list<list<update-response-app-in-progress-deployment-progress-steps-item-steps-item-entry>>>
   }
 
   record update-response-app-in-progress-deployment-progress-steps-item-reason {
@@ -17027,9 +17069,10 @@ interface apps {
     message: option<string>
   }
 
-  record update-response-app-in-progress-deployment-progress-steps-item-steps-item {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record update-response-app-in-progress-deployment-progress-steps-item-steps-item-entry {
+    key: string,
+    value: string
   }
 
   record update-response-app-in-progress-deployment-progress-summary-steps-item {
@@ -17042,7 +17085,7 @@ interface apps {
     reason: option<update-response-app-in-progress-deployment-progress-summary-steps-item-reason>,
     started-at: option<string>,
     status: option<list-op-response-apps-item-active-deployment-progress-steps-item-status-enum>,
-    steps: option<list<update-response-app-in-progress-deployment-progress-summary-steps-item-steps-item>>
+    steps: option<list<list<update-response-app-in-progress-deployment-progress-summary-steps-item-steps-item-entry>>>
   }
 
   record update-response-app-in-progress-deployment-progress-summary-steps-item-reason {
@@ -17050,9 +17093,10 @@ interface apps {
     message: option<string>
   }
 
-  record update-response-app-in-progress-deployment-progress-summary-steps-item-steps-item {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record update-response-app-in-progress-deployment-progress-summary-steps-item-steps-item-entry {
+    key: string,
+    value: string
   }
 
   record update-response-app-in-progress-deployment-services-item {
@@ -17654,7 +17698,7 @@ interface apps {
     reason: option<update-response-app-pending-deployment-progress-steps-item-reason>,
     started-at: option<string>,
     status: option<list-op-response-apps-item-active-deployment-progress-steps-item-status-enum>,
-    steps: option<list<update-response-app-pending-deployment-progress-steps-item-steps-item>>
+    steps: option<list<list<update-response-app-pending-deployment-progress-steps-item-steps-item-entry>>>
   }
 
   record update-response-app-pending-deployment-progress-steps-item-reason {
@@ -17662,9 +17706,10 @@ interface apps {
     message: option<string>
   }
 
-  record update-response-app-pending-deployment-progress-steps-item-steps-item {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record update-response-app-pending-deployment-progress-steps-item-steps-item-entry {
+    key: string,
+    value: string
   }
 
   record update-response-app-pending-deployment-progress-summary-steps-item {
@@ -17677,7 +17722,7 @@ interface apps {
     reason: option<update-response-app-pending-deployment-progress-summary-steps-item-reason>,
     started-at: option<string>,
     status: option<list-op-response-apps-item-active-deployment-progress-steps-item-status-enum>,
-    steps: option<list<update-response-app-pending-deployment-progress-summary-steps-item-steps-item>>
+    steps: option<list<list<update-response-app-pending-deployment-progress-summary-steps-item-steps-item-entry>>>
   }
 
   record update-response-app-pending-deployment-progress-summary-steps-item-reason {
@@ -17685,9 +17730,10 @@ interface apps {
     message: option<string>
   }
 
-  record update-response-app-pending-deployment-progress-summary-steps-item-steps-item {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record update-response-app-pending-deployment-progress-summary-steps-item-steps-item-entry {
+    key: string,
+    value: string
   }
 
   record update-response-app-pending-deployment-services-item {
@@ -18289,7 +18335,7 @@ interface apps {
     reason: option<update-response-app-pinned-deployment-progress-steps-item-reason>,
     started-at: option<string>,
     status: option<list-op-response-apps-item-active-deployment-progress-steps-item-status-enum>,
-    steps: option<list<update-response-app-pinned-deployment-progress-steps-item-steps-item>>
+    steps: option<list<list<update-response-app-pinned-deployment-progress-steps-item-steps-item-entry>>>
   }
 
   record update-response-app-pinned-deployment-progress-steps-item-reason {
@@ -18297,9 +18343,10 @@ interface apps {
     message: option<string>
   }
 
-  record update-response-app-pinned-deployment-progress-steps-item-steps-item {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record update-response-app-pinned-deployment-progress-steps-item-steps-item-entry {
+    key: string,
+    value: string
   }
 
   record update-response-app-pinned-deployment-progress-summary-steps-item {
@@ -18312,7 +18359,7 @@ interface apps {
     reason: option<update-response-app-pinned-deployment-progress-summary-steps-item-reason>,
     started-at: option<string>,
     status: option<list-op-response-apps-item-active-deployment-progress-steps-item-status-enum>,
-    steps: option<list<update-response-app-pinned-deployment-progress-summary-steps-item-steps-item>>
+    steps: option<list<list<update-response-app-pinned-deployment-progress-summary-steps-item-steps-item-entry>>>
   }
 
   record update-response-app-pinned-deployment-progress-summary-steps-item-reason {
@@ -18320,9 +18367,10 @@ interface apps {
     message: option<string>
   }
 
-  record update-response-app-pinned-deployment-progress-summary-steps-item-steps-item {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record update-response-app-pinned-deployment-progress-summary-steps-item-steps-item-entry {
+    key: string,
+    value: string
   }
 
   record update-response-app-pinned-deployment-services-item {
@@ -27750,14 +27798,14 @@ interface monitoring {
 
   record get-droplet-bandwidth-metrics-response-data-result-op-item {
     /// An object containing the metric labels.
-    metric: get-droplet-bandwidth-metrics-response-data-result-op-item-metric,
+    metric: list<get-droplet-bandwidth-metrics-response-data-result-op-item-metric-entry>,
     values: list<list<string>>
   }
 
-  /// An object containing the metric labels.
-  record get-droplet-bandwidth-metrics-response-data-result-op-item-metric {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record get-droplet-bandwidth-metrics-response-data-result-op-item-metric-entry {
+    key: string,
+    value: string
   }
 
   record get-droplet-cpu-metrics-response {
@@ -27773,14 +27821,14 @@ interface monitoring {
 
   record get-droplet-cpu-metrics-response-data-result-op-item {
     /// An object containing the metric labels.
-    metric: get-droplet-cpu-metrics-response-data-result-op-item-metric,
+    metric: list<get-droplet-cpu-metrics-response-data-result-op-item-metric-entry>,
     values: list<list<string>>
   }
 
-  /// An object containing the metric labels.
-  record get-droplet-cpu-metrics-response-data-result-op-item-metric {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record get-droplet-cpu-metrics-response-data-result-op-item-metric-entry {
+    key: string,
+    value: string
   }
 
   record get-droplet-filesystem-free-metrics-response {
@@ -27796,14 +27844,14 @@ interface monitoring {
 
   record get-droplet-filesystem-free-metrics-response-data-result-op-item {
     /// An object containing the metric labels.
-    metric: get-droplet-filesystem-free-metrics-response-data-result-op-item-metric,
+    metric: list<get-droplet-filesystem-free-metrics-response-data-result-op-item-metric-entry>,
     values: list<list<string>>
   }
 
-  /// An object containing the metric labels.
-  record get-droplet-filesystem-free-metrics-response-data-result-op-item-metric {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record get-droplet-filesystem-free-metrics-response-data-result-op-item-metric-entry {
+    key: string,
+    value: string
   }
 
   record get-droplet-filesystem-size-metrics-response {
@@ -27819,14 +27867,14 @@ interface monitoring {
 
   record get-droplet-filesystem-size-metrics-response-data-result-op-item {
     /// An object containing the metric labels.
-    metric: get-droplet-filesystem-size-metrics-response-data-result-op-item-metric,
+    metric: list<get-droplet-filesystem-size-metrics-response-data-result-op-item-metric-entry>,
     values: list<list<string>>
   }
 
-  /// An object containing the metric labels.
-  record get-droplet-filesystem-size-metrics-response-data-result-op-item-metric {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record get-droplet-filesystem-size-metrics-response-data-result-op-item-metric-entry {
+    key: string,
+    value: string
   }
 
   record get-droplet-load1-metrics-response {
@@ -27842,14 +27890,14 @@ interface monitoring {
 
   record get-droplet-load1-metrics-response-data-result-op-item {
     /// An object containing the metric labels.
-    metric: get-droplet-load1-metrics-response-data-result-op-item-metric,
+    metric: list<get-droplet-load1-metrics-response-data-result-op-item-metric-entry>,
     values: list<list<string>>
   }
 
-  /// An object containing the metric labels.
-  record get-droplet-load1-metrics-response-data-result-op-item-metric {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record get-droplet-load1-metrics-response-data-result-op-item-metric-entry {
+    key: string,
+    value: string
   }
 
   record get-droplet-load15-metrics-response {
@@ -27865,14 +27913,14 @@ interface monitoring {
 
   record get-droplet-load15-metrics-response-data-result-op-item {
     /// An object containing the metric labels.
-    metric: get-droplet-load15-metrics-response-data-result-op-item-metric,
+    metric: list<get-droplet-load15-metrics-response-data-result-op-item-metric-entry>,
     values: list<list<string>>
   }
 
-  /// An object containing the metric labels.
-  record get-droplet-load15-metrics-response-data-result-op-item-metric {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record get-droplet-load15-metrics-response-data-result-op-item-metric-entry {
+    key: string,
+    value: string
   }
 
   record get-droplet-load5-metrics-response {
@@ -27888,14 +27936,14 @@ interface monitoring {
 
   record get-droplet-load5-metrics-response-data-result-op-item {
     /// An object containing the metric labels.
-    metric: get-droplet-load5-metrics-response-data-result-op-item-metric,
+    metric: list<get-droplet-load5-metrics-response-data-result-op-item-metric-entry>,
     values: list<list<string>>
   }
 
-  /// An object containing the metric labels.
-  record get-droplet-load5-metrics-response-data-result-op-item-metric {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record get-droplet-load5-metrics-response-data-result-op-item-metric-entry {
+    key: string,
+    value: string
   }
 
   record get-droplet-memory-available-metrics-response {
@@ -27911,14 +27959,14 @@ interface monitoring {
 
   record get-droplet-memory-available-metrics-response-data-result-op-item {
     /// An object containing the metric labels.
-    metric: get-droplet-memory-available-metrics-response-data-result-op-item-metric,
+    metric: list<get-droplet-memory-available-metrics-response-data-result-op-item-metric-entry>,
     values: list<list<string>>
   }
 
-  /// An object containing the metric labels.
-  record get-droplet-memory-available-metrics-response-data-result-op-item-metric {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record get-droplet-memory-available-metrics-response-data-result-op-item-metric-entry {
+    key: string,
+    value: string
   }
 
   record get-droplet-memory-cached-metrics-response {
@@ -27934,14 +27982,14 @@ interface monitoring {
 
   record get-droplet-memory-cached-metrics-response-data-result-op-item {
     /// An object containing the metric labels.
-    metric: get-droplet-memory-cached-metrics-response-data-result-op-item-metric,
+    metric: list<get-droplet-memory-cached-metrics-response-data-result-op-item-metric-entry>,
     values: list<list<string>>
   }
 
-  /// An object containing the metric labels.
-  record get-droplet-memory-cached-metrics-response-data-result-op-item-metric {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record get-droplet-memory-cached-metrics-response-data-result-op-item-metric-entry {
+    key: string,
+    value: string
   }
 
   record get-droplet-memory-free-metrics-response {
@@ -27957,14 +28005,14 @@ interface monitoring {
 
   record get-droplet-memory-free-metrics-response-data-result-op-item {
     /// An object containing the metric labels.
-    metric: get-droplet-memory-free-metrics-response-data-result-op-item-metric,
+    metric: list<get-droplet-memory-free-metrics-response-data-result-op-item-metric-entry>,
     values: list<list<string>>
   }
 
-  /// An object containing the metric labels.
-  record get-droplet-memory-free-metrics-response-data-result-op-item-metric {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record get-droplet-memory-free-metrics-response-data-result-op-item-metric-entry {
+    key: string,
+    value: string
   }
 
   record get-droplet-memory-total-metrics-response {
@@ -27980,14 +28028,14 @@ interface monitoring {
 
   record get-droplet-memory-total-metrics-response-data-result-op-item {
     /// An object containing the metric labels.
-    metric: get-droplet-memory-total-metrics-response-data-result-op-item-metric,
+    metric: list<get-droplet-memory-total-metrics-response-data-result-op-item-metric-entry>,
     values: list<list<string>>
   }
 
-  /// An object containing the metric labels.
-  record get-droplet-memory-total-metrics-response-data-result-op-item-metric {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record get-droplet-memory-total-metrics-response-data-result-op-item-metric-entry {
+    key: string,
+    value: string
   }
 
   variant list-alert-policy-error {

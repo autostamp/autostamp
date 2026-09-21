@@ -290,14 +290,14 @@ fn iface_discovery__attraction__to_json(p: &iface_discovery::Attraction) -> Valu
     m.insert("additionalInfo".into(), match (&p.additional_info) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("classifications".into(), match (&p.classifications) { Some(v) => Value::Array((v).iter().map(|v| iface_discovery__classification__to_json(v)).collect()), None => Value::Null });
     m.insert("description".into(), match (&p.description) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("externalLinks".into(), match (&p.external_links) { Some(v) => iface_discovery__attraction_external_links__to_json(v), None => Value::Null });
+    m.insert("externalLinks".into(), match (&p.external_links) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::Array((&e.value).iter().map(|v| iface_discovery__external_link__to_json(v)).collect()))).collect()), None => Value::Null });
     m.insert("id".into(), Value::String((&p.id).clone()));
     m.insert("images".into(), match (&p.images) { Some(v) => Value::Array((v).iter().map(|v| iface_discovery__image__to_json(v)).collect()), None => Value::Null });
     m.insert("locale".into(), match (&p.locale) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("test".into(), match (&p.test) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     m.insert("type".into(), Value::String(iface_discovery__attraction_type_op_enum__to_str(&p.type_op).into()));
-    m.insert("upcomingEvents".into(), match (&p.upcoming_events) { Some(v) => iface_discovery__attraction_upcoming_events__to_json(v), None => Value::Null });
+    m.insert("upcomingEvents".into(), match (&p.upcoming_events) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::Number(serde_json::Number::from(*(&e.value))))).collect()), None => Value::Null });
     m.insert("url".into(), match (&p.url) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
@@ -327,9 +327,17 @@ fn iface_discovery__segment__to_json(p: &iface_discovery::Segment) -> Value {
     Value::Object(m)
 }
 
-fn iface_discovery__attraction_external_links__to_json(p: &iface_discovery::AttractionExternalLinks) -> Value {
+fn iface_discovery__external_link__to_json(p: &iface_discovery::ExternalLink) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("url".into(), match (&p.url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_discovery__attraction_external_links_entry__to_json(p: &iface_discovery::AttractionExternalLinksEntry) -> Value {
+    let mut m = Map::new();
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::Array((&p.value).iter().map(|v| iface_discovery__external_link__to_json(v)).collect()));
     Value::Object(m)
 }
 
@@ -344,9 +352,10 @@ fn iface_discovery__image__to_json(p: &iface_discovery::Image) -> Value {
     Value::Object(m)
 }
 
-fn iface_discovery__attraction_upcoming_events__to_json(p: &iface_discovery::AttractionUpcomingEvents) -> Value {
+fn iface_discovery__attraction_upcoming_events_entry__to_json(p: &iface_discovery::AttractionUpcomingEventsEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::Number(serde_json::Number::from(*(&p.value))));
     Value::Object(m)
 }
 
@@ -365,7 +374,7 @@ fn iface_discovery__event__to_json(p: &iface_discovery::Event) -> Value {
     m.insert("dates".into(), match (&p.dates) { Some(v) => iface_discovery__event_dates__to_json(v), None => Value::Null });
     m.insert("description".into(), match (&p.description) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("distance".into(), match (&p.distance) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
-    m.insert("externalLinks".into(), match (&p.external_links) { Some(v) => iface_discovery__event_external_links__to_json(v), None => Value::Null });
+    m.insert("externalLinks".into(), match (&p.external_links) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::Array((&e.value).iter().map(|v| iface_discovery__external_link__to_json(v)).collect()))).collect()), None => Value::Null });
     m.insert("id".into(), Value::String((&p.id).clone()));
     m.insert("images".into(), match (&p.images) { Some(v) => Value::Array((v).iter().map(|v| iface_discovery__image__to_json(v)).collect()), None => Value::Null });
     m.insert("info".into(), match (&p.info) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -507,9 +516,10 @@ fn iface_discovery__event_status__to_json(p: &iface_discovery::EventStatus) -> V
     Value::Object(m)
 }
 
-fn iface_discovery__event_external_links__to_json(p: &iface_discovery::EventExternalLinks) -> Value {
+fn iface_discovery__event_external_links_entry__to_json(p: &iface_discovery::EventExternalLinksEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::Array((&p.value).iter().map(|v| iface_discovery__external_link__to_json(v)).collect()));
     Value::Object(m)
 }
 
@@ -651,7 +661,7 @@ fn iface_discovery__venue__to_json(p: &iface_discovery::Venue) -> Value {
     m.insert("description".into(), match (&p.description) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("distance".into(), match (&p.distance) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
     m.insert("dma".into(), match (&p.dma) { Some(v) => Value::Array((v).iter().map(|v| iface_discovery__dma__to_json(v)).collect()), None => Value::Null });
-    m.insert("externalLinks".into(), match (&p.external_links) { Some(v) => iface_discovery__venue_external_links__to_json(v), None => Value::Null });
+    m.insert("externalLinks".into(), match (&p.external_links) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::Array((&e.value).iter().map(|v| iface_discovery__external_link__to_json(v)).collect()))).collect()), None => Value::Null });
     m.insert("generalInfo".into(), match (&p.general_info) { Some(v) => iface_discovery__venue_general_info__to_json(v), None => Value::Null });
     m.insert("id".into(), Value::String((&p.id).clone()));
     m.insert("images".into(), match (&p.images) { Some(v) => Value::Array((v).iter().map(|v| iface_discovery__image__to_json(v)).collect()), None => Value::Null });
@@ -667,7 +677,7 @@ fn iface_discovery__venue__to_json(p: &iface_discovery::Venue) -> Value {
     m.insert("timezone".into(), match (&p.timezone) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("type".into(), Value::String(iface_discovery__attraction_type_op_enum__to_str(&p.type_op).into()));
     m.insert("units".into(), match (&p.units) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("upcomingEvents".into(), match (&p.upcoming_events) { Some(v) => iface_discovery__venue_upcoming_events__to_json(v), None => Value::Null });
+    m.insert("upcomingEvents".into(), match (&p.upcoming_events) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::Number(serde_json::Number::from(*(&e.value))))).collect()), None => Value::Null });
     m.insert("url".into(), match (&p.url) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
@@ -687,9 +697,10 @@ fn iface_discovery__dma__to_json(p: &iface_discovery::Dma) -> Value {
     Value::Object(m)
 }
 
-fn iface_discovery__venue_external_links__to_json(p: &iface_discovery::VenueExternalLinks) -> Value {
+fn iface_discovery__venue_external_links_entry__to_json(p: &iface_discovery::VenueExternalLinksEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::Array((&p.value).iter().map(|v| iface_discovery__external_link__to_json(v)).collect()));
     Value::Object(m)
 }
 
@@ -719,9 +730,10 @@ fn iface_discovery__twitter__to_json(p: &iface_discovery::Twitter) -> Value {
     Value::Object(m)
 }
 
-fn iface_discovery__venue_upcoming_events__to_json(p: &iface_discovery::VenueUpcomingEvents) -> Value {
+fn iface_discovery__venue_upcoming_events_entry__to_json(p: &iface_discovery::VenueUpcomingEventsEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::Number(serde_json::Number::from(*(&p.value))));
     Value::Object(m)
 }
 
@@ -889,14 +901,14 @@ fn iface_discovery__attraction__from_json(v: &Value) -> Option<iface_discovery::
         additional_info: m.get("additionalInfo").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         classifications: m.get("classifications").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_discovery__classification__from_json(x)).collect())),
         description: m.get("description").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        external_links: m.get("externalLinks").filter(|v| !v.is_null()).and_then(|v| iface_discovery__attraction_external_links__from_json(v)),
+        external_links: m.get("externalLinks").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_array().map(|a| a.iter().filter_map(|x| iface_discovery__external_link__from_json(x)).collect())).map(|val| iface_discovery::AttractionExternalLinksEntry { key: k.clone(), value: val })).collect())),
         id: m.get("id").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         images: m.get("images").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_discovery__image__from_json(x)).collect())),
         locale: m.get("locale").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         test: m.get("test").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
         type_op: match m.get("type").and_then(|v| (v).as_str().and_then(iface_discovery__attraction_type_op_enum__from_str)) { Some(x) => x, None => return None },
-        upcoming_events: m.get("upcomingEvents").filter(|v| !v.is_null()).and_then(|v| iface_discovery__attraction_upcoming_events__from_json(v)),
+        upcoming_events: m.get("upcomingEvents").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_i64().map(|n| n as i32)).map(|val| iface_discovery::AttractionUpcomingEventsEntry { key: k.clone(), value: val })).collect())),
         url: m.get("url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
     })
 }
@@ -929,10 +941,19 @@ fn iface_discovery__segment__from_json(v: &Value) -> Option<iface_discovery::Seg
     })
 }
 
-fn iface_discovery__attraction_external_links__from_json(v: &Value) -> Option<iface_discovery::AttractionExternalLinks> {
+fn iface_discovery__external_link__from_json(v: &Value) -> Option<iface_discovery::ExternalLink> {
     let m = v.as_object()?;
-    Some(iface_discovery::AttractionExternalLinks {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_discovery::ExternalLink {
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        url: m.get("url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_discovery__attraction_external_links_entry__from_json(v: &Value) -> Option<iface_discovery::AttractionExternalLinksEntry> {
+    let m = v.as_object()?;
+    Some(iface_discovery::AttractionExternalLinksEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_discovery__external_link__from_json(x)).collect())).unwrap_or_default(),
     })
 }
 
@@ -948,10 +969,11 @@ fn iface_discovery__image__from_json(v: &Value) -> Option<iface_discovery::Image
     })
 }
 
-fn iface_discovery__attraction_upcoming_events__from_json(v: &Value) -> Option<iface_discovery::AttractionUpcomingEvents> {
+fn iface_discovery__attraction_upcoming_events_entry__from_json(v: &Value) -> Option<iface_discovery::AttractionUpcomingEventsEntry> {
     let m = v.as_object()?;
-    Some(iface_discovery::AttractionUpcomingEvents {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_discovery::AttractionUpcomingEventsEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
     })
 }
 
@@ -972,7 +994,7 @@ fn iface_discovery__event__from_json(v: &Value) -> Option<iface_discovery::Event
         dates: m.get("dates").filter(|v| !v.is_null()).and_then(|v| iface_discovery__event_dates__from_json(v)),
         description: m.get("description").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         distance: m.get("distance").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
-        external_links: m.get("externalLinks").filter(|v| !v.is_null()).and_then(|v| iface_discovery__event_external_links__from_json(v)),
+        external_links: m.get("externalLinks").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_array().map(|a| a.iter().filter_map(|x| iface_discovery__external_link__from_json(x)).collect())).map(|val| iface_discovery::EventExternalLinksEntry { key: k.clone(), value: val })).collect())),
         id: m.get("id").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         images: m.get("images").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_discovery__image__from_json(x)).collect())),
         info: m.get("info").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
@@ -1127,10 +1149,11 @@ fn iface_discovery__event_status__from_json(v: &Value) -> Option<iface_discovery
     })
 }
 
-fn iface_discovery__event_external_links__from_json(v: &Value) -> Option<iface_discovery::EventExternalLinks> {
+fn iface_discovery__event_external_links_entry__from_json(v: &Value) -> Option<iface_discovery::EventExternalLinksEntry> {
     let m = v.as_object()?;
-    Some(iface_discovery::EventExternalLinks {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_discovery::EventExternalLinksEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_discovery__external_link__from_json(x)).collect())).unwrap_or_default(),
     })
 }
 
@@ -1289,7 +1312,7 @@ fn iface_discovery__venue__from_json(v: &Value) -> Option<iface_discovery::Venue
         description: m.get("description").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         distance: m.get("distance").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
         dma: m.get("dma").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_discovery__dma__from_json(x)).collect())),
-        external_links: m.get("externalLinks").filter(|v| !v.is_null()).and_then(|v| iface_discovery__venue_external_links__from_json(v)),
+        external_links: m.get("externalLinks").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_array().map(|a| a.iter().filter_map(|x| iface_discovery__external_link__from_json(x)).collect())).map(|val| iface_discovery::VenueExternalLinksEntry { key: k.clone(), value: val })).collect())),
         general_info: m.get("generalInfo").filter(|v| !v.is_null()).and_then(|v| iface_discovery__venue_general_info__from_json(v)),
         id: m.get("id").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         images: m.get("images").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_discovery__image__from_json(x)).collect())),
@@ -1305,7 +1328,7 @@ fn iface_discovery__venue__from_json(v: &Value) -> Option<iface_discovery::Venue
         timezone: m.get("timezone").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         type_op: match m.get("type").and_then(|v| (v).as_str().and_then(iface_discovery__attraction_type_op_enum__from_str)) { Some(x) => x, None => return None },
         units: m.get("units").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        upcoming_events: m.get("upcomingEvents").filter(|v| !v.is_null()).and_then(|v| iface_discovery__venue_upcoming_events__from_json(v)),
+        upcoming_events: m.get("upcomingEvents").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_i64().map(|n| n as i32)).map(|val| iface_discovery::VenueUpcomingEventsEntry { key: k.clone(), value: val })).collect())),
         url: m.get("url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
     })
 }
@@ -1327,10 +1350,11 @@ fn iface_discovery__dma__from_json(v: &Value) -> Option<iface_discovery::Dma> {
     })
 }
 
-fn iface_discovery__venue_external_links__from_json(v: &Value) -> Option<iface_discovery::VenueExternalLinks> {
+fn iface_discovery__venue_external_links_entry__from_json(v: &Value) -> Option<iface_discovery::VenueExternalLinksEntry> {
     let m = v.as_object()?;
-    Some(iface_discovery::VenueExternalLinks {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_discovery::VenueExternalLinksEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_discovery__external_link__from_json(x)).collect())).unwrap_or_default(),
     })
 }
 
@@ -1364,10 +1388,11 @@ fn iface_discovery__twitter__from_json(v: &Value) -> Option<iface_discovery::Twi
     })
 }
 
-fn iface_discovery__venue_upcoming_events__from_json(v: &Value) -> Option<iface_discovery::VenueUpcomingEvents> {
+fn iface_discovery__venue_upcoming_events_entry__from_json(v: &Value) -> Option<iface_discovery::VenueUpcomingEventsEntry> {
     let m = v.as_object()?;
-    Some(iface_discovery::VenueUpcomingEvents {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_discovery::VenueUpcomingEventsEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
     })
 }
 

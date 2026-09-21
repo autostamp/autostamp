@@ -244,9 +244,10 @@ fn iface_player__get_a_users_available_devices_response__to_json(p: &iface_playe
     Value::Object(m)
 }
 
-fn iface_player__start_a_users_playback_body_offset__to_json(p: &iface_player::StartAUsersPlaybackBodyOffset) -> Value {
+fn iface_player__start_a_users_playback_body_offset_entry__to_json(p: &iface_player::StartAUsersPlaybackBodyOffsetEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -300,7 +301,7 @@ fn iface_player__start_a_users_playback_params__to_json(p: &iface_player::StartA
     let mut m = Map::new();
     m.insert("device_id".into(), match (&p.device_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("context_uri".into(), match (&p.context_uri) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("offset".into(), match (&p.offset) { Some(v) => iface_player__start_a_users_playback_body_offset__to_json(v), None => Value::Null });
+    m.insert("offset".into(), match (&p.offset) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("position_ms".into(), match (&p.position_ms) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("uris".into(), match (&p.uris) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
     Value::Object(m)

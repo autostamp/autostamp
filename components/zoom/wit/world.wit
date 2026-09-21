@@ -7,7 +7,7 @@
 /// | --- | --- |
 /// | `Client_Credentials` | `Authorization: Bearer <secret>` |
 /// | `OAuth` | `Authorization: Bearer <secret>` |
-package autostamp:zoom@0.5.0;
+package autostamp:zoom@0.6.0;
 
 interface accounts {
   enum account-create-body-options-pay-mode-enum {
@@ -3522,9 +3522,10 @@ interface sip-connected-audio {
     sip-server-address: option<string>
   }
 
-  record delete-sip-trunk-response {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record delete-sip-trunk-response-entry {
+    key: string,
+    value: string
   }
 
   record list-sip-trunk-numbers-response {
@@ -3726,7 +3727,7 @@ interface sip-connected-audio {
     /// Unique identifier of the SIP Trunk that was previously assigned to a sub account. To retrieve the value of this field, use the List SIP Trunks API.
     trunk-id: string
   }
-  delete-sip-trunk: func(params: delete-sip-trunk-params) -> result<delete-sip-trunk-response, delete-sip-trunk-error>;
+  delete-sip-trunk: func(params: delete-sip-trunk-params) -> result<list<delete-sip-trunk-response-entry>, delete-sip-trunk-error>;
 
   /// List SIP trunk numbers
   list-sip-trunk-numbers: func() -> result<list-sip-trunk-numbers-response, list-sip-trunk-numbers-error>;
@@ -5562,16 +5563,16 @@ interface devices {
 }
 
 interface chatbot-messages {
-  /// JSON template describing how the message should be displayed for the user. For more information please see our ["Send Message" templates](https://marketplace.zoom.us/docs/guides/chatbots/sending-messages#example-request).
-  record sendchatbot-body-content {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record sendchatbot-body-content-entry {
+    key: string,
+    value: string
   }
 
-  /// JSON template describing how the edited message should be displayed for the user. For more information please see our ["Send Message" templates](https://marketplace.zoom.us/docs/guides/chatbots/sending-messages#example-request).
-  record edit-chatbot-message-body-content {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record edit-chatbot-message-body-content-entry {
+    key: string,
+    value: string
   }
 
   record edit-chatbot-message-response {
@@ -5610,7 +5611,7 @@ interface chatbot-messages {
     /// Account ID of the authorized account.
     account-id: string,
     /// JSON template describing how the message should be displayed for the user. For more information please see our ["Send Message" templates](https://marketplace.zoom.us/docs/guides/chatbots/sending-messages#example-request).
-    content: sendchatbot-body-content,
+    content: list<sendchatbot-body-content-entry>,
     /// **Optional**<br>
     /// Applies the markdown parser to your chatbot message if the value of this field is set to `true`.<br> To learn more, refer to the Chatbot message [markdown reference](https://marketplace.zoom.us/docs/guides/chatbots/customizing-messages/message-with-markdown).
     is-markdown-support: option<bool>,
@@ -5633,7 +5634,7 @@ interface chatbot-messages {
     /// The AccountID of the Zoom account to which the message was sent. Retrieve this from the Chatbot request sent to your server as shown in the example [here]( https://marketplace.zoom.us/docs/guides/chatbots/sending-messages).
     account-id: string,
     /// JSON template describing how the edited message should be displayed for the user. For more information please see our ["Send Message" templates](https://marketplace.zoom.us/docs/guides/chatbots/sending-messages#example-request).
-    content: edit-chatbot-message-body-content,
+    content: list<edit-chatbot-message-body-content-entry>,
     /// **Optional**<br>
     /// Enable or disable markdown parser to your chatbot message. Applies the markdown parser to your chatbot message if the value of this field is set to `true`.<br> To learn more, refer to the Chatbot message [markdown reference](https://marketplace.zoom.us/docs/guides/chatbots/customizing-messages/message-with-markdown).
     is-markdown-support: option<bool>,
@@ -10886,9 +10887,10 @@ interface phone-call-queues {
     id: option<string>
   }
 
-  record add-members-to-call-queue-response {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record add-members-to-call-queue-response-entry {
+    key: string,
+    value: string
   }
 
   record assign-phone-to-call-queue-body-phone-numbers-item {
@@ -10898,19 +10900,22 @@ interface phone-call-queues {
     number: option<string>
   }
 
-  record assign-phone-to-call-queue-response {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record assign-phone-to-call-queue-response-entry {
+    key: string,
+    value: string
   }
 
-  record unassign-a-phone-num-call-queue-response {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record unassign-a-phone-num-call-queue-response-entry {
+    key: string,
+    value: string
   }
 
-  record un-assign-phone-num-call-queue-response {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record un-assign-phone-num-call-queue-response-entry {
+    key: string,
+    value: string
   }
 
   record get-call-queue-recordings-response {
@@ -11083,7 +11088,7 @@ interface phone-call-queues {
     /// A maximum of 10 members can be added at a time.
     members: option<add-members-to-call-queue-body-members>
   }
-  add-members-to-call-queue: func(params: add-members-to-call-queue-params) -> result<add-members-to-call-queue-response, add-members-to-call-queue-error>;
+  add-members-to-call-queue: func(params: add-members-to-call-queue-params) -> result<list<add-members-to-call-queue-response-entry>, add-members-to-call-queue-error>;
 
   /// Unassign all members
   record unassign-all-members-params {
@@ -11107,14 +11112,14 @@ interface phone-call-queues {
     /// Provide either the `id` or the `number` field. Only a max of 5 numbers can be assigned to a call queue at a time.
     phone-numbers: option<list<assign-phone-to-call-queue-body-phone-numbers-item>>
   }
-  assign-phone-to-call-queue: func(params: assign-phone-to-call-queue-params) -> result<assign-phone-to-call-queue-response, string>;
+  assign-phone-to-call-queue: func(params: assign-phone-to-call-queue-params) -> result<list<assign-phone-to-call-queue-response-entry>, string>;
 
   /// Unassign all phone numbers
   record unassign-a-phone-num-call-queue-params {
     /// Unique Identifier of the Call Queue. This can be retrieved from List Call Queues API.
     call-queue-id: string
   }
-  unassign-a-phone-num-call-queue: func(params: unassign-a-phone-num-call-queue-params) -> result<unassign-a-phone-num-call-queue-response, unassign-a-phone-num-call-queue-error>;
+  unassign-a-phone-num-call-queue: func(params: unassign-a-phone-num-call-queue-params) -> result<list<unassign-a-phone-num-call-queue-response-entry>, unassign-a-phone-num-call-queue-error>;
 
   /// Unassign a phone number
   record un-assign-phone-num-call-queue-params {
@@ -11123,7 +11128,7 @@ interface phone-call-queues {
     /// Unique Identifier of the Phone Number. 
     phone-number-id: string
   }
-  un-assign-phone-num-call-queue: func(params: un-assign-phone-num-call-queue-params) -> result<un-assign-phone-num-call-queue-response, un-assign-phone-num-call-queue-error>;
+  un-assign-phone-num-call-queue: func(params: un-assign-phone-num-call-queue-params) -> result<list<un-assign-phone-num-call-queue-response-entry>, un-assign-phone-num-call-queue-error>;
 
   /// Get call queue recordings
   record get-call-queue-recordings-params {
@@ -13063,14 +13068,16 @@ interface rooms {
     support-phone: option<string>
   }
 
-  record update-room-profile-response {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record update-room-profile-response-entry {
+    key: string,
+    value: string
   }
 
-  record delete-a-zoom-room-response {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record delete-a-zoom-room-response-entry {
+    key: string,
+    value: string
   }
 
   record list-zr-devices-response {
@@ -13227,14 +13234,14 @@ interface rooms {
     room-id: string,
     basic: option<update-room-profile-body-basic>
   }
-  update-room-profile: func(params: update-room-profile-params) -> result<update-room-profile-response, update-room-profile-error>;
+  update-room-profile: func(params: update-room-profile-params) -> result<list<update-room-profile-response-entry>, update-room-profile-error>;
 
   /// Delete a Zoom Room
   record delete-a-zoom-room-params {
     /// Unique Identifier of a Zoom Room.
     room-id: string
   }
-  delete-a-zoom-room: func(params: delete-a-zoom-room-params) -> result<delete-a-zoom-room-response, delete-a-zoom-room-error>;
+  delete-a-zoom-room: func(params: delete-a-zoom-room-params) -> result<list<delete-a-zoom-room-response-entry>, delete-a-zoom-room-error>;
 
   /// List Zoom Room devices
   record list-zr-devices-params {
@@ -13307,14 +13314,16 @@ interface rooms-account {
     support-phone: option<string>
   }
 
-  record update-zr-acc-profile-response {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record update-zr-acc-profile-response-entry {
+    key: string,
+    value: string
   }
 
-  record update-zoom-room-acc-settings-response {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record update-zoom-room-acc-settings-response-entry {
+    key: string,
+    value: string
   }
 
   variant get-zr-account-profile-error {
@@ -13344,7 +13353,7 @@ interface rooms-account {
   record update-zr-acc-profile-params {
     basic: option<update-zr-acc-profile-body-basic>
   }
-  update-zr-acc-profile: func(params: update-zr-acc-profile-params) -> result<update-zr-acc-profile-response, update-zr-acc-profile-error>;
+  update-zr-acc-profile: func(params: update-zr-acc-profile-params) -> result<list<update-zr-acc-profile-response-entry>, update-zr-acc-profile-error>;
 
   /// Get Zoom Room account settings
   record get-zr-account-settings-params {
@@ -13361,7 +13370,7 @@ interface rooms-account {
     setting-type: string,
     body: option<string>
   }
-  update-zoom-room-acc-settings: func(params: update-zoom-room-acc-settings-params) -> result<update-zoom-room-acc-settings-response, update-zoom-room-acc-settings-error>;
+  update-zoom-room-acc-settings: func(params: update-zoom-room-acc-settings-params) -> result<list<update-zoom-room-acc-settings-response-entry>, update-zoom-room-acc-settings-error>;
 
 }
 

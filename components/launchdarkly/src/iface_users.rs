@@ -84,14 +84,8 @@ fn iface_users__user_record__to_json(p: &iface_users::UserRecord) -> Value {
     m.insert("avatar".into(), match (&p.avatar) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("environmentId".into(), match (&p.environment_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("lastPing".into(), match (&p.last_ping) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("ownerId".into(), match (&p.owner_id) { Some(v) => iface_users__id__to_json(v), None => Value::Null });
+    m.insert("ownerId".into(), match (&p.owner_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("user".into(), match (&p.user) { Some(v) => iface_users__user__to_json(v), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_users__id__to_json(p: &iface_users::Id) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -100,7 +94,7 @@ fn iface_users__user__to_json(p: &iface_users::User) -> Value {
     m.insert("anonymous".into(), match (&p.anonymous) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     m.insert("avatar".into(), match (&p.avatar) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("country".into(), match (&p.country) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("custom".into(), match (&p.custom) { Some(v) => iface_users__user_custom__to_json(v), None => Value::Null });
+    m.insert("custom".into(), match (&p.custom) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("email".into(), match (&p.email) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("firstName".into(), match (&p.first_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("ip".into(), match (&p.ip) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -111,9 +105,10 @@ fn iface_users__user__to_json(p: &iface_users::User) -> Value {
     Value::Object(m)
 }
 
-fn iface_users__user_custom__to_json(p: &iface_users::UserCustom) -> Value {
+fn iface_users__user_custom_entry__to_json(p: &iface_users::UserCustomEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -185,15 +180,8 @@ fn iface_users__user_record__from_json(v: &Value) -> Option<iface_users::UserRec
         avatar: m.get("avatar").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         environment_id: m.get("environmentId").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         last_ping: m.get("lastPing").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        owner_id: m.get("ownerId").filter(|v| !v.is_null()).and_then(|v| iface_users__id__from_json(v)),
+        owner_id: m.get("ownerId").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         user: m.get("user").filter(|v| !v.is_null()).and_then(|v| iface_users__user__from_json(v)),
-    })
-}
-
-fn iface_users__id__from_json(v: &Value) -> Option<iface_users::Id> {
-    let m = v.as_object()?;
-    Some(iface_users::Id {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -203,7 +191,7 @@ fn iface_users__user__from_json(v: &Value) -> Option<iface_users::User> {
         anonymous: m.get("anonymous").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
         avatar: m.get("avatar").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         country: m.get("country").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        custom: m.get("custom").filter(|v| !v.is_null()).and_then(|v| iface_users__user_custom__from_json(v)),
+        custom: m.get("custom").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_users::UserCustomEntry { key: k.clone(), value: val })).collect())),
         email: m.get("email").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         first_name: m.get("firstName").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         ip: m.get("ip").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
@@ -214,10 +202,11 @@ fn iface_users__user__from_json(v: &Value) -> Option<iface_users::User> {
     })
 }
 
-fn iface_users__user_custom__from_json(v: &Value) -> Option<iface_users::UserCustom> {
+fn iface_users__user_custom_entry__from_json(v: &Value) -> Option<iface_users::UserCustomEntry> {
     let m = v.as_object()?;
-    Some(iface_users::UserCustom {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_users::UserCustomEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 

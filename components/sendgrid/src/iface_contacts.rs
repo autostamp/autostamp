@@ -195,7 +195,7 @@ fn iface_contacts__contact_details3__to_json(p: &iface_contacts::ContactDetails3
     m.insert("city".into(), match (&p.city) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("country".into(), match (&p.country) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("created_at".into(), Value::String((&p.created_at).clone()));
-    m.insert("custom_fields".into(), match (&p.custom_fields) { Some(v) => iface_contacts__contact_details3_custom_fields__to_json(v), None => Value::Null });
+    m.insert("custom_fields".into(), match (&p.custom_fields) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("email".into(), match (&p.email) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("facebook".into(), match (&p.facebook) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("first_name".into(), match (&p.first_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -213,9 +213,10 @@ fn iface_contacts__contact_details3__to_json(p: &iface_contacts::ContactDetails3
     Value::Object(m)
 }
 
-fn iface_contacts__contact_details3_custom_fields__to_json(p: &iface_contacts::ContactDetails3CustomFields) -> Value {
+fn iface_contacts__contact_details3_custom_fields_entry__to_json(p: &iface_contacts::ContactDetails3CustomFieldsEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -226,7 +227,7 @@ fn iface_contacts__contact_request__to_json(p: &iface_contacts::ContactRequest) 
     m.insert("alternate_emails".into(), match (&p.alternate_emails) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
     m.insert("city".into(), match (&p.city) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("country".into(), match (&p.country) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("custom_fields".into(), match (&p.custom_fields) { Some(v) => iface_contacts__custom_fields_by_id__to_json(v), None => Value::Null });
+    m.insert("custom_fields".into(), match (&p.custom_fields) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("email".into(), Value::String((&p.email).clone()));
     m.insert("first_name".into(), match (&p.first_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("last_name".into(), match (&p.last_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -235,9 +236,10 @@ fn iface_contacts__contact_request__to_json(p: &iface_contacts::ContactRequest) 
     Value::Object(m)
 }
 
-fn iface_contacts__custom_fields_by_id__to_json(p: &iface_contacts::CustomFieldsById) -> Value {
+fn iface_contacts__custom_fields_by_id_entry__to_json(p: &iface_contacts::CustomFieldsByIdEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -249,13 +251,14 @@ fn iface_contacts__put_mc_contacts_response__to_json(p: &iface_contacts::PutMcCo
 
 fn iface_contacts__delete_mc_contacts_response__to_json(p: &iface_contacts::DeleteMcContactsResponse) -> Value {
     let mut m = Map::new();
-    m.insert("job_id".into(), iface_contacts__delete_mc_contacts_response_job_id__to_json(&p.job_id));
+    m.insert("job_id".into(), Value::Object((&p.job_id).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()));
     Value::Object(m)
 }
 
-fn iface_contacts__delete_mc_contacts_response_job_id__to_json(p: &iface_contacts::DeleteMcContactsResponseJobId) -> Value {
+fn iface_contacts__delete_mc_contacts_response_job_id_entry__to_json(p: &iface_contacts::DeleteMcContactsResponseJobIdEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -275,14 +278,15 @@ fn iface_contacts__get_mc_contacts_count_response__to_json(p: &iface_contacts::G
 
 fn iface_contacts__get_mc_contacts_count_response_billable_breakdown__to_json(p: &iface_contacts::GetMcContactsCountResponseBillableBreakdown) -> Value {
     let mut m = Map::new();
-    m.insert("breakdown".into(), match (&p.breakdown) { Some(v) => iface_contacts__get_mc_contacts_count_response_billable_breakdown_breakdown__to_json(v), None => Value::Null });
+    m.insert("breakdown".into(), match (&p.breakdown) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("total".into(), match (&p.total) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_contacts__get_mc_contacts_count_response_billable_breakdown_breakdown__to_json(p: &iface_contacts::GetMcContactsCountResponseBillableBreakdownBreakdown) -> Value {
+fn iface_contacts__get_mc_contacts_count_response_billable_breakdown_breakdown_entry__to_json(p: &iface_contacts::GetMcContactsCountResponseBillableBreakdownBreakdownEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -527,7 +531,7 @@ fn iface_contacts__contact_details3__from_json(v: &Value) -> Option<iface_contac
         city: m.get("city").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         country: m.get("country").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         created_at: m.get("created_at").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-        custom_fields: m.get("custom_fields").filter(|v| !v.is_null()).and_then(|v| iface_contacts__contact_details3_custom_fields__from_json(v)),
+        custom_fields: m.get("custom_fields").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_contacts::ContactDetails3CustomFieldsEntry { key: k.clone(), value: val })).collect())),
         email: m.get("email").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         facebook: m.get("facebook").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         first_name: m.get("first_name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
@@ -545,10 +549,11 @@ fn iface_contacts__contact_details3__from_json(v: &Value) -> Option<iface_contac
     })
 }
 
-fn iface_contacts__contact_details3_custom_fields__from_json(v: &Value) -> Option<iface_contacts::ContactDetails3CustomFields> {
+fn iface_contacts__contact_details3_custom_fields_entry__from_json(v: &Value) -> Option<iface_contacts::ContactDetails3CustomFieldsEntry> {
     let m = v.as_object()?;
-    Some(iface_contacts::ContactDetails3CustomFields {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_contacts::ContactDetails3CustomFieldsEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -562,14 +567,15 @@ fn iface_contacts__put_mc_contacts_response__from_json(v: &Value) -> Option<ifac
 fn iface_contacts__delete_mc_contacts_response__from_json(v: &Value) -> Option<iface_contacts::DeleteMcContactsResponse> {
     let m = v.as_object()?;
     Some(iface_contacts::DeleteMcContactsResponse {
-        job_id: match m.get("job_id").and_then(|v| iface_contacts__delete_mc_contacts_response_job_id__from_json(v)) { Some(x) => x, None => return None },
+        job_id: m.get("job_id").and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_contacts::DeleteMcContactsResponseJobIdEntry { key: k.clone(), value: val })).collect())).unwrap_or_default(),
     })
 }
 
-fn iface_contacts__delete_mc_contacts_response_job_id__from_json(v: &Value) -> Option<iface_contacts::DeleteMcContactsResponseJobId> {
+fn iface_contacts__delete_mc_contacts_response_job_id_entry__from_json(v: &Value) -> Option<iface_contacts::DeleteMcContactsResponseJobIdEntry> {
     let m = v.as_object()?;
-    Some(iface_contacts::DeleteMcContactsResponseJobId {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_contacts::DeleteMcContactsResponseJobIdEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -592,15 +598,16 @@ fn iface_contacts__get_mc_contacts_count_response__from_json(v: &Value) -> Optio
 fn iface_contacts__get_mc_contacts_count_response_billable_breakdown__from_json(v: &Value) -> Option<iface_contacts::GetMcContactsCountResponseBillableBreakdown> {
     let m = v.as_object()?;
     Some(iface_contacts::GetMcContactsCountResponseBillableBreakdown {
-        breakdown: m.get("breakdown").filter(|v| !v.is_null()).and_then(|v| iface_contacts__get_mc_contacts_count_response_billable_breakdown_breakdown__from_json(v)),
+        breakdown: m.get("breakdown").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_contacts::GetMcContactsCountResponseBillableBreakdownBreakdownEntry { key: k.clone(), value: val })).collect())),
         total: m.get("total").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
     })
 }
 
-fn iface_contacts__get_mc_contacts_count_response_billable_breakdown_breakdown__from_json(v: &Value) -> Option<iface_contacts::GetMcContactsCountResponseBillableBreakdownBreakdown> {
+fn iface_contacts__get_mc_contacts_count_response_billable_breakdown_breakdown_entry__from_json(v: &Value) -> Option<iface_contacts::GetMcContactsCountResponseBillableBreakdownBreakdownEntry> {
     let m = v.as_object()?;
-    Some(iface_contacts::GetMcContactsCountResponseBillableBreakdownBreakdown {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_contacts::GetMcContactsCountResponseBillableBreakdownBreakdownEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 

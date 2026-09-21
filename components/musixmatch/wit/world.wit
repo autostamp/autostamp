@@ -1,4 +1,4 @@
-package autostamp:musixmatch@0.5.0;
+package autostamp:musixmatch@0.6.0;
 
 interface album {
   record get-album-get-response {

@@ -119,40 +119,43 @@ fn iface_setup_attempts__setup_attempt__to_json(p: &iface_setup_attempts::SetupA
 
 fn iface_setup_attempts__setup_attempt_payment_method_details__to_json(p: &iface_setup_attempts::SetupAttemptPaymentMethodDetails) -> Value {
     let mut m = Map::new();
-    m.insert("acss_debit".into(), match (&p.acss_debit) { Some(v) => iface_setup_attempts__setup_attempt_payment_method_details_acss_debit__to_json(v), None => Value::Null });
-    m.insert("au_becs_debit".into(), match (&p.au_becs_debit) { Some(v) => iface_setup_attempts__setup_attempt_payment_method_details_au_becs_debit__to_json(v), None => Value::Null });
-    m.insert("bacs_debit".into(), match (&p.bacs_debit) { Some(v) => iface_setup_attempts__setup_attempt_payment_method_details_bacs_debit__to_json(v), None => Value::Null });
+    m.insert("acss_debit".into(), match (&p.acss_debit) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
+    m.insert("au_becs_debit".into(), match (&p.au_becs_debit) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
+    m.insert("bacs_debit".into(), match (&p.bacs_debit) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("bancontact".into(), match (&p.bancontact) { Some(v) => iface_setup_attempts__setup_attempt_payment_method_details_bancontact__to_json(v), None => Value::Null });
-    m.insert("blik".into(), match (&p.blik) { Some(v) => iface_setup_attempts__setup_attempt_payment_method_details_blik__to_json(v), None => Value::Null });
-    m.insert("boleto".into(), match (&p.boleto) { Some(v) => iface_setup_attempts__setup_attempt_payment_method_details_boleto__to_json(v), None => Value::Null });
+    m.insert("blik".into(), match (&p.blik) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
+    m.insert("boleto".into(), match (&p.boleto) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("card".into(), match (&p.card) { Some(v) => iface_setup_attempts__setup_attempt_payment_method_details_card__to_json(v), None => Value::Null });
     m.insert("card_present".into(), match (&p.card_present) { Some(v) => iface_setup_attempts__setup_attempt_payment_method_details_card_present__to_json(v), None => Value::Null });
-    m.insert("cashapp".into(), match (&p.cashapp) { Some(v) => iface_setup_attempts__setup_attempt_payment_method_details_cashapp__to_json(v), None => Value::Null });
+    m.insert("cashapp".into(), match (&p.cashapp) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("ideal".into(), match (&p.ideal) { Some(v) => iface_setup_attempts__setup_attempt_payment_method_details_ideal__to_json(v), None => Value::Null });
-    m.insert("klarna".into(), match (&p.klarna) { Some(v) => iface_setup_attempts__setup_attempt_payment_method_details_klarna__to_json(v), None => Value::Null });
-    m.insert("link".into(), match (&p.link) { Some(v) => iface_setup_attempts__setup_attempt_payment_method_details_link__to_json(v), None => Value::Null });
-    m.insert("sepa_debit".into(), match (&p.sepa_debit) { Some(v) => iface_setup_attempts__setup_attempt_payment_method_details_sepa_debit__to_json(v), None => Value::Null });
+    m.insert("klarna".into(), match (&p.klarna) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
+    m.insert("link".into(), match (&p.link) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
+    m.insert("sepa_debit".into(), match (&p.sepa_debit) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("sofort".into(), match (&p.sofort) { Some(v) => iface_setup_attempts__setup_attempt_payment_method_details_sofort__to_json(v), None => Value::Null });
     m.insert("type".into(), Value::String((&p.type_op).clone()));
-    m.insert("us_bank_account".into(), match (&p.us_bank_account) { Some(v) => iface_setup_attempts__setup_attempt_payment_method_details_us_bank_account__to_json(v), None => Value::Null });
+    m.insert("us_bank_account".into(), match (&p.us_bank_account) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_setup_attempts__setup_attempt_payment_method_details_acss_debit__to_json(p: &iface_setup_attempts::SetupAttemptPaymentMethodDetailsAcssDebit) -> Value {
+fn iface_setup_attempts__setup_attempt_payment_method_details_acss_debit_entry__to_json(p: &iface_setup_attempts::SetupAttemptPaymentMethodDetailsAcssDebitEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
-fn iface_setup_attempts__setup_attempt_payment_method_details_au_becs_debit__to_json(p: &iface_setup_attempts::SetupAttemptPaymentMethodDetailsAuBecsDebit) -> Value {
+fn iface_setup_attempts__setup_attempt_payment_method_details_au_becs_debit_entry__to_json(p: &iface_setup_attempts::SetupAttemptPaymentMethodDetailsAuBecsDebitEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
-fn iface_setup_attempts__setup_attempt_payment_method_details_bacs_debit__to_json(p: &iface_setup_attempts::SetupAttemptPaymentMethodDetailsBacsDebit) -> Value {
+fn iface_setup_attempts__setup_attempt_payment_method_details_bacs_debit_entry__to_json(p: &iface_setup_attempts::SetupAttemptPaymentMethodDetailsBacsDebitEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -169,15 +172,17 @@ fn iface_setup_attempts__setup_attempt_payment_method_details_bancontact__to_jso
     Value::Object(m)
 }
 
-fn iface_setup_attempts__setup_attempt_payment_method_details_blik__to_json(p: &iface_setup_attempts::SetupAttemptPaymentMethodDetailsBlik) -> Value {
+fn iface_setup_attempts__setup_attempt_payment_method_details_blik_entry__to_json(p: &iface_setup_attempts::SetupAttemptPaymentMethodDetailsBlikEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
-fn iface_setup_attempts__setup_attempt_payment_method_details_boleto__to_json(p: &iface_setup_attempts::SetupAttemptPaymentMethodDetailsBoleto) -> Value {
+fn iface_setup_attempts__setup_attempt_payment_method_details_boleto_entry__to_json(p: &iface_setup_attempts::SetupAttemptPaymentMethodDetailsBoletoEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -194,9 +199,10 @@ fn iface_setup_attempts__setup_attempt_payment_method_details_card_present__to_j
     Value::Object(m)
 }
 
-fn iface_setup_attempts__setup_attempt_payment_method_details_cashapp__to_json(p: &iface_setup_attempts::SetupAttemptPaymentMethodDetailsCashapp) -> Value {
+fn iface_setup_attempts__setup_attempt_payment_method_details_cashapp_entry__to_json(p: &iface_setup_attempts::SetupAttemptPaymentMethodDetailsCashappEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -211,21 +217,24 @@ fn iface_setup_attempts__setup_attempt_payment_method_details_ideal__to_json(p: 
     Value::Object(m)
 }
 
-fn iface_setup_attempts__setup_attempt_payment_method_details_klarna__to_json(p: &iface_setup_attempts::SetupAttemptPaymentMethodDetailsKlarna) -> Value {
+fn iface_setup_attempts__setup_attempt_payment_method_details_klarna_entry__to_json(p: &iface_setup_attempts::SetupAttemptPaymentMethodDetailsKlarnaEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
-fn iface_setup_attempts__setup_attempt_payment_method_details_link__to_json(p: &iface_setup_attempts::SetupAttemptPaymentMethodDetailsLink) -> Value {
+fn iface_setup_attempts__setup_attempt_payment_method_details_link_entry__to_json(p: &iface_setup_attempts::SetupAttemptPaymentMethodDetailsLinkEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
-fn iface_setup_attempts__setup_attempt_payment_method_details_sepa_debit__to_json(p: &iface_setup_attempts::SetupAttemptPaymentMethodDetailsSepaDebit) -> Value {
+fn iface_setup_attempts__setup_attempt_payment_method_details_sepa_debit_entry__to_json(p: &iface_setup_attempts::SetupAttemptPaymentMethodDetailsSepaDebitEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -242,9 +251,10 @@ fn iface_setup_attempts__setup_attempt_payment_method_details_sofort__to_json(p:
     Value::Object(m)
 }
 
-fn iface_setup_attempts__setup_attempt_payment_method_details_us_bank_account__to_json(p: &iface_setup_attempts::SetupAttemptPaymentMethodDetailsUsBankAccount) -> Value {
+fn iface_setup_attempts__setup_attempt_payment_method_details_us_bank_account_entry__to_json(p: &iface_setup_attempts::SetupAttemptPaymentMethodDetailsUsBankAccountEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -294,43 +304,46 @@ fn iface_setup_attempts__setup_attempt__from_json(v: &Value) -> Option<iface_set
 fn iface_setup_attempts__setup_attempt_payment_method_details__from_json(v: &Value) -> Option<iface_setup_attempts::SetupAttemptPaymentMethodDetails> {
     let m = v.as_object()?;
     Some(iface_setup_attempts::SetupAttemptPaymentMethodDetails {
-        acss_debit: m.get("acss_debit").filter(|v| !v.is_null()).and_then(|v| iface_setup_attempts__setup_attempt_payment_method_details_acss_debit__from_json(v)),
-        au_becs_debit: m.get("au_becs_debit").filter(|v| !v.is_null()).and_then(|v| iface_setup_attempts__setup_attempt_payment_method_details_au_becs_debit__from_json(v)),
-        bacs_debit: m.get("bacs_debit").filter(|v| !v.is_null()).and_then(|v| iface_setup_attempts__setup_attempt_payment_method_details_bacs_debit__from_json(v)),
+        acss_debit: m.get("acss_debit").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_setup_attempts::SetupAttemptPaymentMethodDetailsAcssDebitEntry { key: k.clone(), value: val })).collect())),
+        au_becs_debit: m.get("au_becs_debit").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_setup_attempts::SetupAttemptPaymentMethodDetailsAuBecsDebitEntry { key: k.clone(), value: val })).collect())),
+        bacs_debit: m.get("bacs_debit").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_setup_attempts::SetupAttemptPaymentMethodDetailsBacsDebitEntry { key: k.clone(), value: val })).collect())),
         bancontact: m.get("bancontact").filter(|v| !v.is_null()).and_then(|v| iface_setup_attempts__setup_attempt_payment_method_details_bancontact__from_json(v)),
-        blik: m.get("blik").filter(|v| !v.is_null()).and_then(|v| iface_setup_attempts__setup_attempt_payment_method_details_blik__from_json(v)),
-        boleto: m.get("boleto").filter(|v| !v.is_null()).and_then(|v| iface_setup_attempts__setup_attempt_payment_method_details_boleto__from_json(v)),
+        blik: m.get("blik").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_setup_attempts::SetupAttemptPaymentMethodDetailsBlikEntry { key: k.clone(), value: val })).collect())),
+        boleto: m.get("boleto").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_setup_attempts::SetupAttemptPaymentMethodDetailsBoletoEntry { key: k.clone(), value: val })).collect())),
         card: m.get("card").filter(|v| !v.is_null()).and_then(|v| iface_setup_attempts__setup_attempt_payment_method_details_card__from_json(v)),
         card_present: m.get("card_present").filter(|v| !v.is_null()).and_then(|v| iface_setup_attempts__setup_attempt_payment_method_details_card_present__from_json(v)),
-        cashapp: m.get("cashapp").filter(|v| !v.is_null()).and_then(|v| iface_setup_attempts__setup_attempt_payment_method_details_cashapp__from_json(v)),
+        cashapp: m.get("cashapp").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_setup_attempts::SetupAttemptPaymentMethodDetailsCashappEntry { key: k.clone(), value: val })).collect())),
         ideal: m.get("ideal").filter(|v| !v.is_null()).and_then(|v| iface_setup_attempts__setup_attempt_payment_method_details_ideal__from_json(v)),
-        klarna: m.get("klarna").filter(|v| !v.is_null()).and_then(|v| iface_setup_attempts__setup_attempt_payment_method_details_klarna__from_json(v)),
-        link: m.get("link").filter(|v| !v.is_null()).and_then(|v| iface_setup_attempts__setup_attempt_payment_method_details_link__from_json(v)),
-        sepa_debit: m.get("sepa_debit").filter(|v| !v.is_null()).and_then(|v| iface_setup_attempts__setup_attempt_payment_method_details_sepa_debit__from_json(v)),
+        klarna: m.get("klarna").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_setup_attempts::SetupAttemptPaymentMethodDetailsKlarnaEntry { key: k.clone(), value: val })).collect())),
+        link: m.get("link").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_setup_attempts::SetupAttemptPaymentMethodDetailsLinkEntry { key: k.clone(), value: val })).collect())),
+        sepa_debit: m.get("sepa_debit").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_setup_attempts::SetupAttemptPaymentMethodDetailsSepaDebitEntry { key: k.clone(), value: val })).collect())),
         sofort: m.get("sofort").filter(|v| !v.is_null()).and_then(|v| iface_setup_attempts__setup_attempt_payment_method_details_sofort__from_json(v)),
         type_op: m.get("type").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-        us_bank_account: m.get("us_bank_account").filter(|v| !v.is_null()).and_then(|v| iface_setup_attempts__setup_attempt_payment_method_details_us_bank_account__from_json(v)),
+        us_bank_account: m.get("us_bank_account").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_setup_attempts::SetupAttemptPaymentMethodDetailsUsBankAccountEntry { key: k.clone(), value: val })).collect())),
     })
 }
 
-fn iface_setup_attempts__setup_attempt_payment_method_details_acss_debit__from_json(v: &Value) -> Option<iface_setup_attempts::SetupAttemptPaymentMethodDetailsAcssDebit> {
+fn iface_setup_attempts__setup_attempt_payment_method_details_acss_debit_entry__from_json(v: &Value) -> Option<iface_setup_attempts::SetupAttemptPaymentMethodDetailsAcssDebitEntry> {
     let m = v.as_object()?;
-    Some(iface_setup_attempts::SetupAttemptPaymentMethodDetailsAcssDebit {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_setup_attempts::SetupAttemptPaymentMethodDetailsAcssDebitEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
-fn iface_setup_attempts__setup_attempt_payment_method_details_au_becs_debit__from_json(v: &Value) -> Option<iface_setup_attempts::SetupAttemptPaymentMethodDetailsAuBecsDebit> {
+fn iface_setup_attempts__setup_attempt_payment_method_details_au_becs_debit_entry__from_json(v: &Value) -> Option<iface_setup_attempts::SetupAttemptPaymentMethodDetailsAuBecsDebitEntry> {
     let m = v.as_object()?;
-    Some(iface_setup_attempts::SetupAttemptPaymentMethodDetailsAuBecsDebit {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_setup_attempts::SetupAttemptPaymentMethodDetailsAuBecsDebitEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
-fn iface_setup_attempts__setup_attempt_payment_method_details_bacs_debit__from_json(v: &Value) -> Option<iface_setup_attempts::SetupAttemptPaymentMethodDetailsBacsDebit> {
+fn iface_setup_attempts__setup_attempt_payment_method_details_bacs_debit_entry__from_json(v: &Value) -> Option<iface_setup_attempts::SetupAttemptPaymentMethodDetailsBacsDebitEntry> {
     let m = v.as_object()?;
-    Some(iface_setup_attempts::SetupAttemptPaymentMethodDetailsBacsDebit {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_setup_attempts::SetupAttemptPaymentMethodDetailsBacsDebitEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -348,17 +361,19 @@ fn iface_setup_attempts__setup_attempt_payment_method_details_bancontact__from_j
     })
 }
 
-fn iface_setup_attempts__setup_attempt_payment_method_details_blik__from_json(v: &Value) -> Option<iface_setup_attempts::SetupAttemptPaymentMethodDetailsBlik> {
+fn iface_setup_attempts__setup_attempt_payment_method_details_blik_entry__from_json(v: &Value) -> Option<iface_setup_attempts::SetupAttemptPaymentMethodDetailsBlikEntry> {
     let m = v.as_object()?;
-    Some(iface_setup_attempts::SetupAttemptPaymentMethodDetailsBlik {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_setup_attempts::SetupAttemptPaymentMethodDetailsBlikEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
-fn iface_setup_attempts__setup_attempt_payment_method_details_boleto__from_json(v: &Value) -> Option<iface_setup_attempts::SetupAttemptPaymentMethodDetailsBoleto> {
+fn iface_setup_attempts__setup_attempt_payment_method_details_boleto_entry__from_json(v: &Value) -> Option<iface_setup_attempts::SetupAttemptPaymentMethodDetailsBoletoEntry> {
     let m = v.as_object()?;
-    Some(iface_setup_attempts::SetupAttemptPaymentMethodDetailsBoleto {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_setup_attempts::SetupAttemptPaymentMethodDetailsBoletoEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -377,10 +392,11 @@ fn iface_setup_attempts__setup_attempt_payment_method_details_card_present__from
     })
 }
 
-fn iface_setup_attempts__setup_attempt_payment_method_details_cashapp__from_json(v: &Value) -> Option<iface_setup_attempts::SetupAttemptPaymentMethodDetailsCashapp> {
+fn iface_setup_attempts__setup_attempt_payment_method_details_cashapp_entry__from_json(v: &Value) -> Option<iface_setup_attempts::SetupAttemptPaymentMethodDetailsCashappEntry> {
     let m = v.as_object()?;
-    Some(iface_setup_attempts::SetupAttemptPaymentMethodDetailsCashapp {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_setup_attempts::SetupAttemptPaymentMethodDetailsCashappEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -396,24 +412,27 @@ fn iface_setup_attempts__setup_attempt_payment_method_details_ideal__from_json(v
     })
 }
 
-fn iface_setup_attempts__setup_attempt_payment_method_details_klarna__from_json(v: &Value) -> Option<iface_setup_attempts::SetupAttemptPaymentMethodDetailsKlarna> {
+fn iface_setup_attempts__setup_attempt_payment_method_details_klarna_entry__from_json(v: &Value) -> Option<iface_setup_attempts::SetupAttemptPaymentMethodDetailsKlarnaEntry> {
     let m = v.as_object()?;
-    Some(iface_setup_attempts::SetupAttemptPaymentMethodDetailsKlarna {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_setup_attempts::SetupAttemptPaymentMethodDetailsKlarnaEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
-fn iface_setup_attempts__setup_attempt_payment_method_details_link__from_json(v: &Value) -> Option<iface_setup_attempts::SetupAttemptPaymentMethodDetailsLink> {
+fn iface_setup_attempts__setup_attempt_payment_method_details_link_entry__from_json(v: &Value) -> Option<iface_setup_attempts::SetupAttemptPaymentMethodDetailsLinkEntry> {
     let m = v.as_object()?;
-    Some(iface_setup_attempts::SetupAttemptPaymentMethodDetailsLink {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_setup_attempts::SetupAttemptPaymentMethodDetailsLinkEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
-fn iface_setup_attempts__setup_attempt_payment_method_details_sepa_debit__from_json(v: &Value) -> Option<iface_setup_attempts::SetupAttemptPaymentMethodDetailsSepaDebit> {
+fn iface_setup_attempts__setup_attempt_payment_method_details_sepa_debit_entry__from_json(v: &Value) -> Option<iface_setup_attempts::SetupAttemptPaymentMethodDetailsSepaDebitEntry> {
     let m = v.as_object()?;
-    Some(iface_setup_attempts::SetupAttemptPaymentMethodDetailsSepaDebit {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_setup_attempts::SetupAttemptPaymentMethodDetailsSepaDebitEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -431,10 +450,11 @@ fn iface_setup_attempts__setup_attempt_payment_method_details_sofort__from_json(
     })
 }
 
-fn iface_setup_attempts__setup_attempt_payment_method_details_us_bank_account__from_json(v: &Value) -> Option<iface_setup_attempts::SetupAttemptPaymentMethodDetailsUsBankAccount> {
+fn iface_setup_attempts__setup_attempt_payment_method_details_us_bank_account_entry__from_json(v: &Value) -> Option<iface_setup_attempts::SetupAttemptPaymentMethodDetailsUsBankAccountEntry> {
     let m = v.as_object()?;
-    Some(iface_setup_attempts::SetupAttemptPaymentMethodDetailsUsBankAccount {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_setup_attempts::SetupAttemptPaymentMethodDetailsUsBankAccountEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 

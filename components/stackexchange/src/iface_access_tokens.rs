@@ -32,9 +32,21 @@ const OP_ACCESS_TOKENS_GET_ACCESS_TOKENS_ACCESS_TOKENS_INVALIDATE: OpSpec = OpSp
     ],
 };
 
-fn iface_access_tokens__access_tokens__to_json(p: &iface_access_tokens::AccessTokens) -> Value {
+fn iface_access_tokens__access_tokens_item__to_json(p: &iface_access_tokens::AccessTokensItem) -> Value {
     let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
+    m.insert("access_token".into(), match (&p.access_token) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("account_id".into(), match (&p.account_id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("expires_on_date".into(), match (&p.expires_on_date) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("scope".into(), match (&p.scope) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_access_tokens__access_tokens_item_v2__to_json(p: &iface_access_tokens::AccessTokensItemV2) -> Value {
+    let mut m = Map::new();
+    m.insert("access_token".into(), match (&p.access_token) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("account_id".into(), match (&p.account_id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("expires_on_date".into(), match (&p.expires_on_date) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("scope".into(), match (&p.scope) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -58,19 +70,32 @@ fn iface_access_tokens__get_access_tokens_access_tokens_invalidate_params__to_js
     Value::Object(m)
 }
 
-fn iface_access_tokens__access_tokens__from_json(v: &Value) -> Option<iface_access_tokens::AccessTokens> {
+fn iface_access_tokens__access_tokens_item__from_json(v: &Value) -> Option<iface_access_tokens::AccessTokensItem> {
     let m = v.as_object()?;
-    Some(iface_access_tokens::AccessTokens {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    Some(iface_access_tokens::AccessTokensItem {
+        access_token: m.get("access_token").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        account_id: m.get("account_id").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        expires_on_date: m.get("expires_on_date").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        scope: m.get("scope").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
     })
 }
 
-fn iface_access_tokens__get_access_tokens_access_tokens__ok(body: String) -> Result<iface_access_tokens::AccessTokens, crate::runtime::DispatchError> {
+fn iface_access_tokens__access_tokens_item_v2__from_json(v: &Value) -> Option<iface_access_tokens::AccessTokensItemV2> {
+    let m = v.as_object()?;
+    Some(iface_access_tokens::AccessTokensItemV2 {
+        access_token: m.get("access_token").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        account_id: m.get("account_id").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        expires_on_date: m.get("expires_on_date").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        scope: m.get("scope").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+    })
+}
+
+fn iface_access_tokens__get_access_tokens_access_tokens__ok(body: String) -> Result<Vec<iface_access_tokens::AccessTokensItem>, crate::runtime::DispatchError> {
     let v: Value = match serde_json::from_str(&body) {
         Ok(v) => v,
         Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
     };
-    match iface_access_tokens__access_tokens__from_json(&v) {
+    match (&v).as_array().map(|a| a.iter().filter_map(|x| iface_access_tokens__access_tokens_item__from_json(x)).collect()) {
         Some(x) => Ok(x),
         None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
@@ -95,12 +120,12 @@ fn iface_access_tokens__get_access_tokens_access_tokens__err(e: crate::runtime::
     }
 }
 
-fn iface_access_tokens__get_access_tokens_access_tokens_invalidate__ok(body: String) -> Result<iface_access_tokens::AccessTokens, crate::runtime::DispatchError> {
+fn iface_access_tokens__get_access_tokens_access_tokens_invalidate__ok(body: String) -> Result<Vec<iface_access_tokens::AccessTokensItemV2>, crate::runtime::DispatchError> {
     let v: Value = match serde_json::from_str(&body) {
         Ok(v) => v,
         Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
     };
-    match iface_access_tokens__access_tokens__from_json(&v) {
+    match (&v).as_array().map(|a| a.iter().filter_map(|x| iface_access_tokens__access_tokens_item_v2__from_json(x)).collect()) {
         Some(x) => Ok(x),
         None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
@@ -126,14 +151,14 @@ fn iface_access_tokens__get_access_tokens_access_tokens_invalidate__err(e: crate
 }
 
 impl iface_access_tokens::Guest for crate::Component {
-    fn get_access_tokens_access_tokens(params: iface_access_tokens::GetAccessTokensAccessTokensParams) -> Result<iface_access_tokens::AccessTokens, iface_access_tokens::GetAccessTokensAccessTokensError> {
+    fn get_access_tokens_access_tokens(params: iface_access_tokens::GetAccessTokensAccessTokensParams) -> Result<Vec<iface_access_tokens::AccessTokensItem>, iface_access_tokens::GetAccessTokensAccessTokensError> {
         let json = iface_access_tokens__get_access_tokens_access_tokens_params__to_json(&params);
         match dispatch(&OP_ACCESS_TOKENS_GET_ACCESS_TOKENS_ACCESS_TOKENS, json).and_then(iface_access_tokens__get_access_tokens_access_tokens__ok) {
             Ok(v) => Ok(v),
             Err(e) => Err(iface_access_tokens__get_access_tokens_access_tokens__err(e)),
         }
     }
-    fn get_access_tokens_access_tokens_invalidate(params: iface_access_tokens::GetAccessTokensAccessTokensInvalidateParams) -> Result<iface_access_tokens::AccessTokens, iface_access_tokens::GetAccessTokensAccessTokensInvalidateError> {
+    fn get_access_tokens_access_tokens_invalidate(params: iface_access_tokens::GetAccessTokensAccessTokensInvalidateParams) -> Result<Vec<iface_access_tokens::AccessTokensItemV2>, iface_access_tokens::GetAccessTokensAccessTokensInvalidateError> {
         let json = iface_access_tokens__get_access_tokens_access_tokens_invalidate_params__to_json(&params);
         match dispatch(&OP_ACCESS_TOKENS_GET_ACCESS_TOKENS_ACCESS_TOKENS_INVALIDATE, json).and_then(iface_access_tokens__get_access_tokens_access_tokens_invalidate__ok) {
             Ok(v) => Ok(v),

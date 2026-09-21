@@ -1,4 +1,4 @@
-package autostamp:snyk@0.5.0;
+package autostamp:snyk@0.6.0;
 
 interface audit-logs {
   enum get-group-level-audit-logs-body-filters-event-enum {
@@ -790,9 +790,10 @@ interface integrations {
     manual,
   }
 
-  record list-op-response {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record list-op-response-entry {
+    key: string,
+    value: string
   }
 
   record retrieve-response {
@@ -933,7 +934,7 @@ interface integrations {
     /// The organization public ID. The `API_KEY` must have admin access to this organization.
     org-id: string
   }
-  list-op: func(params: list-op-params) -> result<list-op-response, string>;
+  list-op: func(params: list-op-params) -> result<list<list-op-response-entry>, string>;
 
   /// Add new integration
   record add-new-integration-params {
@@ -1218,7 +1219,7 @@ interface projects {
     origin: option<string>,
     /// The user who owns the project, null if not set
     /// 
-    owner: option<retrieve-a-single-project-response-owner>,
+    owner: option<list<retrieve-a-single-project-response-owner-entry>>,
     /// Whether the project is read-only
     read-only: option<bool>,
     /// Remediation data (if available)
@@ -1268,61 +1269,41 @@ interface projects {
     medium: option<f64>
   }
 
-  /// The user who owns the project, null if not set
-  /// 
-  /// {
-  ///     "id": "e713cf94-bb02-4ea0-89d9-613cce0caed2",
-  ///     "name": "example-user@snyk.io",
-  ///     "username": "exampleUser",
-  ///     "email": "example-user@snyk.io"
-  /// }
-  record retrieve-a-single-project-response-owner {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record retrieve-a-single-project-response-owner-entry {
+    key: string,
+    value: string
   }
 
   /// Remediation data (if available)
   record retrieve-a-single-project-response-remediation {
     /// Recommended patches to apply to the project
     /// 
-    patch: option<retrieve-a-single-project-response-remediation-patch>,
+    patch: option<list<retrieve-a-single-project-response-remediation-patch-entry>>,
     /// Recommended pins to apply to the project (Python only)
     /// 
-    pin: option<retrieve-a-single-project-response-remediation-pin>,
+    pin: option<list<retrieve-a-single-project-response-remediation-pin-entry>>,
     /// Recommended upgrades to apply to the project
     /// 
-    upgrade: option<retrieve-a-single-project-response-remediation-upgrade>
+    upgrade: option<list<retrieve-a-single-project-response-remediation-upgrade-entry>>
   }
 
-  /// Recommended patches to apply to the project
-  /// 
-  /// (object)
-  ///    paths (array) - List of paths to the vulnerable dependency that can be patched
-  record retrieve-a-single-project-response-remediation-patch {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record retrieve-a-single-project-response-remediation-patch-entry {
+    key: string,
+    value: string
   }
 
-  /// Recommended pins to apply to the project (Python only)
-  /// 
-  /// (object)
-  ///     + upgradeTo (string, required) - `package@version` to upgrade to
-  ///     + vulns (array[string], required) - List of vulnerability ids that will be fixed as part of this upgrade
-  ///     + isTransitive (boolean) - Describes if the dependency to be pinned is a transitive dependency
-  record retrieve-a-single-project-response-remediation-pin {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record retrieve-a-single-project-response-remediation-pin-entry {
+    key: string,
+    value: string
   }
 
-  /// Recommended upgrades to apply to the project
-  /// 
-  /// (object)
-  ///     + upgradeTo (string, required) - `package@version` to upgrade to
-  ///     + upgrades (array[string], required) -  List of `package@version` that will be upgraded as part of this upgrade
-  ///     + vulns (array[string], required) - List of vulnerability ids that will be fixed as part of this upgrade
-  record retrieve-a-single-project-response-remediation-upgrade {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record retrieve-a-single-project-response-remediation-upgrade-entry {
+    key: string,
+    value: string
   }
 
   /// Set to `null` to remove all ownership. User must be a member of the same organization as the project.
@@ -1367,7 +1348,7 @@ interface projects {
     origin: option<string>,
     /// The user who owns the project, null if not set
     /// 
-    owner: option<update-a-project-response-owner>,
+    owner: option<list<update-a-project-response-owner-entry>>,
     /// Whether the project is read-only
     read-only: option<bool>,
     /// Remediation data (if available)
@@ -1417,61 +1398,41 @@ interface projects {
     medium: option<f64>
   }
 
-  /// The user who owns the project, null if not set
-  /// 
-  /// {
-  ///     "id": "e713cf94-bb02-4ea0-89d9-613cce0caed2",
-  ///     "name": "example-user@snyk.io",
-  ///     "username": "exampleUser",
-  ///     "email": "example-user@snyk.io"
-  /// }
-  record update-a-project-response-owner {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record update-a-project-response-owner-entry {
+    key: string,
+    value: string
   }
 
   /// Remediation data (if available)
   record update-a-project-response-remediation {
     /// Recommended patches to apply to the project
     /// 
-    patch: option<update-a-project-response-remediation-patch>,
+    patch: option<list<update-a-project-response-remediation-patch-entry>>,
     /// Recommended pins to apply to the project (Python only)
     /// 
-    pin: option<update-a-project-response-remediation-pin>,
+    pin: option<list<update-a-project-response-remediation-pin-entry>>,
     /// Recommended upgrades to apply to the project
     /// 
-    upgrade: option<update-a-project-response-remediation-upgrade>
+    upgrade: option<list<update-a-project-response-remediation-upgrade-entry>>
   }
 
-  /// Recommended patches to apply to the project
-  /// 
-  /// (object)
-  ///    paths (array) - List of paths to the vulnerable dependency that can be patched
-  record update-a-project-response-remediation-patch {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record update-a-project-response-remediation-patch-entry {
+    key: string,
+    value: string
   }
 
-  /// Recommended pins to apply to the project (Python only)
-  /// 
-  /// (object)
-  ///     + upgradeTo (string, required) - `package@version` to upgrade to
-  ///     + vulns (array[string], required) - List of vulnerability ids that will be fixed as part of this upgrade
-  ///     + isTransitive (boolean) - Describes if the dependency to be pinned is a transitive dependency
-  record update-a-project-response-remediation-pin {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record update-a-project-response-remediation-pin-entry {
+    key: string,
+    value: string
   }
 
-  /// Recommended upgrades to apply to the project
-  /// 
-  /// (object)
-  ///     + upgradeTo (string, required) - `package@version` to upgrade to
-  ///     + upgrades (array[string], required) -  List of `package@version` that will be upgraded as part of this upgrade
-  ///     + vulns (array[string], required) - List of vulnerability ids that will be fixed as part of this upgrade
-  record update-a-project-response-remediation-upgrade {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record update-a-project-response-remediation-upgrade-entry {
+    key: string,
+    value: string
   }
 
   record list-all-aggregated-issues-body-filters {
@@ -1966,23 +1927,23 @@ interface projects {
 
   record create-jira-issue-body-fields {
     /// See https://developer.atlassian.com/cloud/jira/platform/rest/v3/api-group-issues/#api-rest-api-3-issue-post for details of what to send as fields.
-    issuetype: option<create-jira-issue-body-fields-issuetype>,
+    issuetype: option<list<create-jira-issue-body-fields-issuetype-entry>>,
     /// See https://developer.atlassian.com/cloud/jira/platform/rest/v3/api-group-issues/#api-rest-api-3-issue-post for details of what to send as fields.
-    project: option<create-jira-issue-body-fields-project>,
+    project: option<list<create-jira-issue-body-fields-project-entry>>,
     /// See https://developer.atlassian.com/cloud/jira/platform/rest/v3/api-group-issues/#api-rest-api-3-issue-post for details of what to send as fields.
     summary: option<string>
   }
 
-  /// See https://developer.atlassian.com/cloud/jira/platform/rest/v3/api-group-issues/#api-rest-api-3-issue-post for details of what to send as fields.
-  record create-jira-issue-body-fields-issuetype {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record create-jira-issue-body-fields-issuetype-entry {
+    key: string,
+    value: string
   }
 
-  /// See https://developer.atlassian.com/cloud/jira/platform/rest/v3/api-group-issues/#api-rest-api-3-issue-post for details of what to send as fields.
-  record create-jira-issue-body-fields-project {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record create-jira-issue-body-fields-project-entry {
+    key: string,
+    value: string
   }
 
   record create-jira-issue-response {
@@ -2215,7 +2176,7 @@ interface projects {
     origin: option<string>,
     /// The user who owns the project, null if not set
     /// 
-    owner: option<list-all-projects-response-projects-item-owner>,
+    owner: option<list<list-all-projects-response-projects-item-owner-entry>>,
     /// Whether the project is read-only
     read-only: option<bool>,
     /// The project remote repository url. Only set for projects imported via the Snyk CLI tool.
@@ -2263,17 +2224,10 @@ interface projects {
     medium: option<f64>
   }
 
-  /// The user who owns the project, null if not set
-  /// 
-  /// {
-  ///     "id": "e713cf94-bb02-4ea0-89d9-613cce0caed2",
-  ///     "name": "example-user@snyk.io",
-  ///     "username": "exampleUser",
-  ///     "email": "example-user@snyk.io"
-  /// }
-  record list-all-projects-response-projects-item-owner {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record list-all-projects-response-projects-item-owner-entry {
+    key: string,
+    value: string
   }
 
   /// Retrieve a single project

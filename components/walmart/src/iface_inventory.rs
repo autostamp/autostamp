@@ -147,21 +147,23 @@ fn iface_inventory__get_multi_node_inventory_for_sku_and_all_shipnodes_response_
 
 fn iface_inventory__update_bulk_inventory_response__to_json(p: &iface_inventory::UpdateBulkInventoryResponse) -> Value {
     let mut m = Map::new();
-    m.insert("additionalAttributes".into(), match (&p.additional_attributes) { Some(v) => iface_inventory__update_bulk_inventory_response_additional_attributes__to_json(v), None => Value::Null });
-    m.insert("errors".into(), match (&p.errors) { Some(v) => iface_inventory__update_bulk_inventory_response_errors__to_json(v), None => Value::Null });
+    m.insert("additionalAttributes".into(), match (&p.additional_attributes) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
+    m.insert("errors".into(), match (&p.errors) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("feedId".into(), match (&p.feed_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_inventory__update_bulk_inventory_response_additional_attributes__to_json(p: &iface_inventory::UpdateBulkInventoryResponseAdditionalAttributes) -> Value {
+fn iface_inventory__update_bulk_inventory_response_additional_attributes_entry__to_json(p: &iface_inventory::UpdateBulkInventoryResponseAdditionalAttributesEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
-fn iface_inventory__update_bulk_inventory_response_errors__to_json(p: &iface_inventory::UpdateBulkInventoryResponseErrors) -> Value {
+fn iface_inventory__update_bulk_inventory_response_errors_entry__to_json(p: &iface_inventory::UpdateBulkInventoryResponseErrorsEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -289,7 +291,7 @@ fn iface_inventory__get_multi_node_inventory_for_sku_and_all_shipnodes_response_
     m.insert("causes".into(), match (&p.causes) { Some(v) => Value::Array((v).iter().map(|v| iface_inventory__get_multi_node_inventory_for_sku_and_all_shipnodes_response_nodes_item_errors_item_causes_item__to_json(v)).collect()), None => Value::Null });
     m.insert("code".into(), Value::String((&p.code).clone()));
     m.insert("description".into(), match (&p.description) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("errorIdentifiers".into(), match (&p.error_identifiers) { Some(v) => iface_inventory__get_multi_node_inventory_for_sku_and_all_shipnodes_response_nodes_item_errors_item_error_identifiers__to_json(v), None => Value::Null });
+    m.insert("errorIdentifiers".into(), match (&p.error_identifiers) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::Object((&e.value).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()))).collect()), None => Value::Null });
     m.insert("field".into(), match (&p.field) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("info".into(), match (&p.info) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("severity".into(), match (&p.severity) { Some(v) => Value::String(iface_inventory__get_multi_node_inventory_for_sku_and_all_shipnodes_response_nodes_item_errors_item_severity_enum__to_str(v).into()), None => Value::Null });
@@ -305,9 +307,17 @@ fn iface_inventory__get_multi_node_inventory_for_sku_and_all_shipnodes_response_
     Value::Object(m)
 }
 
-fn iface_inventory__get_multi_node_inventory_for_sku_and_all_shipnodes_response_nodes_item_errors_item_error_identifiers__to_json(p: &iface_inventory::GetMultiNodeInventoryForSkuAndAllShipnodesResponseNodesItemErrorsItemErrorIdentifiers) -> Value {
+fn iface_inventory__get_multi_node_inventory_for_sku_and_all_shipnodes_response_nodes_item_errors_item_error_identifiers_value_entry__to_json(p: &iface_inventory::GetMultiNodeInventoryForSkuAndAllShipnodesResponseNodesItemErrorsItemErrorIdentifiersValueEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
+}
+
+fn iface_inventory__get_multi_node_inventory_for_sku_and_all_shipnodes_response_nodes_item_errors_item_error_identifiers_entry__to_json(p: &iface_inventory::GetMultiNodeInventoryForSkuAndAllShipnodesResponseNodesItemErrorsItemErrorIdentifiersEntry) -> Value {
+    let mut m = Map::new();
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::Object((&p.value).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()));
     Value::Object(m)
 }
 
@@ -366,7 +376,7 @@ fn iface_inventory__update_multi_node_inventory_response_nodes_item_errors_item_
     m.insert("causes".into(), match (&p.causes) { Some(v) => Value::Array((v).iter().map(|v| iface_inventory__update_multi_node_inventory_response_nodes_item_errors_item_causes_item__to_json(v)).collect()), None => Value::Null });
     m.insert("code".into(), Value::String((&p.code).clone()));
     m.insert("description".into(), match (&p.description) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("errorIdentifiers".into(), match (&p.error_identifiers) { Some(v) => iface_inventory__update_multi_node_inventory_response_nodes_item_errors_item_error_identifiers__to_json(v), None => Value::Null });
+    m.insert("errorIdentifiers".into(), match (&p.error_identifiers) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::Object((&e.value).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()))).collect()), None => Value::Null });
     m.insert("field".into(), match (&p.field) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("info".into(), match (&p.info) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("severity".into(), match (&p.severity) { Some(v) => Value::String(iface_inventory__get_multi_node_inventory_for_sku_and_all_shipnodes_response_nodes_item_errors_item_severity_enum__to_str(v).into()), None => Value::Null });
@@ -382,9 +392,17 @@ fn iface_inventory__update_multi_node_inventory_response_nodes_item_errors_item_
     Value::Object(m)
 }
 
-fn iface_inventory__update_multi_node_inventory_response_nodes_item_errors_item_error_identifiers__to_json(p: &iface_inventory::UpdateMultiNodeInventoryResponseNodesItemErrorsItemErrorIdentifiers) -> Value {
+fn iface_inventory__update_multi_node_inventory_response_nodes_item_errors_item_error_identifiers_value_entry__to_json(p: &iface_inventory::UpdateMultiNodeInventoryResponseNodesItemErrorsItemErrorIdentifiersValueEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
+}
+
+fn iface_inventory__update_multi_node_inventory_response_nodes_item_errors_item_error_identifiers_entry__to_json(p: &iface_inventory::UpdateMultiNodeInventoryResponseNodesItemErrorsItemErrorIdentifiersEntry) -> Value {
+    let mut m = Map::new();
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::Object((&p.value).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()));
     Value::Object(m)
 }
 
@@ -509,23 +527,25 @@ fn iface_inventory__update_inventory_for_an_item_params__to_json(p: &iface_inven
 fn iface_inventory__update_bulk_inventory_response__from_json(v: &Value) -> Option<iface_inventory::UpdateBulkInventoryResponse> {
     let m = v.as_object()?;
     Some(iface_inventory::UpdateBulkInventoryResponse {
-        additional_attributes: m.get("additionalAttributes").filter(|v| !v.is_null()).and_then(|v| iface_inventory__update_bulk_inventory_response_additional_attributes__from_json(v)),
-        errors: m.get("errors").filter(|v| !v.is_null()).and_then(|v| iface_inventory__update_bulk_inventory_response_errors__from_json(v)),
+        additional_attributes: m.get("additionalAttributes").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_inventory::UpdateBulkInventoryResponseAdditionalAttributesEntry { key: k.clone(), value: val })).collect())),
+        errors: m.get("errors").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_inventory::UpdateBulkInventoryResponseErrorsEntry { key: k.clone(), value: val })).collect())),
         feed_id: m.get("feedId").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
     })
 }
 
-fn iface_inventory__update_bulk_inventory_response_additional_attributes__from_json(v: &Value) -> Option<iface_inventory::UpdateBulkInventoryResponseAdditionalAttributes> {
+fn iface_inventory__update_bulk_inventory_response_additional_attributes_entry__from_json(v: &Value) -> Option<iface_inventory::UpdateBulkInventoryResponseAdditionalAttributesEntry> {
     let m = v.as_object()?;
-    Some(iface_inventory::UpdateBulkInventoryResponseAdditionalAttributes {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_inventory::UpdateBulkInventoryResponseAdditionalAttributesEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
-fn iface_inventory__update_bulk_inventory_response_errors__from_json(v: &Value) -> Option<iface_inventory::UpdateBulkInventoryResponseErrors> {
+fn iface_inventory__update_bulk_inventory_response_errors_entry__from_json(v: &Value) -> Option<iface_inventory::UpdateBulkInventoryResponseErrorsEntry> {
     let m = v.as_object()?;
-    Some(iface_inventory::UpdateBulkInventoryResponseErrors {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_inventory::UpdateBulkInventoryResponseErrorsEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -670,7 +690,7 @@ fn iface_inventory__get_multi_node_inventory_for_sku_and_all_shipnodes_response_
         causes: m.get("causes").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_inventory__get_multi_node_inventory_for_sku_and_all_shipnodes_response_nodes_item_errors_item_causes_item__from_json(x)).collect())),
         code: m.get("code").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         description: m.get("description").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        error_identifiers: m.get("errorIdentifiers").filter(|v| !v.is_null()).and_then(|v| iface_inventory__get_multi_node_inventory_for_sku_and_all_shipnodes_response_nodes_item_errors_item_error_identifiers__from_json(v)),
+        error_identifiers: m.get("errorIdentifiers").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_inventory::GetMultiNodeInventoryForSkuAndAllShipnodesResponseNodesItemErrorsItemErrorIdentifiersValueEntry { key: k.clone(), value: val })).collect())).map(|val| iface_inventory::GetMultiNodeInventoryForSkuAndAllShipnodesResponseNodesItemErrorsItemErrorIdentifiersEntry { key: k.clone(), value: val })).collect())),
         field: m.get("field").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         info: m.get("info").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         severity: m.get("severity").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_inventory__get_multi_node_inventory_for_sku_and_all_shipnodes_response_nodes_item_errors_item_severity_enum__from_str)),
@@ -687,10 +707,19 @@ fn iface_inventory__get_multi_node_inventory_for_sku_and_all_shipnodes_response_
     })
 }
 
-fn iface_inventory__get_multi_node_inventory_for_sku_and_all_shipnodes_response_nodes_item_errors_item_error_identifiers__from_json(v: &Value) -> Option<iface_inventory::GetMultiNodeInventoryForSkuAndAllShipnodesResponseNodesItemErrorsItemErrorIdentifiers> {
+fn iface_inventory__get_multi_node_inventory_for_sku_and_all_shipnodes_response_nodes_item_errors_item_error_identifiers_value_entry__from_json(v: &Value) -> Option<iface_inventory::GetMultiNodeInventoryForSkuAndAllShipnodesResponseNodesItemErrorsItemErrorIdentifiersValueEntry> {
     let m = v.as_object()?;
-    Some(iface_inventory::GetMultiNodeInventoryForSkuAndAllShipnodesResponseNodesItemErrorsItemErrorIdentifiers {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_inventory::GetMultiNodeInventoryForSkuAndAllShipnodesResponseNodesItemErrorsItemErrorIdentifiersValueEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_inventory__get_multi_node_inventory_for_sku_and_all_shipnodes_response_nodes_item_errors_item_error_identifiers_entry__from_json(v: &Value) -> Option<iface_inventory::GetMultiNodeInventoryForSkuAndAllShipnodesResponseNodesItemErrorsItemErrorIdentifiersEntry> {
+    let m = v.as_object()?;
+    Some(iface_inventory::GetMultiNodeInventoryForSkuAndAllShipnodesResponseNodesItemErrorsItemErrorIdentifiersEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_inventory::GetMultiNodeInventoryForSkuAndAllShipnodesResponseNodesItemErrorsItemErrorIdentifiersValueEntry { key: k.clone(), value: val })).collect())).unwrap_or_default(),
     })
 }
 
@@ -734,7 +763,7 @@ fn iface_inventory__update_multi_node_inventory_response_nodes_item_errors_item_
         causes: m.get("causes").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_inventory__update_multi_node_inventory_response_nodes_item_errors_item_causes_item__from_json(x)).collect())),
         code: m.get("code").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         description: m.get("description").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        error_identifiers: m.get("errorIdentifiers").filter(|v| !v.is_null()).and_then(|v| iface_inventory__update_multi_node_inventory_response_nodes_item_errors_item_error_identifiers__from_json(v)),
+        error_identifiers: m.get("errorIdentifiers").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_inventory::UpdateMultiNodeInventoryResponseNodesItemErrorsItemErrorIdentifiersValueEntry { key: k.clone(), value: val })).collect())).map(|val| iface_inventory::UpdateMultiNodeInventoryResponseNodesItemErrorsItemErrorIdentifiersEntry { key: k.clone(), value: val })).collect())),
         field: m.get("field").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         info: m.get("info").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         severity: m.get("severity").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_inventory__get_multi_node_inventory_for_sku_and_all_shipnodes_response_nodes_item_errors_item_severity_enum__from_str)),
@@ -751,10 +780,19 @@ fn iface_inventory__update_multi_node_inventory_response_nodes_item_errors_item_
     })
 }
 
-fn iface_inventory__update_multi_node_inventory_response_nodes_item_errors_item_error_identifiers__from_json(v: &Value) -> Option<iface_inventory::UpdateMultiNodeInventoryResponseNodesItemErrorsItemErrorIdentifiers> {
+fn iface_inventory__update_multi_node_inventory_response_nodes_item_errors_item_error_identifiers_value_entry__from_json(v: &Value) -> Option<iface_inventory::UpdateMultiNodeInventoryResponseNodesItemErrorsItemErrorIdentifiersValueEntry> {
     let m = v.as_object()?;
-    Some(iface_inventory::UpdateMultiNodeInventoryResponseNodesItemErrorsItemErrorIdentifiers {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_inventory::UpdateMultiNodeInventoryResponseNodesItemErrorsItemErrorIdentifiersValueEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_inventory__update_multi_node_inventory_response_nodes_item_errors_item_error_identifiers_entry__from_json(v: &Value) -> Option<iface_inventory::UpdateMultiNodeInventoryResponseNodesItemErrorsItemErrorIdentifiersEntry> {
+    let m = v.as_object()?;
+    Some(iface_inventory::UpdateMultiNodeInventoryResponseNodesItemErrorsItemErrorIdentifiersEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_inventory::UpdateMultiNodeInventoryResponseNodesItemErrorsItemErrorIdentifiersValueEntry { key: k.clone(), value: val })).collect())).unwrap_or_default(),
     })
 }
 

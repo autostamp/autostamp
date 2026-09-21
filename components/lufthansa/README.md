@@ -20,8 +20,8 @@ triggered.
 
 | Setting | Value |
 | --- | --- |
-| Package | `autostamp:lufthansa@0.5.0` |
-| Published version | `0.5.0+lufthansa-1.0` |
+| Package | `autostamp:lufthansa@0.6.0` |
+| Published version | `0.6.0+lufthansa-1.0` |
 | Tag filter | all tags |
 | Operations generated | 16 |
 | Infer API-key credentials | enabled — not triggered |

@@ -64,15 +64,17 @@ fn iface_invalid_emails_api__invalid_email__to_json(p: &iface_invalid_emails_api
     Value::Object(m)
 }
 
-fn iface_invalid_emails_api__delete_suppression_invalid_emails_response__to_json(p: &iface_invalid_emails_api::DeleteSuppressionInvalidEmailsResponse) -> Value {
+fn iface_invalid_emails_api__delete_suppression_invalid_emails_response_entry__to_json(p: &iface_invalid_emails_api::DeleteSuppressionInvalidEmailsResponseEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
-fn iface_invalid_emails_api__delete_suppression_invalid_emails_email_response__to_json(p: &iface_invalid_emails_api::DeleteSuppressionInvalidEmailsEmailResponse) -> Value {
+fn iface_invalid_emails_api__delete_suppression_invalid_emails_email_response_entry__to_json(p: &iface_invalid_emails_api::DeleteSuppressionInvalidEmailsEmailResponseEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -117,17 +119,19 @@ fn iface_invalid_emails_api__invalid_email__from_json(v: &Value) -> Option<iface
     })
 }
 
-fn iface_invalid_emails_api__delete_suppression_invalid_emails_response__from_json(v: &Value) -> Option<iface_invalid_emails_api::DeleteSuppressionInvalidEmailsResponse> {
+fn iface_invalid_emails_api__delete_suppression_invalid_emails_response_entry__from_json(v: &Value) -> Option<iface_invalid_emails_api::DeleteSuppressionInvalidEmailsResponseEntry> {
     let m = v.as_object()?;
-    Some(iface_invalid_emails_api::DeleteSuppressionInvalidEmailsResponse {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_invalid_emails_api::DeleteSuppressionInvalidEmailsResponseEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
-fn iface_invalid_emails_api__delete_suppression_invalid_emails_email_response__from_json(v: &Value) -> Option<iface_invalid_emails_api::DeleteSuppressionInvalidEmailsEmailResponse> {
+fn iface_invalid_emails_api__delete_suppression_invalid_emails_email_response_entry__from_json(v: &Value) -> Option<iface_invalid_emails_api::DeleteSuppressionInvalidEmailsEmailResponseEntry> {
     let m = v.as_object()?;
-    Some(iface_invalid_emails_api::DeleteSuppressionInvalidEmailsEmailResponse {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_invalid_emails_api::DeleteSuppressionInvalidEmailsEmailResponseEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -149,12 +153,12 @@ fn iface_invalid_emails_api__get_suppression_invalid_emails__err(e: crate::runti
     }
 }
 
-fn iface_invalid_emails_api__delete_suppression_invalid_emails__ok(body: String) -> Result<iface_invalid_emails_api::DeleteSuppressionInvalidEmailsResponse, crate::runtime::DispatchError> {
+fn iface_invalid_emails_api__delete_suppression_invalid_emails__ok(body: String) -> Result<Vec<iface_invalid_emails_api::DeleteSuppressionInvalidEmailsResponseEntry>, crate::runtime::DispatchError> {
     let v: Value = match serde_json::from_str(&body) {
         Ok(v) => v,
         Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
     };
-    match iface_invalid_emails_api__delete_suppression_invalid_emails_response__from_json(&v) {
+    match (&v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_invalid_emails_api::DeleteSuppressionInvalidEmailsResponseEntry { key: k.clone(), value: val })).collect()) {
         Some(x) => Ok(x),
         None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
@@ -185,12 +189,12 @@ fn iface_invalid_emails_api__get_suppression_invalid_emails_email__err(e: crate:
     }
 }
 
-fn iface_invalid_emails_api__delete_suppression_invalid_emails_email__ok(body: String) -> Result<iface_invalid_emails_api::DeleteSuppressionInvalidEmailsEmailResponse, crate::runtime::DispatchError> {
+fn iface_invalid_emails_api__delete_suppression_invalid_emails_email__ok(body: String) -> Result<Vec<iface_invalid_emails_api::DeleteSuppressionInvalidEmailsEmailResponseEntry>, crate::runtime::DispatchError> {
     let v: Value = match serde_json::from_str(&body) {
         Ok(v) => v,
         Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
     };
-    match iface_invalid_emails_api__delete_suppression_invalid_emails_email_response__from_json(&v) {
+    match (&v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_invalid_emails_api::DeleteSuppressionInvalidEmailsEmailResponseEntry { key: k.clone(), value: val })).collect()) {
         Some(x) => Ok(x),
         None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
@@ -211,7 +215,7 @@ impl iface_invalid_emails_api::Guest for crate::Component {
             Err(e) => Err(iface_invalid_emails_api__get_suppression_invalid_emails__err(e)),
         }
     }
-    fn delete_suppression_invalid_emails(params: iface_invalid_emails_api::DeleteSuppressionInvalidEmailsParams) -> Result<iface_invalid_emails_api::DeleteSuppressionInvalidEmailsResponse, String> {
+    fn delete_suppression_invalid_emails(params: iface_invalid_emails_api::DeleteSuppressionInvalidEmailsParams) -> Result<Vec<iface_invalid_emails_api::DeleteSuppressionInvalidEmailsResponseEntry>, String> {
         let json = iface_invalid_emails_api__delete_suppression_invalid_emails_params__to_json(&params);
         match dispatch(&OP_INVALID_EMAILS_API_DELETE_SUPPRESSION_INVALID_EMAILS, json).and_then(iface_invalid_emails_api__delete_suppression_invalid_emails__ok) {
             Ok(v) => Ok(v),
@@ -225,7 +229,7 @@ impl iface_invalid_emails_api::Guest for crate::Component {
             Err(e) => Err(iface_invalid_emails_api__get_suppression_invalid_emails_email__err(e)),
         }
     }
-    fn delete_suppression_invalid_emails_email(params: iface_invalid_emails_api::DeleteSuppressionInvalidEmailsEmailParams) -> Result<iface_invalid_emails_api::DeleteSuppressionInvalidEmailsEmailResponse, String> {
+    fn delete_suppression_invalid_emails_email(params: iface_invalid_emails_api::DeleteSuppressionInvalidEmailsEmailParams) -> Result<Vec<iface_invalid_emails_api::DeleteSuppressionInvalidEmailsEmailResponseEntry>, String> {
         let json = iface_invalid_emails_api__delete_suppression_invalid_emails_email_params__to_json(&params);
         match dispatch(&OP_INVALID_EMAILS_API_DELETE_SUPPRESSION_INVALID_EMAILS_EMAIL, json).and_then(iface_invalid_emails_api__delete_suppression_invalid_emails_email__ok) {
             Ok(v) => Ok(v),

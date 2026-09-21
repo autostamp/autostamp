@@ -65,6 +65,15 @@ const OP_TEAM_MEMBERS_DELETE_MEMBER: OpSpec = OpSpec {
     ],
 };
 
+fn iface_team_members__role__to_str(e: &iface_team_members::Role) -> &'static str {
+    match e {
+        iface_team_members::Role::Writer => "writer",
+        iface_team_members::Role::Reader => "reader",
+        iface_team_members::Role::Admin => "admin",
+        iface_team_members::Role::Owner => "owner",
+    }
+}
+
 fn iface_team_members__members__to_json(p: &iface_team_members::Members) -> Value {
     let mut m = Map::new();
     m.insert("_links".into(), match (&p.links) { Some(v) => iface_team_members__links__to_json(v), None => Value::Null });
@@ -89,36 +98,24 @@ fn iface_team_members__link__to_json(p: &iface_team_members::Link) -> Value {
 
 fn iface_team_members__member__to_json(p: &iface_team_members::Member) -> Value {
     let mut m = Map::new();
-    m.insert("_id".into(), match (&p.id) { Some(v) => iface_team_members__id__to_json(v), None => Value::Null });
+    m.insert("_id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("_lastSeen".into(), match (&p.last_seen) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("_lastSeenMetadata".into(), match (&p.last_seen_metadata) { Some(v) => iface_team_members__member_last_seen_metadata__to_json(v), None => Value::Null });
     m.insert("_links".into(), match (&p.links) { Some(v) => iface_team_members__links__to_json(v), None => Value::Null });
     m.insert("_pendingInvite".into(), match (&p.pending_invite) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     m.insert("_verified".into(), match (&p.verified) { Some(v) => Value::Bool(*(v)), None => Value::Null });
-    m.insert("customRoles".into(), match (&p.custom_roles) { Some(v) => Value::Array((v).iter().map(|v| iface_team_members__id__to_json(v)).collect()), None => Value::Null });
+    m.insert("customRoles".into(), match (&p.custom_roles) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
     m.insert("email".into(), match (&p.email) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("firstName".into(), match (&p.first_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("isBeta".into(), match (&p.is_beta) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     m.insert("lastName".into(), match (&p.last_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("role".into(), match (&p.role) { Some(v) => iface_team_members__role__to_json(v), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_team_members__id__to_json(p: &iface_team_members::Id) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
+    m.insert("role".into(), match (&p.role) { Some(v) => Value::String(iface_team_members__role__to_str(v).into()), None => Value::Null });
     Value::Object(m)
 }
 
 fn iface_team_members__member_last_seen_metadata__to_json(p: &iface_team_members::MemberLastSeenMetadata) -> Value {
     let mut m = Map::new();
     m.insert("tokenId".into(), match (&p.token_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_team_members__role__to_json(p: &iface_team_members::Role) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -177,25 +174,18 @@ fn iface_team_members__link__from_json(v: &Value) -> Option<iface_team_members::
 fn iface_team_members__member__from_json(v: &Value) -> Option<iface_team_members::Member> {
     let m = v.as_object()?;
     Some(iface_team_members::Member {
-        id: m.get("_id").filter(|v| !v.is_null()).and_then(|v| iface_team_members__id__from_json(v)),
+        id: m.get("_id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         last_seen: m.get("_lastSeen").filter(|v| !v.is_null()).and_then(|v| (v).as_i64()),
         last_seen_metadata: m.get("_lastSeenMetadata").filter(|v| !v.is_null()).and_then(|v| iface_team_members__member_last_seen_metadata__from_json(v)),
         links: m.get("_links").filter(|v| !v.is_null()).and_then(|v| iface_team_members__links__from_json(v)),
         pending_invite: m.get("_pendingInvite").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
         verified: m.get("_verified").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
-        custom_roles: m.get("customRoles").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_team_members__id__from_json(x)).collect())),
+        custom_roles: m.get("customRoles").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
         email: m.get("email").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         first_name: m.get("firstName").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         is_beta: m.get("isBeta").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
         last_name: m.get("lastName").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        role: m.get("role").filter(|v| !v.is_null()).and_then(|v| iface_team_members__role__from_json(v)),
-    })
-}
-
-fn iface_team_members__id__from_json(v: &Value) -> Option<iface_team_members::Id> {
-    let m = v.as_object()?;
-    Some(iface_team_members::Id {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        role: m.get("role").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_team_members__role__from_str)),
     })
 }
 
@@ -206,11 +196,14 @@ fn iface_team_members__member_last_seen_metadata__from_json(v: &Value) -> Option
     })
 }
 
-fn iface_team_members__role__from_json(v: &Value) -> Option<iface_team_members::Role> {
-    let m = v.as_object()?;
-    Some(iface_team_members::Role {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-    })
+fn iface_team_members__role__from_str(s: &str) -> Option<iface_team_members::Role> {
+    match s {
+        "writer" => Some(iface_team_members::Role::Writer),
+        "reader" => Some(iface_team_members::Role::Reader),
+        "admin" => Some(iface_team_members::Role::Admin),
+        "owner" => Some(iface_team_members::Role::Owner),
+        _ => None,
+    }
 }
 
 fn iface_team_members__get_members__ok(body: String) -> Result<iface_team_members::Members, crate::runtime::DispatchError> {

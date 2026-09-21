@@ -58,9 +58,9 @@ const OP_TAGS_DELETE_TAG: OpSpec = OpSpec {
 fn iface_tags__get_tags_response__to_json(p: &iface_tags::GetTagsResponse) -> Value {
     let mut m = Map::new();
     m.insert("data".into(), match (&p.data) { Some(v) => Value::Array((v).iter().map(|v| iface_tags__tag__to_json(v)).collect()), None => Value::Null });
-    m.insert("page".into(), match (&p.page) { Some(v) => iface_tags__pagination_envelope_properties_page__to_json(v), None => Value::Null });
-    m.insert("pages".into(), match (&p.pages) { Some(v) => iface_tags__pagination_envelope_properties_pages__to_json(v), None => Value::Null });
-    m.insert("results".into(), match (&p.results) { Some(v) => iface_tags__pagination_envelope_properties_results__to_json(v), None => Value::Null });
+    m.insert("page".into(), match (&p.page) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("pages".into(), match (&p.pages) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("results".into(), match (&p.results) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
@@ -70,30 +70,12 @@ fn iface_tags__tag__to_json(p: &iface_tags::Tag) -> Value {
     Value::Object(m)
 }
 
-fn iface_tags__pagination_envelope_properties_page__to_json(p: &iface_tags::PaginationEnvelopePropertiesPage) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_tags__pagination_envelope_properties_pages__to_json(p: &iface_tags::PaginationEnvelopePropertiesPages) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_tags__pagination_envelope_properties_results__to_json(p: &iface_tags::PaginationEnvelopePropertiesResults) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
 fn iface_tags__get_tagged_objects_response__to_json(p: &iface_tags::GetTaggedObjectsResponse) -> Value {
     let mut m = Map::new();
     m.insert("data".into(), match (&p.data) { Some(v) => Value::Array((v).iter().map(|v| iface_tags__get_tagged_objects_response_data_item__to_json(v)).collect()), None => Value::Null });
-    m.insert("page".into(), match (&p.page) { Some(v) => iface_tags__pagination_envelope_properties_page__to_json(v), None => Value::Null });
-    m.insert("pages".into(), match (&p.pages) { Some(v) => iface_tags__pagination_envelope_properties_pages__to_json(v), None => Value::Null });
-    m.insert("results".into(), match (&p.results) { Some(v) => iface_tags__pagination_envelope_properties_results__to_json(v), None => Value::Null });
+    m.insert("page".into(), match (&p.page) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("pages".into(), match (&p.pages) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("results".into(), match (&p.results) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
@@ -104,9 +86,10 @@ fn iface_tags__get_tagged_objects_response_data_item__to_json(p: &iface_tags::Ge
     Value::Object(m)
 }
 
-fn iface_tags__delete_tag_response__to_json(p: &iface_tags::DeleteTagResponse) -> Value {
+fn iface_tags__delete_tag_response_entry__to_json(p: &iface_tags::DeleteTagResponseEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -145,9 +128,9 @@ fn iface_tags__get_tags_response__from_json(v: &Value) -> Option<iface_tags::Get
     let m = v.as_object()?;
     Some(iface_tags::GetTagsResponse {
         data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_tags__tag__from_json(x)).collect())),
-        page: m.get("page").filter(|v| !v.is_null()).and_then(|v| iface_tags__pagination_envelope_properties_page__from_json(v)),
-        pages: m.get("pages").filter(|v| !v.is_null()).and_then(|v| iface_tags__pagination_envelope_properties_pages__from_json(v)),
-        results: m.get("results").filter(|v| !v.is_null()).and_then(|v| iface_tags__pagination_envelope_properties_results__from_json(v)),
+        page: m.get("page").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        pages: m.get("pages").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        results: m.get("results").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
     })
 }
 
@@ -158,34 +141,13 @@ fn iface_tags__tag__from_json(v: &Value) -> Option<iface_tags::Tag> {
     })
 }
 
-fn iface_tags__pagination_envelope_properties_page__from_json(v: &Value) -> Option<iface_tags::PaginationEnvelopePropertiesPage> {
-    let m = v.as_object()?;
-    Some(iface_tags::PaginationEnvelopePropertiesPage {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-    })
-}
-
-fn iface_tags__pagination_envelope_properties_pages__from_json(v: &Value) -> Option<iface_tags::PaginationEnvelopePropertiesPages> {
-    let m = v.as_object()?;
-    Some(iface_tags::PaginationEnvelopePropertiesPages {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-    })
-}
-
-fn iface_tags__pagination_envelope_properties_results__from_json(v: &Value) -> Option<iface_tags::PaginationEnvelopePropertiesResults> {
-    let m = v.as_object()?;
-    Some(iface_tags::PaginationEnvelopePropertiesResults {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-    })
-}
-
 fn iface_tags__get_tagged_objects_response__from_json(v: &Value) -> Option<iface_tags::GetTaggedObjectsResponse> {
     let m = v.as_object()?;
     Some(iface_tags::GetTaggedObjectsResponse {
         data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_tags__get_tagged_objects_response_data_item__from_json(x)).collect())),
-        page: m.get("page").filter(|v| !v.is_null()).and_then(|v| iface_tags__pagination_envelope_properties_page__from_json(v)),
-        pages: m.get("pages").filter(|v| !v.is_null()).and_then(|v| iface_tags__pagination_envelope_properties_pages__from_json(v)),
-        results: m.get("results").filter(|v| !v.is_null()).and_then(|v| iface_tags__pagination_envelope_properties_results__from_json(v)),
+        page: m.get("page").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        pages: m.get("pages").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        results: m.get("results").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
     })
 }
 
@@ -197,10 +159,11 @@ fn iface_tags__get_tagged_objects_response_data_item__from_json(v: &Value) -> Op
     })
 }
 
-fn iface_tags__delete_tag_response__from_json(v: &Value) -> Option<iface_tags::DeleteTagResponse> {
+fn iface_tags__delete_tag_response_entry__from_json(v: &Value) -> Option<iface_tags::DeleteTagResponseEntry> {
     let m = v.as_object()?;
-    Some(iface_tags::DeleteTagResponse {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_tags::DeleteTagResponseEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -258,12 +221,12 @@ fn iface_tags__get_tagged_objects__err(e: crate::runtime::DispatchError) -> Stri
     }
 }
 
-fn iface_tags__delete_tag__ok(body: String) -> Result<iface_tags::DeleteTagResponse, crate::runtime::DispatchError> {
+fn iface_tags__delete_tag__ok(body: String) -> Result<Vec<iface_tags::DeleteTagResponseEntry>, crate::runtime::DispatchError> {
     let v: Value = match serde_json::from_str(&body) {
         Ok(v) => v,
         Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
     };
-    match iface_tags__delete_tag_response__from_json(&v) {
+    match (&v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_tags::DeleteTagResponseEntry { key: k.clone(), value: val })).collect()) {
         Some(x) => Ok(x),
         None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
@@ -298,7 +261,7 @@ impl iface_tags::Guest for crate::Component {
             Err(e) => Err(iface_tags__get_tagged_objects__err(e)),
         }
     }
-    fn delete_tag(params: iface_tags::DeleteTagParams) -> Result<iface_tags::DeleteTagResponse, String> {
+    fn delete_tag(params: iface_tags::DeleteTagParams) -> Result<Vec<iface_tags::DeleteTagResponseEntry>, String> {
         let json = iface_tags__delete_tag_params__to_json(&params);
         match dispatch(&OP_TAGS_DELETE_TAG, json).and_then(iface_tags__delete_tag__ok) {
             Ok(v) => Ok(v),

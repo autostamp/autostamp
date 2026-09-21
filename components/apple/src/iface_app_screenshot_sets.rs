@@ -80,6 +80,36 @@ const OP_APP_SCREENSHOT_SETS_APP_SCREENSHOTS_REPLACE_TO_MANY_RELATIONSHIP: OpSpe
     ],
 };
 
+fn iface_app_screenshot_sets__screenshot_display_type__to_str(e: &iface_app_screenshot_sets::ScreenshotDisplayType) -> &'static str {
+    match e {
+        iface_app_screenshot_sets::ScreenshotDisplayType::AppIphoneV65 => "APP_IPHONE_65",
+        iface_app_screenshot_sets::ScreenshotDisplayType::AppIphoneV58 => "APP_IPHONE_58",
+        iface_app_screenshot_sets::ScreenshotDisplayType::AppIphoneV55 => "APP_IPHONE_55",
+        iface_app_screenshot_sets::ScreenshotDisplayType::AppIphoneV47 => "APP_IPHONE_47",
+        iface_app_screenshot_sets::ScreenshotDisplayType::AppIphoneV40 => "APP_IPHONE_40",
+        iface_app_screenshot_sets::ScreenshotDisplayType::AppIphoneV35 => "APP_IPHONE_35",
+        iface_app_screenshot_sets::ScreenshotDisplayType::AppIpadProV3genV129 => "APP_IPAD_PRO_3GEN_129",
+        iface_app_screenshot_sets::ScreenshotDisplayType::AppIpadProV3genV11 => "APP_IPAD_PRO_3GEN_11",
+        iface_app_screenshot_sets::ScreenshotDisplayType::AppIpadProV129 => "APP_IPAD_PRO_129",
+        iface_app_screenshot_sets::ScreenshotDisplayType::AppIpadV105 => "APP_IPAD_105",
+        iface_app_screenshot_sets::ScreenshotDisplayType::AppIpadV97 => "APP_IPAD_97",
+        iface_app_screenshot_sets::ScreenshotDisplayType::AppDesktop => "APP_DESKTOP",
+        iface_app_screenshot_sets::ScreenshotDisplayType::AppWatchSeriesV4 => "APP_WATCH_SERIES_4",
+        iface_app_screenshot_sets::ScreenshotDisplayType::AppWatchSeriesV3 => "APP_WATCH_SERIES_3",
+        iface_app_screenshot_sets::ScreenshotDisplayType::AppAppleTv => "APP_APPLE_TV",
+        iface_app_screenshot_sets::ScreenshotDisplayType::ImessageAppIphoneV65 => "IMESSAGE_APP_IPHONE_65",
+        iface_app_screenshot_sets::ScreenshotDisplayType::ImessageAppIphoneV58 => "IMESSAGE_APP_IPHONE_58",
+        iface_app_screenshot_sets::ScreenshotDisplayType::ImessageAppIphoneV55 => "IMESSAGE_APP_IPHONE_55",
+        iface_app_screenshot_sets::ScreenshotDisplayType::ImessageAppIphoneV47 => "IMESSAGE_APP_IPHONE_47",
+        iface_app_screenshot_sets::ScreenshotDisplayType::ImessageAppIphoneV40 => "IMESSAGE_APP_IPHONE_40",
+        iface_app_screenshot_sets::ScreenshotDisplayType::ImessageAppIpadProV3genV129 => "IMESSAGE_APP_IPAD_PRO_3GEN_129",
+        iface_app_screenshot_sets::ScreenshotDisplayType::ImessageAppIpadProV3genV11 => "IMESSAGE_APP_IPAD_PRO_3GEN_11",
+        iface_app_screenshot_sets::ScreenshotDisplayType::ImessageAppIpadProV129 => "IMESSAGE_APP_IPAD_PRO_129",
+        iface_app_screenshot_sets::ScreenshotDisplayType::ImessageAppIpadV105 => "IMESSAGE_APP_IPAD_105",
+        iface_app_screenshot_sets::ScreenshotDisplayType::ImessageAppIpadV97 => "IMESSAGE_APP_IPAD_97",
+    }
+}
+
 fn iface_app_screenshot_sets__app_screenshot_set_create_request_data_relationships_app_store_version_localization_data_type_op_enum__to_str(e: &iface_app_screenshot_sets::AppScreenshotSetCreateRequestDataRelationshipsAppStoreVersionLocalizationDataTypeOpEnum) -> &'static str {
     match e {
         iface_app_screenshot_sets::AppScreenshotSetCreateRequestDataRelationshipsAppStoreVersionLocalizationDataTypeOpEnum::AppStoreVersionLocalizations => "appStoreVersionLocalizations",
@@ -153,13 +183,7 @@ fn iface_app_screenshot_sets__app_screenshot_set_create_request_data__to_json(p:
 
 fn iface_app_screenshot_sets__app_screenshot_set_create_request_data_attributes__to_json(p: &iface_app_screenshot_sets::AppScreenshotSetCreateRequestDataAttributes) -> Value {
     let mut m = Map::new();
-    m.insert("screenshotDisplayType".into(), iface_app_screenshot_sets__screenshot_display_type__to_json(&p.screenshot_display_type));
-    Value::Object(m)
-}
-
-fn iface_app_screenshot_sets__screenshot_display_type__to_json(p: &iface_app_screenshot_sets::ScreenshotDisplayType) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
+    m.insert("screenshotDisplayType".into(), Value::String(iface_app_screenshot_sets__screenshot_display_type__to_str(&p.screenshot_display_type).into()));
     Value::Object(m)
 }
 
@@ -202,7 +226,7 @@ fn iface_app_screenshot_sets__app_screenshot_set__to_json(p: &iface_app_screensh
 
 fn iface_app_screenshot_sets__app_screenshot_set_attributes__to_json(p: &iface_app_screenshot_sets::AppScreenshotSetAttributes) -> Value {
     let mut m = Map::new();
-    m.insert("screenshotDisplayType".into(), match (&p.screenshot_display_type) { Some(v) => iface_app_screenshot_sets__screenshot_display_type__to_json(v), None => Value::Null });
+    m.insert("screenshotDisplayType".into(), match (&p.screenshot_display_type) { Some(v) => Value::String(iface_app_screenshot_sets__screenshot_display_type__to_str(v).into()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -455,13 +479,6 @@ fn iface_app_screenshot_sets__app_screenshots_replace_to_many_relationship_param
     Value::Object(m)
 }
 
-fn iface_app_screenshot_sets__screenshot_display_type__from_json(v: &Value) -> Option<iface_app_screenshot_sets::ScreenshotDisplayType> {
-    let m = v.as_object()?;
-    Some(iface_app_screenshot_sets::ScreenshotDisplayType {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-    })
-}
-
 fn iface_app_screenshot_sets__app_screenshot_set_response__from_json(v: &Value) -> Option<iface_app_screenshot_sets::AppScreenshotSetResponse> {
     let m = v.as_object()?;
     Some(iface_app_screenshot_sets::AppScreenshotSetResponse {
@@ -485,7 +502,7 @@ fn iface_app_screenshot_sets__app_screenshot_set__from_json(v: &Value) -> Option
 fn iface_app_screenshot_sets__app_screenshot_set_attributes__from_json(v: &Value) -> Option<iface_app_screenshot_sets::AppScreenshotSetAttributes> {
     let m = v.as_object()?;
     Some(iface_app_screenshot_sets::AppScreenshotSetAttributes {
-        screenshot_display_type: m.get("screenshotDisplayType").filter(|v| !v.is_null()).and_then(|v| iface_app_screenshot_sets__screenshot_display_type__from_json(v)),
+        screenshot_display_type: m.get("screenshotDisplayType").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_app_screenshot_sets__screenshot_display_type__from_str)),
     })
 }
 
@@ -709,6 +726,37 @@ fn iface_app_screenshot_sets__app_screenshot_set_app_screenshots_linkages_respon
         id: m.get("id").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         type_op: match m.get("type").and_then(|v| (v).as_str().and_then(iface_app_screenshot_sets__app_screenshot_set_relationships_app_screenshots_data_item_type_op_enum__from_str)) { Some(x) => x, None => return None },
     })
+}
+
+fn iface_app_screenshot_sets__screenshot_display_type__from_str(s: &str) -> Option<iface_app_screenshot_sets::ScreenshotDisplayType> {
+    match s {
+        "APP_IPHONE_65" => Some(iface_app_screenshot_sets::ScreenshotDisplayType::AppIphoneV65),
+        "APP_IPHONE_58" => Some(iface_app_screenshot_sets::ScreenshotDisplayType::AppIphoneV58),
+        "APP_IPHONE_55" => Some(iface_app_screenshot_sets::ScreenshotDisplayType::AppIphoneV55),
+        "APP_IPHONE_47" => Some(iface_app_screenshot_sets::ScreenshotDisplayType::AppIphoneV47),
+        "APP_IPHONE_40" => Some(iface_app_screenshot_sets::ScreenshotDisplayType::AppIphoneV40),
+        "APP_IPHONE_35" => Some(iface_app_screenshot_sets::ScreenshotDisplayType::AppIphoneV35),
+        "APP_IPAD_PRO_3GEN_129" => Some(iface_app_screenshot_sets::ScreenshotDisplayType::AppIpadProV3genV129),
+        "APP_IPAD_PRO_3GEN_11" => Some(iface_app_screenshot_sets::ScreenshotDisplayType::AppIpadProV3genV11),
+        "APP_IPAD_PRO_129" => Some(iface_app_screenshot_sets::ScreenshotDisplayType::AppIpadProV129),
+        "APP_IPAD_105" => Some(iface_app_screenshot_sets::ScreenshotDisplayType::AppIpadV105),
+        "APP_IPAD_97" => Some(iface_app_screenshot_sets::ScreenshotDisplayType::AppIpadV97),
+        "APP_DESKTOP" => Some(iface_app_screenshot_sets::ScreenshotDisplayType::AppDesktop),
+        "APP_WATCH_SERIES_4" => Some(iface_app_screenshot_sets::ScreenshotDisplayType::AppWatchSeriesV4),
+        "APP_WATCH_SERIES_3" => Some(iface_app_screenshot_sets::ScreenshotDisplayType::AppWatchSeriesV3),
+        "APP_APPLE_TV" => Some(iface_app_screenshot_sets::ScreenshotDisplayType::AppAppleTv),
+        "IMESSAGE_APP_IPHONE_65" => Some(iface_app_screenshot_sets::ScreenshotDisplayType::ImessageAppIphoneV65),
+        "IMESSAGE_APP_IPHONE_58" => Some(iface_app_screenshot_sets::ScreenshotDisplayType::ImessageAppIphoneV58),
+        "IMESSAGE_APP_IPHONE_55" => Some(iface_app_screenshot_sets::ScreenshotDisplayType::ImessageAppIphoneV55),
+        "IMESSAGE_APP_IPHONE_47" => Some(iface_app_screenshot_sets::ScreenshotDisplayType::ImessageAppIphoneV47),
+        "IMESSAGE_APP_IPHONE_40" => Some(iface_app_screenshot_sets::ScreenshotDisplayType::ImessageAppIphoneV40),
+        "IMESSAGE_APP_IPAD_PRO_3GEN_129" => Some(iface_app_screenshot_sets::ScreenshotDisplayType::ImessageAppIpadProV3genV129),
+        "IMESSAGE_APP_IPAD_PRO_3GEN_11" => Some(iface_app_screenshot_sets::ScreenshotDisplayType::ImessageAppIpadProV3genV11),
+        "IMESSAGE_APP_IPAD_PRO_129" => Some(iface_app_screenshot_sets::ScreenshotDisplayType::ImessageAppIpadProV129),
+        "IMESSAGE_APP_IPAD_105" => Some(iface_app_screenshot_sets::ScreenshotDisplayType::ImessageAppIpadV105),
+        "IMESSAGE_APP_IPAD_97" => Some(iface_app_screenshot_sets::ScreenshotDisplayType::ImessageAppIpadV97),
+        _ => None,
+    }
 }
 
 fn iface_app_screenshot_sets__app_screenshot_set_create_request_data_relationships_app_store_version_localization_data_type_op_enum__from_str(s: &str) -> Option<iface_app_screenshot_sets::AppScreenshotSetCreateRequestDataRelationshipsAppStoreVersionLocalizationDataTypeOpEnum> {
