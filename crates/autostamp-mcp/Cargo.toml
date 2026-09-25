@@ -12,5 +12,12 @@ readme = "README.md"
 [lib]
 crate-type = ["cdylib", "rlib"]
 
+[dependencies]
+heck = "0.5"
+semver = "1"
+serde = "1"
+serde_json = "1"
+wit-parser = "0.227"
+
 [lints]
 workspace = true

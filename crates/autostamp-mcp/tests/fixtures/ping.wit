@@ -1,0 +1,35 @@
+package example:service@0.1.0;
+
+/// Typed MCP tools from a complete, offline tools/list catalog.
+interface tool {
+    /// The complete standard MCP CallToolResult envelope, serialized as JSON.
+    /// Preserves content blocks, structuredContent, isError and metadata.
+    /// This is the declared result when outputSchema is absent, not a schema fallback.
+    type result-envelope-json = string;
+
+    /// Failures are distinct from successful typed tool results.
+    variant error {
+        /// HTTP or transport failure.
+        transport(string),
+        /// MCP protocol or session failure.
+        protocol(string),
+        /// A tool result with isError set; preserves its full envelope.
+        tool-execution(result-envelope-json),
+        /// The result does not match the declared structural schema or numeric representation.
+        result-decoding(string),
+    }
+
+    /// A typed JSON Schema value.
+    record ping-arguments {
+    }
+
+    /// Invoke MCP tool "ping".
+    /// No outputSchema was declared; success returns the full CallToolResult JSON envelope.
+    ping: func() -> result<result-envelope-json, error>;
+
+}
+
+/// A synchronous WASI 0.2-compatible client exporting the catalog's tools.
+world client {
+    export tool;
+}

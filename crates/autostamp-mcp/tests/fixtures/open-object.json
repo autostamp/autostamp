@@ -1,0 +1,11 @@
+{
+  "tools": [
+    {
+      "name": "unsafe_shape",
+      "inputSchema": {
+        "type": "object",
+        "properties": { "known": { "type": "string" } }
+      }
+    }
+  ]
+}

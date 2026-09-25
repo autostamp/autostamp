@@ -33,7 +33,8 @@ The two generators live under `crates/`:
 
 - [`autostamp-openapi`](./crates/autostamp-openapi/): OpenAPI 2 and 3 to component
   source crates, previously named `openapi-bindgen`.
-- [`autostamp-mcp`](./crates/autostamp-mcp/): MCP tools to components (in development).
+- [`autostamp-mcp`](./crates/autostamp-mcp/): complete MCP tool catalogs to typed
+  WIT. Component generation and HTTP invocation are in development.
 
 Generated provider crates in `components/` are standalone packages, deliberately
 excluded from the workspace. `just test` checks the generators; `just build`

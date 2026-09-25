@@ -1,0 +1,21 @@
+{
+  "tools": [
+    {
+      "name": "recursive",
+      "inputSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "$defs": {
+          "node": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "next": { "$ref": "#/$defs/node" }
+            }
+          }
+        },
+        "properties": { "head": { "$ref": "#/$defs/node" } }
+      }
+    }
+  ]
+}
