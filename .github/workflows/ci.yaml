@@ -95,7 +95,7 @@ jobs:
       run: cargo build --workspace --lib --no-default-features --target wasm32-wasip2
 
     - name: CLI integration with loopback mocks
-      run: python3 crates/autostamp-mcp/tests/cli_e2e.py
+      run: cargo test -p autostamp-mcp --all-features --test cli_e2e -- --ignored --nocapture
 
     - name: Generated component runtime with loopback mocks
-      run: python3 crates/autostamp-mcp/tests/component_runtime.py
+      run: cargo test -p autostamp-mcp --all-features --test component_runtime -- --ignored --nocapture

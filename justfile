@@ -226,8 +226,7 @@ build-mcp:
 # Run MCP native tests and mock-only CLI/component integration (requires the tools in docs/mcp.md).
 test-mcp:
     cargo test -p autostamp-mcp --all-features
-    python3 crates/autostamp-mcp/tests/cli_e2e.py
-    python3 crates/autostamp-mcp/tests/component_runtime.py
+    cargo test -p autostamp-mcp --all-features --test cli_e2e --test component_runtime -- --ignored --nocapture
 
 # Fetch the vendored OpenAPI schemas submodule (sparse: only APIs/, shallow + blobless).
 vendor-init:

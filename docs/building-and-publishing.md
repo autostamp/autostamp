@@ -98,7 +98,7 @@ own `just build` step (a per-component `wasm32-wasip2` compile); the reopened-PR
 and the generator's cross-platform validation.
 CI additionally runs a dedicated mock-only MCP component job: it builds both
 generator libraries for WASI without native CLI dependencies, then runs the MCP
-CLI and generated-runtime Python harnesses. That job installs its own pinned
+CLI and generated-runtime Rust integration tests. That job installs its own pinned
 component tools and uses only loopback mocks; it neither builds the OpenAPI
 corpus nor publishes MCP fixtures. Native checks, tests, Clippy and docs include
 all workspace features.

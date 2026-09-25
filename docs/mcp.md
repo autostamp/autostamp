@@ -185,7 +185,7 @@ just build-mcp
 just test-mcp
 ```
 
-The harnesses require Python 3, Cargo with `wasm32-wasip2`, and the following
+The Rust integration tests require Cargo with `wasm32-wasip2` and the following
 tools on `PATH` (these exact versions are used in CI):
 
 ```sh
@@ -202,11 +202,14 @@ If Wasmtime is not on `PATH`, set `WASMTIME` to its executable path. Run the
 harnesses directly with:
 
 ```sh
-python3 crates/autostamp-mcp/tests/cli_e2e.py
-python3 crates/autostamp-mcp/tests/component_runtime.py
+cargo test -p autostamp-mcp --all-features \
+  --test cli_e2e --test component_runtime -- --ignored --nocapture
 ```
 
-They use loopback-only mock servers and test credentials, not real MCP services.
+These tool-dependent tests are ignored by the ordinary native test suite and
+explicitly enabled in the component CI job. They use loopback-only mock servers
+and test credentials, not real MCP services. Subprocesses have 240-second
+deadlines; test teardown stops and joins the fixture server and its workers.
 Fixtures and generated test artifacts stay outside `components/`. CI also
 builds **both** generator libraries for `wasm32-wasip2` with native features
 disabled; native workspace checks and tests retain `--all-features`.

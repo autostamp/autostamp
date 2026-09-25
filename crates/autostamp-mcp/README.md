@@ -314,15 +314,15 @@ properties. Nested Cargo builds use a separate target directory.
 
 ### Real component runtime fixtures
 
-The end-to-end harness requires Python 3, Cargo with the `wasm32-wasip2` target
+The Rust end-to-end tests require Cargo with the `wasm32-wasip2` target
 installed, and `wasm-tools`, `wac`, and `wasmtime` on `PATH` (or `WASMTIME`
 pointing to the Wasmtime executable). Exact CI tool versions and the CLI harness
 are documented in the [MCP guide](../../docs/mcp.md#build-and-test):
 
 ```sh
 rustup target add wasm32-wasip2
-python3 crates/autostamp-mcp/tests/cli_e2e.py
-python3 crates/autostamp-mcp/tests/component_runtime.py
+cargo test -p autostamp-mcp --all-features \
+  --test cli_e2e --test component_runtime -- --ignored --nocapture
 ```
 
 The harness builds anonymous and authenticated fixture components and exercises
