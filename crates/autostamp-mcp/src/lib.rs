@@ -1,6 +1,6 @@
-//! Convert complete MCP `tools/list` results to typed WIT.
+//! Convert complete MCP `tools/list` results to typed WIT and client components.
 //!
-//! This is a pure, offline library: it neither discovers nor invokes tools.
+//! Generation is pure and offline: it neither discovers nor invokes tools.
 //! Unsupported schema shapes fail with the tool name and a JSON Pointer into the
 //! catalog. The supported structural subset and constraints not encoded in WIT
 //! are described in the crate's README.
@@ -20,13 +20,23 @@
 
 mod catalog;
 mod error;
+mod generate;
 mod model;
 mod naming;
 mod package_name;
+mod rust_codegen;
 mod schema;
 mod wit;
 
+/// Bounded MCP transport and session primitives shared by generated clients.
+pub mod runtime;
+
+#[cfg(target_arch = "wasm32")]
+#[allow(unsafe_code)]
+mod component;
+
 pub use catalog::{Catalog, from_json_value, parse_catalog};
 pub use error::Error;
+pub use generate::{GenerateOptions, Generated, RustSource, WitDependency, generate};
 pub use package_name::PackageName;
 pub use wit::generate_wit;

@@ -1,8 +1,8 @@
 # autostamp-mcp
 
-Generate typed WIT from a complete MCP `tools/list` result. This library is an
-offline schema/catalog layer: it does not discover servers, call tools, emit Rust
-codecs, or build client components yet. It is independent of `autostamp-openapi`;
+Generate typed WIT and standalone Rust client components from a complete MCP
+`tools/list` result. Generation is pure and offline: it does not discover servers
+or call tools. It is independent of `autostamp-openapi`;
 the workspace intentionally contains only these two generator crates.
 
 ## Library API
@@ -25,6 +25,66 @@ retains the unmodified catalog, including descriptions, annotations and schema
 constraints. `Catalog::len` and `is_empty` distinguish an empty valid catalog
 from a parse failure. The string parser also rejects duplicate JSON object keys;
 those keys cannot be detected after another parser has converted them to `Value`.
+
+### Generate a standalone component
+
+```rust
+use autostamp_mcp::{GenerateOptions, PackageName, generate, parse_catalog};
+
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let catalog = parse_catalog(&std::fs::read_to_string("tools.json")?)?;
+    let package = PackageName::parse("example:service@0.1.0")?;
+    let generated = generate(&catalog, &package, &GenerateOptions {
+        endpoint: "https://mcp.example.com/mcp".into(),
+        bearer_secret: Some("mcp-bearer".into()), // Secret key, not its value.
+        ..GenerateOptions::default()
+    })?;
+    println!("Generated {} Rust files", generated.rust.len());
+    Ok(())
+}
+```
+
+`Generated` contains `wit`, `rust: Vec<RustSource>`, `cargo_toml`, `wasm_toml`,
+`readme`, and `wit_dependencies: Vec<WitDependency>`. Write the main WIT to
+`wit/world.wit`, Rust files relative to `src/`, and WIT dependencies relative to
+`wit/` (their paths already include `deps/`). Runtime sources are included
+verbatim; generated clients do not depend on either autostamp crate. Their
+dependencies are wit-bindgen 0.41, wstd 0.6, http 1, serde 1 and serde_json 1.
+The standalone Cargo manifest includes its own empty `[workspace]`.
+
+The offline example writes those artifacts:
+
+```sh
+cargo run -p autostamp-mcp --example generate -- \
+  crates/autostamp-mcp/tests/fixtures/tools.json example:service@0.1.0 \
+  https://mcp.example.com/mcp target/generated-service
+cargo build --manifest-path target/generated-service/Cargo.toml \
+  --release --target wasm32-wasip2
+```
+
+Append a secret key to the example invocation for bearer authentication. Anonymous
+clients import no secrets interfaces and need no secrets provider. Authenticated
+clients vendor `wasmcloud:secrets@1.0.0` and load string or UTF-8 byte credentials
+through its store/reveal interfaces at call time. Generated `credentials.rs`
+keeps these two cases separate. Credential values are never embedded.
+
+The example accepts three final numeric arguments to override the timeout and
+response/event byte limits, with or without a preceding secret key. For example,
+append `250 2048 1024` for an anonymous test client or
+`fixture-key 250 2048 1024` for an authenticated one. `-` is also accepted as an
+explicit anonymous key placeholder.
+
+`GenerateOptions::limits` uses `runtime::Limits::default()` unless overridden:
+30,000 ms per request, 4 MiB response bodies and 1 MiB SSE events. Invalid
+endpoints, embedded URL credentials, empty secret keys and unusable limits fail
+before artifact emission.
+
+The generator also builds as an offline component with package
+`autostamp:mcp@0.1.0`, world `bindgen`. Its `generator.generate` export accepts
+catalog JSON, a target package string, and generation options, returning the
+same artifacts or a structured error (`tool`, `pointer`, `message`). Omitting
+the WIT options' `limits` selects runtime defaults. Only the private component
+bindings module permits unsafe ABI glue.
 
 Input is the **result object**, not a JSON-RPC response envelope:
 
@@ -83,8 +143,8 @@ Both MCP input and output schemas must declare `type: "object"`.
 
 The shared `error` variant distinguishes `transport(string)`, `protocol(string)`,
 `tool-execution(result-envelope-json)` and `result-decoding(string)`. These are
-interface definitions only; the runtime and codecs belong to subsequent layers.
-Future codecs must check `isError` before attempting typed success decoding.
+implemented by the shared runtime and generated codecs. The runtime checks
+`isError` before the generated client attempts typed success decoding.
 
 Names are deterministic lowercase ASCII kebab-case. Tools, properties, `$defs`
 and enum cases are sorted by their original wire names. Exact duplicate tool
@@ -124,7 +184,7 @@ The default and only accepted explicit dialect is JSON Schema **2020-12**
 
 Numeric formats are explicit representation hints. Unknown or mismatched numeric
 formats fail. Arbitrary-precision JSON integers/numbers cannot be represented;
-future codecs must reject out-of-range integer conversions, non-finite floats
+codecs reject out-of-range integer conversions, non-finite floats
 and floating-point overflow. Schema `minimum`/`maximum` do not silently select a
 different representation or substitute for conversion checks.
 
@@ -140,8 +200,9 @@ An object is not closed unless `additionalProperties` is explicitly `false`.
 The JSON Schema default is `true`, which would allow untyped values: **both
 omission and `true` are rejected**, never silently narrowed. An empty schema
 `{}` for additional properties is also unsupported. Typed extras are flattened
-into the JSON object, not sent under the synthetic WIT field name. Future codecs
-must reject duplicate map keys and extra keys matching declared properties.
+into the JSON object, not sent under the synthetic WIT field name. Codecs
+reject duplicate map keys and extra keys matching declared properties, including
+optional declared properties that are absent.
 The synthetic field is collision-safe even when a real JSON property is named
 `additional-properties`.
 
@@ -170,10 +231,14 @@ validity are not checked. Constraints must occur on an applicable supported type
 and `writeOnly` are retained as annotations; they do not drop fields, synthesize
 defaults, or alter input/output shape.
 
-This layer does not encode or decode instances. Future generated codecs must
-enforce required fields, nullability, JSON wire types, enum membership, closed
-objects, map key uniqueness, and numeric conversion bounds. WIT alone does not
-provide those JSON-level checks.
+Generated codecs enforce required fields, nullability, JSON wire types, enum
+membership, closed objects, map key uniqueness, and numeric conversion bounds.
+They use explicit structural conversion, not serde-derived records, so an
+optional nullable field never loses its missing/null distinction. References to
+nullable schemas retain that distinction too. Every supported schema has an
+encoder and decoder, including unused definitions and closed empty objects.
+Floating-point overflow, f32 underflow to zero, and non-finite values fail
+explicitly. These codecs are not a full JSON Schema constraint validator.
 
 ### Rejected structures
 
@@ -207,9 +272,40 @@ and keyword rejection.
 ```sh
 cargo test -p autostamp-mcp
 cargo build -p autostamp-mcp --lib --target wasm32-wasip2
+cargo test -p autostamp-mcp --lib generated_clients_compile_and_codecs_execute -- --ignored
 ```
 
-The current library works natively and for WASI 0.2 without HTTP/CLI dependencies.
-Streamable HTTP transport, discovery, Rust/component generation and runtime
-credentials are not implemented here. Stdio, prompts, resources, OAuth and task
-execution are outside the planned tools-only client scope.
+The explicit codegen test compiles anonymous, authenticated and empty generated
+clients natively and for wasm32-wasip2. It executes generated-codec tests for all
+numeric widths, nullable references, optional/null states, arrays, enums, maps,
+mixed objects, closed objects, duplicate keys and extras conflicting with declared
+properties. Nested Cargo builds use a separate target directory.
+
+### Real component runtime fixtures
+
+The end-to-end harness requires Python 3, Cargo with the `wasm32-wasip2` target
+installed, and `wasm-tools`, `wac`, and `wasmtime` on `PATH`:
+
+```sh
+rustup target add wasm32-wasip2
+python3 crates/autostamp-mcp/tests/component_runtime.py
+```
+
+The harness builds anonymous and authenticated fixture components and exercises
+their generated exports against a loopback-only MCP mock. It does not contact a
+live MCP service. These are fixture builds, not generation or publication of the
+component corpus; nothing is published.
+
+The offline example's exact positional contract is:
+
+```text
+generate CATALOG_JSON TARGET_PACKAGE ENDPOINT OUTPUT_DIRECTORY [BEARER_SECRET_KEY] [TIMEOUT_MS MAX_RESPONSE_BYTES MAX_EVENT_BYTES]
+```
+
+Use `-` for an explicit anonymous credential placeholder. For example,
+`fixture:runtime@0.1.0` selects the Cargo crate name `runtime` and produces
+`runtime.wasm` when built for `wasm32-wasip2`.
+
+The library and offline generator work natively and for WASI 0.2. Generated
+clients use bounded Streamable HTTP; stdio, prompts, resources, OAuth and task
+execution are outside this tools-only client scope.

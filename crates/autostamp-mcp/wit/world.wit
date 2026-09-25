@@ -1,0 +1,78 @@
+package autostamp:mcp@0.1.0;
+
+/// Pure generation from a complete offline tools/list catalog.
+interface generator {
+    /// One generated Rust source file, relative to src/.
+    record rust-source {
+        /// Relative path.
+        path: string,
+        /// UTF-8 source.
+        contents: string,
+    }
+
+    /// One vendored WIT dependency, relative to wit/.
+    record wit-dependency {
+        /// Relative path including deps/.
+        path: string,
+        /// UTF-8 WIT source.
+        contents: string,
+    }
+
+    /// Bounded HTTP request execution.
+    record limits {
+        /// Per-request timeout in milliseconds.
+        request-timeout-ms: u64,
+        /// Maximum response body size.
+        max-response-bytes: u32,
+        /// Maximum SSE event size.
+        max-event-bytes: u32,
+    }
+
+    /// Configuration embedded in a generated client.
+    record generate-options {
+        /// Streamable HTTP URL.
+        endpoint: string,
+        /// Secret key, not a bearer token.
+        bearer-secret: option<string>,
+        /// Omit to use the runtime defaults.
+        limits: option<limits>,
+    }
+
+    /// Complete standalone client artifacts.
+    record generated {
+        /// Main WIT source to write to wit/world.wit.
+        wit: string,
+        /// Files relative to src/.
+        rust: list<rust-source>,
+        /// Cargo manifest.
+        cargo-toml: string,
+        /// Component manifest.
+        wasm-toml: string,
+        /// Build and contract documentation.
+        readme: string,
+        /// Dependencies relative to wit/.
+        wit-dependencies: list<wit-dependency>,
+    }
+
+    /// Structured catalog or generation diagnostic.
+    record error {
+        /// Original tool name, if applicable.
+        tool: option<string>,
+        /// RFC 6901 pointer into the input catalog.
+        pointer: string,
+        /// Diagnostic explanation.
+        message: string,
+    }
+
+    /// Generate without making HTTP requests or invoking tools.
+    generate: func(
+        catalog-json: string,
+        target-package: string,
+        options: generate-options,
+    ) -> result<generated, error>;
+}
+
+/// Offline generator component.
+world bindgen {
+    export generator;
+}
