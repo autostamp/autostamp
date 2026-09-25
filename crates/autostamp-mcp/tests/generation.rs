@@ -25,7 +25,9 @@ fn emit(value: Value) -> String {
 
 fn resolve(wit: &str) -> Resolve {
     let mut resolve = Resolve::default();
-    resolve.push_str("fixture.wit", wit).unwrap();
+    let package = resolve.push_str("fixture.wit", wit).unwrap();
+    let bytes = wit_component::encode(&resolve, package).unwrap();
+    wasmparser::Validator::new().validate_all(&bytes).unwrap();
     resolve
 }
 
@@ -109,6 +111,67 @@ fn no_arguments_golden_and_empty_catalog_have_no_dummy_functions() {
         .unwrap();
     assert!(interface.functions.is_empty());
     assert_eq!(resolve.worlds.len(), 1);
+}
+
+#[test]
+fn nested_empty_objects_have_a_component_model_representation() {
+    let wit = emit(json!({"tools":[{
+        "name":"test_tool",
+        "inputSchema":{
+            "type":"object",
+            "additionalProperties":false,
+            "$defs":{"empty":closed(json!({}))},
+            "properties":{
+                "empty":closed(json!({})),
+                "nullable":{"type":["object","null"],"additionalProperties":false},
+                "array":{"type":"array","items":closed(json!({}))},
+                "map":{"type":"object","additionalProperties":closed(json!({}))},
+                "reference":{"$ref":"#/$defs/empty"}
+            }
+        },
+        "outputSchema":closed(json!({}))
+    }]}));
+    let resolve = resolve(&wit);
+    for name in [
+        "test-tool-arguments-empty",
+        "test-tool-arguments-nullable-value",
+        "test-tool-arguments-array-item",
+        "test-tool-arguments-map-additional-value",
+        "test-tool-arguments-reference-target",
+        "test-tool-output",
+    ] {
+        let TypeDefKind::Enum(value) = kind(&resolve, name) else {
+            panic!("{name} must represent the empty JSON object as a singleton enum");
+        };
+        assert_eq!(value.cases.len(), 1);
+        assert_eq!(value.cases.first().unwrap().name, "empty");
+    }
+    let TypeDefKind::Option(Type::Id(inner)) = kind(&resolve, "test-tool-arguments-nullable")
+    else {
+        panic!("nullable empty objects must retain their option");
+    };
+    assert!(matches!(
+        resolve.types.get(*inner).unwrap().kind,
+        TypeDefKind::Enum(_)
+    ));
+    let TypeDefKind::Record(input) = kind(&resolve, "test-tool-arguments") else {
+        panic!();
+    };
+    let nullable = input
+        .fields
+        .iter()
+        .find(|field| field.name == "nullable")
+        .unwrap();
+    let Type::Id(optional) = nullable.ty else {
+        panic!()
+    };
+    let TypeDefKind::Option(Type::Id(nullable)) = resolve.types.get(optional).unwrap().kind else {
+        panic!("an optional nullable empty object must retain both option layers");
+    };
+    assert!(matches!(
+        resolve.types.get(nullable).unwrap().kind,
+        TypeDefKind::Option(_)
+    ));
 }
 
 #[test]
@@ -381,7 +444,7 @@ fn duplicate_tools_are_distinct_from_normalization_collisions() {
     assert!(interface.functions.contains_key("error-v2"));
     assert!(interface.functions.contains_key("self-value"));
     assert!(interface.functions.contains_key("foo-bar-v3"));
-    assert!(wit.contains("record ping-arguments-v2"));
+    assert!(wit.contains("enum ping-arguments-v2"));
 }
 
 #[test]

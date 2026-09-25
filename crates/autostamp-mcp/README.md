@@ -63,6 +63,10 @@ greet: func(arguments: greet-arguments) -> result<result-envelope-json, error>;
 
 A closed empty input object becomes a no-argument function. Other inputs are one
 typed argument record or map, not separate positional JSON properties.
+Closed empty objects used as values (including nested fields and typed outputs)
+use a singleton enum with the case `empty`, representing exactly `{}` on the
+wire. Component Model records cannot have zero fields. This representation does
+not turn the JSON object into a string enum; codecs must still encode/decode `{}`.
 
 When **`outputSchema` is absent**, the success value is
 `type result-envelope-json = string`: the entire standard MCP `CallToolResult`
@@ -106,7 +110,8 @@ The default and only accepted explicit dialect is JSON Schema **2020-12**
 | `number` | `f64` by default |
 | Number `format: float/float32` or `double/float64` | `f32` or `f64` |
 | Array with one supported `items` schema | `list<item>` |
-| Closed object | Record, including empty records |
+| Nonempty closed object | Record |
+| Empty closed object | Singleton enum `{ empty }`, representing JSON `{}` |
 | Object with only typed `additionalProperties` | `list<tuple<string, value>>` |
 | Properties plus typed `additionalProperties` | Record plus a typed extra-properties list |
 | String `enum` | Enum with original JSON values retained |
@@ -191,8 +196,9 @@ catalog-level error instead.
 [`tests/fixtures/tools.json`](tests/fixtures/tools.json) is a complete working
 catalog with typed output, references, nullable fields, maps and mixed objects.
 The adjacent open-object and recursive fixtures demonstrate explicit failures.
-Tests check resolved WIT structure, missing/null states, wire mappings,
-determinism, collisions, malformed inputs and keyword rejection.
+Tests resolve and binary-validate generated Component Model types, and check
+missing/null states, wire mappings, determinism, collisions, malformed inputs
+and keyword rejection.
 
 ```sh
 cargo test -p autostamp-mcp

@@ -20,7 +20,10 @@ interface tool {
     }
 
     /// A typed JSON Schema value.
-    record ping-arguments {
+    /// The empty JSON object. Component Model records cannot have zero fields.
+    enum ping-arguments {
+        /// The only valid value: {}.
+        empty,
     }
 
     /// Invoke MCP tool "ping".

@@ -198,6 +198,17 @@ fn emit_schema(out: &mut String, catalog: &Catalog, value: &Schema) {
             properties,
             additional,
         } => {
+            if properties.is_empty() && additional.is_none() {
+                docs(
+                    out,
+                    "    ",
+                    "The empty JSON object. Component Model records cannot have zero fields.",
+                );
+                out.push_str(&format!(
+                    "    enum {name} {{\n        /// The only valid value: {{}}.\n        empty,\n    }}\n\n"
+                ));
+                return;
+            }
             if properties.is_empty()
                 && let Some(additional) = additional
             {
