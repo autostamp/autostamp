@@ -114,6 +114,35 @@ fn no_arguments_golden_and_empty_catalog_have_no_dummy_functions() {
 }
 
 #[test]
+fn catalog_metadata_preserves_numbers_and_literal_serde_marker_keys() {
+    let source = r#"{"tools":[],"_meta":{"large":18446744073709551617,"tiny":1e-999,"literal":{"$serde_json::private::Number":"7"}}}"#;
+    let catalog = parse_catalog(source).unwrap();
+    assert_eq!(
+        catalog
+            .as_json()
+            .pointer("/_meta/large")
+            .unwrap()
+            .to_string(),
+        "18446744073709551617"
+    );
+    assert_eq!(
+        catalog
+            .as_json()
+            .pointer("/_meta/tiny")
+            .unwrap()
+            .to_string(),
+        "1e-999"
+    );
+    assert_eq!(
+        catalog
+            .as_json()
+            .pointer("/_meta/literal/$serde_json::private::Number")
+            .and_then(Value::as_str),
+        Some("7")
+    );
+}
+
+#[test]
 fn nested_empty_objects_have_a_component_model_representation() {
     let wit = emit(json!({"tools":[{
         "name":"test_tool",

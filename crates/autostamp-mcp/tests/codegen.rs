@@ -23,6 +23,14 @@ fn artifacts_are_deterministic_standalone_and_structural() {
     assert!(generated.cargo_toml.contains("[workspace]"));
     assert!(generated.cargo_toml.contains("doctest = false"));
     assert!(generated.cargo_toml.contains("wit-bindgen = \"0.41\""));
+    let json_dependency = generated
+        .cargo_toml
+        .lines()
+        .find(|line| line.starts_with("serde_json ="))
+        .unwrap();
+    for feature in ["arbitrary_precision", "float_roundtrip", "raw_value"] {
+        assert!(json_dependency.contains(feature));
+    }
     assert!(!generated.cargo_toml.contains("autostamp-openapi"));
     assert!(!generated.cargo_toml.contains("autostamp-mcp ="));
     assert!(
@@ -55,6 +63,8 @@ fn artifacts_are_deterministic_standalone_and_structural() {
     assert!(codec.contains("duplicate object key"));
     assert!(!codec.contains("serde_json::from_value"));
     assert!(!codec.contains("derive(Deserialize"));
+    assert!(codec.contains("crate::runtime::wire::integer"));
+    assert!(!codec.contains("fn integer("));
     let client = &generated
         .rust
         .iter()

@@ -176,6 +176,7 @@ fn codecs(catalog: &Catalog) -> String {
              tool::Error::ResultDecoding(format!(\"{path}: {reason}\"))\n\
          }\n\n",
     );
+    out.push_str(NUMBER_HELPERS);
     for (id, schema) in catalog.schemas.iter().enumerate() {
         let ty = rust_type_name(&schema.name);
         let value_ty = rust_type_name(&schema.value_name);
@@ -203,6 +204,14 @@ fn codecs(catalog: &Catalog) -> String {
     }
     out
 }
+
+const NUMBER_HELPERS: &str = r#"
+fn mantissa_is_zero(token: &str) -> bool {
+    token.split(['e', 'E']).next().unwrap_or_default()
+        .bytes().all(|byte| !matches!(byte, b'1'..=b'9'))
+}
+
+"#;
 
 fn encode(out: &mut String, schema: &Schema) {
     let path = &schema.pointer;
@@ -326,17 +335,21 @@ fn decode(out: &mut String, schema: &Schema) {
 }
 
 fn decode_number(out: &mut String, number: Number, path: &str) {
-    let (ty, method) = match number {
-        Number::S8 => ("i8", "as_i64"),
-        Number::S16 => ("i16", "as_i64"),
-        Number::S32 => ("i32", "as_i64"),
-        Number::S64 => ("i64", "as_i64"),
-        Number::U8 => ("u8", "as_u64"),
-        Number::U16 => ("u16", "as_u64"),
-        Number::U32 => ("u32", "as_u64"),
-        Number::U64 => ("u64", "as_u64"),
+    let ty = match number {
+        Number::S8 => "i8",
+        Number::S16 => "i16",
+        Number::S32 => "i32",
+        Number::S64 => "i64",
+        Number::U8 => "u8",
+        Number::U16 => "u16",
+        Number::U32 => "u32",
+        Number::U64 => "u64",
         Number::F32 | Number::F64 => {
-            out.push_str(&format!("    let number = value.as_f64().ok_or_else(|| invalid({path:?}, \"expected finite number\"))?;\n"));
+            out.push_str(&format!(
+                "    let encoded = value.as_number().ok_or_else(|| invalid({path:?}, \"expected number\"))?;\n\
+                 let number = encoded.as_f64().ok_or_else(|| invalid({path:?}, \"expected finite number\"))?;\n\
+                 if number == 0.0 && !mantissa_is_zero(&encoded.to_string()) {{ return Err(invalid({path:?}, \"number underflows f64\")); }}\n"
+            ));
             if number == Number::F32 {
                 out.push_str(&format!(
                     "    if !number.is_finite() || number.abs() > f64::from(f32::MAX) {{ return Err(invalid({path:?}, \"number outside f32 range\")); }}\n\
@@ -351,7 +364,8 @@ fn decode_number(out: &mut String, number: Number, path: &str) {
         }
     };
     out.push_str(&format!(
-        "    let number = value.{method}().ok_or_else(|| invalid({path:?}, \"expected an integer in {ty} range\"))?;\n\
+        "    let encoded = value.as_number().ok_or_else(|| invalid({path:?}, \"expected number\"))?;\n\
+         let number = crate::runtime::wire::integer(encoded).ok_or_else(|| invalid({path:?}, \"expected an integer in {ty} range\"))?;\n\
          {ty}::try_from(number).map_err(|_| invalid({path:?}, \"integer outside {ty} range\"))\n"
     ));
 }
@@ -672,13 +686,38 @@ mod tests {
                     roundtrip(out, id, &json!(f64::from(f32::MAX)));
                     roundtrip(out, id, &json!(f64::from(f32::MIN)));
                     roundtrip(out, id, &json!(f64::from(f32::MIN_POSITIVE)));
+                    roundtrip(out, id, &json!(f64::from(f32::from_bits(1))));
                     reject(out, id, &json!(1e39));
                     reject(out, id, &json!(-1e39));
                     reject(out, id, &json!(1e-100));
+                    reject_token(out, id, "1e-50");
+                    reject_token(out, id, "-1e-50");
                 } else {
                     roundtrip(out, id, &json!(f64::MAX));
                     roundtrip(out, id, &json!(f64::MIN));
                     roundtrip(out, id, &json!(f64::MIN_POSITIVE));
+                    roundtrip(out, id, &json!(f64::from_bits(1)));
+                }
+                for token in [
+                    "1e-999",
+                    "-1e-999",
+                    "0.0000000001e-999",
+                    "1e-10000000000000000000000000000000000000000",
+                    "1e999",
+                    "-1e999",
+                ] {
+                    reject_token(out, id, token);
+                }
+                for token in [
+                    "-0",
+                    "0.000",
+                    "-0.000e-999",
+                    "0e9999999999999999999999999999999999999999",
+                ] {
+                    out.push_str(&format!(
+                        "let zero = serde_json::from_str::<Value>({token:?}).unwrap();\n\
+                         assert_eq!(encode_{id}(&decode_{id}(&zero).unwrap()).unwrap().as_f64(), Some(0.0));\n"
+                    ));
                 }
                 return;
             }
@@ -689,5 +728,98 @@ mod tests {
         reject(out, id, &above);
         reject(out, id, &json!(1.5));
         reject(out, id, &json!(true));
+        integer_token_checks(out, id, &low, &high);
+    }
+
+    fn accept_integer_token(out: &mut String, id: SchemaId, token: &str, expected: &str) {
+        out.push_str(&format!(
+            "let input = serde_json::from_str::<Value>({token:?}).unwrap();\n\
+             let expected = serde_json::from_str::<Value>({expected:?}).unwrap();\n\
+             assert_eq!(encode_{id}(&decode_{id}(&input).unwrap()).unwrap(), expected, \"integral token {{}}\", {token:?});\n"
+        ));
+    }
+
+    fn reject_token(out: &mut String, id: SchemaId, token: &str) {
+        out.push_str(&format!(
+            "assert!(decode_{id}(&serde_json::from_str::<Value>({token:?}).unwrap()).is_err(), \"invalid numeric token {{}}\", {token:?});\n"
+        ));
+    }
+
+    fn integer_token_checks(out: &mut String, id: SchemaId, low: &Value, high: &Value) {
+        let low: i128 = low.to_string().parse().unwrap();
+        let high: i128 = high.to_string().parse().unwrap();
+        for boundary in [low, high] {
+            let expected = boundary.to_string();
+            for token in [
+                format!("{expected}.0"),
+                format!("{expected}.000e+0"),
+                format!("{expected}e0"),
+                format!("{expected}e+0000000000000000000"),
+            ] {
+                accept_integer_token(out, id, &token, &expected);
+            }
+            if boundary != 0 {
+                for token in [
+                    format!("{expected}0e-1"),
+                    format!("{expected}00000e-5"),
+                    format!("{expected}{}e-100", "0".repeat(100)),
+                ] {
+                    accept_integer_token(out, id, &token, &expected);
+                }
+                let (sign, unsigned) = expected
+                    .strip_prefix('-')
+                    .map_or(("", expected.as_str()), |unsigned| ("-", unsigned));
+                let mut chars = unsigned.chars();
+                let first = chars.next().unwrap();
+                let remaining = chars.as_str();
+                let token = format!("{sign}{first}.{remaining}0E+{}", remaining.len());
+                accept_integer_token(out, id, &token, &expected);
+            }
+            reject_token(
+                out,
+                id,
+                &format!("{expected}.00000000000000000000000000001"),
+            );
+        }
+        for outside in [low - 1, high + 1] {
+            for token in [
+                outside.to_string(),
+                format!("{outside}.0"),
+                format!("{outside}e0"),
+                format!("{outside}0e-1"),
+            ] {
+                reject_token(out, id, &token);
+            }
+        }
+        for token in [
+            "-0",
+            "-0.0",
+            "0e+9999999999999999999999999999999999999999",
+            "-0.000e-999999999999999999999999999999999999999",
+        ] {
+            accept_integer_token(out, id, token, "0");
+        }
+        for token in [
+            "1e2",
+            "1.00e2",
+            "1000e-1",
+            "0.1e3",
+            "1e+000000000000000000000000000000000002",
+        ] {
+            accept_integer_token(out, id, token, "100");
+        }
+        accept_integer_token(out, id, &format!("1{}e-98", "0".repeat(100)), "100");
+        accept_integer_token(out, id, &format!("0.{}1e101", "0".repeat(100)), "1");
+        for token in [
+            "1.5",
+            "-0.000000000000000000000000000000001",
+            "10000000000000000000000000000000000000001e-38",
+            "1e-999",
+            "1e999999999999999999999999999999999999999999999999999999",
+            "1e-999999999999999999999999999999999999999999999999999999",
+            "-1e999999999999999999999999999999999999999999999999999999",
+        ] {
+            reject_token(out, id, token);
+        }
     }
 }

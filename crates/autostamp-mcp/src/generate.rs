@@ -100,7 +100,7 @@ doctest = false
 [dependencies]
 http = "1"
 serde = "1"
-serde_json = {{ version = "1", features = ["float_roundtrip"] }}
+serde_json = {{ version = "1", features = ["arbitrary_precision", "float_roundtrip", "raw_value"] }}
 wit-bindgen = "0.41"
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]

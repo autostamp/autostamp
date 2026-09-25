@@ -1,6 +1,5 @@
-use std::{collections::BTreeSet, fmt};
+use std::collections::BTreeSet;
 
-use serde::de::{self, Deserialize, Deserializer, MapAccess, SeqAccess, Visitor};
 use serde_json::{Map, Value};
 
 use crate::{
@@ -47,9 +46,9 @@ impl Catalog {
 /// Any pagination cursor (including an empty string), duplicate tool names, duplicate JSON keys,
 /// unsupported schemas and tools requiring task execution are errors.
 pub fn parse_catalog(json: &str) -> Result<Catalog, Error> {
-    let value: UniqueValue = serde_json::from_str(json)
+    let value = crate::runtime::wire::parse_value(json)
         .map_err(|err| Error::new(None, "", format!("invalid catalog JSON: {err}")))?;
-    from_json_value(value.0)
+    from_json_value(value)
 }
 
 /// Validate an already parsed complete `tools/list` result.
@@ -334,62 +333,4 @@ fn known_keys(
         }
     }
     Ok(())
-}
-
-struct UniqueValue(Value);
-
-impl<'de> Deserialize<'de> for UniqueValue {
-    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
-        struct JsonVisitor;
-        impl<'de> Visitor<'de> for JsonVisitor {
-            type Value = UniqueValue;
-
-            fn expecting(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-                f.write_str("JSON without duplicate object keys")
-            }
-
-            fn visit_bool<E: de::Error>(self, value: bool) -> Result<Self::Value, E> {
-                Ok(UniqueValue(Value::Bool(value)))
-            }
-            fn visit_i64<E: de::Error>(self, value: i64) -> Result<Self::Value, E> {
-                Ok(UniqueValue(value.into()))
-            }
-            fn visit_u64<E: de::Error>(self, value: u64) -> Result<Self::Value, E> {
-                Ok(UniqueValue(value.into()))
-            }
-            fn visit_f64<E: de::Error>(self, value: f64) -> Result<Self::Value, E> {
-                serde_json::Number::from_f64(value)
-                    .map(|n| UniqueValue(Value::Number(n)))
-                    .ok_or_else(|| E::custom("non-finite JSON number"))
-            }
-            fn visit_str<E: de::Error>(self, value: &str) -> Result<Self::Value, E> {
-                Ok(UniqueValue(Value::String(value.to_owned())))
-            }
-            fn visit_none<E: de::Error>(self) -> Result<Self::Value, E> {
-                Ok(UniqueValue(Value::Null))
-            }
-            fn visit_unit<E: de::Error>(self) -> Result<Self::Value, E> {
-                Ok(UniqueValue(Value::Null))
-            }
-            fn visit_seq<A: SeqAccess<'de>>(self, mut seq: A) -> Result<Self::Value, A::Error> {
-                let mut array = Vec::new();
-                while let Some(UniqueValue(value)) = seq.next_element()? {
-                    array.push(value);
-                }
-                Ok(UniqueValue(Value::Array(array)))
-            }
-            fn visit_map<A: MapAccess<'de>>(self, mut map: A) -> Result<Self::Value, A::Error> {
-                let mut object = Map::new();
-                while let Some((key, UniqueValue(value))) =
-                    map.next_entry::<String, UniqueValue>()?
-                {
-                    if object.insert(key.clone(), value).is_some() {
-                        return Err(de::Error::custom(format!("duplicate JSON key {key:?}")));
-                    }
-                }
-                Ok(UniqueValue(Value::Object(object)))
-            }
-        }
-        deserializer.deserialize_any(JsonVisitor)
-    }
 }

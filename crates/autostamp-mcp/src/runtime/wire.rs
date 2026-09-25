@@ -1,7 +1,7 @@
 //! Bounded, synchronous MCP 2025-11-25 JSON-RPC and SSE decoding.
 //!
 //! This module has no transport, session, reconnect, or method-specific schema logic.
-//! In particular, tool `isError` is ordinary result data. The only dependency is
+//! In particular, tool `isError` is ordinary result data. Its only dependencies are
 //! `serde` and `serde_json`.
 //!
 //! # Consumption contract
@@ -37,8 +37,8 @@
 //! # Ok::<(), autostamp_mcp::runtime::wire::WireError>(())
 //! ```
 
-use serde::de::{self, Deserialize, Deserializer, MapAccess, SeqAccess, Visitor};
-use serde_json::{Map, Number, Value};
+use serde::de::{self, Deserializer, MapAccess, SeqAccess, Visitor};
+use serde_json::{Map, Number, Value, value::RawValue};
 use std::fmt;
 
 /// The resource whose configured byte limit was exceeded.
@@ -129,9 +129,9 @@ impl std::error::Error for WireError {}
 
 /// A non-null MCP request ID.
 ///
-/// Numeric IDs decoded by this module use integer JSON syntax and fit `i64` or
-/// `u64`. Fractional/exponent encodings and larger numbers are rejected rather
-/// than permitting floating-point rounding to correlate distinct IDs.
+/// Numeric IDs are normalized exactly to integers within `i64` or `u64`.
+/// Integral decimal/exponent encodings are accepted without floating-point
+/// rounding; fractional values and integers outside that range are rejected.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum RpcId {
     /// A string ID (including an empty string).
@@ -144,7 +144,13 @@ impl RpcId {
     fn decode(value: Value) -> Result<Self, WireError> {
         match value {
             Value::String(value) => Ok(Self::String(value)),
-            Value::Number(value) if is_integer(&value) => Ok(Self::Number(value)),
+            Value::Number(value) => {
+                rpc_integer(&value)
+                    .map(Self::Number)
+                    .ok_or(WireError::InvalidEnvelope(
+                        "id must be a string or an integer within i64/u64 range",
+                    ))
+            }
             _ => Err(WireError::InvalidEnvelope(
                 "id must be a string or an integer encoded within i64/u64 range",
             )),
@@ -202,8 +208,65 @@ pub enum RpcMessage {
     },
 }
 
-fn is_integer(number: &Number) -> bool {
-    number.is_i64() || number.is_u64()
+fn rpc_integer(number: &Number) -> Option<Number> {
+    let integer = integer(number)?;
+    i64::try_from(integer)
+        .map(Number::from)
+        .or_else(|_| u64::try_from(integer).map(Number::from))
+        .ok()
+}
+
+/// Normalize an integral decimal exactly, with a magnitude bounded by `u64`.
+///
+/// Shared by protocol IDs and generated codecs; target types apply their own
+/// narrower bounds. No intermediate floating-point conversion is permitted.
+pub(crate) fn integer(number: &Number) -> Option<i128> {
+    let text = number.to_string();
+    let (negative, text) = text
+        .strip_prefix('-')
+        .map_or((false, text.as_str()), |text| (true, text));
+    let (mantissa, exponent) = text.split_once(['e', 'E']).unwrap_or((text, "0"));
+    let fraction = mantissa
+        .split_once('.')
+        .map_or(0, |(_, fraction)| fraction.len());
+    let mut digits: Vec<_> = mantissa
+        .bytes()
+        .filter(|byte| *byte != b'.')
+        .skip_while(|byte| *byte == b'0')
+        .collect();
+    if digits.is_empty() {
+        return Some(0);
+    }
+    let exponent = exponent.parse::<i64>().unwrap_or_else(|_| {
+        if exponent.starts_with('-') {
+            i64::MIN
+        } else {
+            i64::MAX
+        }
+    });
+    let shift = exponent.saturating_sub(i64::try_from(fraction).ok()?);
+    if shift < 0 {
+        let removed = usize::try_from(shift.unsigned_abs()).ok()?;
+        let retained = digits.len().checked_sub(removed)?;
+        if digits.get(retained..)?.iter().any(|byte| *byte != b'0') {
+            return None;
+        }
+        digits.truncate(retained);
+    } else {
+        let added = usize::try_from(shift).ok()?;
+        if added > 20_usize.saturating_sub(digits.len()) {
+            return None;
+        }
+        digits.resize(digits.len() + added, b'0');
+    }
+    if digits.len() > 20 {
+        return None;
+    }
+    let magnitude = digits.into_iter().try_fold(0_u64, |value, byte| {
+        value.checked_mul(10)?.checked_add(u64::from(byte - b'0'))
+    })?;
+    let value = i128::from(magnitude);
+    Some(if negative { -value } else { value })
 }
 
 fn object(value: Value, reason: &'static str) -> Result<Map<String, Value>, WireError> {
@@ -218,8 +281,9 @@ fn object(value: Value, reason: &'static str) -> Result<Map<String, Value>, Wire
 /// The bound includes surrounding JSON whitespace. Batches, concatenated JSON,
 /// a JSON BOM, invalid ID types, null/non-object results or parameters, and
 /// conflicting reserved fields are rejected. Integer IDs and codes must fit
-/// `i64`/`u64` and use integer syntax. `serde_json`'s default recursion limit
-/// remains enabled. Unknown extension fields are not method-schema validated.
+/// `i64`/`u64`; integral decimal/exponent spellings are normalized exactly.
+/// Result numbers retain arbitrary precision. Nesting is limited to 128
+/// containers. Unknown extension fields are not method-schema validated.
 pub fn decode_json(body: &[u8], max_body_bytes: usize) -> Result<RpcMessage, WireError> {
     if body.len() > max_body_bytes {
         return Err(WireError::LimitExceeded {
@@ -228,11 +292,10 @@ pub fn decode_json(body: &[u8], max_body_bytes: usize) -> Result<RpcMessage, Wir
         });
     }
     let text = std::str::from_utf8(body).map_err(|_| WireError::InvalidUtf8)?;
-    let UniqueValue(value) =
-        serde_json::from_str(text).map_err(|error: serde_json::Error| WireError::InvalidJson {
-            line: error.line(),
-            column: error.column(),
-        })?;
+    let value = parse_value(text).map_err(|error: serde_json::Error| WireError::InvalidJson {
+        line: error.line(),
+        column: error.column(),
+    })?;
     let mut envelope = object(
         value,
         "expected one object; JSON-RPC batches are not supported",
@@ -277,7 +340,11 @@ pub fn decode_json(body: &[u8], max_body_bytes: usize) -> Result<RpcMessage, Wir
         (None, Some(error)) => {
             let mut error = object(error, "error must be an object")?;
             let code = match error.remove("code") {
-                Some(Value::Number(code)) if is_integer(&code) => code,
+                Some(Value::Number(code)) => {
+                    rpc_integer(&code).ok_or(WireError::InvalidEnvelope(
+                        "error.code must be an integer within i64/u64 range",
+                    ))?
+                }
                 _ => {
                     return Err(WireError::InvalidEnvelope(
                         "error.code must be an integer encoded within i64/u64 range",
@@ -650,59 +717,63 @@ fn increment(count: &mut usize, maximum: usize, limit: Limit) -> Result<(), Wire
     Ok(())
 }
 
-// A Value normally loses duplicate keys before a typed-map codec can see them.
-struct UniqueValue(Value);
+/// Parse real JSON containers separately from arbitrary-precision number tokens.
+///
+/// Borrowed raw children avoid repeatedly copying nested subtrees. Using
+/// deserialize_any for containers would confuse a real object named
+/// `$serde_json::private::Number` with serde_json's internal number transport.
+pub(crate) fn parse_value(text: &str) -> Result<Value, serde_json::Error> {
+    let raw: &RawValue = serde_json::from_str(text)?;
+    parse_raw(raw, 0)
+}
 
-impl<'de> Deserialize<'de> for UniqueValue {
-    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
-        struct JsonVisitor;
-        impl<'de> Visitor<'de> for JsonVisitor {
-            type Value = UniqueValue;
+fn parse_raw(raw: &RawValue, depth: usize) -> Result<Value, serde_json::Error> {
+    struct JsonVisitor {
+        depth: usize,
+    }
 
-            fn expecting(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-                f.write_str("JSON without duplicate object keys")
-            }
+    impl<'de> Visitor<'de> for JsonVisitor {
+        type Value = Value;
 
-            fn visit_bool<E: de::Error>(self, value: bool) -> Result<Self::Value, E> {
-                Ok(UniqueValue(Value::Bool(value)))
-            }
-            fn visit_i64<E: de::Error>(self, value: i64) -> Result<Self::Value, E> {
-                Ok(UniqueValue(value.into()))
-            }
-            fn visit_u64<E: de::Error>(self, value: u64) -> Result<Self::Value, E> {
-                Ok(UniqueValue(value.into()))
-            }
-            fn visit_f64<E: de::Error>(self, value: f64) -> Result<Self::Value, E> {
-                Number::from_f64(value)
-                    .map(|number| UniqueValue(Value::Number(number)))
-                    .ok_or_else(|| E::custom("non-finite JSON number"))
-            }
-            fn visit_str<E: de::Error>(self, value: &str) -> Result<Self::Value, E> {
-                Ok(UniqueValue(Value::String(value.into())))
-            }
-            fn visit_unit<E: de::Error>(self) -> Result<Self::Value, E> {
-                Ok(UniqueValue(Value::Null))
-            }
-            fn visit_seq<A: SeqAccess<'de>>(self, mut seq: A) -> Result<Self::Value, A::Error> {
-                let mut values = Vec::new();
-                while let Some(UniqueValue(value)) = seq.next_element()? {
-                    values.push(value);
-                }
-                Ok(UniqueValue(Value::Array(values)))
-            }
-            fn visit_map<A: MapAccess<'de>>(self, mut map: A) -> Result<Self::Value, A::Error> {
-                let mut values = Map::new();
-                while let Some((key, UniqueValue(value))) =
-                    map.next_entry::<String, UniqueValue>()?
-                {
-                    if values.insert(key, value).is_some() {
-                        return Err(de::Error::custom("duplicate JSON object key"));
-                    }
-                }
-                Ok(UniqueValue(Value::Object(values)))
-            }
+        fn expecting(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+            f.write_str("JSON without duplicate object keys")
         }
-        deserializer.deserialize_any(JsonVisitor)
+
+        fn visit_seq<A: SeqAccess<'de>>(self, mut seq: A) -> Result<Value, A::Error> {
+            let mut values = Vec::new();
+            while let Some(raw) = seq.next_element::<&RawValue>()? {
+                values.push(parse_raw(raw, self.depth + 1).map_err(de::Error::custom)?);
+            }
+            Ok(Value::Array(values))
+        }
+
+        fn visit_map<A: MapAccess<'de>>(self, mut map: A) -> Result<Value, A::Error> {
+            let mut values = Map::new();
+            while let Some((key, raw)) = map.next_entry::<String, &RawValue>()? {
+                if values.contains_key(&key) {
+                    return Err(de::Error::custom("duplicate JSON object key"));
+                }
+                values.insert(
+                    key,
+                    parse_raw(raw, self.depth + 1).map_err(de::Error::custom)?,
+                );
+            }
+            Ok(Value::Object(values))
+        }
+    }
+
+    let text = raw.get().trim();
+    let container = matches!(text.as_bytes().first(), Some(b'{' | b'['));
+    if container && depth >= 128 {
+        return Err(de::Error::custom(
+            "JSON nesting limit exceeded (128 containers)",
+        ));
+    }
+    let mut decoder = serde_json::Deserializer::from_str(text);
+    match text.as_bytes().first() {
+        Some(b'{') => decoder.deserialize_map(JsonVisitor { depth }),
+        Some(b'[') => decoder.deserialize_seq(JsonVisitor { depth }),
+        _ => serde_json::from_str(text),
     }
 }
 
@@ -727,6 +798,111 @@ mod tests {
                 Err(WireError::InvalidJson { .. })
             ));
         }
+    }
+
+    #[test]
+    fn result_numbers_and_private_marker_objects_remain_lossless() {
+        let RpcMessage::Success { result, .. } = rpc(
+            r#"{"jsonrpc":"2.0","id":1,"result":{"_meta":{"large":18446744073709551617,"tiny":1e-999,"literal":{"$serde_json::private::Number":"7"},"raw":{"$serde_json::private::RawValue":"123"}}}}"#,
+        ) else {
+            panic!()
+        };
+        let result = Value::Object(result);
+        assert_eq!(
+            result.pointer("/_meta/large").unwrap().to_string(),
+            "18446744073709551617"
+        );
+        assert_eq!(result.pointer("/_meta/tiny").unwrap().to_string(), "1e-999");
+        assert_eq!(
+            result
+                .pointer("/_meta/literal/$serde_json::private::Number")
+                .and_then(Value::as_str),
+            Some("7")
+        );
+        assert_eq!(
+            result
+                .pointer("/_meta/raw/$serde_json::private::RawValue")
+                .and_then(Value::as_str),
+            Some("123")
+        );
+        assert!(
+            parse_value(
+                r#"{"$serde_json::private::Number":"1","$serde_json::private::Number":"2"}"#
+            )
+            .is_err()
+        );
+        assert!(
+            parse_value(" \n {\"$serde_json::private::Number\":\"7\"} \t")
+                .unwrap()
+                .is_object()
+        );
+    }
+
+    #[test]
+    fn raw_json_nesting_is_bounded_at_128_containers() {
+        for depth in [127, 128] {
+            let text = format!("{}0{}", "[".repeat(depth), "]".repeat(depth));
+            assert!(parse_value(&text).is_ok(), "depth {depth}");
+        }
+        for depth in [129, 1024] {
+            let text = format!("{}0{}", "[".repeat(depth), "]".repeat(depth));
+            assert!(parse_value(&text).is_err(), "depth {depth}");
+        }
+    }
+
+    #[test]
+    fn integer_normalization_is_exact_without_float_rounding() {
+        for (text, expected) in [
+            ("-128.0", -128),
+            ("1e2", 100),
+            ("-0", 0),
+            ("0e999999999999999999999999", 0),
+            ("1.2300e2", 123),
+            ("0.000001e6", 1),
+            ("18446744073709551615.000", i128::from(u64::MAX)),
+            ("-9223372036854775808.0", i128::from(i64::MIN)),
+        ] {
+            assert_eq!(
+                integer(&text.parse::<Number>().unwrap()),
+                Some(expected),
+                "{text}"
+            );
+        }
+        for text in [
+            "1.0000000000000000000001",
+            "1e-99999999999999999999",
+            "1e99999999999999999999",
+            "18446744073709551616.0",
+            "18446744073709551615.1",
+            "100000000000000000000000000000000001e-17",
+        ] {
+            assert_eq!(integer(&text.parse::<Number>().unwrap()), None, "{text}");
+        }
+    }
+
+    #[test]
+    fn rpc_ids_and_codes_accept_integral_decimal_and_exponent_forms() {
+        for id in ["1", "1.0", "1e0", "0.01e2"] {
+            let message = rpc(&format!(r#"{{"jsonrpc":"2.0","id":{id},"result":{{}}}}"#));
+            let mut matcher = ResponseMatcher::new(Some(RpcId::Number(1.into())));
+            assert!(matcher.observe(&message).unwrap());
+        }
+        let mut matcher = ResponseMatcher::new(Some(RpcId::Number(0.into())));
+        assert!(
+            matcher
+                .observe(&rpc(r#"{"jsonrpc":"2.0","id":-0.0,"result":{}}"#))
+                .unwrap()
+        );
+        assert!(matches!(
+            rpc(r#"{"jsonrpc":"2.0","id":1.0,"error":{"code":-3.2602e4,"message":"invalid"}}"#),
+            RpcMessage::Error { error: RpcError { code, .. }, .. } if code == Number::from(-32602)
+        ));
+        assert!(decode_json(br#"{"jsonrpc":"2.0","id":1.5,"result":{}}"#, 1024).is_err());
+        let mut matcher = ResponseMatcher::new(Some(RpcId::Number(1.into())));
+        assert_eq!(
+            matcher.observe(&rpc(r#"{"jsonrpc":"2.0","id":"1","result":{}}"#)),
+            Err(WireError::MismatchedResponseId)
+        );
     }
 
     fn limits() -> SseLimits {
@@ -875,8 +1051,8 @@ mod tests {
             r#"{"jsonrpc":"2.0","id":[],"result":{}}"#,
             r#"{"jsonrpc":"2.0","id":{},"result":{}}"#,
             r#"{"jsonrpc":"2.0","id":0.5,"result":{}}"#,
-            r#"{"jsonrpc":"2.0","id":1.0,"result":{}}"#,
-            r#"{"jsonrpc":"2.0","id":1e0,"result":{}}"#,
+            r#"{"jsonrpc":"2.0","id":1.1,"result":{}}"#,
+            r#"{"jsonrpc":"2.0","id":1e-1,"result":{}}"#,
             r#"{"jsonrpc":"2.0","id":18446744073709551616,"result":{}}"#,
             r#"{"jsonrpc":"2.0","result":{}}"#,
             r#"{"jsonrpc":"2.0","id":0}"#,

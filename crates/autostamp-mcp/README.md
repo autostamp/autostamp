@@ -134,6 +134,9 @@ When **`outputSchema` is absent**, the success value is
 `type result-envelope-json = string`: the entire standard MCP `CallToolResult`
 JSON envelope, not just its text content. This is an explicit API contract, not
 a fallback for unsupported schemas.
+Envelope numbers retain their exact values, including metadata outside Rust's
+numeric ranges; the runtime never rounds large integers or underflows tiny
+metadata numbers to zero. JSON object order and whitespace may be normalized.
 
 When **`outputSchema` is present**, the success value is a generated result
 record with `structured-content` (the typed schema) and `envelope-json` (the same
@@ -183,9 +186,14 @@ The default and only accepted explicit dialect is JSON Schema **2020-12**
 | Acyclic local `$ref` into `$defs` | Alias to a shared resolved schema type |
 
 Numeric formats are explicit representation hints. Unknown or mismatched numeric
-formats fail. Arbitrary-precision JSON integers/numbers cannot be represented;
-codecs reject out-of-range integer conversions, non-finite floats
-and floating-point overflow. Schema `minimum`/`maximum` do not silently select a
+formats fail. Numeric JSON tokens remain lossless until typed conversion.
+Integer schemas accept exact integral decimal/exponent spellings, such as
+`-128.0`, `1e2`, and `-0`; conversion never rounds through floating point.
+Codecs reject fractional integers, out-of-range integer conversions, non-finite
+floats, floating-point overflow, and nonzero numbers that underflow to zero.
+Typed numeric results remain bounded by their WIT representations; arbitrary
+precision is used to preserve input tokens, not to extend those ranges.
+Schema `minimum`/`maximum` do not silently select a
 different representation or substitute for conversion checks.
 
 `required` must name explicitly declared `properties`; otherwise parsing fails
@@ -237,7 +245,7 @@ They use explicit structural conversion, not serde-derived records, so an
 optional nullable field never loses its missing/null distinction. References to
 nullable schemas retain that distinction too. Every supported schema has an
 encoder and decoder, including unused definitions and closed empty objects.
-Floating-point overflow, f32 underflow to zero, and non-finite values fail
+Floating-point overflow, f32/f64 underflow to zero, and non-finite values fail
 explicitly. These codecs are not a full JSON Schema constraint validator.
 
 ### Rejected structures

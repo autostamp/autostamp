@@ -14,6 +14,7 @@
         "properties": {
           "mode": { "type": "string", "enum": ["green", "red"] },
           "tiny": { "type": "integer", "format": "int8" },
+          "double": { "type": "number", "format": "float64" },
           "empty": { "type": "object", "additionalProperties": false },
           "nullable": { "$ref": "#/$defs/choice" },
           "map": {
@@ -43,6 +44,7 @@
         "properties": {
           "mode": { "type": "string", "enum": ["green", "red"] },
           "tiny": { "type": "integer", "format": "int8" },
+          "double": { "type": "number", "format": "float64" },
           "empty": { "type": "object", "additionalProperties": false },
           "nullable": { "$ref": "#/$defs/choice" },
           "map": {

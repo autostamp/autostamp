@@ -26,7 +26,8 @@ impl Body for WasiBody {
             let Some(frame) = self.0.frame().await else {
                 return Ok(None);
             };
-            let frame = frame.map_err(|_| Error::Transport("HTTP response body interrupted".into()))?;
+            let frame =
+                frame.map_err(|_| Error::Transport("HTTP response body interrupted".into()))?;
             if let Ok(bytes) = frame.into_data() {
                 return Ok(Some(bytes.to_vec()));
             }

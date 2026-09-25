@@ -22,7 +22,7 @@ ROOT = Path(__file__).resolve().parents[3]
 CRATE = ROOT / "crates/autostamp-mcp"
 WASMTIME = os.environ.get("WASMTIME", "wasmtime")
 BASE = (
-    '{mode: green, tiny: -128, empty: some(empty), nullable: none, map: some([("a", 32767)]), '
+    '{mode: green, tiny: -128, double: some(1.5), empty: some(empty), nullable: none, map: some([("a", 32767)]), '
     'mixed: some({fixed: some("value"), additional-properties: [("extra", true)]}), '
     'floats: some([1.5]), unsigned: some(18446744073709551615), '
     'array: some([none, some("text")])}'
@@ -30,6 +30,7 @@ BASE = (
 EXPECTED = {
     "mode": "green",
     "tiny": -128,
+    "double": 1.5,
     "empty": {},
     "map": {"a": 32767},
     "mixed": {"fixed": "value", "extra": True},
@@ -173,11 +174,12 @@ class Handler(BaseHTTPRequestHandler):
                 "serverInfo": {"name": "fixture", "version": "1"},
             }
             session = "bad session" if scenario == "session-id" else "session-fixture"
-            self.reply(
-                200,
-                json.dumps({"jsonrpc": "2.0", "id": message["id"], "result": result}).encode(),
-                headers=(("MCP-Session-Id", session),),
-            )
+            data = json.dumps({"jsonrpc": "2.0", "id": message["id"], "result": result}).encode()
+            if scenario == "rpc-id-decimal":
+                data = data.replace(b'"id": 1', b'"id": 1.0')
+            elif scenario == "rpc-id-exponent":
+                data = data.replace(b'"id": 1', b'"id": 1e0')
+            self.reply(200, data, headers=(("MCP-Session-Id", session),))
             return
         if method in ("notifications/initialized", "server-response"):
             if method == "server-response":
@@ -226,8 +228,18 @@ class Handler(BaseHTTPRequestHandler):
         result = {
             "content": [{"type": "text", "text": "kept content"}],
             "structuredContent": structured,
-            "_meta": {"trace": "kept metadata"},
+            "_meta": {
+                "trace": "kept metadata",
+                "large": "RAW_LARGE",
+                "tiny": "RAW_TINY",
+                "literal": {"$serde_json::private::Number": "7"},
+            },
         }
+        if scenario in ("depth-maximum", "depth-overflow"):
+            nested = 0
+            for _ in range(125 if scenario == "depth-maximum" else 126):
+                nested = [nested]
+            result["_meta"]["nested"] = nested
         if scenario == "tool-error":
             result["isError"] = True
             result["structuredContent"] = {"invalid": "success schema must not be decoded"}
@@ -242,6 +254,30 @@ class Handler(BaseHTTPRequestHandler):
         if scenario == "wrong-id":
             rpc["id"] = "wrong"
         data = json.dumps(rpc, ensure_ascii=False).encode()
+        data = data.replace(b'"RAW_LARGE"', b"18446744073709551617").replace(b'"RAW_TINY"', b"1e-999")
+        numeric_spellings = {
+            "integral-decimal": (b'"tiny": -128', b'"tiny": -128.0'),
+            "integral-exponent": (b'"tiny": -128', b'"tiny": 1e2'),
+            "integral-negative-zero": (b'"tiny": -128', b'"tiny": -0'),
+            "integral-u64": (b'"unsigned": 18446744073709551615', b'"unsigned": 18446744073709551615.0'),
+            "integral-u64-exponent": (b'"unsigned": 18446744073709551615', b'"unsigned": 18446744073709551615e0'),
+            "integer-rounded-fraction": (b'"tiny": -128', b'"tiny": -127.9999999999999999999999999999'),
+            "u64-rounded-fraction": (b'"unsigned": 18446744073709551615', b'"unsigned": 18446744073709551615.1'),
+            "integer-exponent-overflow": (b'"tiny": -128', b'"tiny": 1.28e2'),
+            "float64-underflow": (b'"double": 1.5', b'"double": 1e-999'),
+            "float64-overflow": (b'"double": 1.5', b'"double": 1e999'),
+            "float32-underflow": (b'"floats": [1.5]', b'"floats": [1e-999]'),
+            "float32-cast-underflow": (b'"floats": [1.5]', b'"floats": [1e-90]'),
+            "zero-exponent": (b'"double": 1.5', b'"double": 0e-999'),
+            "rpc-id-decimal": (b'"id": 2', b'"id": 2.0'),
+            "rpc-id-exponent": (b'"id": 2', b'"id": 2e0'),
+            "rpc-id-fractional": (b'"id": 2', b'"id": 2.5'),
+            "rpc-id-string": (b'"id": 2', b'"id": "2"'),
+        }
+        if scenario in numeric_spellings:
+            old, new = numeric_spellings[scenario]
+            assert old in data, (scenario, data)
+            data = data.replace(old, new)
         if scenario == "duplicate-wire-key":
             data = data.replace(b'"tiny": -128', b'"tiny": 1, "tiny": 2')
         if scenario == "body-limit":
@@ -376,11 +412,28 @@ def main():
             output = invoke(anonymous_binary, "json")
             assert STATE.calls[0]["arguments"] == EXPECTED, STATE.calls
             assert "structured-content:" in output and "kept metadata" in output
-            invoke(anonymous_binary, "sse")
+            assert "18446744073709551617" in output and "1e-999" in output
+            assert "$serde_json::private::Number" in output
+            output = invoke(anonymous_binary, "sse")
+            assert "18446744073709551617" in output and "1e-999" in output
             invoke(base / "auth.cwasm", "json", auth=True)
             invoke(base / "auth.cwasm", "sse", auth=True)
             output = invoke(anonymous_binary, "json", "envelope()")
             assert "kept content" in output and "kept metadata" in output
+            assert "18446744073709551617" in output and "1e-999" in output
+            for scenario, typed in [
+                ("integral-decimal", "tiny: -128"),
+                ("integral-exponent", "tiny: 100"),
+                ("integral-negative-zero", "tiny: 0"),
+                ("integral-u64", "unsigned: some(18446744073709551615)"),
+                ("integral-u64-exponent", "unsigned: some(18446744073709551615)"),
+                ("zero-exponent", "double: some(0)"),
+                ("rpc-id-decimal", "tiny: -128"),
+                ("rpc-id-exponent", "tiny: -128"),
+                ("depth-maximum", "tiny: -128"),
+            ]:
+                output = invoke(anonymous_binary, scenario)
+                assert typed in output, (scenario, output)
             for wave, value in [("none", "missing"), ("some(none)", None), ("some(some(yes))", "yes")]:
                 output = invoke(anonymous_binary, "json", f"typed({BASE.replace('nullable: none', 'nullable: ' + wave)})")
                 arguments = STATE.calls[0]["arguments"]
@@ -397,12 +450,16 @@ def main():
                 "missing-required", "wrong-type", "integer-overflow", "integer-underflow",
                 "fractional-integer", "enum", "closed-object", "nonnull", "map-type",
                 "map-range", "mixed-type", "float-range", "u64-range", "u64-negative",
-                "missing-structured",
+                "missing-structured", "integer-rounded-fraction", "u64-rounded-fraction",
+                "integer-exponent-overflow", "float64-underflow", "float64-overflow", "float32-underflow",
+                "float32-cast-underflow",
             ]:
                 invoke(anonymous_binary, scenario, expected="err(result-decoding(")
             for scenario in [
                 "wrong-id", "expired", "truncated", "body-limit", "event-limit",
                 "sse-body-limit", "duplicate-wire-key", "envelope-invalid",
+                "rpc-id-fractional", "rpc-id-string",
+                "depth-overflow",
             ]:
                 invoke(anonymous_binary, scenario, expected="err(protocol(")
             output = invoke(base / "auth.cwasm", "rpc-error", expected="err(protocol(", auth=True)
@@ -410,6 +467,7 @@ def main():
             assert "-32602" in output and "field" in output
             output = invoke(anonymous_binary, "tool-error", expected="err(tool-execution(")
             assert "kept metadata" in output
+            assert "18446744073709551617" in output and "1e-999" in output
             for scenario in ["timeout", "interrupted", "delete-error"]:
                 invoke(anonymous_binary, scenario, expected="err(transport(")
             for scenario in ["version", "capability", "session-id", "ack-status", "ack-body"]:

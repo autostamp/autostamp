@@ -17,7 +17,7 @@ heck = "0.5"
 http = "1"
 semver = "1"
 serde = "1"
-serde_json = { version = "1", features = ["float_roundtrip"] }
+serde_json = { version = "1", features = ["arbitrary_precision", "float_roundtrip", "raw_value"] }
 wit-parser = "0.227"
 
 [dev-dependencies]
