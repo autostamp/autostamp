@@ -92,6 +92,8 @@ names fail; normalized collisions get `-v2`, `-v3`, etc., with WIT and Rust
 binding namespaces checked separately. Support names are reserved. Original tool
 names, field keys and enum values remain distinct in the internal model and WIT
 documentation. Descriptions are emitted only as safely prefixed doc lines.
+Control, bidi, and Unicode-discouraged codepoints rejected by the WIT parser
+are escaped literally in documentation; valid multilingual text is preserved.
 
 Package identities use `namespace:name[@version]` with validated lowercase
 kebab-case segments and SemVer versions. A version is recommended. WIT/Rust

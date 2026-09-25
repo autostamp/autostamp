@@ -517,6 +517,36 @@ fn every_source_description_line_is_documentation_not_code() {
 }
 
 #[test]
+fn discouraged_unicode_doc_codepoints_are_escaped_without_losing_multilingual_text() {
+    let multilingual = "Français Ελληνικά 日本語 العربية";
+    for codepoint in [
+        '\u{0149}', '\u{0673}', '\u{0f77}', '\u{0f79}', '\u{17a3}', '\u{17a4}', '\u{17b4}',
+        '\u{17b5}',
+    ] {
+        let text = format!("{multilingual} {codepoint}");
+        let wit = emit(json!({"tools":[{
+            "name":"ping",
+            "description":text,
+            "inputSchema":{
+                "type":"object","additionalProperties":false,
+                "title":text,"description":text
+            },
+            "outputSchema":{
+                "type":"object","additionalProperties":false,
+                "properties":{"value":{"type":"string","title":text,"description":text}}
+            }
+        }]}));
+        assert!(
+            !wit.contains(codepoint),
+            "unescaped codepoint {codepoint:?}"
+        );
+        assert!(wit.contains(&codepoint.escape_default().to_string()));
+        assert_eq!(wit.matches(multilingual).count(), 5);
+        assert!(wit.contains("ping: func()"));
+    }
+}
+
+#[test]
 fn rejected_structural_keywords_never_weaken_the_schema() {
     for keyword in [
         "allOf",

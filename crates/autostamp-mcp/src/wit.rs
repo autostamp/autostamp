@@ -287,7 +287,19 @@ fn docs(out: &mut String, indent: &str, text: &str) {
         out.push_str(indent);
         out.push_str("/// ");
         for c in line.chars() {
-            if c.is_control() || matches!(c, '\u{202a}'..='\u{202e}' | '\u{2066}'..='\u{2069}') {
+            if c.is_control()
+                || matches!(
+                    c,
+                    '\u{202a}'..='\u{202e}'
+                        | '\u{2066}'..='\u{2069}'
+                        | '\u{0149}'
+                        | '\u{0673}'
+                        | '\u{0f77}'
+                        | '\u{0f79}'
+                        | '\u{17a3}'..='\u{17a4}'
+                        | '\u{17b4}'..='\u{17b5}'
+                )
+            {
                 out.extend(c.escape_default());
             } else {
                 out.push(c);
