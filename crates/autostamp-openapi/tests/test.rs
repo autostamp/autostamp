@@ -1,6 +1,6 @@
-//! Integration tests for `openapi-bindgen`.
+//! Integration tests for `autostamp-openapi`.
 
-use openapi_bindgen::{Generated, NoOperations, PackageName, generate, parse_openapi};
+use autostamp_openapi::{Generated, NoOperations, PackageName, generate, parse_openapi};
 
 /// Join every generated Rust source file into one string. The generator splits its output
 /// across a `lib.rs` crate root plus one `iface_*.rs` module per interface; assertions that
@@ -999,7 +999,7 @@ fn splits_rust_into_lib_and_interface_modules() {
     let generated = generate(&spec, &package, None).unwrap();
 
     // `lib.rs` is always the first emitted file.
-    let lib = &generated.rust[0];
+    let lib = generated.rust.first().expect("lib.rs should be emitted");
     assert_eq!(lib.path, "lib.rs");
 
     // It carries the shared crate scaffolding …
@@ -1072,7 +1072,8 @@ fn emits_one_module_file_per_interface() {
     // lib.rs plus one module per interface.
     assert_eq!(generated.interfaces.len(), 2);
     assert_eq!(generated.rust.len(), generated.interfaces.len() + 1);
-    assert_eq!(generated.rust[0].path, "lib.rs");
+    let lib = generated.rust.first().expect("lib.rs should be emitted");
+    assert_eq!(lib.path, "lib.rs");
 
     for iface in &generated.interfaces {
         let module_path = format!("iface_{iface}.rs");
@@ -1082,11 +1083,9 @@ fn emits_one_module_file_per_interface() {
             generated.rust.iter().map(|f| &f.path).collect::<Vec<_>>()
         );
         assert!(
-            generated.rust[0]
-                .contents
-                .contains(&format!("mod iface_{iface};")),
+            lib.contents.contains(&format!("mod iface_{iface};")),
             "lib.rs should declare `mod iface_{iface};`:\n{}",
-            generated.rust[0].contents
+            lib.contents
         );
     }
 

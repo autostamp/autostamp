@@ -86,10 +86,10 @@ the built-in token to prevent loops — so CI would never run on the bot's PR. T
 therefore opens the PR with `GITHUB_TOKEN` and then **closes and reopens it with a PAT**
 (`REGEN_PAT`); the `reopened` activity, performed as a real user, triggers `ci.yaml`.
 
-**What actually gates the publish.** `ci.yaml` only builds and tests the *generator* crate —
-the repo root is a single crate, not a workspace, so the generated component crates are never
-compiled there. The substantive component gate is the pipeline's own `just build` step (a
-per-component `wasm32-wasip2` compile); the reopened-PR CI provides the visible green check
+**What actually gates the publish.** `ci.yaml` builds and tests the *generator* workspace
+under `crates/`. Generated packages in `components/` are excluded from that workspace and
+are not compiled by these native checks. The substantive component gate is the pipeline's
+own `just build` step (a per-component `wasm32-wasip2` compile); the reopened-PR CI provides the visible green check
 and the generator's cross-platform validation.
 
 **Manual dispatch inputs.** `bump_level` (`patch`/`minor`/`major`/`X.Y.Z`, default `minor`),

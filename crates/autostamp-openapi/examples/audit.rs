@@ -10,15 +10,15 @@
 //! authoritative (they carry each field's request location), so broken-path detection is exact.
 //!
 //! ```sh
-//! cargo run --example audit -- vendor/schemas/APIs/github.com/api.github.com/1.1.4/openapi.yaml
-//! cargo run --example audit -- vendor/schemas/APIs/stripe.com vendor/schemas/APIs/kubernetes.io
+//! cargo run -p autostamp-openapi --example audit -- vendor/schemas/APIs/github.com/api.github.com/1.1.4/openapi.yaml
+//! cargo run -p autostamp-openapi --example audit -- vendor/schemas/APIs/stripe.com vendor/schemas/APIs/kubernetes.io
 //! ```
 
 use std::collections::{BTreeSet, HashMap};
 use std::path::{Path, PathBuf};
 
 use anyhow::{Result, bail};
-use openapi_bindgen::{NoOperations, PackageName, generate};
+use autostamp_openapi::{NoOperations, PackageName, generate};
 use openapiv3::{OpenAPI, Parameter, ReferenceOr, RequestBody, Schema, SchemaKind, Type};
 
 #[path = "common/spec_loader.rs"]

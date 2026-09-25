@@ -7,7 +7,7 @@
 use std::path::Path;
 
 use anyhow::{Context, Result};
-use openapi_bindgen::from_json_value;
+use autostamp_openapi::from_json_value;
 use openapiv3::OpenAPI;
 
 /// Read and parse an OpenAPI document, choosing JSON or YAML by file extension. Accepts

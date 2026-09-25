@@ -1,7 +1,7 @@
-<h1 align="center">autostamp-openapi</h1>
+<h1 align="center">autostamp</h1>
 <div align="center">
   <strong>
-    Convert OpenAPI schema definitions to WebAssembly Components
+    Generate WebAssembly component libraries from API and tool definitions
   </strong>
 </div>
 
@@ -26,6 +26,18 @@ achieve with automation here. But those SDKs currently don't exist, and we belie
 - [Building and publishing](./docs/building-and-publishing.md)
 - [Authentication](./docs/auth.md)
 - [Known limitations](./docs/known-limitations.md)
+
+## Workspace
+
+The two generators live under `crates/`:
+
+- [`autostamp-openapi`](./crates/autostamp-openapi/): OpenAPI 2 and 3 to component
+  source crates, previously named `openapi-bindgen`.
+- [`autostamp-mcp`](./crates/autostamp-mcp/): MCP tools to components (in development).
+
+Generated provider crates in `components/` are standalone packages, deliberately
+excluded from the workspace. `just test` checks the generators; `just build`
+regenerates and builds the OpenAPI component corpus.
 
 ## Contributing
 Want to join us? Check out our ["Contributing" guide][contributing] and take a

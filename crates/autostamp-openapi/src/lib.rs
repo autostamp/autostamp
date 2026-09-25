@@ -23,7 +23,7 @@
 //! # Examples
 //!
 //! ```no_run
-//! use openapi_bindgen::{PackageName, generate, parse_openapi};
+//! use autostamp_openapi::{PackageName, generate, parse_openapi};
 //!
 //! # fn main() -> anyhow::Result<()> {
 //! let json = std::fs::read_to_string("openapi.json")?;

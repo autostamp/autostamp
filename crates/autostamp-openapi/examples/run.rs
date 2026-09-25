@@ -1,4 +1,4 @@
-//! Dev helper: run the `openapi-bindgen` library natively and write a buildable component crate.
+//! Dev helper: run the `autostamp-openapi` library natively and write a buildable component crate.
 //!
 //! Reads an OpenAPI 2 (Swagger) or 3 document, generates the WIT + Rust bindings, and lays
 //! them out as a ready-to-build component crate in the output directory:
@@ -18,15 +18,15 @@
 //! deps and compiles each crate for `wasm32-wasip2`.
 //!
 //! ```sh
-//! cargo run --example run -- <openapi-path> <out-dir> <package>
+//! cargo run -p autostamp-openapi --example run -- <openapi-path> <out-dir> <package>
 //! # e.g.
-//! cargo run --example run -- vendor/schemas/APIs/svix.com/1.4/openapi.yaml components/svix autostamp:svix@0.1.0
+//! cargo run -p autostamp-openapi --example run -- vendor/schemas/APIs/svix.com/1.4/openapi.yaml components/svix autostamp:svix@0.1.0
 //! ```
 
 use std::path::Path;
 
 use anyhow::{Context, Result, bail};
-use openapi_bindgen::{NoOperations, PackageName, generate};
+use autostamp_openapi::{NoOperations, PackageName, generate};
 
 #[path = "common/spec_loader.rs"]
 mod spec_loader;

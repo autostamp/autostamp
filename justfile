@@ -14,8 +14,8 @@ build name="": (gen name)
     rustup target list --installed 2>/dev/null | grep -q wasm32-wasip2 || { echo "missing target: rustup target add wasm32-wasip2"; exit 1; }
     # gen already regenerated the component crates (via the recipe dependency).
     # Build the generator itself as a component in the default target dir.
-    cargo build -p openapi-bindgen --target wasm32-wasip2 --release || exit 1
-    echo "component: target/wasm32-wasip2/release/openapi_bindgen.wasm"
+    cargo build -p autostamp-openapi --lib --target wasm32-wasip2 --release || exit 1
+    echo "component: target/wasm32-wasip2/release/autostamp_openapi.wasm"
     # Build the generated component crates. A shared target dir lets the common deps
     # (wit-bindgen, serde_json, ...) compile once across all ~100 crates instead of once per crate.
     export CARGO_TARGET_DIR="${CARGO_TARGET_DIR:-$PWD/target/components}"
@@ -63,7 +63,7 @@ build name="": (gen name)
 gen name="":
     #!/usr/bin/env bash
     set -uo pipefail
-    cargo build --quiet -p openapi-bindgen --example run || { echo "build failed"; exit 1; }
+    cargo build --quiet -p autostamp-openapi --example run || { echo "build failed"; exit 1; }
     bin="target/debug/examples/run"
     # One base SemVer, shared by every component, read from version.toml (default 0.1.0 when
     # absent). Bump it for all components at once with `just bump`.
@@ -211,8 +211,8 @@ publish level="" dry_run="":
 # Format-check, lint, and run the test suite.
 test:
     cargo fmt --all -- --check
-    cargo clippy --all --bins --examples -- -D warnings
-    cargo test --all
+    cargo clippy --workspace --all-targets --all-features -- -D warnings
+    cargo test --workspace --all-features
 
 # Fetch the vendored OpenAPI schemas submodule (sparse: only APIs/, shallow + blobless).
 vendor-init:

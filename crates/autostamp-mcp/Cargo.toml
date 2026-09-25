@@ -1,0 +1,16 @@
+[package]
+name = "autostamp-mcp"
+description = "Convert MCP tool definitions to WebAssembly Components"
+version.workspace = true
+license.workspace = true
+repository.workspace = true
+documentation = "https://docs.rs/autostamp-mcp"
+edition.workspace = true
+authors.workspace = true
+readme = "README.md"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[lints]
+workspace = true
