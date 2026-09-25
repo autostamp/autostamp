@@ -43,8 +43,10 @@ Input is the **result object**, not a JSON-RPC response envelope:
 }
 ```
 
-Nonempty `nextCursor` means the input is incomplete and is rejected. Collect all
-pages first and remove the cursor (an empty string is also accepted). A complete
+Any present string `nextCursor`, including `""`, means the input is incomplete
+and is rejected: cursors are opaque, not truthy/falsey sentinels. Collect every
+page until the server omits `nextCursor`, then omit it from the snapshot.
+Non-string cursors (including `null`) are malformed. A complete
 empty `tools` array generates an empty `tool` interface with no dummy functions.
 Tools requiring task execution (`execution.taskSupport: "required"`) are rejected;
 `"optional"` and `"forbidden"` permit ordinary `tools/call`.

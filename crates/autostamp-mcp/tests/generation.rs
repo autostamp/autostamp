@@ -99,7 +99,7 @@ fn working_fixture_preserves_catalog_and_resolves_typed_outputs() {
 fn no_arguments_golden_and_empty_catalog_have_no_dummy_functions() {
     let wit = emit(json!({"tools":[{"name":"ping", "inputSchema":closed(json!({}))}]}));
     assert_eq!(wit, include_str!("fixtures/ping.wit"));
-    let parsed = parse_catalog(r#"{"tools":[],"nextCursor":""}"#).unwrap();
+    let parsed = parse_catalog(r#"{"tools":[]}"#).unwrap();
     assert!(parsed.is_empty());
     assert_eq!(parsed.len(), 0);
     let wit = generate_wit(&parsed, &package()).unwrap();
@@ -637,6 +637,7 @@ fn malformed_catalogs_and_partial_pages_are_errors_not_empty_successes() {
         (json!({"tools":[{"name":""}]}), "/tools/0/name"),
         (json!({"tools":[{"name":"a"}]}), "/tools/0/inputSchema"),
         (json!({"tools":[],"nextCursor":"next"}), "/nextCursor"),
+        (json!({"tools":[],"nextCursor":""}), "/nextCursor"),
         (json!({"tools":[],"nextCursor":null}), "/nextCursor"),
         (json!({"tools":[],"nextCursor":123}), "/nextCursor"),
         (json!({"tools":[],"_meta":[]}), "/_meta"),
@@ -654,6 +655,28 @@ fn malformed_catalogs_and_partial_pages_are_errors_not_empty_successes() {
         r#"{"tools":[{"name":"x","name":"y"}]}"#,
     ] {
         assert!(parse_catalog(json).is_err());
+    }
+}
+
+#[test]
+fn only_an_omitted_cursor_marks_a_complete_catalog() {
+    for tools in [
+        json!([]),
+        json!([{"name":"ping","inputSchema":closed(json!({}))}]),
+    ] {
+        for cursor in ["", "next", " ", "0"] {
+            let error =
+                parse_catalog(&json!({"tools":tools,"nextCursor":cursor}).to_string()).unwrap_err();
+            assert_eq!(error.pointer, "/nextCursor");
+            assert!(error.message.contains("incomplete tools/list result"));
+        }
+        for cursor in [Value::Null, json!(false), json!(0), json!([]), json!({})] {
+            let error =
+                parse_catalog(&json!({"tools":tools,"nextCursor":cursor}).to_string()).unwrap_err();
+            assert_eq!(error.pointer, "/nextCursor");
+            assert_eq!(error.message, "expected a string pagination cursor");
+        }
+        assert!(parse_catalog(&json!({"tools":tools}).to_string()).is_ok());
     }
 }
 

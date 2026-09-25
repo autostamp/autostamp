@@ -44,7 +44,7 @@ impl Catalog {
 
 /// Parse a complete `tools/list` result, not a JSON-RPC response envelope.
 ///
-/// Nonempty pagination cursors, duplicate tool names, duplicate JSON keys,
+/// Any pagination cursor (including an empty string), duplicate tool names, duplicate JSON keys,
 /// unsupported schemas and tools requiring task execution are errors.
 pub fn parse_catalog(json: &str) -> Result<Catalog, Error> {
     let value: UniqueValue = serde_json::from_str(json)
@@ -67,16 +67,14 @@ pub fn from_json_value(source: Value) -> Result<Catalog, Error> {
     })?;
     known_keys(root, &["tools", "nextCursor", "_meta"], None, "")?;
     if let Some(cursor) = root.get("nextCursor") {
-        let cursor = cursor.as_str().ok_or_else(|| {
+        cursor.as_str().ok_or_else(|| {
             Error::new(None, "/nextCursor", "expected a string pagination cursor")
         })?;
-        if !cursor.is_empty() {
-            return Err(Error::new(
-                None,
-                "/nextCursor",
-                "incomplete tools/list result: collect every page before generation",
-            ));
-        }
+        return Err(Error::new(
+            None,
+            "/nextCursor",
+            "incomplete tools/list result: collect every page and omit nextCursor before generation",
+        ));
     }
     optional_object(root, "_meta", None, "")?;
     let mut ordered = Vec::new();
