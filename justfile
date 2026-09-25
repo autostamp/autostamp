@@ -214,6 +214,21 @@ test:
     cargo clippy --workspace --all-targets --all-features -- -D warnings
     cargo test --workspace --all-features
 
+# Generate a standalone MCP client from a live server or offline catalog (see docs/mcp.md).
+[positional-arguments]
+gen-mcp *args:
+    cargo run -p autostamp-mcp --features cli -- "$@"
+
+# Build the offline MCP generator component without native CLI dependencies.
+build-mcp:
+    cargo build -p autostamp-mcp --lib --no-default-features --target wasm32-wasip2 --release
+
+# Run MCP native tests and mock-only CLI/component integration (requires the tools in docs/mcp.md).
+test-mcp:
+    cargo test -p autostamp-mcp --all-features
+    python3 crates/autostamp-mcp/tests/cli_e2e.py
+    python3 crates/autostamp-mcp/tests/component_runtime.py
+
 # Fetch the vendored OpenAPI schemas submodule (sparse: only APIs/, shallow + blobless).
 vendor-init:
     git submodule update --init --filter=blob:none vendor/schemas

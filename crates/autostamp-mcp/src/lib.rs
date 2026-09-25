@@ -31,6 +31,18 @@ mod wit;
 /// Bounded MCP transport and session primitives shared by generated clients.
 pub mod runtime;
 
+/// Safe, ownership-tracked publication of standalone generated crates.
+#[cfg(all(feature = "cli", not(target_arch = "wasm32")))]
+pub mod artifact_writer;
+
+/// Bounded, tools-only discovery using the shared MCP session implementation.
+#[cfg(all(feature = "cli", not(target_arch = "wasm32")))]
+pub mod discovery;
+
+/// Native streaming HTTP transport for discovery.
+#[cfg(all(feature = "cli", not(target_arch = "wasm32")))]
+pub mod native;
+
 #[cfg(target_arch = "wasm32")]
 #[allow(unsafe_code)]
 mod component;

@@ -1,5 +1,8 @@
 # Authentication
 
+This page describes OpenAPI credentials first. MCP discovery tokens and generated
+runtime secrets have a separate [MCP credential contract](#mcp-credentials).
+
 Many APIs require a credential on every request. Rather than threading a token through
 every operation signature, generated components keep operations **auth-free** and inject
 credentials centrally at runtime. Each generated component:
@@ -56,6 +59,26 @@ unaffected — the credential is still injected centrally.
 This is a name-based heuristic: a legitimate request field that happens to share a name with
 an active security scheme would also be pruned. Path parameters are structural and never
 pruned.
+
+## MCP credentials
+
+The [MCP CLI](./mcp.md#discovery-credentials-and-runtime-credentials) deliberately
+separates discovery authentication from the generated client's runtime credentials:
+
+- `--token-env ENV_VAR` reads a bearer token from the native process environment
+  for **live discovery only**. It is rejected in offline `--catalog` mode. The
+  token value is not embedded in generated artifacts or provisioned to the host.
+- `--bearer-secret KEY` embeds only a **secret key name**, not a credential.
+  The generated client imports `wasmcloud:secrets@1.0.0` and obtains a string or
+  UTF-8 byte token from the host at call time, applying it as a bearer credential.
+  Provision this key independently of the discovery environment variable.
+
+These options are independent and may be used together. A client generated
+without `--bearer-secret` is anonymous and has no secrets imports or secret WIT
+dependencies, even if discovery needed `--token-env`. Conversely, offline
+generation may request a bearer-secret key without any discovery credential.
+Unlike OpenAPI, the key is explicitly chosen rather than derived from a
+`securitySchemes` name. OAuth token acquisition is not performed in either case.
 
 [secrets]: https://github.com/wasmCloud/wasmCloud/tree/main/wit/secrets
 [wstd]: https://github.com/bytecodealliance/wstd

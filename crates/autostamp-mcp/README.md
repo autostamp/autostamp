@@ -1,9 +1,31 @@
 # autostamp-mcp
 
 Generate typed WIT and standalone Rust client components from a complete MCP
-`tools/list` result. Generation is pure and offline: it does not discover servers
-or call tools. It is independent of `autostamp-openapi`;
+`tools/list` result. Library generation is pure and offline: it does not discover
+servers or call tools. The opt-in native `cli` feature adds bounded live discovery
+and ownership-safe output. It is independent of `autostamp-openapi`;
 the workspace intentionally contains only these two generator crates.
+
+## Native CLI
+
+```sh
+cargo run -p autostamp-mcp --features cli -- \
+  --server https://mcp.example.com/mcp \
+  --package example:service@0.1.0 --output target/generated-service
+
+cargo run -p autostamp-mcp --features cli -- \
+  --catalog crates/autostamp-mcp/tests/fixtures/tools.json \
+  --endpoint https://mcp.example.com/mcp \
+  --package example:service@0.1.0 --output target/generated-service
+```
+
+See the [MCP guide](../../docs/mcp.md) for all flags, discovery limits,
+authentication, output ownership, standalone builds and mock-only integration
+tests. Live `--endpoint` overrides the generated endpoint, not discovery.
+`--token-env ENV_VAR` supplies only the live discovery bearer token;
+`--bearer-secret KEY` separately selects the generated runtime secret key.
+Discovery never calls tools. Generated clients are static snapshots supporting
+MCP **2025-11-25 Streamable HTTP** with JSON/SSE responses.
 
 ## Library API
 
@@ -106,8 +128,9 @@ Input is the **result object**, not a JSON-RPC response envelope:
 Any present string `nextCursor`, including `""`, means the input is incomplete
 and is rejected: cursors are opaque, not truthy/falsey sentinels. Collect every
 page until the server omits `nextCursor`, then omit it from the snapshot.
-Non-string cursors (including `null`) are malformed. A complete
-empty `tools` array generates an empty `tool` interface with no dummy functions.
+Non-string cursors (including `null`) are malformed. A complete empty `tools`
+array is valid to discover, parse and generate: it produces a client with no
+tool exports and an empty `tool` interface, without dummy functions.
 Tools requiring task execution (`execution.taskSupport: "required"`) are rejected;
 `"optional"` and `"forbidden"` permit ordinary `tools/call`.
 
@@ -278,8 +301,8 @@ missing/null states, wire mappings, determinism, collisions, malformed inputs
 and keyword rejection.
 
 ```sh
-cargo test -p autostamp-mcp
-cargo build -p autostamp-mcp --lib --target wasm32-wasip2
+cargo test -p autostamp-mcp --all-features
+cargo build -p autostamp-mcp --lib --no-default-features --target wasm32-wasip2
 cargo test -p autostamp-mcp --lib generated_clients_compile_and_codecs_execute -- --ignored
 ```
 
@@ -292,10 +315,13 @@ properties. Nested Cargo builds use a separate target directory.
 ### Real component runtime fixtures
 
 The end-to-end harness requires Python 3, Cargo with the `wasm32-wasip2` target
-installed, and `wasm-tools`, `wac`, and `wasmtime` on `PATH`:
+installed, and `wasm-tools`, `wac`, and `wasmtime` on `PATH` (or `WASMTIME`
+pointing to the Wasmtime executable). Exact CI tool versions and the CLI harness
+are documented in the [MCP guide](../../docs/mcp.md#build-and-test):
 
 ```sh
 rustup target add wasm32-wasip2
+python3 crates/autostamp-mcp/tests/cli_e2e.py
 python3 crates/autostamp-mcp/tests/component_runtime.py
 ```
 
@@ -314,6 +340,7 @@ Use `-` for an explicit anonymous credential placeholder. For example,
 `fixture:runtime@0.1.0` selects the Cargo crate name `runtime` and produces
 `runtime.wasm` when built for `wasm32-wasip2`.
 
-The library and offline generator work natively and for WASI 0.2. Generated
+The library and offline generator work natively and for WASI 0.2; native CLI
+dependencies are feature-gated and excluded from the component build. Generated
 clients use bounded Streamable HTTP; stdio, prompts, resources, OAuth and task
 execution are outside this tools-only client scope.
