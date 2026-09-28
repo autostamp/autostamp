@@ -69,20 +69,14 @@ const OP_REACTIONS_REMOVE: OpSpec = OpSpec {
 
 fn iface_reactions__add_response__to_json(p: &iface_reactions::AddResponse) -> Value {
     let mut m = Map::new();
-    m.insert("ok".into(), iface_reactions__defs_ok_true__to_json(&p.ok));
-    Value::Object(m)
-}
-
-fn iface_reactions__defs_ok_true__to_json(p: &iface_reactions::DefsOkTrue) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
+    m.insert("ok".into(), Value::Bool(*(&p.ok)));
     Value::Object(m)
 }
 
 fn iface_reactions__list_op_response__to_json(p: &iface_reactions::ListOpResponse) -> Value {
     let mut m = Map::new();
     m.insert("items".into(), Value::Array((&p.items).iter().map(|v| Value::String((v).clone())).collect()));
-    m.insert("ok".into(), iface_reactions__defs_ok_true__to_json(&p.ok));
+    m.insert("ok".into(), Value::Bool(*(&p.ok)));
     m.insert("paging".into(), match (&p.paging) { Some(v) => iface_reactions__objs_paging__to_json(v), None => Value::Null });
     m.insert("response_metadata".into(), match (&p.response_metadata) { Some(v) => iface_reactions__objs_response_metadata__to_json(v), None => Value::Null });
     Value::Object(m)
@@ -107,7 +101,7 @@ fn iface_reactions__objs_response_metadata__to_json(p: &iface_reactions::ObjsRes
 
 fn iface_reactions__remove_response__to_json(p: &iface_reactions::RemoveResponse) -> Value {
     let mut m = Map::new();
-    m.insert("ok".into(), iface_reactions__defs_ok_true__to_json(&p.ok));
+    m.insert("ok".into(), Value::Bool(*(&p.ok)));
     Value::Object(m)
 }
 
@@ -157,14 +151,7 @@ fn iface_reactions__remove_params__to_json(p: &iface_reactions::RemoveParams) ->
 fn iface_reactions__add_response__from_json(v: &Value) -> Option<iface_reactions::AddResponse> {
     let m = v.as_object()?;
     Some(iface_reactions::AddResponse {
-        ok: match m.get("ok").and_then(|v| iface_reactions__defs_ok_true__from_json(v)) { Some(x) => x, None => return None },
-    })
-}
-
-fn iface_reactions__defs_ok_true__from_json(v: &Value) -> Option<iface_reactions::DefsOkTrue> {
-    let m = v.as_object()?;
-    Some(iface_reactions::DefsOkTrue {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        ok: m.get("ok").and_then(|v| (v).as_bool()).unwrap_or_default(),
     })
 }
 
@@ -172,7 +159,7 @@ fn iface_reactions__list_op_response__from_json(v: &Value) -> Option<iface_react
     let m = v.as_object()?;
     Some(iface_reactions::ListOpResponse {
         items: m.get("items").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())).unwrap_or_default(),
-        ok: match m.get("ok").and_then(|v| iface_reactions__defs_ok_true__from_json(v)) { Some(x) => x, None => return None },
+        ok: m.get("ok").and_then(|v| (v).as_bool()).unwrap_or_default(),
         paging: m.get("paging").filter(|v| !v.is_null()).and_then(|v| iface_reactions__objs_paging__from_json(v)),
         response_metadata: m.get("response_metadata").filter(|v| !v.is_null()).and_then(|v| iface_reactions__objs_response_metadata__from_json(v)),
     })
@@ -200,7 +187,7 @@ fn iface_reactions__objs_response_metadata__from_json(v: &Value) -> Option<iface
 fn iface_reactions__remove_response__from_json(v: &Value) -> Option<iface_reactions::RemoveResponse> {
     let m = v.as_object()?;
     Some(iface_reactions::RemoveResponse {
-        ok: match m.get("ok").and_then(|v| iface_reactions__defs_ok_true__from_json(v)) { Some(x) => x, None => return None },
+        ok: m.get("ok").and_then(|v| (v).as_bool()).unwrap_or_default(),
     })
 }
 

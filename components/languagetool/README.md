@@ -20,8 +20,8 @@ triggered.
 
 | Setting | Value |
 | --- | --- |
-| Package | `autostamp:languagetool@0.5.0` |
-| Published version | `0.5.0+languagetool-1.1.2` |
+| Package | `autostamp:languagetool@0.6.0` |
+| Published version | `0.6.0+languagetool-1.1.2` |
 | Tag filter | all tags |
 | Operations generated | 5 |
 | Infer API-key credentials | enabled — **triggered**, inferred 1 secret: `api-key` |

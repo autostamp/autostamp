@@ -54,9 +54,10 @@ fn iface_jira_expressions__jexp_jql_issues_validation_enum__to_str(e: &iface_jir
     }
 }
 
-fn iface_jira_expressions__jira_expression_for_analysis_context_variables__to_json(p: &iface_jira_expressions::JiraExpressionForAnalysisContextVariables) -> Value {
+fn iface_jira_expressions__jira_expression_for_analysis_context_variables_entry__to_json(p: &iface_jira_expressions::JiraExpressionForAnalysisContextVariablesEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -79,13 +80,14 @@ fn iface_jira_expressions__jira_expression_analysis__to_json(p: &iface_jira_expr
 fn iface_jira_expressions__jira_expression_complexity__to_json(p: &iface_jira_expressions::JiraExpressionComplexity) -> Value {
     let mut m = Map::new();
     m.insert("expensiveOperations".into(), Value::String((&p.expensive_operations).clone()));
-    m.insert("variables".into(), match (&p.variables) { Some(v) => iface_jira_expressions__jira_expression_complexity_variables__to_json(v), None => Value::Null });
+    m.insert("variables".into(), match (&p.variables) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_jira_expressions__jira_expression_complexity_variables__to_json(p: &iface_jira_expressions::JiraExpressionComplexityVariables) -> Value {
+fn iface_jira_expressions__jira_expression_complexity_variables_entry__to_json(p: &iface_jira_expressions::JiraExpressionComplexityVariablesEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -189,7 +191,7 @@ fn iface_jira_expressions__issues_jql_meta_data_bean__to_json(p: &iface_jira_exp
 fn iface_jira_expressions__analyse_expression_params__to_json(p: &iface_jira_expressions::AnalyseExpressionParams) -> Value {
     let mut m = Map::new();
     m.insert("check".into(), match (&p.check) { Some(v) => Value::String(iface_jira_expressions__analyse_expression_check_enum__to_str(v).into()), None => Value::Null });
-    m.insert("context_variables".into(), match (&p.context_variables) { Some(v) => iface_jira_expressions__jira_expression_for_analysis_context_variables__to_json(v), None => Value::Null });
+    m.insert("context_variables".into(), match (&p.context_variables) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("expressions".into(), Value::Array((&p.expressions).iter().map(|v| Value::String((v).clone())).collect()));
     Value::Object(m)
 }
@@ -224,14 +226,15 @@ fn iface_jira_expressions__jira_expression_complexity__from_json(v: &Value) -> O
     let m = v.as_object()?;
     Some(iface_jira_expressions::JiraExpressionComplexity {
         expensive_operations: m.get("expensiveOperations").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-        variables: m.get("variables").filter(|v| !v.is_null()).and_then(|v| iface_jira_expressions__jira_expression_complexity_variables__from_json(v)),
+        variables: m.get("variables").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_jira_expressions::JiraExpressionComplexityVariablesEntry { key: k.clone(), value: val })).collect())),
     })
 }
 
-fn iface_jira_expressions__jira_expression_complexity_variables__from_json(v: &Value) -> Option<iface_jira_expressions::JiraExpressionComplexityVariables> {
+fn iface_jira_expressions__jira_expression_complexity_variables_entry__from_json(v: &Value) -> Option<iface_jira_expressions::JiraExpressionComplexityVariablesEntry> {
     let m = v.as_object()?;
-    Some(iface_jira_expressions::JiraExpressionComplexityVariables {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_jira_expressions::JiraExpressionComplexityVariablesEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 

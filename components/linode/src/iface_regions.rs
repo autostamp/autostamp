@@ -33,9 +33,9 @@ fn iface_regions__region_status_enum__to_str(e: &iface_regions::RegionStatusEnum
 fn iface_regions__get_regions_response__to_json(p: &iface_regions::GetRegionsResponse) -> Value {
     let mut m = Map::new();
     m.insert("data".into(), match (&p.data) { Some(v) => Value::Array((v).iter().map(|v| iface_regions__region__to_json(v)).collect()), None => Value::Null });
-    m.insert("page".into(), match (&p.page) { Some(v) => iface_regions__pagination_envelope_properties_page__to_json(v), None => Value::Null });
-    m.insert("pages".into(), match (&p.pages) { Some(v) => iface_regions__pagination_envelope_properties_pages__to_json(v), None => Value::Null });
-    m.insert("results".into(), match (&p.results) { Some(v) => iface_regions__pagination_envelope_properties_results__to_json(v), None => Value::Null });
+    m.insert("page".into(), match (&p.page) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("pages".into(), match (&p.pages) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("results".into(), match (&p.results) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
@@ -57,24 +57,6 @@ fn iface_regions__region_resolvers__to_json(p: &iface_regions::RegionResolvers) 
     Value::Object(m)
 }
 
-fn iface_regions__pagination_envelope_properties_page__to_json(p: &iface_regions::PaginationEnvelopePropertiesPage) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_regions__pagination_envelope_properties_pages__to_json(p: &iface_regions::PaginationEnvelopePropertiesPages) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_regions__pagination_envelope_properties_results__to_json(p: &iface_regions::PaginationEnvelopePropertiesResults) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
 fn iface_regions__get_region_params__to_json(p: &iface_regions::GetRegionParams) -> Value {
     let mut m = Map::new();
     m.insert("region_id".into(), Value::String((&p.region_id).clone()));
@@ -85,9 +67,9 @@ fn iface_regions__get_regions_response__from_json(v: &Value) -> Option<iface_reg
     let m = v.as_object()?;
     Some(iface_regions::GetRegionsResponse {
         data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_regions__region__from_json(x)).collect())),
-        page: m.get("page").filter(|v| !v.is_null()).and_then(|v| iface_regions__pagination_envelope_properties_page__from_json(v)),
-        pages: m.get("pages").filter(|v| !v.is_null()).and_then(|v| iface_regions__pagination_envelope_properties_pages__from_json(v)),
-        results: m.get("results").filter(|v| !v.is_null()).and_then(|v| iface_regions__pagination_envelope_properties_results__from_json(v)),
+        page: m.get("page").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        pages: m.get("pages").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        results: m.get("results").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
     })
 }
 
@@ -108,27 +90,6 @@ fn iface_regions__region_resolvers__from_json(v: &Value) -> Option<iface_regions
     Some(iface_regions::RegionResolvers {
         ipv4: m.get("ipv4").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         ipv6: m.get("ipv6").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-    })
-}
-
-fn iface_regions__pagination_envelope_properties_page__from_json(v: &Value) -> Option<iface_regions::PaginationEnvelopePropertiesPage> {
-    let m = v.as_object()?;
-    Some(iface_regions::PaginationEnvelopePropertiesPage {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-    })
-}
-
-fn iface_regions__pagination_envelope_properties_pages__from_json(v: &Value) -> Option<iface_regions::PaginationEnvelopePropertiesPages> {
-    let m = v.as_object()?;
-    Some(iface_regions::PaginationEnvelopePropertiesPages {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-    })
-}
-
-fn iface_regions__pagination_envelope_properties_results__from_json(v: &Value) -> Option<iface_regions::PaginationEnvelopePropertiesResults> {
-    let m = v.as_object()?;
-    Some(iface_regions::PaginationEnvelopePropertiesResults {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 

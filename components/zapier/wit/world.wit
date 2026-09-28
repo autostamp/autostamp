@@ -6,7 +6,7 @@
 /// | Secret name | Applied to each request as |
 /// | --- | --- |
 /// | `SessionAuth` | cookie `sessionid` |
-package autostamp:zapier@0.5.0;
+package autostamp:zapier@0.6.0;
 
 interface api {
   enum execute-response-status-enum {
@@ -21,7 +21,7 @@ interface api {
     /// The name of the action that was executed.
     action-used: string,
     /// The rest of the full results. Always returns an array of objects
-    additional-results: list<execute-response-additional-results-item>,
+    additional-results: list<list<execute-response-additional-results-item-entry>>,
     /// A hint for the assistant on what to do next.
     assistant-hint: option<string>,
     /// The error message if the execution failed.
@@ -29,38 +29,39 @@ interface api {
     /// The id of the execution log.
     id: string,
     /// The params we used / will use to execute the action.
-    input-params: execute-response-input-params,
+    input-params: list<execute-response-input-params-entry>,
     /// A trimmed down result of the first item of the full results. Ideal for humans and language models!
-    result-op: option<execute-response-result-op>,
+    result-op: option<list<execute-response-result-op-entry>>,
     /// Human readable labels for some of the keys in the result.
-    result-field-labels: option<execute-response-result-field-labels>,
+    result-field-labels: option<list<execute-response-result-field-labels-entry>>,
     /// The URL to run the action or review the AI choices the AI made for input_params given instructions.
     review-url: string,
     /// The status of the execution.
     status: option<execute-response-status-enum>
   }
 
-  record execute-response-additional-results-item {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record execute-response-additional-results-item-entry {
+    key: string,
+    value: string
   }
 
-  /// The params we used / will use to execute the action.
-  record execute-response-input-params {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record execute-response-input-params-entry {
+    key: string,
+    value: string
   }
 
-  /// A trimmed down result of the first item of the full results. Ideal for humans and language models!
-  record execute-response-result-op {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record execute-response-result-op-entry {
+    key: string,
+    value: string
   }
 
-  /// Human readable labels for some of the keys in the result.
-  record execute-response-result-field-labels {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record execute-response-result-field-labels-entry {
+    key: string,
+    value: string
   }
 
   record exposed-action-response-schema {
@@ -77,13 +78,13 @@ interface api {
     /// The operation ID of the exposed action.
     operation-id: string,
     /// Available hint fields for the action.
-    params: exposed-action-schema-params
+    params: list<exposed-action-schema-params-entry>
   }
 
-  /// Available hint fields for the action.
-  record exposed-action-schema-params {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record exposed-action-schema-params-entry {
+    key: string,
+    value: string
   }
 
   variant get-execution-log-endpoint-error {

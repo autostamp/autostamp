@@ -20,15 +20,16 @@ const OP_NEGOTIABLE_QUOTE_REQUEST_NEGOTIABLE_QUOTE_NEGOTIABLE_QUOTE_MANAGEMENT_V
 fn iface_negotiable_quote_request__negotiable_quote_data_attachment_content_interface__to_json(p: &iface_negotiable_quote_request::NegotiableQuoteDataAttachmentContentInterface) -> Value {
     let mut m = Map::new();
     m.insert("base64_encoded_data".into(), Value::String((&p.base64_encoded_data).clone()));
-    m.insert("extension_attributes".into(), match (&p.extension_attributes) { Some(v) => iface_negotiable_quote_request__negotiable_quote_data_attachment_content_extension_interface__to_json(v), None => Value::Null });
+    m.insert("extension_attributes".into(), match (&p.extension_attributes) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("name".into(), Value::String((&p.name).clone()));
     m.insert("type".into(), Value::String((&p.type_op).clone()));
     Value::Object(m)
 }
 
-fn iface_negotiable_quote_request__negotiable_quote_data_attachment_content_extension_interface__to_json(p: &iface_negotiable_quote_request::NegotiableQuoteDataAttachmentContentExtensionInterface) -> Value {
+fn iface_negotiable_quote_request__negotiable_quote_data_attachment_content_extension_interface_entry__to_json(p: &iface_negotiable_quote_request::NegotiableQuoteDataAttachmentContentExtensionInterfaceEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 

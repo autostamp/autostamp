@@ -88,14 +88,15 @@ fn iface_asset__signature__to_json(p: &iface_asset::Signature) -> Value {
 
 fn iface_asset__form__to_json(p: &iface_asset::Form) -> Value {
     let mut m = Map::new();
-    m.insert("fields".into(), match (&p.fields) { Some(v) => iface_asset__form_fields__to_json(v), None => Value::Null });
+    m.insert("fields".into(), match (&p.fields) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("url".into(), match (&p.url) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_asset__form_fields__to_json(p: &iface_asset::FormFields) -> Value {
+fn iface_asset__form_fields_entry__to_json(p: &iface_asset::FormFieldsEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -166,15 +167,16 @@ fn iface_asset__signature__from_json(v: &Value) -> Option<iface_asset::Signature
 fn iface_asset__form__from_json(v: &Value) -> Option<iface_asset::Form> {
     let m = v.as_object()?;
     Some(iface_asset::Form {
-        fields: m.get("fields").filter(|v| !v.is_null()).and_then(|v| iface_asset__form_fields__from_json(v)),
+        fields: m.get("fields").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_asset::FormFieldsEntry { key: k.clone(), value: val })).collect())),
         url: m.get("url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
     })
 }
 
-fn iface_asset__form_fields__from_json(v: &Value) -> Option<iface_asset::FormFields> {
+fn iface_asset__form_fields_entry__from_json(v: &Value) -> Option<iface_asset::FormFieldsEntry> {
     let m = v.as_object()?;
-    Some(iface_asset::FormFields {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_asset::FormFieldsEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 

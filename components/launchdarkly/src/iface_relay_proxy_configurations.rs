@@ -63,6 +63,15 @@ const OP_RELAY_PROXY_CONFIGURATIONS_RESET_RELAY_PROXY_CONFIG: OpSpec = OpSpec {
     ],
 };
 
+fn iface_relay_proxy_configurations__role__to_str(e: &iface_relay_proxy_configurations::Role) -> &'static str {
+    match e {
+        iface_relay_proxy_configurations::Role::Writer => "writer",
+        iface_relay_proxy_configurations::Role::Reader => "reader",
+        iface_relay_proxy_configurations::Role::Admin => "admin",
+        iface_relay_proxy_configurations::Role::Owner => "owner",
+    }
+}
+
 fn iface_relay_proxy_configurations__relay_proxy_configs__to_json(p: &iface_relay_proxy_configurations::RelayProxyConfigs) -> Value {
     let mut m = Map::new();
     m.insert("items".into(), match (&p.items) { Some(v) => Value::Array((v).iter().map(|v| iface_relay_proxy_configurations__relay_proxy_config__to_json(v)).collect()), None => Value::Null });
@@ -72,7 +81,7 @@ fn iface_relay_proxy_configurations__relay_proxy_configs__to_json(p: &iface_rela
 fn iface_relay_proxy_configurations__relay_proxy_config__to_json(p: &iface_relay_proxy_configurations::RelayProxyConfig) -> Value {
     let mut m = Map::new();
     m.insert("_creator".into(), iface_relay_proxy_configurations__member__to_json(&p.creator));
-    m.insert("_id".into(), iface_relay_proxy_configurations__id__to_json(&p.id));
+    m.insert("_id".into(), Value::String((&p.id).clone()));
     m.insert("creationDate".into(), Value::Number(serde_json::Number::from(*(&p.creation_date))));
     m.insert("displayKey".into(), Value::String((&p.display_key).clone()));
     m.insert("fullKey".into(), match (&p.full_key) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -84,24 +93,18 @@ fn iface_relay_proxy_configurations__relay_proxy_config__to_json(p: &iface_relay
 
 fn iface_relay_proxy_configurations__member__to_json(p: &iface_relay_proxy_configurations::Member) -> Value {
     let mut m = Map::new();
-    m.insert("_id".into(), match (&p.id) { Some(v) => iface_relay_proxy_configurations__id__to_json(v), None => Value::Null });
+    m.insert("_id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("_lastSeen".into(), match (&p.last_seen) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("_lastSeenMetadata".into(), match (&p.last_seen_metadata) { Some(v) => iface_relay_proxy_configurations__member_last_seen_metadata__to_json(v), None => Value::Null });
     m.insert("_links".into(), match (&p.links) { Some(v) => iface_relay_proxy_configurations__links__to_json(v), None => Value::Null });
     m.insert("_pendingInvite".into(), match (&p.pending_invite) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     m.insert("_verified".into(), match (&p.verified) { Some(v) => Value::Bool(*(v)), None => Value::Null });
-    m.insert("customRoles".into(), match (&p.custom_roles) { Some(v) => Value::Array((v).iter().map(|v| iface_relay_proxy_configurations__id__to_json(v)).collect()), None => Value::Null });
+    m.insert("customRoles".into(), match (&p.custom_roles) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
     m.insert("email".into(), match (&p.email) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("firstName".into(), match (&p.first_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("isBeta".into(), match (&p.is_beta) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     m.insert("lastName".into(), match (&p.last_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("role".into(), match (&p.role) { Some(v) => iface_relay_proxy_configurations__role__to_json(v), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_relay_proxy_configurations__id__to_json(p: &iface_relay_proxy_configurations::Id) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
+    m.insert("role".into(), match (&p.role) { Some(v) => Value::String(iface_relay_proxy_configurations__role__to_str(v).into()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -122,12 +125,6 @@ fn iface_relay_proxy_configurations__link__to_json(p: &iface_relay_proxy_configu
     let mut m = Map::new();
     m.insert("href".into(), match (&p.href) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("type".into(), match (&p.type_op) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_relay_proxy_configurations__role__to_json(p: &iface_relay_proxy_configurations::Role) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -177,7 +174,7 @@ fn iface_relay_proxy_configurations__relay_proxy_config__from_json(v: &Value) ->
     let m = v.as_object()?;
     Some(iface_relay_proxy_configurations::RelayProxyConfig {
         creator: match m.get("_creator").and_then(|v| iface_relay_proxy_configurations__member__from_json(v)) { Some(x) => x, None => return None },
-        id: match m.get("_id").and_then(|v| iface_relay_proxy_configurations__id__from_json(v)) { Some(x) => x, None => return None },
+        id: m.get("_id").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         creation_date: m.get("creationDate").and_then(|v| (v).as_i64()).unwrap_or_default(),
         display_key: m.get("displayKey").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         full_key: m.get("fullKey").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
@@ -190,25 +187,18 @@ fn iface_relay_proxy_configurations__relay_proxy_config__from_json(v: &Value) ->
 fn iface_relay_proxy_configurations__member__from_json(v: &Value) -> Option<iface_relay_proxy_configurations::Member> {
     let m = v.as_object()?;
     Some(iface_relay_proxy_configurations::Member {
-        id: m.get("_id").filter(|v| !v.is_null()).and_then(|v| iface_relay_proxy_configurations__id__from_json(v)),
+        id: m.get("_id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         last_seen: m.get("_lastSeen").filter(|v| !v.is_null()).and_then(|v| (v).as_i64()),
         last_seen_metadata: m.get("_lastSeenMetadata").filter(|v| !v.is_null()).and_then(|v| iface_relay_proxy_configurations__member_last_seen_metadata__from_json(v)),
         links: m.get("_links").filter(|v| !v.is_null()).and_then(|v| iface_relay_proxy_configurations__links__from_json(v)),
         pending_invite: m.get("_pendingInvite").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
         verified: m.get("_verified").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
-        custom_roles: m.get("customRoles").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_relay_proxy_configurations__id__from_json(x)).collect())),
+        custom_roles: m.get("customRoles").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
         email: m.get("email").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         first_name: m.get("firstName").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         is_beta: m.get("isBeta").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
         last_name: m.get("lastName").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        role: m.get("role").filter(|v| !v.is_null()).and_then(|v| iface_relay_proxy_configurations__role__from_json(v)),
-    })
-}
-
-fn iface_relay_proxy_configurations__id__from_json(v: &Value) -> Option<iface_relay_proxy_configurations::Id> {
-    let m = v.as_object()?;
-    Some(iface_relay_proxy_configurations::Id {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        role: m.get("role").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_relay_proxy_configurations__role__from_str)),
     })
 }
 
@@ -235,13 +225,6 @@ fn iface_relay_proxy_configurations__link__from_json(v: &Value) -> Option<iface_
     })
 }
 
-fn iface_relay_proxy_configurations__role__from_json(v: &Value) -> Option<iface_relay_proxy_configurations::Role> {
-    let m = v.as_object()?;
-    Some(iface_relay_proxy_configurations::Role {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-    })
-}
-
 fn iface_relay_proxy_configurations__policy__from_json(v: &Value) -> Option<iface_relay_proxy_configurations::Policy> {
     let m = v.as_object()?;
     Some(iface_relay_proxy_configurations::Policy {
@@ -251,6 +234,16 @@ fn iface_relay_proxy_configurations__policy__from_json(v: &Value) -> Option<ifac
         not_resources: m.get("notResources").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
         resources: m.get("resources").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
     })
+}
+
+fn iface_relay_proxy_configurations__role__from_str(s: &str) -> Option<iface_relay_proxy_configurations::Role> {
+    match s {
+        "writer" => Some(iface_relay_proxy_configurations::Role::Writer),
+        "reader" => Some(iface_relay_proxy_configurations::Role::Reader),
+        "admin" => Some(iface_relay_proxy_configurations::Role::Admin),
+        "owner" => Some(iface_relay_proxy_configurations::Role::Owner),
+        _ => None,
+    }
 }
 
 fn iface_relay_proxy_configurations__get_relay_proxy_configs__ok(body: String) -> Result<iface_relay_proxy_configurations::RelayProxyConfigs, crate::runtime::DispatchError> {

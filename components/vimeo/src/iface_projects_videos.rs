@@ -457,14 +457,15 @@ fn iface_projects_videos__category_subcategories_item__to_json(p: &iface_project
 fn iface_projects_videos__video_context__to_json(p: &iface_projects_videos::VideoContext) -> Value {
     let mut m = Map::new();
     m.insert("action".into(), Value::String(iface_projects_videos__video_context_action_enum__to_str(&p.action).into()));
-    m.insert("resource".into(), iface_projects_videos__video_context_resource_op__to_json(&p.resource_op));
+    m.insert("resource".into(), Value::Object((&p.resource_op).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()));
     m.insert("resource_type".into(), Value::String((&p.resource_type).clone()));
     Value::Object(m)
 }
 
-fn iface_projects_videos__video_context_resource_op__to_json(p: &iface_projects_videos::VideoContextResourceOp) -> Value {
+fn iface_projects_videos__video_context_resource_op_entry__to_json(p: &iface_projects_videos::VideoContextResourceOpEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -1416,15 +1417,16 @@ fn iface_projects_videos__video_context__from_json(v: &Value) -> Option<iface_pr
     let m = v.as_object()?;
     Some(iface_projects_videos::VideoContext {
         action: match m.get("action").and_then(|v| (v).as_str().and_then(iface_projects_videos__video_context_action_enum__from_str)) { Some(x) => x, None => return None },
-        resource_op: match m.get("resource").and_then(|v| iface_projects_videos__video_context_resource_op__from_json(v)) { Some(x) => x, None => return None },
+        resource_op: m.get("resource").and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_projects_videos::VideoContextResourceOpEntry { key: k.clone(), value: val })).collect())).unwrap_or_default(),
         resource_type: m.get("resource_type").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
-fn iface_projects_videos__video_context_resource_op__from_json(v: &Value) -> Option<iface_projects_videos::VideoContextResourceOp> {
+fn iface_projects_videos__video_context_resource_op_entry__from_json(v: &Value) -> Option<iface_projects_videos::VideoContextResourceOpEntry> {
     let m = v.as_object()?;
-    Some(iface_projects_videos::VideoContextResourceOp {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_projects_videos::VideoContextResourceOpEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 

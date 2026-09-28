@@ -47,21 +47,23 @@ fn iface_x__get_available_locales_response__to_json(p: &iface_x::GetAvailableLoc
     m.insert("ErrorCode".into(), match (&p.error_code) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("ErrorStatus".into(), match (&p.error_status) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("Message".into(), match (&p.message) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("MessageData".into(), match (&p.message_data) { Some(v) => iface_x__get_available_locales_response_message_data__to_json(v), None => Value::Null });
-    m.insert("Response".into(), match (&p.response) { Some(v) => iface_x__get_available_locales_response_response__to_json(v), None => Value::Null });
+    m.insert("MessageData".into(), match (&p.message_data) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
+    m.insert("Response".into(), match (&p.response) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("ThrottleSeconds".into(), match (&p.throttle_seconds) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_x__get_available_locales_response_message_data__to_json(p: &iface_x::GetAvailableLocalesResponseMessageData) -> Value {
+fn iface_x__get_available_locales_response_message_data_entry__to_json(p: &iface_x::GetAvailableLocalesResponseMessageDataEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
-fn iface_x__get_available_locales_response_response__to_json(p: &iface_x::GetAvailableLocalesResponseResponse) -> Value {
+fn iface_x__get_available_locales_response_response_entry__to_json(p: &iface_x::GetAvailableLocalesResponseResponseEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -71,15 +73,16 @@ fn iface_x__get_global_alerts_response__to_json(p: &iface_x::GetGlobalAlertsResp
     m.insert("ErrorCode".into(), match (&p.error_code) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("ErrorStatus".into(), match (&p.error_status) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("Message".into(), match (&p.message) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("MessageData".into(), match (&p.message_data) { Some(v) => iface_x__get_global_alerts_response_message_data__to_json(v), None => Value::Null });
+    m.insert("MessageData".into(), match (&p.message_data) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("Response".into(), match (&p.response) { Some(v) => Value::Array((v).iter().map(|v| iface_x__global_alert__to_json(v)).collect()), None => Value::Null });
     m.insert("ThrottleSeconds".into(), match (&p.throttle_seconds) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_x__get_global_alerts_response_message_data__to_json(p: &iface_x::GetGlobalAlertsResponseMessageData) -> Value {
+fn iface_x__get_global_alerts_response_message_data_entry__to_json(p: &iface_x::GetGlobalAlertsResponseMessageDataEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -107,15 +110,16 @@ fn iface_x__get_common_settings_response__to_json(p: &iface_x::GetCommonSettings
     m.insert("ErrorCode".into(), match (&p.error_code) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("ErrorStatus".into(), match (&p.error_status) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("Message".into(), match (&p.message) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("MessageData".into(), match (&p.message_data) { Some(v) => iface_x__get_common_settings_response_message_data__to_json(v), None => Value::Null });
+    m.insert("MessageData".into(), match (&p.message_data) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("Response".into(), match (&p.response) { Some(v) => iface_x__common_models_core_settings_configuration__to_json(v), None => Value::Null });
     m.insert("ThrottleSeconds".into(), match (&p.throttle_seconds) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_x__get_common_settings_response_message_data__to_json(p: &iface_x::GetCommonSettingsResponseMessageData) -> Value {
+fn iface_x__get_common_settings_response_message_data_entry__to_json(p: &iface_x::GetCommonSettingsResponseMessageDataEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -141,7 +145,7 @@ fn iface_x__common_models_core_settings_configuration__to_json(p: &iface_x::Comm
     m.insert("recruitmentMiscTags".into(), match (&p.recruitment_misc_tags) { Some(v) => Value::Array((v).iter().map(|v| iface_x__common_models_core_setting__to_json(v)).collect()), None => Value::Null });
     m.insert("recruitmentPlatformTags".into(), match (&p.recruitment_platform_tags) { Some(v) => Value::Array((v).iter().map(|v| iface_x__common_models_core_setting__to_json(v)).collect()), None => Value::Null });
     m.insert("systemContentLocales".into(), match (&p.system_content_locales) { Some(v) => Value::Array((v).iter().map(|v| iface_x__common_models_core_setting__to_json(v)).collect()), None => Value::Null });
-    m.insert("systems".into(), match (&p.systems) { Some(v) => iface_x__common_models_core_settings_configuration_systems__to_json(v), None => Value::Null });
+    m.insert("systems".into(), match (&p.systems) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), iface_x__common_models_core_system__to_json(&e.value))).collect()), None => Value::Null });
     m.insert("userContentLocales".into(), match (&p.user_content_locales) { Some(v) => Value::Array((v).iter().map(|v| iface_x__common_models_core_setting__to_json(v)).collect()), None => Value::Null });
     Value::Object(m)
 }
@@ -192,33 +196,118 @@ fn iface_x__common_models_destiny2_core_settings__to_json(p: &iface_x::CommonMod
 
 fn iface_x__user_email_settings__to_json(p: &iface_x::UserEmailSettings) -> Value {
     let mut m = Map::new();
-    m.insert("optInDefinitions".into(), match (&p.opt_in_definitions) { Some(v) => iface_x__user_email_settings_opt_in_definitions__to_json(v), None => Value::Null });
-    m.insert("subscriptionDefinitions".into(), match (&p.subscription_definitions) { Some(v) => iface_x__user_email_settings_subscription_definitions__to_json(v), None => Value::Null });
-    m.insert("views".into(), match (&p.views) { Some(v) => iface_x__user_email_settings_views__to_json(v), None => Value::Null });
+    m.insert("optInDefinitions".into(), match (&p.opt_in_definitions) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), iface_x__user_email_opt_in_definition__to_json(&e.value))).collect()), None => Value::Null });
+    m.insert("subscriptionDefinitions".into(), match (&p.subscription_definitions) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), iface_x__user_email_subscription_definition__to_json(&e.value))).collect()), None => Value::Null });
+    m.insert("views".into(), match (&p.views) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), iface_x__user_email_view_definition__to_json(&e.value))).collect()), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_x__user_email_settings_opt_in_definitions__to_json(p: &iface_x::UserEmailSettingsOptInDefinitions) -> Value {
+fn iface_x__user_email_opt_in_definition__to_json(p: &iface_x::UserEmailOptInDefinition) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("dependentSubscriptions".into(), match (&p.dependent_subscriptions) { Some(v) => Value::Array((v).iter().map(|v| iface_x__user_email_subscription_definition__to_json(v)).collect()), None => Value::Null });
+    m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("setByDefault".into(), match (&p.set_by_default) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("value".into(), match (&p.value) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_x__user_email_settings_subscription_definitions__to_json(p: &iface_x::UserEmailSettingsSubscriptionDefinitions) -> Value {
+fn iface_x__user_email_subscription_definition__to_json(p: &iface_x::UserEmailSubscriptionDefinition) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("localization".into(), match (&p.localization) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), iface_x__user_e_mail_setting_subscription_localization__to_json(&e.value))).collect()), None => Value::Null });
+    m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("value".into(), match (&p.value) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_x__user_email_settings_views__to_json(p: &iface_x::UserEmailSettingsViews) -> Value {
+fn iface_x__user_e_mail_setting_subscription_localization__to_json(p: &iface_x::UserEMailSettingSubscriptionLocalization) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("description".into(), match (&p.description) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("knownUserActionText".into(), match (&p.known_user_action_text) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("registeredUserDescription".into(), match (&p.registered_user_description) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("title".into(), match (&p.title) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("unknownUserActionText".into(), match (&p.unknown_user_action_text) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("unknownUserDescription".into(), match (&p.unknown_user_description) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("unregisteredUserDescription".into(), match (&p.unregistered_user_description) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_x__common_models_core_settings_configuration_systems__to_json(p: &iface_x::CommonModelsCoreSettingsConfigurationSystems) -> Value {
+fn iface_x__user_email_subscription_definition_localization_entry__to_json(p: &iface_x::UserEmailSubscriptionDefinitionLocalizationEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), iface_x__user_e_mail_setting_subscription_localization__to_json(&p.value));
+    Value::Object(m)
+}
+
+fn iface_x__user_email_settings_opt_in_definitions_entry__to_json(p: &iface_x::UserEmailSettingsOptInDefinitionsEntry) -> Value {
+    let mut m = Map::new();
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), iface_x__user_email_opt_in_definition__to_json(&p.value));
+    Value::Object(m)
+}
+
+fn iface_x__user_email_settings_subscription_definitions_entry__to_json(p: &iface_x::UserEmailSettingsSubscriptionDefinitionsEntry) -> Value {
+    let mut m = Map::new();
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), iface_x__user_email_subscription_definition__to_json(&p.value));
+    Value::Object(m)
+}
+
+fn iface_x__user_email_view_definition__to_json(p: &iface_x::UserEmailViewDefinition) -> Value {
+    let mut m = Map::new();
+    m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("viewSettings".into(), match (&p.view_settings) { Some(v) => Value::Array((v).iter().map(|v| iface_x__user_email_view_definition_setting__to_json(v)).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_x__user_email_view_definition_setting__to_json(p: &iface_x::UserEmailViewDefinitionSetting) -> Value {
+    let mut m = Map::new();
+    m.insert("localization".into(), match (&p.localization) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), iface_x__user_e_mail_setting_localization__to_json(&e.value))).collect()), None => Value::Null });
+    m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("optInAggregateValue".into(), match (&p.opt_in_aggregate_value) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("setByDefault".into(), match (&p.set_by_default) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("subscriptions".into(), match (&p.subscriptions) { Some(v) => Value::Array((v).iter().map(|v| iface_x__user_email_subscription_definition__to_json(v)).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_x__user_e_mail_setting_localization__to_json(p: &iface_x::UserEMailSettingLocalization) -> Value {
+    let mut m = Map::new();
+    m.insert("description".into(), match (&p.description) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("title".into(), match (&p.title) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_x__user_email_view_definition_setting_localization_entry__to_json(p: &iface_x::UserEmailViewDefinitionSettingLocalizationEntry) -> Value {
+    let mut m = Map::new();
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), iface_x__user_e_mail_setting_localization__to_json(&p.value));
+    Value::Object(m)
+}
+
+fn iface_x__user_email_settings_views_entry__to_json(p: &iface_x::UserEmailSettingsViewsEntry) -> Value {
+    let mut m = Map::new();
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), iface_x__user_email_view_definition__to_json(&p.value));
+    Value::Object(m)
+}
+
+fn iface_x__common_models_core_system__to_json(p: &iface_x::CommonModelsCoreSystem) -> Value {
+    let mut m = Map::new();
+    m.insert("enabled".into(), match (&p.enabled) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("parameters".into(), match (&p.parameters) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_x__common_models_core_system_parameters_entry__to_json(p: &iface_x::CommonModelsCoreSystemParametersEntry) -> Value {
+    let mut m = Map::new();
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
+}
+
+fn iface_x__common_models_core_settings_configuration_systems_entry__to_json(p: &iface_x::CommonModelsCoreSettingsConfigurationSystemsEntry) -> Value {
+    let mut m = Map::new();
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), iface_x__common_models_core_system__to_json(&p.value));
     Value::Object(m)
 }
 
@@ -228,21 +317,23 @@ fn iface_x__get_user_system_overrides_response__to_json(p: &iface_x::GetUserSyst
     m.insert("ErrorCode".into(), match (&p.error_code) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("ErrorStatus".into(), match (&p.error_status) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("Message".into(), match (&p.message) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("MessageData".into(), match (&p.message_data) { Some(v) => iface_x__get_user_system_overrides_response_message_data__to_json(v), None => Value::Null });
-    m.insert("Response".into(), match (&p.response) { Some(v) => iface_x__get_user_system_overrides_response_response__to_json(v), None => Value::Null });
+    m.insert("MessageData".into(), match (&p.message_data) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
+    m.insert("Response".into(), match (&p.response) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), iface_x__common_models_core_system__to_json(&e.value))).collect()), None => Value::Null });
     m.insert("ThrottleSeconds".into(), match (&p.throttle_seconds) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_x__get_user_system_overrides_response_message_data__to_json(p: &iface_x::GetUserSystemOverridesResponseMessageData) -> Value {
+fn iface_x__get_user_system_overrides_response_message_data_entry__to_json(p: &iface_x::GetUserSystemOverridesResponseMessageDataEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
-fn iface_x__get_user_system_overrides_response_response__to_json(p: &iface_x::GetUserSystemOverridesResponseResponse) -> Value {
+fn iface_x__get_user_system_overrides_response_response_entry__to_json(p: &iface_x::GetUserSystemOverridesResponseResponseEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), iface_x__common_models_core_system__to_json(&p.value));
     Value::Object(m)
 }
 
@@ -259,23 +350,25 @@ fn iface_x__get_available_locales_response__from_json(v: &Value) -> Option<iface
         error_code: m.get("ErrorCode").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
         error_status: m.get("ErrorStatus").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         message: m.get("Message").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        message_data: m.get("MessageData").filter(|v| !v.is_null()).and_then(|v| iface_x__get_available_locales_response_message_data__from_json(v)),
-        response: m.get("Response").filter(|v| !v.is_null()).and_then(|v| iface_x__get_available_locales_response_response__from_json(v)),
+        message_data: m.get("MessageData").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_x::GetAvailableLocalesResponseMessageDataEntry { key: k.clone(), value: val })).collect())),
+        response: m.get("Response").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_x::GetAvailableLocalesResponseResponseEntry { key: k.clone(), value: val })).collect())),
         throttle_seconds: m.get("ThrottleSeconds").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
     })
 }
 
-fn iface_x__get_available_locales_response_message_data__from_json(v: &Value) -> Option<iface_x::GetAvailableLocalesResponseMessageData> {
+fn iface_x__get_available_locales_response_message_data_entry__from_json(v: &Value) -> Option<iface_x::GetAvailableLocalesResponseMessageDataEntry> {
     let m = v.as_object()?;
-    Some(iface_x::GetAvailableLocalesResponseMessageData {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_x::GetAvailableLocalesResponseMessageDataEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
-fn iface_x__get_available_locales_response_response__from_json(v: &Value) -> Option<iface_x::GetAvailableLocalesResponseResponse> {
+fn iface_x__get_available_locales_response_response_entry__from_json(v: &Value) -> Option<iface_x::GetAvailableLocalesResponseResponseEntry> {
     let m = v.as_object()?;
-    Some(iface_x::GetAvailableLocalesResponseResponse {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_x::GetAvailableLocalesResponseResponseEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -286,16 +379,17 @@ fn iface_x__get_global_alerts_response__from_json(v: &Value) -> Option<iface_x::
         error_code: m.get("ErrorCode").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
         error_status: m.get("ErrorStatus").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         message: m.get("Message").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        message_data: m.get("MessageData").filter(|v| !v.is_null()).and_then(|v| iface_x__get_global_alerts_response_message_data__from_json(v)),
+        message_data: m.get("MessageData").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_x::GetGlobalAlertsResponseMessageDataEntry { key: k.clone(), value: val })).collect())),
         response: m.get("Response").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_x__global_alert__from_json(x)).collect())),
         throttle_seconds: m.get("ThrottleSeconds").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
     })
 }
 
-fn iface_x__get_global_alerts_response_message_data__from_json(v: &Value) -> Option<iface_x::GetGlobalAlertsResponseMessageData> {
+fn iface_x__get_global_alerts_response_message_data_entry__from_json(v: &Value) -> Option<iface_x::GetGlobalAlertsResponseMessageDataEntry> {
     let m = v.as_object()?;
-    Some(iface_x::GetGlobalAlertsResponseMessageData {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_x::GetGlobalAlertsResponseMessageDataEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -326,16 +420,17 @@ fn iface_x__get_common_settings_response__from_json(v: &Value) -> Option<iface_x
         error_code: m.get("ErrorCode").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
         error_status: m.get("ErrorStatus").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         message: m.get("Message").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        message_data: m.get("MessageData").filter(|v| !v.is_null()).and_then(|v| iface_x__get_common_settings_response_message_data__from_json(v)),
+        message_data: m.get("MessageData").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_x::GetCommonSettingsResponseMessageDataEntry { key: k.clone(), value: val })).collect())),
         response: m.get("Response").filter(|v| !v.is_null()).and_then(|v| iface_x__common_models_core_settings_configuration__from_json(v)),
         throttle_seconds: m.get("ThrottleSeconds").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
     })
 }
 
-fn iface_x__get_common_settings_response_message_data__from_json(v: &Value) -> Option<iface_x::GetCommonSettingsResponseMessageData> {
+fn iface_x__get_common_settings_response_message_data_entry__from_json(v: &Value) -> Option<iface_x::GetCommonSettingsResponseMessageDataEntry> {
     let m = v.as_object()?;
-    Some(iface_x::GetCommonSettingsResponseMessageData {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_x::GetCommonSettingsResponseMessageDataEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -362,7 +457,7 @@ fn iface_x__common_models_core_settings_configuration__from_json(v: &Value) -> O
         recruitment_misc_tags: m.get("recruitmentMiscTags").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_x__common_models_core_setting__from_json(x)).collect())),
         recruitment_platform_tags: m.get("recruitmentPlatformTags").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_x__common_models_core_setting__from_json(x)).collect())),
         system_content_locales: m.get("systemContentLocales").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_x__common_models_core_setting__from_json(x)).collect())),
-        systems: m.get("systems").filter(|v| !v.is_null()).and_then(|v| iface_x__common_models_core_settings_configuration_systems__from_json(v)),
+        systems: m.get("systems").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| (iface_x__common_models_core_system__from_json(x)).map(|val| iface_x::CommonModelsCoreSettingsConfigurationSystemsEntry { key: k.clone(), value: val })).collect())),
         user_content_locales: m.get("userContentLocales").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_x__common_models_core_setting__from_json(x)).collect())),
     })
 }
@@ -416,37 +511,132 @@ fn iface_x__common_models_destiny2_core_settings__from_json(v: &Value) -> Option
 fn iface_x__user_email_settings__from_json(v: &Value) -> Option<iface_x::UserEmailSettings> {
     let m = v.as_object()?;
     Some(iface_x::UserEmailSettings {
-        opt_in_definitions: m.get("optInDefinitions").filter(|v| !v.is_null()).and_then(|v| iface_x__user_email_settings_opt_in_definitions__from_json(v)),
-        subscription_definitions: m.get("subscriptionDefinitions").filter(|v| !v.is_null()).and_then(|v| iface_x__user_email_settings_subscription_definitions__from_json(v)),
-        views: m.get("views").filter(|v| !v.is_null()).and_then(|v| iface_x__user_email_settings_views__from_json(v)),
+        opt_in_definitions: m.get("optInDefinitions").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| (iface_x__user_email_opt_in_definition__from_json(x)).map(|val| iface_x::UserEmailSettingsOptInDefinitionsEntry { key: k.clone(), value: val })).collect())),
+        subscription_definitions: m.get("subscriptionDefinitions").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| (iface_x__user_email_subscription_definition__from_json(x)).map(|val| iface_x::UserEmailSettingsSubscriptionDefinitionsEntry { key: k.clone(), value: val })).collect())),
+        views: m.get("views").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| (iface_x__user_email_view_definition__from_json(x)).map(|val| iface_x::UserEmailSettingsViewsEntry { key: k.clone(), value: val })).collect())),
     })
 }
 
-fn iface_x__user_email_settings_opt_in_definitions__from_json(v: &Value) -> Option<iface_x::UserEmailSettingsOptInDefinitions> {
+fn iface_x__user_email_opt_in_definition__from_json(v: &Value) -> Option<iface_x::UserEmailOptInDefinition> {
     let m = v.as_object()?;
-    Some(iface_x::UserEmailSettingsOptInDefinitions {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_x::UserEmailOptInDefinition {
+        dependent_subscriptions: m.get("dependentSubscriptions").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_x__user_email_subscription_definition__from_json(x)).collect())),
+        name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        set_by_default: m.get("setByDefault").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        value: m.get("value").filter(|v| !v.is_null()).and_then(|v| (v).as_i64()),
     })
 }
 
-fn iface_x__user_email_settings_subscription_definitions__from_json(v: &Value) -> Option<iface_x::UserEmailSettingsSubscriptionDefinitions> {
+fn iface_x__user_email_subscription_definition__from_json(v: &Value) -> Option<iface_x::UserEmailSubscriptionDefinition> {
     let m = v.as_object()?;
-    Some(iface_x::UserEmailSettingsSubscriptionDefinitions {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_x::UserEmailSubscriptionDefinition {
+        localization: m.get("localization").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| (iface_x__user_e_mail_setting_subscription_localization__from_json(x)).map(|val| iface_x::UserEmailSubscriptionDefinitionLocalizationEntry { key: k.clone(), value: val })).collect())),
+        name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        value: m.get("value").filter(|v| !v.is_null()).and_then(|v| (v).as_i64()),
     })
 }
 
-fn iface_x__user_email_settings_views__from_json(v: &Value) -> Option<iface_x::UserEmailSettingsViews> {
+fn iface_x__user_e_mail_setting_subscription_localization__from_json(v: &Value) -> Option<iface_x::UserEMailSettingSubscriptionLocalization> {
     let m = v.as_object()?;
-    Some(iface_x::UserEmailSettingsViews {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_x::UserEMailSettingSubscriptionLocalization {
+        description: m.get("description").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        known_user_action_text: m.get("knownUserActionText").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        registered_user_description: m.get("registeredUserDescription").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        title: m.get("title").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        unknown_user_action_text: m.get("unknownUserActionText").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        unknown_user_description: m.get("unknownUserDescription").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        unregistered_user_description: m.get("unregisteredUserDescription").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
     })
 }
 
-fn iface_x__common_models_core_settings_configuration_systems__from_json(v: &Value) -> Option<iface_x::CommonModelsCoreSettingsConfigurationSystems> {
+fn iface_x__user_email_subscription_definition_localization_entry__from_json(v: &Value) -> Option<iface_x::UserEmailSubscriptionDefinitionLocalizationEntry> {
     let m = v.as_object()?;
-    Some(iface_x::CommonModelsCoreSettingsConfigurationSystems {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_x::UserEmailSubscriptionDefinitionLocalizationEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: match m.get("value").and_then(|v| iface_x__user_e_mail_setting_subscription_localization__from_json(v)) { Some(x) => x, None => return None },
+    })
+}
+
+fn iface_x__user_email_settings_opt_in_definitions_entry__from_json(v: &Value) -> Option<iface_x::UserEmailSettingsOptInDefinitionsEntry> {
+    let m = v.as_object()?;
+    Some(iface_x::UserEmailSettingsOptInDefinitionsEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: match m.get("value").and_then(|v| iface_x__user_email_opt_in_definition__from_json(v)) { Some(x) => x, None => return None },
+    })
+}
+
+fn iface_x__user_email_settings_subscription_definitions_entry__from_json(v: &Value) -> Option<iface_x::UserEmailSettingsSubscriptionDefinitionsEntry> {
+    let m = v.as_object()?;
+    Some(iface_x::UserEmailSettingsSubscriptionDefinitionsEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: match m.get("value").and_then(|v| iface_x__user_email_subscription_definition__from_json(v)) { Some(x) => x, None => return None },
+    })
+}
+
+fn iface_x__user_email_view_definition__from_json(v: &Value) -> Option<iface_x::UserEmailViewDefinition> {
+    let m = v.as_object()?;
+    Some(iface_x::UserEmailViewDefinition {
+        name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        view_settings: m.get("viewSettings").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_x__user_email_view_definition_setting__from_json(x)).collect())),
+    })
+}
+
+fn iface_x__user_email_view_definition_setting__from_json(v: &Value) -> Option<iface_x::UserEmailViewDefinitionSetting> {
+    let m = v.as_object()?;
+    Some(iface_x::UserEmailViewDefinitionSetting {
+        localization: m.get("localization").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| (iface_x__user_e_mail_setting_localization__from_json(x)).map(|val| iface_x::UserEmailViewDefinitionSettingLocalizationEntry { key: k.clone(), value: val })).collect())),
+        name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        opt_in_aggregate_value: m.get("optInAggregateValue").filter(|v| !v.is_null()).and_then(|v| (v).as_i64()),
+        set_by_default: m.get("setByDefault").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        subscriptions: m.get("subscriptions").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_x__user_email_subscription_definition__from_json(x)).collect())),
+    })
+}
+
+fn iface_x__user_e_mail_setting_localization__from_json(v: &Value) -> Option<iface_x::UserEMailSettingLocalization> {
+    let m = v.as_object()?;
+    Some(iface_x::UserEMailSettingLocalization {
+        description: m.get("description").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        title: m.get("title").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_x__user_email_view_definition_setting_localization_entry__from_json(v: &Value) -> Option<iface_x::UserEmailViewDefinitionSettingLocalizationEntry> {
+    let m = v.as_object()?;
+    Some(iface_x::UserEmailViewDefinitionSettingLocalizationEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: match m.get("value").and_then(|v| iface_x__user_e_mail_setting_localization__from_json(v)) { Some(x) => x, None => return None },
+    })
+}
+
+fn iface_x__user_email_settings_views_entry__from_json(v: &Value) -> Option<iface_x::UserEmailSettingsViewsEntry> {
+    let m = v.as_object()?;
+    Some(iface_x::UserEmailSettingsViewsEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: match m.get("value").and_then(|v| iface_x__user_email_view_definition__from_json(v)) { Some(x) => x, None => return None },
+    })
+}
+
+fn iface_x__common_models_core_system__from_json(v: &Value) -> Option<iface_x::CommonModelsCoreSystem> {
+    let m = v.as_object()?;
+    Some(iface_x::CommonModelsCoreSystem {
+        enabled: m.get("enabled").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        parameters: m.get("parameters").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_x::CommonModelsCoreSystemParametersEntry { key: k.clone(), value: val })).collect())),
+    })
+}
+
+fn iface_x__common_models_core_system_parameters_entry__from_json(v: &Value) -> Option<iface_x::CommonModelsCoreSystemParametersEntry> {
+    let m = v.as_object()?;
+    Some(iface_x::CommonModelsCoreSystemParametersEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_x__common_models_core_settings_configuration_systems_entry__from_json(v: &Value) -> Option<iface_x::CommonModelsCoreSettingsConfigurationSystemsEntry> {
+    let m = v.as_object()?;
+    Some(iface_x::CommonModelsCoreSettingsConfigurationSystemsEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: match m.get("value").and_then(|v| iface_x__common_models_core_system__from_json(v)) { Some(x) => x, None => return None },
     })
 }
 
@@ -457,23 +647,25 @@ fn iface_x__get_user_system_overrides_response__from_json(v: &Value) -> Option<i
         error_code: m.get("ErrorCode").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
         error_status: m.get("ErrorStatus").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         message: m.get("Message").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        message_data: m.get("MessageData").filter(|v| !v.is_null()).and_then(|v| iface_x__get_user_system_overrides_response_message_data__from_json(v)),
-        response: m.get("Response").filter(|v| !v.is_null()).and_then(|v| iface_x__get_user_system_overrides_response_response__from_json(v)),
+        message_data: m.get("MessageData").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_x::GetUserSystemOverridesResponseMessageDataEntry { key: k.clone(), value: val })).collect())),
+        response: m.get("Response").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| (iface_x__common_models_core_system__from_json(x)).map(|val| iface_x::GetUserSystemOverridesResponseResponseEntry { key: k.clone(), value: val })).collect())),
         throttle_seconds: m.get("ThrottleSeconds").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
     })
 }
 
-fn iface_x__get_user_system_overrides_response_message_data__from_json(v: &Value) -> Option<iface_x::GetUserSystemOverridesResponseMessageData> {
+fn iface_x__get_user_system_overrides_response_message_data_entry__from_json(v: &Value) -> Option<iface_x::GetUserSystemOverridesResponseMessageDataEntry> {
     let m = v.as_object()?;
-    Some(iface_x::GetUserSystemOverridesResponseMessageData {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_x::GetUserSystemOverridesResponseMessageDataEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
-fn iface_x__get_user_system_overrides_response_response__from_json(v: &Value) -> Option<iface_x::GetUserSystemOverridesResponseResponse> {
+fn iface_x__get_user_system_overrides_response_response_entry__from_json(v: &Value) -> Option<iface_x::GetUserSystemOverridesResponseResponseEntry> {
     let m = v.as_object()?;
-    Some(iface_x::GetUserSystemOverridesResponseResponse {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_x::GetUserSystemOverridesResponseResponseEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: match m.get("value").and_then(|v| iface_x__common_models_core_system__from_json(v)) { Some(x) => x, None => return None },
     })
 }
 

@@ -11,8 +11,8 @@ triggered.
 
 | Setting | Value |
 | --- | --- |
-| Package | `autostamp:telegram@0.5.0` |
-| Published version | `0.5.0+telegram-5.0.0` |
+| Package | `autostamp:telegram@0.6.0` |
+| Published version | `0.6.0+telegram-5.0.0` |
 | Tag filter | all tags |
 | Operations generated | 74 |
 | Infer API-key credentials | enabled — not triggered |

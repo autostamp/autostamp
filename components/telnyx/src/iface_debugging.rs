@@ -57,16 +57,17 @@ fn iface_debugging__call_event__to_json(p: &iface_debugging::CallEvent) -> Value
     m.insert("call_leg_id".into(), Value::String((&p.call_leg_id).clone()));
     m.insert("call_session_id".into(), Value::String((&p.call_session_id).clone()));
     m.insert("event_timestamp".into(), Value::String((&p.event_timestamp).clone()));
-    m.insert("metadata".into(), iface_debugging__call_event_metadata__to_json(&p.metadata));
+    m.insert("metadata".into(), Value::Object((&p.metadata).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()));
     m.insert("name".into(), Value::String((&p.name).clone()));
     m.insert("record_type".into(), Value::String(iface_debugging__call_event_record_type_enum__to_str(&p.record_type).into()));
     m.insert("type".into(), Value::String(iface_debugging__list_call_events_filter_type_enum__to_str(&p.type_op).into()));
     Value::Object(m)
 }
 
-fn iface_debugging__call_event_metadata__to_json(p: &iface_debugging::CallEventMetadata) -> Value {
+fn iface_debugging__call_event_metadata_entry__to_json(p: &iface_debugging::CallEventMetadataEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -109,17 +110,18 @@ fn iface_debugging__call_event__from_json(v: &Value) -> Option<iface_debugging::
         call_leg_id: m.get("call_leg_id").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         call_session_id: m.get("call_session_id").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         event_timestamp: m.get("event_timestamp").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-        metadata: match m.get("metadata").and_then(|v| iface_debugging__call_event_metadata__from_json(v)) { Some(x) => x, None => return None },
+        metadata: m.get("metadata").and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_debugging::CallEventMetadataEntry { key: k.clone(), value: val })).collect())).unwrap_or_default(),
         name: m.get("name").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         record_type: match m.get("record_type").and_then(|v| (v).as_str().and_then(iface_debugging__call_event_record_type_enum__from_str)) { Some(x) => x, None => return None },
         type_op: match m.get("type").and_then(|v| (v).as_str().and_then(iface_debugging__list_call_events_filter_type_enum__from_str)) { Some(x) => x, None => return None },
     })
 }
 
-fn iface_debugging__call_event_metadata__from_json(v: &Value) -> Option<iface_debugging::CallEventMetadata> {
+fn iface_debugging__call_event_metadata_entry__from_json(v: &Value) -> Option<iface_debugging::CallEventMetadataEntry> {
     let m = v.as_object()?;
-    Some(iface_debugging::CallEventMetadata {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_debugging::CallEventMetadataEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 

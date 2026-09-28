@@ -82,7 +82,7 @@ fn iface_projects__link__to_json(p: &iface_projects::Link) -> Value {
 
 fn iface_projects__project__to_json(p: &iface_projects::Project) -> Value {
     let mut m = Map::new();
-    m.insert("_id".into(), match (&p.id) { Some(v) => iface_projects__id__to_json(v), None => Value::Null });
+    m.insert("_id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("_links".into(), match (&p.links) { Some(v) => iface_projects__links__to_json(v), None => Value::Null });
     m.insert("defaultClientSideAvailability".into(), match (&p.default_client_side_availability) { Some(v) => iface_projects__client_side_availability__to_json(v), None => Value::Null });
     m.insert("environments".into(), match (&p.environments) { Some(v) => Value::Array((v).iter().map(|v| iface_projects__environment__to_json(v)).collect()), None => Value::Null });
@@ -90,12 +90,6 @@ fn iface_projects__project__to_json(p: &iface_projects::Project) -> Value {
     m.insert("key".into(), match (&p.key) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("tags".into(), match (&p.tags) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_projects__id__to_json(p: &iface_projects::Id) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -108,7 +102,7 @@ fn iface_projects__client_side_availability__to_json(p: &iface_projects::ClientS
 
 fn iface_projects__environment__to_json(p: &iface_projects::Environment) -> Value {
     let mut m = Map::new();
-    m.insert("_id".into(), match (&p.id) { Some(v) => iface_projects__id__to_json(v), None => Value::Null });
+    m.insert("_id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("_links".into(), match (&p.links) { Some(v) => iface_projects__links__to_json(v), None => Value::Null });
     m.insert("apiKey".into(), match (&p.api_key) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("approvalSettings".into(), match (&p.approval_settings) { Some(v) => iface_projects__environment_approval_settings__to_json(v), None => Value::Null });
@@ -181,7 +175,7 @@ fn iface_projects__link__from_json(v: &Value) -> Option<iface_projects::Link> {
 fn iface_projects__project__from_json(v: &Value) -> Option<iface_projects::Project> {
     let m = v.as_object()?;
     Some(iface_projects::Project {
-        id: m.get("_id").filter(|v| !v.is_null()).and_then(|v| iface_projects__id__from_json(v)),
+        id: m.get("_id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         links: m.get("_links").filter(|v| !v.is_null()).and_then(|v| iface_projects__links__from_json(v)),
         default_client_side_availability: m.get("defaultClientSideAvailability").filter(|v| !v.is_null()).and_then(|v| iface_projects__client_side_availability__from_json(v)),
         environments: m.get("environments").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_projects__environment__from_json(x)).collect())),
@@ -189,13 +183,6 @@ fn iface_projects__project__from_json(v: &Value) -> Option<iface_projects::Proje
         key: m.get("key").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         tags: m.get("tags").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
-    })
-}
-
-fn iface_projects__id__from_json(v: &Value) -> Option<iface_projects::Id> {
-    let m = v.as_object()?;
-    Some(iface_projects::Id {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -210,7 +197,7 @@ fn iface_projects__client_side_availability__from_json(v: &Value) -> Option<ifac
 fn iface_projects__environment__from_json(v: &Value) -> Option<iface_projects::Environment> {
     let m = v.as_object()?;
     Some(iface_projects::Environment {
-        id: m.get("_id").filter(|v| !v.is_null()).and_then(|v| iface_projects__id__from_json(v)),
+        id: m.get("_id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         links: m.get("_links").filter(|v| !v.is_null()).and_then(|v| iface_projects__links__from_json(v)),
         api_key: m.get("apiKey").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         approval_settings: m.get("approvalSettings").filter(|v| !v.is_null()).and_then(|v| iface_projects__environment_approval_settings__from_json(v)),

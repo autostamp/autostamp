@@ -1,4 +1,4 @@
-package autostamp:mastercard@0.5.0;
+package autostamp:mastercard@0.6.0;
 
 interface bin-table-listing-service {
   record bin-table-response {

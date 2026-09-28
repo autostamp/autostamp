@@ -83,7 +83,7 @@ const OP_HOOK_ENABLE_HOOK: OpSpec = OpSpec {
 fn iface_hook__hook__to_json(p: &iface_hook::Hook) -> Value {
     let mut m = Map::new();
     m.insert("created_at".into(), match (&p.created_at) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("data".into(), match (&p.data) { Some(v) => iface_hook__hook_data__to_json(v), None => Value::Null });
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("disabled".into(), match (&p.disabled) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     m.insert("event".into(), match (&p.event) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -93,9 +93,10 @@ fn iface_hook__hook__to_json(p: &iface_hook::Hook) -> Value {
     Value::Object(m)
 }
 
-fn iface_hook__hook_data__to_json(p: &iface_hook::HookData) -> Value {
+fn iface_hook__hook_data_entry__to_json(p: &iface_hook::HookDataEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -109,7 +110,7 @@ fn iface_hook__create_hook_by_site_id_params__to_json(p: &iface_hook::CreateHook
     let mut m = Map::new();
     m.insert("site_id".into(), Value::String((&p.site_id).clone()));
     m.insert("created_at".into(), match (&p.created_at) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("data".into(), match (&p.data) { Some(v) => iface_hook__hook_data__to_json(v), None => Value::Null });
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("disabled".into(), match (&p.disabled) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     m.insert("event".into(), match (&p.event) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -129,7 +130,7 @@ fn iface_hook__update_hook_params__to_json(p: &iface_hook::UpdateHookParams) -> 
     let mut m = Map::new();
     m.insert("hook_id".into(), Value::String((&p.hook_id).clone()));
     m.insert("created_at".into(), match (&p.created_at) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("data".into(), match (&p.data) { Some(v) => iface_hook__hook_data__to_json(v), None => Value::Null });
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("disabled".into(), match (&p.disabled) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     m.insert("event".into(), match (&p.event) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -155,7 +156,7 @@ fn iface_hook__hook__from_json(v: &Value) -> Option<iface_hook::Hook> {
     let m = v.as_object()?;
     Some(iface_hook::Hook {
         created_at: m.get("created_at").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| iface_hook__hook_data__from_json(v)),
+        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_hook::HookDataEntry { key: k.clone(), value: val })).collect())),
         disabled: m.get("disabled").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
         event: m.get("event").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
@@ -165,10 +166,11 @@ fn iface_hook__hook__from_json(v: &Value) -> Option<iface_hook::Hook> {
     })
 }
 
-fn iface_hook__hook_data__from_json(v: &Value) -> Option<iface_hook::HookData> {
+fn iface_hook__hook_data_entry__from_json(v: &Value) -> Option<iface_hook::HookDataEntry> {
     let m = v.as_object()?;
-    Some(iface_hook::HookData {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_hook::HookDataEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 

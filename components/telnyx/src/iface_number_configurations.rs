@@ -297,7 +297,7 @@ fn iface_number_configurations__phone_number_detailed__to_json(p: &iface_number_
     m.insert("emergency_address_id".into(), match (&p.emergency_address_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("emergency_enabled".into(), match (&p.emergency_enabled) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     m.insert("external_pin".into(), match (&p.external_pin) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("id".into(), match (&p.id) { Some(v) => iface_number_configurations__int_id__to_json(v), None => Value::Null });
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("messaging_profile_id".into(), match (&p.messaging_profile_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("messaging_profile_name".into(), match (&p.messaging_profile_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("number_level_routing".into(), match (&p.number_level_routing) { Some(v) => Value::String(iface_number_configurations__phone_number_detailed_number_level_routing_enum__to_str(v).into()), None => Value::Null });
@@ -308,12 +308,6 @@ fn iface_number_configurations__phone_number_detailed__to_json(p: &iface_number_
     m.insert("status".into(), match (&p.status) { Some(v) => Value::String(iface_number_configurations__phone_number_detailed_status_enum__to_str(v).into()), None => Value::Null });
     m.insert("t38_fax_gateway_enabled".into(), match (&p.t38_fax_gateway_enabled) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     m.insert("tags".into(), match (&p.tags) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_number_configurations__int_id__to_json(p: &iface_number_configurations::IntId) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -472,7 +466,7 @@ fn iface_number_configurations__phone_number_deleted_detailed__to_json(p: &iface
     m.insert("emergency_address_id".into(), match (&p.emergency_address_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("emergency_enabled".into(), match (&p.emergency_enabled) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     m.insert("external_pin".into(), match (&p.external_pin) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("id".into(), match (&p.id) { Some(v) => iface_number_configurations__int_id__to_json(v), None => Value::Null });
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("messaging_profile_id".into(), match (&p.messaging_profile_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("messaging_profile_name".into(), match (&p.messaging_profile_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("number_level_routing".into(), match (&p.number_level_routing) { Some(v) => Value::String(iface_number_configurations__phone_number_detailed_number_level_routing_enum__to_str(v).into()), None => Value::Null });
@@ -644,7 +638,7 @@ fn iface_number_configurations__phone_number_detailed__from_json(v: &Value) -> O
         emergency_address_id: m.get("emergency_address_id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         emergency_enabled: m.get("emergency_enabled").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
         external_pin: m.get("external_pin").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| iface_number_configurations__int_id__from_json(v)),
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         messaging_profile_id: m.get("messaging_profile_id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         messaging_profile_name: m.get("messaging_profile_name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         number_level_routing: m.get("number_level_routing").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_number_configurations__phone_number_detailed_number_level_routing_enum__from_str)),
@@ -655,13 +649,6 @@ fn iface_number_configurations__phone_number_detailed__from_json(v: &Value) -> O
         status: m.get("status").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_number_configurations__phone_number_detailed_status_enum__from_str)),
         t38_fax_gateway_enabled: m.get("t38_fax_gateway_enabled").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
         tags: m.get("tags").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
-    })
-}
-
-fn iface_number_configurations__int_id__from_json(v: &Value) -> Option<iface_number_configurations::IntId> {
-    let m = v.as_object()?;
-    Some(iface_number_configurations::IntId {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -837,7 +824,7 @@ fn iface_number_configurations__phone_number_deleted_detailed__from_json(v: &Val
         emergency_address_id: m.get("emergency_address_id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         emergency_enabled: m.get("emergency_enabled").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
         external_pin: m.get("external_pin").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| iface_number_configurations__int_id__from_json(v)),
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         messaging_profile_id: m.get("messaging_profile_id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         messaging_profile_name: m.get("messaging_profile_name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         number_level_routing: m.get("number_level_routing").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_number_configurations__phone_number_detailed_number_level_routing_enum__from_str)),

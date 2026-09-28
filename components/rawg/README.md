@@ -11,8 +11,8 @@ triggered.
 
 | Setting | Value |
 | --- | --- |
-| Package | `autostamp:rawg@0.5.0` |
-| Published version | `0.5.0+rawg-v1.0` |
+| Package | `autostamp:rawg@0.6.0` |
+| Published version | `0.6.0+rawg-v1.0` |
 | Tag filter | all tags |
 | Operations generated | 30 |
 | Infer API-key credentials | enabled — not triggered |

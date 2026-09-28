@@ -51,6 +51,89 @@ fn iface_shopping__get_flight_offers_travel_class_enum__to_str(e: &iface_shoppin
     }
 }
 
+fn iface_shopping__travel_class__to_str(e: &iface_shopping::TravelClass) -> &'static str {
+    match e {
+        iface_shopping::TravelClass::Economy => "ECONOMY",
+        iface_shopping::TravelClass::PremiumEconomy => "PREMIUM_ECONOMY",
+        iface_shopping::TravelClass::Business => "BUSINESS",
+        iface_shopping::TravelClass::First => "FIRST",
+    }
+}
+
+fn iface_shopping__pricing_options_fare_type_item_enum__to_str(e: &iface_shopping::PricingOptionsFareTypeItemEnum) -> &'static str {
+    match e {
+        iface_shopping::PricingOptionsFareTypeItemEnum::Published => "PUBLISHED",
+        iface_shopping::PricingOptionsFareTypeItemEnum::Negotiated => "NEGOTIATED",
+        iface_shopping::PricingOptionsFareTypeItemEnum::Corporate => "CORPORATE",
+    }
+}
+
+fn iface_shopping__flight_offer_source__to_str(e: &iface_shopping::FlightOfferSource) -> &'static str {
+    match e {
+        iface_shopping::FlightOfferSource::Gds => "GDS",
+    }
+}
+
+fn iface_shopping__service_name__to_str(e: &iface_shopping::ServiceName) -> &'static str {
+    match e {
+        iface_shopping::ServiceName::PriorityBoarding => "PRIORITY_BOARDING",
+        iface_shopping::ServiceName::AirportCheckin => "AIRPORT_CHECKIN",
+    }
+}
+
+fn iface_shopping__slice_dice_indicator__to_str(e: &iface_shopping::SliceDiceIndicator) -> &'static str {
+    match e {
+        iface_shopping::SliceDiceIndicator::LocalAvailability => "LOCAL_AVAILABILITY",
+        iface_shopping::SliceDiceIndicator::SubOdAvailabilityV1 => "SUB_OD_AVAILABILITY_1",
+        iface_shopping::SliceDiceIndicator::SubOdAvailabilityV2 => "SUB_OD_AVAILABILITY_2",
+    }
+}
+
+fn iface_shopping__traveler_pricing_fare_option__to_str(e: &iface_shopping::TravelerPricingFareOption) -> &'static str {
+    match e {
+        iface_shopping::TravelerPricingFareOption::Standard => "STANDARD",
+        iface_shopping::TravelerPricingFareOption::InclusiveTour => "INCLUSIVE_TOUR",
+        iface_shopping::TravelerPricingFareOption::SpanishMelillaResident => "SPANISH_MELILLA_RESIDENT",
+        iface_shopping::TravelerPricingFareOption::SpanishCeutaResident => "SPANISH_CEUTA_RESIDENT",
+        iface_shopping::TravelerPricingFareOption::SpanishCanaryResident => "SPANISH_CANARY_RESIDENT",
+        iface_shopping::TravelerPricingFareOption::SpanishBalearicResident => "SPANISH_BALEARIC_RESIDENT",
+        iface_shopping::TravelerPricingFareOption::AirFranceMetropolitanDiscountPass => "AIR_FRANCE_METROPOLITAN_DISCOUNT_PASS",
+        iface_shopping::TravelerPricingFareOption::AirFranceDomDiscountPass => "AIR_FRANCE_DOM_DISCOUNT_PASS",
+        iface_shopping::TravelerPricingFareOption::AirFranceCombinedDiscountPass => "AIR_FRANCE_COMBINED_DISCOUNT_PASS",
+        iface_shopping::TravelerPricingFareOption::AirFranceFamily => "AIR_FRANCE_FAMILY",
+        iface_shopping::TravelerPricingFareOption::AdultWithCompanion => "ADULT_WITH_COMPANION",
+        iface_shopping::TravelerPricingFareOption::Companion => "COMPANION",
+    }
+}
+
+fn iface_shopping__fee_type__to_str(e: &iface_shopping::FeeType) -> &'static str {
+    match e {
+        iface_shopping::FeeType::Ticketing => "TICKETING",
+        iface_shopping::FeeType::FormOfPayment => "FORM_OF_PAYMENT",
+        iface_shopping::FeeType::Supplier => "SUPPLIER",
+    }
+}
+
+fn iface_shopping__traveler_type__to_str(e: &iface_shopping::TravelerType) -> &'static str {
+    match e {
+        iface_shopping::TravelerType::Adult => "ADULT",
+        iface_shopping::TravelerType::Child => "CHILD",
+        iface_shopping::TravelerType::Senior => "SENIOR",
+        iface_shopping::TravelerType::Young => "YOUNG",
+        iface_shopping::TravelerType::HeldInfant => "HELD_INFANT",
+        iface_shopping::TravelerType::SeatedInfant => "SEATED_INFANT",
+        iface_shopping::TravelerType::Student => "STUDENT",
+    }
+}
+
+fn iface_shopping__coverage__to_str(e: &iface_shopping::Coverage) -> &'static str {
+    match e {
+        iface_shopping::Coverage::MostSegments => "MOST_SEGMENTS",
+        iface_shopping::Coverage::AtLeastOneSegment => "AT_LEAST_ONE_SEGMENT",
+        iface_shopping::Coverage::AllSegments => "ALL_SEGMENTS",
+    }
+}
+
 fn iface_shopping__get_flight_offers_response__to_json(p: &iface_shopping::GetFlightOffersResponse) -> Value {
     let mut m = Map::new();
     m.insert("data".into(), Value::Array((&p.data).iter().map(|v| iface_shopping__flight_offer__to_json(v)).collect()));
@@ -73,7 +156,7 @@ fn iface_shopping__flight_offer__to_json(p: &iface_shopping::FlightOffer) -> Val
     m.insert("paymentCardRequired".into(), match (&p.payment_card_required) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     m.insert("price".into(), match (&p.price) { Some(v) => iface_shopping__extended_price__to_json(v), None => Value::Null });
     m.insert("pricingOptions".into(), match (&p.pricing_options) { Some(v) => iface_shopping__flight_offer_pricing_options__to_json(v), None => Value::Null });
-    m.insert("source".into(), match (&p.source) { Some(v) => iface_shopping__flight_offer_source__to_json(v), None => Value::Null });
+    m.insert("source".into(), match (&p.source) { Some(v) => Value::String(iface_shopping__flight_offer_source__to_str(v).into()), None => Value::Null });
     m.insert("travelerPricings".into(), match (&p.traveler_pricings) { Some(v) => Value::Array((v).iter().map(|v| iface_shopping__flight_offer_traveler_pricings_item__to_json(v)).collect()), None => Value::Null });
     m.insert("type".into(), Value::String((&p.type_op).clone()));
     m.insert("validatingAirlineCodes".into(), match (&p.validating_airline_codes) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
@@ -106,15 +189,9 @@ fn iface_shopping__segment__to_json(p: &iface_shopping::Segment) -> Value {
 
 fn iface_shopping__co2_emission__to_json(p: &iface_shopping::Co2Emission) -> Value {
     let mut m = Map::new();
-    m.insert("cabin".into(), match (&p.cabin) { Some(v) => iface_shopping__travel_class__to_json(v), None => Value::Null });
+    m.insert("cabin".into(), match (&p.cabin) { Some(v) => Value::String(iface_shopping__travel_class__to_str(v).into()), None => Value::Null });
     m.insert("weight".into(), match (&p.weight) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("weightUnit".into(), match (&p.weight_unit) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_shopping__travel_class__to_json(p: &iface_shopping::TravelClass) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -155,7 +232,7 @@ fn iface_shopping__extended_price__to_json(p: &iface_shopping::ExtendedPrice) ->
 
 fn iface_shopping__flight_offer_pricing_options__to_json(p: &iface_shopping::FlightOfferPricingOptions) -> Value {
     let mut m = Map::new();
-    m.insert("fareType".into(), match (&p.fare_type) { Some(v) => iface_shopping__pricing_options_fare_type__to_json(v), None => Value::Null });
+    m.insert("fareType".into(), match (&p.fare_type) { Some(v) => Value::Array((v).iter().map(|v| Value::String(iface_shopping__pricing_options_fare_type_item_enum__to_str(v).into())).collect()), None => Value::Null });
     m.insert("includedCheckedBagsOnly".into(), match (&p.included_checked_bags_only) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     m.insert("noPenaltyFare".into(), match (&p.no_penalty_fare) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     m.insert("noRestrictionFare".into(), match (&p.no_restriction_fare) { Some(v) => Value::Bool(*(v)), None => Value::Null });
@@ -163,26 +240,14 @@ fn iface_shopping__flight_offer_pricing_options__to_json(p: &iface_shopping::Fli
     Value::Object(m)
 }
 
-fn iface_shopping__pricing_options_fare_type__to_json(p: &iface_shopping::PricingOptionsFareType) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_shopping__flight_offer_source__to_json(p: &iface_shopping::FlightOfferSource) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
 fn iface_shopping__flight_offer_traveler_pricings_item__to_json(p: &iface_shopping::FlightOfferTravelerPricingsItem) -> Value {
     let mut m = Map::new();
     m.insert("associatedAdultId".into(), match (&p.associated_adult_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("fareDetailsBySegment".into(), Value::Array((&p.fare_details_by_segment).iter().map(|v| iface_shopping__flight_offer_traveler_pricings_item_fare_details_by_segment_item__to_json(v)).collect()));
-    m.insert("fareOption".into(), iface_shopping__traveler_pricing_fare_option__to_json(&p.fare_option));
+    m.insert("fareOption".into(), Value::String(iface_shopping__traveler_pricing_fare_option__to_str(&p.fare_option).into()));
     m.insert("price".into(), match (&p.price) { Some(v) => iface_shopping__price__to_json(v), None => Value::Null });
     m.insert("travelerId".into(), Value::String((&p.traveler_id).clone()));
-    m.insert("travelerType".into(), iface_shopping__traveler_type__to_json(&p.traveler_type));
+    m.insert("travelerType".into(), Value::String(iface_shopping__traveler_type__to_str(&p.traveler_type).into()));
     Value::Object(m)
 }
 
@@ -191,13 +256,13 @@ fn iface_shopping__flight_offer_traveler_pricings_item_fare_details_by_segment_i
     m.insert("additionalServices".into(), match (&p.additional_services) { Some(v) => iface_shopping__flight_offer_traveler_pricings_item_fare_details_by_segment_item_additional_services__to_json(v), None => Value::Null });
     m.insert("allotmentDetails".into(), match (&p.allotment_details) { Some(v) => iface_shopping__flight_offer_traveler_pricings_item_fare_details_by_segment_item_allotment_details__to_json(v), None => Value::Null });
     m.insert("brandedFare".into(), match (&p.branded_fare) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("cabin".into(), match (&p.cabin) { Some(v) => iface_shopping__travel_class__to_json(v), None => Value::Null });
+    m.insert("cabin".into(), match (&p.cabin) { Some(v) => Value::String(iface_shopping__travel_class__to_str(v).into()), None => Value::Null });
     m.insert("class".into(), match (&p.class) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("fareBasis".into(), match (&p.fare_basis) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("includedCheckedBags".into(), match (&p.included_checked_bags) { Some(v) => iface_shopping__baggage_allowance__to_json(v), None => Value::Null });
     m.insert("isAllotment".into(), match (&p.is_allotment) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     m.insert("segmentId".into(), Value::String((&p.segment_id).clone()));
-    m.insert("sliceDiceIndicator".into(), match (&p.slice_dice_indicator) { Some(v) => iface_shopping__slice_dice_indicator__to_json(v), None => Value::Null });
+    m.insert("sliceDiceIndicator".into(), match (&p.slice_dice_indicator) { Some(v) => Value::String(iface_shopping__slice_dice_indicator__to_str(v).into()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -205,7 +270,7 @@ fn iface_shopping__flight_offer_traveler_pricings_item_fare_details_by_segment_i
     let mut m = Map::new();
     m.insert("chargeableCheckedBags".into(), match (&p.chargeable_checked_bags) { Some(v) => iface_shopping__baggage_allowance__to_json(v), None => Value::Null });
     m.insert("chargeableSeatNumber".into(), match (&p.chargeable_seat_number) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("otherServices".into(), match (&p.other_services) { Some(v) => Value::Array((v).iter().map(|v| iface_shopping__service_name__to_json(v)).collect()), None => Value::Null });
+    m.insert("otherServices".into(), match (&p.other_services) { Some(v) => Value::Array((v).iter().map(|v| Value::String(iface_shopping__service_name__to_str(v).into())).collect()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -217,28 +282,10 @@ fn iface_shopping__baggage_allowance__to_json(p: &iface_shopping::BaggageAllowan
     Value::Object(m)
 }
 
-fn iface_shopping__service_name__to_json(p: &iface_shopping::ServiceName) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
 fn iface_shopping__flight_offer_traveler_pricings_item_fare_details_by_segment_item_allotment_details__to_json(p: &iface_shopping::FlightOfferTravelerPricingsItemFareDetailsBySegmentItemAllotmentDetails) -> Value {
     let mut m = Map::new();
     m.insert("tourName".into(), match (&p.tour_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("tourReference".into(), match (&p.tour_reference) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_shopping__slice_dice_indicator__to_json(p: &iface_shopping::SliceDiceIndicator) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_shopping__traveler_pricing_fare_option__to_json(p: &iface_shopping::TravelerPricingFareOption) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -256,13 +303,7 @@ fn iface_shopping__price__to_json(p: &iface_shopping::Price) -> Value {
 fn iface_shopping__fee__to_json(p: &iface_shopping::Fee) -> Value {
     let mut m = Map::new();
     m.insert("amount".into(), match (&p.amount) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("type".into(), match (&p.type_op) { Some(v) => iface_shopping__fee_type__to_json(v), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_shopping__fee_type__to_json(p: &iface_shopping::FeeType) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
+    m.insert("type".into(), match (&p.type_op) { Some(v) => Value::String(iface_shopping__fee_type__to_str(v).into()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -270,12 +311,6 @@ fn iface_shopping__tax__to_json(p: &iface_shopping::Tax) -> Value {
     let mut m = Map::new();
     m.insert("amount".into(), match (&p.amount) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("code".into(), match (&p.code) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_shopping__traveler_type__to_json(p: &iface_shopping::TravelerType) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -410,15 +445,9 @@ fn iface_shopping__search_criteria_flight_filters__to_json(p: &iface_shopping::S
 
 fn iface_shopping__search_criteria_flight_filters_cabin_restrictions_item__to_json(p: &iface_shopping::SearchCriteriaFlightFiltersCabinRestrictionsItem) -> Value {
     let mut m = Map::new();
-    m.insert("cabin".into(), match (&p.cabin) { Some(v) => iface_shopping__travel_class__to_json(v), None => Value::Null });
-    m.insert("coverage".into(), match (&p.coverage) { Some(v) => iface_shopping__coverage__to_json(v), None => Value::Null });
+    m.insert("cabin".into(), match (&p.cabin) { Some(v) => Value::String(iface_shopping__travel_class__to_str(v).into()), None => Value::Null });
+    m.insert("coverage".into(), match (&p.coverage) { Some(v) => Value::String(iface_shopping__coverage__to_str(v).into()), None => Value::Null });
     m.insert("originDestinationIds".into(), match (&p.origin_destination_ids) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_shopping__coverage__to_json(p: &iface_shopping::Coverage) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -448,7 +477,7 @@ fn iface_shopping__traveler__to_json(p: &iface_shopping::Traveler) -> Value {
     let mut m = Map::new();
     m.insert("associatedAdultId".into(), match (&p.associated_adult_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("id".into(), Value::String((&p.id).clone()));
-    m.insert("travelerType".into(), iface_shopping__traveler_type__to_json(&p.traveler_type));
+    m.insert("travelerType".into(), Value::String(iface_shopping__traveler_type__to_str(&p.traveler_type).into()));
     Value::Object(m)
 }
 
@@ -500,7 +529,7 @@ fn iface_shopping__search_flight_offers_params__to_json(p: &iface_shopping::Sear
     m.insert("currency_code".into(), match (&p.currency_code) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("origin_destinations".into(), Value::Array((&p.origin_destinations).iter().map(|v| iface_shopping__origin_destination__to_json(v)).collect()));
     m.insert("search_criteria".into(), match (&p.search_criteria) { Some(v) => iface_shopping__search_criteria__to_json(v), None => Value::Null });
-    m.insert("sources".into(), Value::Array((&p.sources).iter().map(|v| iface_shopping__flight_offer_source__to_json(v)).collect()));
+    m.insert("sources".into(), Value::Array((&p.sources).iter().map(|v| Value::String(iface_shopping__flight_offer_source__to_str(v).into())).collect()));
     m.insert("travelers".into(), Value::Array((&p.travelers).iter().map(|v| iface_shopping__traveler__to_json(v)).collect()));
     Value::Object(m)
 }
@@ -529,7 +558,7 @@ fn iface_shopping__flight_offer__from_json(v: &Value) -> Option<iface_shopping::
         payment_card_required: m.get("paymentCardRequired").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
         price: m.get("price").filter(|v| !v.is_null()).and_then(|v| iface_shopping__extended_price__from_json(v)),
         pricing_options: m.get("pricingOptions").filter(|v| !v.is_null()).and_then(|v| iface_shopping__flight_offer_pricing_options__from_json(v)),
-        source: m.get("source").filter(|v| !v.is_null()).and_then(|v| iface_shopping__flight_offer_source__from_json(v)),
+        source: m.get("source").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_shopping__flight_offer_source__from_str)),
         traveler_pricings: m.get("travelerPricings").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_shopping__flight_offer_traveler_pricings_item__from_json(x)).collect())),
         type_op: m.get("type").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         validating_airline_codes: m.get("validatingAirlineCodes").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
@@ -565,16 +594,9 @@ fn iface_shopping__segment__from_json(v: &Value) -> Option<iface_shopping::Segme
 fn iface_shopping__co2_emission__from_json(v: &Value) -> Option<iface_shopping::Co2Emission> {
     let m = v.as_object()?;
     Some(iface_shopping::Co2Emission {
-        cabin: m.get("cabin").filter(|v| !v.is_null()).and_then(|v| iface_shopping__travel_class__from_json(v)),
+        cabin: m.get("cabin").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_shopping__travel_class__from_str)),
         weight: m.get("weight").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
         weight_unit: m.get("weightUnit").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-    })
-}
-
-fn iface_shopping__travel_class__from_json(v: &Value) -> Option<iface_shopping::TravelClass> {
-    let m = v.as_object()?;
-    Some(iface_shopping::TravelClass {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -621,25 +643,11 @@ fn iface_shopping__extended_price__from_json(v: &Value) -> Option<iface_shopping
 fn iface_shopping__flight_offer_pricing_options__from_json(v: &Value) -> Option<iface_shopping::FlightOfferPricingOptions> {
     let m = v.as_object()?;
     Some(iface_shopping::FlightOfferPricingOptions {
-        fare_type: m.get("fareType").filter(|v| !v.is_null()).and_then(|v| iface_shopping__pricing_options_fare_type__from_json(v)),
+        fare_type: m.get("fareType").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().and_then(iface_shopping__pricing_options_fare_type_item_enum__from_str)).collect())),
         included_checked_bags_only: m.get("includedCheckedBagsOnly").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
         no_penalty_fare: m.get("noPenaltyFare").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
         no_restriction_fare: m.get("noRestrictionFare").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
         refundable_fare: m.get("refundableFare").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
-    })
-}
-
-fn iface_shopping__pricing_options_fare_type__from_json(v: &Value) -> Option<iface_shopping::PricingOptionsFareType> {
-    let m = v.as_object()?;
-    Some(iface_shopping::PricingOptionsFareType {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-    })
-}
-
-fn iface_shopping__flight_offer_source__from_json(v: &Value) -> Option<iface_shopping::FlightOfferSource> {
-    let m = v.as_object()?;
-    Some(iface_shopping::FlightOfferSource {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -648,10 +656,10 @@ fn iface_shopping__flight_offer_traveler_pricings_item__from_json(v: &Value) -> 
     Some(iface_shopping::FlightOfferTravelerPricingsItem {
         associated_adult_id: m.get("associatedAdultId").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         fare_details_by_segment: m.get("fareDetailsBySegment").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_shopping__flight_offer_traveler_pricings_item_fare_details_by_segment_item__from_json(x)).collect())).unwrap_or_default(),
-        fare_option: match m.get("fareOption").and_then(|v| iface_shopping__traveler_pricing_fare_option__from_json(v)) { Some(x) => x, None => return None },
+        fare_option: match m.get("fareOption").and_then(|v| (v).as_str().and_then(iface_shopping__traveler_pricing_fare_option__from_str)) { Some(x) => x, None => return None },
         price: m.get("price").filter(|v| !v.is_null()).and_then(|v| iface_shopping__price__from_json(v)),
         traveler_id: m.get("travelerId").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-        traveler_type: match m.get("travelerType").and_then(|v| iface_shopping__traveler_type__from_json(v)) { Some(x) => x, None => return None },
+        traveler_type: match m.get("travelerType").and_then(|v| (v).as_str().and_then(iface_shopping__traveler_type__from_str)) { Some(x) => x, None => return None },
     })
 }
 
@@ -661,13 +669,13 @@ fn iface_shopping__flight_offer_traveler_pricings_item_fare_details_by_segment_i
         additional_services: m.get("additionalServices").filter(|v| !v.is_null()).and_then(|v| iface_shopping__flight_offer_traveler_pricings_item_fare_details_by_segment_item_additional_services__from_json(v)),
         allotment_details: m.get("allotmentDetails").filter(|v| !v.is_null()).and_then(|v| iface_shopping__flight_offer_traveler_pricings_item_fare_details_by_segment_item_allotment_details__from_json(v)),
         branded_fare: m.get("brandedFare").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        cabin: m.get("cabin").filter(|v| !v.is_null()).and_then(|v| iface_shopping__travel_class__from_json(v)),
+        cabin: m.get("cabin").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_shopping__travel_class__from_str)),
         class: m.get("class").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         fare_basis: m.get("fareBasis").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         included_checked_bags: m.get("includedCheckedBags").filter(|v| !v.is_null()).and_then(|v| iface_shopping__baggage_allowance__from_json(v)),
         is_allotment: m.get("isAllotment").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
         segment_id: m.get("segmentId").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-        slice_dice_indicator: m.get("sliceDiceIndicator").filter(|v| !v.is_null()).and_then(|v| iface_shopping__slice_dice_indicator__from_json(v)),
+        slice_dice_indicator: m.get("sliceDiceIndicator").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_shopping__slice_dice_indicator__from_str)),
     })
 }
 
@@ -676,7 +684,7 @@ fn iface_shopping__flight_offer_traveler_pricings_item_fare_details_by_segment_i
     Some(iface_shopping::FlightOfferTravelerPricingsItemFareDetailsBySegmentItemAdditionalServices {
         chargeable_checked_bags: m.get("chargeableCheckedBags").filter(|v| !v.is_null()).and_then(|v| iface_shopping__baggage_allowance__from_json(v)),
         chargeable_seat_number: m.get("chargeableSeatNumber").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        other_services: m.get("otherServices").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_shopping__service_name__from_json(x)).collect())),
+        other_services: m.get("otherServices").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().and_then(iface_shopping__service_name__from_str)).collect())),
     })
 }
 
@@ -689,32 +697,11 @@ fn iface_shopping__baggage_allowance__from_json(v: &Value) -> Option<iface_shopp
     })
 }
 
-fn iface_shopping__service_name__from_json(v: &Value) -> Option<iface_shopping::ServiceName> {
-    let m = v.as_object()?;
-    Some(iface_shopping::ServiceName {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-    })
-}
-
 fn iface_shopping__flight_offer_traveler_pricings_item_fare_details_by_segment_item_allotment_details__from_json(v: &Value) -> Option<iface_shopping::FlightOfferTravelerPricingsItemFareDetailsBySegmentItemAllotmentDetails> {
     let m = v.as_object()?;
     Some(iface_shopping::FlightOfferTravelerPricingsItemFareDetailsBySegmentItemAllotmentDetails {
         tour_name: m.get("tourName").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         tour_reference: m.get("tourReference").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-    })
-}
-
-fn iface_shopping__slice_dice_indicator__from_json(v: &Value) -> Option<iface_shopping::SliceDiceIndicator> {
-    let m = v.as_object()?;
-    Some(iface_shopping::SliceDiceIndicator {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-    })
-}
-
-fn iface_shopping__traveler_pricing_fare_option__from_json(v: &Value) -> Option<iface_shopping::TravelerPricingFareOption> {
-    let m = v.as_object()?;
-    Some(iface_shopping::TravelerPricingFareOption {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -734,14 +721,7 @@ fn iface_shopping__fee__from_json(v: &Value) -> Option<iface_shopping::Fee> {
     let m = v.as_object()?;
     Some(iface_shopping::Fee {
         amount: m.get("amount").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        type_op: m.get("type").filter(|v| !v.is_null()).and_then(|v| iface_shopping__fee_type__from_json(v)),
-    })
-}
-
-fn iface_shopping__fee_type__from_json(v: &Value) -> Option<iface_shopping::FeeType> {
-    let m = v.as_object()?;
-    Some(iface_shopping::FeeType {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        type_op: m.get("type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_shopping__fee_type__from_str)),
     })
 }
 
@@ -750,13 +730,6 @@ fn iface_shopping__tax__from_json(v: &Value) -> Option<iface_shopping::Tax> {
     Some(iface_shopping::Tax {
         amount: m.get("amount").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         code: m.get("code").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-    })
-}
-
-fn iface_shopping__traveler_type__from_json(v: &Value) -> Option<iface_shopping::TravelerType> {
-    let m = v.as_object()?;
-    Some(iface_shopping::TravelerType {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -862,6 +835,89 @@ fn iface_shopping__collection_meta_one_way_combinations_item__from_json(v: &Valu
         flight_offer_ids: m.get("flightOfferIds").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
         origin_destination_id: m.get("originDestinationId").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
     })
+}
+
+fn iface_shopping__travel_class__from_str(s: &str) -> Option<iface_shopping::TravelClass> {
+    match s {
+        "ECONOMY" => Some(iface_shopping::TravelClass::Economy),
+        "PREMIUM_ECONOMY" => Some(iface_shopping::TravelClass::PremiumEconomy),
+        "BUSINESS" => Some(iface_shopping::TravelClass::Business),
+        "FIRST" => Some(iface_shopping::TravelClass::First),
+        _ => None,
+    }
+}
+
+fn iface_shopping__pricing_options_fare_type_item_enum__from_str(s: &str) -> Option<iface_shopping::PricingOptionsFareTypeItemEnum> {
+    match s {
+        "PUBLISHED" => Some(iface_shopping::PricingOptionsFareTypeItemEnum::Published),
+        "NEGOTIATED" => Some(iface_shopping::PricingOptionsFareTypeItemEnum::Negotiated),
+        "CORPORATE" => Some(iface_shopping::PricingOptionsFareTypeItemEnum::Corporate),
+        _ => None,
+    }
+}
+
+fn iface_shopping__flight_offer_source__from_str(s: &str) -> Option<iface_shopping::FlightOfferSource> {
+    match s {
+        "GDS" => Some(iface_shopping::FlightOfferSource::Gds),
+        _ => None,
+    }
+}
+
+fn iface_shopping__service_name__from_str(s: &str) -> Option<iface_shopping::ServiceName> {
+    match s {
+        "PRIORITY_BOARDING" => Some(iface_shopping::ServiceName::PriorityBoarding),
+        "AIRPORT_CHECKIN" => Some(iface_shopping::ServiceName::AirportCheckin),
+        _ => None,
+    }
+}
+
+fn iface_shopping__slice_dice_indicator__from_str(s: &str) -> Option<iface_shopping::SliceDiceIndicator> {
+    match s {
+        "LOCAL_AVAILABILITY" => Some(iface_shopping::SliceDiceIndicator::LocalAvailability),
+        "SUB_OD_AVAILABILITY_1" => Some(iface_shopping::SliceDiceIndicator::SubOdAvailabilityV1),
+        "SUB_OD_AVAILABILITY_2" => Some(iface_shopping::SliceDiceIndicator::SubOdAvailabilityV2),
+        _ => None,
+    }
+}
+
+fn iface_shopping__traveler_pricing_fare_option__from_str(s: &str) -> Option<iface_shopping::TravelerPricingFareOption> {
+    match s {
+        "STANDARD" => Some(iface_shopping::TravelerPricingFareOption::Standard),
+        "INCLUSIVE_TOUR" => Some(iface_shopping::TravelerPricingFareOption::InclusiveTour),
+        "SPANISH_MELILLA_RESIDENT" => Some(iface_shopping::TravelerPricingFareOption::SpanishMelillaResident),
+        "SPANISH_CEUTA_RESIDENT" => Some(iface_shopping::TravelerPricingFareOption::SpanishCeutaResident),
+        "SPANISH_CANARY_RESIDENT" => Some(iface_shopping::TravelerPricingFareOption::SpanishCanaryResident),
+        "SPANISH_BALEARIC_RESIDENT" => Some(iface_shopping::TravelerPricingFareOption::SpanishBalearicResident),
+        "AIR_FRANCE_METROPOLITAN_DISCOUNT_PASS" => Some(iface_shopping::TravelerPricingFareOption::AirFranceMetropolitanDiscountPass),
+        "AIR_FRANCE_DOM_DISCOUNT_PASS" => Some(iface_shopping::TravelerPricingFareOption::AirFranceDomDiscountPass),
+        "AIR_FRANCE_COMBINED_DISCOUNT_PASS" => Some(iface_shopping::TravelerPricingFareOption::AirFranceCombinedDiscountPass),
+        "AIR_FRANCE_FAMILY" => Some(iface_shopping::TravelerPricingFareOption::AirFranceFamily),
+        "ADULT_WITH_COMPANION" => Some(iface_shopping::TravelerPricingFareOption::AdultWithCompanion),
+        "COMPANION" => Some(iface_shopping::TravelerPricingFareOption::Companion),
+        _ => None,
+    }
+}
+
+fn iface_shopping__fee_type__from_str(s: &str) -> Option<iface_shopping::FeeType> {
+    match s {
+        "TICKETING" => Some(iface_shopping::FeeType::Ticketing),
+        "FORM_OF_PAYMENT" => Some(iface_shopping::FeeType::FormOfPayment),
+        "SUPPLIER" => Some(iface_shopping::FeeType::Supplier),
+        _ => None,
+    }
+}
+
+fn iface_shopping__traveler_type__from_str(s: &str) -> Option<iface_shopping::TravelerType> {
+    match s {
+        "ADULT" => Some(iface_shopping::TravelerType::Adult),
+        "CHILD" => Some(iface_shopping::TravelerType::Child),
+        "SENIOR" => Some(iface_shopping::TravelerType::Senior),
+        "YOUNG" => Some(iface_shopping::TravelerType::Young),
+        "HELD_INFANT" => Some(iface_shopping::TravelerType::HeldInfant),
+        "SEATED_INFANT" => Some(iface_shopping::TravelerType::SeatedInfant),
+        "STUDENT" => Some(iface_shopping::TravelerType::Student),
+        _ => None,
+    }
 }
 
 fn iface_shopping__get_flight_offers__ok(body: String) -> Result<iface_shopping::GetFlightOffersResponse, crate::runtime::DispatchError> {

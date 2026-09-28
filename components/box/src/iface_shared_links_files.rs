@@ -100,9 +100,10 @@ fn iface_shared_links_files__file_full__to_json(p: &iface_shared_links_files::Fi
     Value::Object(m)
 }
 
-fn iface_shared_links_files__remove_shared_link_body_shared_link__to_json(p: &iface_shared_links_files::RemoveSharedLinkBodySharedLink) -> Value {
+fn iface_shared_links_files__remove_shared_link_body_shared_link_entry__to_json(p: &iface_shared_links_files::RemoveSharedLinkBodySharedLinkEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -143,7 +144,7 @@ fn iface_shared_links_files__remove_shared_link_params__to_json(p: &iface_shared
     let mut m = Map::new();
     m.insert("file_id".into(), Value::String((&p.file_id).clone()));
     m.insert("fields".into(), Value::String((&p.fields).clone()));
-    m.insert("shared_link".into(), match (&p.shared_link) { Some(v) => iface_shared_links_files__remove_shared_link_body_shared_link__to_json(v), None => Value::Null });
+    m.insert("shared_link".into(), match (&p.shared_link) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     Value::Object(m)
 }
 

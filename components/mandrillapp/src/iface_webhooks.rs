@@ -78,9 +78,18 @@ fn iface_webhooks__webhook__to_json(p: &iface_webhooks::Webhook) -> Value {
     Value::Object(m)
 }
 
-fn iface_webhooks__list_response__to_json(p: &iface_webhooks::ListResponse) -> Value {
+fn iface_webhooks__list_response_item__to_json(p: &iface_webhooks::ListResponseItem) -> Value {
     let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
+    m.insert("auth_key".into(), match (&p.auth_key) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("batches_sent".into(), match (&p.batches_sent) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("created_at".into(), match (&p.created_at) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("description".into(), match (&p.description) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("events".into(), match (&p.events) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("events_sent".into(), match (&p.events_sent) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("last_error".into(), match (&p.last_error) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("last_sent_at".into(), match (&p.last_sent_at) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("url".into(), match (&p.url) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -139,10 +148,19 @@ fn iface_webhooks__webhook__from_json(v: &Value) -> Option<iface_webhooks::Webho
     })
 }
 
-fn iface_webhooks__list_response__from_json(v: &Value) -> Option<iface_webhooks::ListResponse> {
+fn iface_webhooks__list_response_item__from_json(v: &Value) -> Option<iface_webhooks::ListResponseItem> {
     let m = v.as_object()?;
-    Some(iface_webhooks::ListResponse {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    Some(iface_webhooks::ListResponseItem {
+        auth_key: m.get("auth_key").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        batches_sent: m.get("batches_sent").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        created_at: m.get("created_at").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        description: m.get("description").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        events: m.get("events").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        events_sent: m.get("events_sent").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        last_error: m.get("last_error").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        last_sent_at: m.get("last_sent_at").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        url: m.get("url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
     })
 }
 
@@ -200,12 +218,12 @@ fn iface_webhooks__post_webhooks_info_json__err(e: crate::runtime::DispatchError
     }
 }
 
-fn iface_webhooks__post_webhooks_list_json__ok(body: String) -> Result<iface_webhooks::ListResponse, crate::runtime::DispatchError> {
+fn iface_webhooks__post_webhooks_list_json__ok(body: String) -> Result<Vec<iface_webhooks::ListResponseItem>, crate::runtime::DispatchError> {
     let v: Value = match serde_json::from_str(&body) {
         Ok(v) => v,
         Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
     };
-    match iface_webhooks__list_response__from_json(&v) {
+    match (&v).as_array().map(|a| a.iter().filter_map(|x| iface_webhooks__list_response_item__from_json(x)).collect()) {
         Some(x) => Ok(x),
         None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
@@ -258,7 +276,7 @@ impl iface_webhooks::Guest for crate::Component {
             Err(e) => Err(iface_webhooks__post_webhooks_info_json__err(e)),
         }
     }
-    fn post_webhooks_list_json(params: iface_webhooks::PostWebhooksListJsonParams) -> Result<iface_webhooks::ListResponse, String> {
+    fn post_webhooks_list_json(params: iface_webhooks::PostWebhooksListJsonParams) -> Result<Vec<iface_webhooks::ListResponseItem>, String> {
         let json = iface_webhooks__post_webhooks_list_json_params__to_json(&params);
         match dispatch(&OP_WEBHOOKS_POST_WEBHOOKS_LIST_JSON, json).and_then(iface_webhooks__post_webhooks_list_json__ok) {
             Ok(v) => Ok(v),

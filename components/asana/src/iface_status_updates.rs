@@ -171,13 +171,14 @@ fn iface_status_updates__get_status_response__to_json(p: &iface_status_updates::
 
 fn iface_status_updates__delete_status_response__to_json(p: &iface_status_updates::DeleteStatusResponse) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => iface_status_updates__empty_response__to_json(v), None => Value::Null });
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_status_updates__empty_response__to_json(p: &iface_status_updates::EmptyResponse) -> Value {
+fn iface_status_updates__empty_response_entry__to_json(p: &iface_status_updates::EmptyResponseEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -302,14 +303,15 @@ fn iface_status_updates__get_status_response__from_json(v: &Value) -> Option<ifa
 fn iface_status_updates__delete_status_response__from_json(v: &Value) -> Option<iface_status_updates::DeleteStatusResponse> {
     let m = v.as_object()?;
     Some(iface_status_updates::DeleteStatusResponse {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| iface_status_updates__empty_response__from_json(v)),
+        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_status_updates::EmptyResponseEntry { key: k.clone(), value: val })).collect())),
     })
 }
 
-fn iface_status_updates__empty_response__from_json(v: &Value) -> Option<iface_status_updates::EmptyResponse> {
+fn iface_status_updates__empty_response_entry__from_json(v: &Value) -> Option<iface_status_updates::EmptyResponseEntry> {
     let m = v.as_object()?;
-    Some(iface_status_updates::EmptyResponse {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_status_updates::EmptyResponseEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 

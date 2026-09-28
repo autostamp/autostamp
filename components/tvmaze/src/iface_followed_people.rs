@@ -63,13 +63,14 @@ fn iface_followed_people__person_follow__to_json(p: &iface_followed_people::Pers
 
 fn iface_followed_people__person_follow_embedded__to_json(p: &iface_followed_people::PersonFollowEmbedded) -> Value {
     let mut m = Map::new();
-    m.insert("person".into(), match (&p.person) { Some(v) => iface_followed_people__person__to_json(v), None => Value::Null });
+    m.insert("person".into(), match (&p.person) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_followed_people__person__to_json(p: &iface_followed_people::Person) -> Value {
+fn iface_followed_people__person_entry__to_json(p: &iface_followed_people::PersonEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -108,14 +109,15 @@ fn iface_followed_people__person_follow__from_json(v: &Value) -> Option<iface_fo
 fn iface_followed_people__person_follow_embedded__from_json(v: &Value) -> Option<iface_followed_people::PersonFollowEmbedded> {
     let m = v.as_object()?;
     Some(iface_followed_people::PersonFollowEmbedded {
-        person: m.get("person").filter(|v| !v.is_null()).and_then(|v| iface_followed_people__person__from_json(v)),
+        person: m.get("person").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_followed_people::PersonEntry { key: k.clone(), value: val })).collect())),
     })
 }
 
-fn iface_followed_people__person__from_json(v: &Value) -> Option<iface_followed_people::Person> {
+fn iface_followed_people__person_entry__from_json(v: &Value) -> Option<iface_followed_people::PersonEntry> {
     let m = v.as_object()?;
-    Some(iface_followed_people::Person {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_followed_people::PersonEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 

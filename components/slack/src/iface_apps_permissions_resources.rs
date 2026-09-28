@@ -19,15 +19,9 @@ const OP_APPS_PERMISSIONS_RESOURCES_LIST_OP: OpSpec = OpSpec {
 
 fn iface_apps_permissions_resources__list_op_response__to_json(p: &iface_apps_permissions_resources::ListOpResponse) -> Value {
     let mut m = Map::new();
-    m.insert("ok".into(), iface_apps_permissions_resources__defs_ok_true__to_json(&p.ok));
+    m.insert("ok".into(), Value::Bool(*(&p.ok)));
     m.insert("resources".into(), Value::Array((&p.resources).iter().map(|v| iface_apps_permissions_resources__list_op_response_resources_item__to_json(v)).collect()));
     m.insert("response_metadata".into(), match (&p.response_metadata) { Some(v) => iface_apps_permissions_resources__list_op_response_response_metadata__to_json(v), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_apps_permissions_resources__defs_ok_true__to_json(p: &iface_apps_permissions_resources::DefsOkTrue) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -55,16 +49,9 @@ fn iface_apps_permissions_resources__list_op_params__to_json(p: &iface_apps_perm
 fn iface_apps_permissions_resources__list_op_response__from_json(v: &Value) -> Option<iface_apps_permissions_resources::ListOpResponse> {
     let m = v.as_object()?;
     Some(iface_apps_permissions_resources::ListOpResponse {
-        ok: match m.get("ok").and_then(|v| iface_apps_permissions_resources__defs_ok_true__from_json(v)) { Some(x) => x, None => return None },
+        ok: m.get("ok").and_then(|v| (v).as_bool()).unwrap_or_default(),
         resources: m.get("resources").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_apps_permissions_resources__list_op_response_resources_item__from_json(x)).collect())).unwrap_or_default(),
         response_metadata: m.get("response_metadata").filter(|v| !v.is_null()).and_then(|v| iface_apps_permissions_resources__list_op_response_response_metadata__from_json(v)),
-    })
-}
-
-fn iface_apps_permissions_resources__defs_ok_true__from_json(v: &Value) -> Option<iface_apps_permissions_resources::DefsOkTrue> {
-    let m = v.as_object()?;
-    Some(iface_apps_permissions_resources::DefsOkTrue {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 

@@ -100,9 +100,10 @@ fn iface_suppressions_unsubscribe_groups__get_asm_groups_group_id_response__to_j
     Value::Object(m)
 }
 
-fn iface_suppressions_unsubscribe_groups__delete_asm_groups_group_id_response__to_json(p: &iface_suppressions_unsubscribe_groups::DeleteAsmGroupsGroupIdResponse) -> Value {
+fn iface_suppressions_unsubscribe_groups__delete_asm_groups_group_id_response_entry__to_json(p: &iface_suppressions_unsubscribe_groups::DeleteAsmGroupsGroupIdResponseEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -180,10 +181,11 @@ fn iface_suppressions_unsubscribe_groups__get_asm_groups_group_id_response__from
     })
 }
 
-fn iface_suppressions_unsubscribe_groups__delete_asm_groups_group_id_response__from_json(v: &Value) -> Option<iface_suppressions_unsubscribe_groups::DeleteAsmGroupsGroupIdResponse> {
+fn iface_suppressions_unsubscribe_groups__delete_asm_groups_group_id_response_entry__from_json(v: &Value) -> Option<iface_suppressions_unsubscribe_groups::DeleteAsmGroupsGroupIdResponseEntry> {
     let m = v.as_object()?;
-    Some(iface_suppressions_unsubscribe_groups::DeleteAsmGroupsGroupIdResponse {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_suppressions_unsubscribe_groups::DeleteAsmGroupsGroupIdResponseEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -259,12 +261,12 @@ fn iface_suppressions_unsubscribe_groups__patch_asm_groups_group_id__err(e: crat
     }
 }
 
-fn iface_suppressions_unsubscribe_groups__delete_asm_groups_group_id__ok(body: String) -> Result<iface_suppressions_unsubscribe_groups::DeleteAsmGroupsGroupIdResponse, crate::runtime::DispatchError> {
+fn iface_suppressions_unsubscribe_groups__delete_asm_groups_group_id__ok(body: String) -> Result<Vec<iface_suppressions_unsubscribe_groups::DeleteAsmGroupsGroupIdResponseEntry>, crate::runtime::DispatchError> {
     let v: Value = match serde_json::from_str(&body) {
         Ok(v) => v,
         Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
     };
-    match iface_suppressions_unsubscribe_groups__delete_asm_groups_group_id_response__from_json(&v) {
+    match (&v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_suppressions_unsubscribe_groups::DeleteAsmGroupsGroupIdResponseEntry { key: k.clone(), value: val })).collect()) {
         Some(x) => Ok(x),
         None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
@@ -306,7 +308,7 @@ impl iface_suppressions_unsubscribe_groups::Guest for crate::Component {
             Err(e) => Err(iface_suppressions_unsubscribe_groups__patch_asm_groups_group_id__err(e)),
         }
     }
-    fn delete_asm_groups_group_id(params: iface_suppressions_unsubscribe_groups::DeleteAsmGroupsGroupIdParams) -> Result<iface_suppressions_unsubscribe_groups::DeleteAsmGroupsGroupIdResponse, String> {
+    fn delete_asm_groups_group_id(params: iface_suppressions_unsubscribe_groups::DeleteAsmGroupsGroupIdParams) -> Result<Vec<iface_suppressions_unsubscribe_groups::DeleteAsmGroupsGroupIdResponseEntry>, String> {
         let json = iface_suppressions_unsubscribe_groups__delete_asm_groups_group_id_params__to_json(&params);
         match dispatch(&OP_SUPPRESSIONS_UNSUBSCRIBE_GROUPS_DELETE_ASM_GROUPS_GROUP_ID, json).and_then(iface_suppressions_unsubscribe_groups__delete_asm_groups_group_id__ok) {
             Ok(v) => Ok(v),

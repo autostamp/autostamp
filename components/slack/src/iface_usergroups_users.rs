@@ -33,26 +33,14 @@ const OP_USERGROUPS_USERS_UPDATE: OpSpec = OpSpec {
 
 fn iface_usergroups_users__list_op_response__to_json(p: &iface_usergroups_users::ListOpResponse) -> Value {
     let mut m = Map::new();
-    m.insert("ok".into(), iface_usergroups_users__defs_ok_true__to_json(&p.ok));
-    m.insert("users".into(), Value::Array((&p.users).iter().map(|v| iface_usergroups_users__defs_user_id__to_json(v)).collect()));
-    Value::Object(m)
-}
-
-fn iface_usergroups_users__defs_ok_true__to_json(p: &iface_usergroups_users::DefsOkTrue) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_usergroups_users__defs_user_id__to_json(p: &iface_usergroups_users::DefsUserId) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
+    m.insert("ok".into(), Value::Bool(*(&p.ok)));
+    m.insert("users".into(), Value::Array((&p.users).iter().map(|v| Value::String((v).clone())).collect()));
     Value::Object(m)
 }
 
 fn iface_usergroups_users__update_response__to_json(p: &iface_usergroups_users::UpdateResponse) -> Value {
     let mut m = Map::new();
-    m.insert("ok".into(), iface_usergroups_users__defs_ok_true__to_json(&p.ok));
+    m.insert("ok".into(), Value::Bool(*(&p.ok)));
     m.insert("usergroup".into(), iface_usergroups_users__objs_subteam__to_json(&p.usergroup));
     Value::Object(m)
 }
@@ -62,7 +50,7 @@ fn iface_usergroups_users__objs_subteam__to_json(p: &iface_usergroups_users::Obj
     m.insert("auto_provision".into(), Value::Bool(*(&p.auto_provision)));
     m.insert("auto_type".into(), Value::String((&p.auto_type).clone()));
     m.insert("channel_count".into(), match (&p.channel_count) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    m.insert("created_by".into(), iface_usergroups_users__defs_user_id__to_json(&p.created_by));
+    m.insert("created_by".into(), Value::String((&p.created_by).clone()));
     m.insert("date_create".into(), Value::Number(serde_json::Number::from(*(&p.date_create))));
     m.insert("date_delete".into(), Value::Number(serde_json::Number::from(*(&p.date_delete))));
     m.insert("date_update".into(), Value::Number(serde_json::Number::from(*(&p.date_update))));
@@ -70,47 +58,23 @@ fn iface_usergroups_users__objs_subteam__to_json(p: &iface_usergroups_users::Obj
     m.insert("description".into(), Value::String((&p.description).clone()));
     m.insert("enterprise_subteam_id".into(), Value::String((&p.enterprise_subteam_id).clone()));
     m.insert("handle".into(), Value::String((&p.handle).clone()));
-    m.insert("id".into(), iface_usergroups_users__defs_subteam_id__to_json(&p.id));
+    m.insert("id".into(), Value::String((&p.id).clone()));
     m.insert("is_external".into(), Value::Bool(*(&p.is_external)));
     m.insert("is_subteam".into(), Value::Bool(*(&p.is_subteam)));
     m.insert("is_usergroup".into(), Value::Bool(*(&p.is_usergroup)));
     m.insert("name".into(), Value::String((&p.name).clone()));
     m.insert("prefs".into(), iface_usergroups_users__objs_subteam_prefs__to_json(&p.prefs));
-    m.insert("team_id".into(), iface_usergroups_users__defs_team__to_json(&p.team_id));
-    m.insert("updated_by".into(), iface_usergroups_users__defs_user_id__to_json(&p.updated_by));
+    m.insert("team_id".into(), Value::String((&p.team_id).clone()));
+    m.insert("updated_by".into(), Value::String((&p.updated_by).clone()));
     m.insert("user_count".into(), match (&p.user_count) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    m.insert("users".into(), match (&p.users) { Some(v) => Value::Array((v).iter().map(|v| iface_usergroups_users__defs_user_id__to_json(v)).collect()), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_usergroups_users__defs_subteam_id__to_json(p: &iface_usergroups_users::DefsSubteamId) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
+    m.insert("users".into(), match (&p.users) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
     Value::Object(m)
 }
 
 fn iface_usergroups_users__objs_subteam_prefs__to_json(p: &iface_usergroups_users::ObjsSubteamPrefs) -> Value {
     let mut m = Map::new();
-    m.insert("channels".into(), Value::Array((&p.channels).iter().map(|v| iface_usergroups_users__defs_channel_id__to_json(v)).collect()));
-    m.insert("groups".into(), Value::Array((&p.groups).iter().map(|v| iface_usergroups_users__defs_group_id__to_json(v)).collect()));
-    Value::Object(m)
-}
-
-fn iface_usergroups_users__defs_channel_id__to_json(p: &iface_usergroups_users::DefsChannelId) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_usergroups_users__defs_group_id__to_json(p: &iface_usergroups_users::DefsGroupId) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_usergroups_users__defs_team__to_json(p: &iface_usergroups_users::DefsTeam) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
+    m.insert("channels".into(), Value::Array((&p.channels).iter().map(|v| Value::String((v).clone())).collect()));
+    m.insert("groups".into(), Value::Array((&p.groups).iter().map(|v| Value::String((v).clone())).collect()));
     Value::Object(m)
 }
 
@@ -134,29 +98,15 @@ fn iface_usergroups_users__update_params__to_json(p: &iface_usergroups_users::Up
 fn iface_usergroups_users__list_op_response__from_json(v: &Value) -> Option<iface_usergroups_users::ListOpResponse> {
     let m = v.as_object()?;
     Some(iface_usergroups_users::ListOpResponse {
-        ok: match m.get("ok").and_then(|v| iface_usergroups_users__defs_ok_true__from_json(v)) { Some(x) => x, None => return None },
-        users: m.get("users").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_usergroups_users__defs_user_id__from_json(x)).collect())).unwrap_or_default(),
-    })
-}
-
-fn iface_usergroups_users__defs_ok_true__from_json(v: &Value) -> Option<iface_usergroups_users::DefsOkTrue> {
-    let m = v.as_object()?;
-    Some(iface_usergroups_users::DefsOkTrue {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-    })
-}
-
-fn iface_usergroups_users__defs_user_id__from_json(v: &Value) -> Option<iface_usergroups_users::DefsUserId> {
-    let m = v.as_object()?;
-    Some(iface_usergroups_users::DefsUserId {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        ok: m.get("ok").and_then(|v| (v).as_bool()).unwrap_or_default(),
+        users: m.get("users").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())).unwrap_or_default(),
     })
 }
 
 fn iface_usergroups_users__update_response__from_json(v: &Value) -> Option<iface_usergroups_users::UpdateResponse> {
     let m = v.as_object()?;
     Some(iface_usergroups_users::UpdateResponse {
-        ok: match m.get("ok").and_then(|v| iface_usergroups_users__defs_ok_true__from_json(v)) { Some(x) => x, None => return None },
+        ok: m.get("ok").and_then(|v| (v).as_bool()).unwrap_or_default(),
         usergroup: match m.get("usergroup").and_then(|v| iface_usergroups_users__objs_subteam__from_json(v)) { Some(x) => x, None => return None },
     })
 }
@@ -167,7 +117,7 @@ fn iface_usergroups_users__objs_subteam__from_json(v: &Value) -> Option<iface_us
         auto_provision: m.get("auto_provision").and_then(|v| (v).as_bool()).unwrap_or_default(),
         auto_type: m.get("auto_type").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         channel_count: m.get("channel_count").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
-        created_by: match m.get("created_by").and_then(|v| iface_usergroups_users__defs_user_id__from_json(v)) { Some(x) => x, None => return None },
+        created_by: m.get("created_by").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         date_create: m.get("date_create").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
         date_delete: m.get("date_delete").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
         date_update: m.get("date_update").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
@@ -175,52 +125,24 @@ fn iface_usergroups_users__objs_subteam__from_json(v: &Value) -> Option<iface_us
         description: m.get("description").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         enterprise_subteam_id: m.get("enterprise_subteam_id").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         handle: m.get("handle").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-        id: match m.get("id").and_then(|v| iface_usergroups_users__defs_subteam_id__from_json(v)) { Some(x) => x, None => return None },
+        id: m.get("id").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         is_external: m.get("is_external").and_then(|v| (v).as_bool()).unwrap_or_default(),
         is_subteam: m.get("is_subteam").and_then(|v| (v).as_bool()).unwrap_or_default(),
         is_usergroup: m.get("is_usergroup").and_then(|v| (v).as_bool()).unwrap_or_default(),
         name: m.get("name").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         prefs: match m.get("prefs").and_then(|v| iface_usergroups_users__objs_subteam_prefs__from_json(v)) { Some(x) => x, None => return None },
-        team_id: match m.get("team_id").and_then(|v| iface_usergroups_users__defs_team__from_json(v)) { Some(x) => x, None => return None },
-        updated_by: match m.get("updated_by").and_then(|v| iface_usergroups_users__defs_user_id__from_json(v)) { Some(x) => x, None => return None },
+        team_id: m.get("team_id").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        updated_by: m.get("updated_by").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         user_count: m.get("user_count").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
-        users: m.get("users").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_usergroups_users__defs_user_id__from_json(x)).collect())),
-    })
-}
-
-fn iface_usergroups_users__defs_subteam_id__from_json(v: &Value) -> Option<iface_usergroups_users::DefsSubteamId> {
-    let m = v.as_object()?;
-    Some(iface_usergroups_users::DefsSubteamId {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        users: m.get("users").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
     })
 }
 
 fn iface_usergroups_users__objs_subteam_prefs__from_json(v: &Value) -> Option<iface_usergroups_users::ObjsSubteamPrefs> {
     let m = v.as_object()?;
     Some(iface_usergroups_users::ObjsSubteamPrefs {
-        channels: m.get("channels").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_usergroups_users__defs_channel_id__from_json(x)).collect())).unwrap_or_default(),
-        groups: m.get("groups").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_usergroups_users__defs_group_id__from_json(x)).collect())).unwrap_or_default(),
-    })
-}
-
-fn iface_usergroups_users__defs_channel_id__from_json(v: &Value) -> Option<iface_usergroups_users::DefsChannelId> {
-    let m = v.as_object()?;
-    Some(iface_usergroups_users::DefsChannelId {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-    })
-}
-
-fn iface_usergroups_users__defs_group_id__from_json(v: &Value) -> Option<iface_usergroups_users::DefsGroupId> {
-    let m = v.as_object()?;
-    Some(iface_usergroups_users::DefsGroupId {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-    })
-}
-
-fn iface_usergroups_users__defs_team__from_json(v: &Value) -> Option<iface_usergroups_users::DefsTeam> {
-    let m = v.as_object()?;
-    Some(iface_usergroups_users::DefsTeam {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        channels: m.get("channels").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())).unwrap_or_default(),
+        groups: m.get("groups").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())).unwrap_or_default(),
     })
 }
 

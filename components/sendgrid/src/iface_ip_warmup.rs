@@ -47,15 +47,31 @@ const OP_IP_WARMUP_DELETE_IPS_WARMUP_IP_ADDRESS: OpSpec = OpSpec {
     ],
 };
 
-fn iface_ip_warmup__response__to_json(p: &iface_ip_warmup::Response) -> Value {
+fn iface_ip_warmup__response_item__to_json(p: &iface_ip_warmup::ResponseItem) -> Value {
     let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
+    m.insert("ip".into(), Value::String((&p.ip).clone()));
+    m.insert("start_date".into(), Value::Number(serde_json::Number::from(*(&p.start_date))));
     Value::Object(m)
 }
 
-fn iface_ip_warmup__delete_ips_warmup_ip_address_response__to_json(p: &iface_ip_warmup::DeleteIpsWarmupIpAddressResponse) -> Value {
+fn iface_ip_warmup__response_item_v2__to_json(p: &iface_ip_warmup::ResponseItemV2) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("ip".into(), Value::String((&p.ip).clone()));
+    m.insert("start_date".into(), Value::Number(serde_json::Number::from(*(&p.start_date))));
+    Value::Object(m)
+}
+
+fn iface_ip_warmup__response_item_v3__to_json(p: &iface_ip_warmup::ResponseItemV3) -> Value {
+    let mut m = Map::new();
+    m.insert("ip".into(), Value::String((&p.ip).clone()));
+    m.insert("start_date".into(), Value::Number(serde_json::Number::from(*(&p.start_date))));
+    Value::Object(m)
+}
+
+fn iface_ip_warmup__delete_ips_warmup_ip_address_response_entry__to_json(p: &iface_ip_warmup::DeleteIpsWarmupIpAddressResponseEntry) -> Value {
+    let mut m = Map::new();
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -77,26 +93,44 @@ fn iface_ip_warmup__delete_ips_warmup_ip_address_params__to_json(p: &iface_ip_wa
     Value::Object(m)
 }
 
-fn iface_ip_warmup__response__from_json(v: &Value) -> Option<iface_ip_warmup::Response> {
+fn iface_ip_warmup__response_item__from_json(v: &Value) -> Option<iface_ip_warmup::ResponseItem> {
     let m = v.as_object()?;
-    Some(iface_ip_warmup::Response {
+    Some(iface_ip_warmup::ResponseItem {
+        ip: m.get("ip").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        start_date: m.get("start_date").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
+    })
+}
+
+fn iface_ip_warmup__response_item_v2__from_json(v: &Value) -> Option<iface_ip_warmup::ResponseItemV2> {
+    let m = v.as_object()?;
+    Some(iface_ip_warmup::ResponseItemV2 {
+        ip: m.get("ip").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        start_date: m.get("start_date").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
+    })
+}
+
+fn iface_ip_warmup__response_item_v3__from_json(v: &Value) -> Option<iface_ip_warmup::ResponseItemV3> {
+    let m = v.as_object()?;
+    Some(iface_ip_warmup::ResponseItemV3 {
+        ip: m.get("ip").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        start_date: m.get("start_date").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
+    })
+}
+
+fn iface_ip_warmup__delete_ips_warmup_ip_address_response_entry__from_json(v: &Value) -> Option<iface_ip_warmup::DeleteIpsWarmupIpAddressResponseEntry> {
+    let m = v.as_object()?;
+    Some(iface_ip_warmup::DeleteIpsWarmupIpAddressResponseEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
-fn iface_ip_warmup__delete_ips_warmup_ip_address_response__from_json(v: &Value) -> Option<iface_ip_warmup::DeleteIpsWarmupIpAddressResponse> {
-    let m = v.as_object()?;
-    Some(iface_ip_warmup::DeleteIpsWarmupIpAddressResponse {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-    })
-}
-
-fn iface_ip_warmup__get_ips_warmup__ok(body: String) -> Result<iface_ip_warmup::Response, crate::runtime::DispatchError> {
+fn iface_ip_warmup__get_ips_warmup__ok(body: String) -> Result<Vec<iface_ip_warmup::ResponseItem>, crate::runtime::DispatchError> {
     let v: Value = match serde_json::from_str(&body) {
         Ok(v) => v,
         Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
     };
-    match iface_ip_warmup__response__from_json(&v) {
+    match (&v).as_array().map(|a| a.iter().filter_map(|x| iface_ip_warmup__response_item__from_json(x)).collect()) {
         Some(x) => Ok(x),
         None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
@@ -109,12 +143,12 @@ fn iface_ip_warmup__get_ips_warmup__err(e: crate::runtime::DispatchError) -> Str
     }
 }
 
-fn iface_ip_warmup__post_ips_warmup__ok(body: String) -> Result<iface_ip_warmup::Response, crate::runtime::DispatchError> {
+fn iface_ip_warmup__post_ips_warmup__ok(body: String) -> Result<Vec<iface_ip_warmup::ResponseItemV2>, crate::runtime::DispatchError> {
     let v: Value = match serde_json::from_str(&body) {
         Ok(v) => v,
         Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
     };
-    match iface_ip_warmup__response__from_json(&v) {
+    match (&v).as_array().map(|a| a.iter().filter_map(|x| iface_ip_warmup__response_item_v2__from_json(x)).collect()) {
         Some(x) => Ok(x),
         None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
@@ -130,12 +164,12 @@ fn iface_ip_warmup__post_ips_warmup__err(e: crate::runtime::DispatchError) -> if
     }
 }
 
-fn iface_ip_warmup__get_ips_warmup_ip_address__ok(body: String) -> Result<iface_ip_warmup::Response, crate::runtime::DispatchError> {
+fn iface_ip_warmup__get_ips_warmup_ip_address__ok(body: String) -> Result<Vec<iface_ip_warmup::ResponseItemV3>, crate::runtime::DispatchError> {
     let v: Value = match serde_json::from_str(&body) {
         Ok(v) => v,
         Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
     };
-    match iface_ip_warmup__response__from_json(&v) {
+    match (&v).as_array().map(|a| a.iter().filter_map(|x| iface_ip_warmup__response_item_v3__from_json(x)).collect()) {
         Some(x) => Ok(x),
         None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
@@ -151,12 +185,12 @@ fn iface_ip_warmup__get_ips_warmup_ip_address__err(e: crate::runtime::DispatchEr
     }
 }
 
-fn iface_ip_warmup__delete_ips_warmup_ip_address__ok(body: String) -> Result<iface_ip_warmup::DeleteIpsWarmupIpAddressResponse, crate::runtime::DispatchError> {
+fn iface_ip_warmup__delete_ips_warmup_ip_address__ok(body: String) -> Result<Vec<iface_ip_warmup::DeleteIpsWarmupIpAddressResponseEntry>, crate::runtime::DispatchError> {
     let v: Value = match serde_json::from_str(&body) {
         Ok(v) => v,
         Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
     };
-    match iface_ip_warmup__delete_ips_warmup_ip_address_response__from_json(&v) {
+    match (&v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_ip_warmup::DeleteIpsWarmupIpAddressResponseEntry { key: k.clone(), value: val })).collect()) {
         Some(x) => Ok(x),
         None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
@@ -173,27 +207,27 @@ fn iface_ip_warmup__delete_ips_warmup_ip_address__err(e: crate::runtime::Dispatc
 }
 
 impl iface_ip_warmup::Guest for crate::Component {
-    fn get_ips_warmup() -> Result<iface_ip_warmup::Response, String> {
+    fn get_ips_warmup() -> Result<Vec<iface_ip_warmup::ResponseItem>, String> {
         match dispatch(&OP_IP_WARMUP_GET_IPS_WARMUP, Value::Object(Map::new())).and_then(iface_ip_warmup__get_ips_warmup__ok) {
             Ok(v) => Ok(v),
             Err(e) => Err(iface_ip_warmup__get_ips_warmup__err(e)),
         }
     }
-    fn post_ips_warmup(params: iface_ip_warmup::PostIpsWarmupParams) -> Result<iface_ip_warmup::Response, iface_ip_warmup::PostIpsWarmupError> {
+    fn post_ips_warmup(params: iface_ip_warmup::PostIpsWarmupParams) -> Result<Vec<iface_ip_warmup::ResponseItemV2>, iface_ip_warmup::PostIpsWarmupError> {
         let json = iface_ip_warmup__post_ips_warmup_params__to_json(&params);
         match dispatch(&OP_IP_WARMUP_POST_IPS_WARMUP, json).and_then(iface_ip_warmup__post_ips_warmup__ok) {
             Ok(v) => Ok(v),
             Err(e) => Err(iface_ip_warmup__post_ips_warmup__err(e)),
         }
     }
-    fn get_ips_warmup_ip_address(params: iface_ip_warmup::GetIpsWarmupIpAddressParams) -> Result<iface_ip_warmup::Response, iface_ip_warmup::GetIpsWarmupIpAddressError> {
+    fn get_ips_warmup_ip_address(params: iface_ip_warmup::GetIpsWarmupIpAddressParams) -> Result<Vec<iface_ip_warmup::ResponseItemV3>, iface_ip_warmup::GetIpsWarmupIpAddressError> {
         let json = iface_ip_warmup__get_ips_warmup_ip_address_params__to_json(&params);
         match dispatch(&OP_IP_WARMUP_GET_IPS_WARMUP_IP_ADDRESS, json).and_then(iface_ip_warmup__get_ips_warmup_ip_address__ok) {
             Ok(v) => Ok(v),
             Err(e) => Err(iface_ip_warmup__get_ips_warmup_ip_address__err(e)),
         }
     }
-    fn delete_ips_warmup_ip_address(params: iface_ip_warmup::DeleteIpsWarmupIpAddressParams) -> Result<iface_ip_warmup::DeleteIpsWarmupIpAddressResponse, iface_ip_warmup::DeleteIpsWarmupIpAddressError> {
+    fn delete_ips_warmup_ip_address(params: iface_ip_warmup::DeleteIpsWarmupIpAddressParams) -> Result<Vec<iface_ip_warmup::DeleteIpsWarmupIpAddressResponseEntry>, iface_ip_warmup::DeleteIpsWarmupIpAddressError> {
         let json = iface_ip_warmup__delete_ips_warmup_ip_address_params__to_json(&params);
         match dispatch(&OP_IP_WARMUP_DELETE_IPS_WARMUP_IP_ADDRESS, json).and_then(iface_ip_warmup__delete_ips_warmup_ip_address__ok) {
             Ok(v) => Ok(v),

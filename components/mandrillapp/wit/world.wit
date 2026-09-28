@@ -1,4 +1,4 @@
-package autostamp:mandrillapp@0.5.0;
+package autostamp:mandrillapp@0.6.0;
 
 interface exports {
   record satus {
@@ -19,9 +19,13 @@ interface exports {
     type-op: option<string>
   }
 
-  record list-response {
-    /// opaque schema; raw JSON
-    value: string
+  record list-response-item {
+    created-at: option<string>,
+    finished-at: option<string>,
+    id: option<string>,
+    result-url: option<string>,
+    state: option<string>,
+    type-op: option<string>
   }
 
   record post-exports-activity-json-params {
@@ -45,7 +49,7 @@ interface exports {
   record post-exports-list-json-params {
     key: option<string>
   }
-  post-exports-list-json: func(params: post-exports-list-json-params) -> result<list-response, string>;
+  post-exports-list-json: func(params: post-exports-list-json-params) -> result<list<list-response-item>, string>;
 
   record post-exports-rejects-json-params {
     key: option<string>,
@@ -75,19 +79,22 @@ interface inbound {
     url: option<string>
   }
 
-  record domains-response {
-    /// opaque schema; raw JSON
-    value: string
+  record domains-response-item {
+    created-at: option<string>,
+    domain: option<string>,
+    valid-mx: option<bool>
   }
 
-  record routes-response {
-    /// opaque schema; raw JSON
-    value: string
+  record routes-response-item {
+    id: option<string>,
+    pattern: option<string>,
+    url: option<string>
   }
 
-  record send-raw-response {
-    /// opaque schema; raw JSON
-    value: string
+  record send-raw-response-item {
+    email: option<string>,
+    pattern: option<string>,
+    url: option<string>
   }
 
   record post-inbound-add-domain-json-params {
@@ -125,13 +132,13 @@ interface inbound {
   record post-inbound-domains-json-params {
     key: option<string>
   }
-  post-inbound-domains-json: func(params: post-inbound-domains-json-params) -> result<domains-response, string>;
+  post-inbound-domains-json: func(params: post-inbound-domains-json-params) -> result<list<domains-response-item>, string>;
 
   record post-inbound-routes-json-params {
     domain: option<string>,
     key: option<string>
   }
-  post-inbound-routes-json: func(params: post-inbound-routes-json-params) -> result<routes-response, string>;
+  post-inbound-routes-json: func(params: post-inbound-routes-json-params) -> result<list<routes-response-item>, string>;
 
   record post-inbound-send-raw-json-params {
     client-address: option<string>,
@@ -141,7 +148,7 @@ interface inbound {
     raw-message: option<string>,
     to: option<list<string>>
   }
-  post-inbound-send-raw-json: func(params: post-inbound-send-raw-json-params) -> result<send-raw-response, string>;
+  post-inbound-send-raw-json: func(params: post-inbound-send-raw-json-params) -> result<list<send-raw-response-item>, string>;
 
   record post-inbound-update-route-json-params {
     id: option<string>,
@@ -217,14 +224,52 @@ interface ips {
     ip: option<string>
   }
 
-  record list-pools-response {
-    /// opaque schema; raw JSON
-    value: string
+  record list-pools-response-item {
+    created-at: option<string>,
+    ips: option<list<list-pools-response-item-ips-item>>,
+    name: option<string>
   }
 
-  record list-response {
-    /// opaque schema; raw JSON
-    value: string
+  record list-pools-response-item-ips-item {
+    created-at: option<string>,
+    custom-dns: option<list-pools-response-item-ips-item-custom-dns>,
+    domain: option<string>,
+    ip: option<string>,
+    pool: option<string>,
+    warmup: option<list-pools-response-item-ips-item-warmup>
+  }
+
+  record list-pools-response-item-ips-item-custom-dns {
+    enabled: option<bool>,
+    error: option<string>,
+    valid: option<bool>
+  }
+
+  record list-pools-response-item-ips-item-warmup {
+    end-at: option<string>,
+    start-at: option<string>,
+    warming-up: option<bool>
+  }
+
+  record list-response-item {
+    created-at: option<string>,
+    custom-dns: option<list-response-item-custom-dns>,
+    domain: option<string>,
+    ip: option<string>,
+    pool: option<string>,
+    warmup: option<list-response-item-warmup>
+  }
+
+  record list-response-item-custom-dns {
+    enabled: option<bool>,
+    error: option<string>,
+    valid: option<bool>
+  }
+
+  record list-response-item-warmup {
+    end-at: option<string>,
+    start-at: option<string>,
+    warming-up: option<bool>
   }
 
   record provision-response {
@@ -271,12 +316,12 @@ interface ips {
   record post-ips-list-pools-json-params {
     key: option<string>
   }
-  post-ips-list-pools-json: func(params: post-ips-list-pools-json-params) -> result<list-pools-response, string>;
+  post-ips-list-pools-json: func(params: post-ips-list-pools-json-params) -> result<list<list-pools-response-item>, string>;
 
   record post-ips-list-json-params {
     key: option<string>
   }
-  post-ips-list-json: func(params: post-ips-list-json-params) -> result<list-response, string>;
+  post-ips-list-json: func(params: post-ips-list-json-params) -> result<list<list-response-item>, string>;
 
   record post-ips-pool-info-json-params {
     key: option<string>,
@@ -396,9 +441,13 @@ interface messages {
     type-op: option<string>
   }
 
-  record list-scheduled-response {
-    /// opaque schema; raw JSON
-    value: string
+  record list-scheduled-response-item {
+    id: option<string>,
+    created-at: option<string>,
+    from-email: option<string>,
+    send-at: option<string>,
+    subject: option<string>,
+    to: option<string>
   }
 
   record parse-response {
@@ -435,19 +484,61 @@ interface messages {
     name: option<string>
   }
 
-  record timeseries {
-    /// opaque schema; raw JSON
-    value: string
+  record timeseries-item {
+    clicks: option<s32>,
+    complaints: option<s32>,
+    hard-bounces: option<s32>,
+    opens: option<s32>,
+    rejects: option<s32>,
+    sent: option<s32>,
+    soft-bounces: option<s32>,
+    time: option<string>,
+    unique-clicks: option<s32>,
+    unique-opens: option<s32>,
+    unsubs: option<s32>
   }
 
-  record search-response {
-    /// opaque schema; raw JSON
-    value: string
+  record search-response-item {
+    id: option<string>,
+    clicks: option<s32>,
+    clicks-detail: option<list<search-response-item-clicks-detail-item>>,
+    email: option<string>,
+    metadata: option<search-response-item-metadata>,
+    opens: option<s32>,
+    opens-detail: option<list<search-response-item-opens-detail-item>>,
+    sender: option<string>,
+    state: option<string>,
+    subject: option<string>,
+    tags: option<list<string>>,
+    template: option<string>,
+    ts: option<s32>
   }
 
-  record message-send-status {
-    /// opaque schema; raw JSON
-    value: string
+  record search-response-item-clicks-detail-item {
+    ip: option<string>,
+    location: option<string>,
+    ts: option<s32>,
+    ua: option<string>,
+    url: option<string>
+  }
+
+  record search-response-item-metadata {
+    user-id: option<string>,
+    website: option<string>
+  }
+
+  record search-response-item-opens-detail-item {
+    ip: option<string>,
+    location: option<string>,
+    ts: option<s32>,
+    ua: option<string>
+  }
+
+  record message-send-status-item {
+    id: option<string>,
+    email: option<string>,
+    reject-reason: option<string>,
+    status: option<string>
   }
 
   record send-template-message {
@@ -539,6 +630,13 @@ interface messages {
     name: option<string>
   }
 
+  record message-send-status-item-v2 {
+    id: option<string>,
+    email: option<string>,
+    reject-reason: option<string>,
+    status: option<string>
+  }
+
   record send-message {
     attachments: option<list<send-message-attachments-item>>,
     auto-html: option<string>,
@@ -623,6 +721,13 @@ interface messages {
     type-op: option<string>
   }
 
+  record message-send-status-item-v3 {
+    id: option<string>,
+    email: option<string>,
+    reject-reason: option<string>,
+    status: option<string>
+  }
+
   record post-messages-cancel-scheduled-json-params {
     id: option<string>,
     key: option<string>
@@ -645,7 +750,7 @@ interface messages {
     key: option<string>,
     to: option<string>
   }
-  post-messages-list-scheduled-json: func(params: post-messages-list-scheduled-json-params) -> result<list-scheduled-response, string>;
+  post-messages-list-scheduled-json: func(params: post-messages-list-scheduled-json-params) -> result<list<list-scheduled-response-item>, string>;
 
   record post-messages-parse-json-params {
     key: option<string>,
@@ -668,7 +773,7 @@ interface messages {
     senders: option<list<string>>,
     tags: option<list<string>>
   }
-  post-messages-search-time-series-json: func(params: post-messages-search-time-series-json-params) -> result<timeseries, string>;
+  post-messages-search-time-series-json: func(params: post-messages-search-time-series-json-params) -> result<list<timeseries-item>, string>;
 
   record post-messages-search-json-params {
     api-keys: option<list<string>>,
@@ -680,7 +785,7 @@ interface messages {
     senders: option<list<string>>,
     tags: option<list<string>>
   }
-  post-messages-search-json: func(params: post-messages-search-json-params) -> result<search-response, string>;
+  post-messages-search-json: func(params: post-messages-search-json-params) -> result<list<search-response-item>, string>;
 
   record post-messages-send-raw-json-params {
     async-op: option<bool>,
@@ -693,7 +798,7 @@ interface messages {
     send-at: option<string>,
     to: option<list<string>>
   }
-  post-messages-send-raw-json: func(params: post-messages-send-raw-json-params) -> result<message-send-status, string>;
+  post-messages-send-raw-json: func(params: post-messages-send-raw-json-params) -> result<list<message-send-status-item>, string>;
 
   record post-messages-send-template-json-params {
     async-op: option<bool>,
@@ -704,7 +809,7 @@ interface messages {
     template-content: option<list<send-template-template-content-item>>,
     template-name: option<string>
   }
-  post-messages-send-template-json: func(params: post-messages-send-template-json-params) -> result<message-send-status, string>;
+  post-messages-send-template-json: func(params: post-messages-send-template-json-params) -> result<list<message-send-status-item-v2>, string>;
 
   record post-messages-send-json-params {
     async-op: option<bool>,
@@ -713,7 +818,7 @@ interface messages {
     message: option<send-message>,
     send-at: option<string>
   }
-  post-messages-send-json: func(params: post-messages-send-json-params) -> result<message-send-status, string>;
+  post-messages-send-json: func(params: post-messages-send-json-params) -> result<list<message-send-status-item-v3>, string>;
 
 }
 
@@ -724,9 +829,10 @@ interface metadata {
     view-template: option<string>
   }
 
-  record list-response {
-    /// opaque schema; raw JSON
-    value: string
+  record list-response-item {
+    name: option<string>,
+    state: option<string>,
+    view-template: option<string>
   }
 
   record post-metadata-add-json-params {
@@ -745,7 +851,7 @@ interface metadata {
   record post-metadata-list-json-params {
     key: option<string>
   }
-  post-metadata-list-json: func(params: post-metadata-list-json-params) -> result<list-response, string>;
+  post-metadata-list-json: func(params: post-metadata-list-json-params) -> result<list<list-response-item>, string>;
 
   record post-metadata-update-json-params {
     key: option<string>,
@@ -768,9 +874,31 @@ interface rejects {
     subaccount: option<string>
   }
 
-  record list-response {
-    /// opaque schema; raw JSON
-    value: string
+  record list-response-item {
+    created-at: option<string>,
+    detail: option<string>,
+    email: option<string>,
+    expired: option<bool>,
+    expires-at: option<string>,
+    last-event-at: option<string>,
+    reason: option<string>,
+    sender: option<list-response-item-sender>,
+    subaccount: option<string>
+  }
+
+  record list-response-item-sender {
+    address: option<string>,
+    clicks: option<s32>,
+    complaints: option<s32>,
+    created-at: option<string>,
+    hard-bounces: option<s32>,
+    opens: option<s32>,
+    rejects: option<s32>,
+    sent: option<s32>,
+    soft-bounces: option<s32>,
+    unique-clicks: option<s32>,
+    unique-opens: option<s32>,
+    unsubs: option<s32>
   }
 
   record post-rejects-add-json-params {
@@ -794,7 +922,7 @@ interface rejects {
     key: option<string>,
     subaccount: option<string>
   }
-  post-rejects-list-json: func(params: post-rejects-list-json-params) -> result<list-response, string>;
+  post-rejects-list-json: func(params: post-rejects-list-json-params) -> result<list<list-response-item>, string>;
 
 }
 
@@ -821,9 +949,26 @@ interface senders {
     valid-after: option<string>
   }
 
-  record domains-response {
-    /// opaque schema; raw JSON
-    value: string
+  record domains-response-item {
+    created-at: option<string>,
+    dkim: option<domains-response-item-dkim>,
+    domain: option<string>,
+    last-tested-at: option<string>,
+    spf: option<domains-response-item-spf>,
+    valid-signing: option<bool>,
+    verified-at: option<string>
+  }
+
+  record domains-response-item-dkim {
+    error: option<string>,
+    valid: option<bool>,
+    valid-after: option<string>
+  }
+
+  record domains-response-item-spf {
+    error: option<string>,
+    valid: option<bool>,
+    valid-after: option<string>
   }
 
   record info-response {
@@ -913,14 +1058,32 @@ interface senders {
     unsubs: option<s32>
   }
 
-  record senders {
-    /// opaque schema; raw JSON
-    value: string
+  record senders-item {
+    address: option<string>,
+    clicks: option<s32>,
+    complaints: option<s32>,
+    created-at: option<string>,
+    hard-bounces: option<s32>,
+    opens: option<s32>,
+    rejects: option<s32>,
+    sent: option<s32>,
+    soft-bounces: option<s32>,
+    unique-clicks: option<s32>,
+    unique-opens: option<s32>,
+    unsubs: option<s32>
   }
 
-  record time-series {
-    /// opaque schema; raw JSON
-    value: string
+  record time-series-item {
+    clicks: option<s32>,
+    complaints: option<s32>,
+    hard-bounces: option<s32>,
+    opens: option<s32>,
+    rejects: option<s32>,
+    sent: option<s32>,
+    soft-bounces: option<s32>,
+    time: option<string>,
+    unique-clicks: option<s32>,
+    unique-opens: option<s32>
   }
 
   record verify-domain-response {
@@ -944,7 +1107,7 @@ interface senders {
   record post-senders-domains-json-params {
     key: option<string>
   }
-  post-senders-domains-json: func(params: post-senders-domains-json-params) -> result<domains-response, string>;
+  post-senders-domains-json: func(params: post-senders-domains-json-params) -> result<list<domains-response-item>, string>;
 
   record post-senders-info-json-params {
     address: option<string>,
@@ -955,13 +1118,13 @@ interface senders {
   record post-senders-list-json-params {
     key: option<string>
   }
-  post-senders-list-json: func(params: post-senders-list-json-params) -> result<senders, string>;
+  post-senders-list-json: func(params: post-senders-list-json-params) -> result<list<senders-item>, string>;
 
   record post-senders-time-series-json-params {
     address: option<string>,
     key: option<string>
   }
-  post-senders-time-series-json: func(params: post-senders-time-series-json-params) -> result<time-series, string>;
+  post-senders-time-series-json: func(params: post-senders-time-series-json-params) -> result<list<time-series-item>, string>;
 
   record post-senders-verify-domain-json-params {
     domain: option<string>,
@@ -1016,9 +1179,17 @@ interface subaccounts {
     unsubs: option<s32>
   }
 
-  record list-response {
-    /// opaque schema; raw JSON
-    value: string
+  record list-response-item {
+    created-at: option<string>,
+    custom-quota: option<s32>,
+    first-sent-at: option<string>,
+    id: option<string>,
+    name: option<string>,
+    reputation: option<s32>,
+    sent-monthly: option<s32>,
+    sent-total: option<s32>,
+    sent-weekly: option<s32>,
+    status: option<string>
   }
 
   record post-subaccounts-add-json-params {
@@ -1046,7 +1217,7 @@ interface subaccounts {
     key: option<string>,
     q: option<string>
   }
-  post-subaccounts-list-json: func(params: post-subaccounts-list-json-params) -> result<list-response, string>;
+  post-subaccounts-list-json: func(params: post-subaccounts-list-json-params) -> result<list<list-response-item>, string>;
 
   record post-subaccounts-pause-json-params {
     id: option<string>,
@@ -1072,9 +1243,18 @@ interface subaccounts {
 }
 
 interface tags {
-  record timeseries {
-    /// opaque schema; raw JSON
-    value: string
+  record timeseries-item {
+    clicks: option<s32>,
+    complaints: option<s32>,
+    hard-bounces: option<s32>,
+    opens: option<s32>,
+    rejects: option<s32>,
+    sent: option<s32>,
+    soft-bounces: option<s32>,
+    time: option<string>,
+    unique-clicks: option<s32>,
+    unique-opens: option<s32>,
+    unsubs: option<s32>
   }
 
   record delete-response {
@@ -1178,15 +1358,39 @@ interface tags {
     unsubs: option<s32>
   }
 
-  record list-response {
-    /// opaque schema; raw JSON
-    value: string
+  record list-response-item {
+    clicks: option<s32>,
+    complaints: option<s32>,
+    hard-bounces: option<s32>,
+    opens: option<s32>,
+    rejects: option<s32>,
+    reputation: option<s32>,
+    sent: option<s32>,
+    soft-bounces: option<s32>,
+    tag: option<string>,
+    unique-clicks: option<s32>,
+    unique-opens: option<s32>,
+    unsubs: option<s32>
+  }
+
+  record timeseries-item-v2 {
+    clicks: option<s32>,
+    complaints: option<s32>,
+    hard-bounces: option<s32>,
+    opens: option<s32>,
+    rejects: option<s32>,
+    sent: option<s32>,
+    soft-bounces: option<s32>,
+    time: option<string>,
+    unique-clicks: option<s32>,
+    unique-opens: option<s32>,
+    unsubs: option<s32>
   }
 
   record post-tags-all-time-series-json-params {
     key: option<string>
   }
-  post-tags-all-time-series-json: func(params: post-tags-all-time-series-json-params) -> result<timeseries, string>;
+  post-tags-all-time-series-json: func(params: post-tags-all-time-series-json-params) -> result<list<timeseries-item>, string>;
 
   record post-tags-delete-json-params {
     key: option<string>,
@@ -1203,13 +1407,13 @@ interface tags {
   record post-tags-list-json-params {
     key: option<string>
   }
-  post-tags-list-json: func(params: post-tags-list-json-params) -> result<list-response, string>;
+  post-tags-list-json: func(params: post-tags-list-json-params) -> result<list<list-response-item>, string>;
 
   record post-tags-time-series-json-params {
     key: option<string>,
     tag: option<string>
   }
-  post-tags-time-series-json: func(params: post-tags-time-series-json-params) -> result<timeseries, string>;
+  post-tags-time-series-json: func(params: post-tags-time-series-json-params) -> result<list<timeseries-item-v2>, string>;
 
 }
 
@@ -1234,9 +1438,24 @@ interface templates {
     updated-at: option<string>
   }
 
-  record list-response {
-    /// opaque schema; raw JSON
-    value: string
+  record list-response-item {
+    code: option<string>,
+    created-at: option<string>,
+    from-email: option<string>,
+    from-name: option<string>,
+    labels: option<list<string>>,
+    name: option<string>,
+    publish-code: option<string>,
+    publish-from-email: option<string>,
+    publish-from-name: option<string>,
+    publish-name: option<string>,
+    publish-subject: option<string>,
+    publish-text: option<string>,
+    published-at: option<string>,
+    slug: option<string>,
+    subject: option<string>,
+    text: option<string>,
+    updated-at: option<string>
   }
 
   record render-merge-vars-item {
@@ -1253,9 +1472,17 @@ interface templates {
     html: option<string>
   }
 
-  record time-series {
-    /// opaque schema; raw JSON
-    value: string
+  record time-series-item {
+    clicks: option<s32>,
+    complaints: option<s32>,
+    hard-bounces: option<s32>,
+    opens: option<s32>,
+    rejects: option<s32>,
+    sent: option<s32>,
+    soft-bounces: option<s32>,
+    time: option<string>,
+    unique-clicks: option<s32>,
+    unique-opens: option<s32>
   }
 
   record post-templates-add-json-params {
@@ -1287,7 +1514,7 @@ interface templates {
     key: option<string>,
     label: option<string>
   }
-  post-templates-list-json: func(params: post-templates-list-json-params) -> result<list-response, string>;
+  post-templates-list-json: func(params: post-templates-list-json-params) -> result<list<list-response-item>, string>;
 
   record post-templates-publish-json-params {
     key: option<string>,
@@ -1307,7 +1534,7 @@ interface templates {
     key: option<string>,
     name: option<string>
   }
-  post-templates-time-series-json: func(params: post-templates-time-series-json-params) -> result<time-series, string>;
+  post-templates-time-series-json: func(params: post-templates-time-series-json-params) -> result<list<time-series-item>, string>;
 
   record post-templates-update-json-params {
     code: option<string>,
@@ -1339,19 +1566,39 @@ interface urls {
     valid-after: option<string>
   }
 
-  record url-infos {
-    /// opaque schema; raw JSON
-    value: string
+  record url-infos-item {
+    clicks: option<s32>,
+    sent: option<s32>,
+    unique-clicks: option<s32>,
+    url: option<string>
   }
 
-  record time-series-response {
-    /// opaque schema; raw JSON
-    value: string
+  record url-infos-item-v2 {
+    clicks: option<s32>,
+    sent: option<s32>,
+    unique-clicks: option<s32>,
+    url: option<string>
   }
 
-  record tracking-domains-response {
-    /// opaque schema; raw JSON
-    value: string
+  record time-series-response-item {
+    clicks: option<s32>,
+    sent: option<s32>,
+    time: option<string>,
+    unique-clicks: option<s32>
+  }
+
+  record tracking-domains-response-item {
+    cname: option<tracking-domains-response-item-cname>,
+    created-at: option<string>,
+    domain: option<string>,
+    last-tested-at: option<string>,
+    valid-tracking: option<bool>
+  }
+
+  record tracking-domains-response-item-cname {
+    error: option<string>,
+    valid: option<bool>,
+    valid-after: option<string>
   }
 
   record post-urls-add-tracking-domain-json-params {
@@ -1369,24 +1616,24 @@ interface urls {
   record post-urls-list-json-params {
     key: option<string>
   }
-  post-urls-list-json: func(params: post-urls-list-json-params) -> result<url-infos, string>;
+  post-urls-list-json: func(params: post-urls-list-json-params) -> result<list<url-infos-item>, string>;
 
   record post-urls-search-json-params {
     key: option<string>,
     q: option<string>
   }
-  post-urls-search-json: func(params: post-urls-search-json-params) -> result<url-infos, string>;
+  post-urls-search-json: func(params: post-urls-search-json-params) -> result<list<url-infos-item-v2>, string>;
 
   record post-urls-time-series-json-params {
     key: option<string>,
     url: option<string>
   }
-  post-urls-time-series-json: func(params: post-urls-time-series-json-params) -> result<time-series-response, string>;
+  post-urls-time-series-json: func(params: post-urls-time-series-json-params) -> result<list<time-series-response-item>, string>;
 
   record post-urls-tracking-domains-json-params {
     key: option<string>
   }
-  post-urls-tracking-domains-json: func(params: post-urls-tracking-domains-json-params) -> result<tracking-domains-response, string>;
+  post-urls-tracking-domains-json: func(params: post-urls-tracking-domains-json-params) -> result<list<tracking-domains-response-item>, string>;
 
 }
 
@@ -1492,9 +1739,19 @@ interface users {
     ping: option<string>
   }
 
-  record senders {
-    /// opaque schema; raw JSON
-    value: string
+  record senders-item {
+    address: option<string>,
+    clicks: option<s32>,
+    complaints: option<s32>,
+    created-at: option<string>,
+    hard-bounces: option<s32>,
+    opens: option<s32>,
+    rejects: option<s32>,
+    sent: option<s32>,
+    soft-bounces: option<s32>,
+    unique-clicks: option<s32>,
+    unique-opens: option<s32>,
+    unsubs: option<s32>
   }
 
   record post-users-info-json-params {
@@ -1515,7 +1772,7 @@ interface users {
   record post-users-senders-json-params {
     key: option<string>
   }
-  post-users-senders-json: func(params: post-users-senders-json-params) -> result<senders, string>;
+  post-users-senders-json: func(params: post-users-senders-json-params) -> result<list<senders-item>, string>;
 
 }
 
@@ -1533,9 +1790,17 @@ interface webhooks {
     url: option<string>
   }
 
-  record list-response {
-    /// opaque schema; raw JSON
-    value: string
+  record list-response-item {
+    auth-key: option<string>,
+    batches-sent: option<s32>,
+    created-at: option<string>,
+    description: option<string>,
+    events: option<list<string>>,
+    events-sent: option<s32>,
+    id: option<s32>,
+    last-error: option<string>,
+    last-sent-at: option<string>,
+    url: option<string>
   }
 
   record post-webhooks-add-json-params {
@@ -1561,7 +1826,7 @@ interface webhooks {
   record post-webhooks-list-json-params {
     key: option<string>
   }
-  post-webhooks-list-json: func(params: post-webhooks-list-json-params) -> result<list-response, string>;
+  post-webhooks-list-json: func(params: post-webhooks-list-json-params) -> result<list<list-response-item>, string>;
 
   record post-webhooks-update-json-params {
     description: option<string>,
@@ -1585,9 +1850,10 @@ interface whitelists {
     email: option<string>
   }
 
-  record list-response {
-    /// opaque schema; raw JSON
-    value: string
+  record list-response-item {
+    created-at: option<string>,
+    detail: option<string>,
+    email: option<string>
   }
 
   record post-whitelists-add-json-params {
@@ -1606,7 +1872,7 @@ interface whitelists {
     email: option<string>,
     key: option<string>
   }
-  post-whitelists-list-json: func(params: post-whitelists-list-json-params) -> result<list-response, string>;
+  post-whitelists-list-json: func(params: post-whitelists-list-json-params) -> result<list<list-response-item>, string>;
 
 }
 /// The component world: imports the secrets host capability

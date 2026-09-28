@@ -63,18 +63,19 @@ fn iface_v_version__response_rate__to_json(p: &iface_v_version::ResponseRate) ->
 
 fn iface_v_version__response_results_item__to_json(p: &iface_v_version::ResponseResultsItem) -> Value {
     let mut m = Map::new();
-    m.insert("annotations".into(), match (&p.annotations) { Some(v) => iface_v_version__response_results_item_annotations__to_json(v), None => Value::Null });
+    m.insert("annotations".into(), match (&p.annotations) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("bounds".into(), match (&p.bounds) { Some(v) => iface_v_version__response_results_item_bounds__to_json(v), None => Value::Null });
-    m.insert("components".into(), match (&p.components) { Some(v) => iface_v_version__response_results_item_components__to_json(v), None => Value::Null });
+    m.insert("components".into(), match (&p.components) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("confidence".into(), match (&p.confidence) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("formatted".into(), match (&p.formatted) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("geometry".into(), match (&p.geometry) { Some(v) => iface_v_version__lat_lng__to_json(v), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_v_version__response_results_item_annotations__to_json(p: &iface_v_version::ResponseResultsItemAnnotations) -> Value {
+fn iface_v_version__response_results_item_annotations_entry__to_json(p: &iface_v_version::ResponseResultsItemAnnotationsEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -92,9 +93,10 @@ fn iface_v_version__lat_lng__to_json(p: &iface_v_version::LatLng) -> Value {
     Value::Object(m)
 }
 
-fn iface_v_version__response_results_item_components__to_json(p: &iface_v_version::ResponseResultsItemComponents) -> Value {
+fn iface_v_version__response_results_item_components_entry__to_json(p: &iface_v_version::ResponseResultsItemComponentsEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -178,19 +180,20 @@ fn iface_v_version__response_rate__from_json(v: &Value) -> Option<iface_v_versio
 fn iface_v_version__response_results_item__from_json(v: &Value) -> Option<iface_v_version::ResponseResultsItem> {
     let m = v.as_object()?;
     Some(iface_v_version::ResponseResultsItem {
-        annotations: m.get("annotations").filter(|v| !v.is_null()).and_then(|v| iface_v_version__response_results_item_annotations__from_json(v)),
+        annotations: m.get("annotations").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_v_version::ResponseResultsItemAnnotationsEntry { key: k.clone(), value: val })).collect())),
         bounds: m.get("bounds").filter(|v| !v.is_null()).and_then(|v| iface_v_version__response_results_item_bounds__from_json(v)),
-        components: m.get("components").filter(|v| !v.is_null()).and_then(|v| iface_v_version__response_results_item_components__from_json(v)),
+        components: m.get("components").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_v_version::ResponseResultsItemComponentsEntry { key: k.clone(), value: val })).collect())),
         confidence: m.get("confidence").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
         formatted: m.get("formatted").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         geometry: m.get("geometry").filter(|v| !v.is_null()).and_then(|v| iface_v_version__lat_lng__from_json(v)),
     })
 }
 
-fn iface_v_version__response_results_item_annotations__from_json(v: &Value) -> Option<iface_v_version::ResponseResultsItemAnnotations> {
+fn iface_v_version__response_results_item_annotations_entry__from_json(v: &Value) -> Option<iface_v_version::ResponseResultsItemAnnotationsEntry> {
     let m = v.as_object()?;
-    Some(iface_v_version::ResponseResultsItemAnnotations {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_v_version::ResponseResultsItemAnnotationsEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -210,10 +213,11 @@ fn iface_v_version__lat_lng__from_json(v: &Value) -> Option<iface_v_version::Lat
     })
 }
 
-fn iface_v_version__response_results_item_components__from_json(v: &Value) -> Option<iface_v_version::ResponseResultsItemComponents> {
+fn iface_v_version__response_results_item_components_entry__from_json(v: &Value) -> Option<iface_v_version::ResponseResultsItemComponentsEntry> {
     let m = v.as_object()?;
-    Some(iface_v_version::ResponseResultsItemComponents {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_v_version::ResponseResultsItemComponentsEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
