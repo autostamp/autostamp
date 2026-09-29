@@ -27,6 +27,14 @@ tests. Live `--endpoint` overrides the generated endpoint, not discovery.
 Discovery never calls tools. Generated clients are static snapshots supporting
 MCP **2025-11-25 Streamable HTTP** with JSON/SSE responses.
 
+Native discovery uses the official `rmcp` SDK for its client lifecycle and
+sessions, with a bounded HTTP adapter that preserves raw tool definitions.
+Generated WASI clients retain custom session code because the SDK's HTTP/worker
+combination does not integrate with the existing `wstd` reactor, and its typed
+results do not preserve the required complete result envelope. See the
+[SDK boundary](../../docs/mcp.md#mcp-sdk-boundary) for the evaluated APIs,
+compatibility constraints, and the scope of custom code.
+
 ## Library API
 
 ```rust

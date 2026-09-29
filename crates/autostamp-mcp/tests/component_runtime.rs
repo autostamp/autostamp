@@ -213,6 +213,7 @@ impl State {
 
     fn sse(&self, data: String) -> Reply {
         let mut stream = Stream {
+            gate_before_chunk: None,
             chunks: Vec::new(),
             interval: Duration::ZERO,
             release: None,

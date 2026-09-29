@@ -158,6 +158,7 @@ impl Request {
 #[derive(Debug)]
 pub(crate) struct Stream {
     pub(crate) chunks: Vec<Vec<u8>>,
+    pub(crate) gate_before_chunk: Option<(usize, Arc<AtomicBool>)>,
     pub(crate) interval: Duration,
     pub(crate) release: Option<Arc<AtomicBool>>,
     pub(crate) opened: Option<Arc<AtomicBool>>,
@@ -388,7 +389,17 @@ fn write_reply(socket: &mut TcpStream, reply: Reply, shutdown: &AtomicBool) -> i
         if let Some(opened) = stream.opened {
             opened.store(true, Ordering::SeqCst);
         }
-        for chunk in stream.chunks {
+        for (index, chunk) in stream.chunks.into_iter().enumerate() {
+            if let Some((gate_index, ready)) = &stream.gate_before_chunk
+                && index == *gate_index
+            {
+                wait(Duration::from_secs(5), shutdown, Some(ready));
+                if !ready.load(Ordering::SeqCst) && !shutdown.load(Ordering::SeqCst) {
+                    return Err(invalid(
+                        "fixture peer never acknowledged the gated server request",
+                    ));
+                }
+            }
             if shutdown.load(Ordering::SeqCst) {
                 return Ok(());
             }

@@ -35,13 +35,16 @@ pub mod runtime;
 #[cfg(all(feature = "cli", not(target_arch = "wasm32")))]
 pub mod artifact_writer;
 
-/// Bounded, tools-only discovery using the shared MCP session implementation.
+/// Bounded, tools-only discovery using the official Rust MCP SDK.
 #[cfg(all(feature = "cli", not(target_arch = "wasm32")))]
 pub mod discovery;
 
 /// Native streaming HTTP transport for discovery.
 #[cfg(all(feature = "cli", not(target_arch = "wasm32")))]
 pub mod native;
+
+#[cfg(all(feature = "cli", not(target_arch = "wasm32")))]
+mod sdk_http;
 
 #[cfg(target_arch = "wasm32")]
 #[allow(unsafe_code)]

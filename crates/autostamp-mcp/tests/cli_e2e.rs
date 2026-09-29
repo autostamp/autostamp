@@ -69,6 +69,7 @@ impl State {
                 .push(("Content-Type".into(), "text/event-stream".into()));
             let event = format!(": comment\r\nevent: message\r\ndata: {data}\r\n\r\n");
             reply.stream = Some(Stream {
+                gate_before_chunk: None,
                 chunks: event.as_bytes().chunks(7).map(<[u8]>::to_vec).collect(),
                 interval: Duration::ZERO,
                 release: Some(self.release.clone()),

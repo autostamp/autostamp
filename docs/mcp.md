@@ -166,6 +166,63 @@ Regenerate deliberately when the server's tool schemas change, review the
 resulting API diff, and rebuild. A running generated client does not update
 its schemas automatically.
 
+## MCP SDK boundary
+
+Native discovery uses the official [`rmcp` Rust SDK](https://github.com/modelcontextprotocol/rust-sdk)
+(3.4.1) for initialization, request IDs and response correlation, server-request
+dispatch, HTTP session headers, and shutdown. It does **not** run the generated
+client's custom session implementation. Discovery supplies no client capabilities,
+lists tools through the SDK, and disables automatic retries, expired-session
+reinitialization, and the optional idle GET stream.
+
+The native adapter retains bounded HTTP reads and strict JSON/SSE decoding.
+The SDK's default HTTP adapter reads JSON and error bodies without our total
+byte bound, and its typed `Tool` model normalizes or drops some original fields.
+We must preserve the complete tool definition so unsupported schemas and fields
+are rejected by our schema compiler rather than disappearing. An SDK-internal
+`CustomResult` carries the raw page as a JSON string, including over SSE, where
+the SDK otherwise deserializes events into its typed model again. This wrapper
+never appears on the network. There is no second session or raw-result lookup
+table. The adapter also propagates DELETE failures, which the SDK otherwise logs.
+These compatibility points are covered by native loopback tests and are why the
+SDK version is pinned.
+
+Three lifecycle accommodations are local to that adapter. During initialization,
+it answers inline pings because the SDK's bootstrap SSE reader otherwise discards
+them; the server may wait for the reply before returning initialization. A
+temporary cleanup lease releases an allocated HTTP session if bootstrap fails
+before the SDK returns its running client. Once bootstrap succeeds, the SDK owns
+normal session shutdown. Before shutdown, the adapter drains pending server
+replies under the configured request deadline, avoiding the SDK's fixed
+two-second cancellation drain. These are bounded compatibility hooks, not a
+second request-ID allocator or session client.
+Native SDK messages require numeric IDs to fit `i64`; integral decimal/exponent
+spellings are normalized exactly before that check. Overlapping server replies
+share the earliest originating deadline, so no reply can extend a request by
+starting a fresh timeout.
+
+Generated WASI clients still use a small custom session implementation. This is
+not because Rust MCP SDKs or Tokio categorically lack WASI support: `rmcp` has a
+WASI example, and minimal Tokio features compile for `wasm32-wasip2`. The missing
+combination is HTTP on the existing `wstd` reactor: the SDK's supplied reqwest
+backend selects `tokio/net` for WASI, while its service and transport workers
+use Tokio spawning and timers. A custom HTTP transport alone does not connect
+those workers to `wstd`'s WASI pollable reactor. Adopting it in generated clients
+would require a separate executor/I/O integration, not just another transport.
+Its typed tool-result models also do not retain the complete original result
+envelope required by the generated API. We retain the bounded guest
+implementation rather than add an unverified scheduler bridge or silently
+change that API; native discovery has no such exception.
+
+The evaluated SDK boundaries are
+[`StreamableHttpClient`](https://github.com/modelcontextprotocol/rust-sdk/blob/9427a929959e665e0d12e9395f674026baf4bd48/crates/rmcp/src/transport/streamable_http_client.rs#L418-L504),
+the [HTTP body reader](https://github.com/modelcontextprotocol/rust-sdk/blob/9427a929959e665e0d12e9395f674026baf4bd48/crates/rmcp/src/transport/common/reqwest/streamable_http_client.rs#L276-L335),
+the [typed tool model](https://github.com/modelcontextprotocol/rust-sdk/blob/9427a929959e665e0d12e9395f674026baf4bd48/crates/rmcp/src/model/tool.rs#L13-L40),
+and [Tokio-based workers](https://github.com/modelcontextprotocol/rust-sdk/blob/9427a929959e665e0d12e9395f674026baf4bd48/crates/rmcp/src/transport/worker.rs#L207-L237).
+The guest-specific constraints are visible in
+[reqwest's WASI dependency selection](https://github.com/seanmonstar/reqwest/blob/de55373434f07f42926599dbb5a88550d8e55112/Cargo.toml#L116-L125)
+and the [`wstd` reactor](https://github.com/bytecodealliance/wstd/blob/b83cf3201c255b01db15e61eafee07a36fd60112/src/runtime/reactor.rs#L106-L117).
+
 ## Build and test
 
 ```sh
