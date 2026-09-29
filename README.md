@@ -24,6 +24,7 @@ achieve with automation here. But those SDKs currently don't exist, and we belie
 ## Documentation
 
 - [Building and publishing](./docs/building-and-publishing.md)
+- [MCP discovery and client generation](./docs/mcp.md)
 - [Authentication](./docs/auth.md)
 - [Known limitations](./docs/known-limitations.md)
 
@@ -34,11 +35,15 @@ The two generators live under `crates/`:
 - [`autostamp-openapi`](./crates/autostamp-openapi/): OpenAPI 2 and 3 to component
   source crates, previously named `openapi-bindgen`.
 - [`autostamp-mcp`](./crates/autostamp-mcp/): complete MCP tool catalogs to typed
-  WIT. Component generation and HTTP invocation are in development.
+  WIT and standalone Rust clients for MCP 2025-11-25 Streamable HTTP.
+  The opt-in native CLI discovers live servers or reads offline catalogs;
+  see the [MCP guide](./docs/mcp.md).
 
 Generated provider crates in `components/` are standalone packages, deliberately
 excluded from the workspace. `just test` checks the generators; `just build`
 regenerates and builds the OpenAPI component corpus.
+`just gen-mcp`, `just build-mcp` and `just test-mcp` are separate MCP entry points;
+they do not add fixtures to `components/` or change the OpenAPI publish flow.
 
 ## Contributing
 Want to join us? Check out our ["Contributing" guide][contributing] and take a

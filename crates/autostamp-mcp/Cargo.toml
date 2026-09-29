@@ -12,6 +12,15 @@ readme = "README.md"
 [lib]
 crate-type = ["cdylib", "rlib"]
 
+[[bin]]
+name = "autostamp-mcp"
+path = "src/bin/autostamp-mcp.rs"
+required-features = ["cli"]
+
+[features]
+default = []
+cli = ["dep:bytes", "dep:clap", "dep:futures-util", "dep:reqwest", "dep:rmcp", "dep:sha2", "dep:sse-stream", "dep:tokio", "serde/derive"]
+
 [dependencies]
 heck = "0.5"
 http = "1"
@@ -23,6 +32,19 @@ wit-parser = "0.227"
 [dev-dependencies]
 wasmparser = "0.227"
 wit-component = "0.227"
+
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+bytes = { version = "1", optional = true }
+clap = { version = "4", features = ["derive"], optional = true }
+futures-util = { version = "0.3", optional = true }
+reqwest = { version = "0.13.5", default-features = false, features = ["rustls", "stream"], optional = true }
+rmcp = { version = "=3.4.1", default-features = false, features = ["client", "transport-streamable-http-client"], optional = true }
+sha2 = { version = "0.10", optional = true }
+sse-stream = { version = "0.2.6", optional = true }
+tokio = { version = "1", features = ["rt", "time"], optional = true }
+
+[target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
+tokio = { version = "1", features = ["macros", "net", "io-util", "sync", "test-util"] }
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 wit-bindgen = "0.41"

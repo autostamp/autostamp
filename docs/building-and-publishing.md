@@ -1,5 +1,10 @@
 # Building and publishing
 
+This page covers the **OpenAPI component corpus** and its existing release
+automation. For separate MCP discovery, standalone client builds, ownership-safe
+regeneration and mock-only tests, see the [MCP guide](./mcp.md). The MCP recipes
+do not change `gen`, `build`, versioning or publishing.
+
 Generated crates are compiled and published as OCI artifacts to `ghcr.io/autostamp/<name>`
 with the [`component` CLI](https://github.com/yoshuawuyts/component-registry). The flow is
 two `just` recipes — the same ones CI runs:
@@ -91,6 +96,12 @@ under `crates/`. Generated packages in `components/` are excluded from that work
 are not compiled by these native checks. The substantive component gate is the pipeline's
 own `just build` step (a per-component `wasm32-wasip2` compile); the reopened-PR CI provides the visible green check
 and the generator's cross-platform validation.
+CI additionally runs a dedicated mock-only MCP component job: it builds both
+generator libraries for WASI without native CLI dependencies, then runs the MCP
+CLI and generated-runtime Rust integration tests. That job installs its own pinned
+component tools and uses only loopback mocks; it neither builds the OpenAPI
+corpus nor publishes MCP fixtures. Native checks, tests, Clippy and docs include
+all workspace features.
 
 **Manual dispatch inputs.** `bump_level` (`patch`/`minor`/`major`/`X.Y.Z`, default `minor`),
 `vendor_update` (default `true`), and `dry_run` (default `false`). A dry run still opens the
