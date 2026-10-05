@@ -6,12 +6,18 @@
 /// | Secret name | Applied to each request as |
 /// | --- | --- |
 /// | `accountSid_authToken` | `Authorization: Basic base64(<secret>)` |
-package autostamp:twilio@0.5.0;
+package autostamp:twilio@0.6.0;
 
 interface api20100401-account {
-  record account-enum-status {
-    /// opaque schema; raw JSON
-    value: string
+  enum account-enum-status {
+    active,
+    suspended,
+    closed,
+  }
+
+  enum account-enum-type {
+    trial,
+    full,
   }
 
   record list-account-response {
@@ -45,11 +51,6 @@ interface api20100401-account {
     type-op: option<account-enum-type>,
     /// The URI for this resource, relative to `https://api.twilio.com`
     uri: option<string>
-  }
-
-  record account-enum-type {
-    /// opaque schema; raw JSON
-    value: string
   }
 
   record list-account-params {
@@ -227,6 +228,18 @@ interface api20100401-address {
 }
 
 interface api20100401-dependent-phone-number {
+  enum dependent-phone-number-enum-address-requirement {
+    none,
+    any,
+    local,
+    foreign,
+  }
+
+  enum dependent-phone-number-enum-emergency-status {
+    active,
+    inactive,
+  }
+
   enum api-v2010-account-address-dependent-phone-number-sms-fallback-method-enum {
     head,
     get,
@@ -299,16 +312,6 @@ interface api20100401-dependent-phone-number {
     voice-method: option<api-v2010-account-address-dependent-phone-number-sms-fallback-method-enum>,
     /// The URL we call when the phone number receives a call. The `voice_url` will not be used if a `voice_application_sid` or a `trunk_sid` is set.
     voice-url: option<string>
-  }
-
-  record dependent-phone-number-enum-address-requirement {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
-  record dependent-phone-number-enum-emergency-status {
-    /// opaque schema; raw JSON
-    value: string
   }
 
   record list-dependent-phone-number-params {
@@ -505,6 +508,11 @@ interface api20100401-application {
 }
 
 interface api20100401-authorized-connect-app {
+  enum authorized-connect-app-enum-permission {
+    get-all,
+    post-all,
+  }
+
   record list-authorized-connect-app-response {
     authorized-connect-apps: option<list<api-v2010-account-authorized-connect-app>>,
     end: option<s32>,
@@ -534,11 +542,6 @@ interface api20100401-authorized-connect-app {
     permissions: option<list<authorized-connect-app-enum-permission>>,
     /// The URI of the resource, relative to `https://api.twilio.com`.
     uri: option<string>
-  }
-
-  record authorized-connect-app-enum-permission {
-    /// opaque schema; raw JSON
-    value: string
   }
 
   record list-authorized-connect-app-params {
@@ -612,6 +615,27 @@ interface api20100401-available-phone-number-country {
 }
 
 interface api20100401-local {
+  enum incoming-phone-number-local-enum-address-requirement {
+    none,
+    any,
+    local,
+    foreign,
+  }
+
+  enum incoming-phone-number-local-enum-emergency-address-status {
+    registered,
+    unregistered,
+    pending-registration,
+    registration-failure,
+    pending-unregistration,
+    unregistration-failure,
+  }
+
+  enum incoming-phone-number-local-enum-emergency-status {
+    active,
+    inactive,
+  }
+
   enum api-v2010-account-incoming-phone-number-incoming-phone-number-local-sms-fallback-method-enum {
     head,
     get,
@@ -619,6 +643,11 @@ interface api20100401-local {
     patch,
     put,
     delete,
+  }
+
+  enum incoming-phone-number-local-enum-voice-receive-mode {
+    voice,
+    fax,
   }
 
   record list-available-phone-number-local-response {
@@ -747,31 +776,11 @@ interface api20100401-local {
     voice-url: option<string>
   }
 
-  record incoming-phone-number-local-enum-address-requirement {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
   record api-v2010-account-incoming-phone-number-incoming-phone-number-local-capabilities {
     fax: option<bool>,
     mms: option<bool>,
     sms: option<bool>,
     voice: option<bool>
-  }
-
-  record incoming-phone-number-local-enum-emergency-address-status {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
-  record incoming-phone-number-local-enum-emergency-status {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
-  record incoming-phone-number-local-enum-voice-receive-mode {
-    /// opaque schema; raw JSON
-    value: string
   }
 
   record list-available-phone-number-local-params {
@@ -998,6 +1007,27 @@ interface api20100401-machine-to-machine {
 }
 
 interface api20100401-mobile {
+  enum incoming-phone-number-mobile-enum-address-requirement {
+    none,
+    any,
+    local,
+    foreign,
+  }
+
+  enum incoming-phone-number-mobile-enum-emergency-address-status {
+    registered,
+    unregistered,
+    pending-registration,
+    registration-failure,
+    pending-unregistration,
+    unregistration-failure,
+  }
+
+  enum incoming-phone-number-mobile-enum-emergency-status {
+    active,
+    inactive,
+  }
+
   enum api-v2010-account-incoming-phone-number-incoming-phone-number-mobile-sms-fallback-method-enum {
     head,
     get,
@@ -1005,6 +1035,11 @@ interface api20100401-mobile {
     patch,
     put,
     delete,
+  }
+
+  enum incoming-phone-number-mobile-enum-voice-receive-mode {
+    voice,
+    fax,
   }
 
   record list-available-phone-number-mobile-response {
@@ -1133,31 +1168,11 @@ interface api20100401-mobile {
     voice-url: option<string>
   }
 
-  record incoming-phone-number-mobile-enum-address-requirement {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
   record api-v2010-account-incoming-phone-number-incoming-phone-number-mobile-capabilities {
     fax: option<bool>,
     mms: option<bool>,
     sms: option<bool>,
     voice: option<bool>
-  }
-
-  record incoming-phone-number-mobile-enum-emergency-address-status {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
-  record incoming-phone-number-mobile-enum-emergency-status {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
-  record incoming-phone-number-mobile-enum-voice-receive-mode {
-    /// opaque schema; raw JSON
-    value: string
   }
 
   record list-available-phone-number-mobile-params {
@@ -1485,6 +1500,27 @@ interface api20100401-shared-cost {
 }
 
 interface api20100401-toll-free {
+  enum incoming-phone-number-toll-free-enum-address-requirement {
+    none,
+    any,
+    local,
+    foreign,
+  }
+
+  enum incoming-phone-number-toll-free-enum-emergency-address-status {
+    registered,
+    unregistered,
+    pending-registration,
+    registration-failure,
+    pending-unregistration,
+    unregistration-failure,
+  }
+
+  enum incoming-phone-number-toll-free-enum-emergency-status {
+    active,
+    inactive,
+  }
+
   enum api-v2010-account-incoming-phone-number-incoming-phone-number-toll-free-sms-fallback-method-enum {
     head,
     get,
@@ -1492,6 +1528,11 @@ interface api20100401-toll-free {
     patch,
     put,
     delete,
+  }
+
+  enum incoming-phone-number-toll-free-enum-voice-receive-mode {
+    voice,
+    fax,
   }
 
   record list-available-phone-number-toll-free-response {
@@ -1620,31 +1661,11 @@ interface api20100401-toll-free {
     voice-url: option<string>
   }
 
-  record incoming-phone-number-toll-free-enum-address-requirement {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
   record api-v2010-account-incoming-phone-number-incoming-phone-number-toll-free-capabilities {
     fax: option<bool>,
     mms: option<bool>,
     sms: option<bool>,
     voice: option<bool>
-  }
-
-  record incoming-phone-number-toll-free-enum-emergency-address-status {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
-  record incoming-phone-number-toll-free-enum-emergency-status {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
-  record incoming-phone-number-toll-free-enum-voice-receive-mode {
-    /// opaque schema; raw JSON
-    value: string
   }
 
   record list-available-phone-number-toll-free-params {
@@ -1889,6 +1910,17 @@ interface api20100401-balance {
 }
 
 interface api20100401-call {
+  enum call-enum-status {
+    queued,
+    ringing,
+    in-progress,
+    completed,
+    busy,
+    failed,
+    no-answer,
+    canceled,
+  }
+
   enum create-call-body-async-amd-status-callback-method-enum {
     head,
     get,
@@ -1898,9 +1930,9 @@ interface api20100401-call {
     delete,
   }
 
-  record call-enum-status {
-    /// opaque schema; raw JSON
-    value: string
+  enum call-enum-update-status {
+    canceled,
+    completed,
   }
 
   record list-call-response {
@@ -1967,11 +1999,6 @@ interface api20100401-call {
     trunk-sid: option<string>,
     /// The URI of this resource, relative to `https://api.twilio.com`.
     uri: option<string>
-  }
-
-  record call-enum-update-status {
-    /// opaque schema; raw JSON
-    value: string
   }
 
   record list-call-params {
@@ -2394,19 +2421,34 @@ interface api20100401-notification {
 }
 
 interface api20100401-payment {
-  record payments-enum-bank-account-type {
-    /// opaque schema; raw JSON
-    value: string
+  enum payments-enum-bank-account-type {
+    consumer-checking,
+    consumer-savings,
+    commercial-checking,
   }
 
-  record payments-enum-payment-method {
-    /// opaque schema; raw JSON
-    value: string
+  enum payments-enum-payment-method {
+    credit-card,
+    ach-debit,
   }
 
-  record payments-enum-token-type {
-    /// opaque schema; raw JSON
-    value: string
+  enum payments-enum-token-type {
+    one-time,
+    reusable,
+  }
+
+  enum payments-enum-capture {
+    payment-card-number,
+    expiration-date,
+    security-code,
+    postal-code,
+    bank-routing-number,
+    bank-account-number,
+  }
+
+  enum payments-enum-status {
+    complete,
+    cancel,
   }
 
   record api-v2010-account-call-payments {
@@ -2422,16 +2464,6 @@ interface api20100401-payment {
     sid: option<string>,
     /// The URI of the resource, relative to `https://api.twilio.com`.
     uri: option<string>
-  }
-
-  record payments-enum-capture {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
-  record payments-enum-status {
-    /// opaque schema; raw JSON
-    value: string
   }
 
   record create-payments-params {
@@ -2490,6 +2522,25 @@ interface api20100401-payment {
 }
 
 interface api20100401-recording {
+  enum call-recording-enum-source {
+    dial-verb,
+    conference,
+    outbound-api,
+    trunking,
+    record-verb,
+    start-call-recording-api,
+    start-conference-recording-api,
+  }
+
+  enum call-recording-enum-status {
+    in-progress,
+    paused,
+    stopped,
+    processing,
+    completed,
+    absent,
+  }
+
   enum create-call-recording-body-recording-status-callback-method-enum {
     head,
     get,
@@ -2497,6 +2548,45 @@ interface api20100401-recording {
     patch,
     put,
     delete,
+  }
+
+  enum conference-recording-enum-source {
+    dial-verb,
+    conference,
+    outbound-api,
+    trunking,
+    record-verb,
+    start-call-recording-api,
+    start-conference-recording-api,
+  }
+
+  enum conference-recording-enum-status {
+    in-progress,
+    paused,
+    stopped,
+    processing,
+    completed,
+    absent,
+  }
+
+  enum recording-enum-source {
+    dial-verb,
+    conference,
+    outbound-api,
+    trunking,
+    record-verb,
+    start-call-recording-api,
+    start-conference-recording-api,
+  }
+
+  enum recording-enum-status {
+    in-progress,
+    paused,
+    stopped,
+    processing,
+    completed,
+    absent,
+    deleted,
   }
 
   record list-call-recording-response {
@@ -2548,16 +2638,6 @@ interface api20100401-recording {
     uri: option<string>
   }
 
-  record call-recording-enum-source {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
-  record call-recording-enum-status {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
   record list-conference-recording-response {
     end: option<s32>,
     first-page-uri: option<string>,
@@ -2603,16 +2683,6 @@ interface api20100401-recording {
     status: option<conference-recording-enum-status>,
     /// The URI of the resource, relative to `https://api.twilio.com`.
     uri: option<string>
-  }
-
-  record conference-recording-enum-source {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
-  record conference-recording-enum-status {
-    /// opaque schema; raw JSON
-    value: string
   }
 
   record list-recording-response {
@@ -2664,16 +2734,6 @@ interface api20100401-recording {
     subresource-uris: option<string>,
     /// The URI of the resource, relative to `https://api.twilio.com`.
     uri: option<string>
-  }
-
-  record recording-enum-source {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
-  record recording-enum-status {
-    /// opaque schema; raw JSON
-    value: string
   }
 
   record list-call-recording-params {
@@ -2856,9 +2916,19 @@ interface api20100401-siprec {
     delete,
   }
 
-  record siprec-enum-track {
-    /// opaque schema; raw JSON
-    value: string
+  enum siprec-enum-track {
+    inbound-track,
+    outbound-track,
+    both-tracks,
+  }
+
+  enum siprec-enum-status {
+    in-progress,
+    stopped,
+  }
+
+  enum siprec-enum-update-status {
+    stopped,
   }
 
   record api-v2010-account-call-siprec {
@@ -2875,16 +2945,6 @@ interface api20100401-siprec {
     status: option<siprec-enum-status>,
     /// The URI of the resource, relative to `https://api.twilio.com`.
     uri: option<string>
-  }
-
-  record siprec-enum-status {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
-  record siprec-enum-update-status {
-    /// opaque schema; raw JSON
-    value: string
   }
 
   record create-siprec-params {
@@ -3323,9 +3383,19 @@ interface api20100401-stream {
     delete,
   }
 
-  record stream-enum-track {
-    /// opaque schema; raw JSON
-    value: string
+  enum stream-enum-track {
+    inbound-track,
+    outbound-track,
+    both-tracks,
+  }
+
+  enum stream-enum-status {
+    in-progress,
+    stopped,
+  }
+
+  enum stream-enum-update-status {
+    stopped,
   }
 
   record api-v2010-account-call-stream {
@@ -3342,16 +3412,6 @@ interface api20100401-stream {
     status: option<stream-enum-status>,
     /// The URI of the resource, relative to `https://api.twilio.com`.
     uri: option<string>
-  }
-
-  record stream-enum-status {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
-  record stream-enum-update-status {
-    /// opaque schema; raw JSON
-    value: string
   }
 
   record create-stream-params {
@@ -3856,6 +3916,20 @@ interface api20100401-user-defined-message {
 }
 
 interface api20100401-conference {
+  enum conference-enum-status {
+    init,
+    in-progress,
+    completed,
+  }
+
+  enum conference-enum-reason-conference-ended {
+    conference-ended-via-api,
+    participant-with-end-conference-on-exit-left,
+    participant-with-end-conference-on-exit-kicked,
+    last-participant-kicked,
+    last-participant-left,
+  }
+
   enum update-conference-body-announce-method-enum {
     head,
     get,
@@ -3865,9 +3939,8 @@ interface api20100401-conference {
     delete,
   }
 
-  record conference-enum-status {
-    /// opaque schema; raw JSON
-    value: string
+  enum conference-enum-update-status {
+    completed,
   }
 
   record list-conference-response {
@@ -3905,16 +3978,6 @@ interface api20100401-conference {
     subresource-uris: option<string>,
     /// The URI of this resource, relative to `https://api.twilio.com`.
     uri: option<string>
-  }
-
-  record conference-enum-reason-conference-ended {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
-  record conference-enum-update-status {
-    /// opaque schema; raw JSON
-    value: string
   }
 
   record list-conference-params {
@@ -3969,6 +4032,15 @@ interface api20100401-conference {
 }
 
 interface api20100401-participant {
+  enum participant-enum-status {
+    queued,
+    connecting,
+    ringing,
+    connected,
+    complete,
+    failed,
+  }
+
   enum create-participant-body-amd-status-callback-method-enum {
     head,
     get,
@@ -4018,11 +4090,6 @@ interface api20100401-participant {
     status: option<participant-enum-status>,
     /// The URI of the resource, relative to `https://api.twilio.com`.
     uri: option<string>
-  }
-
-  record participant-enum-status {
-    /// opaque schema; raw JSON
-    value: string
   }
 
   record list-participant-params {
@@ -4215,6 +4282,11 @@ interface api20100401-connect-app {
     delete,
   }
 
+  enum connect-app-enum-permission {
+    get-all,
+    post-all,
+  }
+
   record list-connect-app-response {
     connect-apps: option<list<api-v2010-account-connect-app>>,
     end: option<s32>,
@@ -4250,11 +4322,6 @@ interface api20100401-connect-app {
     sid: option<string>,
     /// The URI of the resource, relative to `https://api.twilio.com`.
     uri: option<string>
-  }
-
-  record connect-app-enum-permission {
-    /// opaque schema; raw JSON
-    value: string
   }
 
   record list-connect-app-params {
@@ -4312,6 +4379,27 @@ interface api20100401-connect-app {
 }
 
 interface api20100401-incoming-phone-number {
+  enum incoming-phone-number-enum-address-requirement {
+    none,
+    any,
+    local,
+    foreign,
+  }
+
+  enum incoming-phone-number-enum-emergency-address-status {
+    registered,
+    unregistered,
+    pending-registration,
+    registration-failure,
+    pending-unregistration,
+    unregistration-failure,
+  }
+
+  enum incoming-phone-number-enum-emergency-status {
+    active,
+    inactive,
+  }
+
   enum api-v2010-account-incoming-phone-number-sms-fallback-method-enum {
     head,
     get,
@@ -4319,6 +4407,11 @@ interface api20100401-incoming-phone-number {
     patch,
     put,
     delete,
+  }
+
+  enum incoming-phone-number-enum-voice-receive-mode {
+    voice,
+    fax,
   }
 
   record list-incoming-phone-number-response {
@@ -4399,31 +4492,11 @@ interface api20100401-incoming-phone-number {
     voice-url: option<string>
   }
 
-  record incoming-phone-number-enum-address-requirement {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
   record api-v2010-account-incoming-phone-number-capabilities {
     fax: option<bool>,
     mms: option<bool>,
     sms: option<bool>,
     voice: option<bool>
-  }
-
-  record incoming-phone-number-enum-emergency-address-status {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
-  record incoming-phone-number-enum-emergency-status {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
-  record incoming-phone-number-enum-voice-receive-mode {
-    /// opaque schema; raw JSON
-    value: string
   }
 
   record list-incoming-phone-number-params {
@@ -4805,6 +4878,52 @@ interface api20100401-new-key {
 }
 
 interface api20100401-message {
+  enum message-enum-direction {
+    inbound,
+    outbound-api,
+    outbound-call,
+    outbound-reply,
+  }
+
+  enum message-enum-status {
+    queued,
+    sending,
+    sent,
+    failed,
+    delivered,
+    undelivered,
+    receiving,
+    received,
+    accepted,
+    scheduled,
+    read,
+    partially-delivered,
+    canceled,
+  }
+
+  enum message-enum-address-retention {
+    retain,
+    obfuscate,
+  }
+
+  enum message-enum-content-retention {
+    retain,
+    discard,
+  }
+
+  enum message-enum-risk-check {
+    enable,
+    disable,
+  }
+
+  enum message-enum-schedule-type {
+    fixed,
+  }
+
+  enum message-enum-update-status {
+    canceled,
+  }
+
   record list-message-response {
     end: option<s32>,
     first-page-uri: option<string>,
@@ -4856,41 +4975,6 @@ interface api20100401-message {
     to: option<string>,
     /// The URI of the Message resource, relative to `https://api.twilio.com`.
     uri: option<string>
-  }
-
-  record message-enum-direction {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
-  record message-enum-status {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
-  record message-enum-address-retention {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
-  record message-enum-content-retention {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
-  record message-enum-risk-check {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
-  record message-enum-schedule-type {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
-  record message-enum-update-status {
-    /// opaque schema; raw JSON
-    value: string
   }
 
   record list-message-params {
@@ -4993,9 +5077,9 @@ interface api20100401-message {
 }
 
 interface api20100401-feedback {
-  record message-feedback-enum-outcome {
-    /// opaque schema; raw JSON
-    value: string
+  enum message-feedback-enum-outcome {
+    confirmed,
+    unconfirmed,
   }
 
   record api-v2010-account-message-message-feedback {
@@ -5376,6 +5460,18 @@ interface api20100401-member {
 }
 
 interface api20100401-transcription {
+  enum recording-transcription-enum-status {
+    in-progress,
+    completed,
+    failed,
+  }
+
+  enum transcription-enum-status {
+    in-progress,
+    completed,
+    failed,
+  }
+
   record list-recording-transcription-response {
     end: option<s32>,
     first-page-uri: option<string>,
@@ -5416,11 +5512,6 @@ interface api20100401-transcription {
     uri: option<string>
   }
 
-  record recording-transcription-enum-status {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
   record list-transcription-response {
     end: option<s32>,
     first-page-uri: option<string>,
@@ -5459,11 +5550,6 @@ interface api20100401-transcription {
     type-op: option<string>,
     /// The URI of the resource, relative to `https://api.twilio.com`.
     uri: option<string>
-  }
-
-  record transcription-enum-status {
-    /// opaque schema; raw JSON
-    value: string
   }
 
   record list-recording-transcription-params {
@@ -5531,6 +5617,17 @@ interface api20100401-transcription {
 }
 
 interface api20100401-add-on-result {
+  enum recording-add-on-result-enum-status {
+    canceled,
+    completed,
+    deleted,
+    failed,
+    in-progress,
+    init,
+    processing,
+    queued,
+  }
+
   record list-recording-add-on-result-response {
     add-on-results: option<list<api-v2010-account-recording-recording-add-on-result>>,
     end: option<s32>,
@@ -5563,11 +5660,6 @@ interface api20100401-add-on-result {
     status: option<recording-add-on-result-enum-status>,
     /// A list of related resources identified by their relative URIs.
     subresource-uris: option<string>
-  }
-
-  record recording-add-on-result-enum-status {
-    /// opaque schema; raw JSON
-    value: string
   }
 
   record list-recording-add-on-result-params {
@@ -6770,9 +6862,256 @@ interface api20100401-token {
 }
 
 interface api20100401-record {
-  record usage-record-enum-category {
-    /// opaque schema; raw JSON
-    value: string
+  enum usage-record-enum-category {
+    a2p-registration-fees,
+    agent-conference,
+    amazon-polly,
+    answering-machine-detection,
+    authy-authentications,
+    authy-calls-outbound,
+    authy-monthly-fees,
+    authy-phone-intelligence,
+    authy-phone-verifications,
+    authy-sms-outbound,
+    call-progess-events,
+    calleridlookups,
+    calls,
+    calls-client,
+    calls-globalconference,
+    calls-inbound,
+    calls-inbound-local,
+    calls-inbound-mobile,
+    calls-inbound-tollfree,
+    calls-outbound,
+    calls-pay-verb-transactions,
+    calls-recordings,
+    calls-sip,
+    calls-sip-inbound,
+    calls-sip-outbound,
+    calls-transfers,
+    carrier-lookups,
+    conversations,
+    conversations-api-requests,
+    conversations-conversation-events,
+    conversations-endpoint-connectivity,
+    conversations-events,
+    conversations-participant-events,
+    conversations-participants,
+    cps,
+    flex-usage,
+    fraud-lookups,
+    group-rooms,
+    group-rooms-data-track,
+    group-rooms-encrypted-media-recorded,
+    group-rooms-media-downloaded,
+    group-rooms-media-recorded,
+    group-rooms-media-routed,
+    group-rooms-media-stored,
+    group-rooms-participant-minutes,
+    group-rooms-recorded-minutes,
+    imp-v1-usage,
+    lookups,
+    marketplace,
+    marketplace-algorithmia-named-entity-recognition,
+    marketplace-cadence-transcription,
+    marketplace-cadence-translation,
+    marketplace-capio-speech-to-text,
+    marketplace-convriza-ababa,
+    marketplace-deepgram-phrase-detector,
+    marketplace-digital-segment-business-info,
+    marketplace-facebook-offline-conversions,
+    marketplace-google-speech-to-text,
+    marketplace-ibm-watson-message-insights,
+    marketplace-ibm-watson-message-sentiment,
+    marketplace-ibm-watson-recording-analysis,
+    marketplace-ibm-watson-tone-analyzer,
+    marketplace-icehook-systems-scout,
+    marketplace-infogroup-dataaxle-bizinfo,
+    marketplace-keen-io-contact-center-analytics,
+    marketplace-marchex-cleancall,
+    marketplace-marchex-sentiment-analysis-for-sms,
+    marketplace-marketplace-nextcaller-social-id,
+    marketplace-mobile-commons-opt-out-classifier,
+    marketplace-nexiwave-voicemail-to-text,
+    marketplace-nextcaller-advanced-caller-identification,
+    marketplace-nomorobo-spam-score,
+    marketplace-payfone-tcpa-compliance,
+    marketplace-remeeting-automatic-speech-recognition,
+    marketplace-tcpa-defense-solutions-blacklist-feed,
+    marketplace-telo-opencnam,
+    marketplace-truecnam-true-spam,
+    marketplace-twilio-caller-name-lookup-us,
+    marketplace-twilio-carrier-information-lookup,
+    marketplace-voicebase-pci,
+    marketplace-voicebase-transcription,
+    marketplace-voicebase-transcription-custom-vocabulary,
+    marketplace-whitepages-pro-caller-identification,
+    marketplace-whitepages-pro-phone-intelligence,
+    marketplace-whitepages-pro-phone-reputation,
+    marketplace-wolfarm-spoken-results,
+    marketplace-wolfram-short-answer,
+    marketplace-ytica-contact-center-reporting-analytics,
+    mediastorage,
+    mms,
+    mms-inbound,
+    mms-inbound-longcode,
+    mms-inbound-shortcode,
+    mms-messages-carrierfees,
+    mms-outbound,
+    mms-outbound-longcode,
+    mms-outbound-shortcode,
+    monitor-reads,
+    monitor-storage,
+    monitor-writes,
+    notify,
+    notify-actions-attempts,
+    notify-channels,
+    number-format-lookups,
+    pchat,
+    pchat-users,
+    peer-to-peer-rooms-participant-minutes,
+    pfax,
+    pfax-minutes,
+    pfax-minutes-inbound,
+    pfax-minutes-outbound,
+    pfax-pages,
+    phonenumbers,
+    phonenumbers-cps,
+    phonenumbers-emergency,
+    phonenumbers-local,
+    phonenumbers-mobile,
+    phonenumbers-setups,
+    phonenumbers-tollfree,
+    premiumsupport,
+    proxy,
+    proxy-active-sessions,
+    pstnconnectivity,
+    pv,
+    pv-composition-media-downloaded,
+    pv-composition-media-encrypted,
+    pv-composition-media-stored,
+    pv-composition-minutes,
+    pv-recording-compositions,
+    pv-room-participants,
+    pv-room-participants-au1,
+    pv-room-participants-br1,
+    pv-room-participants-ie1,
+    pv-room-participants-jp1,
+    pv-room-participants-sg1,
+    pv-room-participants-us1,
+    pv-room-participants-us2,
+    pv-rooms,
+    pv-sip-endpoint-registrations,
+    recordings,
+    recordingstorage,
+    rooms-group-bandwidth,
+    rooms-group-minutes,
+    rooms-peer-to-peer-minutes,
+    shortcodes,
+    shortcodes-customerowned,
+    shortcodes-mms-enablement,
+    shortcodes-mps,
+    shortcodes-random,
+    shortcodes-uk,
+    shortcodes-vanity,
+    small-group-rooms,
+    small-group-rooms-data-track,
+    small-group-rooms-participant-minutes,
+    sms,
+    sms-inbound,
+    sms-inbound-longcode,
+    sms-inbound-shortcode,
+    sms-messages-carrierfees,
+    sms-messages-features,
+    sms-messages-features-senderid,
+    sms-outbound,
+    sms-outbound-content-inspection,
+    sms-outbound-longcode,
+    sms-outbound-shortcode,
+    speech-recognition,
+    studio-engagements,
+    sync,
+    sync-actions,
+    sync-endpoint-hours,
+    sync-endpoint-hours-above-daily-cap,
+    taskrouter-tasks,
+    totalprice,
+    transcriptions,
+    trunking-cps,
+    trunking-emergency-calls,
+    trunking-origination,
+    trunking-origination-local,
+    trunking-origination-mobile,
+    trunking-origination-tollfree,
+    trunking-recordings,
+    trunking-secure,
+    trunking-termination,
+    tts-google,
+    turnmegabytes,
+    turnmegabytes-australia,
+    turnmegabytes-brasil,
+    turnmegabytes-germany,
+    turnmegabytes-india,
+    turnmegabytes-ireland,
+    turnmegabytes-japan,
+    turnmegabytes-singapore,
+    turnmegabytes-useast,
+    turnmegabytes-uswest,
+    twilio-interconnect,
+    verify-push,
+    verify-totp,
+    verify-whatsapp-conversations-business-initiated,
+    video-recordings,
+    virtual-agent,
+    voice-insights,
+    voice-insights-client-insights-on-demand-minute,
+    voice-insights-ptsn-insights-on-demand-minute,
+    voice-insights-sip-interface-insights-on-demand-minute,
+    voice-insights-sip-trunking-insights-on-demand-minute,
+    voice-intelligence,
+    voice-intelligence-transcription,
+    voice-intelligence-operators,
+    wireless,
+    wireless-orders,
+    wireless-orders-artwork,
+    wireless-orders-bulk,
+    wireless-orders-esim,
+    wireless-orders-starter,
+    wireless-usage,
+    wireless-usage-commands,
+    wireless-usage-commands-africa,
+    wireless-usage-commands-asia,
+    wireless-usage-commands-centralandsouthamerica,
+    wireless-usage-commands-europe,
+    wireless-usage-commands-home,
+    wireless-usage-commands-northamerica,
+    wireless-usage-commands-oceania,
+    wireless-usage-commands-roaming,
+    wireless-usage-data,
+    wireless-usage-data-africa,
+    wireless-usage-data-asia,
+    wireless-usage-data-centralandsouthamerica,
+    wireless-usage-data-custom-additionalmb,
+    wireless-usage-data-custom-first5mb,
+    wireless-usage-data-domestic-roaming,
+    wireless-usage-data-europe,
+    wireless-usage-data-individual-additionalgb,
+    wireless-usage-data-individual-firstgb,
+    wireless-usage-data-international-roaming-canada,
+    wireless-usage-data-international-roaming-india,
+    wireless-usage-data-international-roaming-mexico,
+    wireless-usage-data-northamerica,
+    wireless-usage-data-oceania,
+    wireless-usage-data-pooled,
+    wireless-usage-data-pooled-downlink,
+    wireless-usage-data-pooled-uplink,
+    wireless-usage-mrc,
+    wireless-usage-mrc-custom,
+    wireless-usage-mrc-individual,
+    wireless-usage-mrc-pooled,
+    wireless-usage-mrc-suspended,
+    wireless-usage-sms,
+    wireless-usage-voice,
   }
 
   record list-usage-record-response {
@@ -6842,9 +7181,256 @@ interface api20100401-record {
 }
 
 interface api20100401-all-time {
-  record usage-record-all-time-enum-category {
-    /// opaque schema; raw JSON
-    value: string
+  enum usage-record-all-time-enum-category {
+    a2p-registration-fees,
+    agent-conference,
+    amazon-polly,
+    answering-machine-detection,
+    authy-authentications,
+    authy-calls-outbound,
+    authy-monthly-fees,
+    authy-phone-intelligence,
+    authy-phone-verifications,
+    authy-sms-outbound,
+    call-progess-events,
+    calleridlookups,
+    calls,
+    calls-client,
+    calls-globalconference,
+    calls-inbound,
+    calls-inbound-local,
+    calls-inbound-mobile,
+    calls-inbound-tollfree,
+    calls-outbound,
+    calls-pay-verb-transactions,
+    calls-recordings,
+    calls-sip,
+    calls-sip-inbound,
+    calls-sip-outbound,
+    calls-transfers,
+    carrier-lookups,
+    conversations,
+    conversations-api-requests,
+    conversations-conversation-events,
+    conversations-endpoint-connectivity,
+    conversations-events,
+    conversations-participant-events,
+    conversations-participants,
+    cps,
+    flex-usage,
+    fraud-lookups,
+    group-rooms,
+    group-rooms-data-track,
+    group-rooms-encrypted-media-recorded,
+    group-rooms-media-downloaded,
+    group-rooms-media-recorded,
+    group-rooms-media-routed,
+    group-rooms-media-stored,
+    group-rooms-participant-minutes,
+    group-rooms-recorded-minutes,
+    imp-v1-usage,
+    lookups,
+    marketplace,
+    marketplace-algorithmia-named-entity-recognition,
+    marketplace-cadence-transcription,
+    marketplace-cadence-translation,
+    marketplace-capio-speech-to-text,
+    marketplace-convriza-ababa,
+    marketplace-deepgram-phrase-detector,
+    marketplace-digital-segment-business-info,
+    marketplace-facebook-offline-conversions,
+    marketplace-google-speech-to-text,
+    marketplace-ibm-watson-message-insights,
+    marketplace-ibm-watson-message-sentiment,
+    marketplace-ibm-watson-recording-analysis,
+    marketplace-ibm-watson-tone-analyzer,
+    marketplace-icehook-systems-scout,
+    marketplace-infogroup-dataaxle-bizinfo,
+    marketplace-keen-io-contact-center-analytics,
+    marketplace-marchex-cleancall,
+    marketplace-marchex-sentiment-analysis-for-sms,
+    marketplace-marketplace-nextcaller-social-id,
+    marketplace-mobile-commons-opt-out-classifier,
+    marketplace-nexiwave-voicemail-to-text,
+    marketplace-nextcaller-advanced-caller-identification,
+    marketplace-nomorobo-spam-score,
+    marketplace-payfone-tcpa-compliance,
+    marketplace-remeeting-automatic-speech-recognition,
+    marketplace-tcpa-defense-solutions-blacklist-feed,
+    marketplace-telo-opencnam,
+    marketplace-truecnam-true-spam,
+    marketplace-twilio-caller-name-lookup-us,
+    marketplace-twilio-carrier-information-lookup,
+    marketplace-voicebase-pci,
+    marketplace-voicebase-transcription,
+    marketplace-voicebase-transcription-custom-vocabulary,
+    marketplace-whitepages-pro-caller-identification,
+    marketplace-whitepages-pro-phone-intelligence,
+    marketplace-whitepages-pro-phone-reputation,
+    marketplace-wolfarm-spoken-results,
+    marketplace-wolfram-short-answer,
+    marketplace-ytica-contact-center-reporting-analytics,
+    mediastorage,
+    mms,
+    mms-inbound,
+    mms-inbound-longcode,
+    mms-inbound-shortcode,
+    mms-messages-carrierfees,
+    mms-outbound,
+    mms-outbound-longcode,
+    mms-outbound-shortcode,
+    monitor-reads,
+    monitor-storage,
+    monitor-writes,
+    notify,
+    notify-actions-attempts,
+    notify-channels,
+    number-format-lookups,
+    pchat,
+    pchat-users,
+    peer-to-peer-rooms-participant-minutes,
+    pfax,
+    pfax-minutes,
+    pfax-minutes-inbound,
+    pfax-minutes-outbound,
+    pfax-pages,
+    phonenumbers,
+    phonenumbers-cps,
+    phonenumbers-emergency,
+    phonenumbers-local,
+    phonenumbers-mobile,
+    phonenumbers-setups,
+    phonenumbers-tollfree,
+    premiumsupport,
+    proxy,
+    proxy-active-sessions,
+    pstnconnectivity,
+    pv,
+    pv-composition-media-downloaded,
+    pv-composition-media-encrypted,
+    pv-composition-media-stored,
+    pv-composition-minutes,
+    pv-recording-compositions,
+    pv-room-participants,
+    pv-room-participants-au1,
+    pv-room-participants-br1,
+    pv-room-participants-ie1,
+    pv-room-participants-jp1,
+    pv-room-participants-sg1,
+    pv-room-participants-us1,
+    pv-room-participants-us2,
+    pv-rooms,
+    pv-sip-endpoint-registrations,
+    recordings,
+    recordingstorage,
+    rooms-group-bandwidth,
+    rooms-group-minutes,
+    rooms-peer-to-peer-minutes,
+    shortcodes,
+    shortcodes-customerowned,
+    shortcodes-mms-enablement,
+    shortcodes-mps,
+    shortcodes-random,
+    shortcodes-uk,
+    shortcodes-vanity,
+    small-group-rooms,
+    small-group-rooms-data-track,
+    small-group-rooms-participant-minutes,
+    sms,
+    sms-inbound,
+    sms-inbound-longcode,
+    sms-inbound-shortcode,
+    sms-messages-carrierfees,
+    sms-messages-features,
+    sms-messages-features-senderid,
+    sms-outbound,
+    sms-outbound-content-inspection,
+    sms-outbound-longcode,
+    sms-outbound-shortcode,
+    speech-recognition,
+    studio-engagements,
+    sync,
+    sync-actions,
+    sync-endpoint-hours,
+    sync-endpoint-hours-above-daily-cap,
+    taskrouter-tasks,
+    totalprice,
+    transcriptions,
+    trunking-cps,
+    trunking-emergency-calls,
+    trunking-origination,
+    trunking-origination-local,
+    trunking-origination-mobile,
+    trunking-origination-tollfree,
+    trunking-recordings,
+    trunking-secure,
+    trunking-termination,
+    tts-google,
+    turnmegabytes,
+    turnmegabytes-australia,
+    turnmegabytes-brasil,
+    turnmegabytes-germany,
+    turnmegabytes-india,
+    turnmegabytes-ireland,
+    turnmegabytes-japan,
+    turnmegabytes-singapore,
+    turnmegabytes-useast,
+    turnmegabytes-uswest,
+    twilio-interconnect,
+    verify-push,
+    verify-totp,
+    verify-whatsapp-conversations-business-initiated,
+    video-recordings,
+    virtual-agent,
+    voice-insights,
+    voice-insights-client-insights-on-demand-minute,
+    voice-insights-ptsn-insights-on-demand-minute,
+    voice-insights-sip-interface-insights-on-demand-minute,
+    voice-insights-sip-trunking-insights-on-demand-minute,
+    voice-intelligence,
+    voice-intelligence-transcription,
+    voice-intelligence-operators,
+    wireless,
+    wireless-orders,
+    wireless-orders-artwork,
+    wireless-orders-bulk,
+    wireless-orders-esim,
+    wireless-orders-starter,
+    wireless-usage,
+    wireless-usage-commands,
+    wireless-usage-commands-africa,
+    wireless-usage-commands-asia,
+    wireless-usage-commands-centralandsouthamerica,
+    wireless-usage-commands-europe,
+    wireless-usage-commands-home,
+    wireless-usage-commands-northamerica,
+    wireless-usage-commands-oceania,
+    wireless-usage-commands-roaming,
+    wireless-usage-data,
+    wireless-usage-data-africa,
+    wireless-usage-data-asia,
+    wireless-usage-data-centralandsouthamerica,
+    wireless-usage-data-custom-additionalmb,
+    wireless-usage-data-custom-first5mb,
+    wireless-usage-data-domestic-roaming,
+    wireless-usage-data-europe,
+    wireless-usage-data-individual-additionalgb,
+    wireless-usage-data-individual-firstgb,
+    wireless-usage-data-international-roaming-canada,
+    wireless-usage-data-international-roaming-india,
+    wireless-usage-data-international-roaming-mexico,
+    wireless-usage-data-northamerica,
+    wireless-usage-data-oceania,
+    wireless-usage-data-pooled,
+    wireless-usage-data-pooled-downlink,
+    wireless-usage-data-pooled-uplink,
+    wireless-usage-mrc,
+    wireless-usage-mrc-custom,
+    wireless-usage-mrc-individual,
+    wireless-usage-mrc-pooled,
+    wireless-usage-mrc-suspended,
+    wireless-usage-sms,
+    wireless-usage-voice,
   }
 
   record list-usage-record-all-time-response {
@@ -6914,9 +7500,256 @@ interface api20100401-all-time {
 }
 
 interface api20100401-daily {
-  record usage-record-daily-enum-category {
-    /// opaque schema; raw JSON
-    value: string
+  enum usage-record-daily-enum-category {
+    a2p-registration-fees,
+    agent-conference,
+    amazon-polly,
+    answering-machine-detection,
+    authy-authentications,
+    authy-calls-outbound,
+    authy-monthly-fees,
+    authy-phone-intelligence,
+    authy-phone-verifications,
+    authy-sms-outbound,
+    call-progess-events,
+    calleridlookups,
+    calls,
+    calls-client,
+    calls-globalconference,
+    calls-inbound,
+    calls-inbound-local,
+    calls-inbound-mobile,
+    calls-inbound-tollfree,
+    calls-outbound,
+    calls-pay-verb-transactions,
+    calls-recordings,
+    calls-sip,
+    calls-sip-inbound,
+    calls-sip-outbound,
+    calls-transfers,
+    carrier-lookups,
+    conversations,
+    conversations-api-requests,
+    conversations-conversation-events,
+    conversations-endpoint-connectivity,
+    conversations-events,
+    conversations-participant-events,
+    conversations-participants,
+    cps,
+    flex-usage,
+    fraud-lookups,
+    group-rooms,
+    group-rooms-data-track,
+    group-rooms-encrypted-media-recorded,
+    group-rooms-media-downloaded,
+    group-rooms-media-recorded,
+    group-rooms-media-routed,
+    group-rooms-media-stored,
+    group-rooms-participant-minutes,
+    group-rooms-recorded-minutes,
+    imp-v1-usage,
+    lookups,
+    marketplace,
+    marketplace-algorithmia-named-entity-recognition,
+    marketplace-cadence-transcription,
+    marketplace-cadence-translation,
+    marketplace-capio-speech-to-text,
+    marketplace-convriza-ababa,
+    marketplace-deepgram-phrase-detector,
+    marketplace-digital-segment-business-info,
+    marketplace-facebook-offline-conversions,
+    marketplace-google-speech-to-text,
+    marketplace-ibm-watson-message-insights,
+    marketplace-ibm-watson-message-sentiment,
+    marketplace-ibm-watson-recording-analysis,
+    marketplace-ibm-watson-tone-analyzer,
+    marketplace-icehook-systems-scout,
+    marketplace-infogroup-dataaxle-bizinfo,
+    marketplace-keen-io-contact-center-analytics,
+    marketplace-marchex-cleancall,
+    marketplace-marchex-sentiment-analysis-for-sms,
+    marketplace-marketplace-nextcaller-social-id,
+    marketplace-mobile-commons-opt-out-classifier,
+    marketplace-nexiwave-voicemail-to-text,
+    marketplace-nextcaller-advanced-caller-identification,
+    marketplace-nomorobo-spam-score,
+    marketplace-payfone-tcpa-compliance,
+    marketplace-remeeting-automatic-speech-recognition,
+    marketplace-tcpa-defense-solutions-blacklist-feed,
+    marketplace-telo-opencnam,
+    marketplace-truecnam-true-spam,
+    marketplace-twilio-caller-name-lookup-us,
+    marketplace-twilio-carrier-information-lookup,
+    marketplace-voicebase-pci,
+    marketplace-voicebase-transcription,
+    marketplace-voicebase-transcription-custom-vocabulary,
+    marketplace-whitepages-pro-caller-identification,
+    marketplace-whitepages-pro-phone-intelligence,
+    marketplace-whitepages-pro-phone-reputation,
+    marketplace-wolfarm-spoken-results,
+    marketplace-wolfram-short-answer,
+    marketplace-ytica-contact-center-reporting-analytics,
+    mediastorage,
+    mms,
+    mms-inbound,
+    mms-inbound-longcode,
+    mms-inbound-shortcode,
+    mms-messages-carrierfees,
+    mms-outbound,
+    mms-outbound-longcode,
+    mms-outbound-shortcode,
+    monitor-reads,
+    monitor-storage,
+    monitor-writes,
+    notify,
+    notify-actions-attempts,
+    notify-channels,
+    number-format-lookups,
+    pchat,
+    pchat-users,
+    peer-to-peer-rooms-participant-minutes,
+    pfax,
+    pfax-minutes,
+    pfax-minutes-inbound,
+    pfax-minutes-outbound,
+    pfax-pages,
+    phonenumbers,
+    phonenumbers-cps,
+    phonenumbers-emergency,
+    phonenumbers-local,
+    phonenumbers-mobile,
+    phonenumbers-setups,
+    phonenumbers-tollfree,
+    premiumsupport,
+    proxy,
+    proxy-active-sessions,
+    pstnconnectivity,
+    pv,
+    pv-composition-media-downloaded,
+    pv-composition-media-encrypted,
+    pv-composition-media-stored,
+    pv-composition-minutes,
+    pv-recording-compositions,
+    pv-room-participants,
+    pv-room-participants-au1,
+    pv-room-participants-br1,
+    pv-room-participants-ie1,
+    pv-room-participants-jp1,
+    pv-room-participants-sg1,
+    pv-room-participants-us1,
+    pv-room-participants-us2,
+    pv-rooms,
+    pv-sip-endpoint-registrations,
+    recordings,
+    recordingstorage,
+    rooms-group-bandwidth,
+    rooms-group-minutes,
+    rooms-peer-to-peer-minutes,
+    shortcodes,
+    shortcodes-customerowned,
+    shortcodes-mms-enablement,
+    shortcodes-mps,
+    shortcodes-random,
+    shortcodes-uk,
+    shortcodes-vanity,
+    small-group-rooms,
+    small-group-rooms-data-track,
+    small-group-rooms-participant-minutes,
+    sms,
+    sms-inbound,
+    sms-inbound-longcode,
+    sms-inbound-shortcode,
+    sms-messages-carrierfees,
+    sms-messages-features,
+    sms-messages-features-senderid,
+    sms-outbound,
+    sms-outbound-content-inspection,
+    sms-outbound-longcode,
+    sms-outbound-shortcode,
+    speech-recognition,
+    studio-engagements,
+    sync,
+    sync-actions,
+    sync-endpoint-hours,
+    sync-endpoint-hours-above-daily-cap,
+    taskrouter-tasks,
+    totalprice,
+    transcriptions,
+    trunking-cps,
+    trunking-emergency-calls,
+    trunking-origination,
+    trunking-origination-local,
+    trunking-origination-mobile,
+    trunking-origination-tollfree,
+    trunking-recordings,
+    trunking-secure,
+    trunking-termination,
+    tts-google,
+    turnmegabytes,
+    turnmegabytes-australia,
+    turnmegabytes-brasil,
+    turnmegabytes-germany,
+    turnmegabytes-india,
+    turnmegabytes-ireland,
+    turnmegabytes-japan,
+    turnmegabytes-singapore,
+    turnmegabytes-useast,
+    turnmegabytes-uswest,
+    twilio-interconnect,
+    verify-push,
+    verify-totp,
+    verify-whatsapp-conversations-business-initiated,
+    video-recordings,
+    virtual-agent,
+    voice-insights,
+    voice-insights-client-insights-on-demand-minute,
+    voice-insights-ptsn-insights-on-demand-minute,
+    voice-insights-sip-interface-insights-on-demand-minute,
+    voice-insights-sip-trunking-insights-on-demand-minute,
+    voice-intelligence,
+    voice-intelligence-transcription,
+    voice-intelligence-operators,
+    wireless,
+    wireless-orders,
+    wireless-orders-artwork,
+    wireless-orders-bulk,
+    wireless-orders-esim,
+    wireless-orders-starter,
+    wireless-usage,
+    wireless-usage-commands,
+    wireless-usage-commands-africa,
+    wireless-usage-commands-asia,
+    wireless-usage-commands-centralandsouthamerica,
+    wireless-usage-commands-europe,
+    wireless-usage-commands-home,
+    wireless-usage-commands-northamerica,
+    wireless-usage-commands-oceania,
+    wireless-usage-commands-roaming,
+    wireless-usage-data,
+    wireless-usage-data-africa,
+    wireless-usage-data-asia,
+    wireless-usage-data-centralandsouthamerica,
+    wireless-usage-data-custom-additionalmb,
+    wireless-usage-data-custom-first5mb,
+    wireless-usage-data-domestic-roaming,
+    wireless-usage-data-europe,
+    wireless-usage-data-individual-additionalgb,
+    wireless-usage-data-individual-firstgb,
+    wireless-usage-data-international-roaming-canada,
+    wireless-usage-data-international-roaming-india,
+    wireless-usage-data-international-roaming-mexico,
+    wireless-usage-data-northamerica,
+    wireless-usage-data-oceania,
+    wireless-usage-data-pooled,
+    wireless-usage-data-pooled-downlink,
+    wireless-usage-data-pooled-uplink,
+    wireless-usage-mrc,
+    wireless-usage-mrc-custom,
+    wireless-usage-mrc-individual,
+    wireless-usage-mrc-pooled,
+    wireless-usage-mrc-suspended,
+    wireless-usage-sms,
+    wireless-usage-voice,
   }
 
   record list-usage-record-daily-response {
@@ -6986,9 +7819,256 @@ interface api20100401-daily {
 }
 
 interface api20100401-last-month {
-  record usage-record-last-month-enum-category {
-    /// opaque schema; raw JSON
-    value: string
+  enum usage-record-last-month-enum-category {
+    a2p-registration-fees,
+    agent-conference,
+    amazon-polly,
+    answering-machine-detection,
+    authy-authentications,
+    authy-calls-outbound,
+    authy-monthly-fees,
+    authy-phone-intelligence,
+    authy-phone-verifications,
+    authy-sms-outbound,
+    call-progess-events,
+    calleridlookups,
+    calls,
+    calls-client,
+    calls-globalconference,
+    calls-inbound,
+    calls-inbound-local,
+    calls-inbound-mobile,
+    calls-inbound-tollfree,
+    calls-outbound,
+    calls-pay-verb-transactions,
+    calls-recordings,
+    calls-sip,
+    calls-sip-inbound,
+    calls-sip-outbound,
+    calls-transfers,
+    carrier-lookups,
+    conversations,
+    conversations-api-requests,
+    conversations-conversation-events,
+    conversations-endpoint-connectivity,
+    conversations-events,
+    conversations-participant-events,
+    conversations-participants,
+    cps,
+    flex-usage,
+    fraud-lookups,
+    group-rooms,
+    group-rooms-data-track,
+    group-rooms-encrypted-media-recorded,
+    group-rooms-media-downloaded,
+    group-rooms-media-recorded,
+    group-rooms-media-routed,
+    group-rooms-media-stored,
+    group-rooms-participant-minutes,
+    group-rooms-recorded-minutes,
+    imp-v1-usage,
+    lookups,
+    marketplace,
+    marketplace-algorithmia-named-entity-recognition,
+    marketplace-cadence-transcription,
+    marketplace-cadence-translation,
+    marketplace-capio-speech-to-text,
+    marketplace-convriza-ababa,
+    marketplace-deepgram-phrase-detector,
+    marketplace-digital-segment-business-info,
+    marketplace-facebook-offline-conversions,
+    marketplace-google-speech-to-text,
+    marketplace-ibm-watson-message-insights,
+    marketplace-ibm-watson-message-sentiment,
+    marketplace-ibm-watson-recording-analysis,
+    marketplace-ibm-watson-tone-analyzer,
+    marketplace-icehook-systems-scout,
+    marketplace-infogroup-dataaxle-bizinfo,
+    marketplace-keen-io-contact-center-analytics,
+    marketplace-marchex-cleancall,
+    marketplace-marchex-sentiment-analysis-for-sms,
+    marketplace-marketplace-nextcaller-social-id,
+    marketplace-mobile-commons-opt-out-classifier,
+    marketplace-nexiwave-voicemail-to-text,
+    marketplace-nextcaller-advanced-caller-identification,
+    marketplace-nomorobo-spam-score,
+    marketplace-payfone-tcpa-compliance,
+    marketplace-remeeting-automatic-speech-recognition,
+    marketplace-tcpa-defense-solutions-blacklist-feed,
+    marketplace-telo-opencnam,
+    marketplace-truecnam-true-spam,
+    marketplace-twilio-caller-name-lookup-us,
+    marketplace-twilio-carrier-information-lookup,
+    marketplace-voicebase-pci,
+    marketplace-voicebase-transcription,
+    marketplace-voicebase-transcription-custom-vocabulary,
+    marketplace-whitepages-pro-caller-identification,
+    marketplace-whitepages-pro-phone-intelligence,
+    marketplace-whitepages-pro-phone-reputation,
+    marketplace-wolfarm-spoken-results,
+    marketplace-wolfram-short-answer,
+    marketplace-ytica-contact-center-reporting-analytics,
+    mediastorage,
+    mms,
+    mms-inbound,
+    mms-inbound-longcode,
+    mms-inbound-shortcode,
+    mms-messages-carrierfees,
+    mms-outbound,
+    mms-outbound-longcode,
+    mms-outbound-shortcode,
+    monitor-reads,
+    monitor-storage,
+    monitor-writes,
+    notify,
+    notify-actions-attempts,
+    notify-channels,
+    number-format-lookups,
+    pchat,
+    pchat-users,
+    peer-to-peer-rooms-participant-minutes,
+    pfax,
+    pfax-minutes,
+    pfax-minutes-inbound,
+    pfax-minutes-outbound,
+    pfax-pages,
+    phonenumbers,
+    phonenumbers-cps,
+    phonenumbers-emergency,
+    phonenumbers-local,
+    phonenumbers-mobile,
+    phonenumbers-setups,
+    phonenumbers-tollfree,
+    premiumsupport,
+    proxy,
+    proxy-active-sessions,
+    pstnconnectivity,
+    pv,
+    pv-composition-media-downloaded,
+    pv-composition-media-encrypted,
+    pv-composition-media-stored,
+    pv-composition-minutes,
+    pv-recording-compositions,
+    pv-room-participants,
+    pv-room-participants-au1,
+    pv-room-participants-br1,
+    pv-room-participants-ie1,
+    pv-room-participants-jp1,
+    pv-room-participants-sg1,
+    pv-room-participants-us1,
+    pv-room-participants-us2,
+    pv-rooms,
+    pv-sip-endpoint-registrations,
+    recordings,
+    recordingstorage,
+    rooms-group-bandwidth,
+    rooms-group-minutes,
+    rooms-peer-to-peer-minutes,
+    shortcodes,
+    shortcodes-customerowned,
+    shortcodes-mms-enablement,
+    shortcodes-mps,
+    shortcodes-random,
+    shortcodes-uk,
+    shortcodes-vanity,
+    small-group-rooms,
+    small-group-rooms-data-track,
+    small-group-rooms-participant-minutes,
+    sms,
+    sms-inbound,
+    sms-inbound-longcode,
+    sms-inbound-shortcode,
+    sms-messages-carrierfees,
+    sms-messages-features,
+    sms-messages-features-senderid,
+    sms-outbound,
+    sms-outbound-content-inspection,
+    sms-outbound-longcode,
+    sms-outbound-shortcode,
+    speech-recognition,
+    studio-engagements,
+    sync,
+    sync-actions,
+    sync-endpoint-hours,
+    sync-endpoint-hours-above-daily-cap,
+    taskrouter-tasks,
+    totalprice,
+    transcriptions,
+    trunking-cps,
+    trunking-emergency-calls,
+    trunking-origination,
+    trunking-origination-local,
+    trunking-origination-mobile,
+    trunking-origination-tollfree,
+    trunking-recordings,
+    trunking-secure,
+    trunking-termination,
+    tts-google,
+    turnmegabytes,
+    turnmegabytes-australia,
+    turnmegabytes-brasil,
+    turnmegabytes-germany,
+    turnmegabytes-india,
+    turnmegabytes-ireland,
+    turnmegabytes-japan,
+    turnmegabytes-singapore,
+    turnmegabytes-useast,
+    turnmegabytes-uswest,
+    twilio-interconnect,
+    verify-push,
+    verify-totp,
+    verify-whatsapp-conversations-business-initiated,
+    video-recordings,
+    virtual-agent,
+    voice-insights,
+    voice-insights-client-insights-on-demand-minute,
+    voice-insights-ptsn-insights-on-demand-minute,
+    voice-insights-sip-interface-insights-on-demand-minute,
+    voice-insights-sip-trunking-insights-on-demand-minute,
+    voice-intelligence,
+    voice-intelligence-transcription,
+    voice-intelligence-operators,
+    wireless,
+    wireless-orders,
+    wireless-orders-artwork,
+    wireless-orders-bulk,
+    wireless-orders-esim,
+    wireless-orders-starter,
+    wireless-usage,
+    wireless-usage-commands,
+    wireless-usage-commands-africa,
+    wireless-usage-commands-asia,
+    wireless-usage-commands-centralandsouthamerica,
+    wireless-usage-commands-europe,
+    wireless-usage-commands-home,
+    wireless-usage-commands-northamerica,
+    wireless-usage-commands-oceania,
+    wireless-usage-commands-roaming,
+    wireless-usage-data,
+    wireless-usage-data-africa,
+    wireless-usage-data-asia,
+    wireless-usage-data-centralandsouthamerica,
+    wireless-usage-data-custom-additionalmb,
+    wireless-usage-data-custom-first5mb,
+    wireless-usage-data-domestic-roaming,
+    wireless-usage-data-europe,
+    wireless-usage-data-individual-additionalgb,
+    wireless-usage-data-individual-firstgb,
+    wireless-usage-data-international-roaming-canada,
+    wireless-usage-data-international-roaming-india,
+    wireless-usage-data-international-roaming-mexico,
+    wireless-usage-data-northamerica,
+    wireless-usage-data-oceania,
+    wireless-usage-data-pooled,
+    wireless-usage-data-pooled-downlink,
+    wireless-usage-data-pooled-uplink,
+    wireless-usage-mrc,
+    wireless-usage-mrc-custom,
+    wireless-usage-mrc-individual,
+    wireless-usage-mrc-pooled,
+    wireless-usage-mrc-suspended,
+    wireless-usage-sms,
+    wireless-usage-voice,
   }
 
   record list-usage-record-last-month-response {
@@ -7058,9 +8138,256 @@ interface api20100401-last-month {
 }
 
 interface api20100401-monthly {
-  record usage-record-monthly-enum-category {
-    /// opaque schema; raw JSON
-    value: string
+  enum usage-record-monthly-enum-category {
+    a2p-registration-fees,
+    agent-conference,
+    amazon-polly,
+    answering-machine-detection,
+    authy-authentications,
+    authy-calls-outbound,
+    authy-monthly-fees,
+    authy-phone-intelligence,
+    authy-phone-verifications,
+    authy-sms-outbound,
+    call-progess-events,
+    calleridlookups,
+    calls,
+    calls-client,
+    calls-globalconference,
+    calls-inbound,
+    calls-inbound-local,
+    calls-inbound-mobile,
+    calls-inbound-tollfree,
+    calls-outbound,
+    calls-pay-verb-transactions,
+    calls-recordings,
+    calls-sip,
+    calls-sip-inbound,
+    calls-sip-outbound,
+    calls-transfers,
+    carrier-lookups,
+    conversations,
+    conversations-api-requests,
+    conversations-conversation-events,
+    conversations-endpoint-connectivity,
+    conversations-events,
+    conversations-participant-events,
+    conversations-participants,
+    cps,
+    flex-usage,
+    fraud-lookups,
+    group-rooms,
+    group-rooms-data-track,
+    group-rooms-encrypted-media-recorded,
+    group-rooms-media-downloaded,
+    group-rooms-media-recorded,
+    group-rooms-media-routed,
+    group-rooms-media-stored,
+    group-rooms-participant-minutes,
+    group-rooms-recorded-minutes,
+    imp-v1-usage,
+    lookups,
+    marketplace,
+    marketplace-algorithmia-named-entity-recognition,
+    marketplace-cadence-transcription,
+    marketplace-cadence-translation,
+    marketplace-capio-speech-to-text,
+    marketplace-convriza-ababa,
+    marketplace-deepgram-phrase-detector,
+    marketplace-digital-segment-business-info,
+    marketplace-facebook-offline-conversions,
+    marketplace-google-speech-to-text,
+    marketplace-ibm-watson-message-insights,
+    marketplace-ibm-watson-message-sentiment,
+    marketplace-ibm-watson-recording-analysis,
+    marketplace-ibm-watson-tone-analyzer,
+    marketplace-icehook-systems-scout,
+    marketplace-infogroup-dataaxle-bizinfo,
+    marketplace-keen-io-contact-center-analytics,
+    marketplace-marchex-cleancall,
+    marketplace-marchex-sentiment-analysis-for-sms,
+    marketplace-marketplace-nextcaller-social-id,
+    marketplace-mobile-commons-opt-out-classifier,
+    marketplace-nexiwave-voicemail-to-text,
+    marketplace-nextcaller-advanced-caller-identification,
+    marketplace-nomorobo-spam-score,
+    marketplace-payfone-tcpa-compliance,
+    marketplace-remeeting-automatic-speech-recognition,
+    marketplace-tcpa-defense-solutions-blacklist-feed,
+    marketplace-telo-opencnam,
+    marketplace-truecnam-true-spam,
+    marketplace-twilio-caller-name-lookup-us,
+    marketplace-twilio-carrier-information-lookup,
+    marketplace-voicebase-pci,
+    marketplace-voicebase-transcription,
+    marketplace-voicebase-transcription-custom-vocabulary,
+    marketplace-whitepages-pro-caller-identification,
+    marketplace-whitepages-pro-phone-intelligence,
+    marketplace-whitepages-pro-phone-reputation,
+    marketplace-wolfarm-spoken-results,
+    marketplace-wolfram-short-answer,
+    marketplace-ytica-contact-center-reporting-analytics,
+    mediastorage,
+    mms,
+    mms-inbound,
+    mms-inbound-longcode,
+    mms-inbound-shortcode,
+    mms-messages-carrierfees,
+    mms-outbound,
+    mms-outbound-longcode,
+    mms-outbound-shortcode,
+    monitor-reads,
+    monitor-storage,
+    monitor-writes,
+    notify,
+    notify-actions-attempts,
+    notify-channels,
+    number-format-lookups,
+    pchat,
+    pchat-users,
+    peer-to-peer-rooms-participant-minutes,
+    pfax,
+    pfax-minutes,
+    pfax-minutes-inbound,
+    pfax-minutes-outbound,
+    pfax-pages,
+    phonenumbers,
+    phonenumbers-cps,
+    phonenumbers-emergency,
+    phonenumbers-local,
+    phonenumbers-mobile,
+    phonenumbers-setups,
+    phonenumbers-tollfree,
+    premiumsupport,
+    proxy,
+    proxy-active-sessions,
+    pstnconnectivity,
+    pv,
+    pv-composition-media-downloaded,
+    pv-composition-media-encrypted,
+    pv-composition-media-stored,
+    pv-composition-minutes,
+    pv-recording-compositions,
+    pv-room-participants,
+    pv-room-participants-au1,
+    pv-room-participants-br1,
+    pv-room-participants-ie1,
+    pv-room-participants-jp1,
+    pv-room-participants-sg1,
+    pv-room-participants-us1,
+    pv-room-participants-us2,
+    pv-rooms,
+    pv-sip-endpoint-registrations,
+    recordings,
+    recordingstorage,
+    rooms-group-bandwidth,
+    rooms-group-minutes,
+    rooms-peer-to-peer-minutes,
+    shortcodes,
+    shortcodes-customerowned,
+    shortcodes-mms-enablement,
+    shortcodes-mps,
+    shortcodes-random,
+    shortcodes-uk,
+    shortcodes-vanity,
+    small-group-rooms,
+    small-group-rooms-data-track,
+    small-group-rooms-participant-minutes,
+    sms,
+    sms-inbound,
+    sms-inbound-longcode,
+    sms-inbound-shortcode,
+    sms-messages-carrierfees,
+    sms-messages-features,
+    sms-messages-features-senderid,
+    sms-outbound,
+    sms-outbound-content-inspection,
+    sms-outbound-longcode,
+    sms-outbound-shortcode,
+    speech-recognition,
+    studio-engagements,
+    sync,
+    sync-actions,
+    sync-endpoint-hours,
+    sync-endpoint-hours-above-daily-cap,
+    taskrouter-tasks,
+    totalprice,
+    transcriptions,
+    trunking-cps,
+    trunking-emergency-calls,
+    trunking-origination,
+    trunking-origination-local,
+    trunking-origination-mobile,
+    trunking-origination-tollfree,
+    trunking-recordings,
+    trunking-secure,
+    trunking-termination,
+    tts-google,
+    turnmegabytes,
+    turnmegabytes-australia,
+    turnmegabytes-brasil,
+    turnmegabytes-germany,
+    turnmegabytes-india,
+    turnmegabytes-ireland,
+    turnmegabytes-japan,
+    turnmegabytes-singapore,
+    turnmegabytes-useast,
+    turnmegabytes-uswest,
+    twilio-interconnect,
+    verify-push,
+    verify-totp,
+    verify-whatsapp-conversations-business-initiated,
+    video-recordings,
+    virtual-agent,
+    voice-insights,
+    voice-insights-client-insights-on-demand-minute,
+    voice-insights-ptsn-insights-on-demand-minute,
+    voice-insights-sip-interface-insights-on-demand-minute,
+    voice-insights-sip-trunking-insights-on-demand-minute,
+    voice-intelligence,
+    voice-intelligence-transcription,
+    voice-intelligence-operators,
+    wireless,
+    wireless-orders,
+    wireless-orders-artwork,
+    wireless-orders-bulk,
+    wireless-orders-esim,
+    wireless-orders-starter,
+    wireless-usage,
+    wireless-usage-commands,
+    wireless-usage-commands-africa,
+    wireless-usage-commands-asia,
+    wireless-usage-commands-centralandsouthamerica,
+    wireless-usage-commands-europe,
+    wireless-usage-commands-home,
+    wireless-usage-commands-northamerica,
+    wireless-usage-commands-oceania,
+    wireless-usage-commands-roaming,
+    wireless-usage-data,
+    wireless-usage-data-africa,
+    wireless-usage-data-asia,
+    wireless-usage-data-centralandsouthamerica,
+    wireless-usage-data-custom-additionalmb,
+    wireless-usage-data-custom-first5mb,
+    wireless-usage-data-domestic-roaming,
+    wireless-usage-data-europe,
+    wireless-usage-data-individual-additionalgb,
+    wireless-usage-data-individual-firstgb,
+    wireless-usage-data-international-roaming-canada,
+    wireless-usage-data-international-roaming-india,
+    wireless-usage-data-international-roaming-mexico,
+    wireless-usage-data-northamerica,
+    wireless-usage-data-oceania,
+    wireless-usage-data-pooled,
+    wireless-usage-data-pooled-downlink,
+    wireless-usage-data-pooled-uplink,
+    wireless-usage-mrc,
+    wireless-usage-mrc-custom,
+    wireless-usage-mrc-individual,
+    wireless-usage-mrc-pooled,
+    wireless-usage-mrc-suspended,
+    wireless-usage-sms,
+    wireless-usage-voice,
   }
 
   record list-usage-record-monthly-response {
@@ -7130,9 +8457,256 @@ interface api20100401-monthly {
 }
 
 interface api20100401-this-month {
-  record usage-record-this-month-enum-category {
-    /// opaque schema; raw JSON
-    value: string
+  enum usage-record-this-month-enum-category {
+    a2p-registration-fees,
+    agent-conference,
+    amazon-polly,
+    answering-machine-detection,
+    authy-authentications,
+    authy-calls-outbound,
+    authy-monthly-fees,
+    authy-phone-intelligence,
+    authy-phone-verifications,
+    authy-sms-outbound,
+    call-progess-events,
+    calleridlookups,
+    calls,
+    calls-client,
+    calls-globalconference,
+    calls-inbound,
+    calls-inbound-local,
+    calls-inbound-mobile,
+    calls-inbound-tollfree,
+    calls-outbound,
+    calls-pay-verb-transactions,
+    calls-recordings,
+    calls-sip,
+    calls-sip-inbound,
+    calls-sip-outbound,
+    calls-transfers,
+    carrier-lookups,
+    conversations,
+    conversations-api-requests,
+    conversations-conversation-events,
+    conversations-endpoint-connectivity,
+    conversations-events,
+    conversations-participant-events,
+    conversations-participants,
+    cps,
+    flex-usage,
+    fraud-lookups,
+    group-rooms,
+    group-rooms-data-track,
+    group-rooms-encrypted-media-recorded,
+    group-rooms-media-downloaded,
+    group-rooms-media-recorded,
+    group-rooms-media-routed,
+    group-rooms-media-stored,
+    group-rooms-participant-minutes,
+    group-rooms-recorded-minutes,
+    imp-v1-usage,
+    lookups,
+    marketplace,
+    marketplace-algorithmia-named-entity-recognition,
+    marketplace-cadence-transcription,
+    marketplace-cadence-translation,
+    marketplace-capio-speech-to-text,
+    marketplace-convriza-ababa,
+    marketplace-deepgram-phrase-detector,
+    marketplace-digital-segment-business-info,
+    marketplace-facebook-offline-conversions,
+    marketplace-google-speech-to-text,
+    marketplace-ibm-watson-message-insights,
+    marketplace-ibm-watson-message-sentiment,
+    marketplace-ibm-watson-recording-analysis,
+    marketplace-ibm-watson-tone-analyzer,
+    marketplace-icehook-systems-scout,
+    marketplace-infogroup-dataaxle-bizinfo,
+    marketplace-keen-io-contact-center-analytics,
+    marketplace-marchex-cleancall,
+    marketplace-marchex-sentiment-analysis-for-sms,
+    marketplace-marketplace-nextcaller-social-id,
+    marketplace-mobile-commons-opt-out-classifier,
+    marketplace-nexiwave-voicemail-to-text,
+    marketplace-nextcaller-advanced-caller-identification,
+    marketplace-nomorobo-spam-score,
+    marketplace-payfone-tcpa-compliance,
+    marketplace-remeeting-automatic-speech-recognition,
+    marketplace-tcpa-defense-solutions-blacklist-feed,
+    marketplace-telo-opencnam,
+    marketplace-truecnam-true-spam,
+    marketplace-twilio-caller-name-lookup-us,
+    marketplace-twilio-carrier-information-lookup,
+    marketplace-voicebase-pci,
+    marketplace-voicebase-transcription,
+    marketplace-voicebase-transcription-custom-vocabulary,
+    marketplace-whitepages-pro-caller-identification,
+    marketplace-whitepages-pro-phone-intelligence,
+    marketplace-whitepages-pro-phone-reputation,
+    marketplace-wolfarm-spoken-results,
+    marketplace-wolfram-short-answer,
+    marketplace-ytica-contact-center-reporting-analytics,
+    mediastorage,
+    mms,
+    mms-inbound,
+    mms-inbound-longcode,
+    mms-inbound-shortcode,
+    mms-messages-carrierfees,
+    mms-outbound,
+    mms-outbound-longcode,
+    mms-outbound-shortcode,
+    monitor-reads,
+    monitor-storage,
+    monitor-writes,
+    notify,
+    notify-actions-attempts,
+    notify-channels,
+    number-format-lookups,
+    pchat,
+    pchat-users,
+    peer-to-peer-rooms-participant-minutes,
+    pfax,
+    pfax-minutes,
+    pfax-minutes-inbound,
+    pfax-minutes-outbound,
+    pfax-pages,
+    phonenumbers,
+    phonenumbers-cps,
+    phonenumbers-emergency,
+    phonenumbers-local,
+    phonenumbers-mobile,
+    phonenumbers-setups,
+    phonenumbers-tollfree,
+    premiumsupport,
+    proxy,
+    proxy-active-sessions,
+    pstnconnectivity,
+    pv,
+    pv-composition-media-downloaded,
+    pv-composition-media-encrypted,
+    pv-composition-media-stored,
+    pv-composition-minutes,
+    pv-recording-compositions,
+    pv-room-participants,
+    pv-room-participants-au1,
+    pv-room-participants-br1,
+    pv-room-participants-ie1,
+    pv-room-participants-jp1,
+    pv-room-participants-sg1,
+    pv-room-participants-us1,
+    pv-room-participants-us2,
+    pv-rooms,
+    pv-sip-endpoint-registrations,
+    recordings,
+    recordingstorage,
+    rooms-group-bandwidth,
+    rooms-group-minutes,
+    rooms-peer-to-peer-minutes,
+    shortcodes,
+    shortcodes-customerowned,
+    shortcodes-mms-enablement,
+    shortcodes-mps,
+    shortcodes-random,
+    shortcodes-uk,
+    shortcodes-vanity,
+    small-group-rooms,
+    small-group-rooms-data-track,
+    small-group-rooms-participant-minutes,
+    sms,
+    sms-inbound,
+    sms-inbound-longcode,
+    sms-inbound-shortcode,
+    sms-messages-carrierfees,
+    sms-messages-features,
+    sms-messages-features-senderid,
+    sms-outbound,
+    sms-outbound-content-inspection,
+    sms-outbound-longcode,
+    sms-outbound-shortcode,
+    speech-recognition,
+    studio-engagements,
+    sync,
+    sync-actions,
+    sync-endpoint-hours,
+    sync-endpoint-hours-above-daily-cap,
+    taskrouter-tasks,
+    totalprice,
+    transcriptions,
+    trunking-cps,
+    trunking-emergency-calls,
+    trunking-origination,
+    trunking-origination-local,
+    trunking-origination-mobile,
+    trunking-origination-tollfree,
+    trunking-recordings,
+    trunking-secure,
+    trunking-termination,
+    tts-google,
+    turnmegabytes,
+    turnmegabytes-australia,
+    turnmegabytes-brasil,
+    turnmegabytes-germany,
+    turnmegabytes-india,
+    turnmegabytes-ireland,
+    turnmegabytes-japan,
+    turnmegabytes-singapore,
+    turnmegabytes-useast,
+    turnmegabytes-uswest,
+    twilio-interconnect,
+    verify-push,
+    verify-totp,
+    verify-whatsapp-conversations-business-initiated,
+    video-recordings,
+    virtual-agent,
+    voice-insights,
+    voice-insights-client-insights-on-demand-minute,
+    voice-insights-ptsn-insights-on-demand-minute,
+    voice-insights-sip-interface-insights-on-demand-minute,
+    voice-insights-sip-trunking-insights-on-demand-minute,
+    voice-intelligence,
+    voice-intelligence-transcription,
+    voice-intelligence-operators,
+    wireless,
+    wireless-orders,
+    wireless-orders-artwork,
+    wireless-orders-bulk,
+    wireless-orders-esim,
+    wireless-orders-starter,
+    wireless-usage,
+    wireless-usage-commands,
+    wireless-usage-commands-africa,
+    wireless-usage-commands-asia,
+    wireless-usage-commands-centralandsouthamerica,
+    wireless-usage-commands-europe,
+    wireless-usage-commands-home,
+    wireless-usage-commands-northamerica,
+    wireless-usage-commands-oceania,
+    wireless-usage-commands-roaming,
+    wireless-usage-data,
+    wireless-usage-data-africa,
+    wireless-usage-data-asia,
+    wireless-usage-data-centralandsouthamerica,
+    wireless-usage-data-custom-additionalmb,
+    wireless-usage-data-custom-first5mb,
+    wireless-usage-data-domestic-roaming,
+    wireless-usage-data-europe,
+    wireless-usage-data-individual-additionalgb,
+    wireless-usage-data-individual-firstgb,
+    wireless-usage-data-international-roaming-canada,
+    wireless-usage-data-international-roaming-india,
+    wireless-usage-data-international-roaming-mexico,
+    wireless-usage-data-northamerica,
+    wireless-usage-data-oceania,
+    wireless-usage-data-pooled,
+    wireless-usage-data-pooled-downlink,
+    wireless-usage-data-pooled-uplink,
+    wireless-usage-mrc,
+    wireless-usage-mrc-custom,
+    wireless-usage-mrc-individual,
+    wireless-usage-mrc-pooled,
+    wireless-usage-mrc-suspended,
+    wireless-usage-sms,
+    wireless-usage-voice,
   }
 
   record list-usage-record-this-month-response {
@@ -7202,9 +8776,256 @@ interface api20100401-this-month {
 }
 
 interface api20100401-today {
-  record usage-record-today-enum-category {
-    /// opaque schema; raw JSON
-    value: string
+  enum usage-record-today-enum-category {
+    a2p-registration-fees,
+    agent-conference,
+    amazon-polly,
+    answering-machine-detection,
+    authy-authentications,
+    authy-calls-outbound,
+    authy-monthly-fees,
+    authy-phone-intelligence,
+    authy-phone-verifications,
+    authy-sms-outbound,
+    call-progess-events,
+    calleridlookups,
+    calls,
+    calls-client,
+    calls-globalconference,
+    calls-inbound,
+    calls-inbound-local,
+    calls-inbound-mobile,
+    calls-inbound-tollfree,
+    calls-outbound,
+    calls-pay-verb-transactions,
+    calls-recordings,
+    calls-sip,
+    calls-sip-inbound,
+    calls-sip-outbound,
+    calls-transfers,
+    carrier-lookups,
+    conversations,
+    conversations-api-requests,
+    conversations-conversation-events,
+    conversations-endpoint-connectivity,
+    conversations-events,
+    conversations-participant-events,
+    conversations-participants,
+    cps,
+    flex-usage,
+    fraud-lookups,
+    group-rooms,
+    group-rooms-data-track,
+    group-rooms-encrypted-media-recorded,
+    group-rooms-media-downloaded,
+    group-rooms-media-recorded,
+    group-rooms-media-routed,
+    group-rooms-media-stored,
+    group-rooms-participant-minutes,
+    group-rooms-recorded-minutes,
+    imp-v1-usage,
+    lookups,
+    marketplace,
+    marketplace-algorithmia-named-entity-recognition,
+    marketplace-cadence-transcription,
+    marketplace-cadence-translation,
+    marketplace-capio-speech-to-text,
+    marketplace-convriza-ababa,
+    marketplace-deepgram-phrase-detector,
+    marketplace-digital-segment-business-info,
+    marketplace-facebook-offline-conversions,
+    marketplace-google-speech-to-text,
+    marketplace-ibm-watson-message-insights,
+    marketplace-ibm-watson-message-sentiment,
+    marketplace-ibm-watson-recording-analysis,
+    marketplace-ibm-watson-tone-analyzer,
+    marketplace-icehook-systems-scout,
+    marketplace-infogroup-dataaxle-bizinfo,
+    marketplace-keen-io-contact-center-analytics,
+    marketplace-marchex-cleancall,
+    marketplace-marchex-sentiment-analysis-for-sms,
+    marketplace-marketplace-nextcaller-social-id,
+    marketplace-mobile-commons-opt-out-classifier,
+    marketplace-nexiwave-voicemail-to-text,
+    marketplace-nextcaller-advanced-caller-identification,
+    marketplace-nomorobo-spam-score,
+    marketplace-payfone-tcpa-compliance,
+    marketplace-remeeting-automatic-speech-recognition,
+    marketplace-tcpa-defense-solutions-blacklist-feed,
+    marketplace-telo-opencnam,
+    marketplace-truecnam-true-spam,
+    marketplace-twilio-caller-name-lookup-us,
+    marketplace-twilio-carrier-information-lookup,
+    marketplace-voicebase-pci,
+    marketplace-voicebase-transcription,
+    marketplace-voicebase-transcription-custom-vocabulary,
+    marketplace-whitepages-pro-caller-identification,
+    marketplace-whitepages-pro-phone-intelligence,
+    marketplace-whitepages-pro-phone-reputation,
+    marketplace-wolfarm-spoken-results,
+    marketplace-wolfram-short-answer,
+    marketplace-ytica-contact-center-reporting-analytics,
+    mediastorage,
+    mms,
+    mms-inbound,
+    mms-inbound-longcode,
+    mms-inbound-shortcode,
+    mms-messages-carrierfees,
+    mms-outbound,
+    mms-outbound-longcode,
+    mms-outbound-shortcode,
+    monitor-reads,
+    monitor-storage,
+    monitor-writes,
+    notify,
+    notify-actions-attempts,
+    notify-channels,
+    number-format-lookups,
+    pchat,
+    pchat-users,
+    peer-to-peer-rooms-participant-minutes,
+    pfax,
+    pfax-minutes,
+    pfax-minutes-inbound,
+    pfax-minutes-outbound,
+    pfax-pages,
+    phonenumbers,
+    phonenumbers-cps,
+    phonenumbers-emergency,
+    phonenumbers-local,
+    phonenumbers-mobile,
+    phonenumbers-setups,
+    phonenumbers-tollfree,
+    premiumsupport,
+    proxy,
+    proxy-active-sessions,
+    pstnconnectivity,
+    pv,
+    pv-composition-media-downloaded,
+    pv-composition-media-encrypted,
+    pv-composition-media-stored,
+    pv-composition-minutes,
+    pv-recording-compositions,
+    pv-room-participants,
+    pv-room-participants-au1,
+    pv-room-participants-br1,
+    pv-room-participants-ie1,
+    pv-room-participants-jp1,
+    pv-room-participants-sg1,
+    pv-room-participants-us1,
+    pv-room-participants-us2,
+    pv-rooms,
+    pv-sip-endpoint-registrations,
+    recordings,
+    recordingstorage,
+    rooms-group-bandwidth,
+    rooms-group-minutes,
+    rooms-peer-to-peer-minutes,
+    shortcodes,
+    shortcodes-customerowned,
+    shortcodes-mms-enablement,
+    shortcodes-mps,
+    shortcodes-random,
+    shortcodes-uk,
+    shortcodes-vanity,
+    small-group-rooms,
+    small-group-rooms-data-track,
+    small-group-rooms-participant-minutes,
+    sms,
+    sms-inbound,
+    sms-inbound-longcode,
+    sms-inbound-shortcode,
+    sms-messages-carrierfees,
+    sms-messages-features,
+    sms-messages-features-senderid,
+    sms-outbound,
+    sms-outbound-content-inspection,
+    sms-outbound-longcode,
+    sms-outbound-shortcode,
+    speech-recognition,
+    studio-engagements,
+    sync,
+    sync-actions,
+    sync-endpoint-hours,
+    sync-endpoint-hours-above-daily-cap,
+    taskrouter-tasks,
+    totalprice,
+    transcriptions,
+    trunking-cps,
+    trunking-emergency-calls,
+    trunking-origination,
+    trunking-origination-local,
+    trunking-origination-mobile,
+    trunking-origination-tollfree,
+    trunking-recordings,
+    trunking-secure,
+    trunking-termination,
+    tts-google,
+    turnmegabytes,
+    turnmegabytes-australia,
+    turnmegabytes-brasil,
+    turnmegabytes-germany,
+    turnmegabytes-india,
+    turnmegabytes-ireland,
+    turnmegabytes-japan,
+    turnmegabytes-singapore,
+    turnmegabytes-useast,
+    turnmegabytes-uswest,
+    twilio-interconnect,
+    verify-push,
+    verify-totp,
+    verify-whatsapp-conversations-business-initiated,
+    video-recordings,
+    virtual-agent,
+    voice-insights,
+    voice-insights-client-insights-on-demand-minute,
+    voice-insights-ptsn-insights-on-demand-minute,
+    voice-insights-sip-interface-insights-on-demand-minute,
+    voice-insights-sip-trunking-insights-on-demand-minute,
+    voice-intelligence,
+    voice-intelligence-transcription,
+    voice-intelligence-operators,
+    wireless,
+    wireless-orders,
+    wireless-orders-artwork,
+    wireless-orders-bulk,
+    wireless-orders-esim,
+    wireless-orders-starter,
+    wireless-usage,
+    wireless-usage-commands,
+    wireless-usage-commands-africa,
+    wireless-usage-commands-asia,
+    wireless-usage-commands-centralandsouthamerica,
+    wireless-usage-commands-europe,
+    wireless-usage-commands-home,
+    wireless-usage-commands-northamerica,
+    wireless-usage-commands-oceania,
+    wireless-usage-commands-roaming,
+    wireless-usage-data,
+    wireless-usage-data-africa,
+    wireless-usage-data-asia,
+    wireless-usage-data-centralandsouthamerica,
+    wireless-usage-data-custom-additionalmb,
+    wireless-usage-data-custom-first5mb,
+    wireless-usage-data-domestic-roaming,
+    wireless-usage-data-europe,
+    wireless-usage-data-individual-additionalgb,
+    wireless-usage-data-individual-firstgb,
+    wireless-usage-data-international-roaming-canada,
+    wireless-usage-data-international-roaming-india,
+    wireless-usage-data-international-roaming-mexico,
+    wireless-usage-data-northamerica,
+    wireless-usage-data-oceania,
+    wireless-usage-data-pooled,
+    wireless-usage-data-pooled-downlink,
+    wireless-usage-data-pooled-uplink,
+    wireless-usage-mrc,
+    wireless-usage-mrc-custom,
+    wireless-usage-mrc-individual,
+    wireless-usage-mrc-pooled,
+    wireless-usage-mrc-suspended,
+    wireless-usage-sms,
+    wireless-usage-voice,
   }
 
   record list-usage-record-today-response {
@@ -7274,9 +9095,256 @@ interface api20100401-today {
 }
 
 interface api20100401-yearly {
-  record usage-record-yearly-enum-category {
-    /// opaque schema; raw JSON
-    value: string
+  enum usage-record-yearly-enum-category {
+    a2p-registration-fees,
+    agent-conference,
+    amazon-polly,
+    answering-machine-detection,
+    authy-authentications,
+    authy-calls-outbound,
+    authy-monthly-fees,
+    authy-phone-intelligence,
+    authy-phone-verifications,
+    authy-sms-outbound,
+    call-progess-events,
+    calleridlookups,
+    calls,
+    calls-client,
+    calls-globalconference,
+    calls-inbound,
+    calls-inbound-local,
+    calls-inbound-mobile,
+    calls-inbound-tollfree,
+    calls-outbound,
+    calls-pay-verb-transactions,
+    calls-recordings,
+    calls-sip,
+    calls-sip-inbound,
+    calls-sip-outbound,
+    calls-transfers,
+    carrier-lookups,
+    conversations,
+    conversations-api-requests,
+    conversations-conversation-events,
+    conversations-endpoint-connectivity,
+    conversations-events,
+    conversations-participant-events,
+    conversations-participants,
+    cps,
+    flex-usage,
+    fraud-lookups,
+    group-rooms,
+    group-rooms-data-track,
+    group-rooms-encrypted-media-recorded,
+    group-rooms-media-downloaded,
+    group-rooms-media-recorded,
+    group-rooms-media-routed,
+    group-rooms-media-stored,
+    group-rooms-participant-minutes,
+    group-rooms-recorded-minutes,
+    imp-v1-usage,
+    lookups,
+    marketplace,
+    marketplace-algorithmia-named-entity-recognition,
+    marketplace-cadence-transcription,
+    marketplace-cadence-translation,
+    marketplace-capio-speech-to-text,
+    marketplace-convriza-ababa,
+    marketplace-deepgram-phrase-detector,
+    marketplace-digital-segment-business-info,
+    marketplace-facebook-offline-conversions,
+    marketplace-google-speech-to-text,
+    marketplace-ibm-watson-message-insights,
+    marketplace-ibm-watson-message-sentiment,
+    marketplace-ibm-watson-recording-analysis,
+    marketplace-ibm-watson-tone-analyzer,
+    marketplace-icehook-systems-scout,
+    marketplace-infogroup-dataaxle-bizinfo,
+    marketplace-keen-io-contact-center-analytics,
+    marketplace-marchex-cleancall,
+    marketplace-marchex-sentiment-analysis-for-sms,
+    marketplace-marketplace-nextcaller-social-id,
+    marketplace-mobile-commons-opt-out-classifier,
+    marketplace-nexiwave-voicemail-to-text,
+    marketplace-nextcaller-advanced-caller-identification,
+    marketplace-nomorobo-spam-score,
+    marketplace-payfone-tcpa-compliance,
+    marketplace-remeeting-automatic-speech-recognition,
+    marketplace-tcpa-defense-solutions-blacklist-feed,
+    marketplace-telo-opencnam,
+    marketplace-truecnam-true-spam,
+    marketplace-twilio-caller-name-lookup-us,
+    marketplace-twilio-carrier-information-lookup,
+    marketplace-voicebase-pci,
+    marketplace-voicebase-transcription,
+    marketplace-voicebase-transcription-custom-vocabulary,
+    marketplace-whitepages-pro-caller-identification,
+    marketplace-whitepages-pro-phone-intelligence,
+    marketplace-whitepages-pro-phone-reputation,
+    marketplace-wolfarm-spoken-results,
+    marketplace-wolfram-short-answer,
+    marketplace-ytica-contact-center-reporting-analytics,
+    mediastorage,
+    mms,
+    mms-inbound,
+    mms-inbound-longcode,
+    mms-inbound-shortcode,
+    mms-messages-carrierfees,
+    mms-outbound,
+    mms-outbound-longcode,
+    mms-outbound-shortcode,
+    monitor-reads,
+    monitor-storage,
+    monitor-writes,
+    notify,
+    notify-actions-attempts,
+    notify-channels,
+    number-format-lookups,
+    pchat,
+    pchat-users,
+    peer-to-peer-rooms-participant-minutes,
+    pfax,
+    pfax-minutes,
+    pfax-minutes-inbound,
+    pfax-minutes-outbound,
+    pfax-pages,
+    phonenumbers,
+    phonenumbers-cps,
+    phonenumbers-emergency,
+    phonenumbers-local,
+    phonenumbers-mobile,
+    phonenumbers-setups,
+    phonenumbers-tollfree,
+    premiumsupport,
+    proxy,
+    proxy-active-sessions,
+    pstnconnectivity,
+    pv,
+    pv-composition-media-downloaded,
+    pv-composition-media-encrypted,
+    pv-composition-media-stored,
+    pv-composition-minutes,
+    pv-recording-compositions,
+    pv-room-participants,
+    pv-room-participants-au1,
+    pv-room-participants-br1,
+    pv-room-participants-ie1,
+    pv-room-participants-jp1,
+    pv-room-participants-sg1,
+    pv-room-participants-us1,
+    pv-room-participants-us2,
+    pv-rooms,
+    pv-sip-endpoint-registrations,
+    recordings,
+    recordingstorage,
+    rooms-group-bandwidth,
+    rooms-group-minutes,
+    rooms-peer-to-peer-minutes,
+    shortcodes,
+    shortcodes-customerowned,
+    shortcodes-mms-enablement,
+    shortcodes-mps,
+    shortcodes-random,
+    shortcodes-uk,
+    shortcodes-vanity,
+    small-group-rooms,
+    small-group-rooms-data-track,
+    small-group-rooms-participant-minutes,
+    sms,
+    sms-inbound,
+    sms-inbound-longcode,
+    sms-inbound-shortcode,
+    sms-messages-carrierfees,
+    sms-messages-features,
+    sms-messages-features-senderid,
+    sms-outbound,
+    sms-outbound-content-inspection,
+    sms-outbound-longcode,
+    sms-outbound-shortcode,
+    speech-recognition,
+    studio-engagements,
+    sync,
+    sync-actions,
+    sync-endpoint-hours,
+    sync-endpoint-hours-above-daily-cap,
+    taskrouter-tasks,
+    totalprice,
+    transcriptions,
+    trunking-cps,
+    trunking-emergency-calls,
+    trunking-origination,
+    trunking-origination-local,
+    trunking-origination-mobile,
+    trunking-origination-tollfree,
+    trunking-recordings,
+    trunking-secure,
+    trunking-termination,
+    tts-google,
+    turnmegabytes,
+    turnmegabytes-australia,
+    turnmegabytes-brasil,
+    turnmegabytes-germany,
+    turnmegabytes-india,
+    turnmegabytes-ireland,
+    turnmegabytes-japan,
+    turnmegabytes-singapore,
+    turnmegabytes-useast,
+    turnmegabytes-uswest,
+    twilio-interconnect,
+    verify-push,
+    verify-totp,
+    verify-whatsapp-conversations-business-initiated,
+    video-recordings,
+    virtual-agent,
+    voice-insights,
+    voice-insights-client-insights-on-demand-minute,
+    voice-insights-ptsn-insights-on-demand-minute,
+    voice-insights-sip-interface-insights-on-demand-minute,
+    voice-insights-sip-trunking-insights-on-demand-minute,
+    voice-intelligence,
+    voice-intelligence-transcription,
+    voice-intelligence-operators,
+    wireless,
+    wireless-orders,
+    wireless-orders-artwork,
+    wireless-orders-bulk,
+    wireless-orders-esim,
+    wireless-orders-starter,
+    wireless-usage,
+    wireless-usage-commands,
+    wireless-usage-commands-africa,
+    wireless-usage-commands-asia,
+    wireless-usage-commands-centralandsouthamerica,
+    wireless-usage-commands-europe,
+    wireless-usage-commands-home,
+    wireless-usage-commands-northamerica,
+    wireless-usage-commands-oceania,
+    wireless-usage-commands-roaming,
+    wireless-usage-data,
+    wireless-usage-data-africa,
+    wireless-usage-data-asia,
+    wireless-usage-data-centralandsouthamerica,
+    wireless-usage-data-custom-additionalmb,
+    wireless-usage-data-custom-first5mb,
+    wireless-usage-data-domestic-roaming,
+    wireless-usage-data-europe,
+    wireless-usage-data-individual-additionalgb,
+    wireless-usage-data-individual-firstgb,
+    wireless-usage-data-international-roaming-canada,
+    wireless-usage-data-international-roaming-india,
+    wireless-usage-data-international-roaming-mexico,
+    wireless-usage-data-northamerica,
+    wireless-usage-data-oceania,
+    wireless-usage-data-pooled,
+    wireless-usage-data-pooled-downlink,
+    wireless-usage-data-pooled-uplink,
+    wireless-usage-mrc,
+    wireless-usage-mrc-custom,
+    wireless-usage-mrc-individual,
+    wireless-usage-mrc-pooled,
+    wireless-usage-mrc-suspended,
+    wireless-usage-sms,
+    wireless-usage-voice,
   }
 
   record list-usage-record-yearly-response {
@@ -7346,9 +9414,256 @@ interface api20100401-yearly {
 }
 
 interface api20100401-yesterday {
-  record usage-record-yesterday-enum-category {
-    /// opaque schema; raw JSON
-    value: string
+  enum usage-record-yesterday-enum-category {
+    a2p-registration-fees,
+    agent-conference,
+    amazon-polly,
+    answering-machine-detection,
+    authy-authentications,
+    authy-calls-outbound,
+    authy-monthly-fees,
+    authy-phone-intelligence,
+    authy-phone-verifications,
+    authy-sms-outbound,
+    call-progess-events,
+    calleridlookups,
+    calls,
+    calls-client,
+    calls-globalconference,
+    calls-inbound,
+    calls-inbound-local,
+    calls-inbound-mobile,
+    calls-inbound-tollfree,
+    calls-outbound,
+    calls-pay-verb-transactions,
+    calls-recordings,
+    calls-sip,
+    calls-sip-inbound,
+    calls-sip-outbound,
+    calls-transfers,
+    carrier-lookups,
+    conversations,
+    conversations-api-requests,
+    conversations-conversation-events,
+    conversations-endpoint-connectivity,
+    conversations-events,
+    conversations-participant-events,
+    conversations-participants,
+    cps,
+    flex-usage,
+    fraud-lookups,
+    group-rooms,
+    group-rooms-data-track,
+    group-rooms-encrypted-media-recorded,
+    group-rooms-media-downloaded,
+    group-rooms-media-recorded,
+    group-rooms-media-routed,
+    group-rooms-media-stored,
+    group-rooms-participant-minutes,
+    group-rooms-recorded-minutes,
+    imp-v1-usage,
+    lookups,
+    marketplace,
+    marketplace-algorithmia-named-entity-recognition,
+    marketplace-cadence-transcription,
+    marketplace-cadence-translation,
+    marketplace-capio-speech-to-text,
+    marketplace-convriza-ababa,
+    marketplace-deepgram-phrase-detector,
+    marketplace-digital-segment-business-info,
+    marketplace-facebook-offline-conversions,
+    marketplace-google-speech-to-text,
+    marketplace-ibm-watson-message-insights,
+    marketplace-ibm-watson-message-sentiment,
+    marketplace-ibm-watson-recording-analysis,
+    marketplace-ibm-watson-tone-analyzer,
+    marketplace-icehook-systems-scout,
+    marketplace-infogroup-dataaxle-bizinfo,
+    marketplace-keen-io-contact-center-analytics,
+    marketplace-marchex-cleancall,
+    marketplace-marchex-sentiment-analysis-for-sms,
+    marketplace-marketplace-nextcaller-social-id,
+    marketplace-mobile-commons-opt-out-classifier,
+    marketplace-nexiwave-voicemail-to-text,
+    marketplace-nextcaller-advanced-caller-identification,
+    marketplace-nomorobo-spam-score,
+    marketplace-payfone-tcpa-compliance,
+    marketplace-remeeting-automatic-speech-recognition,
+    marketplace-tcpa-defense-solutions-blacklist-feed,
+    marketplace-telo-opencnam,
+    marketplace-truecnam-true-spam,
+    marketplace-twilio-caller-name-lookup-us,
+    marketplace-twilio-carrier-information-lookup,
+    marketplace-voicebase-pci,
+    marketplace-voicebase-transcription,
+    marketplace-voicebase-transcription-custom-vocabulary,
+    marketplace-whitepages-pro-caller-identification,
+    marketplace-whitepages-pro-phone-intelligence,
+    marketplace-whitepages-pro-phone-reputation,
+    marketplace-wolfarm-spoken-results,
+    marketplace-wolfram-short-answer,
+    marketplace-ytica-contact-center-reporting-analytics,
+    mediastorage,
+    mms,
+    mms-inbound,
+    mms-inbound-longcode,
+    mms-inbound-shortcode,
+    mms-messages-carrierfees,
+    mms-outbound,
+    mms-outbound-longcode,
+    mms-outbound-shortcode,
+    monitor-reads,
+    monitor-storage,
+    monitor-writes,
+    notify,
+    notify-actions-attempts,
+    notify-channels,
+    number-format-lookups,
+    pchat,
+    pchat-users,
+    peer-to-peer-rooms-participant-minutes,
+    pfax,
+    pfax-minutes,
+    pfax-minutes-inbound,
+    pfax-minutes-outbound,
+    pfax-pages,
+    phonenumbers,
+    phonenumbers-cps,
+    phonenumbers-emergency,
+    phonenumbers-local,
+    phonenumbers-mobile,
+    phonenumbers-setups,
+    phonenumbers-tollfree,
+    premiumsupport,
+    proxy,
+    proxy-active-sessions,
+    pstnconnectivity,
+    pv,
+    pv-composition-media-downloaded,
+    pv-composition-media-encrypted,
+    pv-composition-media-stored,
+    pv-composition-minutes,
+    pv-recording-compositions,
+    pv-room-participants,
+    pv-room-participants-au1,
+    pv-room-participants-br1,
+    pv-room-participants-ie1,
+    pv-room-participants-jp1,
+    pv-room-participants-sg1,
+    pv-room-participants-us1,
+    pv-room-participants-us2,
+    pv-rooms,
+    pv-sip-endpoint-registrations,
+    recordings,
+    recordingstorage,
+    rooms-group-bandwidth,
+    rooms-group-minutes,
+    rooms-peer-to-peer-minutes,
+    shortcodes,
+    shortcodes-customerowned,
+    shortcodes-mms-enablement,
+    shortcodes-mps,
+    shortcodes-random,
+    shortcodes-uk,
+    shortcodes-vanity,
+    small-group-rooms,
+    small-group-rooms-data-track,
+    small-group-rooms-participant-minutes,
+    sms,
+    sms-inbound,
+    sms-inbound-longcode,
+    sms-inbound-shortcode,
+    sms-messages-carrierfees,
+    sms-messages-features,
+    sms-messages-features-senderid,
+    sms-outbound,
+    sms-outbound-content-inspection,
+    sms-outbound-longcode,
+    sms-outbound-shortcode,
+    speech-recognition,
+    studio-engagements,
+    sync,
+    sync-actions,
+    sync-endpoint-hours,
+    sync-endpoint-hours-above-daily-cap,
+    taskrouter-tasks,
+    totalprice,
+    transcriptions,
+    trunking-cps,
+    trunking-emergency-calls,
+    trunking-origination,
+    trunking-origination-local,
+    trunking-origination-mobile,
+    trunking-origination-tollfree,
+    trunking-recordings,
+    trunking-secure,
+    trunking-termination,
+    tts-google,
+    turnmegabytes,
+    turnmegabytes-australia,
+    turnmegabytes-brasil,
+    turnmegabytes-germany,
+    turnmegabytes-india,
+    turnmegabytes-ireland,
+    turnmegabytes-japan,
+    turnmegabytes-singapore,
+    turnmegabytes-useast,
+    turnmegabytes-uswest,
+    twilio-interconnect,
+    verify-push,
+    verify-totp,
+    verify-whatsapp-conversations-business-initiated,
+    video-recordings,
+    virtual-agent,
+    voice-insights,
+    voice-insights-client-insights-on-demand-minute,
+    voice-insights-ptsn-insights-on-demand-minute,
+    voice-insights-sip-interface-insights-on-demand-minute,
+    voice-insights-sip-trunking-insights-on-demand-minute,
+    voice-intelligence,
+    voice-intelligence-transcription,
+    voice-intelligence-operators,
+    wireless,
+    wireless-orders,
+    wireless-orders-artwork,
+    wireless-orders-bulk,
+    wireless-orders-esim,
+    wireless-orders-starter,
+    wireless-usage,
+    wireless-usage-commands,
+    wireless-usage-commands-africa,
+    wireless-usage-commands-asia,
+    wireless-usage-commands-centralandsouthamerica,
+    wireless-usage-commands-europe,
+    wireless-usage-commands-home,
+    wireless-usage-commands-northamerica,
+    wireless-usage-commands-oceania,
+    wireless-usage-commands-roaming,
+    wireless-usage-data,
+    wireless-usage-data-africa,
+    wireless-usage-data-asia,
+    wireless-usage-data-centralandsouthamerica,
+    wireless-usage-data-custom-additionalmb,
+    wireless-usage-data-custom-first5mb,
+    wireless-usage-data-domestic-roaming,
+    wireless-usage-data-europe,
+    wireless-usage-data-individual-additionalgb,
+    wireless-usage-data-individual-firstgb,
+    wireless-usage-data-international-roaming-canada,
+    wireless-usage-data-international-roaming-india,
+    wireless-usage-data-international-roaming-mexico,
+    wireless-usage-data-northamerica,
+    wireless-usage-data-oceania,
+    wireless-usage-data-pooled,
+    wireless-usage-data-pooled-downlink,
+    wireless-usage-data-pooled-uplink,
+    wireless-usage-mrc,
+    wireless-usage-mrc-custom,
+    wireless-usage-mrc-individual,
+    wireless-usage-mrc-pooled,
+    wireless-usage-mrc-suspended,
+    wireless-usage-sms,
+    wireless-usage-voice,
   }
 
   record list-usage-record-yesterday-response {
@@ -7418,6 +9733,271 @@ interface api20100401-yesterday {
 }
 
 interface api20100401-trigger {
+  enum usage-trigger-enum-recurring {
+    daily,
+    monthly,
+    yearly,
+    alltime,
+  }
+
+  enum usage-trigger-enum-trigger-field {
+    count,
+    usage,
+    price,
+  }
+
+  enum usage-trigger-enum-usage-category {
+    a2p-registration-fees,
+    agent-conference,
+    amazon-polly,
+    answering-machine-detection,
+    authy-authentications,
+    authy-calls-outbound,
+    authy-monthly-fees,
+    authy-phone-intelligence,
+    authy-phone-verifications,
+    authy-sms-outbound,
+    call-progess-events,
+    calleridlookups,
+    calls,
+    calls-client,
+    calls-globalconference,
+    calls-inbound,
+    calls-inbound-local,
+    calls-inbound-mobile,
+    calls-inbound-tollfree,
+    calls-outbound,
+    calls-pay-verb-transactions,
+    calls-recordings,
+    calls-sip,
+    calls-sip-inbound,
+    calls-sip-outbound,
+    calls-transfers,
+    carrier-lookups,
+    conversations,
+    conversations-api-requests,
+    conversations-conversation-events,
+    conversations-endpoint-connectivity,
+    conversations-events,
+    conversations-participant-events,
+    conversations-participants,
+    cps,
+    flex-usage,
+    fraud-lookups,
+    group-rooms,
+    group-rooms-data-track,
+    group-rooms-encrypted-media-recorded,
+    group-rooms-media-downloaded,
+    group-rooms-media-recorded,
+    group-rooms-media-routed,
+    group-rooms-media-stored,
+    group-rooms-participant-minutes,
+    group-rooms-recorded-minutes,
+    imp-v1-usage,
+    lookups,
+    marketplace,
+    marketplace-algorithmia-named-entity-recognition,
+    marketplace-cadence-transcription,
+    marketplace-cadence-translation,
+    marketplace-capio-speech-to-text,
+    marketplace-convriza-ababa,
+    marketplace-deepgram-phrase-detector,
+    marketplace-digital-segment-business-info,
+    marketplace-facebook-offline-conversions,
+    marketplace-google-speech-to-text,
+    marketplace-ibm-watson-message-insights,
+    marketplace-ibm-watson-message-sentiment,
+    marketplace-ibm-watson-recording-analysis,
+    marketplace-ibm-watson-tone-analyzer,
+    marketplace-icehook-systems-scout,
+    marketplace-infogroup-dataaxle-bizinfo,
+    marketplace-keen-io-contact-center-analytics,
+    marketplace-marchex-cleancall,
+    marketplace-marchex-sentiment-analysis-for-sms,
+    marketplace-marketplace-nextcaller-social-id,
+    marketplace-mobile-commons-opt-out-classifier,
+    marketplace-nexiwave-voicemail-to-text,
+    marketplace-nextcaller-advanced-caller-identification,
+    marketplace-nomorobo-spam-score,
+    marketplace-payfone-tcpa-compliance,
+    marketplace-remeeting-automatic-speech-recognition,
+    marketplace-tcpa-defense-solutions-blacklist-feed,
+    marketplace-telo-opencnam,
+    marketplace-truecnam-true-spam,
+    marketplace-twilio-caller-name-lookup-us,
+    marketplace-twilio-carrier-information-lookup,
+    marketplace-voicebase-pci,
+    marketplace-voicebase-transcription,
+    marketplace-voicebase-transcription-custom-vocabulary,
+    marketplace-whitepages-pro-caller-identification,
+    marketplace-whitepages-pro-phone-intelligence,
+    marketplace-whitepages-pro-phone-reputation,
+    marketplace-wolfarm-spoken-results,
+    marketplace-wolfram-short-answer,
+    marketplace-ytica-contact-center-reporting-analytics,
+    mediastorage,
+    mms,
+    mms-inbound,
+    mms-inbound-longcode,
+    mms-inbound-shortcode,
+    mms-messages-carrierfees,
+    mms-outbound,
+    mms-outbound-longcode,
+    mms-outbound-shortcode,
+    monitor-reads,
+    monitor-storage,
+    monitor-writes,
+    notify,
+    notify-actions-attempts,
+    notify-channels,
+    number-format-lookups,
+    pchat,
+    pchat-users,
+    peer-to-peer-rooms-participant-minutes,
+    pfax,
+    pfax-minutes,
+    pfax-minutes-inbound,
+    pfax-minutes-outbound,
+    pfax-pages,
+    phonenumbers,
+    phonenumbers-cps,
+    phonenumbers-emergency,
+    phonenumbers-local,
+    phonenumbers-mobile,
+    phonenumbers-setups,
+    phonenumbers-tollfree,
+    premiumsupport,
+    proxy,
+    proxy-active-sessions,
+    pstnconnectivity,
+    pv,
+    pv-composition-media-downloaded,
+    pv-composition-media-encrypted,
+    pv-composition-media-stored,
+    pv-composition-minutes,
+    pv-recording-compositions,
+    pv-room-participants,
+    pv-room-participants-au1,
+    pv-room-participants-br1,
+    pv-room-participants-ie1,
+    pv-room-participants-jp1,
+    pv-room-participants-sg1,
+    pv-room-participants-us1,
+    pv-room-participants-us2,
+    pv-rooms,
+    pv-sip-endpoint-registrations,
+    recordings,
+    recordingstorage,
+    rooms-group-bandwidth,
+    rooms-group-minutes,
+    rooms-peer-to-peer-minutes,
+    shortcodes,
+    shortcodes-customerowned,
+    shortcodes-mms-enablement,
+    shortcodes-mps,
+    shortcodes-random,
+    shortcodes-uk,
+    shortcodes-vanity,
+    small-group-rooms,
+    small-group-rooms-data-track,
+    small-group-rooms-participant-minutes,
+    sms,
+    sms-inbound,
+    sms-inbound-longcode,
+    sms-inbound-shortcode,
+    sms-messages-carrierfees,
+    sms-messages-features,
+    sms-messages-features-senderid,
+    sms-outbound,
+    sms-outbound-content-inspection,
+    sms-outbound-longcode,
+    sms-outbound-shortcode,
+    speech-recognition,
+    studio-engagements,
+    sync,
+    sync-actions,
+    sync-endpoint-hours,
+    sync-endpoint-hours-above-daily-cap,
+    taskrouter-tasks,
+    totalprice,
+    transcriptions,
+    trunking-cps,
+    trunking-emergency-calls,
+    trunking-origination,
+    trunking-origination-local,
+    trunking-origination-mobile,
+    trunking-origination-tollfree,
+    trunking-recordings,
+    trunking-secure,
+    trunking-termination,
+    tts-google,
+    turnmegabytes,
+    turnmegabytes-australia,
+    turnmegabytes-brasil,
+    turnmegabytes-germany,
+    turnmegabytes-india,
+    turnmegabytes-ireland,
+    turnmegabytes-japan,
+    turnmegabytes-singapore,
+    turnmegabytes-useast,
+    turnmegabytes-uswest,
+    twilio-interconnect,
+    verify-push,
+    verify-totp,
+    verify-whatsapp-conversations-business-initiated,
+    video-recordings,
+    virtual-agent,
+    voice-insights,
+    voice-insights-client-insights-on-demand-minute,
+    voice-insights-ptsn-insights-on-demand-minute,
+    voice-insights-sip-interface-insights-on-demand-minute,
+    voice-insights-sip-trunking-insights-on-demand-minute,
+    voice-intelligence,
+    voice-intelligence-transcription,
+    voice-intelligence-operators,
+    wireless,
+    wireless-orders,
+    wireless-orders-artwork,
+    wireless-orders-bulk,
+    wireless-orders-esim,
+    wireless-orders-starter,
+    wireless-usage,
+    wireless-usage-commands,
+    wireless-usage-commands-africa,
+    wireless-usage-commands-asia,
+    wireless-usage-commands-centralandsouthamerica,
+    wireless-usage-commands-europe,
+    wireless-usage-commands-home,
+    wireless-usage-commands-northamerica,
+    wireless-usage-commands-oceania,
+    wireless-usage-commands-roaming,
+    wireless-usage-data,
+    wireless-usage-data-africa,
+    wireless-usage-data-asia,
+    wireless-usage-data-centralandsouthamerica,
+    wireless-usage-data-custom-additionalmb,
+    wireless-usage-data-custom-first5mb,
+    wireless-usage-data-domestic-roaming,
+    wireless-usage-data-europe,
+    wireless-usage-data-individual-additionalgb,
+    wireless-usage-data-individual-firstgb,
+    wireless-usage-data-international-roaming-canada,
+    wireless-usage-data-international-roaming-india,
+    wireless-usage-data-international-roaming-mexico,
+    wireless-usage-data-northamerica,
+    wireless-usage-data-oceania,
+    wireless-usage-data-pooled,
+    wireless-usage-data-pooled-downlink,
+    wireless-usage-data-pooled-uplink,
+    wireless-usage-mrc,
+    wireless-usage-mrc-custom,
+    wireless-usage-mrc-individual,
+    wireless-usage-mrc-pooled,
+    wireless-usage-mrc-suspended,
+    wireless-usage-sms,
+    wireless-usage-voice,
+  }
+
   enum api-v2010-account-usage-usage-trigger-callback-method-enum {
     head,
     get,
@@ -7425,21 +10005,6 @@ interface api20100401-trigger {
     patch,
     put,
     delete,
-  }
-
-  record usage-trigger-enum-recurring {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
-  record usage-trigger-enum-trigger-field {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
-  record usage-trigger-enum-usage-category {
-    /// opaque schema; raw JSON
-    value: string
   }
 
   record list-usage-trigger-response {

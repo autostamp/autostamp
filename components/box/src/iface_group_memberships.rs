@@ -95,9 +95,10 @@ fn iface_group_memberships__group_membership_type_op_enum__to_str(e: &iface_grou
     }
 }
 
-fn iface_group_memberships__post_group_memberships_body_configurable_permissions__to_json(p: &iface_group_memberships::PostGroupMembershipsBodyConfigurablePermissions) -> Value {
+fn iface_group_memberships__post_group_memberships_body_configurable_permissions_entry__to_json(p: &iface_group_memberships::PostGroupMembershipsBodyConfigurablePermissionsEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::Bool(*(&p.value)));
     Value::Object(m)
 }
 
@@ -137,9 +138,10 @@ fn iface_group_memberships__group_membership_user__to_json(p: &iface_group_membe
     Value::Object(m)
 }
 
-fn iface_group_memberships__put_group_memberships_id_body_configurable_permissions__to_json(p: &iface_group_memberships::PutGroupMembershipsIdBodyConfigurablePermissions) -> Value {
+fn iface_group_memberships__put_group_memberships_id_body_configurable_permissions_entry__to_json(p: &iface_group_memberships::PutGroupMembershipsIdBodyConfigurablePermissionsEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::Bool(*(&p.value)));
     Value::Object(m)
 }
 
@@ -152,7 +154,7 @@ fn iface_group_memberships__group_memberships__to_json(p: &iface_group_membershi
 fn iface_group_memberships__post_group_memberships_params__to_json(p: &iface_group_memberships::PostGroupMembershipsParams) -> Value {
     let mut m = Map::new();
     m.insert("fields".into(), match (&p.fields) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
-    m.insert("configurable_permissions".into(), match (&p.configurable_permissions) { Some(v) => iface_group_memberships__post_group_memberships_body_configurable_permissions__to_json(v), None => Value::Null });
+    m.insert("configurable_permissions".into(), match (&p.configurable_permissions) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::Bool(*(&e.value)))).collect()), None => Value::Null });
     m.insert("group".into(), iface_group_memberships__post_group_memberships_body_group__to_json(&p.group));
     m.insert("role".into(), match (&p.role) { Some(v) => Value::String(iface_group_memberships__post_group_memberships_body_role_enum__to_str(v).into()), None => Value::Null });
     m.insert("user".into(), iface_group_memberships__post_group_memberships_body_user__to_json(&p.user));
@@ -170,7 +172,7 @@ fn iface_group_memberships__put_group_memberships_id_params__to_json(p: &iface_g
     let mut m = Map::new();
     m.insert("group_membership_id".into(), Value::String((&p.group_membership_id).clone()));
     m.insert("fields".into(), match (&p.fields) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
-    m.insert("configurable_permissions".into(), match (&p.configurable_permissions) { Some(v) => iface_group_memberships__put_group_memberships_id_body_configurable_permissions__to_json(v), None => Value::Null });
+    m.insert("configurable_permissions".into(), match (&p.configurable_permissions) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::Bool(*(&e.value)))).collect()), None => Value::Null });
     m.insert("role".into(), match (&p.role) { Some(v) => Value::String(iface_group_memberships__post_group_memberships_body_role_enum__to_str(v).into()), None => Value::Null });
     Value::Object(m)
 }

@@ -97,43 +97,37 @@ const OP_FILES_REMOTE_UPDATE: OpSpec = OpSpec {
 
 fn iface_files_remote__add_response__to_json(p: &iface_files_remote::AddResponse) -> Value {
     let mut m = Map::new();
-    m.insert("ok".into(), iface_files_remote__defs_ok_true__to_json(&p.ok));
-    Value::Object(m)
-}
-
-fn iface_files_remote__defs_ok_true__to_json(p: &iface_files_remote::DefsOkTrue) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
+    m.insert("ok".into(), Value::Bool(*(&p.ok)));
     Value::Object(m)
 }
 
 fn iface_files_remote__info_response__to_json(p: &iface_files_remote::InfoResponse) -> Value {
     let mut m = Map::new();
-    m.insert("ok".into(), iface_files_remote__defs_ok_true__to_json(&p.ok));
+    m.insert("ok".into(), Value::Bool(*(&p.ok)));
     Value::Object(m)
 }
 
 fn iface_files_remote__list_op_response__to_json(p: &iface_files_remote::ListOpResponse) -> Value {
     let mut m = Map::new();
-    m.insert("ok".into(), iface_files_remote__defs_ok_true__to_json(&p.ok));
+    m.insert("ok".into(), Value::Bool(*(&p.ok)));
     Value::Object(m)
 }
 
 fn iface_files_remote__remove_response__to_json(p: &iface_files_remote::RemoveResponse) -> Value {
     let mut m = Map::new();
-    m.insert("ok".into(), iface_files_remote__defs_ok_true__to_json(&p.ok));
+    m.insert("ok".into(), Value::Bool(*(&p.ok)));
     Value::Object(m)
 }
 
 fn iface_files_remote__share_response__to_json(p: &iface_files_remote::ShareResponse) -> Value {
     let mut m = Map::new();
-    m.insert("ok".into(), iface_files_remote__defs_ok_true__to_json(&p.ok));
+    m.insert("ok".into(), Value::Bool(*(&p.ok)));
     Value::Object(m)
 }
 
 fn iface_files_remote__update_response__to_json(p: &iface_files_remote::UpdateResponse) -> Value {
     let mut m = Map::new();
-    m.insert("ok".into(), iface_files_remote__defs_ok_true__to_json(&p.ok));
+    m.insert("ok".into(), Value::Bool(*(&p.ok)));
     Value::Object(m)
 }
 
@@ -201,49 +195,42 @@ fn iface_files_remote__update_params__to_json(p: &iface_files_remote::UpdatePara
 fn iface_files_remote__add_response__from_json(v: &Value) -> Option<iface_files_remote::AddResponse> {
     let m = v.as_object()?;
     Some(iface_files_remote::AddResponse {
-        ok: match m.get("ok").and_then(|v| iface_files_remote__defs_ok_true__from_json(v)) { Some(x) => x, None => return None },
-    })
-}
-
-fn iface_files_remote__defs_ok_true__from_json(v: &Value) -> Option<iface_files_remote::DefsOkTrue> {
-    let m = v.as_object()?;
-    Some(iface_files_remote::DefsOkTrue {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        ok: m.get("ok").and_then(|v| (v).as_bool()).unwrap_or_default(),
     })
 }
 
 fn iface_files_remote__info_response__from_json(v: &Value) -> Option<iface_files_remote::InfoResponse> {
     let m = v.as_object()?;
     Some(iface_files_remote::InfoResponse {
-        ok: match m.get("ok").and_then(|v| iface_files_remote__defs_ok_true__from_json(v)) { Some(x) => x, None => return None },
+        ok: m.get("ok").and_then(|v| (v).as_bool()).unwrap_or_default(),
     })
 }
 
 fn iface_files_remote__list_op_response__from_json(v: &Value) -> Option<iface_files_remote::ListOpResponse> {
     let m = v.as_object()?;
     Some(iface_files_remote::ListOpResponse {
-        ok: match m.get("ok").and_then(|v| iface_files_remote__defs_ok_true__from_json(v)) { Some(x) => x, None => return None },
+        ok: m.get("ok").and_then(|v| (v).as_bool()).unwrap_or_default(),
     })
 }
 
 fn iface_files_remote__remove_response__from_json(v: &Value) -> Option<iface_files_remote::RemoveResponse> {
     let m = v.as_object()?;
     Some(iface_files_remote::RemoveResponse {
-        ok: match m.get("ok").and_then(|v| iface_files_remote__defs_ok_true__from_json(v)) { Some(x) => x, None => return None },
+        ok: m.get("ok").and_then(|v| (v).as_bool()).unwrap_or_default(),
     })
 }
 
 fn iface_files_remote__share_response__from_json(v: &Value) -> Option<iface_files_remote::ShareResponse> {
     let m = v.as_object()?;
     Some(iface_files_remote::ShareResponse {
-        ok: match m.get("ok").and_then(|v| iface_files_remote__defs_ok_true__from_json(v)) { Some(x) => x, None => return None },
+        ok: m.get("ok").and_then(|v| (v).as_bool()).unwrap_or_default(),
     })
 }
 
 fn iface_files_remote__update_response__from_json(v: &Value) -> Option<iface_files_remote::UpdateResponse> {
     let m = v.as_object()?;
     Some(iface_files_remote::UpdateResponse {
-        ok: match m.get("ok").and_then(|v| iface_files_remote__defs_ok_true__from_json(v)) { Some(x) => x, None => return None },
+        ok: m.get("ok").and_then(|v| (v).as_bool()).unwrap_or_default(),
     })
 }
 

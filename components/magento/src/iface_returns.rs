@@ -46,7 +46,7 @@ fn iface_returns__rma_data_rma_interface__to_json(p: &iface_returns::RmaDataRmaI
     m.insert("customer_id".into(), Value::Number(serde_json::Number::from(*(&p.customer_id))));
     m.insert("date_requested".into(), Value::String((&p.date_requested).clone()));
     m.insert("entity_id".into(), Value::Number(serde_json::Number::from(*(&p.entity_id))));
-    m.insert("extension_attributes".into(), match (&p.extension_attributes) { Some(v) => iface_returns__rma_data_rma_extension_interface__to_json(v), None => Value::Null });
+    m.insert("extension_attributes".into(), match (&p.extension_attributes) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("increment_id".into(), Value::String((&p.increment_id).clone()));
     m.insert("items".into(), Value::Array((&p.items).iter().map(|v| iface_returns__rma_data_item_interface__to_json(v)).collect()));
     m.insert("order_id".into(), Value::Number(serde_json::Number::from(*(&p.order_id))));
@@ -65,7 +65,7 @@ fn iface_returns__rma_data_comment_interface__to_json(p: &iface_returns::RmaData
     m.insert("custom_attributes".into(), match (&p.custom_attributes) { Some(v) => Value::Array((v).iter().map(|v| iface_returns__framework_attribute_interface__to_json(v)).collect()), None => Value::Null });
     m.insert("customer_notified".into(), Value::Bool(*(&p.customer_notified)));
     m.insert("entity_id".into(), Value::Number(serde_json::Number::from(*(&p.entity_id))));
-    m.insert("extension_attributes".into(), match (&p.extension_attributes) { Some(v) => iface_returns__rma_data_comment_extension_interface__to_json(v), None => Value::Null });
+    m.insert("extension_attributes".into(), match (&p.extension_attributes) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("rma_entity_id".into(), Value::Number(serde_json::Number::from(*(&p.rma_entity_id))));
     m.insert("status".into(), Value::String((&p.status).clone()));
     m.insert("visible_on_front".into(), Value::Bool(*(&p.visible_on_front)));
@@ -79,15 +79,17 @@ fn iface_returns__framework_attribute_interface__to_json(p: &iface_returns::Fram
     Value::Object(m)
 }
 
-fn iface_returns__rma_data_comment_extension_interface__to_json(p: &iface_returns::RmaDataCommentExtensionInterface) -> Value {
+fn iface_returns__rma_data_comment_extension_interface_entry__to_json(p: &iface_returns::RmaDataCommentExtensionInterfaceEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
-fn iface_returns__rma_data_rma_extension_interface__to_json(p: &iface_returns::RmaDataRmaExtensionInterface) -> Value {
+fn iface_returns__rma_data_rma_extension_interface_entry__to_json(p: &iface_returns::RmaDataRmaExtensionInterfaceEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -95,7 +97,7 @@ fn iface_returns__rma_data_item_interface__to_json(p: &iface_returns::RmaDataIte
     let mut m = Map::new();
     m.insert("condition".into(), Value::String((&p.condition).clone()));
     m.insert("entity_id".into(), Value::Number(serde_json::Number::from(*(&p.entity_id))));
-    m.insert("extension_attributes".into(), match (&p.extension_attributes) { Some(v) => iface_returns__rma_data_item_extension_interface__to_json(v), None => Value::Null });
+    m.insert("extension_attributes".into(), match (&p.extension_attributes) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("order_item_id".into(), Value::Number(serde_json::Number::from(*(&p.order_item_id))));
     m.insert("qty_approved".into(), Value::Number(serde_json::Number::from(*(&p.qty_approved))));
     m.insert("qty_authorized".into(), Value::Number(serde_json::Number::from(*(&p.qty_authorized))));
@@ -108,9 +110,10 @@ fn iface_returns__rma_data_item_interface__to_json(p: &iface_returns::RmaDataIte
     Value::Object(m)
 }
 
-fn iface_returns__rma_data_item_extension_interface__to_json(p: &iface_returns::RmaDataItemExtensionInterface) -> Value {
+fn iface_returns__rma_data_item_extension_interface_entry__to_json(p: &iface_returns::RmaDataItemExtensionInterfaceEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -119,15 +122,16 @@ fn iface_returns__rma_data_track_interface__to_json(p: &iface_returns::RmaDataTr
     m.insert("carrier_code".into(), Value::String((&p.carrier_code).clone()));
     m.insert("carrier_title".into(), Value::String((&p.carrier_title).clone()));
     m.insert("entity_id".into(), Value::Number(serde_json::Number::from(*(&p.entity_id))));
-    m.insert("extension_attributes".into(), match (&p.extension_attributes) { Some(v) => iface_returns__rma_data_track_extension_interface__to_json(v), None => Value::Null });
+    m.insert("extension_attributes".into(), match (&p.extension_attributes) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("rma_entity_id".into(), Value::Number(serde_json::Number::from(*(&p.rma_entity_id))));
     m.insert("track_number".into(), Value::String((&p.track_number).clone()));
     Value::Object(m)
 }
 
-fn iface_returns__rma_data_track_extension_interface__to_json(p: &iface_returns::RmaDataTrackExtensionInterface) -> Value {
+fn iface_returns__rma_data_track_extension_interface_entry__to_json(p: &iface_returns::RmaDataTrackExtensionInterfaceEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -197,7 +201,7 @@ fn iface_returns__rma_data_rma_interface__from_json(v: &Value) -> Option<iface_r
         customer_id: m.get("customer_id").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
         date_requested: m.get("date_requested").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         entity_id: m.get("entity_id").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
-        extension_attributes: m.get("extension_attributes").filter(|v| !v.is_null()).and_then(|v| iface_returns__rma_data_rma_extension_interface__from_json(v)),
+        extension_attributes: m.get("extension_attributes").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_returns::RmaDataRmaExtensionInterfaceEntry { key: k.clone(), value: val })).collect())),
         increment_id: m.get("increment_id").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         items: m.get("items").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_returns__rma_data_item_interface__from_json(x)).collect())).unwrap_or_default(),
         order_id: m.get("order_id").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
@@ -217,7 +221,7 @@ fn iface_returns__rma_data_comment_interface__from_json(v: &Value) -> Option<ifa
         custom_attributes: m.get("custom_attributes").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_returns__framework_attribute_interface__from_json(x)).collect())),
         customer_notified: m.get("customer_notified").and_then(|v| (v).as_bool()).unwrap_or_default(),
         entity_id: m.get("entity_id").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
-        extension_attributes: m.get("extension_attributes").filter(|v| !v.is_null()).and_then(|v| iface_returns__rma_data_comment_extension_interface__from_json(v)),
+        extension_attributes: m.get("extension_attributes").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_returns::RmaDataCommentExtensionInterfaceEntry { key: k.clone(), value: val })).collect())),
         rma_entity_id: m.get("rma_entity_id").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
         status: m.get("status").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         visible_on_front: m.get("visible_on_front").and_then(|v| (v).as_bool()).unwrap_or_default(),
@@ -232,17 +236,19 @@ fn iface_returns__framework_attribute_interface__from_json(v: &Value) -> Option<
     })
 }
 
-fn iface_returns__rma_data_comment_extension_interface__from_json(v: &Value) -> Option<iface_returns::RmaDataCommentExtensionInterface> {
+fn iface_returns__rma_data_comment_extension_interface_entry__from_json(v: &Value) -> Option<iface_returns::RmaDataCommentExtensionInterfaceEntry> {
     let m = v.as_object()?;
-    Some(iface_returns::RmaDataCommentExtensionInterface {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_returns::RmaDataCommentExtensionInterfaceEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
-fn iface_returns__rma_data_rma_extension_interface__from_json(v: &Value) -> Option<iface_returns::RmaDataRmaExtensionInterface> {
+fn iface_returns__rma_data_rma_extension_interface_entry__from_json(v: &Value) -> Option<iface_returns::RmaDataRmaExtensionInterfaceEntry> {
     let m = v.as_object()?;
-    Some(iface_returns::RmaDataRmaExtensionInterface {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_returns::RmaDataRmaExtensionInterfaceEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -251,7 +257,7 @@ fn iface_returns__rma_data_item_interface__from_json(v: &Value) -> Option<iface_
     Some(iface_returns::RmaDataItemInterface {
         condition: m.get("condition").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         entity_id: m.get("entity_id").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
-        extension_attributes: m.get("extension_attributes").filter(|v| !v.is_null()).and_then(|v| iface_returns__rma_data_item_extension_interface__from_json(v)),
+        extension_attributes: m.get("extension_attributes").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_returns::RmaDataItemExtensionInterfaceEntry { key: k.clone(), value: val })).collect())),
         order_item_id: m.get("order_item_id").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
         qty_approved: m.get("qty_approved").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
         qty_authorized: m.get("qty_authorized").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
@@ -264,10 +270,11 @@ fn iface_returns__rma_data_item_interface__from_json(v: &Value) -> Option<iface_
     })
 }
 
-fn iface_returns__rma_data_item_extension_interface__from_json(v: &Value) -> Option<iface_returns::RmaDataItemExtensionInterface> {
+fn iface_returns__rma_data_item_extension_interface_entry__from_json(v: &Value) -> Option<iface_returns::RmaDataItemExtensionInterfaceEntry> {
     let m = v.as_object()?;
-    Some(iface_returns::RmaDataItemExtensionInterface {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_returns::RmaDataItemExtensionInterfaceEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -277,16 +284,17 @@ fn iface_returns__rma_data_track_interface__from_json(v: &Value) -> Option<iface
         carrier_code: m.get("carrier_code").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         carrier_title: m.get("carrier_title").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         entity_id: m.get("entity_id").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
-        extension_attributes: m.get("extension_attributes").filter(|v| !v.is_null()).and_then(|v| iface_returns__rma_data_track_extension_interface__from_json(v)),
+        extension_attributes: m.get("extension_attributes").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_returns::RmaDataTrackExtensionInterfaceEntry { key: k.clone(), value: val })).collect())),
         rma_entity_id: m.get("rma_entity_id").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
         track_number: m.get("track_number").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
-fn iface_returns__rma_data_track_extension_interface__from_json(v: &Value) -> Option<iface_returns::RmaDataTrackExtensionInterface> {
+fn iface_returns__rma_data_track_extension_interface_entry__from_json(v: &Value) -> Option<iface_returns::RmaDataTrackExtensionInterfaceEntry> {
     let m = v.as_object()?;
-    Some(iface_returns::RmaDataTrackExtensionInterface {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_returns::RmaDataTrackExtensionInterfaceEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 

@@ -243,7 +243,7 @@ const OP_TWEETS_ADD_OR_DELETE_RULES: OpSpec = OpSpec {
     path_template: "/2/tweets/search/stream/rules",
     fields: &[
         FieldSpec { snake: "dry_run", wire: "dry_run", location: FieldLocation::Query },
-        FieldSpec { snake: "value", wire: "value", location: FieldLocation::Body },
+        FieldSpec { snake: "body", wire: "body", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "BearerToken", kind: AuthKind::Bearer },
@@ -564,6 +564,15 @@ fn iface_tweets__tweet_referenced_tweets_item_type_op_enum__to_str(e: &iface_twe
     }
 }
 
+fn iface_tweets__reply_settings__to_str(e: &iface_tweets::ReplySettings) -> &'static str {
+    match e {
+        iface_tweets::ReplySettings::Everyone => "everyone",
+        iface_tweets::ReplySettings::MentionedUsers => "mentionedUsers",
+        iface_tweets::ReplySettings::Following => "following",
+        iface_tweets::ReplySettings::Other => "other",
+    }
+}
+
 fn iface_tweets__tweet_withheld_scope_enum__to_str(e: &iface_tweets::TweetWithheldScopeEnum) -> &'static str {
     match e {
         iface_tweets::TweetWithheldScopeEnum::Tweet => "tweet",
@@ -574,6 +583,17 @@ fn iface_tweets__tweet_withheld_scope_enum__to_str(e: &iface_tweets::TweetWithhe
 fn iface_tweets__geo_type_op_enum__to_str(e: &iface_tweets::GeoTypeOpEnum) -> &'static str {
     match e {
         iface_tweets::GeoTypeOpEnum::Feature => "Feature",
+    }
+}
+
+fn iface_tweets__place_type__to_str(e: &iface_tweets::PlaceType) -> &'static str {
+    match e {
+        iface_tweets::PlaceType::Poi => "poi",
+        iface_tweets::PlaceType::Neighborhood => "neighborhood",
+        iface_tweets::PlaceType::City => "city",
+        iface_tweets::PlaceType::Admin => "admin",
+        iface_tweets::PlaceType::Country => "country",
+        iface_tweets::PlaceType::Unknown => "unknown",
     }
 }
 
@@ -627,12 +647,6 @@ fn iface_tweets__find_tweets_that_quote_a_tweet_exclude_item_enum__to_str(e: &if
     }
 }
 
-fn iface_tweets__pagination_token36__to_json(p: &iface_tweets::PaginationToken36) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
 fn iface_tweets__get2_lists_id_tweets_response__to_json(p: &iface_tweets::Get2ListsIdTweetsResponse) -> Value {
     let mut m = Map::new();
     m.insert("data".into(), match (&p.data) { Some(v) => Value::Array((v).iter().map(|v| iface_tweets__tweet__to_json(v)).collect()), None => Value::Null });
@@ -645,16 +659,16 @@ fn iface_tweets__get2_lists_id_tweets_response__to_json(p: &iface_tweets::Get2Li
 fn iface_tweets__tweet__to_json(p: &iface_tweets::Tweet) -> Value {
     let mut m = Map::new();
     m.insert("attachments".into(), match (&p.attachments) { Some(v) => iface_tweets__tweet_attachments__to_json(v), None => Value::Null });
-    m.insert("author_id".into(), match (&p.author_id) { Some(v) => iface_tweets__user_id__to_json(v), None => Value::Null });
+    m.insert("author_id".into(), match (&p.author_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("context_annotations".into(), match (&p.context_annotations) { Some(v) => Value::Array((v).iter().map(|v| iface_tweets__context_annotation__to_json(v)).collect()), None => Value::Null });
-    m.insert("conversation_id".into(), match (&p.conversation_id) { Some(v) => iface_tweets__tweet_id__to_json(v), None => Value::Null });
+    m.insert("conversation_id".into(), match (&p.conversation_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("created_at".into(), match (&p.created_at) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("edit_controls".into(), match (&p.edit_controls) { Some(v) => iface_tweets__tweet_edit_controls__to_json(v), None => Value::Null });
-    m.insert("edit_history_tweet_ids".into(), Value::Array((&p.edit_history_tweet_ids).iter().map(|v| iface_tweets__tweet_id__to_json(v)).collect()));
+    m.insert("edit_history_tweet_ids".into(), Value::Array((&p.edit_history_tweet_ids).iter().map(|v| Value::String((v).clone())).collect()));
     m.insert("entities".into(), match (&p.entities) { Some(v) => iface_tweets__full_text_entities__to_json(v), None => Value::Null });
     m.insert("geo".into(), match (&p.geo) { Some(v) => iface_tweets__tweet_geo__to_json(v), None => Value::Null });
-    m.insert("id".into(), iface_tweets__tweet_id__to_json(&p.id));
-    m.insert("in_reply_to_user_id".into(), match (&p.in_reply_to_user_id) { Some(v) => iface_tweets__user_id__to_json(v), None => Value::Null });
+    m.insert("id".into(), Value::String((&p.id).clone()));
+    m.insert("in_reply_to_user_id".into(), match (&p.in_reply_to_user_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("lang".into(), match (&p.lang) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("non_public_metrics".into(), match (&p.non_public_metrics) { Some(v) => iface_tweets__tweet_non_public_metrics__to_json(v), None => Value::Null });
     m.insert("organic_metrics".into(), match (&p.organic_metrics) { Some(v) => iface_tweets__tweet_organic_metrics__to_json(v), None => Value::Null });
@@ -662,35 +676,17 @@ fn iface_tweets__tweet__to_json(p: &iface_tweets::Tweet) -> Value {
     m.insert("promoted_metrics".into(), match (&p.promoted_metrics) { Some(v) => iface_tweets__tweet_promoted_metrics__to_json(v), None => Value::Null });
     m.insert("public_metrics".into(), match (&p.public_metrics) { Some(v) => iface_tweets__tweet_public_metrics__to_json(v), None => Value::Null });
     m.insert("referenced_tweets".into(), match (&p.referenced_tweets) { Some(v) => Value::Array((v).iter().map(|v| iface_tweets__tweet_referenced_tweets_item__to_json(v)).collect()), None => Value::Null });
-    m.insert("reply_settings".into(), match (&p.reply_settings) { Some(v) => iface_tweets__reply_settings__to_json(v), None => Value::Null });
+    m.insert("reply_settings".into(), match (&p.reply_settings) { Some(v) => Value::String(iface_tweets__reply_settings__to_str(v).into()), None => Value::Null });
     m.insert("source".into(), match (&p.source) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("text".into(), iface_tweets__tweet_text__to_json(&p.text));
+    m.insert("text".into(), Value::String((&p.text).clone()));
     m.insert("withheld".into(), match (&p.withheld) { Some(v) => iface_tweets__tweet_withheld__to_json(v), None => Value::Null });
     Value::Object(m)
 }
 
 fn iface_tweets__tweet_attachments__to_json(p: &iface_tweets::TweetAttachments) -> Value {
     let mut m = Map::new();
-    m.insert("media_keys".into(), match (&p.media_keys) { Some(v) => Value::Array((v).iter().map(|v| iface_tweets__media_key__to_json(v)).collect()), None => Value::Null });
-    m.insert("poll_ids".into(), match (&p.poll_ids) { Some(v) => Value::Array((v).iter().map(|v| iface_tweets__poll_id__to_json(v)).collect()), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_tweets__media_key__to_json(p: &iface_tweets::MediaKey) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_tweets__poll_id__to_json(p: &iface_tweets::PollId) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_tweets__user_id__to_json(p: &iface_tweets::UserId) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
+    m.insert("media_keys".into(), match (&p.media_keys) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("poll_ids".into(), match (&p.poll_ids) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -714,12 +710,6 @@ fn iface_tweets__context_annotation_entity_fields__to_json(p: &iface_tweets::Con
     m.insert("description".into(), match (&p.description) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("id".into(), Value::String((&p.id).clone()));
     m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_tweets__tweet_id__to_json(p: &iface_tweets::TweetId) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -771,14 +761,8 @@ fn iface_tweets__mention_entity__to_json(p: &iface_tweets::MentionEntity) -> Val
     let mut m = Map::new();
     m.insert("end".into(), Value::Number(serde_json::Number::from(*(&p.end))));
     m.insert("start".into(), Value::Number(serde_json::Number::from(*(&p.start))));
-    m.insert("id".into(), match (&p.id) { Some(v) => iface_tweets__user_id__to_json(v), None => Value::Null });
-    m.insert("username".into(), iface_tweets__user_name__to_json(&p.username));
-    Value::Object(m)
-}
-
-fn iface_tweets__user_name__to_json(p: &iface_tweets::UserName) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("username".into(), Value::String((&p.username).clone()));
     Value::Object(m)
 }
 
@@ -788,71 +772,35 @@ fn iface_tweets__url_entity__to_json(p: &iface_tweets::UrlEntity) -> Value {
     m.insert("start".into(), Value::Number(serde_json::Number::from(*(&p.start))));
     m.insert("description".into(), match (&p.description) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("display_url".into(), match (&p.display_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("expanded_url".into(), match (&p.expanded_url) { Some(v) => iface_tweets__url__to_json(v), None => Value::Null });
+    m.insert("expanded_url".into(), match (&p.expanded_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("images".into(), match (&p.images) { Some(v) => Value::Array((v).iter().map(|v| iface_tweets__url_image__to_json(v)).collect()), None => Value::Null });
-    m.insert("media_key".into(), match (&p.media_key) { Some(v) => iface_tweets__media_key__to_json(v), None => Value::Null });
-    m.insert("status".into(), match (&p.status) { Some(v) => iface_tweets__http_status_code__to_json(v), None => Value::Null });
+    m.insert("media_key".into(), match (&p.media_key) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("status".into(), match (&p.status) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("title".into(), match (&p.title) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("unwound_url".into(), match (&p.unwound_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("url".into(), iface_tweets__url__to_json(&p.url));
-    Value::Object(m)
-}
-
-fn iface_tweets__url__to_json(p: &iface_tweets::Url) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
+    m.insert("url".into(), Value::String((&p.url).clone()));
     Value::Object(m)
 }
 
 fn iface_tweets__url_image__to_json(p: &iface_tweets::UrlImage) -> Value {
     let mut m = Map::new();
-    m.insert("height".into(), match (&p.height) { Some(v) => iface_tweets__media_height__to_json(v), None => Value::Null });
-    m.insert("url".into(), match (&p.url) { Some(v) => iface_tweets__url__to_json(v), None => Value::Null });
-    m.insert("width".into(), match (&p.width) { Some(v) => iface_tweets__media_width__to_json(v), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_tweets__media_height__to_json(p: &iface_tweets::MediaHeight) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_tweets__media_width__to_json(p: &iface_tweets::MediaWidth) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_tweets__http_status_code__to_json(p: &iface_tweets::HttpStatusCode) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
+    m.insert("height".into(), match (&p.height) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("url".into(), match (&p.url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("width".into(), match (&p.width) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
 fn iface_tweets__tweet_geo__to_json(p: &iface_tweets::TweetGeo) -> Value {
     let mut m = Map::new();
     m.insert("coordinates".into(), match (&p.coordinates) { Some(v) => iface_tweets__point__to_json(v), None => Value::Null });
-    m.insert("place_id".into(), match (&p.place_id) { Some(v) => iface_tweets__place_id__to_json(v), None => Value::Null });
+    m.insert("place_id".into(), match (&p.place_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
 fn iface_tweets__point__to_json(p: &iface_tweets::Point) -> Value {
     let mut m = Map::new();
-    m.insert("coordinates".into(), iface_tweets__position__to_json(&p.coordinates));
+    m.insert("coordinates".into(), Value::Array((&p.coordinates).iter().map(|v| serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null)).collect()));
     m.insert("type".into(), Value::String(iface_tweets__point_type_op_enum__to_str(&p.type_op).into()));
-    Value::Object(m)
-}
-
-fn iface_tweets__position__to_json(p: &iface_tweets::Position) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_tweets__place_id__to_json(p: &iface_tweets::PlaceId) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -892,34 +840,16 @@ fn iface_tweets__tweet_public_metrics__to_json(p: &iface_tweets::TweetPublicMetr
 
 fn iface_tweets__tweet_referenced_tweets_item__to_json(p: &iface_tweets::TweetReferencedTweetsItem) -> Value {
     let mut m = Map::new();
-    m.insert("id".into(), iface_tweets__tweet_id__to_json(&p.id));
+    m.insert("id".into(), Value::String((&p.id).clone()));
     m.insert("type".into(), Value::String(iface_tweets__tweet_referenced_tweets_item_type_op_enum__to_str(&p.type_op).into()));
-    Value::Object(m)
-}
-
-fn iface_tweets__reply_settings__to_json(p: &iface_tweets::ReplySettings) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_tweets__tweet_text__to_json(p: &iface_tweets::TweetText) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
 fn iface_tweets__tweet_withheld__to_json(p: &iface_tweets::TweetWithheld) -> Value {
     let mut m = Map::new();
     m.insert("copyright".into(), Value::Bool(*(&p.copyright)));
-    m.insert("country_codes".into(), Value::Array((&p.country_codes).iter().map(|v| iface_tweets__country_code__to_json(v)).collect()));
+    m.insert("country_codes".into(), Value::Array((&p.country_codes).iter().map(|v| Value::String((v).clone())).collect()));
     m.insert("scope".into(), match (&p.scope) { Some(v) => Value::String(iface_tweets__tweet_withheld_scope_enum__to_str(v).into()), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_tweets__country_code__to_json(p: &iface_tweets::CountryCode) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -945,23 +875,23 @@ fn iface_tweets__expansions__to_json(p: &iface_tweets::Expansions) -> Value {
 
 fn iface_tweets__media__to_json(p: &iface_tweets::Media) -> Value {
     let mut m = Map::new();
-    m.insert("height".into(), match (&p.height) { Some(v) => iface_tweets__media_height__to_json(v), None => Value::Null });
-    m.insert("media_key".into(), match (&p.media_key) { Some(v) => iface_tweets__media_key__to_json(v), None => Value::Null });
+    m.insert("height".into(), match (&p.height) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("media_key".into(), match (&p.media_key) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("type".into(), Value::String((&p.type_op).clone()));
-    m.insert("width".into(), match (&p.width) { Some(v) => iface_tweets__media_width__to_json(v), None => Value::Null });
+    m.insert("width".into(), match (&p.width) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
 fn iface_tweets__place__to_json(p: &iface_tweets::Place) -> Value {
     let mut m = Map::new();
-    m.insert("contained_within".into(), match (&p.contained_within) { Some(v) => Value::Array((v).iter().map(|v| iface_tweets__place_id__to_json(v)).collect()), None => Value::Null });
+    m.insert("contained_within".into(), match (&p.contained_within) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
     m.insert("country".into(), match (&p.country) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("country_code".into(), match (&p.country_code) { Some(v) => iface_tweets__country_code__to_json(v), None => Value::Null });
+    m.insert("country_code".into(), match (&p.country_code) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("full_name".into(), Value::String((&p.full_name).clone()));
     m.insert("geo".into(), match (&p.geo) { Some(v) => iface_tweets__geo__to_json(v), None => Value::Null });
-    m.insert("id".into(), iface_tweets__place_id__to_json(&p.id));
+    m.insert("id".into(), Value::String((&p.id).clone()));
     m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("place_type".into(), match (&p.place_type) { Some(v) => iface_tweets__place_type__to_json(v), None => Value::Null });
+    m.insert("place_type".into(), match (&p.place_type) { Some(v) => Value::String(iface_tweets__place_type__to_str(v).into()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -969,19 +899,14 @@ fn iface_tweets__geo__to_json(p: &iface_tweets::Geo) -> Value {
     let mut m = Map::new();
     m.insert("bbox".into(), Value::Array((&p.bbox).iter().map(|v| serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null)).collect()));
     m.insert("geometry".into(), match (&p.geometry) { Some(v) => iface_tweets__point__to_json(v), None => Value::Null });
-    m.insert("properties".into(), iface_tweets__geo_properties__to_json(&p.properties));
+    m.insert("properties".into(), Value::Object((&p.properties).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()));
     m.insert("type".into(), Value::String(iface_tweets__geo_type_op_enum__to_str(&p.type_op).into()));
     Value::Object(m)
 }
 
-fn iface_tweets__geo_properties__to_json(p: &iface_tweets::GeoProperties) -> Value {
+fn iface_tweets__geo_properties_entry__to_json(p: &iface_tweets::GeoPropertiesEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_tweets__place_type__to_json(p: &iface_tweets::PlaceType) -> Value {
-    let mut m = Map::new();
+    m.insert("key".into(), Value::String((&p.key).clone()));
     m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
@@ -990,7 +915,7 @@ fn iface_tweets__poll__to_json(p: &iface_tweets::Poll) -> Value {
     let mut m = Map::new();
     m.insert("duration_minutes".into(), match (&p.duration_minutes) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("end_datetime".into(), match (&p.end_datetime) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("id".into(), iface_tweets__poll_id__to_json(&p.id));
+    m.insert("id".into(), Value::String((&p.id).clone()));
     m.insert("options".into(), Value::Array((&p.options).iter().map(|v| iface_tweets__poll_option__to_json(v)).collect()));
     m.insert("voting_status".into(), match (&p.voting_status) { Some(v) => Value::String(iface_tweets__poll_voting_status_enum__to_str(v).into()), None => Value::Null });
     Value::Object(m)
@@ -998,29 +923,17 @@ fn iface_tweets__poll__to_json(p: &iface_tweets::Poll) -> Value {
 
 fn iface_tweets__poll_option__to_json(p: &iface_tweets::PollOption) -> Value {
     let mut m = Map::new();
-    m.insert("label".into(), iface_tweets__poll_option_label__to_json(&p.label));
+    m.insert("label".into(), Value::String((&p.label).clone()));
     m.insert("position".into(), Value::Number(serde_json::Number::from(*(&p.position))));
     m.insert("votes".into(), Value::Number(serde_json::Number::from(*(&p.votes))));
-    Value::Object(m)
-}
-
-fn iface_tweets__poll_option_label__to_json(p: &iface_tweets::PollOptionLabel) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
 fn iface_tweets__topic__to_json(p: &iface_tweets::Topic) -> Value {
     let mut m = Map::new();
     m.insert("description".into(), match (&p.description) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("id".into(), iface_tweets__topic_id__to_json(&p.id));
+    m.insert("id".into(), Value::String((&p.id).clone()));
     m.insert("name".into(), Value::String((&p.name).clone()));
-    Value::Object(m)
-}
-
-fn iface_tweets__topic_id__to_json(p: &iface_tweets::TopicId) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -1029,15 +942,15 @@ fn iface_tweets__user__to_json(p: &iface_tweets::User) -> Value {
     m.insert("created_at".into(), match (&p.created_at) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("description".into(), match (&p.description) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("entities".into(), match (&p.entities) { Some(v) => iface_tweets__user_entities__to_json(v), None => Value::Null });
-    m.insert("id".into(), iface_tweets__user_id__to_json(&p.id));
+    m.insert("id".into(), Value::String((&p.id).clone()));
     m.insert("location".into(), match (&p.location) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("name".into(), Value::String((&p.name).clone()));
-    m.insert("pinned_tweet_id".into(), match (&p.pinned_tweet_id) { Some(v) => iface_tweets__tweet_id__to_json(v), None => Value::Null });
+    m.insert("pinned_tweet_id".into(), match (&p.pinned_tweet_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("profile_image_url".into(), match (&p.profile_image_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("protected".into(), match (&p.protected) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     m.insert("public_metrics".into(), match (&p.public_metrics) { Some(v) => iface_tweets__user_public_metrics__to_json(v), None => Value::Null });
     m.insert("url".into(), match (&p.url) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("username".into(), iface_tweets__user_name__to_json(&p.username));
+    m.insert("username".into(), Value::String((&p.username).clone()));
     m.insert("verified".into(), match (&p.verified) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     m.insert("verified_type".into(), match (&p.verified_type) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("withheld".into(), match (&p.withheld) { Some(v) => iface_tweets__user_withheld__to_json(v), None => Value::Null });
@@ -1068,34 +981,16 @@ fn iface_tweets__user_public_metrics__to_json(p: &iface_tweets::UserPublicMetric
 
 fn iface_tweets__user_withheld__to_json(p: &iface_tweets::UserWithheld) -> Value {
     let mut m = Map::new();
-    m.insert("country_codes".into(), Value::Array((&p.country_codes).iter().map(|v| iface_tweets__country_code__to_json(v)).collect()));
+    m.insert("country_codes".into(), Value::Array((&p.country_codes).iter().map(|v| Value::String((v).clone())).collect()));
     m.insert("scope".into(), match (&p.scope) { Some(v) => Value::String(iface_tweets__user_withheld_scope_enum__to_str(v).into()), None => Value::Null });
     Value::Object(m)
 }
 
 fn iface_tweets__get2_lists_id_tweets_response_meta__to_json(p: &iface_tweets::Get2ListsIdTweetsResponseMeta) -> Value {
     let mut m = Map::new();
-    m.insert("next_token".into(), match (&p.next_token) { Some(v) => iface_tweets__next_token__to_json(v), None => Value::Null });
-    m.insert("previous_token".into(), match (&p.previous_token) { Some(v) => iface_tweets__previous_token__to_json(v), None => Value::Null });
-    m.insert("result_count".into(), match (&p.result_count) { Some(v) => iface_tweets__result_count__to_json(v), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_tweets__next_token__to_json(p: &iface_tweets::NextToken) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_tweets__previous_token__to_json(p: &iface_tweets::PreviousToken) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_tweets__result_count__to_json(p: &iface_tweets::ResultCount) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
+    m.insert("next_token".into(), match (&p.next_token) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("previous_token".into(), match (&p.previous_token) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("result_count".into(), match (&p.result_count) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
@@ -1115,14 +1010,8 @@ fn iface_tweets__tweet_create_request_geo__to_json(p: &iface_tweets::TweetCreate
 
 fn iface_tweets__tweet_create_request_media__to_json(p: &iface_tweets::TweetCreateRequestMedia) -> Value {
     let mut m = Map::new();
-    m.insert("media_ids".into(), Value::Array((&p.media_ids).iter().map(|v| iface_tweets__media_id__to_json(v)).collect()));
-    m.insert("tagged_user_ids".into(), match (&p.tagged_user_ids) { Some(v) => Value::Array((v).iter().map(|v| iface_tweets__user_id__to_json(v)).collect()), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_tweets__media_id__to_json(p: &iface_tweets::MediaId) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
+    m.insert("media_ids".into(), Value::Array((&p.media_ids).iter().map(|v| Value::String((v).clone())).collect()));
+    m.insert("tagged_user_ids".into(), match (&p.tagged_user_ids) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -1136,8 +1025,8 @@ fn iface_tweets__tweet_create_request_poll__to_json(p: &iface_tweets::TweetCreat
 
 fn iface_tweets__tweet_create_request_reply__to_json(p: &iface_tweets::TweetCreateRequestReply) -> Value {
     let mut m = Map::new();
-    m.insert("exclude_reply_user_ids".into(), match (&p.exclude_reply_user_ids) { Some(v) => Value::Array((v).iter().map(|v| iface_tweets__user_id__to_json(v)).collect()), None => Value::Null });
-    m.insert("in_reply_to_tweet_id".into(), iface_tweets__tweet_id__to_json(&p.in_reply_to_tweet_id));
+    m.insert("exclude_reply_user_ids".into(), match (&p.exclude_reply_user_ids) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("in_reply_to_tweet_id".into(), Value::String((&p.in_reply_to_tweet_id).clone()));
     Value::Object(m)
 }
 
@@ -1150,8 +1039,8 @@ fn iface_tweets__tweet_create_response__to_json(p: &iface_tweets::TweetCreateRes
 
 fn iface_tweets__tweet_create_response_data__to_json(p: &iface_tweets::TweetCreateResponseData) -> Value {
     let mut m = Map::new();
-    m.insert("id".into(), iface_tweets__tweet_id__to_json(&p.id));
-    m.insert("text".into(), iface_tweets__tweet_text__to_json(&p.text));
+    m.insert("id".into(), Value::String((&p.id).clone()));
+    m.insert("text".into(), Value::String((&p.text).clone()));
     Value::Object(m)
 }
 
@@ -1165,54 +1054,18 @@ fn iface_tweets__get2_tweets_counts_all_response__to_json(p: &iface_tweets::Get2
 
 fn iface_tweets__search_count__to_json(p: &iface_tweets::SearchCount) -> Value {
     let mut m = Map::new();
-    m.insert("end".into(), iface_tweets__end__to_json(&p.end));
-    m.insert("start".into(), iface_tweets__start__to_json(&p.start));
-    m.insert("tweet_count".into(), iface_tweets__tweet_count__to_json(&p.tweet_count));
-    Value::Object(m)
-}
-
-fn iface_tweets__end__to_json(p: &iface_tweets::End) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_tweets__start__to_json(p: &iface_tweets::Start) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_tweets__tweet_count__to_json(p: &iface_tweets::TweetCount) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
+    m.insert("end".into(), Value::String((&p.end).clone()));
+    m.insert("start".into(), Value::String((&p.start).clone()));
+    m.insert("tweet_count".into(), Value::Number(serde_json::Number::from(*(&p.tweet_count))));
     Value::Object(m)
 }
 
 fn iface_tweets__get2_tweets_counts_all_response_meta__to_json(p: &iface_tweets::Get2TweetsCountsAllResponseMeta) -> Value {
     let mut m = Map::new();
-    m.insert("newest_id".into(), match (&p.newest_id) { Some(v) => iface_tweets__newest_id__to_json(v), None => Value::Null });
-    m.insert("next_token".into(), match (&p.next_token) { Some(v) => iface_tweets__next_token__to_json(v), None => Value::Null });
-    m.insert("oldest_id".into(), match (&p.oldest_id) { Some(v) => iface_tweets__oldest_id__to_json(v), None => Value::Null });
-    m.insert("total_tweet_count".into(), match (&p.total_tweet_count) { Some(v) => iface_tweets__aggregate__to_json(v), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_tweets__newest_id__to_json(p: &iface_tweets::NewestId) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_tweets__oldest_id__to_json(p: &iface_tweets::OldestId) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_tweets__aggregate__to_json(p: &iface_tweets::Aggregate) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
+    m.insert("newest_id".into(), match (&p.newest_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("next_token".into(), match (&p.next_token) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("oldest_id".into(), match (&p.oldest_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("total_tweet_count".into(), match (&p.total_tweet_count) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
@@ -1226,10 +1079,10 @@ fn iface_tweets__get2_tweets_counts_recent_response__to_json(p: &iface_tweets::G
 
 fn iface_tweets__get2_tweets_counts_recent_response_meta__to_json(p: &iface_tweets::Get2TweetsCountsRecentResponseMeta) -> Value {
     let mut m = Map::new();
-    m.insert("newest_id".into(), match (&p.newest_id) { Some(v) => iface_tweets__newest_id__to_json(v), None => Value::Null });
-    m.insert("next_token".into(), match (&p.next_token) { Some(v) => iface_tweets__next_token__to_json(v), None => Value::Null });
-    m.insert("oldest_id".into(), match (&p.oldest_id) { Some(v) => iface_tweets__oldest_id__to_json(v), None => Value::Null });
-    m.insert("total_tweet_count".into(), match (&p.total_tweet_count) { Some(v) => iface_tweets__aggregate__to_json(v), None => Value::Null });
+    m.insert("newest_id".into(), match (&p.newest_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("next_token".into(), match (&p.next_token) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("oldest_id".into(), match (&p.oldest_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("total_tweet_count".into(), match (&p.total_tweet_count) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
@@ -1260,10 +1113,10 @@ fn iface_tweets__get2_tweets_search_all_response__to_json(p: &iface_tweets::Get2
 
 fn iface_tweets__get2_tweets_search_all_response_meta__to_json(p: &iface_tweets::Get2TweetsSearchAllResponseMeta) -> Value {
     let mut m = Map::new();
-    m.insert("newest_id".into(), match (&p.newest_id) { Some(v) => iface_tweets__newest_id__to_json(v), None => Value::Null });
-    m.insert("next_token".into(), match (&p.next_token) { Some(v) => iface_tweets__next_token__to_json(v), None => Value::Null });
-    m.insert("oldest_id".into(), match (&p.oldest_id) { Some(v) => iface_tweets__oldest_id__to_json(v), None => Value::Null });
-    m.insert("result_count".into(), match (&p.result_count) { Some(v) => iface_tweets__result_count__to_json(v), None => Value::Null });
+    m.insert("newest_id".into(), match (&p.newest_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("next_token".into(), match (&p.next_token) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("oldest_id".into(), match (&p.oldest_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("result_count".into(), match (&p.result_count) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
@@ -1278,10 +1131,10 @@ fn iface_tweets__get2_tweets_search_recent_response__to_json(p: &iface_tweets::G
 
 fn iface_tweets__get2_tweets_search_recent_response_meta__to_json(p: &iface_tweets::Get2TweetsSearchRecentResponseMeta) -> Value {
     let mut m = Map::new();
-    m.insert("newest_id".into(), match (&p.newest_id) { Some(v) => iface_tweets__newest_id__to_json(v), None => Value::Null });
-    m.insert("next_token".into(), match (&p.next_token) { Some(v) => iface_tweets__next_token__to_json(v), None => Value::Null });
-    m.insert("oldest_id".into(), match (&p.oldest_id) { Some(v) => iface_tweets__oldest_id__to_json(v), None => Value::Null });
-    m.insert("result_count".into(), match (&p.result_count) { Some(v) => iface_tweets__result_count__to_json(v), None => Value::Null });
+    m.insert("newest_id".into(), match (&p.newest_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("next_token".into(), match (&p.next_token) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("oldest_id".into(), match (&p.oldest_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("result_count".into(), match (&p.result_count) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
@@ -1296,20 +1149,8 @@ fn iface_tweets__filtered_streaming_tweet_response__to_json(p: &iface_tweets::Fi
 
 fn iface_tweets__filtered_streaming_tweet_response_matching_rules_item__to_json(p: &iface_tweets::FilteredStreamingTweetResponseMatchingRulesItem) -> Value {
     let mut m = Map::new();
-    m.insert("id".into(), iface_tweets__rule_id__to_json(&p.id));
-    m.insert("tag".into(), match (&p.tag) { Some(v) => iface_tweets__rule_tag__to_json(v), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_tweets__rule_id__to_json(p: &iface_tweets::RuleId) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_tweets__rule_tag__to_json(p: &iface_tweets::RuleTag) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
+    m.insert("id".into(), Value::String((&p.id).clone()));
+    m.insert("tag".into(), match (&p.tag) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -1322,30 +1163,18 @@ fn iface_tweets__rules_lookup_response__to_json(p: &iface_tweets::RulesLookupRes
 
 fn iface_tweets__rule__to_json(p: &iface_tweets::Rule) -> Value {
     let mut m = Map::new();
-    m.insert("id".into(), match (&p.id) { Some(v) => iface_tweets__rule_id__to_json(v), None => Value::Null });
-    m.insert("tag".into(), match (&p.tag) { Some(v) => iface_tweets__rule_tag__to_json(v), None => Value::Null });
-    m.insert("value".into(), iface_tweets__rule_value__to_json(&p.value));
-    Value::Object(m)
-}
-
-fn iface_tweets__rule_value__to_json(p: &iface_tweets::RuleValue) -> Value {
-    let mut m = Map::new();
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("tag".into(), match (&p.tag) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
 fn iface_tweets__rules_response_metadata__to_json(p: &iface_tweets::RulesResponseMetadata) -> Value {
     let mut m = Map::new();
-    m.insert("next_token".into(), match (&p.next_token) { Some(v) => iface_tweets__next_token__to_json(v), None => Value::Null });
+    m.insert("next_token".into(), match (&p.next_token) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("result_count".into(), match (&p.result_count) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("sent".into(), Value::String((&p.sent).clone()));
-    m.insert("summary".into(), match (&p.summary) { Some(v) => iface_tweets__rules_request_summary__to_json(v), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_tweets__rules_request_summary__to_json(p: &iface_tweets::RulesRequestSummary) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
+    m.insert("summary".into(), match (&p.summary) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -1389,8 +1218,8 @@ fn iface_tweets__get2_tweets_id_quote_tweets_response__to_json(p: &iface_tweets:
 
 fn iface_tweets__get2_tweets_id_quote_tweets_response_meta__to_json(p: &iface_tweets::Get2TweetsIdQuoteTweetsResponseMeta) -> Value {
     let mut m = Map::new();
-    m.insert("next_token".into(), match (&p.next_token) { Some(v) => iface_tweets__next_token__to_json(v), None => Value::Null });
-    m.insert("result_count".into(), match (&p.result_count) { Some(v) => iface_tweets__result_count__to_json(v), None => Value::Null });
+    m.insert("next_token".into(), match (&p.next_token) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("result_count".into(), match (&p.result_count) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
@@ -1417,9 +1246,9 @@ fn iface_tweets__get2_users_id_liked_tweets_response__to_json(p: &iface_tweets::
 
 fn iface_tweets__get2_users_id_liked_tweets_response_meta__to_json(p: &iface_tweets::Get2UsersIdLikedTweetsResponseMeta) -> Value {
     let mut m = Map::new();
-    m.insert("next_token".into(), match (&p.next_token) { Some(v) => iface_tweets__next_token__to_json(v), None => Value::Null });
-    m.insert("previous_token".into(), match (&p.previous_token) { Some(v) => iface_tweets__previous_token__to_json(v), None => Value::Null });
-    m.insert("result_count".into(), match (&p.result_count) { Some(v) => iface_tweets__result_count__to_json(v), None => Value::Null });
+    m.insert("next_token".into(), match (&p.next_token) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("previous_token".into(), match (&p.previous_token) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("result_count".into(), match (&p.result_count) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
@@ -1460,11 +1289,11 @@ fn iface_tweets__get2_users_id_mentions_response__to_json(p: &iface_tweets::Get2
 
 fn iface_tweets__get2_users_id_mentions_response_meta__to_json(p: &iface_tweets::Get2UsersIdMentionsResponseMeta) -> Value {
     let mut m = Map::new();
-    m.insert("newest_id".into(), match (&p.newest_id) { Some(v) => iface_tweets__newest_id__to_json(v), None => Value::Null });
-    m.insert("next_token".into(), match (&p.next_token) { Some(v) => iface_tweets__next_token__to_json(v), None => Value::Null });
-    m.insert("oldest_id".into(), match (&p.oldest_id) { Some(v) => iface_tweets__oldest_id__to_json(v), None => Value::Null });
-    m.insert("previous_token".into(), match (&p.previous_token) { Some(v) => iface_tweets__previous_token__to_json(v), None => Value::Null });
-    m.insert("result_count".into(), match (&p.result_count) { Some(v) => iface_tweets__result_count__to_json(v), None => Value::Null });
+    m.insert("newest_id".into(), match (&p.newest_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("next_token".into(), match (&p.next_token) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("oldest_id".into(), match (&p.oldest_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("previous_token".into(), match (&p.previous_token) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("result_count".into(), match (&p.result_count) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
@@ -1505,11 +1334,11 @@ fn iface_tweets__get2_users_id_timelines_reverse_chronological_response__to_json
 
 fn iface_tweets__get2_users_id_timelines_reverse_chronological_response_meta__to_json(p: &iface_tweets::Get2UsersIdTimelinesReverseChronologicalResponseMeta) -> Value {
     let mut m = Map::new();
-    m.insert("newest_id".into(), match (&p.newest_id) { Some(v) => iface_tweets__newest_id__to_json(v), None => Value::Null });
-    m.insert("next_token".into(), match (&p.next_token) { Some(v) => iface_tweets__next_token__to_json(v), None => Value::Null });
-    m.insert("oldest_id".into(), match (&p.oldest_id) { Some(v) => iface_tweets__oldest_id__to_json(v), None => Value::Null });
-    m.insert("previous_token".into(), match (&p.previous_token) { Some(v) => iface_tweets__previous_token__to_json(v), None => Value::Null });
-    m.insert("result_count".into(), match (&p.result_count) { Some(v) => iface_tweets__result_count__to_json(v), None => Value::Null });
+    m.insert("newest_id".into(), match (&p.newest_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("next_token".into(), match (&p.next_token) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("oldest_id".into(), match (&p.oldest_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("previous_token".into(), match (&p.previous_token) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("result_count".into(), match (&p.result_count) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
@@ -1524,11 +1353,11 @@ fn iface_tweets__get2_users_id_tweets_response__to_json(p: &iface_tweets::Get2Us
 
 fn iface_tweets__get2_users_id_tweets_response_meta__to_json(p: &iface_tweets::Get2UsersIdTweetsResponseMeta) -> Value {
     let mut m = Map::new();
-    m.insert("newest_id".into(), match (&p.newest_id) { Some(v) => iface_tweets__newest_id__to_json(v), None => Value::Null });
-    m.insert("next_token".into(), match (&p.next_token) { Some(v) => iface_tweets__next_token__to_json(v), None => Value::Null });
-    m.insert("oldest_id".into(), match (&p.oldest_id) { Some(v) => iface_tweets__oldest_id__to_json(v), None => Value::Null });
-    m.insert("previous_token".into(), match (&p.previous_token) { Some(v) => iface_tweets__previous_token__to_json(v), None => Value::Null });
-    m.insert("result_count".into(), match (&p.result_count) { Some(v) => iface_tweets__result_count__to_json(v), None => Value::Null });
+    m.insert("newest_id".into(), match (&p.newest_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("next_token".into(), match (&p.next_token) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("oldest_id".into(), match (&p.oldest_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("previous_token".into(), match (&p.previous_token) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("result_count".into(), match (&p.result_count) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
@@ -1536,7 +1365,7 @@ fn iface_tweets__lists_id_tweets_params__to_json(p: &iface_tweets::ListsIdTweets
     let mut m = Map::new();
     m.insert("id".into(), Value::String((&p.id).clone()));
     m.insert("max_results".into(), match (&p.max_results) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    m.insert("pagination_token".into(), match (&p.pagination_token) { Some(v) => iface_tweets__pagination_token36__to_json(v), None => Value::Null });
+    m.insert("pagination_token".into(), match (&p.pagination_token) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("tweet_fields".into(), match (&p.tweet_fields) { Some(v) => Value::Array((v).iter().map(|v| Value::String(iface_tweets__lists_id_tweets_tweet_fields_item_enum__to_str(v).into())).collect()), None => Value::Null });
     m.insert("expansions".into(), match (&p.expansions) { Some(v) => Value::Array((v).iter().map(|v| Value::String(iface_tweets__lists_id_tweets_expansions_item_enum__to_str(v).into())).collect()), None => Value::Null });
     m.insert("media_fields".into(), match (&p.media_fields) { Some(v) => Value::Array((v).iter().map(|v| Value::String(iface_tweets__lists_id_tweets_media_fields_item_enum__to_str(v).into())).collect()), None => Value::Null });
@@ -1548,7 +1377,7 @@ fn iface_tweets__lists_id_tweets_params__to_json(p: &iface_tweets::ListsIdTweets
 
 fn iface_tweets__find_tweets_by_id_params__to_json(p: &iface_tweets::FindTweetsByIdParams) -> Value {
     let mut m = Map::new();
-    m.insert("ids".into(), Value::Array((&p.ids).iter().map(|v| iface_tweets__tweet_id__to_json(v)).collect()));
+    m.insert("ids".into(), Value::Array((&p.ids).iter().map(|v| Value::String((v).clone())).collect()));
     m.insert("tweet_fields".into(), match (&p.tweet_fields) { Some(v) => Value::Array((v).iter().map(|v| Value::String(iface_tweets__lists_id_tweets_tweet_fields_item_enum__to_str(v).into())).collect()), None => Value::Null });
     m.insert("expansions".into(), match (&p.expansions) { Some(v) => Value::Array((v).iter().map(|v| Value::String(iface_tweets__lists_id_tweets_expansions_item_enum__to_str(v).into())).collect()), None => Value::Null });
     m.insert("media_fields".into(), match (&p.media_fields) { Some(v) => Value::Array((v).iter().map(|v| Value::String(iface_tweets__lists_id_tweets_media_fields_item_enum__to_str(v).into())).collect()), None => Value::Null });
@@ -1567,10 +1396,10 @@ fn iface_tweets__create_tweet_params__to_json(p: &iface_tweets::CreateTweetParam
     m.insert("media".into(), match (&p.media) { Some(v) => iface_tweets__tweet_create_request_media__to_json(v), None => Value::Null });
     m.insert("nullcast".into(), match (&p.nullcast) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     m.insert("poll".into(), match (&p.poll) { Some(v) => iface_tweets__tweet_create_request_poll__to_json(v), None => Value::Null });
-    m.insert("quote_tweet_id".into(), match (&p.quote_tweet_id) { Some(v) => iface_tweets__tweet_id__to_json(v), None => Value::Null });
+    m.insert("quote_tweet_id".into(), match (&p.quote_tweet_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("reply".into(), match (&p.reply) { Some(v) => iface_tweets__tweet_create_request_reply__to_json(v), None => Value::Null });
     m.insert("reply_settings".into(), match (&p.reply_settings) { Some(v) => Value::String(iface_tweets__tweet_create_request_poll_reply_settings_enum__to_str(v).into()), None => Value::Null });
-    m.insert("text".into(), match (&p.text) { Some(v) => iface_tweets__tweet_text__to_json(v), None => Value::Null });
+    m.insert("text".into(), match (&p.text) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -1579,10 +1408,10 @@ fn iface_tweets__tweet_counts_full_archive_search_params__to_json(p: &iface_twee
     m.insert("query".into(), Value::String((&p.query).clone()));
     m.insert("start_time".into(), match (&p.start_time) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("end_time".into(), match (&p.end_time) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("since_id".into(), match (&p.since_id) { Some(v) => iface_tweets__tweet_id__to_json(v), None => Value::Null });
-    m.insert("until_id".into(), match (&p.until_id) { Some(v) => iface_tweets__tweet_id__to_json(v), None => Value::Null });
-    m.insert("next_token".into(), match (&p.next_token) { Some(v) => iface_tweets__pagination_token36__to_json(v), None => Value::Null });
-    m.insert("pagination_token".into(), match (&p.pagination_token) { Some(v) => iface_tweets__pagination_token36__to_json(v), None => Value::Null });
+    m.insert("since_id".into(), match (&p.since_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("until_id".into(), match (&p.until_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("next_token".into(), match (&p.next_token) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("pagination_token".into(), match (&p.pagination_token) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("granularity".into(), match (&p.granularity) { Some(v) => Value::String(iface_tweets__tweet_counts_full_archive_search_granularity_enum__to_str(v).into()), None => Value::Null });
     m.insert("search_count_fields".into(), match (&p.search_count_fields) { Some(v) => Value::Array((v).iter().map(|v| Value::String(iface_tweets__tweet_counts_full_archive_search_search_count_fields_item_enum__to_str(v).into())).collect()), None => Value::Null });
     Value::Object(m)
@@ -1593,10 +1422,10 @@ fn iface_tweets__tweet_counts_recent_search_params__to_json(p: &iface_tweets::Tw
     m.insert("query".into(), Value::String((&p.query).clone()));
     m.insert("start_time".into(), match (&p.start_time) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("end_time".into(), match (&p.end_time) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("since_id".into(), match (&p.since_id) { Some(v) => iface_tweets__tweet_id__to_json(v), None => Value::Null });
-    m.insert("until_id".into(), match (&p.until_id) { Some(v) => iface_tweets__tweet_id__to_json(v), None => Value::Null });
-    m.insert("next_token".into(), match (&p.next_token) { Some(v) => iface_tweets__pagination_token36__to_json(v), None => Value::Null });
-    m.insert("pagination_token".into(), match (&p.pagination_token) { Some(v) => iface_tweets__pagination_token36__to_json(v), None => Value::Null });
+    m.insert("since_id".into(), match (&p.since_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("until_id".into(), match (&p.until_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("next_token".into(), match (&p.next_token) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("pagination_token".into(), match (&p.pagination_token) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("granularity".into(), match (&p.granularity) { Some(v) => Value::String(iface_tweets__tweet_counts_full_archive_search_granularity_enum__to_str(v).into()), None => Value::Null });
     m.insert("search_count_fields".into(), match (&p.search_count_fields) { Some(v) => Value::Array((v).iter().map(|v| Value::String(iface_tweets__tweet_counts_full_archive_search_search_count_fields_item_enum__to_str(v).into())).collect()), None => Value::Null });
     Value::Object(m)
@@ -1649,11 +1478,11 @@ fn iface_tweets__fullarchive_search_params__to_json(p: &iface_tweets::Fullarchiv
     m.insert("query".into(), Value::String((&p.query).clone()));
     m.insert("start_time".into(), match (&p.start_time) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("end_time".into(), match (&p.end_time) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("since_id".into(), match (&p.since_id) { Some(v) => iface_tweets__tweet_id__to_json(v), None => Value::Null });
-    m.insert("until_id".into(), match (&p.until_id) { Some(v) => iface_tweets__tweet_id__to_json(v), None => Value::Null });
+    m.insert("since_id".into(), match (&p.since_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("until_id".into(), match (&p.until_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("max_results".into(), match (&p.max_results) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    m.insert("next_token".into(), match (&p.next_token) { Some(v) => iface_tweets__pagination_token36__to_json(v), None => Value::Null });
-    m.insert("pagination_token".into(), match (&p.pagination_token) { Some(v) => iface_tweets__pagination_token36__to_json(v), None => Value::Null });
+    m.insert("next_token".into(), match (&p.next_token) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("pagination_token".into(), match (&p.pagination_token) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("sort_order".into(), match (&p.sort_order) { Some(v) => Value::String(iface_tweets__fullarchive_search_sort_order_enum__to_str(v).into()), None => Value::Null });
     m.insert("tweet_fields".into(), match (&p.tweet_fields) { Some(v) => Value::Array((v).iter().map(|v| Value::String(iface_tweets__lists_id_tweets_tweet_fields_item_enum__to_str(v).into())).collect()), None => Value::Null });
     m.insert("expansions".into(), match (&p.expansions) { Some(v) => Value::Array((v).iter().map(|v| Value::String(iface_tweets__lists_id_tweets_expansions_item_enum__to_str(v).into())).collect()), None => Value::Null });
@@ -1669,11 +1498,11 @@ fn iface_tweets__recent_search_params__to_json(p: &iface_tweets::RecentSearchPar
     m.insert("query".into(), Value::String((&p.query).clone()));
     m.insert("start_time".into(), match (&p.start_time) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("end_time".into(), match (&p.end_time) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("since_id".into(), match (&p.since_id) { Some(v) => iface_tweets__tweet_id__to_json(v), None => Value::Null });
-    m.insert("until_id".into(), match (&p.until_id) { Some(v) => iface_tweets__tweet_id__to_json(v), None => Value::Null });
+    m.insert("since_id".into(), match (&p.since_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("until_id".into(), match (&p.until_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("max_results".into(), match (&p.max_results) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    m.insert("next_token".into(), match (&p.next_token) { Some(v) => iface_tweets__pagination_token36__to_json(v), None => Value::Null });
-    m.insert("pagination_token".into(), match (&p.pagination_token) { Some(v) => iface_tweets__pagination_token36__to_json(v), None => Value::Null });
+    m.insert("next_token".into(), match (&p.next_token) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("pagination_token".into(), match (&p.pagination_token) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("sort_order".into(), match (&p.sort_order) { Some(v) => Value::String(iface_tweets__fullarchive_search_sort_order_enum__to_str(v).into()), None => Value::Null });
     m.insert("tweet_fields".into(), match (&p.tweet_fields) { Some(v) => Value::Array((v).iter().map(|v| Value::String(iface_tweets__lists_id_tweets_tweet_fields_item_enum__to_str(v).into())).collect()), None => Value::Null });
     m.insert("expansions".into(), match (&p.expansions) { Some(v) => Value::Array((v).iter().map(|v| Value::String(iface_tweets__lists_id_tweets_expansions_item_enum__to_str(v).into())).collect()), None => Value::Null });
@@ -1700,7 +1529,7 @@ fn iface_tweets__search_stream_params__to_json(p: &iface_tweets::SearchStreamPar
 
 fn iface_tweets__get_rules_params__to_json(p: &iface_tweets::GetRulesParams) -> Value {
     let mut m = Map::new();
-    m.insert("ids".into(), match (&p.ids) { Some(v) => Value::Array((v).iter().map(|v| iface_tweets__rule_id__to_json(v)).collect()), None => Value::Null });
+    m.insert("ids".into(), match (&p.ids) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
     m.insert("max_results".into(), match (&p.max_results) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("pagination_token".into(), match (&p.pagination_token) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
@@ -1709,7 +1538,7 @@ fn iface_tweets__get_rules_params__to_json(p: &iface_tweets::GetRulesParams) -> 
 fn iface_tweets__add_or_delete_rules_params__to_json(p: &iface_tweets::AddOrDeleteRulesParams) -> Value {
     let mut m = Map::new();
     m.insert("dry_run".into(), match (&p.dry_run) { Some(v) => Value::Bool(*(v)), None => Value::Null });
-    m.insert("value".into(), Value::String((&p.value).clone()));
+    m.insert("body".into(), Value::String((&p.body).clone()));
     Value::Object(m)
 }
 
@@ -1735,7 +1564,7 @@ fn iface_tweets__find_tweets_that_quote_a_tweet_params__to_json(p: &iface_tweets
     let mut m = Map::new();
     m.insert("id".into(), Value::String((&p.id).clone()));
     m.insert("max_results".into(), match (&p.max_results) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    m.insert("pagination_token".into(), match (&p.pagination_token) { Some(v) => iface_tweets__pagination_token36__to_json(v), None => Value::Null });
+    m.insert("pagination_token".into(), match (&p.pagination_token) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("exclude".into(), match (&p.exclude) { Some(v) => Value::Array((v).iter().map(|v| Value::String(iface_tweets__find_tweets_that_quote_a_tweet_exclude_item_enum__to_str(v).into())).collect()), None => Value::Null });
     m.insert("tweet_fields".into(), match (&p.tweet_fields) { Some(v) => Value::Array((v).iter().map(|v| Value::String(iface_tweets__lists_id_tweets_tweet_fields_item_enum__to_str(v).into())).collect()), None => Value::Null });
     m.insert("expansions".into(), match (&p.expansions) { Some(v) => Value::Array((v).iter().map(|v| Value::String(iface_tweets__lists_id_tweets_expansions_item_enum__to_str(v).into())).collect()), None => Value::Null });
@@ -1757,7 +1586,7 @@ fn iface_tweets__users_id_liked_tweets_params__to_json(p: &iface_tweets::UsersId
     let mut m = Map::new();
     m.insert("id".into(), Value::String((&p.id).clone()));
     m.insert("max_results".into(), match (&p.max_results) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    m.insert("pagination_token".into(), match (&p.pagination_token) { Some(v) => iface_tweets__pagination_token36__to_json(v), None => Value::Null });
+    m.insert("pagination_token".into(), match (&p.pagination_token) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("tweet_fields".into(), match (&p.tweet_fields) { Some(v) => Value::Array((v).iter().map(|v| Value::String(iface_tweets__lists_id_tweets_tweet_fields_item_enum__to_str(v).into())).collect()), None => Value::Null });
     m.insert("expansions".into(), match (&p.expansions) { Some(v) => Value::Array((v).iter().map(|v| Value::String(iface_tweets__lists_id_tweets_expansions_item_enum__to_str(v).into())).collect()), None => Value::Null });
     m.insert("media_fields".into(), match (&p.media_fields) { Some(v) => Value::Array((v).iter().map(|v| Value::String(iface_tweets__lists_id_tweets_media_fields_item_enum__to_str(v).into())).collect()), None => Value::Null });
@@ -1770,7 +1599,7 @@ fn iface_tweets__users_id_liked_tweets_params__to_json(p: &iface_tweets::UsersId
 fn iface_tweets__users_id_like_params__to_json(p: &iface_tweets::UsersIdLikeParams) -> Value {
     let mut m = Map::new();
     m.insert("id".into(), Value::String((&p.id).clone()));
-    m.insert("tweet_id".into(), iface_tweets__tweet_id__to_json(&p.tweet_id));
+    m.insert("tweet_id".into(), Value::String((&p.tweet_id).clone()));
     Value::Object(m)
 }
 
@@ -1784,10 +1613,10 @@ fn iface_tweets__users_id_unlike_params__to_json(p: &iface_tweets::UsersIdUnlike
 fn iface_tweets__users_id_mentions_params__to_json(p: &iface_tweets::UsersIdMentionsParams) -> Value {
     let mut m = Map::new();
     m.insert("id".into(), Value::String((&p.id).clone()));
-    m.insert("since_id".into(), match (&p.since_id) { Some(v) => iface_tweets__tweet_id__to_json(v), None => Value::Null });
-    m.insert("until_id".into(), match (&p.until_id) { Some(v) => iface_tweets__tweet_id__to_json(v), None => Value::Null });
+    m.insert("since_id".into(), match (&p.since_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("until_id".into(), match (&p.until_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("max_results".into(), match (&p.max_results) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    m.insert("pagination_token".into(), match (&p.pagination_token) { Some(v) => iface_tweets__pagination_token36__to_json(v), None => Value::Null });
+    m.insert("pagination_token".into(), match (&p.pagination_token) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("start_time".into(), match (&p.start_time) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("end_time".into(), match (&p.end_time) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("tweet_fields".into(), match (&p.tweet_fields) { Some(v) => Value::Array((v).iter().map(|v| Value::String(iface_tweets__lists_id_tweets_tweet_fields_item_enum__to_str(v).into())).collect()), None => Value::Null });
@@ -1802,7 +1631,7 @@ fn iface_tweets__users_id_mentions_params__to_json(p: &iface_tweets::UsersIdMent
 fn iface_tweets__users_id_retweets_params__to_json(p: &iface_tweets::UsersIdRetweetsParams) -> Value {
     let mut m = Map::new();
     m.insert("id".into(), Value::String((&p.id).clone()));
-    m.insert("tweet_id".into(), iface_tweets__tweet_id__to_json(&p.tweet_id));
+    m.insert("tweet_id".into(), Value::String((&p.tweet_id).clone()));
     Value::Object(m)
 }
 
@@ -1816,10 +1645,10 @@ fn iface_tweets__users_id_unretweets_params__to_json(p: &iface_tweets::UsersIdUn
 fn iface_tweets__users_id_timeline_params__to_json(p: &iface_tweets::UsersIdTimelineParams) -> Value {
     let mut m = Map::new();
     m.insert("id".into(), Value::String((&p.id).clone()));
-    m.insert("since_id".into(), match (&p.since_id) { Some(v) => iface_tweets__tweet_id__to_json(v), None => Value::Null });
-    m.insert("until_id".into(), match (&p.until_id) { Some(v) => iface_tweets__tweet_id__to_json(v), None => Value::Null });
+    m.insert("since_id".into(), match (&p.since_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("until_id".into(), match (&p.until_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("max_results".into(), match (&p.max_results) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    m.insert("pagination_token".into(), match (&p.pagination_token) { Some(v) => iface_tweets__pagination_token36__to_json(v), None => Value::Null });
+    m.insert("pagination_token".into(), match (&p.pagination_token) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("exclude".into(), match (&p.exclude) { Some(v) => Value::Array((v).iter().map(|v| Value::String(iface_tweets__find_tweets_that_quote_a_tweet_exclude_item_enum__to_str(v).into())).collect()), None => Value::Null });
     m.insert("start_time".into(), match (&p.start_time) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("end_time".into(), match (&p.end_time) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -1835,10 +1664,10 @@ fn iface_tweets__users_id_timeline_params__to_json(p: &iface_tweets::UsersIdTime
 fn iface_tweets__users_id_tweets_params__to_json(p: &iface_tweets::UsersIdTweetsParams) -> Value {
     let mut m = Map::new();
     m.insert("id".into(), Value::String((&p.id).clone()));
-    m.insert("since_id".into(), match (&p.since_id) { Some(v) => iface_tweets__tweet_id__to_json(v), None => Value::Null });
-    m.insert("until_id".into(), match (&p.until_id) { Some(v) => iface_tweets__tweet_id__to_json(v), None => Value::Null });
+    m.insert("since_id".into(), match (&p.since_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("until_id".into(), match (&p.until_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("max_results".into(), match (&p.max_results) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    m.insert("pagination_token".into(), match (&p.pagination_token) { Some(v) => iface_tweets__pagination_token36__to_json(v), None => Value::Null });
+    m.insert("pagination_token".into(), match (&p.pagination_token) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("exclude".into(), match (&p.exclude) { Some(v) => Value::Array((v).iter().map(|v| Value::String(iface_tweets__find_tweets_that_quote_a_tweet_exclude_item_enum__to_str(v).into())).collect()), None => Value::Null });
     m.insert("start_time".into(), match (&p.start_time) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("end_time".into(), match (&p.end_time) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -1865,16 +1694,16 @@ fn iface_tweets__tweet__from_json(v: &Value) -> Option<iface_tweets::Tweet> {
     let m = v.as_object()?;
     Some(iface_tweets::Tweet {
         attachments: m.get("attachments").filter(|v| !v.is_null()).and_then(|v| iface_tweets__tweet_attachments__from_json(v)),
-        author_id: m.get("author_id").filter(|v| !v.is_null()).and_then(|v| iface_tweets__user_id__from_json(v)),
+        author_id: m.get("author_id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         context_annotations: m.get("context_annotations").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_tweets__context_annotation__from_json(x)).collect())),
-        conversation_id: m.get("conversation_id").filter(|v| !v.is_null()).and_then(|v| iface_tweets__tweet_id__from_json(v)),
+        conversation_id: m.get("conversation_id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         created_at: m.get("created_at").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         edit_controls: m.get("edit_controls").filter(|v| !v.is_null()).and_then(|v| iface_tweets__tweet_edit_controls__from_json(v)),
-        edit_history_tweet_ids: m.get("edit_history_tweet_ids").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_tweets__tweet_id__from_json(x)).collect())).unwrap_or_default(),
+        edit_history_tweet_ids: m.get("edit_history_tweet_ids").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())).unwrap_or_default(),
         entities: m.get("entities").filter(|v| !v.is_null()).and_then(|v| iface_tweets__full_text_entities__from_json(v)),
         geo: m.get("geo").filter(|v| !v.is_null()).and_then(|v| iface_tweets__tweet_geo__from_json(v)),
-        id: match m.get("id").and_then(|v| iface_tweets__tweet_id__from_json(v)) { Some(x) => x, None => return None },
-        in_reply_to_user_id: m.get("in_reply_to_user_id").filter(|v| !v.is_null()).and_then(|v| iface_tweets__user_id__from_json(v)),
+        id: m.get("id").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        in_reply_to_user_id: m.get("in_reply_to_user_id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         lang: m.get("lang").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         non_public_metrics: m.get("non_public_metrics").filter(|v| !v.is_null()).and_then(|v| iface_tweets__tweet_non_public_metrics__from_json(v)),
         organic_metrics: m.get("organic_metrics").filter(|v| !v.is_null()).and_then(|v| iface_tweets__tweet_organic_metrics__from_json(v)),
@@ -1882,9 +1711,9 @@ fn iface_tweets__tweet__from_json(v: &Value) -> Option<iface_tweets::Tweet> {
         promoted_metrics: m.get("promoted_metrics").filter(|v| !v.is_null()).and_then(|v| iface_tweets__tweet_promoted_metrics__from_json(v)),
         public_metrics: m.get("public_metrics").filter(|v| !v.is_null()).and_then(|v| iface_tweets__tweet_public_metrics__from_json(v)),
         referenced_tweets: m.get("referenced_tweets").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_tweets__tweet_referenced_tweets_item__from_json(x)).collect())),
-        reply_settings: m.get("reply_settings").filter(|v| !v.is_null()).and_then(|v| iface_tweets__reply_settings__from_json(v)),
+        reply_settings: m.get("reply_settings").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_tweets__reply_settings__from_str)),
         source: m.get("source").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        text: match m.get("text").and_then(|v| iface_tweets__tweet_text__from_json(v)) { Some(x) => x, None => return None },
+        text: m.get("text").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         withheld: m.get("withheld").filter(|v| !v.is_null()).and_then(|v| iface_tweets__tweet_withheld__from_json(v)),
     })
 }
@@ -1892,29 +1721,8 @@ fn iface_tweets__tweet__from_json(v: &Value) -> Option<iface_tweets::Tweet> {
 fn iface_tweets__tweet_attachments__from_json(v: &Value) -> Option<iface_tweets::TweetAttachments> {
     let m = v.as_object()?;
     Some(iface_tweets::TweetAttachments {
-        media_keys: m.get("media_keys").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_tweets__media_key__from_json(x)).collect())),
-        poll_ids: m.get("poll_ids").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_tweets__poll_id__from_json(x)).collect())),
-    })
-}
-
-fn iface_tweets__media_key__from_json(v: &Value) -> Option<iface_tweets::MediaKey> {
-    let m = v.as_object()?;
-    Some(iface_tweets::MediaKey {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-    })
-}
-
-fn iface_tweets__poll_id__from_json(v: &Value) -> Option<iface_tweets::PollId> {
-    let m = v.as_object()?;
-    Some(iface_tweets::PollId {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-    })
-}
-
-fn iface_tweets__user_id__from_json(v: &Value) -> Option<iface_tweets::UserId> {
-    let m = v.as_object()?;
-    Some(iface_tweets::UserId {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        media_keys: m.get("media_keys").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        poll_ids: m.get("poll_ids").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
     })
 }
 
@@ -1941,13 +1749,6 @@ fn iface_tweets__context_annotation_entity_fields__from_json(v: &Value) -> Optio
         description: m.get("description").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         id: m.get("id").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-    })
-}
-
-fn iface_tweets__tweet_id__from_json(v: &Value) -> Option<iface_tweets::TweetId> {
-    let m = v.as_object()?;
-    Some(iface_tweets::TweetId {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -2005,15 +1806,8 @@ fn iface_tweets__mention_entity__from_json(v: &Value) -> Option<iface_tweets::Me
     Some(iface_tweets::MentionEntity {
         end: m.get("end").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
         start: m.get("start").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
-        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| iface_tweets__user_id__from_json(v)),
-        username: match m.get("username").and_then(|v| iface_tweets__user_name__from_json(v)) { Some(x) => x, None => return None },
-    })
-}
-
-fn iface_tweets__user_name__from_json(v: &Value) -> Option<iface_tweets::UserName> {
-    let m = v.as_object()?;
-    Some(iface_tweets::UserName {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        username: m.get("username").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -2024,50 +1818,22 @@ fn iface_tweets__url_entity__from_json(v: &Value) -> Option<iface_tweets::UrlEnt
         start: m.get("start").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
         description: m.get("description").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         display_url: m.get("display_url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        expanded_url: m.get("expanded_url").filter(|v| !v.is_null()).and_then(|v| iface_tweets__url__from_json(v)),
+        expanded_url: m.get("expanded_url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         images: m.get("images").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_tweets__url_image__from_json(x)).collect())),
-        media_key: m.get("media_key").filter(|v| !v.is_null()).and_then(|v| iface_tweets__media_key__from_json(v)),
-        status: m.get("status").filter(|v| !v.is_null()).and_then(|v| iface_tweets__http_status_code__from_json(v)),
+        media_key: m.get("media_key").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        status: m.get("status").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
         title: m.get("title").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         unwound_url: m.get("unwound_url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        url: match m.get("url").and_then(|v| iface_tweets__url__from_json(v)) { Some(x) => x, None => return None },
-    })
-}
-
-fn iface_tweets__url__from_json(v: &Value) -> Option<iface_tweets::Url> {
-    let m = v.as_object()?;
-    Some(iface_tweets::Url {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        url: m.get("url").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
 fn iface_tweets__url_image__from_json(v: &Value) -> Option<iface_tweets::UrlImage> {
     let m = v.as_object()?;
     Some(iface_tweets::UrlImage {
-        height: m.get("height").filter(|v| !v.is_null()).and_then(|v| iface_tweets__media_height__from_json(v)),
-        url: m.get("url").filter(|v| !v.is_null()).and_then(|v| iface_tweets__url__from_json(v)),
-        width: m.get("width").filter(|v| !v.is_null()).and_then(|v| iface_tweets__media_width__from_json(v)),
-    })
-}
-
-fn iface_tweets__media_height__from_json(v: &Value) -> Option<iface_tweets::MediaHeight> {
-    let m = v.as_object()?;
-    Some(iface_tweets::MediaHeight {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-    })
-}
-
-fn iface_tweets__media_width__from_json(v: &Value) -> Option<iface_tweets::MediaWidth> {
-    let m = v.as_object()?;
-    Some(iface_tweets::MediaWidth {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-    })
-}
-
-fn iface_tweets__http_status_code__from_json(v: &Value) -> Option<iface_tweets::HttpStatusCode> {
-    let m = v.as_object()?;
-    Some(iface_tweets::HttpStatusCode {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        height: m.get("height").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        url: m.get("url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        width: m.get("width").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
     })
 }
 
@@ -2075,29 +1841,15 @@ fn iface_tweets__tweet_geo__from_json(v: &Value) -> Option<iface_tweets::TweetGe
     let m = v.as_object()?;
     Some(iface_tweets::TweetGeo {
         coordinates: m.get("coordinates").filter(|v| !v.is_null()).and_then(|v| iface_tweets__point__from_json(v)),
-        place_id: m.get("place_id").filter(|v| !v.is_null()).and_then(|v| iface_tweets__place_id__from_json(v)),
+        place_id: m.get("place_id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
     })
 }
 
 fn iface_tweets__point__from_json(v: &Value) -> Option<iface_tweets::Point> {
     let m = v.as_object()?;
     Some(iface_tweets::Point {
-        coordinates: match m.get("coordinates").and_then(|v| iface_tweets__position__from_json(v)) { Some(x) => x, None => return None },
+        coordinates: m.get("coordinates").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_f64()).collect())).unwrap_or_default(),
         type_op: match m.get("type").and_then(|v| (v).as_str().and_then(iface_tweets__point_type_op_enum__from_str)) { Some(x) => x, None => return None },
-    })
-}
-
-fn iface_tweets__position__from_json(v: &Value) -> Option<iface_tweets::Position> {
-    let m = v.as_object()?;
-    Some(iface_tweets::Position {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-    })
-}
-
-fn iface_tweets__place_id__from_json(v: &Value) -> Option<iface_tweets::PlaceId> {
-    let m = v.as_object()?;
-    Some(iface_tweets::PlaceId {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -2142,22 +1894,8 @@ fn iface_tweets__tweet_public_metrics__from_json(v: &Value) -> Option<iface_twee
 fn iface_tweets__tweet_referenced_tweets_item__from_json(v: &Value) -> Option<iface_tweets::TweetReferencedTweetsItem> {
     let m = v.as_object()?;
     Some(iface_tweets::TweetReferencedTweetsItem {
-        id: match m.get("id").and_then(|v| iface_tweets__tweet_id__from_json(v)) { Some(x) => x, None => return None },
+        id: m.get("id").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         type_op: match m.get("type").and_then(|v| (v).as_str().and_then(iface_tweets__tweet_referenced_tweets_item_type_op_enum__from_str)) { Some(x) => x, None => return None },
-    })
-}
-
-fn iface_tweets__reply_settings__from_json(v: &Value) -> Option<iface_tweets::ReplySettings> {
-    let m = v.as_object()?;
-    Some(iface_tweets::ReplySettings {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-    })
-}
-
-fn iface_tweets__tweet_text__from_json(v: &Value) -> Option<iface_tweets::TweetText> {
-    let m = v.as_object()?;
-    Some(iface_tweets::TweetText {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -2165,15 +1903,8 @@ fn iface_tweets__tweet_withheld__from_json(v: &Value) -> Option<iface_tweets::Tw
     let m = v.as_object()?;
     Some(iface_tweets::TweetWithheld {
         copyright: m.get("copyright").and_then(|v| (v).as_bool()).unwrap_or_default(),
-        country_codes: m.get("country_codes").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_tweets__country_code__from_json(x)).collect())).unwrap_or_default(),
+        country_codes: m.get("country_codes").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())).unwrap_or_default(),
         scope: m.get("scope").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_tweets__tweet_withheld_scope_enum__from_str)),
-    })
-}
-
-fn iface_tweets__country_code__from_json(v: &Value) -> Option<iface_tweets::CountryCode> {
-    let m = v.as_object()?;
-    Some(iface_tweets::CountryCode {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -2202,24 +1933,24 @@ fn iface_tweets__expansions__from_json(v: &Value) -> Option<iface_tweets::Expans
 fn iface_tweets__media__from_json(v: &Value) -> Option<iface_tweets::Media> {
     let m = v.as_object()?;
     Some(iface_tweets::Media {
-        height: m.get("height").filter(|v| !v.is_null()).and_then(|v| iface_tweets__media_height__from_json(v)),
-        media_key: m.get("media_key").filter(|v| !v.is_null()).and_then(|v| iface_tweets__media_key__from_json(v)),
+        height: m.get("height").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        media_key: m.get("media_key").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         type_op: m.get("type").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-        width: m.get("width").filter(|v| !v.is_null()).and_then(|v| iface_tweets__media_width__from_json(v)),
+        width: m.get("width").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
     })
 }
 
 fn iface_tweets__place__from_json(v: &Value) -> Option<iface_tweets::Place> {
     let m = v.as_object()?;
     Some(iface_tweets::Place {
-        contained_within: m.get("contained_within").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_tweets__place_id__from_json(x)).collect())),
+        contained_within: m.get("contained_within").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
         country: m.get("country").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        country_code: m.get("country_code").filter(|v| !v.is_null()).and_then(|v| iface_tweets__country_code__from_json(v)),
+        country_code: m.get("country_code").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         full_name: m.get("full_name").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         geo: m.get("geo").filter(|v| !v.is_null()).and_then(|v| iface_tweets__geo__from_json(v)),
-        id: match m.get("id").and_then(|v| iface_tweets__place_id__from_json(v)) { Some(x) => x, None => return None },
+        id: m.get("id").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        place_type: m.get("place_type").filter(|v| !v.is_null()).and_then(|v| iface_tweets__place_type__from_json(v)),
+        place_type: m.get("place_type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_tweets__place_type__from_str)),
     })
 }
 
@@ -2228,21 +1959,15 @@ fn iface_tweets__geo__from_json(v: &Value) -> Option<iface_tweets::Geo> {
     Some(iface_tweets::Geo {
         bbox: m.get("bbox").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_f64()).collect())).unwrap_or_default(),
         geometry: m.get("geometry").filter(|v| !v.is_null()).and_then(|v| iface_tweets__point__from_json(v)),
-        properties: match m.get("properties").and_then(|v| iface_tweets__geo_properties__from_json(v)) { Some(x) => x, None => return None },
+        properties: m.get("properties").and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_tweets::GeoPropertiesEntry { key: k.clone(), value: val })).collect())).unwrap_or_default(),
         type_op: match m.get("type").and_then(|v| (v).as_str().and_then(iface_tweets__geo_type_op_enum__from_str)) { Some(x) => x, None => return None },
     })
 }
 
-fn iface_tweets__geo_properties__from_json(v: &Value) -> Option<iface_tweets::GeoProperties> {
+fn iface_tweets__geo_properties_entry__from_json(v: &Value) -> Option<iface_tweets::GeoPropertiesEntry> {
     let m = v.as_object()?;
-    Some(iface_tweets::GeoProperties {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-    })
-}
-
-fn iface_tweets__place_type__from_json(v: &Value) -> Option<iface_tweets::PlaceType> {
-    let m = v.as_object()?;
-    Some(iface_tweets::PlaceType {
+    Some(iface_tweets::GeoPropertiesEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
@@ -2252,7 +1977,7 @@ fn iface_tweets__poll__from_json(v: &Value) -> Option<iface_tweets::Poll> {
     Some(iface_tweets::Poll {
         duration_minutes: m.get("duration_minutes").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
         end_datetime: m.get("end_datetime").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        id: match m.get("id").and_then(|v| iface_tweets__poll_id__from_json(v)) { Some(x) => x, None => return None },
+        id: m.get("id").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         options: m.get("options").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_tweets__poll_option__from_json(x)).collect())).unwrap_or_default(),
         voting_status: m.get("voting_status").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_tweets__poll_voting_status_enum__from_str)),
     })
@@ -2261,16 +1986,9 @@ fn iface_tweets__poll__from_json(v: &Value) -> Option<iface_tweets::Poll> {
 fn iface_tweets__poll_option__from_json(v: &Value) -> Option<iface_tweets::PollOption> {
     let m = v.as_object()?;
     Some(iface_tweets::PollOption {
-        label: match m.get("label").and_then(|v| iface_tweets__poll_option_label__from_json(v)) { Some(x) => x, None => return None },
+        label: m.get("label").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         position: m.get("position").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
         votes: m.get("votes").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
-    })
-}
-
-fn iface_tweets__poll_option_label__from_json(v: &Value) -> Option<iface_tweets::PollOptionLabel> {
-    let m = v.as_object()?;
-    Some(iface_tweets::PollOptionLabel {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -2278,15 +1996,8 @@ fn iface_tweets__topic__from_json(v: &Value) -> Option<iface_tweets::Topic> {
     let m = v.as_object()?;
     Some(iface_tweets::Topic {
         description: m.get("description").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        id: match m.get("id").and_then(|v| iface_tweets__topic_id__from_json(v)) { Some(x) => x, None => return None },
+        id: m.get("id").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         name: m.get("name").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-    })
-}
-
-fn iface_tweets__topic_id__from_json(v: &Value) -> Option<iface_tweets::TopicId> {
-    let m = v.as_object()?;
-    Some(iface_tweets::TopicId {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -2296,15 +2007,15 @@ fn iface_tweets__user__from_json(v: &Value) -> Option<iface_tweets::User> {
         created_at: m.get("created_at").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         description: m.get("description").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         entities: m.get("entities").filter(|v| !v.is_null()).and_then(|v| iface_tweets__user_entities__from_json(v)),
-        id: match m.get("id").and_then(|v| iface_tweets__user_id__from_json(v)) { Some(x) => x, None => return None },
+        id: m.get("id").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         location: m.get("location").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         name: m.get("name").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-        pinned_tweet_id: m.get("pinned_tweet_id").filter(|v| !v.is_null()).and_then(|v| iface_tweets__tweet_id__from_json(v)),
+        pinned_tweet_id: m.get("pinned_tweet_id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         profile_image_url: m.get("profile_image_url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         protected: m.get("protected").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
         public_metrics: m.get("public_metrics").filter(|v| !v.is_null()).and_then(|v| iface_tweets__user_public_metrics__from_json(v)),
         url: m.get("url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        username: match m.get("username").and_then(|v| iface_tweets__user_name__from_json(v)) { Some(x) => x, None => return None },
+        username: m.get("username").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         verified: m.get("verified").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
         verified_type: m.get("verified_type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         withheld: m.get("withheld").filter(|v| !v.is_null()).and_then(|v| iface_tweets__user_withheld__from_json(v)),
@@ -2339,7 +2050,7 @@ fn iface_tweets__user_public_metrics__from_json(v: &Value) -> Option<iface_tweet
 fn iface_tweets__user_withheld__from_json(v: &Value) -> Option<iface_tweets::UserWithheld> {
     let m = v.as_object()?;
     Some(iface_tweets::UserWithheld {
-        country_codes: m.get("country_codes").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_tweets__country_code__from_json(x)).collect())).unwrap_or_default(),
+        country_codes: m.get("country_codes").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())).unwrap_or_default(),
         scope: m.get("scope").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_tweets__user_withheld_scope_enum__from_str)),
     })
 }
@@ -2347,30 +2058,9 @@ fn iface_tweets__user_withheld__from_json(v: &Value) -> Option<iface_tweets::Use
 fn iface_tweets__get2_lists_id_tweets_response_meta__from_json(v: &Value) -> Option<iface_tweets::Get2ListsIdTweetsResponseMeta> {
     let m = v.as_object()?;
     Some(iface_tweets::Get2ListsIdTweetsResponseMeta {
-        next_token: m.get("next_token").filter(|v| !v.is_null()).and_then(|v| iface_tweets__next_token__from_json(v)),
-        previous_token: m.get("previous_token").filter(|v| !v.is_null()).and_then(|v| iface_tweets__previous_token__from_json(v)),
-        result_count: m.get("result_count").filter(|v| !v.is_null()).and_then(|v| iface_tweets__result_count__from_json(v)),
-    })
-}
-
-fn iface_tweets__next_token__from_json(v: &Value) -> Option<iface_tweets::NextToken> {
-    let m = v.as_object()?;
-    Some(iface_tweets::NextToken {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-    })
-}
-
-fn iface_tweets__previous_token__from_json(v: &Value) -> Option<iface_tweets::PreviousToken> {
-    let m = v.as_object()?;
-    Some(iface_tweets::PreviousToken {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-    })
-}
-
-fn iface_tweets__result_count__from_json(v: &Value) -> Option<iface_tweets::ResultCount> {
-    let m = v.as_object()?;
-    Some(iface_tweets::ResultCount {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        next_token: m.get("next_token").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        previous_token: m.get("previous_token").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        result_count: m.get("result_count").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
     })
 }
 
@@ -2394,8 +2084,8 @@ fn iface_tweets__tweet_create_response__from_json(v: &Value) -> Option<iface_twe
 fn iface_tweets__tweet_create_response_data__from_json(v: &Value) -> Option<iface_tweets::TweetCreateResponseData> {
     let m = v.as_object()?;
     Some(iface_tweets::TweetCreateResponseData {
-        id: match m.get("id").and_then(|v| iface_tweets__tweet_id__from_json(v)) { Some(x) => x, None => return None },
-        text: match m.get("text").and_then(|v| iface_tweets__tweet_text__from_json(v)) { Some(x) => x, None => return None },
+        id: m.get("id").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        text: m.get("text").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -2411,61 +2101,19 @@ fn iface_tweets__get2_tweets_counts_all_response__from_json(v: &Value) -> Option
 fn iface_tweets__search_count__from_json(v: &Value) -> Option<iface_tweets::SearchCount> {
     let m = v.as_object()?;
     Some(iface_tweets::SearchCount {
-        end: match m.get("end").and_then(|v| iface_tweets__end__from_json(v)) { Some(x) => x, None => return None },
-        start: match m.get("start").and_then(|v| iface_tweets__start__from_json(v)) { Some(x) => x, None => return None },
-        tweet_count: match m.get("tweet_count").and_then(|v| iface_tweets__tweet_count__from_json(v)) { Some(x) => x, None => return None },
-    })
-}
-
-fn iface_tweets__end__from_json(v: &Value) -> Option<iface_tweets::End> {
-    let m = v.as_object()?;
-    Some(iface_tweets::End {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-    })
-}
-
-fn iface_tweets__start__from_json(v: &Value) -> Option<iface_tweets::Start> {
-    let m = v.as_object()?;
-    Some(iface_tweets::Start {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-    })
-}
-
-fn iface_tweets__tweet_count__from_json(v: &Value) -> Option<iface_tweets::TweetCount> {
-    let m = v.as_object()?;
-    Some(iface_tweets::TweetCount {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        end: m.get("end").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        start: m.get("start").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        tweet_count: m.get("tweet_count").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
     })
 }
 
 fn iface_tweets__get2_tweets_counts_all_response_meta__from_json(v: &Value) -> Option<iface_tweets::Get2TweetsCountsAllResponseMeta> {
     let m = v.as_object()?;
     Some(iface_tweets::Get2TweetsCountsAllResponseMeta {
-        newest_id: m.get("newest_id").filter(|v| !v.is_null()).and_then(|v| iface_tweets__newest_id__from_json(v)),
-        next_token: m.get("next_token").filter(|v| !v.is_null()).and_then(|v| iface_tweets__next_token__from_json(v)),
-        oldest_id: m.get("oldest_id").filter(|v| !v.is_null()).and_then(|v| iface_tweets__oldest_id__from_json(v)),
-        total_tweet_count: m.get("total_tweet_count").filter(|v| !v.is_null()).and_then(|v| iface_tweets__aggregate__from_json(v)),
-    })
-}
-
-fn iface_tweets__newest_id__from_json(v: &Value) -> Option<iface_tweets::NewestId> {
-    let m = v.as_object()?;
-    Some(iface_tweets::NewestId {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-    })
-}
-
-fn iface_tweets__oldest_id__from_json(v: &Value) -> Option<iface_tweets::OldestId> {
-    let m = v.as_object()?;
-    Some(iface_tweets::OldestId {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-    })
-}
-
-fn iface_tweets__aggregate__from_json(v: &Value) -> Option<iface_tweets::Aggregate> {
-    let m = v.as_object()?;
-    Some(iface_tweets::Aggregate {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        newest_id: m.get("newest_id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        next_token: m.get("next_token").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        oldest_id: m.get("oldest_id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        total_tweet_count: m.get("total_tweet_count").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
     })
 }
 
@@ -2481,10 +2129,10 @@ fn iface_tweets__get2_tweets_counts_recent_response__from_json(v: &Value) -> Opt
 fn iface_tweets__get2_tweets_counts_recent_response_meta__from_json(v: &Value) -> Option<iface_tweets::Get2TweetsCountsRecentResponseMeta> {
     let m = v.as_object()?;
     Some(iface_tweets::Get2TweetsCountsRecentResponseMeta {
-        newest_id: m.get("newest_id").filter(|v| !v.is_null()).and_then(|v| iface_tweets__newest_id__from_json(v)),
-        next_token: m.get("next_token").filter(|v| !v.is_null()).and_then(|v| iface_tweets__next_token__from_json(v)),
-        oldest_id: m.get("oldest_id").filter(|v| !v.is_null()).and_then(|v| iface_tweets__oldest_id__from_json(v)),
-        total_tweet_count: m.get("total_tweet_count").filter(|v| !v.is_null()).and_then(|v| iface_tweets__aggregate__from_json(v)),
+        newest_id: m.get("newest_id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        next_token: m.get("next_token").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        oldest_id: m.get("oldest_id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        total_tweet_count: m.get("total_tweet_count").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
     })
 }
 
@@ -2519,10 +2167,10 @@ fn iface_tweets__get2_tweets_search_all_response__from_json(v: &Value) -> Option
 fn iface_tweets__get2_tweets_search_all_response_meta__from_json(v: &Value) -> Option<iface_tweets::Get2TweetsSearchAllResponseMeta> {
     let m = v.as_object()?;
     Some(iface_tweets::Get2TweetsSearchAllResponseMeta {
-        newest_id: m.get("newest_id").filter(|v| !v.is_null()).and_then(|v| iface_tweets__newest_id__from_json(v)),
-        next_token: m.get("next_token").filter(|v| !v.is_null()).and_then(|v| iface_tweets__next_token__from_json(v)),
-        oldest_id: m.get("oldest_id").filter(|v| !v.is_null()).and_then(|v| iface_tweets__oldest_id__from_json(v)),
-        result_count: m.get("result_count").filter(|v| !v.is_null()).and_then(|v| iface_tweets__result_count__from_json(v)),
+        newest_id: m.get("newest_id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        next_token: m.get("next_token").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        oldest_id: m.get("oldest_id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        result_count: m.get("result_count").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
     })
 }
 
@@ -2539,10 +2187,10 @@ fn iface_tweets__get2_tweets_search_recent_response__from_json(v: &Value) -> Opt
 fn iface_tweets__get2_tweets_search_recent_response_meta__from_json(v: &Value) -> Option<iface_tweets::Get2TweetsSearchRecentResponseMeta> {
     let m = v.as_object()?;
     Some(iface_tweets::Get2TweetsSearchRecentResponseMeta {
-        newest_id: m.get("newest_id").filter(|v| !v.is_null()).and_then(|v| iface_tweets__newest_id__from_json(v)),
-        next_token: m.get("next_token").filter(|v| !v.is_null()).and_then(|v| iface_tweets__next_token__from_json(v)),
-        oldest_id: m.get("oldest_id").filter(|v| !v.is_null()).and_then(|v| iface_tweets__oldest_id__from_json(v)),
-        result_count: m.get("result_count").filter(|v| !v.is_null()).and_then(|v| iface_tweets__result_count__from_json(v)),
+        newest_id: m.get("newest_id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        next_token: m.get("next_token").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        oldest_id: m.get("oldest_id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        result_count: m.get("result_count").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
     })
 }
 
@@ -2559,22 +2207,8 @@ fn iface_tweets__filtered_streaming_tweet_response__from_json(v: &Value) -> Opti
 fn iface_tweets__filtered_streaming_tweet_response_matching_rules_item__from_json(v: &Value) -> Option<iface_tweets::FilteredStreamingTweetResponseMatchingRulesItem> {
     let m = v.as_object()?;
     Some(iface_tweets::FilteredStreamingTweetResponseMatchingRulesItem {
-        id: match m.get("id").and_then(|v| iface_tweets__rule_id__from_json(v)) { Some(x) => x, None => return None },
-        tag: m.get("tag").filter(|v| !v.is_null()).and_then(|v| iface_tweets__rule_tag__from_json(v)),
-    })
-}
-
-fn iface_tweets__rule_id__from_json(v: &Value) -> Option<iface_tweets::RuleId> {
-    let m = v.as_object()?;
-    Some(iface_tweets::RuleId {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-    })
-}
-
-fn iface_tweets__rule_tag__from_json(v: &Value) -> Option<iface_tweets::RuleTag> {
-    let m = v.as_object()?;
-    Some(iface_tweets::RuleTag {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        id: m.get("id").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        tag: m.get("tag").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
     })
 }
 
@@ -2589,15 +2223,8 @@ fn iface_tweets__rules_lookup_response__from_json(v: &Value) -> Option<iface_twe
 fn iface_tweets__rule__from_json(v: &Value) -> Option<iface_tweets::Rule> {
     let m = v.as_object()?;
     Some(iface_tweets::Rule {
-        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| iface_tweets__rule_id__from_json(v)),
-        tag: m.get("tag").filter(|v| !v.is_null()).and_then(|v| iface_tweets__rule_tag__from_json(v)),
-        value: match m.get("value").and_then(|v| iface_tweets__rule_value__from_json(v)) { Some(x) => x, None => return None },
-    })
-}
-
-fn iface_tweets__rule_value__from_json(v: &Value) -> Option<iface_tweets::RuleValue> {
-    let m = v.as_object()?;
-    Some(iface_tweets::RuleValue {
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        tag: m.get("tag").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
@@ -2605,17 +2232,10 @@ fn iface_tweets__rule_value__from_json(v: &Value) -> Option<iface_tweets::RuleVa
 fn iface_tweets__rules_response_metadata__from_json(v: &Value) -> Option<iface_tweets::RulesResponseMetadata> {
     let m = v.as_object()?;
     Some(iface_tweets::RulesResponseMetadata {
-        next_token: m.get("next_token").filter(|v| !v.is_null()).and_then(|v| iface_tweets__next_token__from_json(v)),
+        next_token: m.get("next_token").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         result_count: m.get("result_count").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
         sent: m.get("sent").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-        summary: m.get("summary").filter(|v| !v.is_null()).and_then(|v| iface_tweets__rules_request_summary__from_json(v)),
-    })
-}
-
-fn iface_tweets__rules_request_summary__from_json(v: &Value) -> Option<iface_tweets::RulesRequestSummary> {
-    let m = v.as_object()?;
-    Some(iface_tweets::RulesRequestSummary {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        summary: m.get("summary").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
     })
 }
 
@@ -2665,8 +2285,8 @@ fn iface_tweets__get2_tweets_id_quote_tweets_response__from_json(v: &Value) -> O
 fn iface_tweets__get2_tweets_id_quote_tweets_response_meta__from_json(v: &Value) -> Option<iface_tweets::Get2TweetsIdQuoteTweetsResponseMeta> {
     let m = v.as_object()?;
     Some(iface_tweets::Get2TweetsIdQuoteTweetsResponseMeta {
-        next_token: m.get("next_token").filter(|v| !v.is_null()).and_then(|v| iface_tweets__next_token__from_json(v)),
-        result_count: m.get("result_count").filter(|v| !v.is_null()).and_then(|v| iface_tweets__result_count__from_json(v)),
+        next_token: m.get("next_token").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        result_count: m.get("result_count").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
     })
 }
 
@@ -2697,9 +2317,9 @@ fn iface_tweets__get2_users_id_liked_tweets_response__from_json(v: &Value) -> Op
 fn iface_tweets__get2_users_id_liked_tweets_response_meta__from_json(v: &Value) -> Option<iface_tweets::Get2UsersIdLikedTweetsResponseMeta> {
     let m = v.as_object()?;
     Some(iface_tweets::Get2UsersIdLikedTweetsResponseMeta {
-        next_token: m.get("next_token").filter(|v| !v.is_null()).and_then(|v| iface_tweets__next_token__from_json(v)),
-        previous_token: m.get("previous_token").filter(|v| !v.is_null()).and_then(|v| iface_tweets__previous_token__from_json(v)),
-        result_count: m.get("result_count").filter(|v| !v.is_null()).and_then(|v| iface_tweets__result_count__from_json(v)),
+        next_token: m.get("next_token").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        previous_token: m.get("previous_token").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        result_count: m.get("result_count").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
     })
 }
 
@@ -2746,11 +2366,11 @@ fn iface_tweets__get2_users_id_mentions_response__from_json(v: &Value) -> Option
 fn iface_tweets__get2_users_id_mentions_response_meta__from_json(v: &Value) -> Option<iface_tweets::Get2UsersIdMentionsResponseMeta> {
     let m = v.as_object()?;
     Some(iface_tweets::Get2UsersIdMentionsResponseMeta {
-        newest_id: m.get("newest_id").filter(|v| !v.is_null()).and_then(|v| iface_tweets__newest_id__from_json(v)),
-        next_token: m.get("next_token").filter(|v| !v.is_null()).and_then(|v| iface_tweets__next_token__from_json(v)),
-        oldest_id: m.get("oldest_id").filter(|v| !v.is_null()).and_then(|v| iface_tweets__oldest_id__from_json(v)),
-        previous_token: m.get("previous_token").filter(|v| !v.is_null()).and_then(|v| iface_tweets__previous_token__from_json(v)),
-        result_count: m.get("result_count").filter(|v| !v.is_null()).and_then(|v| iface_tweets__result_count__from_json(v)),
+        newest_id: m.get("newest_id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        next_token: m.get("next_token").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        oldest_id: m.get("oldest_id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        previous_token: m.get("previous_token").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        result_count: m.get("result_count").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
     })
 }
 
@@ -2797,11 +2417,11 @@ fn iface_tweets__get2_users_id_timelines_reverse_chronological_response__from_js
 fn iface_tweets__get2_users_id_timelines_reverse_chronological_response_meta__from_json(v: &Value) -> Option<iface_tweets::Get2UsersIdTimelinesReverseChronologicalResponseMeta> {
     let m = v.as_object()?;
     Some(iface_tweets::Get2UsersIdTimelinesReverseChronologicalResponseMeta {
-        newest_id: m.get("newest_id").filter(|v| !v.is_null()).and_then(|v| iface_tweets__newest_id__from_json(v)),
-        next_token: m.get("next_token").filter(|v| !v.is_null()).and_then(|v| iface_tweets__next_token__from_json(v)),
-        oldest_id: m.get("oldest_id").filter(|v| !v.is_null()).and_then(|v| iface_tweets__oldest_id__from_json(v)),
-        previous_token: m.get("previous_token").filter(|v| !v.is_null()).and_then(|v| iface_tweets__previous_token__from_json(v)),
-        result_count: m.get("result_count").filter(|v| !v.is_null()).and_then(|v| iface_tweets__result_count__from_json(v)),
+        newest_id: m.get("newest_id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        next_token: m.get("next_token").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        oldest_id: m.get("oldest_id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        previous_token: m.get("previous_token").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        result_count: m.get("result_count").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
     })
 }
 
@@ -2818,11 +2438,11 @@ fn iface_tweets__get2_users_id_tweets_response__from_json(v: &Value) -> Option<i
 fn iface_tweets__get2_users_id_tweets_response_meta__from_json(v: &Value) -> Option<iface_tweets::Get2UsersIdTweetsResponseMeta> {
     let m = v.as_object()?;
     Some(iface_tweets::Get2UsersIdTweetsResponseMeta {
-        newest_id: m.get("newest_id").filter(|v| !v.is_null()).and_then(|v| iface_tweets__newest_id__from_json(v)),
-        next_token: m.get("next_token").filter(|v| !v.is_null()).and_then(|v| iface_tweets__next_token__from_json(v)),
-        oldest_id: m.get("oldest_id").filter(|v| !v.is_null()).and_then(|v| iface_tweets__oldest_id__from_json(v)),
-        previous_token: m.get("previous_token").filter(|v| !v.is_null()).and_then(|v| iface_tweets__previous_token__from_json(v)),
-        result_count: m.get("result_count").filter(|v| !v.is_null()).and_then(|v| iface_tweets__result_count__from_json(v)),
+        newest_id: m.get("newest_id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        next_token: m.get("next_token").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        oldest_id: m.get("oldest_id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        previous_token: m.get("previous_token").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        result_count: m.get("result_count").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
     })
 }
 
@@ -2842,6 +2462,16 @@ fn iface_tweets__tweet_referenced_tweets_item_type_op_enum__from_str(s: &str) ->
     }
 }
 
+fn iface_tweets__reply_settings__from_str(s: &str) -> Option<iface_tweets::ReplySettings> {
+    match s {
+        "everyone" => Some(iface_tweets::ReplySettings::Everyone),
+        "mentionedUsers" => Some(iface_tweets::ReplySettings::MentionedUsers),
+        "following" => Some(iface_tweets::ReplySettings::Following),
+        "other" => Some(iface_tweets::ReplySettings::Other),
+        _ => None,
+    }
+}
+
 fn iface_tweets__tweet_withheld_scope_enum__from_str(s: &str) -> Option<iface_tweets::TweetWithheldScopeEnum> {
     match s {
         "tweet" => Some(iface_tweets::TweetWithheldScopeEnum::Tweet),
@@ -2853,6 +2483,18 @@ fn iface_tweets__tweet_withheld_scope_enum__from_str(s: &str) -> Option<iface_tw
 fn iface_tweets__geo_type_op_enum__from_str(s: &str) -> Option<iface_tweets::GeoTypeOpEnum> {
     match s {
         "Feature" => Some(iface_tweets::GeoTypeOpEnum::Feature),
+        _ => None,
+    }
+}
+
+fn iface_tweets__place_type__from_str(s: &str) -> Option<iface_tweets::PlaceType> {
+    match s {
+        "poi" => Some(iface_tweets::PlaceType::Poi),
+        "neighborhood" => Some(iface_tweets::PlaceType::Neighborhood),
+        "city" => Some(iface_tweets::PlaceType::City),
+        "admin" => Some(iface_tweets::PlaceType::Admin),
+        "country" => Some(iface_tweets::PlaceType::Country),
+        "unknown" => Some(iface_tweets::PlaceType::Unknown),
         _ => None,
     }
 }

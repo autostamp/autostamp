@@ -11,8 +11,8 @@ triggered.
 
 | Setting | Value |
 | --- | --- |
-| Package | `autostamp:visualcrossing@0.5.0` |
-| Published version | `0.5.0+visualcrossing-4.6` |
+| Package | `autostamp:visualcrossing@0.6.0` |
+| Published version | `0.6.0+visualcrossing-4.6` |
 | Tag filter | all tags |
 | Operations generated | 5 |
 | Infer API-key credentials | enabled — not triggered |

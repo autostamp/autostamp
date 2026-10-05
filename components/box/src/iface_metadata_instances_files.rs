@@ -35,7 +35,7 @@ const OP_METADATA_INSTANCES_FILES_POST_FILES_ID_METADATA_ID_ID: OpSpec = OpSpec 
         FieldSpec { snake: "file_id", wire: "file_id", location: FieldLocation::Path },
         FieldSpec { snake: "scope", wire: "scope", location: FieldLocation::Path },
         FieldSpec { snake: "template_key", wire: "template_key", location: FieldLocation::Path },
-        FieldSpec { snake: "data", wire: "data", location: FieldLocation::Body },
+        FieldSpec { snake: "body", wire: "body", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "OAuth2Security", kind: AuthKind::Bearer },
@@ -93,6 +93,13 @@ fn iface_metadata_instances_files__metadata__to_json(p: &iface_metadata_instance
     Value::Object(m)
 }
 
+fn iface_metadata_instances_files__post_files_id_metadata_id_id_body_entry__to_json(p: &iface_metadata_instances_files::PostFilesIdMetadataIdIdBodyEntry) -> Value {
+    let mut m = Map::new();
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
+}
+
 fn iface_metadata_instances_files__put_files_id_metadata_id_id_body_item__to_json(p: &iface_metadata_instances_files::PutFilesIdMetadataIdIdBodyItem) -> Value {
     let mut m = Map::new();
     m.insert("from".into(), match (&p.from_op) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -121,7 +128,7 @@ fn iface_metadata_instances_files__post_files_id_metadata_id_id_params__to_json(
     m.insert("file_id".into(), Value::String((&p.file_id).clone()));
     m.insert("scope".into(), Value::String((&p.scope).clone()));
     m.insert("template_key".into(), Value::String((&p.template_key).clone()));
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("body".into(), match (&p.body) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     Value::Object(m)
 }
 

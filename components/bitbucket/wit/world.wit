@@ -6,7 +6,7 @@
 /// | Secret name | Applied to each request as |
 /// | --- | --- |
 /// | `oauth2` | `Authorization: Bearer <secret>` |
-package autostamp:bitbucket@0.5.0;
+package autostamp:bitbucket@0.6.0;
 
 interface addon {
   variant put-addon-error {
@@ -2139,13 +2139,14 @@ interface repositories {
 
   /// A json object representing the repository's inheritance state values
   record repository-inheritance-state {
-    override-settings: option<repository-inheritance-state-override-settings>,
+    override-settings: option<list<repository-inheritance-state-override-settings-entry>>,
     type-op: string
   }
 
-  record repository-inheritance-state-override-settings {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record repository-inheritance-state-override-settings-entry {
+    key: string,
+    value: string
   }
 
   /// A paginated list of repository group permissions.
@@ -4885,13 +4886,13 @@ interface reports {
     /// The type of data contained in the value field. If not provided, then the value will be detected as a boolean, number or string.
     type-op: option<report-data-type-op-enum>,
     /// The value of the data element.
-    value: option<report-data-value>
+    value: option<list<report-data-value-entry>>
   }
 
-  /// The value of the data element.
-  record report-data-value {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record report-data-value-entry {
+    key: string,
+    value: string
   }
 
   /// A paginated list of annotations.
@@ -6131,15 +6132,15 @@ interface issue-tracker {
 
   record error-error {
     /// Optional structured data that is endpoint-specific.
-    data: option<error-error-data>,
+    data: option<list<error-error-data-entry>>,
     detail: option<string>,
     message: string
   }
 
-  /// Optional structured data that is endpoint-specific.
-  record error-error-data {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record error-error-data-entry {
+    key: string,
+    value: string
   }
 
   /// A paginated list of issue tracker milestones.

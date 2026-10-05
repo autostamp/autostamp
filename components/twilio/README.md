@@ -20,8 +20,8 @@ triggered.
 
 | Setting | Value |
 | --- | --- |
-| Package | `autostamp:twilio@0.5.0` |
-| Published version | `0.5.0+twilio-1.55.0` |
+| Package | `autostamp:twilio@0.6.0` |
+| Published version | `0.6.0+twilio-1.55.0` |
 | Tag filter | all tags |
 | Operations generated | 195 |
 | Infer API-key credentials | enabled — not triggered |

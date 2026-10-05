@@ -399,6 +399,13 @@ fn iface_beta_groups__app_relationships_prices_data_item_type_op_enum__to_str(e:
     }
 }
 
+fn iface_beta_groups__beta_invite_type__to_str(e: &iface_beta_groups::BetaInviteType) -> &'static str {
+    match e {
+        iface_beta_groups::BetaInviteType::Email => "EMAIL",
+        iface_beta_groups::BetaInviteType::PublicLink => "PUBLIC_LINK",
+    }
+}
+
 fn iface_beta_groups__build_attributes_processing_state_enum__to_str(e: &iface_beta_groups::BuildAttributesProcessingStateEnum) -> &'static str {
     match e {
         iface_beta_groups::BuildAttributesProcessingStateEnum::Processing => "PROCESSING",
@@ -1044,14 +1051,8 @@ fn iface_beta_groups__beta_tester_attributes__to_json(p: &iface_beta_groups::Bet
     let mut m = Map::new();
     m.insert("email".into(), match (&p.email) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("firstName".into(), match (&p.first_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("inviteType".into(), match (&p.invite_type) { Some(v) => iface_beta_groups__beta_invite_type__to_json(v), None => Value::Null });
+    m.insert("inviteType".into(), match (&p.invite_type) { Some(v) => Value::String(iface_beta_groups__beta_invite_type__to_str(v).into()), None => Value::Null });
     m.insert("lastName".into(), match (&p.last_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_beta_groups__beta_invite_type__to_json(p: &iface_beta_groups::BetaInviteType) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -2129,15 +2130,8 @@ fn iface_beta_groups__beta_tester_attributes__from_json(v: &Value) -> Option<ifa
     Some(iface_beta_groups::BetaTesterAttributes {
         email: m.get("email").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         first_name: m.get("firstName").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        invite_type: m.get("inviteType").filter(|v| !v.is_null()).and_then(|v| iface_beta_groups__beta_invite_type__from_json(v)),
+        invite_type: m.get("inviteType").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_beta_groups__beta_invite_type__from_str)),
         last_name: m.get("lastName").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-    })
-}
-
-fn iface_beta_groups__beta_invite_type__from_json(v: &Value) -> Option<iface_beta_groups::BetaInviteType> {
-    let m = v.as_object()?;
-    Some(iface_beta_groups::BetaInviteType {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -2653,6 +2647,14 @@ fn iface_beta_groups__app_relationships_pre_release_versions_data_item_type_op_e
 fn iface_beta_groups__app_relationships_prices_data_item_type_op_enum__from_str(s: &str) -> Option<iface_beta_groups::AppRelationshipsPricesDataItemTypeOpEnum> {
     match s {
         "appPrices" => Some(iface_beta_groups::AppRelationshipsPricesDataItemTypeOpEnum::AppPrices),
+        _ => None,
+    }
+}
+
+fn iface_beta_groups__beta_invite_type__from_str(s: &str) -> Option<iface_beta_groups::BetaInviteType> {
+    match s {
+        "EMAIL" => Some(iface_beta_groups::BetaInviteType::Email),
+        "PUBLIC_LINK" => Some(iface_beta_groups::BetaInviteType::PublicLink),
         _ => None,
     }
 }

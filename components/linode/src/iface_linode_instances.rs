@@ -677,6 +677,16 @@ fn iface_linode_instances__linode_status_enum__to_str(e: &iface_linode_instances
     }
 }
 
+fn iface_linode_instances__disk_properties_filesystem__to_str(e: &iface_linode_instances::DiskPropertiesFilesystem) -> &'static str {
+    match e {
+        iface_linode_instances::DiskPropertiesFilesystem::Raw => "raw",
+        iface_linode_instances::DiskPropertiesFilesystem::Swap => "swap",
+        iface_linode_instances::DiskPropertiesFilesystem::Ext3 => "ext3",
+        iface_linode_instances::DiskPropertiesFilesystem::Ext4 => "ext4",
+        iface_linode_instances::DiskPropertiesFilesystem::Initrd => "initrd",
+    }
+}
+
 fn iface_linode_instances__get_backups_response_automatic_item_status_enum__to_str(e: &iface_linode_instances::GetBackupsResponseAutomaticItemStatusEnum) -> &'static str {
     match e {
         iface_linode_instances::GetBackupsResponseAutomaticItemStatusEnum::Paused => "paused",
@@ -708,16 +718,6 @@ fn iface_linode_instances__linode_config_virt_mode_enum__to_str(e: &iface_linode
     match e {
         iface_linode_instances::LinodeConfigVirtModeEnum::Paravirt => "paravirt",
         iface_linode_instances::LinodeConfigVirtModeEnum::Fullvirt => "fullvirt",
-    }
-}
-
-fn iface_linode_instances__disk_filesystem_enum__to_str(e: &iface_linode_instances::DiskFilesystemEnum) -> &'static str {
-    match e {
-        iface_linode_instances::DiskFilesystemEnum::Raw => "raw",
-        iface_linode_instances::DiskFilesystemEnum::Swap => "swap",
-        iface_linode_instances::DiskFilesystemEnum::Ext3 => "ext3",
-        iface_linode_instances::DiskFilesystemEnum::Ext4 => "ext4",
-        iface_linode_instances::DiskFilesystemEnum::Initrd => "initrd",
     }
 }
 
@@ -793,9 +793,9 @@ fn iface_linode_instances__kernel_architecture_enum__to_str(e: &iface_linode_ins
 fn iface_linode_instances__get_linode_instances_response__to_json(p: &iface_linode_instances::GetLinodeInstancesResponse) -> Value {
     let mut m = Map::new();
     m.insert("data".into(), match (&p.data) { Some(v) => Value::Array((v).iter().map(|v| iface_linode_instances__linode__to_json(v)).collect()), None => Value::Null });
-    m.insert("page".into(), match (&p.page) { Some(v) => iface_linode_instances__pagination_envelope_properties_page__to_json(v), None => Value::Null });
-    m.insert("pages".into(), match (&p.pages) { Some(v) => iface_linode_instances__pagination_envelope_properties_pages__to_json(v), None => Value::Null });
-    m.insert("results".into(), match (&p.results) { Some(v) => iface_linode_instances__pagination_envelope_properties_results__to_json(v), None => Value::Null });
+    m.insert("page".into(), match (&p.page) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("pages".into(), match (&p.pages) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("results".into(), match (&p.results) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
@@ -808,7 +808,7 @@ fn iface_linode_instances__linode__to_json(p: &iface_linode_instances::Linode) -
     m.insert("host_uuid".into(), match (&p.host_uuid) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("hypervisor".into(), match (&p.hypervisor) { Some(v) => Value::String(iface_linode_instances__linode_hypervisor_enum__to_str(v).into()), None => Value::Null });
     m.insert("id".into(), match (&p.id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    m.insert("image".into(), match (&p.image) { Some(v) => iface_linode_instances__disk_request_properties_image__to_json(v), None => Value::Null });
+    m.insert("image".into(), match (&p.image) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("ipv4".into(), match (&p.ipv4) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
     m.insert("ipv6".into(), match (&p.ipv6) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("label".into(), match (&p.label) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -848,12 +848,6 @@ fn iface_linode_instances__linode_backups_schedule__to_json(p: &iface_linode_ins
     Value::Object(m)
 }
 
-fn iface_linode_instances__disk_request_properties_image__to_json(p: &iface_linode_instances::DiskRequestPropertiesImage) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
 fn iface_linode_instances__linode_specs__to_json(p: &iface_linode_instances::LinodeSpecs) -> Value {
     let mut m = Map::new();
     m.insert("disk".into(), match (&p.disk) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
@@ -864,27 +858,10 @@ fn iface_linode_instances__linode_specs__to_json(p: &iface_linode_instances::Lin
     Value::Object(m)
 }
 
-fn iface_linode_instances__pagination_envelope_properties_page__to_json(p: &iface_linode_instances::PaginationEnvelopePropertiesPage) -> Value {
+fn iface_linode_instances__delete_linode_instance_response_entry__to_json(p: &iface_linode_instances::DeleteLinodeInstanceResponseEntry) -> Value {
     let mut m = Map::new();
+    m.insert("key".into(), Value::String((&p.key).clone()));
     m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_linode_instances__pagination_envelope_properties_pages__to_json(p: &iface_linode_instances::PaginationEnvelopePropertiesPages) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_linode_instances__pagination_envelope_properties_results__to_json(p: &iface_linode_instances::PaginationEnvelopePropertiesResults) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_linode_instances__delete_linode_instance_response__to_json(p: &iface_linode_instances::DeleteLinodeInstanceResponse) -> Value {
-    let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -912,15 +889,9 @@ fn iface_linode_instances__get_backups_response_automatic_item__to_json(p: &ifac
 
 fn iface_linode_instances__get_backups_response_automatic_item_disks_item__to_json(p: &iface_linode_instances::GetBackupsResponseAutomaticItemDisksItem) -> Value {
     let mut m = Map::new();
-    m.insert("filesystem".into(), match (&p.filesystem) { Some(v) => iface_linode_instances__disk_properties_filesystem__to_json(v), None => Value::Null });
+    m.insert("filesystem".into(), match (&p.filesystem) { Some(v) => Value::String(iface_linode_instances__disk_properties_filesystem__to_str(v).into()), None => Value::Null });
     m.insert("label".into(), match (&p.label) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("size".into(), match (&p.size) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_linode_instances__disk_properties_filesystem__to_json(p: &iface_linode_instances::DiskPropertiesFilesystem) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -948,42 +919,46 @@ fn iface_linode_instances__backup__to_json(p: &iface_linode_instances::Backup) -
 
 fn iface_linode_instances__backup_disks_item__to_json(p: &iface_linode_instances::BackupDisksItem) -> Value {
     let mut m = Map::new();
-    m.insert("filesystem".into(), match (&p.filesystem) { Some(v) => iface_linode_instances__disk_properties_filesystem__to_json(v), None => Value::Null });
+    m.insert("filesystem".into(), match (&p.filesystem) { Some(v) => Value::String(iface_linode_instances__disk_properties_filesystem__to_str(v).into()), None => Value::Null });
     m.insert("label".into(), match (&p.label) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("size".into(), match (&p.size) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_linode_instances__cancel_backups_response__to_json(p: &iface_linode_instances::CancelBackupsResponse) -> Value {
+fn iface_linode_instances__cancel_backups_response_entry__to_json(p: &iface_linode_instances::CancelBackupsResponseEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
-fn iface_linode_instances__enable_backups_response__to_json(p: &iface_linode_instances::EnableBackupsResponse) -> Value {
+fn iface_linode_instances__enable_backups_response_entry__to_json(p: &iface_linode_instances::EnableBackupsResponseEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
-fn iface_linode_instances__restore_backup_response__to_json(p: &iface_linode_instances::RestoreBackupResponse) -> Value {
+fn iface_linode_instances__restore_backup_response_entry__to_json(p: &iface_linode_instances::RestoreBackupResponseEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
-fn iface_linode_instances__boot_linode_instance_response__to_json(p: &iface_linode_instances::BootLinodeInstanceResponse) -> Value {
+fn iface_linode_instances__boot_linode_instance_response_entry__to_json(p: &iface_linode_instances::BootLinodeInstanceResponseEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
 fn iface_linode_instances__get_linode_configs_response__to_json(p: &iface_linode_instances::GetLinodeConfigsResponse) -> Value {
     let mut m = Map::new();
     m.insert("data".into(), match (&p.data) { Some(v) => Value::Array((v).iter().map(|v| iface_linode_instances__linode_config__to_json(v)).collect()), None => Value::Null });
-    m.insert("page".into(), match (&p.page) { Some(v) => iface_linode_instances__pagination_envelope_properties_page__to_json(v), None => Value::Null });
-    m.insert("pages".into(), match (&p.pages) { Some(v) => iface_linode_instances__pagination_envelope_properties_pages__to_json(v), None => Value::Null });
-    m.insert("results".into(), match (&p.results) { Some(v) => iface_linode_instances__pagination_envelope_properties_results__to_json(v), None => Value::Null });
+    m.insert("page".into(), match (&p.page) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("pages".into(), match (&p.pages) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("results".into(), match (&p.results) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
@@ -1039,25 +1014,26 @@ fn iface_linode_instances__linode_config_interfaces__to_json(p: &iface_linode_in
     Value::Object(m)
 }
 
-fn iface_linode_instances__delete_linode_config_response__to_json(p: &iface_linode_instances::DeleteLinodeConfigResponse) -> Value {
+fn iface_linode_instances__delete_linode_config_response_entry__to_json(p: &iface_linode_instances::DeleteLinodeConfigResponseEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
 fn iface_linode_instances__get_linode_disks_response__to_json(p: &iface_linode_instances::GetLinodeDisksResponse) -> Value {
     let mut m = Map::new();
     m.insert("data".into(), match (&p.data) { Some(v) => Value::Array((v).iter().map(|v| iface_linode_instances__disk__to_json(v)).collect()), None => Value::Null });
-    m.insert("page".into(), match (&p.page) { Some(v) => iface_linode_instances__pagination_envelope_properties_page__to_json(v), None => Value::Null });
-    m.insert("pages".into(), match (&p.pages) { Some(v) => iface_linode_instances__pagination_envelope_properties_pages__to_json(v), None => Value::Null });
-    m.insert("results".into(), match (&p.results) { Some(v) => iface_linode_instances__pagination_envelope_properties_results__to_json(v), None => Value::Null });
+    m.insert("page".into(), match (&p.page) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("pages".into(), match (&p.pages) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("results".into(), match (&p.results) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
 fn iface_linode_instances__disk__to_json(p: &iface_linode_instances::Disk) -> Value {
     let mut m = Map::new();
     m.insert("created".into(), match (&p.created) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("filesystem".into(), match (&p.filesystem) { Some(v) => Value::String(iface_linode_instances__disk_filesystem_enum__to_str(v).into()), None => Value::Null });
+    m.insert("filesystem".into(), match (&p.filesystem) { Some(v) => Value::String(iface_linode_instances__disk_properties_filesystem__to_str(v).into()), None => Value::Null });
     m.insert("id".into(), match (&p.id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("label".into(), match (&p.label) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("size".into(), match (&p.size) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
@@ -1066,30 +1042,33 @@ fn iface_linode_instances__disk__to_json(p: &iface_linode_instances::Disk) -> Va
     Value::Object(m)
 }
 
-fn iface_linode_instances__delete_disk_response__to_json(p: &iface_linode_instances::DeleteDiskResponse) -> Value {
+fn iface_linode_instances__delete_disk_response_entry__to_json(p: &iface_linode_instances::DeleteDiskResponseEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
-fn iface_linode_instances__reset_disk_password_response__to_json(p: &iface_linode_instances::ResetDiskPasswordResponse) -> Value {
+fn iface_linode_instances__reset_disk_password_response_entry__to_json(p: &iface_linode_instances::ResetDiskPasswordResponseEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
-fn iface_linode_instances__resize_disk_response__to_json(p: &iface_linode_instances::ResizeDiskResponse) -> Value {
+fn iface_linode_instances__resize_disk_response_entry__to_json(p: &iface_linode_instances::ResizeDiskResponseEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
 fn iface_linode_instances__get_linode_firewalls_response__to_json(p: &iface_linode_instances::GetLinodeFirewallsResponse) -> Value {
     let mut m = Map::new();
     m.insert("data".into(), match (&p.data) { Some(v) => Value::Array((v).iter().map(|v| iface_linode_instances__firewall__to_json(v)).collect()), None => Value::Null });
-    m.insert("page".into(), match (&p.page) { Some(v) => iface_linode_instances__pagination_envelope_properties_page__to_json(v), None => Value::Null });
-    m.insert("pages".into(), match (&p.pages) { Some(v) => iface_linode_instances__pagination_envelope_properties_pages__to_json(v), None => Value::Null });
-    m.insert("results".into(), match (&p.results) { Some(v) => iface_linode_instances__pagination_envelope_properties_results__to_json(v), None => Value::Null });
+    m.insert("page".into(), match (&p.page) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("pages".into(), match (&p.pages) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("results".into(), match (&p.results) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
@@ -1221,30 +1200,33 @@ fn iface_linode_instances__ip_address_v6_slaac__to_json(p: &iface_linode_instanc
     Value::Object(m)
 }
 
-fn iface_linode_instances__remove_linode_ip_response__to_json(p: &iface_linode_instances::RemoveLinodeIpResponse) -> Value {
+fn iface_linode_instances__remove_linode_ip_response_entry__to_json(p: &iface_linode_instances::RemoveLinodeIpResponseEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
-fn iface_linode_instances__migrate_linode_instance_response__to_json(p: &iface_linode_instances::MigrateLinodeInstanceResponse) -> Value {
+fn iface_linode_instances__migrate_linode_instance_response_entry__to_json(p: &iface_linode_instances::MigrateLinodeInstanceResponseEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
-fn iface_linode_instances__mutate_linode_instance_response__to_json(p: &iface_linode_instances::MutateLinodeInstanceResponse) -> Value {
+fn iface_linode_instances__mutate_linode_instance_response_entry__to_json(p: &iface_linode_instances::MutateLinodeInstanceResponseEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
 fn iface_linode_instances__get_linode_node_balancers_response__to_json(p: &iface_linode_instances::GetLinodeNodeBalancersResponse) -> Value {
     let mut m = Map::new();
     m.insert("data".into(), match (&p.data) { Some(v) => Value::Array((v).iter().map(|v| iface_linode_instances__node_balancer__to_json(v)).collect()), None => Value::Null });
-    m.insert("page".into(), match (&p.page) { Some(v) => iface_linode_instances__pagination_envelope_properties_page__to_json(v), None => Value::Null });
-    m.insert("pages".into(), match (&p.pages) { Some(v) => iface_linode_instances__pagination_envelope_properties_pages__to_json(v), None => Value::Null });
-    m.insert("results".into(), match (&p.results) { Some(v) => iface_linode_instances__pagination_envelope_properties_results__to_json(v), None => Value::Null });
+    m.insert("page".into(), match (&p.page) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("pages".into(), match (&p.pages) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("results".into(), match (&p.results) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
@@ -1272,15 +1254,17 @@ fn iface_linode_instances__node_balancer_transfer__to_json(p: &iface_linode_inst
     Value::Object(m)
 }
 
-fn iface_linode_instances__reset_linode_password_response__to_json(p: &iface_linode_instances::ResetLinodePasswordResponse) -> Value {
+fn iface_linode_instances__reset_linode_password_response_entry__to_json(p: &iface_linode_instances::ResetLinodePasswordResponseEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
-fn iface_linode_instances__reboot_linode_instance_response__to_json(p: &iface_linode_instances::RebootLinodeInstanceResponse) -> Value {
+fn iface_linode_instances__reboot_linode_instance_response_entry__to_json(p: &iface_linode_instances::RebootLinodeInstanceResponseEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -1296,21 +1280,24 @@ fn iface_linode_instances__rescue_devices__to_json(p: &iface_linode_instances::R
     Value::Object(m)
 }
 
-fn iface_linode_instances__rescue_linode_instance_response__to_json(p: &iface_linode_instances::RescueLinodeInstanceResponse) -> Value {
+fn iface_linode_instances__rescue_linode_instance_response_entry__to_json(p: &iface_linode_instances::RescueLinodeInstanceResponseEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
-fn iface_linode_instances__resize_linode_instance_response__to_json(p: &iface_linode_instances::ResizeLinodeInstanceResponse) -> Value {
+fn iface_linode_instances__resize_linode_instance_response_entry__to_json(p: &iface_linode_instances::ResizeLinodeInstanceResponseEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
-fn iface_linode_instances__shutdown_linode_instance_response__to_json(p: &iface_linode_instances::ShutdownLinodeInstanceResponse) -> Value {
+fn iface_linode_instances__shutdown_linode_instance_response_entry__to_json(p: &iface_linode_instances::ShutdownLinodeInstanceResponseEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -1368,9 +1355,9 @@ fn iface_linode_instances__get_linode_transfer_by_year_month_response__to_json(p
 fn iface_linode_instances__get_linode_volumes_response__to_json(p: &iface_linode_instances::GetLinodeVolumesResponse) -> Value {
     let mut m = Map::new();
     m.insert("data".into(), match (&p.data) { Some(v) => Value::Array((v).iter().map(|v| iface_linode_instances__volume__to_json(v)).collect()), None => Value::Null });
-    m.insert("page".into(), match (&p.page) { Some(v) => iface_linode_instances__pagination_envelope_properties_page__to_json(v), None => Value::Null });
-    m.insert("pages".into(), match (&p.pages) { Some(v) => iface_linode_instances__pagination_envelope_properties_pages__to_json(v), None => Value::Null });
-    m.insert("results".into(), match (&p.results) { Some(v) => iface_linode_instances__pagination_envelope_properties_results__to_json(v), None => Value::Null });
+    m.insert("page".into(), match (&p.page) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("pages".into(), match (&p.pages) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("results".into(), match (&p.results) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
@@ -1383,7 +1370,7 @@ fn iface_linode_instances__volume__to_json(p: &iface_linode_instances::Volume) -
     m.insert("label".into(), match (&p.label) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("linode_id".into(), match (&p.linode_id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("linode_label".into(), match (&p.linode_label) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("region".into(), match (&p.region) { Some(v) => iface_linode_instances__region_properties_id__to_json(v), None => Value::Null });
+    m.insert("region".into(), match (&p.region) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("size".into(), match (&p.size) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("status".into(), match (&p.status) { Some(v) => Value::String(iface_linode_instances__volume_status_enum__to_str(v).into()), None => Value::Null });
     m.insert("tags".into(), match (&p.tags) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
@@ -1391,18 +1378,12 @@ fn iface_linode_instances__volume__to_json(p: &iface_linode_instances::Volume) -
     Value::Object(m)
 }
 
-fn iface_linode_instances__region_properties_id__to_json(p: &iface_linode_instances::RegionPropertiesId) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
 fn iface_linode_instances__get_kernels_response__to_json(p: &iface_linode_instances::GetKernelsResponse) -> Value {
     let mut m = Map::new();
     m.insert("data".into(), match (&p.data) { Some(v) => Value::Array((v).iter().map(|v| iface_linode_instances__kernel__to_json(v)).collect()), None => Value::Null });
-    m.insert("page".into(), match (&p.page) { Some(v) => iface_linode_instances__pagination_envelope_properties_page__to_json(v), None => Value::Null });
-    m.insert("pages".into(), match (&p.pages) { Some(v) => iface_linode_instances__pagination_envelope_properties_pages__to_json(v), None => Value::Null });
-    m.insert("results".into(), match (&p.results) { Some(v) => iface_linode_instances__pagination_envelope_properties_results__to_json(v), None => Value::Null });
+    m.insert("page".into(), match (&p.page) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("pages".into(), match (&p.pages) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("results".into(), match (&p.results) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
@@ -1449,7 +1430,7 @@ fn iface_linode_instances__update_linode_instance_params__to_json(p: &iface_lino
     m.insert("host_uuid".into(), match (&p.host_uuid) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("hypervisor".into(), match (&p.hypervisor) { Some(v) => Value::String(iface_linode_instances__linode_hypervisor_enum__to_str(v).into()), None => Value::Null });
     m.insert("id".into(), match (&p.id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    m.insert("image".into(), match (&p.image) { Some(v) => iface_linode_instances__disk_request_properties_image__to_json(v), None => Value::Null });
+    m.insert("image".into(), match (&p.image) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("ipv4".into(), match (&p.ipv4) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
     m.insert("ipv6".into(), match (&p.ipv6) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("label".into(), match (&p.label) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -1606,7 +1587,7 @@ fn iface_linode_instances__update_disk_params__to_json(p: &iface_linode_instance
     m.insert("linode_id".into(), Value::String((&p.linode_id).clone()));
     m.insert("disk_id".into(), Value::String((&p.disk_id).clone()));
     m.insert("created".into(), match (&p.created) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("filesystem".into(), match (&p.filesystem) { Some(v) => Value::String(iface_linode_instances__disk_filesystem_enum__to_str(v).into()), None => Value::Null });
+    m.insert("filesystem".into(), match (&p.filesystem) { Some(v) => Value::String(iface_linode_instances__disk_properties_filesystem__to_str(v).into()), None => Value::Null });
     m.insert("id".into(), match (&p.id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("label".into(), match (&p.label) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("size".into(), match (&p.size) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
@@ -1805,9 +1786,9 @@ fn iface_linode_instances__get_linode_instances_response__from_json(v: &Value) -
     let m = v.as_object()?;
     Some(iface_linode_instances::GetLinodeInstancesResponse {
         data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_linode_instances__linode__from_json(x)).collect())),
-        page: m.get("page").filter(|v| !v.is_null()).and_then(|v| iface_linode_instances__pagination_envelope_properties_page__from_json(v)),
-        pages: m.get("pages").filter(|v| !v.is_null()).and_then(|v| iface_linode_instances__pagination_envelope_properties_pages__from_json(v)),
-        results: m.get("results").filter(|v| !v.is_null()).and_then(|v| iface_linode_instances__pagination_envelope_properties_results__from_json(v)),
+        page: m.get("page").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        pages: m.get("pages").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        results: m.get("results").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
     })
 }
 
@@ -1821,7 +1802,7 @@ fn iface_linode_instances__linode__from_json(v: &Value) -> Option<iface_linode_i
         host_uuid: m.get("host_uuid").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         hypervisor: m.get("hypervisor").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_linode_instances__linode_hypervisor_enum__from_str)),
         id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
-        image: m.get("image").filter(|v| !v.is_null()).and_then(|v| iface_linode_instances__disk_request_properties_image__from_json(v)),
+        image: m.get("image").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         ipv4: m.get("ipv4").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
         ipv6: m.get("ipv6").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         label: m.get("label").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
@@ -1864,13 +1845,6 @@ fn iface_linode_instances__linode_backups_schedule__from_json(v: &Value) -> Opti
     })
 }
 
-fn iface_linode_instances__disk_request_properties_image__from_json(v: &Value) -> Option<iface_linode_instances::DiskRequestPropertiesImage> {
-    let m = v.as_object()?;
-    Some(iface_linode_instances::DiskRequestPropertiesImage {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-    })
-}
-
 fn iface_linode_instances__linode_specs__from_json(v: &Value) -> Option<iface_linode_instances::LinodeSpecs> {
     let m = v.as_object()?;
     Some(iface_linode_instances::LinodeSpecs {
@@ -1882,31 +1856,11 @@ fn iface_linode_instances__linode_specs__from_json(v: &Value) -> Option<iface_li
     })
 }
 
-fn iface_linode_instances__pagination_envelope_properties_page__from_json(v: &Value) -> Option<iface_linode_instances::PaginationEnvelopePropertiesPage> {
+fn iface_linode_instances__delete_linode_instance_response_entry__from_json(v: &Value) -> Option<iface_linode_instances::DeleteLinodeInstanceResponseEntry> {
     let m = v.as_object()?;
-    Some(iface_linode_instances::PaginationEnvelopePropertiesPage {
+    Some(iface_linode_instances::DeleteLinodeInstanceResponseEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-    })
-}
-
-fn iface_linode_instances__pagination_envelope_properties_pages__from_json(v: &Value) -> Option<iface_linode_instances::PaginationEnvelopePropertiesPages> {
-    let m = v.as_object()?;
-    Some(iface_linode_instances::PaginationEnvelopePropertiesPages {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-    })
-}
-
-fn iface_linode_instances__pagination_envelope_properties_results__from_json(v: &Value) -> Option<iface_linode_instances::PaginationEnvelopePropertiesResults> {
-    let m = v.as_object()?;
-    Some(iface_linode_instances::PaginationEnvelopePropertiesResults {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-    })
-}
-
-fn iface_linode_instances__delete_linode_instance_response__from_json(v: &Value) -> Option<iface_linode_instances::DeleteLinodeInstanceResponse> {
-    let m = v.as_object()?;
-    Some(iface_linode_instances::DeleteLinodeInstanceResponse {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
     })
 }
 
@@ -1937,16 +1891,9 @@ fn iface_linode_instances__get_backups_response_automatic_item__from_json(v: &Va
 fn iface_linode_instances__get_backups_response_automatic_item_disks_item__from_json(v: &Value) -> Option<iface_linode_instances::GetBackupsResponseAutomaticItemDisksItem> {
     let m = v.as_object()?;
     Some(iface_linode_instances::GetBackupsResponseAutomaticItemDisksItem {
-        filesystem: m.get("filesystem").filter(|v| !v.is_null()).and_then(|v| iface_linode_instances__disk_properties_filesystem__from_json(v)),
+        filesystem: m.get("filesystem").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_linode_instances__disk_properties_filesystem__from_str)),
         label: m.get("label").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         size: m.get("size").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
-    })
-}
-
-fn iface_linode_instances__disk_properties_filesystem__from_json(v: &Value) -> Option<iface_linode_instances::DiskPropertiesFilesystem> {
-    let m = v.as_object()?;
-    Some(iface_linode_instances::DiskPropertiesFilesystem {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -1977,37 +1924,41 @@ fn iface_linode_instances__backup__from_json(v: &Value) -> Option<iface_linode_i
 fn iface_linode_instances__backup_disks_item__from_json(v: &Value) -> Option<iface_linode_instances::BackupDisksItem> {
     let m = v.as_object()?;
     Some(iface_linode_instances::BackupDisksItem {
-        filesystem: m.get("filesystem").filter(|v| !v.is_null()).and_then(|v| iface_linode_instances__disk_properties_filesystem__from_json(v)),
+        filesystem: m.get("filesystem").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_linode_instances__disk_properties_filesystem__from_str)),
         label: m.get("label").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         size: m.get("size").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
     })
 }
 
-fn iface_linode_instances__cancel_backups_response__from_json(v: &Value) -> Option<iface_linode_instances::CancelBackupsResponse> {
+fn iface_linode_instances__cancel_backups_response_entry__from_json(v: &Value) -> Option<iface_linode_instances::CancelBackupsResponseEntry> {
     let m = v.as_object()?;
-    Some(iface_linode_instances::CancelBackupsResponse {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_linode_instances::CancelBackupsResponseEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
-fn iface_linode_instances__enable_backups_response__from_json(v: &Value) -> Option<iface_linode_instances::EnableBackupsResponse> {
+fn iface_linode_instances__enable_backups_response_entry__from_json(v: &Value) -> Option<iface_linode_instances::EnableBackupsResponseEntry> {
     let m = v.as_object()?;
-    Some(iface_linode_instances::EnableBackupsResponse {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_linode_instances::EnableBackupsResponseEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
-fn iface_linode_instances__restore_backup_response__from_json(v: &Value) -> Option<iface_linode_instances::RestoreBackupResponse> {
+fn iface_linode_instances__restore_backup_response_entry__from_json(v: &Value) -> Option<iface_linode_instances::RestoreBackupResponseEntry> {
     let m = v.as_object()?;
-    Some(iface_linode_instances::RestoreBackupResponse {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_linode_instances::RestoreBackupResponseEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
-fn iface_linode_instances__boot_linode_instance_response__from_json(v: &Value) -> Option<iface_linode_instances::BootLinodeInstanceResponse> {
+fn iface_linode_instances__boot_linode_instance_response_entry__from_json(v: &Value) -> Option<iface_linode_instances::BootLinodeInstanceResponseEntry> {
     let m = v.as_object()?;
-    Some(iface_linode_instances::BootLinodeInstanceResponse {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_linode_instances::BootLinodeInstanceResponseEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -2015,9 +1966,9 @@ fn iface_linode_instances__get_linode_configs_response__from_json(v: &Value) -> 
     let m = v.as_object()?;
     Some(iface_linode_instances::GetLinodeConfigsResponse {
         data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_linode_instances__linode_config__from_json(x)).collect())),
-        page: m.get("page").filter(|v| !v.is_null()).and_then(|v| iface_linode_instances__pagination_envelope_properties_page__from_json(v)),
-        pages: m.get("pages").filter(|v| !v.is_null()).and_then(|v| iface_linode_instances__pagination_envelope_properties_pages__from_json(v)),
-        results: m.get("results").filter(|v| !v.is_null()).and_then(|v| iface_linode_instances__pagination_envelope_properties_results__from_json(v)),
+        page: m.get("page").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        pages: m.get("pages").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        results: m.get("results").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
     })
 }
 
@@ -2078,10 +2029,11 @@ fn iface_linode_instances__linode_config_interfaces__from_json(v: &Value) -> Opt
     })
 }
 
-fn iface_linode_instances__delete_linode_config_response__from_json(v: &Value) -> Option<iface_linode_instances::DeleteLinodeConfigResponse> {
+fn iface_linode_instances__delete_linode_config_response_entry__from_json(v: &Value) -> Option<iface_linode_instances::DeleteLinodeConfigResponseEntry> {
     let m = v.as_object()?;
-    Some(iface_linode_instances::DeleteLinodeConfigResponse {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_linode_instances::DeleteLinodeConfigResponseEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -2089,9 +2041,9 @@ fn iface_linode_instances__get_linode_disks_response__from_json(v: &Value) -> Op
     let m = v.as_object()?;
     Some(iface_linode_instances::GetLinodeDisksResponse {
         data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_linode_instances__disk__from_json(x)).collect())),
-        page: m.get("page").filter(|v| !v.is_null()).and_then(|v| iface_linode_instances__pagination_envelope_properties_page__from_json(v)),
-        pages: m.get("pages").filter(|v| !v.is_null()).and_then(|v| iface_linode_instances__pagination_envelope_properties_pages__from_json(v)),
-        results: m.get("results").filter(|v| !v.is_null()).and_then(|v| iface_linode_instances__pagination_envelope_properties_results__from_json(v)),
+        page: m.get("page").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        pages: m.get("pages").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        results: m.get("results").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
     })
 }
 
@@ -2099,7 +2051,7 @@ fn iface_linode_instances__disk__from_json(v: &Value) -> Option<iface_linode_ins
     let m = v.as_object()?;
     Some(iface_linode_instances::Disk {
         created: m.get("created").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        filesystem: m.get("filesystem").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_linode_instances__disk_filesystem_enum__from_str)),
+        filesystem: m.get("filesystem").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_linode_instances__disk_properties_filesystem__from_str)),
         id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
         label: m.get("label").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         size: m.get("size").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
@@ -2108,24 +2060,27 @@ fn iface_linode_instances__disk__from_json(v: &Value) -> Option<iface_linode_ins
     })
 }
 
-fn iface_linode_instances__delete_disk_response__from_json(v: &Value) -> Option<iface_linode_instances::DeleteDiskResponse> {
+fn iface_linode_instances__delete_disk_response_entry__from_json(v: &Value) -> Option<iface_linode_instances::DeleteDiskResponseEntry> {
     let m = v.as_object()?;
-    Some(iface_linode_instances::DeleteDiskResponse {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_linode_instances::DeleteDiskResponseEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
-fn iface_linode_instances__reset_disk_password_response__from_json(v: &Value) -> Option<iface_linode_instances::ResetDiskPasswordResponse> {
+fn iface_linode_instances__reset_disk_password_response_entry__from_json(v: &Value) -> Option<iface_linode_instances::ResetDiskPasswordResponseEntry> {
     let m = v.as_object()?;
-    Some(iface_linode_instances::ResetDiskPasswordResponse {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_linode_instances::ResetDiskPasswordResponseEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
-fn iface_linode_instances__resize_disk_response__from_json(v: &Value) -> Option<iface_linode_instances::ResizeDiskResponse> {
+fn iface_linode_instances__resize_disk_response_entry__from_json(v: &Value) -> Option<iface_linode_instances::ResizeDiskResponseEntry> {
     let m = v.as_object()?;
-    Some(iface_linode_instances::ResizeDiskResponse {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_linode_instances::ResizeDiskResponseEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -2133,9 +2088,9 @@ fn iface_linode_instances__get_linode_firewalls_response__from_json(v: &Value) -
     let m = v.as_object()?;
     Some(iface_linode_instances::GetLinodeFirewallsResponse {
         data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_linode_instances__firewall__from_json(x)).collect())),
-        page: m.get("page").filter(|v| !v.is_null()).and_then(|v| iface_linode_instances__pagination_envelope_properties_page__from_json(v)),
-        pages: m.get("pages").filter(|v| !v.is_null()).and_then(|v| iface_linode_instances__pagination_envelope_properties_pages__from_json(v)),
-        results: m.get("results").filter(|v| !v.is_null()).and_then(|v| iface_linode_instances__pagination_envelope_properties_results__from_json(v)),
+        page: m.get("page").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        pages: m.get("pages").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        results: m.get("results").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
     })
 }
 
@@ -2279,24 +2234,27 @@ fn iface_linode_instances__ip_address_v6_slaac__from_json(v: &Value) -> Option<i
     })
 }
 
-fn iface_linode_instances__remove_linode_ip_response__from_json(v: &Value) -> Option<iface_linode_instances::RemoveLinodeIpResponse> {
+fn iface_linode_instances__remove_linode_ip_response_entry__from_json(v: &Value) -> Option<iface_linode_instances::RemoveLinodeIpResponseEntry> {
     let m = v.as_object()?;
-    Some(iface_linode_instances::RemoveLinodeIpResponse {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_linode_instances::RemoveLinodeIpResponseEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
-fn iface_linode_instances__migrate_linode_instance_response__from_json(v: &Value) -> Option<iface_linode_instances::MigrateLinodeInstanceResponse> {
+fn iface_linode_instances__migrate_linode_instance_response_entry__from_json(v: &Value) -> Option<iface_linode_instances::MigrateLinodeInstanceResponseEntry> {
     let m = v.as_object()?;
-    Some(iface_linode_instances::MigrateLinodeInstanceResponse {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_linode_instances::MigrateLinodeInstanceResponseEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
-fn iface_linode_instances__mutate_linode_instance_response__from_json(v: &Value) -> Option<iface_linode_instances::MutateLinodeInstanceResponse> {
+fn iface_linode_instances__mutate_linode_instance_response_entry__from_json(v: &Value) -> Option<iface_linode_instances::MutateLinodeInstanceResponseEntry> {
     let m = v.as_object()?;
-    Some(iface_linode_instances::MutateLinodeInstanceResponse {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_linode_instances::MutateLinodeInstanceResponseEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -2304,9 +2262,9 @@ fn iface_linode_instances__get_linode_node_balancers_response__from_json(v: &Val
     let m = v.as_object()?;
     Some(iface_linode_instances::GetLinodeNodeBalancersResponse {
         data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_linode_instances__node_balancer__from_json(x)).collect())),
-        page: m.get("page").filter(|v| !v.is_null()).and_then(|v| iface_linode_instances__pagination_envelope_properties_page__from_json(v)),
-        pages: m.get("pages").filter(|v| !v.is_null()).and_then(|v| iface_linode_instances__pagination_envelope_properties_pages__from_json(v)),
-        results: m.get("results").filter(|v| !v.is_null()).and_then(|v| iface_linode_instances__pagination_envelope_properties_results__from_json(v)),
+        page: m.get("page").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        pages: m.get("pages").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        results: m.get("results").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
     })
 }
 
@@ -2336,38 +2294,43 @@ fn iface_linode_instances__node_balancer_transfer__from_json(v: &Value) -> Optio
     })
 }
 
-fn iface_linode_instances__reset_linode_password_response__from_json(v: &Value) -> Option<iface_linode_instances::ResetLinodePasswordResponse> {
+fn iface_linode_instances__reset_linode_password_response_entry__from_json(v: &Value) -> Option<iface_linode_instances::ResetLinodePasswordResponseEntry> {
     let m = v.as_object()?;
-    Some(iface_linode_instances::ResetLinodePasswordResponse {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_linode_instances::ResetLinodePasswordResponseEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
-fn iface_linode_instances__reboot_linode_instance_response__from_json(v: &Value) -> Option<iface_linode_instances::RebootLinodeInstanceResponse> {
+fn iface_linode_instances__reboot_linode_instance_response_entry__from_json(v: &Value) -> Option<iface_linode_instances::RebootLinodeInstanceResponseEntry> {
     let m = v.as_object()?;
-    Some(iface_linode_instances::RebootLinodeInstanceResponse {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_linode_instances::RebootLinodeInstanceResponseEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
-fn iface_linode_instances__rescue_linode_instance_response__from_json(v: &Value) -> Option<iface_linode_instances::RescueLinodeInstanceResponse> {
+fn iface_linode_instances__rescue_linode_instance_response_entry__from_json(v: &Value) -> Option<iface_linode_instances::RescueLinodeInstanceResponseEntry> {
     let m = v.as_object()?;
-    Some(iface_linode_instances::RescueLinodeInstanceResponse {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_linode_instances::RescueLinodeInstanceResponseEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
-fn iface_linode_instances__resize_linode_instance_response__from_json(v: &Value) -> Option<iface_linode_instances::ResizeLinodeInstanceResponse> {
+fn iface_linode_instances__resize_linode_instance_response_entry__from_json(v: &Value) -> Option<iface_linode_instances::ResizeLinodeInstanceResponseEntry> {
     let m = v.as_object()?;
-    Some(iface_linode_instances::ResizeLinodeInstanceResponse {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_linode_instances::ResizeLinodeInstanceResponseEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
-fn iface_linode_instances__shutdown_linode_instance_response__from_json(v: &Value) -> Option<iface_linode_instances::ShutdownLinodeInstanceResponse> {
+fn iface_linode_instances__shutdown_linode_instance_response_entry__from_json(v: &Value) -> Option<iface_linode_instances::ShutdownLinodeInstanceResponseEntry> {
     let m = v.as_object()?;
-    Some(iface_linode_instances::ShutdownLinodeInstanceResponse {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_linode_instances::ShutdownLinodeInstanceResponseEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -2432,9 +2395,9 @@ fn iface_linode_instances__get_linode_volumes_response__from_json(v: &Value) -> 
     let m = v.as_object()?;
     Some(iface_linode_instances::GetLinodeVolumesResponse {
         data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_linode_instances__volume__from_json(x)).collect())),
-        page: m.get("page").filter(|v| !v.is_null()).and_then(|v| iface_linode_instances__pagination_envelope_properties_page__from_json(v)),
-        pages: m.get("pages").filter(|v| !v.is_null()).and_then(|v| iface_linode_instances__pagination_envelope_properties_pages__from_json(v)),
-        results: m.get("results").filter(|v| !v.is_null()).and_then(|v| iface_linode_instances__pagination_envelope_properties_results__from_json(v)),
+        page: m.get("page").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        pages: m.get("pages").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        results: m.get("results").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
     })
 }
 
@@ -2448,7 +2411,7 @@ fn iface_linode_instances__volume__from_json(v: &Value) -> Option<iface_linode_i
         label: m.get("label").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         linode_id: m.get("linode_id").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
         linode_label: m.get("linode_label").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        region: m.get("region").filter(|v| !v.is_null()).and_then(|v| iface_linode_instances__region_properties_id__from_json(v)),
+        region: m.get("region").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         size: m.get("size").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
         status: m.get("status").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_linode_instances__volume_status_enum__from_str)),
         tags: m.get("tags").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
@@ -2456,20 +2419,13 @@ fn iface_linode_instances__volume__from_json(v: &Value) -> Option<iface_linode_i
     })
 }
 
-fn iface_linode_instances__region_properties_id__from_json(v: &Value) -> Option<iface_linode_instances::RegionPropertiesId> {
-    let m = v.as_object()?;
-    Some(iface_linode_instances::RegionPropertiesId {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-    })
-}
-
 fn iface_linode_instances__get_kernels_response__from_json(v: &Value) -> Option<iface_linode_instances::GetKernelsResponse> {
     let m = v.as_object()?;
     Some(iface_linode_instances::GetKernelsResponse {
         data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_linode_instances__kernel__from_json(x)).collect())),
-        page: m.get("page").filter(|v| !v.is_null()).and_then(|v| iface_linode_instances__pagination_envelope_properties_page__from_json(v)),
-        pages: m.get("pages").filter(|v| !v.is_null()).and_then(|v| iface_linode_instances__pagination_envelope_properties_pages__from_json(v)),
-        results: m.get("results").filter(|v| !v.is_null()).and_then(|v| iface_linode_instances__pagination_envelope_properties_results__from_json(v)),
+        page: m.get("page").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        pages: m.get("pages").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        results: m.get("results").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
     })
 }
 
@@ -2546,6 +2502,17 @@ fn iface_linode_instances__linode_status_enum__from_str(s: &str) -> Option<iface
     }
 }
 
+fn iface_linode_instances__disk_properties_filesystem__from_str(s: &str) -> Option<iface_linode_instances::DiskPropertiesFilesystem> {
+    match s {
+        "raw" => Some(iface_linode_instances::DiskPropertiesFilesystem::Raw),
+        "swap" => Some(iface_linode_instances::DiskPropertiesFilesystem::Swap),
+        "ext3" => Some(iface_linode_instances::DiskPropertiesFilesystem::Ext3),
+        "ext4" => Some(iface_linode_instances::DiskPropertiesFilesystem::Ext4),
+        "initrd" => Some(iface_linode_instances::DiskPropertiesFilesystem::Initrd),
+        _ => None,
+    }
+}
+
 fn iface_linode_instances__get_backups_response_automatic_item_status_enum__from_str(s: &str) -> Option<iface_linode_instances::GetBackupsResponseAutomaticItemStatusEnum> {
     match s {
         "paused" => Some(iface_linode_instances::GetBackupsResponseAutomaticItemStatusEnum::Paused),
@@ -2580,17 +2547,6 @@ fn iface_linode_instances__linode_config_virt_mode_enum__from_str(s: &str) -> Op
     match s {
         "paravirt" => Some(iface_linode_instances::LinodeConfigVirtModeEnum::Paravirt),
         "fullvirt" => Some(iface_linode_instances::LinodeConfigVirtModeEnum::Fullvirt),
-        _ => None,
-    }
-}
-
-fn iface_linode_instances__disk_filesystem_enum__from_str(s: &str) -> Option<iface_linode_instances::DiskFilesystemEnum> {
-    match s {
-        "raw" => Some(iface_linode_instances::DiskFilesystemEnum::Raw),
-        "swap" => Some(iface_linode_instances::DiskFilesystemEnum::Swap),
-        "ext3" => Some(iface_linode_instances::DiskFilesystemEnum::Ext3),
-        "ext4" => Some(iface_linode_instances::DiskFilesystemEnum::Ext4),
-        "initrd" => Some(iface_linode_instances::DiskFilesystemEnum::Initrd),
         _ => None,
     }
 }
@@ -2738,12 +2694,12 @@ fn iface_linode_instances__update_linode_instance__err(e: crate::runtime::Dispat
     }
 }
 
-fn iface_linode_instances__delete_linode_instance__ok(body: String) -> Result<iface_linode_instances::DeleteLinodeInstanceResponse, crate::runtime::DispatchError> {
+fn iface_linode_instances__delete_linode_instance__ok(body: String) -> Result<Vec<iface_linode_instances::DeleteLinodeInstanceResponseEntry>, crate::runtime::DispatchError> {
     let v: Value = match serde_json::from_str(&body) {
         Ok(v) => v,
         Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
     };
-    match iface_linode_instances__delete_linode_instance_response__from_json(&v) {
+    match (&v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_linode_instances::DeleteLinodeInstanceResponseEntry { key: k.clone(), value: val })).collect()) {
         Some(x) => Ok(x),
         None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
@@ -2792,12 +2748,12 @@ fn iface_linode_instances__create_snapshot__err(e: crate::runtime::DispatchError
     }
 }
 
-fn iface_linode_instances__cancel_backups__ok(body: String) -> Result<iface_linode_instances::CancelBackupsResponse, crate::runtime::DispatchError> {
+fn iface_linode_instances__cancel_backups__ok(body: String) -> Result<Vec<iface_linode_instances::CancelBackupsResponseEntry>, crate::runtime::DispatchError> {
     let v: Value = match serde_json::from_str(&body) {
         Ok(v) => v,
         Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
     };
-    match iface_linode_instances__cancel_backups_response__from_json(&v) {
+    match (&v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_linode_instances::CancelBackupsResponseEntry { key: k.clone(), value: val })).collect()) {
         Some(x) => Ok(x),
         None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
@@ -2810,12 +2766,12 @@ fn iface_linode_instances__cancel_backups__err(e: crate::runtime::DispatchError)
     }
 }
 
-fn iface_linode_instances__enable_backups__ok(body: String) -> Result<iface_linode_instances::EnableBackupsResponse, crate::runtime::DispatchError> {
+fn iface_linode_instances__enable_backups__ok(body: String) -> Result<Vec<iface_linode_instances::EnableBackupsResponseEntry>, crate::runtime::DispatchError> {
     let v: Value = match serde_json::from_str(&body) {
         Ok(v) => v,
         Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
     };
-    match iface_linode_instances__enable_backups_response__from_json(&v) {
+    match (&v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_linode_instances::EnableBackupsResponseEntry { key: k.clone(), value: val })).collect()) {
         Some(x) => Ok(x),
         None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
@@ -2846,12 +2802,12 @@ fn iface_linode_instances__get_backup__err(e: crate::runtime::DispatchError) -> 
     }
 }
 
-fn iface_linode_instances__restore_backup__ok(body: String) -> Result<iface_linode_instances::RestoreBackupResponse, crate::runtime::DispatchError> {
+fn iface_linode_instances__restore_backup__ok(body: String) -> Result<Vec<iface_linode_instances::RestoreBackupResponseEntry>, crate::runtime::DispatchError> {
     let v: Value = match serde_json::from_str(&body) {
         Ok(v) => v,
         Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
     };
-    match iface_linode_instances__restore_backup_response__from_json(&v) {
+    match (&v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_linode_instances::RestoreBackupResponseEntry { key: k.clone(), value: val })).collect()) {
         Some(x) => Ok(x),
         None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
@@ -2864,12 +2820,12 @@ fn iface_linode_instances__restore_backup__err(e: crate::runtime::DispatchError)
     }
 }
 
-fn iface_linode_instances__boot_linode_instance__ok(body: String) -> Result<iface_linode_instances::BootLinodeInstanceResponse, crate::runtime::DispatchError> {
+fn iface_linode_instances__boot_linode_instance__ok(body: String) -> Result<Vec<iface_linode_instances::BootLinodeInstanceResponseEntry>, crate::runtime::DispatchError> {
     let v: Value = match serde_json::from_str(&body) {
         Ok(v) => v,
         Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
     };
-    match iface_linode_instances__boot_linode_instance_response__from_json(&v) {
+    match (&v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_linode_instances::BootLinodeInstanceResponseEntry { key: k.clone(), value: val })).collect()) {
         Some(x) => Ok(x),
         None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
@@ -2972,12 +2928,12 @@ fn iface_linode_instances__update_linode_config__err(e: crate::runtime::Dispatch
     }
 }
 
-fn iface_linode_instances__delete_linode_config__ok(body: String) -> Result<iface_linode_instances::DeleteLinodeConfigResponse, crate::runtime::DispatchError> {
+fn iface_linode_instances__delete_linode_config__ok(body: String) -> Result<Vec<iface_linode_instances::DeleteLinodeConfigResponseEntry>, crate::runtime::DispatchError> {
     let v: Value = match serde_json::from_str(&body) {
         Ok(v) => v,
         Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
     };
-    match iface_linode_instances__delete_linode_config_response__from_json(&v) {
+    match (&v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_linode_instances::DeleteLinodeConfigResponseEntry { key: k.clone(), value: val })).collect()) {
         Some(x) => Ok(x),
         None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
@@ -3062,12 +3018,12 @@ fn iface_linode_instances__update_disk__err(e: crate::runtime::DispatchError) ->
     }
 }
 
-fn iface_linode_instances__delete_disk__ok(body: String) -> Result<iface_linode_instances::DeleteDiskResponse, crate::runtime::DispatchError> {
+fn iface_linode_instances__delete_disk__ok(body: String) -> Result<Vec<iface_linode_instances::DeleteDiskResponseEntry>, crate::runtime::DispatchError> {
     let v: Value = match serde_json::from_str(&body) {
         Ok(v) => v,
         Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
     };
-    match iface_linode_instances__delete_disk_response__from_json(&v) {
+    match (&v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_linode_instances::DeleteDiskResponseEntry { key: k.clone(), value: val })).collect()) {
         Some(x) => Ok(x),
         None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
@@ -3098,12 +3054,12 @@ fn iface_linode_instances__clone_linode_disk__err(e: crate::runtime::DispatchErr
     }
 }
 
-fn iface_linode_instances__reset_disk_password__ok(body: String) -> Result<iface_linode_instances::ResetDiskPasswordResponse, crate::runtime::DispatchError> {
+fn iface_linode_instances__reset_disk_password__ok(body: String) -> Result<Vec<iface_linode_instances::ResetDiskPasswordResponseEntry>, crate::runtime::DispatchError> {
     let v: Value = match serde_json::from_str(&body) {
         Ok(v) => v,
         Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
     };
-    match iface_linode_instances__reset_disk_password_response__from_json(&v) {
+    match (&v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_linode_instances::ResetDiskPasswordResponseEntry { key: k.clone(), value: val })).collect()) {
         Some(x) => Ok(x),
         None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
@@ -3116,12 +3072,12 @@ fn iface_linode_instances__reset_disk_password__err(e: crate::runtime::DispatchE
     }
 }
 
-fn iface_linode_instances__resize_disk__ok(body: String) -> Result<iface_linode_instances::ResizeDiskResponse, crate::runtime::DispatchError> {
+fn iface_linode_instances__resize_disk__ok(body: String) -> Result<Vec<iface_linode_instances::ResizeDiskResponseEntry>, crate::runtime::DispatchError> {
     let v: Value = match serde_json::from_str(&body) {
         Ok(v) => v,
         Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
     };
-    match iface_linode_instances__resize_disk_response__from_json(&v) {
+    match (&v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_linode_instances::ResizeDiskResponseEntry { key: k.clone(), value: val })).collect()) {
         Some(x) => Ok(x),
         None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
@@ -3224,12 +3180,12 @@ fn iface_linode_instances__update_linode_ip__err(e: crate::runtime::DispatchErro
     }
 }
 
-fn iface_linode_instances__remove_linode_ip__ok(body: String) -> Result<iface_linode_instances::RemoveLinodeIpResponse, crate::runtime::DispatchError> {
+fn iface_linode_instances__remove_linode_ip__ok(body: String) -> Result<Vec<iface_linode_instances::RemoveLinodeIpResponseEntry>, crate::runtime::DispatchError> {
     let v: Value = match serde_json::from_str(&body) {
         Ok(v) => v,
         Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
     };
-    match iface_linode_instances__remove_linode_ip_response__from_json(&v) {
+    match (&v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_linode_instances::RemoveLinodeIpResponseEntry { key: k.clone(), value: val })).collect()) {
         Some(x) => Ok(x),
         None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
@@ -3242,12 +3198,12 @@ fn iface_linode_instances__remove_linode_ip__err(e: crate::runtime::DispatchErro
     }
 }
 
-fn iface_linode_instances__migrate_linode_instance__ok(body: String) -> Result<iface_linode_instances::MigrateLinodeInstanceResponse, crate::runtime::DispatchError> {
+fn iface_linode_instances__migrate_linode_instance__ok(body: String) -> Result<Vec<iface_linode_instances::MigrateLinodeInstanceResponseEntry>, crate::runtime::DispatchError> {
     let v: Value = match serde_json::from_str(&body) {
         Ok(v) => v,
         Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
     };
-    match iface_linode_instances__migrate_linode_instance_response__from_json(&v) {
+    match (&v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_linode_instances::MigrateLinodeInstanceResponseEntry { key: k.clone(), value: val })).collect()) {
         Some(x) => Ok(x),
         None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
@@ -3260,12 +3216,12 @@ fn iface_linode_instances__migrate_linode_instance__err(e: crate::runtime::Dispa
     }
 }
 
-fn iface_linode_instances__mutate_linode_instance__ok(body: String) -> Result<iface_linode_instances::MutateLinodeInstanceResponse, crate::runtime::DispatchError> {
+fn iface_linode_instances__mutate_linode_instance__ok(body: String) -> Result<Vec<iface_linode_instances::MutateLinodeInstanceResponseEntry>, crate::runtime::DispatchError> {
     let v: Value = match serde_json::from_str(&body) {
         Ok(v) => v,
         Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
     };
-    match iface_linode_instances__mutate_linode_instance_response__from_json(&v) {
+    match (&v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_linode_instances::MutateLinodeInstanceResponseEntry { key: k.clone(), value: val })).collect()) {
         Some(x) => Ok(x),
         None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
@@ -3296,12 +3252,12 @@ fn iface_linode_instances__get_linode_node_balancers__err(e: crate::runtime::Dis
     }
 }
 
-fn iface_linode_instances__reset_linode_password__ok(body: String) -> Result<iface_linode_instances::ResetLinodePasswordResponse, crate::runtime::DispatchError> {
+fn iface_linode_instances__reset_linode_password__ok(body: String) -> Result<Vec<iface_linode_instances::ResetLinodePasswordResponseEntry>, crate::runtime::DispatchError> {
     let v: Value = match serde_json::from_str(&body) {
         Ok(v) => v,
         Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
     };
-    match iface_linode_instances__reset_linode_password_response__from_json(&v) {
+    match (&v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_linode_instances::ResetLinodePasswordResponseEntry { key: k.clone(), value: val })).collect()) {
         Some(x) => Ok(x),
         None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
@@ -3314,12 +3270,12 @@ fn iface_linode_instances__reset_linode_password__err(e: crate::runtime::Dispatc
     }
 }
 
-fn iface_linode_instances__reboot_linode_instance__ok(body: String) -> Result<iface_linode_instances::RebootLinodeInstanceResponse, crate::runtime::DispatchError> {
+fn iface_linode_instances__reboot_linode_instance__ok(body: String) -> Result<Vec<iface_linode_instances::RebootLinodeInstanceResponseEntry>, crate::runtime::DispatchError> {
     let v: Value = match serde_json::from_str(&body) {
         Ok(v) => v,
         Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
     };
-    match iface_linode_instances__reboot_linode_instance_response__from_json(&v) {
+    match (&v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_linode_instances::RebootLinodeInstanceResponseEntry { key: k.clone(), value: val })).collect()) {
         Some(x) => Ok(x),
         None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
@@ -3350,12 +3306,12 @@ fn iface_linode_instances__rebuild_linode_instance__err(e: crate::runtime::Dispa
     }
 }
 
-fn iface_linode_instances__rescue_linode_instance__ok(body: String) -> Result<iface_linode_instances::RescueLinodeInstanceResponse, crate::runtime::DispatchError> {
+fn iface_linode_instances__rescue_linode_instance__ok(body: String) -> Result<Vec<iface_linode_instances::RescueLinodeInstanceResponseEntry>, crate::runtime::DispatchError> {
     let v: Value = match serde_json::from_str(&body) {
         Ok(v) => v,
         Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
     };
-    match iface_linode_instances__rescue_linode_instance_response__from_json(&v) {
+    match (&v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_linode_instances::RescueLinodeInstanceResponseEntry { key: k.clone(), value: val })).collect()) {
         Some(x) => Ok(x),
         None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
@@ -3368,12 +3324,12 @@ fn iface_linode_instances__rescue_linode_instance__err(e: crate::runtime::Dispat
     }
 }
 
-fn iface_linode_instances__resize_linode_instance__ok(body: String) -> Result<iface_linode_instances::ResizeLinodeInstanceResponse, crate::runtime::DispatchError> {
+fn iface_linode_instances__resize_linode_instance__ok(body: String) -> Result<Vec<iface_linode_instances::ResizeLinodeInstanceResponseEntry>, crate::runtime::DispatchError> {
     let v: Value = match serde_json::from_str(&body) {
         Ok(v) => v,
         Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
     };
-    match iface_linode_instances__resize_linode_instance_response__from_json(&v) {
+    match (&v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_linode_instances::ResizeLinodeInstanceResponseEntry { key: k.clone(), value: val })).collect()) {
         Some(x) => Ok(x),
         None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
@@ -3386,12 +3342,12 @@ fn iface_linode_instances__resize_linode_instance__err(e: crate::runtime::Dispat
     }
 }
 
-fn iface_linode_instances__shutdown_linode_instance__ok(body: String) -> Result<iface_linode_instances::ShutdownLinodeInstanceResponse, crate::runtime::DispatchError> {
+fn iface_linode_instances__shutdown_linode_instance__ok(body: String) -> Result<Vec<iface_linode_instances::ShutdownLinodeInstanceResponseEntry>, crate::runtime::DispatchError> {
     let v: Value = match serde_json::from_str(&body) {
         Ok(v) => v,
         Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
     };
-    match iface_linode_instances__shutdown_linode_instance_response__from_json(&v) {
+    match (&v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_linode_instances::ShutdownLinodeInstanceResponseEntry { key: k.clone(), value: val })).collect()) {
         Some(x) => Ok(x),
         None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
@@ -3559,7 +3515,7 @@ impl iface_linode_instances::Guest for crate::Component {
             Err(e) => Err(iface_linode_instances__update_linode_instance__err(e)),
         }
     }
-    fn delete_linode_instance(params: iface_linode_instances::DeleteLinodeInstanceParams) -> Result<iface_linode_instances::DeleteLinodeInstanceResponse, String> {
+    fn delete_linode_instance(params: iface_linode_instances::DeleteLinodeInstanceParams) -> Result<Vec<iface_linode_instances::DeleteLinodeInstanceResponseEntry>, String> {
         let json = iface_linode_instances__delete_linode_instance_params__to_json(&params);
         match dispatch(&OP_LINODE_INSTANCES_DELETE_LINODE_INSTANCE, json).and_then(iface_linode_instances__delete_linode_instance__ok) {
             Ok(v) => Ok(v),
@@ -3580,14 +3536,14 @@ impl iface_linode_instances::Guest for crate::Component {
             Err(e) => Err(iface_linode_instances__create_snapshot__err(e)),
         }
     }
-    fn cancel_backups(params: iface_linode_instances::CancelBackupsParams) -> Result<iface_linode_instances::CancelBackupsResponse, String> {
+    fn cancel_backups(params: iface_linode_instances::CancelBackupsParams) -> Result<Vec<iface_linode_instances::CancelBackupsResponseEntry>, String> {
         let json = iface_linode_instances__cancel_backups_params__to_json(&params);
         match dispatch(&OP_LINODE_INSTANCES_CANCEL_BACKUPS, json).and_then(iface_linode_instances__cancel_backups__ok) {
             Ok(v) => Ok(v),
             Err(e) => Err(iface_linode_instances__cancel_backups__err(e)),
         }
     }
-    fn enable_backups(params: iface_linode_instances::EnableBackupsParams) -> Result<iface_linode_instances::EnableBackupsResponse, String> {
+    fn enable_backups(params: iface_linode_instances::EnableBackupsParams) -> Result<Vec<iface_linode_instances::EnableBackupsResponseEntry>, String> {
         let json = iface_linode_instances__enable_backups_params__to_json(&params);
         match dispatch(&OP_LINODE_INSTANCES_ENABLE_BACKUPS, json).and_then(iface_linode_instances__enable_backups__ok) {
             Ok(v) => Ok(v),
@@ -3601,14 +3557,14 @@ impl iface_linode_instances::Guest for crate::Component {
             Err(e) => Err(iface_linode_instances__get_backup__err(e)),
         }
     }
-    fn restore_backup(params: iface_linode_instances::RestoreBackupParams) -> Result<iface_linode_instances::RestoreBackupResponse, String> {
+    fn restore_backup(params: iface_linode_instances::RestoreBackupParams) -> Result<Vec<iface_linode_instances::RestoreBackupResponseEntry>, String> {
         let json = iface_linode_instances__restore_backup_params__to_json(&params);
         match dispatch(&OP_LINODE_INSTANCES_RESTORE_BACKUP, json).and_then(iface_linode_instances__restore_backup__ok) {
             Ok(v) => Ok(v),
             Err(e) => Err(iface_linode_instances__restore_backup__err(e)),
         }
     }
-    fn boot_linode_instance(params: iface_linode_instances::BootLinodeInstanceParams) -> Result<iface_linode_instances::BootLinodeInstanceResponse, String> {
+    fn boot_linode_instance(params: iface_linode_instances::BootLinodeInstanceParams) -> Result<Vec<iface_linode_instances::BootLinodeInstanceResponseEntry>, String> {
         let json = iface_linode_instances__boot_linode_instance_params__to_json(&params);
         match dispatch(&OP_LINODE_INSTANCES_BOOT_LINODE_INSTANCE, json).and_then(iface_linode_instances__boot_linode_instance__ok) {
             Ok(v) => Ok(v),
@@ -3650,7 +3606,7 @@ impl iface_linode_instances::Guest for crate::Component {
             Err(e) => Err(iface_linode_instances__update_linode_config__err(e)),
         }
     }
-    fn delete_linode_config(params: iface_linode_instances::DeleteLinodeConfigParams) -> Result<iface_linode_instances::DeleteLinodeConfigResponse, String> {
+    fn delete_linode_config(params: iface_linode_instances::DeleteLinodeConfigParams) -> Result<Vec<iface_linode_instances::DeleteLinodeConfigResponseEntry>, String> {
         let json = iface_linode_instances__delete_linode_config_params__to_json(&params);
         match dispatch(&OP_LINODE_INSTANCES_DELETE_LINODE_CONFIG, json).and_then(iface_linode_instances__delete_linode_config__ok) {
             Ok(v) => Ok(v),
@@ -3685,7 +3641,7 @@ impl iface_linode_instances::Guest for crate::Component {
             Err(e) => Err(iface_linode_instances__update_disk__err(e)),
         }
     }
-    fn delete_disk(params: iface_linode_instances::DeleteDiskParams) -> Result<iface_linode_instances::DeleteDiskResponse, String> {
+    fn delete_disk(params: iface_linode_instances::DeleteDiskParams) -> Result<Vec<iface_linode_instances::DeleteDiskResponseEntry>, String> {
         let json = iface_linode_instances__delete_disk_params__to_json(&params);
         match dispatch(&OP_LINODE_INSTANCES_DELETE_DISK, json).and_then(iface_linode_instances__delete_disk__ok) {
             Ok(v) => Ok(v),
@@ -3699,14 +3655,14 @@ impl iface_linode_instances::Guest for crate::Component {
             Err(e) => Err(iface_linode_instances__clone_linode_disk__err(e)),
         }
     }
-    fn reset_disk_password(params: iface_linode_instances::ResetDiskPasswordParams) -> Result<iface_linode_instances::ResetDiskPasswordResponse, String> {
+    fn reset_disk_password(params: iface_linode_instances::ResetDiskPasswordParams) -> Result<Vec<iface_linode_instances::ResetDiskPasswordResponseEntry>, String> {
         let json = iface_linode_instances__reset_disk_password_params__to_json(&params);
         match dispatch(&OP_LINODE_INSTANCES_RESET_DISK_PASSWORD, json).and_then(iface_linode_instances__reset_disk_password__ok) {
             Ok(v) => Ok(v),
             Err(e) => Err(iface_linode_instances__reset_disk_password__err(e)),
         }
     }
-    fn resize_disk(params: iface_linode_instances::ResizeDiskParams) -> Result<iface_linode_instances::ResizeDiskResponse, String> {
+    fn resize_disk(params: iface_linode_instances::ResizeDiskParams) -> Result<Vec<iface_linode_instances::ResizeDiskResponseEntry>, String> {
         let json = iface_linode_instances__resize_disk_params__to_json(&params);
         match dispatch(&OP_LINODE_INSTANCES_RESIZE_DISK, json).and_then(iface_linode_instances__resize_disk__ok) {
             Ok(v) => Ok(v),
@@ -3748,21 +3704,21 @@ impl iface_linode_instances::Guest for crate::Component {
             Err(e) => Err(iface_linode_instances__update_linode_ip__err(e)),
         }
     }
-    fn remove_linode_ip(params: iface_linode_instances::RemoveLinodeIpParams) -> Result<iface_linode_instances::RemoveLinodeIpResponse, String> {
+    fn remove_linode_ip(params: iface_linode_instances::RemoveLinodeIpParams) -> Result<Vec<iface_linode_instances::RemoveLinodeIpResponseEntry>, String> {
         let json = iface_linode_instances__remove_linode_ip_params__to_json(&params);
         match dispatch(&OP_LINODE_INSTANCES_REMOVE_LINODE_IP, json).and_then(iface_linode_instances__remove_linode_ip__ok) {
             Ok(v) => Ok(v),
             Err(e) => Err(iface_linode_instances__remove_linode_ip__err(e)),
         }
     }
-    fn migrate_linode_instance(params: iface_linode_instances::MigrateLinodeInstanceParams) -> Result<iface_linode_instances::MigrateLinodeInstanceResponse, String> {
+    fn migrate_linode_instance(params: iface_linode_instances::MigrateLinodeInstanceParams) -> Result<Vec<iface_linode_instances::MigrateLinodeInstanceResponseEntry>, String> {
         let json = iface_linode_instances__migrate_linode_instance_params__to_json(&params);
         match dispatch(&OP_LINODE_INSTANCES_MIGRATE_LINODE_INSTANCE, json).and_then(iface_linode_instances__migrate_linode_instance__ok) {
             Ok(v) => Ok(v),
             Err(e) => Err(iface_linode_instances__migrate_linode_instance__err(e)),
         }
     }
-    fn mutate_linode_instance(params: iface_linode_instances::MutateLinodeInstanceParams) -> Result<iface_linode_instances::MutateLinodeInstanceResponse, String> {
+    fn mutate_linode_instance(params: iface_linode_instances::MutateLinodeInstanceParams) -> Result<Vec<iface_linode_instances::MutateLinodeInstanceResponseEntry>, String> {
         let json = iface_linode_instances__mutate_linode_instance_params__to_json(&params);
         match dispatch(&OP_LINODE_INSTANCES_MUTATE_LINODE_INSTANCE, json).and_then(iface_linode_instances__mutate_linode_instance__ok) {
             Ok(v) => Ok(v),
@@ -3776,14 +3732,14 @@ impl iface_linode_instances::Guest for crate::Component {
             Err(e) => Err(iface_linode_instances__get_linode_node_balancers__err(e)),
         }
     }
-    fn reset_linode_password(params: iface_linode_instances::ResetLinodePasswordParams) -> Result<iface_linode_instances::ResetLinodePasswordResponse, String> {
+    fn reset_linode_password(params: iface_linode_instances::ResetLinodePasswordParams) -> Result<Vec<iface_linode_instances::ResetLinodePasswordResponseEntry>, String> {
         let json = iface_linode_instances__reset_linode_password_params__to_json(&params);
         match dispatch(&OP_LINODE_INSTANCES_RESET_LINODE_PASSWORD, json).and_then(iface_linode_instances__reset_linode_password__ok) {
             Ok(v) => Ok(v),
             Err(e) => Err(iface_linode_instances__reset_linode_password__err(e)),
         }
     }
-    fn reboot_linode_instance(params: iface_linode_instances::RebootLinodeInstanceParams) -> Result<iface_linode_instances::RebootLinodeInstanceResponse, String> {
+    fn reboot_linode_instance(params: iface_linode_instances::RebootLinodeInstanceParams) -> Result<Vec<iface_linode_instances::RebootLinodeInstanceResponseEntry>, String> {
         let json = iface_linode_instances__reboot_linode_instance_params__to_json(&params);
         match dispatch(&OP_LINODE_INSTANCES_REBOOT_LINODE_INSTANCE, json).and_then(iface_linode_instances__reboot_linode_instance__ok) {
             Ok(v) => Ok(v),
@@ -3797,21 +3753,21 @@ impl iface_linode_instances::Guest for crate::Component {
             Err(e) => Err(iface_linode_instances__rebuild_linode_instance__err(e)),
         }
     }
-    fn rescue_linode_instance(params: iface_linode_instances::RescueLinodeInstanceParams) -> Result<iface_linode_instances::RescueLinodeInstanceResponse, String> {
+    fn rescue_linode_instance(params: iface_linode_instances::RescueLinodeInstanceParams) -> Result<Vec<iface_linode_instances::RescueLinodeInstanceResponseEntry>, String> {
         let json = iface_linode_instances__rescue_linode_instance_params__to_json(&params);
         match dispatch(&OP_LINODE_INSTANCES_RESCUE_LINODE_INSTANCE, json).and_then(iface_linode_instances__rescue_linode_instance__ok) {
             Ok(v) => Ok(v),
             Err(e) => Err(iface_linode_instances__rescue_linode_instance__err(e)),
         }
     }
-    fn resize_linode_instance(params: iface_linode_instances::ResizeLinodeInstanceParams) -> Result<iface_linode_instances::ResizeLinodeInstanceResponse, String> {
+    fn resize_linode_instance(params: iface_linode_instances::ResizeLinodeInstanceParams) -> Result<Vec<iface_linode_instances::ResizeLinodeInstanceResponseEntry>, String> {
         let json = iface_linode_instances__resize_linode_instance_params__to_json(&params);
         match dispatch(&OP_LINODE_INSTANCES_RESIZE_LINODE_INSTANCE, json).and_then(iface_linode_instances__resize_linode_instance__ok) {
             Ok(v) => Ok(v),
             Err(e) => Err(iface_linode_instances__resize_linode_instance__err(e)),
         }
     }
-    fn shutdown_linode_instance(params: iface_linode_instances::ShutdownLinodeInstanceParams) -> Result<iface_linode_instances::ShutdownLinodeInstanceResponse, String> {
+    fn shutdown_linode_instance(params: iface_linode_instances::ShutdownLinodeInstanceParams) -> Result<Vec<iface_linode_instances::ShutdownLinodeInstanceResponseEntry>, String> {
         let json = iface_linode_instances__shutdown_linode_instance_params__to_json(&params);
         match dispatch(&OP_LINODE_INSTANCES_SHUTDOWN_LINODE_INSTANCE, json).and_then(iface_linode_instances__shutdown_linode_instance__ok) {
             Ok(v) => Ok(v),

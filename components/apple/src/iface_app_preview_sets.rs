@@ -80,6 +80,26 @@ const OP_APP_PREVIEW_SETS_APP_PREVIEWS_REPLACE_TO_MANY_RELATIONSHIP: OpSpec = Op
     ],
 };
 
+fn iface_app_preview_sets__preview_type__to_str(e: &iface_app_preview_sets::PreviewType) -> &'static str {
+    match e {
+        iface_app_preview_sets::PreviewType::IphoneV65 => "IPHONE_65",
+        iface_app_preview_sets::PreviewType::IphoneV58 => "IPHONE_58",
+        iface_app_preview_sets::PreviewType::IphoneV55 => "IPHONE_55",
+        iface_app_preview_sets::PreviewType::IphoneV47 => "IPHONE_47",
+        iface_app_preview_sets::PreviewType::IphoneV40 => "IPHONE_40",
+        iface_app_preview_sets::PreviewType::IphoneV35 => "IPHONE_35",
+        iface_app_preview_sets::PreviewType::IpadProV3genV129 => "IPAD_PRO_3GEN_129",
+        iface_app_preview_sets::PreviewType::IpadProV3genV11 => "IPAD_PRO_3GEN_11",
+        iface_app_preview_sets::PreviewType::IpadProV129 => "IPAD_PRO_129",
+        iface_app_preview_sets::PreviewType::IpadV105 => "IPAD_105",
+        iface_app_preview_sets::PreviewType::IpadV97 => "IPAD_97",
+        iface_app_preview_sets::PreviewType::Desktop => "DESKTOP",
+        iface_app_preview_sets::PreviewType::WatchSeriesV4 => "WATCH_SERIES_4",
+        iface_app_preview_sets::PreviewType::WatchSeriesV3 => "WATCH_SERIES_3",
+        iface_app_preview_sets::PreviewType::AppleTv => "APPLE_TV",
+    }
+}
+
 fn iface_app_preview_sets__app_preview_set_create_request_data_relationships_app_store_version_localization_data_type_op_enum__to_str(e: &iface_app_preview_sets::AppPreviewSetCreateRequestDataRelationshipsAppStoreVersionLocalizationDataTypeOpEnum) -> &'static str {
     match e {
         iface_app_preview_sets::AppPreviewSetCreateRequestDataRelationshipsAppStoreVersionLocalizationDataTypeOpEnum::AppStoreVersionLocalizations => "appStoreVersionLocalizations",
@@ -154,13 +174,7 @@ fn iface_app_preview_sets__app_preview_set_create_request_data__to_json(p: &ifac
 
 fn iface_app_preview_sets__app_preview_set_create_request_data_attributes__to_json(p: &iface_app_preview_sets::AppPreviewSetCreateRequestDataAttributes) -> Value {
     let mut m = Map::new();
-    m.insert("previewType".into(), iface_app_preview_sets__preview_type__to_json(&p.preview_type));
-    Value::Object(m)
-}
-
-fn iface_app_preview_sets__preview_type__to_json(p: &iface_app_preview_sets::PreviewType) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
+    m.insert("previewType".into(), Value::String(iface_app_preview_sets__preview_type__to_str(&p.preview_type).into()));
     Value::Object(m)
 }
 
@@ -203,7 +217,7 @@ fn iface_app_preview_sets__app_preview_set__to_json(p: &iface_app_preview_sets::
 
 fn iface_app_preview_sets__app_preview_set_attributes__to_json(p: &iface_app_preview_sets::AppPreviewSetAttributes) -> Value {
     let mut m = Map::new();
-    m.insert("previewType".into(), match (&p.preview_type) { Some(v) => iface_app_preview_sets__preview_type__to_json(v), None => Value::Null });
+    m.insert("previewType".into(), match (&p.preview_type) { Some(v) => Value::String(iface_app_preview_sets__preview_type__to_str(v).into()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -457,13 +471,6 @@ fn iface_app_preview_sets__app_previews_replace_to_many_relationship_params__to_
     Value::Object(m)
 }
 
-fn iface_app_preview_sets__preview_type__from_json(v: &Value) -> Option<iface_app_preview_sets::PreviewType> {
-    let m = v.as_object()?;
-    Some(iface_app_preview_sets::PreviewType {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-    })
-}
-
 fn iface_app_preview_sets__app_preview_set_response__from_json(v: &Value) -> Option<iface_app_preview_sets::AppPreviewSetResponse> {
     let m = v.as_object()?;
     Some(iface_app_preview_sets::AppPreviewSetResponse {
@@ -487,7 +494,7 @@ fn iface_app_preview_sets__app_preview_set__from_json(v: &Value) -> Option<iface
 fn iface_app_preview_sets__app_preview_set_attributes__from_json(v: &Value) -> Option<iface_app_preview_sets::AppPreviewSetAttributes> {
     let m = v.as_object()?;
     Some(iface_app_preview_sets::AppPreviewSetAttributes {
-        preview_type: m.get("previewType").filter(|v| !v.is_null()).and_then(|v| iface_app_preview_sets__preview_type__from_json(v)),
+        preview_type: m.get("previewType").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_app_preview_sets__preview_type__from_str)),
     })
 }
 
@@ -712,6 +719,27 @@ fn iface_app_preview_sets__app_preview_set_app_previews_linkages_response_data_i
         id: m.get("id").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         type_op: match m.get("type").and_then(|v| (v).as_str().and_then(iface_app_preview_sets__app_preview_set_relationships_app_previews_data_item_type_op_enum__from_str)) { Some(x) => x, None => return None },
     })
+}
+
+fn iface_app_preview_sets__preview_type__from_str(s: &str) -> Option<iface_app_preview_sets::PreviewType> {
+    match s {
+        "IPHONE_65" => Some(iface_app_preview_sets::PreviewType::IphoneV65),
+        "IPHONE_58" => Some(iface_app_preview_sets::PreviewType::IphoneV58),
+        "IPHONE_55" => Some(iface_app_preview_sets::PreviewType::IphoneV55),
+        "IPHONE_47" => Some(iface_app_preview_sets::PreviewType::IphoneV47),
+        "IPHONE_40" => Some(iface_app_preview_sets::PreviewType::IphoneV40),
+        "IPHONE_35" => Some(iface_app_preview_sets::PreviewType::IphoneV35),
+        "IPAD_PRO_3GEN_129" => Some(iface_app_preview_sets::PreviewType::IpadProV3genV129),
+        "IPAD_PRO_3GEN_11" => Some(iface_app_preview_sets::PreviewType::IpadProV3genV11),
+        "IPAD_PRO_129" => Some(iface_app_preview_sets::PreviewType::IpadProV129),
+        "IPAD_105" => Some(iface_app_preview_sets::PreviewType::IpadV105),
+        "IPAD_97" => Some(iface_app_preview_sets::PreviewType::IpadV97),
+        "DESKTOP" => Some(iface_app_preview_sets::PreviewType::Desktop),
+        "WATCH_SERIES_4" => Some(iface_app_preview_sets::PreviewType::WatchSeriesV4),
+        "WATCH_SERIES_3" => Some(iface_app_preview_sets::PreviewType::WatchSeriesV3),
+        "APPLE_TV" => Some(iface_app_preview_sets::PreviewType::AppleTv),
+        _ => None,
+    }
 }
 
 fn iface_app_preview_sets__app_preview_set_create_request_data_relationships_app_store_version_localization_data_type_op_enum__from_str(s: &str) -> Option<iface_app_preview_sets::AppPreviewSetCreateRequestDataRelationshipsAppStoreVersionLocalizationDataTypeOpEnum> {

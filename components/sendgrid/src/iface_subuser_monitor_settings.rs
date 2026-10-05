@@ -59,9 +59,10 @@ fn iface_subuser_monitor_settings__monitor__to_json(p: &iface_subuser_monitor_se
     Value::Object(m)
 }
 
-fn iface_subuser_monitor_settings__delete_subusers_subuser_name_monitor_response__to_json(p: &iface_subuser_monitor_settings::DeleteSubusersSubuserNameMonitorResponse) -> Value {
+fn iface_subuser_monitor_settings__delete_subusers_subuser_name_monitor_response_entry__to_json(p: &iface_subuser_monitor_settings::DeleteSubusersSubuserNameMonitorResponseEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -101,10 +102,11 @@ fn iface_subuser_monitor_settings__monitor__from_json(v: &Value) -> Option<iface
     })
 }
 
-fn iface_subuser_monitor_settings__delete_subusers_subuser_name_monitor_response__from_json(v: &Value) -> Option<iface_subuser_monitor_settings::DeleteSubusersSubuserNameMonitorResponse> {
+fn iface_subuser_monitor_settings__delete_subusers_subuser_name_monitor_response_entry__from_json(v: &Value) -> Option<iface_subuser_monitor_settings::DeleteSubusersSubuserNameMonitorResponseEntry> {
     let m = v.as_object()?;
-    Some(iface_subuser_monitor_settings::DeleteSubusersSubuserNameMonitorResponse {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_subuser_monitor_settings::DeleteSubusersSubuserNameMonitorResponseEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -174,12 +176,12 @@ fn iface_subuser_monitor_settings__put_subusers_subuser_name_monitor__err(e: cra
     }
 }
 
-fn iface_subuser_monitor_settings__delete_subusers_subuser_name_monitor__ok(body: String) -> Result<iface_subuser_monitor_settings::DeleteSubusersSubuserNameMonitorResponse, crate::runtime::DispatchError> {
+fn iface_subuser_monitor_settings__delete_subusers_subuser_name_monitor__ok(body: String) -> Result<Vec<iface_subuser_monitor_settings::DeleteSubusersSubuserNameMonitorResponseEntry>, crate::runtime::DispatchError> {
     let v: Value = match serde_json::from_str(&body) {
         Ok(v) => v,
         Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
     };
-    match iface_subuser_monitor_settings__delete_subusers_subuser_name_monitor_response__from_json(&v) {
+    match (&v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_subuser_monitor_settings::DeleteSubusersSubuserNameMonitorResponseEntry { key: k.clone(), value: val })).collect()) {
         Some(x) => Ok(x),
         None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
@@ -218,7 +220,7 @@ impl iface_subuser_monitor_settings::Guest for crate::Component {
             Err(e) => Err(iface_subuser_monitor_settings__put_subusers_subuser_name_monitor__err(e)),
         }
     }
-    fn delete_subusers_subuser_name_monitor(params: iface_subuser_monitor_settings::DeleteSubusersSubuserNameMonitorParams) -> Result<iface_subuser_monitor_settings::DeleteSubusersSubuserNameMonitorResponse, iface_subuser_monitor_settings::DeleteSubusersSubuserNameMonitorError> {
+    fn delete_subusers_subuser_name_monitor(params: iface_subuser_monitor_settings::DeleteSubusersSubuserNameMonitorParams) -> Result<Vec<iface_subuser_monitor_settings::DeleteSubusersSubuserNameMonitorResponseEntry>, iface_subuser_monitor_settings::DeleteSubusersSubuserNameMonitorError> {
         let json = iface_subuser_monitor_settings__delete_subusers_subuser_name_monitor_params__to_json(&params);
         match dispatch(&OP_SUBUSER_MONITOR_SETTINGS_DELETE_SUBUSERS_SUBUSER_NAME_MONITOR, json).and_then(iface_subuser_monitor_settings__delete_subusers_subuser_name_monitor__ok) {
             Ok(v) => Ok(v),

@@ -18,16 +18,17 @@ const OP_COMPANY_ASSIGN_ROLES_COMPANY_ACL_V1_ASSIGN_ROLES_PUT: OpSpec = OpSpec {
 fn iface_company_assign_roles__company_data_role_interface__to_json(p: &iface_company_assign_roles::CompanyDataRoleInterface) -> Value {
     let mut m = Map::new();
     m.insert("company_id".into(), match (&p.company_id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    m.insert("extension_attributes".into(), match (&p.extension_attributes) { Some(v) => iface_company_assign_roles__company_data_role_extension_interface__to_json(v), None => Value::Null });
+    m.insert("extension_attributes".into(), match (&p.extension_attributes) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("id".into(), match (&p.id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("permissions".into(), Value::Array((&p.permissions).iter().map(|v| iface_company_assign_roles__company_data_permission_interface__to_json(v)).collect()));
     m.insert("role_name".into(), match (&p.role_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_company_assign_roles__company_data_role_extension_interface__to_json(p: &iface_company_assign_roles::CompanyDataRoleExtensionInterface) -> Value {
+fn iface_company_assign_roles__company_data_role_extension_interface_entry__to_json(p: &iface_company_assign_roles::CompanyDataRoleExtensionInterfaceEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 

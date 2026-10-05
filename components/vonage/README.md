@@ -20,8 +20,8 @@ triggered.
 
 | Setting | Value |
 | --- | --- |
-| Package | `autostamp:vonage@0.5.0` |
-| Published version | `0.5.0+vonage-1.11.8` |
+| Package | `autostamp:vonage@0.6.0` |
+| Published version | `0.6.0+vonage-1.11.8` |
 | Tag filter | all tags |
 | Operations generated | 3 |
 | Infer API-key credentials | enabled — not triggered |

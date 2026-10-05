@@ -6,7 +6,7 @@
 /// | Secret name | Applied to each request as |
 /// | --- | --- |
 /// | `api_key` | query `key` |
-package autostamp:graphhopper@0.5.0;
+package autostamp:graphhopper@0.6.0;
 
 interface cluster-api {
   enum cluster-response-status-enum {
@@ -182,14 +182,21 @@ interface geocoding-api {
 }
 
 interface isochrone-api {
+  enum vehicle-profile-id {
+    car,
+    bike,
+    foot,
+    hike,
+    mtb,
+    racingbike,
+    scooter,
+    truck,
+    small-truck,
+  }
+
   enum get-isochrone-weighting-enum {
     fastest,
     shortest,
-  }
-
-  record vehicle-profile-id {
-    /// opaque schema; raw JSON
-    value: string
   }
 
   record isochrone-response {
@@ -259,7 +266,7 @@ interface map-matching-api {
     descend: option<f64>,
     /// Details, as requested with the `details` parameter. Consider the value `{"street_name": [[0,2,"Frankfurter Straße"],[2,6,"Zollweg"]]}`.
     /// In this example, the route uses two streets: The first, Frankfurter Straße, is
-    details: option<route-response-path-details>,
+    details: option<list<route-response-path-details-entry>>,
     /// The total distance, in meters. To get this information for one 'leg' please read [this blog post](https://www.graphhopper.com/blog/2019/11/28/routing-api-using-path-details/).
     distance: option<f64>,
     /// The instructions for this route. This feature is under active development, and our instructions can sometimes be misleading,
@@ -277,13 +284,10 @@ interface map-matching-api {
     time: option<s64>
   }
 
-  /// Details, as requested with the `details` parameter. Consider the value `{"street_name": [[0,2,"Frankfurter Straße"],[2,6,"Zollweg"]]}`.
-  /// In this example, the route uses two streets: The first, Frankfurter Straße, is
-  /// used between `points[0]` and `points[2]`, and the second, Zollweg, between `points[2]` and `points[6]`.
-  /// See [here](https://discuss.graphhopper.com/t/2539) for discussion.
-  record route-response-path-details {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record route-response-path-details-entry {
+    key: string,
+    value: string
   }
 
   record route-response-path-instructions-item {
@@ -336,9 +340,16 @@ interface matrix-api {
     left,
   }
 
-  record vehicle-profile-id {
-    /// opaque schema; raw JSON
-    value: string
+  enum vehicle-profile-id {
+    car,
+    bike,
+    foot,
+    hike,
+    mtb,
+    racingbike,
+    scooter,
+    truck,
+    small-truck,
   }
 
   record matrix-response {
@@ -433,6 +444,18 @@ interface matrix-api {
 }
 
 interface routing-api {
+  enum vehicle-profile-id {
+    car,
+    bike,
+    foot,
+    hike,
+    mtb,
+    racingbike,
+    scooter,
+    truck,
+    small-truck,
+  }
+
   enum get-route-curbside-item-enum {
     any,
     right,
@@ -442,11 +465,6 @@ interface routing-api {
   enum get-route-algorithm-enum {
     round-trip,
     alternative-route,
-  }
-
-  record vehicle-profile-id {
-    /// opaque schema; raw JSON
-    value: string
   }
 
   record route-response {
@@ -470,7 +488,7 @@ interface routing-api {
     descend: option<f64>,
     /// Details, as requested with the `details` parameter. Consider the value `{"street_name": [[0,2,"Frankfurter Straße"],[2,6,"Zollweg"]]}`.
     /// In this example, the route uses two streets: The first, Frankfurter Straße, is
-    details: option<route-response-path-details>,
+    details: option<list<route-response-path-details-entry>>,
     /// The total distance, in meters. To get this information for one 'leg' please read [this blog post](https://www.graphhopper.com/blog/2019/11/28/routing-api-using-path-details/).
     distance: option<f64>,
     /// The instructions for this route. This feature is under active development, and our instructions can sometimes be misleading,
@@ -488,13 +506,10 @@ interface routing-api {
     time: option<s64>
   }
 
-  /// Details, as requested with the `details` parameter. Consider the value `{"street_name": [[0,2,"Frankfurter Straße"],[2,6,"Zollweg"]]}`.
-  /// In this example, the route uses two streets: The first, Frankfurter Straße, is
-  /// used between `points[0]` and `points[2]`, and the second, Zollweg, between `points[2]` and `points[6]`.
-  /// See [here](https://discuss.graphhopper.com/t/2539) for discussion.
-  record route-response-path-details {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record route-response-path-details-entry {
+    key: string,
+    value: string
   }
 
   record route-response-path-instructions-item {
@@ -539,15 +554,15 @@ interface routing-api {
     /// The bounding box of the geographical area covered by this GraphHopper instance. Format: `"minLon,minLat,maxLon,maxLat"
     bbox: option<string>,
     /// The supported features, such as elevation, per vehicle profile.
-    features: option<info-response-features>,
+    features: option<list<info-response-features-entry>>,
     /// The version of the GraphHopper server that provided this response. This is not related to the API version.
     version: option<string>
   }
 
-  /// The supported features, such as elevation, per vehicle profile.
-  record info-response-features {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record info-response-features-entry {
+    key: string,
+    value: string
   }
 
   variant get-route-error {
@@ -1096,13 +1111,14 @@ interface route-optimization-api {
   }
 
   record route-point {
-    coordinates: option<list<route-point-coordinates-item>>,
+    coordinates: option<list<list<route-point-coordinates-item-entry>>>,
     type-op: option<string>
   }
 
-  record route-point-coordinates-item {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record route-point-coordinates-item-entry {
+    key: string,
+    value: string
   }
 
   record solution-unassigned {

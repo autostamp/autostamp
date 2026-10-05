@@ -301,9 +301,34 @@ fn iface_tracks__comment_user__to_json(p: &iface_tracks::CommentUser) -> Value {
     Value::Object(m)
 }
 
-fn iface_tracks__users_list__to_json(p: &iface_tracks::UsersList) -> Value {
+fn iface_tracks__users_list_item__to_json(p: &iface_tracks::UsersListItem) -> Value {
     let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
+    m.insert("avatar_url".into(), match (&p.avatar_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("city".into(), match (&p.city) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("country".into(), match (&p.country) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("description".into(), match (&p.description) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("discogs_name".into(), match (&p.discogs_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("first_name".into(), match (&p.first_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("followers_count".into(), match (&p.followers_count) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("followings_count".into(), match (&p.followings_count) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("full_name".into(), match (&p.full_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("kind".into(), match (&p.kind) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("last_modified".into(), match (&p.last_modified) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("last_name".into(), match (&p.last_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("myspace_name".into(), match (&p.myspace_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("permalink".into(), match (&p.permalink) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("permalink_url".into(), match (&p.permalink_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("plan".into(), match (&p.plan) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("playlist_count".into(), match (&p.playlist_count) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("public_favorites_count".into(), match (&p.public_favorites_count) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("reposts_count".into(), match (&p.reposts_count) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("subscriptions".into(), match (&p.subscriptions) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("track_count".into(), match (&p.track_count) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("uri".into(), match (&p.uri) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("username".into(), match (&p.username) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("website".into(), match (&p.website) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("website_title".into(), match (&p.website_title) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -508,10 +533,35 @@ fn iface_tracks__comment_user__from_json(v: &Value) -> Option<iface_tracks::Comm
     })
 }
 
-fn iface_tracks__users_list__from_json(v: &Value) -> Option<iface_tracks::UsersList> {
+fn iface_tracks__users_list_item__from_json(v: &Value) -> Option<iface_tracks::UsersListItem> {
     let m = v.as_object()?;
-    Some(iface_tracks::UsersList {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    Some(iface_tracks::UsersListItem {
+        avatar_url: m.get("avatar_url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        city: m.get("city").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        country: m.get("country").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        description: m.get("description").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        discogs_name: m.get("discogs_name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        first_name: m.get("first_name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        followers_count: m.get("followers_count").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        followings_count: m.get("followings_count").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        full_name: m.get("full_name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        kind: m.get("kind").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        last_modified: m.get("last_modified").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        last_name: m.get("last_name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        myspace_name: m.get("myspace_name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        permalink: m.get("permalink").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        permalink_url: m.get("permalink_url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        plan: m.get("plan").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        playlist_count: m.get("playlist_count").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        public_favorites_count: m.get("public_favorites_count").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        reposts_count: m.get("reposts_count").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        subscriptions: m.get("subscriptions").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        track_count: m.get("track_count").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        uri: m.get("uri").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        username: m.get("username").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        website: m.get("website").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        website_title: m.get("website_title").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
     })
 }
 
@@ -659,12 +709,12 @@ fn iface_tracks__post_tracks_track_id_comments__err(e: crate::runtime::DispatchE
     }
 }
 
-fn iface_tracks__get_tracks_track_id_favoriters__ok(body: String) -> Result<iface_tracks::UsersList, crate::runtime::DispatchError> {
+fn iface_tracks__get_tracks_track_id_favoriters__ok(body: String) -> Result<Vec<iface_tracks::UsersListItem>, crate::runtime::DispatchError> {
     let v: Value = match serde_json::from_str(&body) {
         Ok(v) => v,
         Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
     };
-    match iface_tracks__users_list__from_json(&v) {
+    match (&v).as_array().map(|a| a.iter().filter_map(|x| iface_tracks__users_list_item__from_json(x)).collect()) {
         Some(x) => Ok(x),
         None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
@@ -783,7 +833,7 @@ impl iface_tracks::Guest for crate::Component {
             Err(e) => Err(iface_tracks__post_tracks_track_id_comments__err(e)),
         }
     }
-    fn get_tracks_track_id_favoriters(params: iface_tracks::GetTracksTrackIdFavoritersParams) -> Result<iface_tracks::UsersList, iface_tracks::GetTracksTrackIdFavoritersError> {
+    fn get_tracks_track_id_favoriters(params: iface_tracks::GetTracksTrackIdFavoritersParams) -> Result<Vec<iface_tracks::UsersListItem>, iface_tracks::GetTracksTrackIdFavoritersError> {
         let json = iface_tracks__get_tracks_track_id_favoriters_params__to_json(&params);
         match dispatch(&OP_TRACKS_GET_TRACKS_TRACK_ID_FAVORITERS, json).and_then(iface_tracks__get_tracks_track_id_favoriters__ok) {
             Ok(v) => Ok(v),

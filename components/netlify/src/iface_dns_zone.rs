@@ -130,12 +130,6 @@ const OP_DNS_ZONE_CONFIGURE_DNS_FOR_SITE: OpSpec = OpSpec {
     ],
 };
 
-fn iface_dns_zone__dns_zones__to_json(p: &iface_dns_zone::DnsZones) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
 fn iface_dns_zone__dns_zone__to_json(p: &iface_dns_zone::DnsZone) -> Value {
     let mut m = Map::new();
     m.insert("account_id".into(), match (&p.account_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -170,12 +164,6 @@ fn iface_dns_zone__dns_record__to_json(p: &iface_dns_zone::DnsRecord) -> Value {
     m.insert("ttl".into(), match (&p.ttl) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("type".into(), match (&p.type_op) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("value".into(), match (&p.value) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_dns_zone__dns_records__to_json(p: &iface_dns_zone::DnsRecords) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -261,13 +249,6 @@ fn iface_dns_zone__configure_dns_for_site_params__to_json(p: &iface_dns_zone::Co
     Value::Object(m)
 }
 
-fn iface_dns_zone__dns_zones__from_json(v: &Value) -> Option<iface_dns_zone::DnsZones> {
-    let m = v.as_object()?;
-    Some(iface_dns_zone::DnsZones {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-    })
-}
-
 fn iface_dns_zone__dns_zone__from_json(v: &Value) -> Option<iface_dns_zone::DnsZone> {
     let m = v.as_object()?;
     Some(iface_dns_zone::DnsZone {
@@ -307,19 +288,12 @@ fn iface_dns_zone__dns_record__from_json(v: &Value) -> Option<iface_dns_zone::Dn
     })
 }
 
-fn iface_dns_zone__dns_records__from_json(v: &Value) -> Option<iface_dns_zone::DnsRecords> {
-    let m = v.as_object()?;
-    Some(iface_dns_zone::DnsRecords {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-    })
-}
-
-fn iface_dns_zone__get_dns_zones__ok(body: String) -> Result<iface_dns_zone::DnsZones, crate::runtime::DispatchError> {
+fn iface_dns_zone__get_dns_zones__ok(body: String) -> Result<Vec<iface_dns_zone::DnsZone>, crate::runtime::DispatchError> {
     let v: Value = match serde_json::from_str(&body) {
         Ok(v) => v,
         Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
     };
-    match iface_dns_zone__dns_zones__from_json(&v) {
+    match (&v).as_array().map(|a| a.iter().filter_map(|x| iface_dns_zone__dns_zone__from_json(x)).collect()) {
         Some(x) => Ok(x),
         None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
@@ -379,12 +353,12 @@ fn iface_dns_zone__delete_dns_zone__err(e: crate::runtime::DispatchError) -> Str
     }
 }
 
-fn iface_dns_zone__get_dns_records__ok(body: String) -> Result<iface_dns_zone::DnsRecords, crate::runtime::DispatchError> {
+fn iface_dns_zone__get_dns_records__ok(body: String) -> Result<Vec<iface_dns_zone::DnsRecord>, crate::runtime::DispatchError> {
     let v: Value = match serde_json::from_str(&body) {
         Ok(v) => v,
         Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
     };
-    match iface_dns_zone__dns_records__from_json(&v) {
+    match (&v).as_array().map(|a| a.iter().filter_map(|x| iface_dns_zone__dns_record__from_json(x)).collect()) {
         Some(x) => Ok(x),
         None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
@@ -499,7 +473,7 @@ fn iface_dns_zone__configure_dns_for_site__err(e: crate::runtime::DispatchError)
 }
 
 impl iface_dns_zone::Guest for crate::Component {
-    fn get_dns_zones(params: iface_dns_zone::GetDnsZonesParams) -> Result<iface_dns_zone::DnsZones, String> {
+    fn get_dns_zones(params: iface_dns_zone::GetDnsZonesParams) -> Result<Vec<iface_dns_zone::DnsZone>, String> {
         let json = iface_dns_zone__get_dns_zones_params__to_json(&params);
         match dispatch(&OP_DNS_ZONE_GET_DNS_ZONES, json).and_then(iface_dns_zone__get_dns_zones__ok) {
             Ok(v) => Ok(v),
@@ -527,7 +501,7 @@ impl iface_dns_zone::Guest for crate::Component {
             Err(e) => Err(iface_dns_zone__delete_dns_zone__err(e)),
         }
     }
-    fn get_dns_records(params: iface_dns_zone::GetDnsRecordsParams) -> Result<iface_dns_zone::DnsRecords, String> {
+    fn get_dns_records(params: iface_dns_zone::GetDnsRecordsParams) -> Result<Vec<iface_dns_zone::DnsRecord>, String> {
         let json = iface_dns_zone__get_dns_records_params__to_json(&params);
         match dispatch(&OP_DNS_ZONE_GET_DNS_RECORDS, json).and_then(iface_dns_zone__get_dns_records__ok) {
             Ok(v) => Ok(v),

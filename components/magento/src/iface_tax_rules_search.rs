@@ -33,7 +33,7 @@ fn iface_tax_rules_search__tax_data_tax_rule_interface__to_json(p: &iface_tax_ru
     m.insert("calculate_subtotal".into(), match (&p.calculate_subtotal) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     m.insert("code".into(), Value::String((&p.code).clone()));
     m.insert("customer_tax_class_ids".into(), Value::Array((&p.customer_tax_class_ids).iter().map(|v| Value::Number(serde_json::Number::from(*(v)))).collect()));
-    m.insert("extension_attributes".into(), match (&p.extension_attributes) { Some(v) => iface_tax_rules_search__tax_data_tax_rule_extension_interface__to_json(v), None => Value::Null });
+    m.insert("extension_attributes".into(), match (&p.extension_attributes) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("id".into(), match (&p.id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("position".into(), Value::Number(serde_json::Number::from(*(&p.position))));
     m.insert("priority".into(), Value::Number(serde_json::Number::from(*(&p.priority))));
@@ -42,9 +42,10 @@ fn iface_tax_rules_search__tax_data_tax_rule_interface__to_json(p: &iface_tax_ru
     Value::Object(m)
 }
 
-fn iface_tax_rules_search__tax_data_tax_rule_extension_interface__to_json(p: &iface_tax_rules_search::TaxDataTaxRuleExtensionInterface) -> Value {
+fn iface_tax_rules_search__tax_data_tax_rule_extension_interface_entry__to_json(p: &iface_tax_rules_search::TaxDataTaxRuleExtensionInterfaceEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -105,7 +106,7 @@ fn iface_tax_rules_search__tax_data_tax_rule_interface__from_json(v: &Value) -> 
         calculate_subtotal: m.get("calculate_subtotal").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
         code: m.get("code").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         customer_tax_class_ids: m.get("customer_tax_class_ids").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_i64().map(|n| n as i32)).collect())).unwrap_or_default(),
-        extension_attributes: m.get("extension_attributes").filter(|v| !v.is_null()).and_then(|v| iface_tax_rules_search__tax_data_tax_rule_extension_interface__from_json(v)),
+        extension_attributes: m.get("extension_attributes").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_tax_rules_search::TaxDataTaxRuleExtensionInterfaceEntry { key: k.clone(), value: val })).collect())),
         id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
         position: m.get("position").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
         priority: m.get("priority").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
@@ -114,10 +115,11 @@ fn iface_tax_rules_search__tax_data_tax_rule_interface__from_json(v: &Value) -> 
     })
 }
 
-fn iface_tax_rules_search__tax_data_tax_rule_extension_interface__from_json(v: &Value) -> Option<iface_tax_rules_search::TaxDataTaxRuleExtensionInterface> {
+fn iface_tax_rules_search__tax_data_tax_rule_extension_interface_entry__from_json(v: &Value) -> Option<iface_tax_rules_search::TaxDataTaxRuleExtensionInterfaceEntry> {
     let m = v.as_object()?;
-    Some(iface_tax_rules_search::TaxDataTaxRuleExtensionInterface {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_tax_rules_search::TaxDataTaxRuleExtensionInterfaceEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 

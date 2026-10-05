@@ -1,4 +1,4 @@
-package autostamp:wikimedia@0.5.0;
+package autostamp:wikimedia@0.6.0;
 
 interface feed-content-availability {
   record availability {
@@ -940,9 +940,22 @@ interface transform {
     tools: option<list<string>>
   }
 
-  record cx-list-pairs-for-tool {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record cx-list-pairs-for-tool-entry {
+    key: string,
+    value: string
+  }
+
+  /// one entry of a string-keyed map (free-form object)
+  record cx-list-pairs-for-tool-entry-v2 {
+    key: string,
+    value: string
+  }
+
+  /// one entry of a string-keyed map (free-form object)
+  record cx-list-pairs-for-tool-entry-v3 {
+    key: string,
+    value: string
   }
 
   record cx-dict {
@@ -1002,7 +1015,7 @@ interface transform {
     /// The tool category to list tools and language pairs for
     tool: string
   }
-  get-transform-list-tool-tool: func(params: get-transform-list-tool-tool-params) -> result<cx-list-pairs-for-tool, string>;
+  get-transform-list-tool-tool: func(params: get-transform-list-tool-tool-params) -> result<list<cx-list-pairs-for-tool-entry>, string>;
 
   /// Lists the tools and language pairs available for the given tool category
   record get-transform-list-tool-tool-from-params {
@@ -1011,7 +1024,7 @@ interface transform {
     /// The source language code
     from-op: string
   }
-  get-transform-list-tool-tool-from: func(params: get-transform-list-tool-tool-from-params) -> result<cx-list-pairs-for-tool, string>;
+  get-transform-list-tool-tool-from: func(params: get-transform-list-tool-tool-from-params) -> result<list<cx-list-pairs-for-tool-entry-v2>, string>;
 
   /// Lists the tools and language pairs available for the given tool category
   record get-transform-list-tool-tool-from-to-params {
@@ -1022,7 +1035,7 @@ interface transform {
     /// The target language code
     to: string
   }
-  get-transform-list-tool-tool-from-to: func(params: get-transform-list-tool-tool-from-to-params) -> result<cx-list-pairs-for-tool, string>;
+  get-transform-list-tool-tool-from-to: func(params: get-transform-list-tool-tool-from-to-params) -> result<list<cx-list-pairs-for-tool-entry-v3>, string>;
 
   /// Fetch the dictionary meaning of a word
   record get-transform-word-from-from-lang-to-to-lang-word-params {

@@ -423,6 +423,19 @@ fn iface_pulls__list_op_direction_enum__to_str(e: &iface_pulls::ListOpDirectionE
     }
 }
 
+fn iface_pulls__author_association__to_str(e: &iface_pulls::AuthorAssociation) -> &'static str {
+    match e {
+        iface_pulls::AuthorAssociation::Collaborator => "COLLABORATOR",
+        iface_pulls::AuthorAssociation::Contributor => "CONTRIBUTOR",
+        iface_pulls::AuthorAssociation::FirstTimer => "FIRST_TIMER",
+        iface_pulls::AuthorAssociation::FirstTimeContributor => "FIRST_TIME_CONTRIBUTOR",
+        iface_pulls::AuthorAssociation::Mannequin => "MANNEQUIN",
+        iface_pulls::AuthorAssociation::Member => "MEMBER",
+        iface_pulls::AuthorAssociation::None => "NONE",
+        iface_pulls::AuthorAssociation::Owner => "OWNER",
+    }
+}
+
 fn iface_pulls__auto_merge_merge_method_enum__to_str(e: &iface_pulls::AutoMergeMergeMethodEnum) -> &'static str {
     match e {
         iface_pulls::AutoMergeMergeMethodEnum::Merge => "merge",
@@ -530,7 +543,7 @@ fn iface_pulls__pull_request_simple__to_json(p: &iface_pulls::PullRequestSimple)
     m.insert("active_lock_reason".into(), match (&p.active_lock_reason) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("assignee".into(), iface_pulls__nullable_simple_user__to_json(&p.assignee));
     m.insert("assignees".into(), match (&p.assignees) { Some(v) => Value::Array((v).iter().map(|v| iface_pulls__simple_user__to_json(v)).collect()), None => Value::Null });
-    m.insert("author_association".into(), iface_pulls__author_association__to_json(&p.author_association));
+    m.insert("author_association".into(), Value::String(iface_pulls__author_association__to_str(&p.author_association).into()));
     m.insert("auto_merge".into(), iface_pulls__auto_merge__to_json(&p.auto_merge));
     m.insert("base".into(), iface_pulls__pull_request_simple_base__to_json(&p.base));
     m.insert("body".into(), Value::String((&p.body).clone()));
@@ -633,12 +646,6 @@ fn iface_pulls__simple_user__to_json(p: &iface_pulls::SimpleUser) -> Value {
     m.insert("subscriptions_url".into(), Value::String((&p.subscriptions_url).clone()));
     m.insert("type".into(), Value::String((&p.type_op).clone()));
     m.insert("url".into(), Value::String((&p.url).clone()));
-    Value::Object(m)
-}
-
-fn iface_pulls__author_association__to_json(p: &iface_pulls::AuthorAssociation) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -1006,7 +1013,7 @@ fn iface_pulls__pull_request__to_json(p: &iface_pulls::PullRequest) -> Value {
     m.insert("additions".into(), Value::Number(serde_json::Number::from(*(&p.additions))));
     m.insert("assignee".into(), iface_pulls__nullable_simple_user__to_json(&p.assignee));
     m.insert("assignees".into(), match (&p.assignees) { Some(v) => Value::Array((v).iter().map(|v| iface_pulls__simple_user__to_json(v)).collect()), None => Value::Null });
-    m.insert("author_association".into(), iface_pulls__author_association__to_json(&p.author_association));
+    m.insert("author_association".into(), Value::String(iface_pulls__author_association__to_str(&p.author_association).into()));
     m.insert("auto_merge".into(), iface_pulls__auto_merge__to_json(&p.auto_merge));
     m.insert("base".into(), iface_pulls__pull_request_base__to_json(&p.base));
     m.insert("body".into(), Value::String((&p.body).clone()));
@@ -1419,7 +1426,7 @@ fn iface_pulls__team_simple__to_json(p: &iface_pulls::TeamSimple) -> Value {
 fn iface_pulls__pull_request_review_comment__to_json(p: &iface_pulls::PullRequestReviewComment) -> Value {
     let mut m = Map::new();
     m.insert("_links".into(), iface_pulls__pull_request_review_comment_links__to_json(&p.links));
-    m.insert("author_association".into(), iface_pulls__author_association__to_json(&p.author_association));
+    m.insert("author_association".into(), Value::String(iface_pulls__author_association__to_str(&p.author_association).into()));
     m.insert("body".into(), Value::String((&p.body).clone()));
     m.insert("body_html".into(), match (&p.body_html) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("body_text".into(), match (&p.body_text) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -1592,7 +1599,7 @@ fn iface_pulls__pull_request_review_request__to_json(p: &iface_pulls::PullReques
 fn iface_pulls__pull_request_review__to_json(p: &iface_pulls::PullRequestReview) -> Value {
     let mut m = Map::new();
     m.insert("_links".into(), iface_pulls__pull_request_review_links__to_json(&p.links));
-    m.insert("author_association".into(), iface_pulls__author_association__to_json(&p.author_association));
+    m.insert("author_association".into(), Value::String(iface_pulls__author_association__to_str(&p.author_association).into()));
     m.insert("body".into(), Value::String((&p.body).clone()));
     m.insert("body_html".into(), match (&p.body_html) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("body_text".into(), match (&p.body_text) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -1641,7 +1648,7 @@ fn iface_pulls__create_review_body_comments_item__to_json(p: &iface_pulls::Creat
 fn iface_pulls__review_comment__to_json(p: &iface_pulls::ReviewComment) -> Value {
     let mut m = Map::new();
     m.insert("_links".into(), iface_pulls__review_comment_links__to_json(&p.links));
-    m.insert("author_association".into(), iface_pulls__author_association__to_json(&p.author_association));
+    m.insert("author_association".into(), Value::String(iface_pulls__author_association__to_str(&p.author_association).into()));
     m.insert("body".into(), Value::String((&p.body).clone()));
     m.insert("body_html".into(), match (&p.body_html) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("body_text".into(), match (&p.body_text) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -1980,7 +1987,7 @@ fn iface_pulls__pull_request_simple__from_json(v: &Value) -> Option<iface_pulls:
         active_lock_reason: m.get("active_lock_reason").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         assignee: match m.get("assignee").and_then(|v| iface_pulls__nullable_simple_user__from_json(v)) { Some(x) => x, None => return None },
         assignees: m.get("assignees").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_pulls__simple_user__from_json(x)).collect())),
-        author_association: match m.get("author_association").and_then(|v| iface_pulls__author_association__from_json(v)) { Some(x) => x, None => return None },
+        author_association: match m.get("author_association").and_then(|v| (v).as_str().and_then(iface_pulls__author_association__from_str)) { Some(x) => x, None => return None },
         auto_merge: match m.get("auto_merge").and_then(|v| iface_pulls__auto_merge__from_json(v)) { Some(x) => x, None => return None },
         base: match m.get("base").and_then(|v| iface_pulls__pull_request_simple_base__from_json(v)) { Some(x) => x, None => return None },
         body: m.get("body").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
@@ -2087,13 +2094,6 @@ fn iface_pulls__simple_user__from_json(v: &Value) -> Option<iface_pulls::SimpleU
         subscriptions_url: m.get("subscriptions_url").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         type_op: m.get("type").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         url: m.get("url").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-    })
-}
-
-fn iface_pulls__author_association__from_json(v: &Value) -> Option<iface_pulls::AuthorAssociation> {
-    let m = v.as_object()?;
-    Some(iface_pulls::AuthorAssociation {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -2476,7 +2476,7 @@ fn iface_pulls__pull_request__from_json(v: &Value) -> Option<iface_pulls::PullRe
         additions: m.get("additions").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
         assignee: match m.get("assignee").and_then(|v| iface_pulls__nullable_simple_user__from_json(v)) { Some(x) => x, None => return None },
         assignees: m.get("assignees").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_pulls__simple_user__from_json(x)).collect())),
-        author_association: match m.get("author_association").and_then(|v| iface_pulls__author_association__from_json(v)) { Some(x) => x, None => return None },
+        author_association: match m.get("author_association").and_then(|v| (v).as_str().and_then(iface_pulls__author_association__from_str)) { Some(x) => x, None => return None },
         auto_merge: match m.get("auto_merge").and_then(|v| iface_pulls__auto_merge__from_json(v)) { Some(x) => x, None => return None },
         base: match m.get("base").and_then(|v| iface_pulls__pull_request_base__from_json(v)) { Some(x) => x, None => return None },
         body: m.get("body").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
@@ -2904,7 +2904,7 @@ fn iface_pulls__pull_request_review_comment__from_json(v: &Value) -> Option<ifac
     let m = v.as_object()?;
     Some(iface_pulls::PullRequestReviewComment {
         links: match m.get("_links").and_then(|v| iface_pulls__pull_request_review_comment_links__from_json(v)) { Some(x) => x, None => return None },
-        author_association: match m.get("author_association").and_then(|v| iface_pulls__author_association__from_json(v)) { Some(x) => x, None => return None },
+        author_association: match m.get("author_association").and_then(|v| (v).as_str().and_then(iface_pulls__author_association__from_str)) { Some(x) => x, None => return None },
         body: m.get("body").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         body_html: m.get("body_html").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         body_text: m.get("body_text").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
@@ -3093,7 +3093,7 @@ fn iface_pulls__pull_request_review__from_json(v: &Value) -> Option<iface_pulls:
     let m = v.as_object()?;
     Some(iface_pulls::PullRequestReview {
         links: match m.get("_links").and_then(|v| iface_pulls__pull_request_review_links__from_json(v)) { Some(x) => x, None => return None },
-        author_association: match m.get("author_association").and_then(|v| iface_pulls__author_association__from_json(v)) { Some(x) => x, None => return None },
+        author_association: match m.get("author_association").and_then(|v| (v).as_str().and_then(iface_pulls__author_association__from_str)) { Some(x) => x, None => return None },
         body: m.get("body").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         body_html: m.get("body_html").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         body_text: m.get("body_text").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
@@ -3134,7 +3134,7 @@ fn iface_pulls__review_comment__from_json(v: &Value) -> Option<iface_pulls::Revi
     let m = v.as_object()?;
     Some(iface_pulls::ReviewComment {
         links: match m.get("_links").and_then(|v| iface_pulls__review_comment_links__from_json(v)) { Some(x) => x, None => return None },
-        author_association: match m.get("author_association").and_then(|v| iface_pulls__author_association__from_json(v)) { Some(x) => x, None => return None },
+        author_association: match m.get("author_association").and_then(|v| (v).as_str().and_then(iface_pulls__author_association__from_str)) { Some(x) => x, None => return None },
         body: m.get("body").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         body_html: m.get("body_html").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         body_text: m.get("body_text").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
@@ -3179,6 +3179,20 @@ fn iface_pulls__update_branch_response__from_json(v: &Value) -> Option<iface_pul
         message: m.get("message").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         url: m.get("url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
     })
+}
+
+fn iface_pulls__author_association__from_str(s: &str) -> Option<iface_pulls::AuthorAssociation> {
+    match s {
+        "COLLABORATOR" => Some(iface_pulls::AuthorAssociation::Collaborator),
+        "CONTRIBUTOR" => Some(iface_pulls::AuthorAssociation::Contributor),
+        "FIRST_TIMER" => Some(iface_pulls::AuthorAssociation::FirstTimer),
+        "FIRST_TIME_CONTRIBUTOR" => Some(iface_pulls::AuthorAssociation::FirstTimeContributor),
+        "MANNEQUIN" => Some(iface_pulls::AuthorAssociation::Mannequin),
+        "MEMBER" => Some(iface_pulls::AuthorAssociation::Member),
+        "NONE" => Some(iface_pulls::AuthorAssociation::None),
+        "OWNER" => Some(iface_pulls::AuthorAssociation::Owner),
+        _ => None,
+    }
 }
 
 fn iface_pulls__auto_merge_merge_method_enum__from_str(s: &str) -> Option<iface_pulls::AutoMergeMergeMethodEnum> {

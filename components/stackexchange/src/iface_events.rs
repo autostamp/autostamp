@@ -19,9 +19,13 @@ const OP_EVENTS_GET_EVENTS: OpSpec = OpSpec {
     ],
 };
 
-fn iface_events__events__to_json(p: &iface_events::Events) -> Value {
+fn iface_events__events_item__to_json(p: &iface_events::EventsItem) -> Value {
     let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
+    m.insert("creation_date".into(), match (&p.creation_date) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("event_type".into(), match (&p.event_type) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("excerpt".into(), match (&p.excerpt) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("link".into(), match (&p.link) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("the id of the object (answer, comment, question, or user) the event describes".into(), match (&p.the_id_of_the_object_answer_comment_question_or_user_the_event_describes) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
@@ -36,19 +40,23 @@ fn iface_events__get_events_params__to_json(p: &iface_events::GetEventsParams) -
     Value::Object(m)
 }
 
-fn iface_events__events__from_json(v: &Value) -> Option<iface_events::Events> {
+fn iface_events__events_item__from_json(v: &Value) -> Option<iface_events::EventsItem> {
     let m = v.as_object()?;
-    Some(iface_events::Events {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    Some(iface_events::EventsItem {
+        creation_date: m.get("creation_date").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        event_type: m.get("event_type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        excerpt: m.get("excerpt").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        link: m.get("link").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        the_id_of_the_object_answer_comment_question_or_user_the_event_describes: m.get("the id of the object (answer, comment, question, or user) the event describes").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
     })
 }
 
-fn iface_events__get_events__ok(body: String) -> Result<iface_events::Events, crate::runtime::DispatchError> {
+fn iface_events__get_events__ok(body: String) -> Result<Vec<iface_events::EventsItem>, crate::runtime::DispatchError> {
     let v: Value = match serde_json::from_str(&body) {
         Ok(v) => v,
         Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
     };
-    match iface_events__events__from_json(&v) {
+    match (&v).as_array().map(|a| a.iter().filter_map(|x| iface_events__events_item__from_json(x)).collect()) {
         Some(x) => Ok(x),
         None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
@@ -74,7 +82,7 @@ fn iface_events__get_events__err(e: crate::runtime::DispatchError) -> iface_even
 }
 
 impl iface_events::Guest for crate::Component {
-    fn get_events(params: iface_events::GetEventsParams) -> Result<iface_events::Events, iface_events::GetEventsError> {
+    fn get_events(params: iface_events::GetEventsParams) -> Result<Vec<iface_events::EventsItem>, iface_events::GetEventsError> {
         let json = iface_events__get_events_params__to_json(&params);
         match dispatch(&OP_EVENTS_GET_EVENTS, json).and_then(iface_events__get_events__ok) {
             Ok(v) => Ok(v),
