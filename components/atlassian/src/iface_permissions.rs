@@ -56,15 +56,35 @@ const OP_PERMISSIONS_GET_PERMITTED_PROJECTS: OpSpec = OpSpec {
     ],
 };
 
+fn iface_permissions__user_permission_type_op_enum__to_str(e: &iface_permissions::UserPermissionTypeOpEnum) -> &'static str {
+    match e {
+        iface_permissions::UserPermissionTypeOpEnum::Global => "GLOBAL",
+        iface_permissions::UserPermissionTypeOpEnum::Project => "PROJECT",
+    }
+}
+
 fn iface_permissions__permissions__to_json(p: &iface_permissions::Permissions) -> Value {
     let mut m = Map::new();
-    m.insert("permissions".into(), match (&p.permissions) { Some(v) => iface_permissions__permissions_permissions__to_json(v), None => Value::Null });
+    m.insert("permissions".into(), match (&p.permissions) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), iface_permissions__user_permission__to_json(&e.value))).collect()), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_permissions__permissions_permissions__to_json(p: &iface_permissions::PermissionsPermissions) -> Value {
+fn iface_permissions__user_permission__to_json(p: &iface_permissions::UserPermission) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("deprecatedKey".into(), match (&p.deprecated_key) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("description".into(), match (&p.description) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("havePermission".into(), match (&p.have_permission) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), match (&p.key) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("type".into(), match (&p.type_op) { Some(v) => Value::String(iface_permissions__user_permission_type_op_enum__to_str(v).into()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_permissions__permissions_permissions_entry__to_json(p: &iface_permissions::PermissionsPermissionsEntry) -> Value {
+    let mut m = Map::new();
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), iface_permissions__user_permission__to_json(&p.value));
     Value::Object(m)
 }
 
@@ -134,14 +154,28 @@ fn iface_permissions__get_permitted_projects_params__to_json(p: &iface_permissio
 fn iface_permissions__permissions__from_json(v: &Value) -> Option<iface_permissions::Permissions> {
     let m = v.as_object()?;
     Some(iface_permissions::Permissions {
-        permissions: m.get("permissions").filter(|v| !v.is_null()).and_then(|v| iface_permissions__permissions_permissions__from_json(v)),
+        permissions: m.get("permissions").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| (iface_permissions__user_permission__from_json(x)).map(|val| iface_permissions::PermissionsPermissionsEntry { key: k.clone(), value: val })).collect())),
     })
 }
 
-fn iface_permissions__permissions_permissions__from_json(v: &Value) -> Option<iface_permissions::PermissionsPermissions> {
+fn iface_permissions__user_permission__from_json(v: &Value) -> Option<iface_permissions::UserPermission> {
     let m = v.as_object()?;
-    Some(iface_permissions::PermissionsPermissions {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_permissions::UserPermission {
+        deprecated_key: m.get("deprecatedKey").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        description: m.get("description").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        have_permission: m.get("havePermission").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        key: m.get("key").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        type_op: m.get("type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_permissions__user_permission_type_op_enum__from_str)),
+    })
+}
+
+fn iface_permissions__permissions_permissions_entry__from_json(v: &Value) -> Option<iface_permissions::PermissionsPermissionsEntry> {
+    let m = v.as_object()?;
+    Some(iface_permissions::PermissionsPermissionsEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: match m.get("value").and_then(|v| iface_permissions__user_permission__from_json(v)) { Some(x) => x, None => return None },
     })
 }
 
@@ -175,6 +209,14 @@ fn iface_permissions__project_identifier_bean__from_json(v: &Value) -> Option<if
         id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_i64()),
         key: m.get("key").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
     })
+}
+
+fn iface_permissions__user_permission_type_op_enum__from_str(s: &str) -> Option<iface_permissions::UserPermissionTypeOpEnum> {
+    match s {
+        "GLOBAL" => Some(iface_permissions::UserPermissionTypeOpEnum::Global),
+        "PROJECT" => Some(iface_permissions::UserPermissionTypeOpEnum::Project),
+        _ => None,
+    }
 }
 
 fn iface_permissions__get_my_permissions__ok(body: String) -> Result<iface_permissions::Permissions, crate::runtime::DispatchError> {

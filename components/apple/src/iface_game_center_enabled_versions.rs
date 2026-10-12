@@ -132,6 +132,14 @@ fn iface_game_center_enabled_versions__compatible_versions_get_to_many_related_i
     }
 }
 
+fn iface_game_center_enabled_versions__platform__to_str(e: &iface_game_center_enabled_versions::Platform) -> &'static str {
+    match e {
+        iface_game_center_enabled_versions::Platform::Ios => "IOS",
+        iface_game_center_enabled_versions::Platform::MacOs => "MAC_OS",
+        iface_game_center_enabled_versions::Platform::TvOs => "TV_OS",
+    }
+}
+
 fn iface_game_center_enabled_versions__game_center_enabled_version_relationships_app_data_type_op_enum__to_str(e: &iface_game_center_enabled_versions::GameCenterEnabledVersionRelationshipsAppDataTypeOpEnum) -> &'static str {
     match e {
         iface_game_center_enabled_versions::GameCenterEnabledVersionRelationshipsAppDataTypeOpEnum::Apps => "apps",
@@ -166,7 +174,7 @@ fn iface_game_center_enabled_versions__game_center_enabled_version__to_json(p: &
 fn iface_game_center_enabled_versions__game_center_enabled_version_attributes__to_json(p: &iface_game_center_enabled_versions::GameCenterEnabledVersionAttributes) -> Value {
     let mut m = Map::new();
     m.insert("iconAsset".into(), match (&p.icon_asset) { Some(v) => iface_game_center_enabled_versions__image_asset__to_json(v), None => Value::Null });
-    m.insert("platform".into(), match (&p.platform) { Some(v) => iface_game_center_enabled_versions__platform__to_json(v), None => Value::Null });
+    m.insert("platform".into(), match (&p.platform) { Some(v) => Value::String(iface_game_center_enabled_versions__platform__to_str(v).into()), None => Value::Null });
     m.insert("versionString".into(), match (&p.version_string) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
@@ -176,12 +184,6 @@ fn iface_game_center_enabled_versions__image_asset__to_json(p: &iface_game_cente
     m.insert("height".into(), match (&p.height) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("templateUrl".into(), match (&p.template_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("width".into(), match (&p.width) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_game_center_enabled_versions__platform__to_json(p: &iface_game_center_enabled_versions::Platform) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -352,7 +354,7 @@ fn iface_game_center_enabled_versions__game_center_enabled_version_attributes__f
     let m = v.as_object()?;
     Some(iface_game_center_enabled_versions::GameCenterEnabledVersionAttributes {
         icon_asset: m.get("iconAsset").filter(|v| !v.is_null()).and_then(|v| iface_game_center_enabled_versions__image_asset__from_json(v)),
-        platform: m.get("platform").filter(|v| !v.is_null()).and_then(|v| iface_game_center_enabled_versions__platform__from_json(v)),
+        platform: m.get("platform").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_game_center_enabled_versions__platform__from_str)),
         version_string: m.get("versionString").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
     })
 }
@@ -363,13 +365,6 @@ fn iface_game_center_enabled_versions__image_asset__from_json(v: &Value) -> Opti
         height: m.get("height").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
         template_url: m.get("templateUrl").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         width: m.get("width").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
-    })
-}
-
-fn iface_game_center_enabled_versions__platform__from_json(v: &Value) -> Option<iface_game_center_enabled_versions::Platform> {
-    let m = v.as_object()?;
-    Some(iface_game_center_enabled_versions::Platform {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -476,6 +471,15 @@ fn iface_game_center_enabled_versions__game_center_enabled_version_compatible_ve
         id: m.get("id").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         type_op: match m.get("type").and_then(|v| (v).as_str().and_then(iface_game_center_enabled_versions__game_center_enabled_version_relationships_compatible_versions_data_item_type_op_enum__from_str)) { Some(x) => x, None => return None },
     })
+}
+
+fn iface_game_center_enabled_versions__platform__from_str(s: &str) -> Option<iface_game_center_enabled_versions::Platform> {
+    match s {
+        "IOS" => Some(iface_game_center_enabled_versions::Platform::Ios),
+        "MAC_OS" => Some(iface_game_center_enabled_versions::Platform::MacOs),
+        "TV_OS" => Some(iface_game_center_enabled_versions::Platform::TvOs),
+        _ => None,
+    }
 }
 
 fn iface_game_center_enabled_versions__game_center_enabled_version_relationships_app_data_type_op_enum__from_str(s: &str) -> Option<iface_game_center_enabled_versions::GameCenterEnabledVersionRelationshipsAppDataTypeOpEnum> {

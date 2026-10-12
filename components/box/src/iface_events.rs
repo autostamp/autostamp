@@ -153,7 +153,7 @@ fn iface_events__events__to_json(p: &iface_events::Events) -> Value {
 
 fn iface_events__event__to_json(p: &iface_events::Event) -> Value {
     let mut m = Map::new();
-    m.insert("additional_details".into(), match (&p.additional_details) { Some(v) => iface_events__event_additional_details__to_json(v), None => Value::Null });
+    m.insert("additional_details".into(), match (&p.additional_details) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("created_at".into(), match (&p.created_at) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("created_by".into(), match (&p.created_by) { Some(v) => iface_events__event_created_by__to_json(v), None => Value::Null });
     m.insert("event_id".into(), match (&p.event_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -165,9 +165,10 @@ fn iface_events__event__to_json(p: &iface_events::Event) -> Value {
     Value::Object(m)
 }
 
-fn iface_events__event_additional_details__to_json(p: &iface_events::EventAdditionalDetails) -> Value {
+fn iface_events__event_additional_details_entry__to_json(p: &iface_events::EventAdditionalDetailsEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -212,7 +213,7 @@ fn iface_events__events__from_json(v: &Value) -> Option<iface_events::Events> {
 fn iface_events__event__from_json(v: &Value) -> Option<iface_events::Event> {
     let m = v.as_object()?;
     Some(iface_events::Event {
-        additional_details: m.get("additional_details").filter(|v| !v.is_null()).and_then(|v| iface_events__event_additional_details__from_json(v)),
+        additional_details: m.get("additional_details").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_events::EventAdditionalDetailsEntry { key: k.clone(), value: val })).collect())),
         created_at: m.get("created_at").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         created_by: m.get("created_by").filter(|v| !v.is_null()).and_then(|v| iface_events__event_created_by__from_json(v)),
         event_id: m.get("event_id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
@@ -224,10 +225,11 @@ fn iface_events__event__from_json(v: &Value) -> Option<iface_events::Event> {
     })
 }
 
-fn iface_events__event_additional_details__from_json(v: &Value) -> Option<iface_events::EventAdditionalDetails> {
+fn iface_events__event_additional_details_entry__from_json(v: &Value) -> Option<iface_events::EventAdditionalDetailsEntry> {
     let m = v.as_object()?;
-    Some(iface_events::EventAdditionalDetails {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_events::EventAdditionalDetailsEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 

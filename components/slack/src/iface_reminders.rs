@@ -67,63 +67,45 @@ const OP_REMINDERS_LIST_OP: OpSpec = OpSpec {
 
 fn iface_reminders__add_response__to_json(p: &iface_reminders::AddResponse) -> Value {
     let mut m = Map::new();
-    m.insert("ok".into(), iface_reminders__defs_ok_true__to_json(&p.ok));
+    m.insert("ok".into(), Value::Bool(*(&p.ok)));
     m.insert("reminder".into(), iface_reminders__objs_reminder__to_json(&p.reminder));
-    Value::Object(m)
-}
-
-fn iface_reminders__defs_ok_true__to_json(p: &iface_reminders::DefsOkTrue) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
 fn iface_reminders__objs_reminder__to_json(p: &iface_reminders::ObjsReminder) -> Value {
     let mut m = Map::new();
     m.insert("complete_ts".into(), match (&p.complete_ts) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    m.insert("creator".into(), iface_reminders__defs_user_id__to_json(&p.creator));
-    m.insert("id".into(), iface_reminders__defs_reminder_id__to_json(&p.id));
+    m.insert("creator".into(), Value::String((&p.creator).clone()));
+    m.insert("id".into(), Value::String((&p.id).clone()));
     m.insert("recurring".into(), Value::Bool(*(&p.recurring)));
     m.insert("text".into(), Value::String((&p.text).clone()));
     m.insert("time".into(), match (&p.time) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    m.insert("user".into(), iface_reminders__defs_user_id__to_json(&p.user));
-    Value::Object(m)
-}
-
-fn iface_reminders__defs_user_id__to_json(p: &iface_reminders::DefsUserId) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_reminders__defs_reminder_id__to_json(p: &iface_reminders::DefsReminderId) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
+    m.insert("user".into(), Value::String((&p.user).clone()));
     Value::Object(m)
 }
 
 fn iface_reminders__complete_response__to_json(p: &iface_reminders::CompleteResponse) -> Value {
     let mut m = Map::new();
-    m.insert("ok".into(), iface_reminders__defs_ok_true__to_json(&p.ok));
+    m.insert("ok".into(), Value::Bool(*(&p.ok)));
     Value::Object(m)
 }
 
 fn iface_reminders__delete_response__to_json(p: &iface_reminders::DeleteResponse) -> Value {
     let mut m = Map::new();
-    m.insert("ok".into(), iface_reminders__defs_ok_true__to_json(&p.ok));
+    m.insert("ok".into(), Value::Bool(*(&p.ok)));
     Value::Object(m)
 }
 
 fn iface_reminders__info_response__to_json(p: &iface_reminders::InfoResponse) -> Value {
     let mut m = Map::new();
-    m.insert("ok".into(), iface_reminders__defs_ok_true__to_json(&p.ok));
+    m.insert("ok".into(), Value::Bool(*(&p.ok)));
     m.insert("reminder".into(), iface_reminders__objs_reminder__to_json(&p.reminder));
     Value::Object(m)
 }
 
 fn iface_reminders__list_op_response__to_json(p: &iface_reminders::ListOpResponse) -> Value {
     let mut m = Map::new();
-    m.insert("ok".into(), iface_reminders__defs_ok_true__to_json(&p.ok));
+    m.insert("ok".into(), Value::Bool(*(&p.ok)));
     m.insert("reminders".into(), Value::Array((&p.reminders).iter().map(|v| iface_reminders__objs_reminder__to_json(v)).collect()));
     Value::Object(m)
 }
@@ -167,15 +149,8 @@ fn iface_reminders__list_op_params__to_json(p: &iface_reminders::ListOpParams) -
 fn iface_reminders__add_response__from_json(v: &Value) -> Option<iface_reminders::AddResponse> {
     let m = v.as_object()?;
     Some(iface_reminders::AddResponse {
-        ok: match m.get("ok").and_then(|v| iface_reminders__defs_ok_true__from_json(v)) { Some(x) => x, None => return None },
+        ok: m.get("ok").and_then(|v| (v).as_bool()).unwrap_or_default(),
         reminder: match m.get("reminder").and_then(|v| iface_reminders__objs_reminder__from_json(v)) { Some(x) => x, None => return None },
-    })
-}
-
-fn iface_reminders__defs_ok_true__from_json(v: &Value) -> Option<iface_reminders::DefsOkTrue> {
-    let m = v.as_object()?;
-    Some(iface_reminders::DefsOkTrue {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -183,47 +158,33 @@ fn iface_reminders__objs_reminder__from_json(v: &Value) -> Option<iface_reminder
     let m = v.as_object()?;
     Some(iface_reminders::ObjsReminder {
         complete_ts: m.get("complete_ts").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
-        creator: match m.get("creator").and_then(|v| iface_reminders__defs_user_id__from_json(v)) { Some(x) => x, None => return None },
-        id: match m.get("id").and_then(|v| iface_reminders__defs_reminder_id__from_json(v)) { Some(x) => x, None => return None },
+        creator: m.get("creator").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        id: m.get("id").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         recurring: m.get("recurring").and_then(|v| (v).as_bool()).unwrap_or_default(),
         text: m.get("text").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         time: m.get("time").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
-        user: match m.get("user").and_then(|v| iface_reminders__defs_user_id__from_json(v)) { Some(x) => x, None => return None },
-    })
-}
-
-fn iface_reminders__defs_user_id__from_json(v: &Value) -> Option<iface_reminders::DefsUserId> {
-    let m = v.as_object()?;
-    Some(iface_reminders::DefsUserId {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-    })
-}
-
-fn iface_reminders__defs_reminder_id__from_json(v: &Value) -> Option<iface_reminders::DefsReminderId> {
-    let m = v.as_object()?;
-    Some(iface_reminders::DefsReminderId {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        user: m.get("user").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
 fn iface_reminders__complete_response__from_json(v: &Value) -> Option<iface_reminders::CompleteResponse> {
     let m = v.as_object()?;
     Some(iface_reminders::CompleteResponse {
-        ok: match m.get("ok").and_then(|v| iface_reminders__defs_ok_true__from_json(v)) { Some(x) => x, None => return None },
+        ok: m.get("ok").and_then(|v| (v).as_bool()).unwrap_or_default(),
     })
 }
 
 fn iface_reminders__delete_response__from_json(v: &Value) -> Option<iface_reminders::DeleteResponse> {
     let m = v.as_object()?;
     Some(iface_reminders::DeleteResponse {
-        ok: match m.get("ok").and_then(|v| iface_reminders__defs_ok_true__from_json(v)) { Some(x) => x, None => return None },
+        ok: m.get("ok").and_then(|v| (v).as_bool()).unwrap_or_default(),
     })
 }
 
 fn iface_reminders__info_response__from_json(v: &Value) -> Option<iface_reminders::InfoResponse> {
     let m = v.as_object()?;
     Some(iface_reminders::InfoResponse {
-        ok: match m.get("ok").and_then(|v| iface_reminders__defs_ok_true__from_json(v)) { Some(x) => x, None => return None },
+        ok: m.get("ok").and_then(|v| (v).as_bool()).unwrap_or_default(),
         reminder: match m.get("reminder").and_then(|v| iface_reminders__objs_reminder__from_json(v)) { Some(x) => x, None => return None },
     })
 }
@@ -231,7 +192,7 @@ fn iface_reminders__info_response__from_json(v: &Value) -> Option<iface_reminder
 fn iface_reminders__list_op_response__from_json(v: &Value) -> Option<iface_reminders::ListOpResponse> {
     let m = v.as_object()?;
     Some(iface_reminders::ListOpResponse {
-        ok: match m.get("ok").and_then(|v| iface_reminders__defs_ok_true__from_json(v)) { Some(x) => x, None => return None },
+        ok: m.get("ok").and_then(|v| (v).as_bool()).unwrap_or_default(),
         reminders: m.get("reminders").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_reminders__objs_reminder__from_json(x)).collect())).unwrap_or_default(),
     })
 }

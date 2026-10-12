@@ -7,7 +7,7 @@
 /// | --- | --- |
 /// | `AuthHeader` | header `Authorization` |
 /// | `ClientId` | query `client_id` |
-package autostamp:soundcloud@0.5.0;
+package autostamp:soundcloud@0.6.0;
 
 interface oauth {
   enum get-connect-response-type-enum {
@@ -206,11 +206,6 @@ interface me {
     type-op: option<string>
   }
 
-  record connections {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
   record connection {
     /// Created timestamp.
     created-at: option<string>,
@@ -286,114 +281,6 @@ interface me {
     website: option<string>,
     /// a custom title for the website
     website-title: option<string>
-  }
-
-  record tracks-list {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
-  record playlists-array {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
-  /// Soundcloud Playlist Object
-  record playlist {
-    /// URL to a JPEG image.
-    artwork-url: option<string>,
-    /// Created timestamp.
-    created-at: option<string>,
-    /// Playlist description.
-    description: option<string>,
-    /// is downloadable.
-    downloadable: option<bool>,
-    /// Playlist duration.
-    duration: option<s32>,
-    /// European Article Number.
-    ean: option<string>,
-    /// Embeddable by.
-    embeddable-by: option<string>,
-    /// Playlist genre.
-    genre: option<string>,
-    /// Playlist identifier.
-    id: option<s32>,
-    /// Type of Soundcloud object (playlist).
-    kind: option<string>,
-    label: option<meta-user>,
-    /// Label user identifier.
-    label-id: option<s32>,
-    /// Label name.
-    label-name: option<string>,
-    /// Last modified timestamp.
-    last-modified: option<string>,
-    /// License.
-    license: option<string>,
-    /// Count of playlist likes.
-    likes-count: option<s32>,
-    /// Playlist permalink.
-    permalink: option<string>,
-    /// Playlist permalink URL.
-    permalink-url: option<string>,
-    /// Type of playlist.
-    playlist-type: option<string>,
-    /// Purchase title.
-    purchase-title: option<string>,
-    /// Purchase URL.
-    purchase-url: option<string>,
-    /// Release.
-    release: option<string>,
-    /// Day of release.
-    release-day: option<s32>,
-    /// Month of release.
-    release-month: option<s32>,
-    /// Year of release.
-    release-year: option<s32>,
-    /// Type of sharing (private/public).
-    sharing: option<string>,
-    /// Is streamable.
-    streamable: option<bool>,
-    /// Tags.
-    tag-list: option<string>,
-    /// Tags.
-    tags: option<string>,
-    /// Playlist title.
-    title: option<string>,
-    /// Count of tracks.
-    track-count: option<s32>,
-    /// List of tracks.
-    tracks: option<list<track>>,
-    /// tracks URI.
-    tracks-uri: option<string>,
-    /// Playlist type.
-    type-op: option<string>,
-    /// Playlist URI.
-    uri: option<string>,
-    user: option<meta-user>,
-    /// User identifier.
-    user-id: option<s32>
-  }
-
-  /// SoundCloud User object.
-  record meta-user {
-    /// URL to a JPEG image
-    avatar-url: option<string>,
-    /// profile creation datetime
-    created-at: option<string>,
-    /// unique identifier
-    id: option<s32>,
-    /// kind of resource
-    kind: option<string>,
-    /// last modified datetime
-    last-modified: option<string>,
-    /// permalink of the resource
-    permalink: option<string>,
-    /// URL to the SoundCloud.com page
-    permalink-url: option<string>,
-    /// API resource URL
-    uri: option<string>,
-    /// username
-    username: option<string>
   }
 
   /// Soundcloud Track object.
@@ -480,6 +367,104 @@ interface me {
     user-playback-count: option<s32>,
     /// Waveform URL.
     waveform-url: option<string>
+  }
+
+  /// SoundCloud User object.
+  record meta-user {
+    /// URL to a JPEG image
+    avatar-url: option<string>,
+    /// profile creation datetime
+    created-at: option<string>,
+    /// unique identifier
+    id: option<s32>,
+    /// kind of resource
+    kind: option<string>,
+    /// last modified datetime
+    last-modified: option<string>,
+    /// permalink of the resource
+    permalink: option<string>,
+    /// URL to the SoundCloud.com page
+    permalink-url: option<string>,
+    /// API resource URL
+    uri: option<string>,
+    /// username
+    username: option<string>
+  }
+
+  /// Soundcloud Playlist Object
+  record playlist {
+    /// URL to a JPEG image.
+    artwork-url: option<string>,
+    /// Created timestamp.
+    created-at: option<string>,
+    /// Playlist description.
+    description: option<string>,
+    /// is downloadable.
+    downloadable: option<bool>,
+    /// Playlist duration.
+    duration: option<s32>,
+    /// European Article Number.
+    ean: option<string>,
+    /// Embeddable by.
+    embeddable-by: option<string>,
+    /// Playlist genre.
+    genre: option<string>,
+    /// Playlist identifier.
+    id: option<s32>,
+    /// Type of Soundcloud object (playlist).
+    kind: option<string>,
+    label: option<meta-user>,
+    /// Label user identifier.
+    label-id: option<s32>,
+    /// Label name.
+    label-name: option<string>,
+    /// Last modified timestamp.
+    last-modified: option<string>,
+    /// License.
+    license: option<string>,
+    /// Count of playlist likes.
+    likes-count: option<s32>,
+    /// Playlist permalink.
+    permalink: option<string>,
+    /// Playlist permalink URL.
+    permalink-url: option<string>,
+    /// Type of playlist.
+    playlist-type: option<string>,
+    /// Purchase title.
+    purchase-title: option<string>,
+    /// Purchase URL.
+    purchase-url: option<string>,
+    /// Release.
+    release: option<string>,
+    /// Day of release.
+    release-day: option<s32>,
+    /// Month of release.
+    release-month: option<s32>,
+    /// Year of release.
+    release-year: option<s32>,
+    /// Type of sharing (private/public).
+    sharing: option<string>,
+    /// Is streamable.
+    streamable: option<bool>,
+    /// Tags.
+    tag-list: option<string>,
+    /// Tags.
+    tags: option<string>,
+    /// Playlist title.
+    title: option<string>,
+    /// Count of tracks.
+    track-count: option<s32>,
+    /// List of tracks.
+    tracks: option<list<track>>,
+    /// tracks URI.
+    tracks-uri: option<string>,
+    /// Playlist type.
+    type-op: option<string>,
+    /// Playlist URI.
+    uri: option<string>,
+    user: option<meta-user>,
+    /// User identifier.
+    user-id: option<s32>
   }
 
   variant get-me-error {
@@ -610,7 +595,7 @@ interface me {
     /// Offset of first result. Deprecated, use `linked_partitioning` instead.
     offset: option<s32>
   }
-  get-me-connections: func(params: get-me-connections-params) -> result<connections, get-me-connections-error>;
+  get-me-connections: func(params: get-me-connections-params) -> result<list<connection>, get-me-connections-error>;
 
   /// Returns the authenticated user's connected social account.
   record get-me-connections-connection-id-params {
@@ -658,7 +643,7 @@ interface me {
     /// Offset of first result. Deprecated, use `linked_partitioning` instead.
     offset: option<s32>
   }
-  get-me-followings-tracks: func(params: get-me-followings-tracks-params) -> result<tracks-list, get-me-followings-tracks-error>;
+  get-me-followings-tracks: func(params: get-me-followings-tracks-params) -> result<list<track>, get-me-followings-tracks-error>;
 
   /// Returns a user who is followed by the authenticated user. (use /users/{user_id} instead, to fetch the user details)
   record get-me-followings-user-id-params {
@@ -695,7 +680,7 @@ interface me {
     /// Number of results to return in the collection.
     limit: option<s32>
   }
-  get-me-playlists: func(params: get-me-playlists-params) -> result<playlists-array, get-me-playlists-error>;
+  get-me-playlists: func(params: get-me-playlists-params) -> result<list<playlist>, get-me-playlists-error>;
 
   /// Returns playlist. (use /playlists/{playlist_id} instead, to fetch the playlist details)
   record get-me-playlists-playlist-id-params {
@@ -1688,9 +1673,60 @@ interface tracks {
     username: option<string>
   }
 
-  record users-list {
-    /// opaque schema; raw JSON
-    value: string
+  /// SoundCloud User object
+  record users-list-item {
+    /// URL to a JPEG image
+    avatar-url: option<string>,
+    /// city
+    city: option<string>,
+    /// country
+    country: option<string>,
+    /// description
+    description: option<string>,
+    /// discogs name
+    discogs-name: option<string>,
+    /// first name
+    first-name: option<string>,
+    /// number of followers
+    followers-count: option<s32>,
+    /// number of followed users
+    followings-count: option<s32>,
+    /// first and last name
+    full-name: option<string>,
+    /// unique identifier
+    id: option<s32>,
+    /// kind of resource
+    kind: option<string>,
+    /// last modified datetime
+    last-modified: option<string>,
+    /// last name
+    last-name: option<string>,
+    /// myspace name
+    myspace-name: option<string>,
+    /// permalink of the resource
+    permalink: option<string>,
+    /// URL to the SoundCloud.com page
+    permalink-url: option<string>,
+    /// subscription plan of the user
+    plan: option<string>,
+    /// number of public playlists
+    playlist-count: option<s32>,
+    /// number of favorited public tracks
+    public-favorites-count: option<s32>,
+    /// number of reposts from user
+    reposts-count: option<s32>,
+    /// a list subscriptions associated with the user
+    subscriptions: option<string>,
+    /// number of public tracks
+    track-count: option<s32>,
+    /// API resource URL
+    uri: option<string>,
+    /// username
+    username: option<string>,
+    /// a URL to the website
+    website: option<string>,
+    /// a custom title for the website
+    website-title: option<string>
   }
 
   record meta-users {
@@ -1845,7 +1881,7 @@ interface tracks {
     /// Offset of first result. Deprecated, use `linked_partitioning` instead.
     offset: option<s32>
   }
-  get-tracks-track-id-favoriters: func(params: get-tracks-track-id-favoriters-params) -> result<users-list, get-tracks-track-id-favoriters-error>;
+  get-tracks-track-id-favoriters: func(params: get-tracks-track-id-favoriters-params) -> result<list<users-list-item>, get-tracks-track-id-favoriters-error>;
 
   /// Returns all related tracks of track on SoundCloud.
   record get-tracks-track-id-related-params {
@@ -1963,15 +1999,69 @@ interface users {
     upload-seconds-used: option<s32>
   }
 
-  record comments-list {
-    /// opaque schema; raw JSON
-    value: string
+  /// User's Comment
+  record comment {
+    /// Comment body.
+    body: option<string>,
+    /// Created timestamp.
+    created-at: option<string>,
+    /// Identifier.
+    id: option<s32>,
+    /// Kind (comment).
+    kind: option<string>,
+    /// Timestamp.
+    timestamp: option<string>,
+    /// Track's identifier.
+    track-id: option<s32>,
+    /// Comment's URL.
+    uri: option<string>,
+    /// SoundCloud User object
+    user: option<comment-user>,
+    /// User's identifier.
+    user-id: option<s32>
   }
 
-  /// User's links added to their profile
-  record web-profiles {
-    /// opaque schema; raw JSON
-    value: string
+  /// SoundCloud User object
+  record comment-user {
+    /// URL to a JPEG image.
+    avatar-url: option<string>,
+    /// number of followers.
+    followers-count: option<s32>,
+    /// number of followed users.
+    followings-count: option<s32>,
+    /// unique identifier
+    id: option<s32>,
+    /// kind of resource.
+    kind: option<string>,
+    /// last modified timestamp.
+    last-modified: option<string>,
+    /// permalink of the resource.
+    permalink: option<string>,
+    /// URL to the SoundCloud.com page.
+    permalink-url: option<string>,
+    /// number of reposts from user
+    reposts-count: option<s32>,
+    /// API resource URL.
+    uri: option<string>,
+    /// username
+    username: option<string>
+  }
+
+  record web-profiles-item {
+    /// Timestamp of when the link was added to the profile.
+    created-at: option<string>,
+    /// Id
+    id: option<s32>,
+    /// Kind
+    kind: option<string>,
+    /// Service or platform
+    service: option<string>,
+    /// Link's title
+    title: option<string>,
+    /// URL of the external link
+    url: option<string>,
+    /// Username extracted from the external link
+    username: option<string>
   }
 
   variant get-users-user-id-error {
@@ -2046,7 +2136,7 @@ interface users {
     /// Offset of first result. Deprecated, use `linked_partitioning` instead.
     offset: option<s32>
   }
-  get-users-user-id-comments: func(params: get-users-user-id-comments-params) -> result<comments-list, get-users-user-id-comments-error>;
+  get-users-user-id-comments: func(params: get-users-user-id-comments-params) -> result<list<comment>, get-users-user-id-comments-error>;
 
   /// Returns a list of user's favorited or liked tracks. (use /users/:userId/likes/tracks instead, to fetch a user's likes)
   record get-users-user-id-favorites-params {
@@ -2132,7 +2222,7 @@ interface users {
     /// Number of results to return in the collection.
     limit: option<s32>
   }
-  get-users-user-id-web-profiles: func(params: get-users-user-id-web-profiles-params) -> result<web-profiles, get-users-user-id-web-profiles-error>;
+  get-users-user-id-web-profiles: func(params: get-users-user-id-web-profiles-params) -> result<list<web-profiles-item>, get-users-user-id-web-profiles-error>;
 
 }
 /// The component world: imports the secrets host capability

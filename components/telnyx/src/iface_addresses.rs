@@ -47,7 +47,7 @@ const OP_ADDRESSES_CREATE_ADDRESS: OpSpec = OpSpec {
     ],
 };
 
-const OP_ADDRESSES_VALIDATE_ADDRESS_V2: OpSpec = OpSpec {
+const OP_ADDRESSES_VALIDATE_ADDRESS: OpSpec = OpSpec {
     method: "POST",
     path_template: "/addresses/actions/validate",
     fields: &[
@@ -111,115 +111,25 @@ fn iface_addresses__find_addresss_response__to_json(p: &iface_addresses::FindAdd
 
 fn iface_addresses__address__to_json(p: &iface_addresses::Address) -> Value {
     let mut m = Map::new();
-    m.insert("address_book".into(), match (&p.address_book) { Some(v) => iface_addresses__address_book__to_json(v), None => Value::Null });
-    m.insert("administrative_area".into(), match (&p.administrative_area) { Some(v) => iface_addresses__administrative_area__to_json(v), None => Value::Null });
-    m.insert("borough".into(), match (&p.borough) { Some(v) => iface_addresses__borough__to_json(v), None => Value::Null });
-    m.insert("business_name".into(), match (&p.business_name) { Some(v) => iface_addresses__business_name__to_json(v), None => Value::Null });
-    m.insert("country_code".into(), match (&p.country_code) { Some(v) => iface_addresses__country_code__to_json(v), None => Value::Null });
+    m.insert("address_book".into(), match (&p.address_book) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("administrative_area".into(), match (&p.administrative_area) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("borough".into(), match (&p.borough) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("business_name".into(), match (&p.business_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("country_code".into(), match (&p.country_code) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("created_at".into(), match (&p.created_at) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("customer_reference".into(), match (&p.customer_reference) { Some(v) => iface_addresses__customer_reference__to_json(v), None => Value::Null });
-    m.insert("extended_address".into(), match (&p.extended_address) { Some(v) => iface_addresses__extended_address__to_json(v), None => Value::Null });
-    m.insert("first_name".into(), match (&p.first_name) { Some(v) => iface_addresses__first_name__to_json(v), None => Value::Null });
+    m.insert("customer_reference".into(), match (&p.customer_reference) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("extended_address".into(), match (&p.extended_address) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("first_name".into(), match (&p.first_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("last_name".into(), match (&p.last_name) { Some(v) => iface_addresses__last_name__to_json(v), None => Value::Null });
-    m.insert("locality".into(), match (&p.locality) { Some(v) => iface_addresses__locality__to_json(v), None => Value::Null });
-    m.insert("neighborhood".into(), match (&p.neighborhood) { Some(v) => iface_addresses__neighborhood__to_json(v), None => Value::Null });
-    m.insert("phone_number".into(), match (&p.phone_number) { Some(v) => iface_addresses__phone_number__to_json(v), None => Value::Null });
-    m.insert("postal_code".into(), match (&p.postal_code) { Some(v) => iface_addresses__postal_code__to_json(v), None => Value::Null });
+    m.insert("last_name".into(), match (&p.last_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("locality".into(), match (&p.locality) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("neighborhood".into(), match (&p.neighborhood) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("phone_number".into(), match (&p.phone_number) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("postal_code".into(), match (&p.postal_code) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("record_type".into(), match (&p.record_type) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("street_address".into(), match (&p.street_address) { Some(v) => iface_addresses__street_address__to_json(v), None => Value::Null });
+    m.insert("street_address".into(), match (&p.street_address) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("updated_at".into(), match (&p.updated_at) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("validate_address".into(), match (&p.validate_address) { Some(v) => iface_addresses__validate_address__to_json(v), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_addresses__address_book__to_json(p: &iface_addresses::AddressBook) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_addresses__administrative_area__to_json(p: &iface_addresses::AdministrativeArea) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_addresses__borough__to_json(p: &iface_addresses::Borough) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_addresses__business_name__to_json(p: &iface_addresses::BusinessName) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_addresses__country_code__to_json(p: &iface_addresses::CountryCode) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_addresses__customer_reference__to_json(p: &iface_addresses::CustomerReference) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_addresses__extended_address__to_json(p: &iface_addresses::ExtendedAddress) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_addresses__first_name__to_json(p: &iface_addresses::FirstName) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_addresses__last_name__to_json(p: &iface_addresses::LastName) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_addresses__locality__to_json(p: &iface_addresses::Locality) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_addresses__neighborhood__to_json(p: &iface_addresses::Neighborhood) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_addresses__phone_number__to_json(p: &iface_addresses::PhoneNumber) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_addresses__postal_code__to_json(p: &iface_addresses::PostalCode) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_addresses__street_address__to_json(p: &iface_addresses::StreetAddress) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_addresses__validate_address__to_json(p: &iface_addresses::ValidateAddress) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
+    m.insert("validate_address".into(), match (&p.validate_address) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     Value::Object(m)
 }
 
@@ -238,7 +148,7 @@ fn iface_addresses__create_address_response__to_json(p: &iface_addresses::Create
     Value::Object(m)
 }
 
-fn iface_addresses__validate_address_v2_response__to_json(p: &iface_addresses::ValidateAddressV2Response) -> Value {
+fn iface_addresses__validate_address_response__to_json(p: &iface_addresses::ValidateAddressResponse) -> Value {
     let mut m = Map::new();
     m.insert("data".into(), match (&p.data) { Some(v) => iface_addresses__validate_address_result__to_json(v), None => Value::Null });
     Value::Object(m)
@@ -249,7 +159,7 @@ fn iface_addresses__validate_address_result__to_json(p: &iface_addresses::Valida
     m.insert("errors".into(), match (&p.errors) { Some(v) => Value::Array((v).iter().map(|v| iface_addresses__error__to_json(v)).collect()), None => Value::Null });
     m.insert("record_type".into(), match (&p.record_type) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("result".into(), Value::String(iface_addresses__validate_address_result_result_op_enum__to_str(&p.result_op).into()));
-    m.insert("suggested".into(), iface_addresses__validate_address_v3__to_json(&p.suggested));
+    m.insert("suggested".into(), iface_addresses__validate_address_v2__to_json(&p.suggested));
     Value::Object(m)
 }
 
@@ -257,15 +167,16 @@ fn iface_addresses__error__to_json(p: &iface_addresses::Error) -> Value {
     let mut m = Map::new();
     m.insert("code".into(), Value::String((&p.code).clone()));
     m.insert("detail".into(), match (&p.detail) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("meta".into(), match (&p.meta) { Some(v) => iface_addresses__error_meta__to_json(v), None => Value::Null });
+    m.insert("meta".into(), match (&p.meta) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("source".into(), match (&p.source) { Some(v) => iface_addresses__error_source__to_json(v), None => Value::Null });
     m.insert("title".into(), Value::String((&p.title).clone()));
     Value::Object(m)
 }
 
-fn iface_addresses__error_meta__to_json(p: &iface_addresses::ErrorMeta) -> Value {
+fn iface_addresses__error_meta_entry__to_json(p: &iface_addresses::ErrorMetaEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -276,14 +187,14 @@ fn iface_addresses__error_source__to_json(p: &iface_addresses::ErrorSource) -> V
     Value::Object(m)
 }
 
-fn iface_addresses__validate_address_v3__to_json(p: &iface_addresses::ValidateAddressV3) -> Value {
+fn iface_addresses__validate_address_v2__to_json(p: &iface_addresses::ValidateAddressV2) -> Value {
     let mut m = Map::new();
-    m.insert("administrative_area".into(), match (&p.administrative_area) { Some(v) => iface_addresses__administrative_area__to_json(v), None => Value::Null });
-    m.insert("country_code".into(), match (&p.country_code) { Some(v) => iface_addresses__country_code__to_json(v), None => Value::Null });
-    m.insert("extended_address".into(), match (&p.extended_address) { Some(v) => iface_addresses__extended_address__to_json(v), None => Value::Null });
-    m.insert("locality".into(), match (&p.locality) { Some(v) => iface_addresses__locality__to_json(v), None => Value::Null });
-    m.insert("postal_code".into(), match (&p.postal_code) { Some(v) => iface_addresses__postal_code__to_json(v), None => Value::Null });
-    m.insert("street_address".into(), match (&p.street_address) { Some(v) => iface_addresses__street_address__to_json(v), None => Value::Null });
+    m.insert("administrative_area".into(), match (&p.administrative_area) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("country_code".into(), match (&p.country_code) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("extended_address".into(), match (&p.extended_address) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("locality".into(), match (&p.locality) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("postal_code".into(), match (&p.postal_code) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("street_address".into(), match (&p.street_address) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -314,32 +225,32 @@ fn iface_addresses__find_addresss_params__to_json(p: &iface_addresses::FindAddre
 
 fn iface_addresses__create_address_params__to_json(p: &iface_addresses::CreateAddressParams) -> Value {
     let mut m = Map::new();
-    m.insert("address_book".into(), match (&p.address_book) { Some(v) => iface_addresses__address_book__to_json(v), None => Value::Null });
-    m.insert("administrative_area".into(), match (&p.administrative_area) { Some(v) => iface_addresses__administrative_area__to_json(v), None => Value::Null });
-    m.insert("borough".into(), match (&p.borough) { Some(v) => iface_addresses__borough__to_json(v), None => Value::Null });
-    m.insert("business_name".into(), iface_addresses__business_name__to_json(&p.business_name));
-    m.insert("country_code".into(), iface_addresses__country_code__to_json(&p.country_code));
-    m.insert("customer_reference".into(), match (&p.customer_reference) { Some(v) => iface_addresses__customer_reference__to_json(v), None => Value::Null });
-    m.insert("extended_address".into(), match (&p.extended_address) { Some(v) => iface_addresses__extended_address__to_json(v), None => Value::Null });
-    m.insert("first_name".into(), iface_addresses__first_name__to_json(&p.first_name));
-    m.insert("last_name".into(), iface_addresses__last_name__to_json(&p.last_name));
-    m.insert("locality".into(), iface_addresses__locality__to_json(&p.locality));
-    m.insert("neighborhood".into(), match (&p.neighborhood) { Some(v) => iface_addresses__neighborhood__to_json(v), None => Value::Null });
-    m.insert("phone_number".into(), match (&p.phone_number) { Some(v) => iface_addresses__phone_number__to_json(v), None => Value::Null });
-    m.insert("postal_code".into(), match (&p.postal_code) { Some(v) => iface_addresses__postal_code__to_json(v), None => Value::Null });
-    m.insert("street_address".into(), iface_addresses__street_address__to_json(&p.street_address));
-    m.insert("validate_address".into(), match (&p.validate_address) { Some(v) => iface_addresses__validate_address__to_json(v), None => Value::Null });
+    m.insert("address_book".into(), match (&p.address_book) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("administrative_area".into(), match (&p.administrative_area) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("borough".into(), match (&p.borough) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("business_name".into(), Value::String((&p.business_name).clone()));
+    m.insert("country_code".into(), Value::String((&p.country_code).clone()));
+    m.insert("customer_reference".into(), match (&p.customer_reference) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("extended_address".into(), match (&p.extended_address) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("first_name".into(), Value::String((&p.first_name).clone()));
+    m.insert("last_name".into(), Value::String((&p.last_name).clone()));
+    m.insert("locality".into(), Value::String((&p.locality).clone()));
+    m.insert("neighborhood".into(), match (&p.neighborhood) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("phone_number".into(), match (&p.phone_number) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("postal_code".into(), match (&p.postal_code) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("street_address".into(), Value::String((&p.street_address).clone()));
+    m.insert("validate_address".into(), match (&p.validate_address) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_addresses__validate_address_v2_params__to_json(p: &iface_addresses::ValidateAddressV2Params) -> Value {
+fn iface_addresses__validate_address_params__to_json(p: &iface_addresses::ValidateAddressParams) -> Value {
     let mut m = Map::new();
-    m.insert("administrative_area".into(), match (&p.administrative_area) { Some(v) => iface_addresses__administrative_area__to_json(v), None => Value::Null });
-    m.insert("country_code".into(), iface_addresses__country_code__to_json(&p.country_code));
-    m.insert("extended_address".into(), match (&p.extended_address) { Some(v) => iface_addresses__extended_address__to_json(v), None => Value::Null });
-    m.insert("locality".into(), match (&p.locality) { Some(v) => iface_addresses__locality__to_json(v), None => Value::Null });
-    m.insert("postal_code".into(), iface_addresses__postal_code__to_json(&p.postal_code));
-    m.insert("street_address".into(), iface_addresses__street_address__to_json(&p.street_address));
+    m.insert("administrative_area".into(), match (&p.administrative_area) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("country_code".into(), Value::String((&p.country_code).clone()));
+    m.insert("extended_address".into(), match (&p.extended_address) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("locality".into(), match (&p.locality) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("postal_code".into(), Value::String((&p.postal_code).clone()));
+    m.insert("street_address".into(), Value::String((&p.street_address).clone()));
     Value::Object(m)
 }
 
@@ -366,130 +277,25 @@ fn iface_addresses__find_addresss_response__from_json(v: &Value) -> Option<iface
 fn iface_addresses__address__from_json(v: &Value) -> Option<iface_addresses::Address> {
     let m = v.as_object()?;
     Some(iface_addresses::Address {
-        address_book: m.get("address_book").filter(|v| !v.is_null()).and_then(|v| iface_addresses__address_book__from_json(v)),
-        administrative_area: m.get("administrative_area").filter(|v| !v.is_null()).and_then(|v| iface_addresses__administrative_area__from_json(v)),
-        borough: m.get("borough").filter(|v| !v.is_null()).and_then(|v| iface_addresses__borough__from_json(v)),
-        business_name: m.get("business_name").filter(|v| !v.is_null()).and_then(|v| iface_addresses__business_name__from_json(v)),
-        country_code: m.get("country_code").filter(|v| !v.is_null()).and_then(|v| iface_addresses__country_code__from_json(v)),
+        address_book: m.get("address_book").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        administrative_area: m.get("administrative_area").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        borough: m.get("borough").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        business_name: m.get("business_name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        country_code: m.get("country_code").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         created_at: m.get("created_at").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        customer_reference: m.get("customer_reference").filter(|v| !v.is_null()).and_then(|v| iface_addresses__customer_reference__from_json(v)),
-        extended_address: m.get("extended_address").filter(|v| !v.is_null()).and_then(|v| iface_addresses__extended_address__from_json(v)),
-        first_name: m.get("first_name").filter(|v| !v.is_null()).and_then(|v| iface_addresses__first_name__from_json(v)),
+        customer_reference: m.get("customer_reference").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        extended_address: m.get("extended_address").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        first_name: m.get("first_name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        last_name: m.get("last_name").filter(|v| !v.is_null()).and_then(|v| iface_addresses__last_name__from_json(v)),
-        locality: m.get("locality").filter(|v| !v.is_null()).and_then(|v| iface_addresses__locality__from_json(v)),
-        neighborhood: m.get("neighborhood").filter(|v| !v.is_null()).and_then(|v| iface_addresses__neighborhood__from_json(v)),
-        phone_number: m.get("phone_number").filter(|v| !v.is_null()).and_then(|v| iface_addresses__phone_number__from_json(v)),
-        postal_code: m.get("postal_code").filter(|v| !v.is_null()).and_then(|v| iface_addresses__postal_code__from_json(v)),
+        last_name: m.get("last_name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        locality: m.get("locality").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        neighborhood: m.get("neighborhood").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        phone_number: m.get("phone_number").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        postal_code: m.get("postal_code").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         record_type: m.get("record_type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        street_address: m.get("street_address").filter(|v| !v.is_null()).and_then(|v| iface_addresses__street_address__from_json(v)),
+        street_address: m.get("street_address").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         updated_at: m.get("updated_at").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        validate_address: m.get("validate_address").filter(|v| !v.is_null()).and_then(|v| iface_addresses__validate_address__from_json(v)),
-    })
-}
-
-fn iface_addresses__address_book__from_json(v: &Value) -> Option<iface_addresses::AddressBook> {
-    let m = v.as_object()?;
-    Some(iface_addresses::AddressBook {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-    })
-}
-
-fn iface_addresses__administrative_area__from_json(v: &Value) -> Option<iface_addresses::AdministrativeArea> {
-    let m = v.as_object()?;
-    Some(iface_addresses::AdministrativeArea {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-    })
-}
-
-fn iface_addresses__borough__from_json(v: &Value) -> Option<iface_addresses::Borough> {
-    let m = v.as_object()?;
-    Some(iface_addresses::Borough {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-    })
-}
-
-fn iface_addresses__business_name__from_json(v: &Value) -> Option<iface_addresses::BusinessName> {
-    let m = v.as_object()?;
-    Some(iface_addresses::BusinessName {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-    })
-}
-
-fn iface_addresses__country_code__from_json(v: &Value) -> Option<iface_addresses::CountryCode> {
-    let m = v.as_object()?;
-    Some(iface_addresses::CountryCode {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-    })
-}
-
-fn iface_addresses__customer_reference__from_json(v: &Value) -> Option<iface_addresses::CustomerReference> {
-    let m = v.as_object()?;
-    Some(iface_addresses::CustomerReference {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-    })
-}
-
-fn iface_addresses__extended_address__from_json(v: &Value) -> Option<iface_addresses::ExtendedAddress> {
-    let m = v.as_object()?;
-    Some(iface_addresses::ExtendedAddress {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-    })
-}
-
-fn iface_addresses__first_name__from_json(v: &Value) -> Option<iface_addresses::FirstName> {
-    let m = v.as_object()?;
-    Some(iface_addresses::FirstName {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-    })
-}
-
-fn iface_addresses__last_name__from_json(v: &Value) -> Option<iface_addresses::LastName> {
-    let m = v.as_object()?;
-    Some(iface_addresses::LastName {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-    })
-}
-
-fn iface_addresses__locality__from_json(v: &Value) -> Option<iface_addresses::Locality> {
-    let m = v.as_object()?;
-    Some(iface_addresses::Locality {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-    })
-}
-
-fn iface_addresses__neighborhood__from_json(v: &Value) -> Option<iface_addresses::Neighborhood> {
-    let m = v.as_object()?;
-    Some(iface_addresses::Neighborhood {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-    })
-}
-
-fn iface_addresses__phone_number__from_json(v: &Value) -> Option<iface_addresses::PhoneNumber> {
-    let m = v.as_object()?;
-    Some(iface_addresses::PhoneNumber {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-    })
-}
-
-fn iface_addresses__postal_code__from_json(v: &Value) -> Option<iface_addresses::PostalCode> {
-    let m = v.as_object()?;
-    Some(iface_addresses::PostalCode {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-    })
-}
-
-fn iface_addresses__street_address__from_json(v: &Value) -> Option<iface_addresses::StreetAddress> {
-    let m = v.as_object()?;
-    Some(iface_addresses::StreetAddress {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-    })
-}
-
-fn iface_addresses__validate_address__from_json(v: &Value) -> Option<iface_addresses::ValidateAddress> {
-    let m = v.as_object()?;
-    Some(iface_addresses::ValidateAddress {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        validate_address: m.get("validate_address").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
     })
 }
 
@@ -510,9 +316,9 @@ fn iface_addresses__create_address_response__from_json(v: &Value) -> Option<ifac
     })
 }
 
-fn iface_addresses__validate_address_v2_response__from_json(v: &Value) -> Option<iface_addresses::ValidateAddressV2Response> {
+fn iface_addresses__validate_address_response__from_json(v: &Value) -> Option<iface_addresses::ValidateAddressResponse> {
     let m = v.as_object()?;
-    Some(iface_addresses::ValidateAddressV2Response {
+    Some(iface_addresses::ValidateAddressResponse {
         data: m.get("data").filter(|v| !v.is_null()).and_then(|v| iface_addresses__validate_address_result__from_json(v)),
     })
 }
@@ -523,7 +329,7 @@ fn iface_addresses__validate_address_result__from_json(v: &Value) -> Option<ifac
         errors: m.get("errors").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_addresses__error__from_json(x)).collect())),
         record_type: m.get("record_type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         result_op: match m.get("result").and_then(|v| (v).as_str().and_then(iface_addresses__validate_address_result_result_op_enum__from_str)) { Some(x) => x, None => return None },
-        suggested: match m.get("suggested").and_then(|v| iface_addresses__validate_address_v3__from_json(v)) { Some(x) => x, None => return None },
+        suggested: match m.get("suggested").and_then(|v| iface_addresses__validate_address_v2__from_json(v)) { Some(x) => x, None => return None },
     })
 }
 
@@ -532,16 +338,17 @@ fn iface_addresses__error__from_json(v: &Value) -> Option<iface_addresses::Error
     Some(iface_addresses::Error {
         code: m.get("code").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         detail: m.get("detail").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        meta: m.get("meta").filter(|v| !v.is_null()).and_then(|v| iface_addresses__error_meta__from_json(v)),
+        meta: m.get("meta").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_addresses::ErrorMetaEntry { key: k.clone(), value: val })).collect())),
         source: m.get("source").filter(|v| !v.is_null()).and_then(|v| iface_addresses__error_source__from_json(v)),
         title: m.get("title").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
-fn iface_addresses__error_meta__from_json(v: &Value) -> Option<iface_addresses::ErrorMeta> {
+fn iface_addresses__error_meta_entry__from_json(v: &Value) -> Option<iface_addresses::ErrorMetaEntry> {
     let m = v.as_object()?;
-    Some(iface_addresses::ErrorMeta {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_addresses::ErrorMetaEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -553,15 +360,15 @@ fn iface_addresses__error_source__from_json(v: &Value) -> Option<iface_addresses
     })
 }
 
-fn iface_addresses__validate_address_v3__from_json(v: &Value) -> Option<iface_addresses::ValidateAddressV3> {
+fn iface_addresses__validate_address_v2__from_json(v: &Value) -> Option<iface_addresses::ValidateAddressV2> {
     let m = v.as_object()?;
-    Some(iface_addresses::ValidateAddressV3 {
-        administrative_area: m.get("administrative_area").filter(|v| !v.is_null()).and_then(|v| iface_addresses__administrative_area__from_json(v)),
-        country_code: m.get("country_code").filter(|v| !v.is_null()).and_then(|v| iface_addresses__country_code__from_json(v)),
-        extended_address: m.get("extended_address").filter(|v| !v.is_null()).and_then(|v| iface_addresses__extended_address__from_json(v)),
-        locality: m.get("locality").filter(|v| !v.is_null()).and_then(|v| iface_addresses__locality__from_json(v)),
-        postal_code: m.get("postal_code").filter(|v| !v.is_null()).and_then(|v| iface_addresses__postal_code__from_json(v)),
-        street_address: m.get("street_address").filter(|v| !v.is_null()).and_then(|v| iface_addresses__street_address__from_json(v)),
+    Some(iface_addresses::ValidateAddressV2 {
+        administrative_area: m.get("administrative_area").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        country_code: m.get("country_code").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        extended_address: m.get("extended_address").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        locality: m.get("locality").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        postal_code: m.get("postal_code").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        street_address: m.get("street_address").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
     })
 }
 
@@ -631,24 +438,24 @@ fn iface_addresses__create_address__err(e: crate::runtime::DispatchError) -> ifa
     }
 }
 
-fn iface_addresses__validate_address_v2__ok(body: String) -> Result<iface_addresses::ValidateAddressV2Response, crate::runtime::DispatchError> {
+fn iface_addresses__validate_address__ok(body: String) -> Result<iface_addresses::ValidateAddressResponse, crate::runtime::DispatchError> {
     let v: Value = match serde_json::from_str(&body) {
         Ok(v) => v,
         Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
     };
-    match iface_addresses__validate_address_v2_response__from_json(&v) {
+    match iface_addresses__validate_address_response__from_json(&v) {
         Some(x) => Ok(x),
         None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
 }
 
-fn iface_addresses__validate_address_v2__err(e: crate::runtime::DispatchError) -> iface_addresses::ValidateAddressV2Error {
+fn iface_addresses__validate_address__err(e: crate::runtime::DispatchError) -> iface_addresses::ValidateAddressError {
     match e {
         crate::runtime::DispatchError::Http { status, body } => match status {
-            422u16 => iface_addresses::ValidateAddressV2Error::UnprocessableEntity(body),
-            _ => iface_addresses::ValidateAddressV2Error::Other(body),
+            422u16 => iface_addresses::ValidateAddressError::UnprocessableEntity(body),
+            _ => iface_addresses::ValidateAddressError::Other(body),
         },
-        crate::runtime::DispatchError::Transport(m) => iface_addresses::ValidateAddressV2Error::Other(m),
+        crate::runtime::DispatchError::Transport(m) => iface_addresses::ValidateAddressError::Other(m),
     }
 }
 
@@ -713,11 +520,11 @@ impl iface_addresses::Guest for crate::Component {
             Err(e) => Err(iface_addresses__create_address__err(e)),
         }
     }
-    fn validate_address_v2(params: iface_addresses::ValidateAddressV2Params) -> Result<iface_addresses::ValidateAddressV2Response, iface_addresses::ValidateAddressV2Error> {
-        let json = iface_addresses__validate_address_v2_params__to_json(&params);
-        match dispatch(&OP_ADDRESSES_VALIDATE_ADDRESS_V2, json).and_then(iface_addresses__validate_address_v2__ok) {
+    fn validate_address(params: iface_addresses::ValidateAddressParams) -> Result<iface_addresses::ValidateAddressResponse, iface_addresses::ValidateAddressError> {
+        let json = iface_addresses__validate_address_params__to_json(&params);
+        match dispatch(&OP_ADDRESSES_VALIDATE_ADDRESS, json).and_then(iface_addresses__validate_address__ok) {
             Ok(v) => Ok(v),
-            Err(e) => Err(iface_addresses__validate_address_v2__err(e)),
+            Err(e) => Err(iface_addresses__validate_address__err(e)),
         }
     }
     fn get_address(params: iface_addresses::GetAddressParams) -> Result<iface_addresses::GetAddressResponse, iface_addresses::GetAddressError> {

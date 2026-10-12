@@ -47,25 +47,19 @@ const OP_ADMIN_CONVERSATIONS_RESTRICT_ACCESS_REMOVE_GROUP: OpSpec = OpSpec {
 
 fn iface_admin_conversations_restrict_access__add_group_response__to_json(p: &iface_admin_conversations_restrict_access::AddGroupResponse) -> Value {
     let mut m = Map::new();
-    m.insert("ok".into(), iface_admin_conversations_restrict_access__defs_ok_true__to_json(&p.ok));
-    Value::Object(m)
-}
-
-fn iface_admin_conversations_restrict_access__defs_ok_true__to_json(p: &iface_admin_conversations_restrict_access::DefsOkTrue) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
+    m.insert("ok".into(), Value::Bool(*(&p.ok)));
     Value::Object(m)
 }
 
 fn iface_admin_conversations_restrict_access__list_groups_response__to_json(p: &iface_admin_conversations_restrict_access::ListGroupsResponse) -> Value {
     let mut m = Map::new();
-    m.insert("ok".into(), iface_admin_conversations_restrict_access__defs_ok_true__to_json(&p.ok));
+    m.insert("ok".into(), Value::Bool(*(&p.ok)));
     Value::Object(m)
 }
 
 fn iface_admin_conversations_restrict_access__remove_group_response__to_json(p: &iface_admin_conversations_restrict_access::RemoveGroupResponse) -> Value {
     let mut m = Map::new();
-    m.insert("ok".into(), iface_admin_conversations_restrict_access__defs_ok_true__to_json(&p.ok));
+    m.insert("ok".into(), Value::Bool(*(&p.ok)));
     Value::Object(m)
 }
 
@@ -98,28 +92,21 @@ fn iface_admin_conversations_restrict_access__remove_group_params__to_json(p: &i
 fn iface_admin_conversations_restrict_access__add_group_response__from_json(v: &Value) -> Option<iface_admin_conversations_restrict_access::AddGroupResponse> {
     let m = v.as_object()?;
     Some(iface_admin_conversations_restrict_access::AddGroupResponse {
-        ok: match m.get("ok").and_then(|v| iface_admin_conversations_restrict_access__defs_ok_true__from_json(v)) { Some(x) => x, None => return None },
-    })
-}
-
-fn iface_admin_conversations_restrict_access__defs_ok_true__from_json(v: &Value) -> Option<iface_admin_conversations_restrict_access::DefsOkTrue> {
-    let m = v.as_object()?;
-    Some(iface_admin_conversations_restrict_access::DefsOkTrue {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        ok: m.get("ok").and_then(|v| (v).as_bool()).unwrap_or_default(),
     })
 }
 
 fn iface_admin_conversations_restrict_access__list_groups_response__from_json(v: &Value) -> Option<iface_admin_conversations_restrict_access::ListGroupsResponse> {
     let m = v.as_object()?;
     Some(iface_admin_conversations_restrict_access::ListGroupsResponse {
-        ok: match m.get("ok").and_then(|v| iface_admin_conversations_restrict_access__defs_ok_true__from_json(v)) { Some(x) => x, None => return None },
+        ok: m.get("ok").and_then(|v| (v).as_bool()).unwrap_or_default(),
     })
 }
 
 fn iface_admin_conversations_restrict_access__remove_group_response__from_json(v: &Value) -> Option<iface_admin_conversations_restrict_access::RemoveGroupResponse> {
     let m = v.as_object()?;
     Some(iface_admin_conversations_restrict_access::RemoveGroupResponse {
-        ok: match m.get("ok").and_then(|v| iface_admin_conversations_restrict_access__defs_ok_true__from_json(v)) { Some(x) => x, None => return None },
+        ok: m.get("ok").and_then(|v| (v).as_bool()).unwrap_or_default(),
     })
 }
 

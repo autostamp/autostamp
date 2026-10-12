@@ -16,14 +16,15 @@ const OP_HOOK_TYPE_LIST_HOOK_TYPES: OpSpec = OpSpec {
 fn iface_hook_type__hook_type__to_json(p: &iface_hook_type::HookType) -> Value {
     let mut m = Map::new();
     m.insert("events".into(), match (&p.events) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
-    m.insert("fields".into(), match (&p.fields) { Some(v) => Value::Array((v).iter().map(|v| iface_hook_type__hook_type_fields_item__to_json(v)).collect()), None => Value::Null });
+    m.insert("fields".into(), match (&p.fields) { Some(v) => Value::Array((v).iter().map(|v| Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect())).collect()), None => Value::Null });
     m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_hook_type__hook_type_fields_item__to_json(p: &iface_hook_type::HookTypeFieldsItem) -> Value {
+fn iface_hook_type__hook_type_fields_item_entry__to_json(p: &iface_hook_type::HookTypeFieldsItemEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -31,15 +32,16 @@ fn iface_hook_type__hook_type__from_json(v: &Value) -> Option<iface_hook_type::H
     let m = v.as_object()?;
     Some(iface_hook_type::HookType {
         events: m.get("events").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
-        fields: m.get("fields").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_hook_type__hook_type_fields_item__from_json(x)).collect())),
+        fields: m.get("fields").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_hook_type::HookTypeFieldsItemEntry { key: k.clone(), value: val })).collect())).collect())),
         name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
     })
 }
 
-fn iface_hook_type__hook_type_fields_item__from_json(v: &Value) -> Option<iface_hook_type::HookTypeFieldsItem> {
+fn iface_hook_type__hook_type_fields_item_entry__from_json(v: &Value) -> Option<iface_hook_type::HookTypeFieldsItemEntry> {
     let m = v.as_object()?;
-    Some(iface_hook_type::HookTypeFieldsItem {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_hook_type::HookTypeFieldsItemEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 

@@ -20,8 +20,8 @@ triggered.
 
 | Setting | Value |
 | --- | --- |
-| Package | `autostamp:nordigen@0.5.0` |
-| Published version | `0.5.0+nordigen-2.0-v2` |
+| Package | `autostamp:nordigen@0.6.0` |
+| Published version | `0.6.0+nordigen-2.0-v2` |
 | Tag filter | all tags |
 | Operations generated | 29 |
 | Infer API-key credentials | enabled — not triggered |

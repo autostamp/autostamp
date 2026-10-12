@@ -132,14 +132,15 @@ fn iface_batches__post_batches_body_operations_item__to_json(p: &iface_batches::
     m.insert("body".into(), match (&p.body) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("method".into(), Value::String(iface_batches__post_batches_body_operations_item_method_enum__to_str(&p.method).into()));
     m.insert("operation_id".into(), match (&p.operation_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("params".into(), match (&p.params) { Some(v) => iface_batches__post_batches_body_operations_item_params__to_json(v), None => Value::Null });
+    m.insert("params".into(), match (&p.params) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("path".into(), Value::String((&p.path).clone()));
     Value::Object(m)
 }
 
-fn iface_batches__post_batches_body_operations_item_params__to_json(p: &iface_batches::PostBatchesBodyOperationsItemParams) -> Value {
+fn iface_batches__post_batches_body_operations_item_params_entry__to_json(p: &iface_batches::PostBatchesBodyOperationsItemParamsEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 

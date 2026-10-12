@@ -201,15 +201,17 @@ fn iface_menu_items__get_menu_item_information_response_servings__to_json(p: &if
     Value::Object(m)
 }
 
-fn iface_menu_items__menu_item_nutrition_label_image_response__to_json(p: &iface_menu_items::MenuItemNutritionLabelImageResponse) -> Value {
+fn iface_menu_items__menu_item_nutrition_label_image_response_entry__to_json(p: &iface_menu_items::MenuItemNutritionLabelImageResponseEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
-fn iface_menu_items__menu_item_nutrition_by_id_image_response__to_json(p: &iface_menu_items::MenuItemNutritionByIdImageResponse) -> Value {
+fn iface_menu_items__menu_item_nutrition_by_id_image_response_entry__to_json(p: &iface_menu_items::MenuItemNutritionByIdImageResponseEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -377,17 +379,19 @@ fn iface_menu_items__get_menu_item_information_response_servings__from_json(v: &
     })
 }
 
-fn iface_menu_items__menu_item_nutrition_label_image_response__from_json(v: &Value) -> Option<iface_menu_items::MenuItemNutritionLabelImageResponse> {
+fn iface_menu_items__menu_item_nutrition_label_image_response_entry__from_json(v: &Value) -> Option<iface_menu_items::MenuItemNutritionLabelImageResponseEntry> {
     let m = v.as_object()?;
-    Some(iface_menu_items::MenuItemNutritionLabelImageResponse {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_menu_items::MenuItemNutritionLabelImageResponseEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
-fn iface_menu_items__menu_item_nutrition_by_id_image_response__from_json(v: &Value) -> Option<iface_menu_items::MenuItemNutritionByIdImageResponse> {
+fn iface_menu_items__menu_item_nutrition_by_id_image_response_entry__from_json(v: &Value) -> Option<iface_menu_items::MenuItemNutritionByIdImageResponseEntry> {
     let m = v.as_object()?;
-    Some(iface_menu_items::MenuItemNutritionByIdImageResponse {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_menu_items::MenuItemNutritionByIdImageResponseEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -476,12 +480,12 @@ fn iface_menu_items__menu_item_nutrition_label_widget__err(e: crate::runtime::Di
     }
 }
 
-fn iface_menu_items__menu_item_nutrition_label_image__ok(body: String) -> Result<iface_menu_items::MenuItemNutritionLabelImageResponse, crate::runtime::DispatchError> {
+fn iface_menu_items__menu_item_nutrition_label_image__ok(body: String) -> Result<Vec<iface_menu_items::MenuItemNutritionLabelImageResponseEntry>, crate::runtime::DispatchError> {
     let v: Value = match serde_json::from_str(&body) {
         Ok(v) => v,
         Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
     };
-    match iface_menu_items__menu_item_nutrition_label_image_response__from_json(&v) {
+    match (&v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_menu_items::MenuItemNutritionLabelImageResponseEntry { key: k.clone(), value: val })).collect()) {
         Some(x) => Ok(x),
         None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
@@ -515,12 +519,12 @@ fn iface_menu_items__visualize_menu_item_nutrition_by_id__err(e: crate::runtime:
     }
 }
 
-fn iface_menu_items__menu_item_nutrition_by_id_image__ok(body: String) -> Result<iface_menu_items::MenuItemNutritionByIdImageResponse, crate::runtime::DispatchError> {
+fn iface_menu_items__menu_item_nutrition_by_id_image__ok(body: String) -> Result<Vec<iface_menu_items::MenuItemNutritionByIdImageResponseEntry>, crate::runtime::DispatchError> {
     let v: Value = match serde_json::from_str(&body) {
         Ok(v) => v,
         Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
     };
-    match iface_menu_items__menu_item_nutrition_by_id_image_response__from_json(&v) {
+    match (&v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_menu_items::MenuItemNutritionByIdImageResponseEntry { key: k.clone(), value: val })).collect()) {
         Some(x) => Ok(x),
         None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
@@ -567,7 +571,7 @@ impl iface_menu_items::Guest for crate::Component {
             Err(e) => Err(iface_menu_items__menu_item_nutrition_label_widget__err(e)),
         }
     }
-    fn menu_item_nutrition_label_image(params: iface_menu_items::MenuItemNutritionLabelImageParams) -> Result<iface_menu_items::MenuItemNutritionLabelImageResponse, iface_menu_items::MenuItemNutritionLabelImageError> {
+    fn menu_item_nutrition_label_image(params: iface_menu_items::MenuItemNutritionLabelImageParams) -> Result<Vec<iface_menu_items::MenuItemNutritionLabelImageResponseEntry>, iface_menu_items::MenuItemNutritionLabelImageError> {
         let json = iface_menu_items__menu_item_nutrition_label_image_params__to_json(&params);
         match dispatch(&OP_MENU_ITEMS_MENU_ITEM_NUTRITION_LABEL_IMAGE, json).and_then(iface_menu_items__menu_item_nutrition_label_image__ok) {
             Ok(v) => Ok(v),
@@ -581,7 +585,7 @@ impl iface_menu_items::Guest for crate::Component {
             Err(e) => Err(iface_menu_items__visualize_menu_item_nutrition_by_id__err(e)),
         }
     }
-    fn menu_item_nutrition_by_id_image(params: iface_menu_items::MenuItemNutritionByIdImageParams) -> Result<iface_menu_items::MenuItemNutritionByIdImageResponse, iface_menu_items::MenuItemNutritionByIdImageError> {
+    fn menu_item_nutrition_by_id_image(params: iface_menu_items::MenuItemNutritionByIdImageParams) -> Result<Vec<iface_menu_items::MenuItemNutritionByIdImageResponseEntry>, iface_menu_items::MenuItemNutritionByIdImageError> {
         let json = iface_menu_items__menu_item_nutrition_by_id_image_params__to_json(&params);
         match dispatch(&OP_MENU_ITEMS_MENU_ITEM_NUTRITION_BY_ID_IMAGE, json).and_then(iface_menu_items__menu_item_nutrition_by_id_image__ok) {
             Ok(v) => Ok(v),

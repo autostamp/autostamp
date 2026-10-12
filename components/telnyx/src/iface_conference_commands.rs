@@ -500,12 +500,6 @@ fn iface_conference_commands__conference_mute_participants_response__to_json(p: 
     Value::Object(m)
 }
 
-fn iface_conference_commands__loopcount__to_json(p: &iface_conference_commands::Loopcount) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
 fn iface_conference_commands__conference_play_audio_response__to_json(p: &iface_conference_commands::ConferencePlayAudioResponse) -> Value {
     let mut m = Map::new();
     m.insert("data".into(), match (&p.data) { Some(v) => iface_conference_commands__conference_command_result__to_json(v), None => Value::Null });
@@ -661,7 +655,7 @@ fn iface_conference_commands__conference_play_audio_params__to_json(p: &iface_co
     m.insert("id".into(), Value::String((&p.id).clone()));
     m.insert("audio_url".into(), match (&p.audio_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("call_control_ids".into(), match (&p.call_control_ids) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
-    m.insert("loop".into(), match (&p.loop_) { Some(v) => iface_conference_commands__loopcount__to_json(v), None => Value::Null });
+    m.insert("loop".into(), match (&p.loop_) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("media_name".into(), match (&p.media_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }

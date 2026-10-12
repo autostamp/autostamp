@@ -98,15 +98,16 @@ fn iface_tokens__apply_missing_partner_offers_without_claim_response__to_json(p:
     m.insert("ErrorCode".into(), match (&p.error_code) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("ErrorStatus".into(), match (&p.error_status) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("Message".into(), match (&p.message) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("MessageData".into(), match (&p.message_data) { Some(v) => iface_tokens__apply_missing_partner_offers_without_claim_response_message_data__to_json(v), None => Value::Null });
+    m.insert("MessageData".into(), match (&p.message_data) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("Response".into(), match (&p.response) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     m.insert("ThrottleSeconds".into(), match (&p.throttle_seconds) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_tokens__apply_missing_partner_offers_without_claim_response_message_data__to_json(p: &iface_tokens::ApplyMissingPartnerOffersWithoutClaimResponseMessageData) -> Value {
+fn iface_tokens__apply_missing_partner_offers_without_claim_response_message_data_entry__to_json(p: &iface_tokens::ApplyMissingPartnerOffersWithoutClaimResponseMessageDataEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -116,15 +117,16 @@ fn iface_tokens__claim_partner_offer_response__to_json(p: &iface_tokens::ClaimPa
     m.insert("ErrorCode".into(), match (&p.error_code) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("ErrorStatus".into(), match (&p.error_status) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("Message".into(), match (&p.message) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("MessageData".into(), match (&p.message_data) { Some(v) => iface_tokens__claim_partner_offer_response_message_data__to_json(v), None => Value::Null });
+    m.insert("MessageData".into(), match (&p.message_data) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("Response".into(), match (&p.response) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     m.insert("ThrottleSeconds".into(), match (&p.throttle_seconds) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_tokens__claim_partner_offer_response_message_data__to_json(p: &iface_tokens::ClaimPartnerOfferResponseMessageData) -> Value {
+fn iface_tokens__claim_partner_offer_response_message_data_entry__to_json(p: &iface_tokens::ClaimPartnerOfferResponseMessageDataEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -134,15 +136,16 @@ fn iface_tokens__force_drops_repair_response__to_json(p: &iface_tokens::ForceDro
     m.insert("ErrorCode".into(), match (&p.error_code) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("ErrorStatus".into(), match (&p.error_status) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("Message".into(), match (&p.message) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("MessageData".into(), match (&p.message_data) { Some(v) => iface_tokens__force_drops_repair_response_message_data__to_json(v), None => Value::Null });
+    m.insert("MessageData".into(), match (&p.message_data) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("Response".into(), match (&p.response) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     m.insert("ThrottleSeconds".into(), match (&p.throttle_seconds) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_tokens__force_drops_repair_response_message_data__to_json(p: &iface_tokens::ForceDropsRepairResponseMessageData) -> Value {
+fn iface_tokens__force_drops_repair_response_message_data_entry__to_json(p: &iface_tokens::ForceDropsRepairResponseMessageDataEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -152,15 +155,16 @@ fn iface_tokens__get_partner_offer_sku_history_response__to_json(p: &iface_token
     m.insert("ErrorCode".into(), match (&p.error_code) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("ErrorStatus".into(), match (&p.error_status) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("Message".into(), match (&p.message) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("MessageData".into(), match (&p.message_data) { Some(v) => iface_tokens__get_partner_offer_sku_history_response_message_data__to_json(v), None => Value::Null });
+    m.insert("MessageData".into(), match (&p.message_data) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("Response".into(), match (&p.response) { Some(v) => Value::Array((v).iter().map(|v| iface_tokens__partner_offer_sku_history_response__to_json(v)).collect()), None => Value::Null });
     m.insert("ThrottleSeconds".into(), match (&p.throttle_seconds) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_tokens__get_partner_offer_sku_history_response_message_data__to_json(p: &iface_tokens::GetPartnerOfferSkuHistoryResponseMessageData) -> Value {
+fn iface_tokens__get_partner_offer_sku_history_response_message_data_entry__to_json(p: &iface_tokens::GetPartnerOfferSkuHistoryResponseMessageDataEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -195,15 +199,16 @@ fn iface_tokens__get_partner_reward_history_response__to_json(p: &iface_tokens::
     m.insert("ErrorCode".into(), match (&p.error_code) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("ErrorStatus".into(), match (&p.error_status) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("Message".into(), match (&p.message) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("MessageData".into(), match (&p.message_data) { Some(v) => iface_tokens__get_partner_reward_history_response_message_data__to_json(v), None => Value::Null });
+    m.insert("MessageData".into(), match (&p.message_data) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("Response".into(), match (&p.response) { Some(v) => iface_tokens__partner_reward_history_response__to_json(v), None => Value::Null });
     m.insert("ThrottleSeconds".into(), match (&p.throttle_seconds) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_tokens__get_partner_reward_history_response_message_data__to_json(p: &iface_tokens::GetPartnerRewardHistoryResponseMessageData) -> Value {
+fn iface_tokens__get_partner_reward_history_response_message_data_entry__to_json(p: &iface_tokens::GetPartnerRewardHistoryResponseMessageDataEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -229,21 +234,325 @@ fn iface_tokens__get_bungie_rewards_list_response__to_json(p: &iface_tokens::Get
     m.insert("ErrorCode".into(), match (&p.error_code) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("ErrorStatus".into(), match (&p.error_status) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("Message".into(), match (&p.message) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("MessageData".into(), match (&p.message_data) { Some(v) => iface_tokens__get_bungie_rewards_list_response_message_data__to_json(v), None => Value::Null });
-    m.insert("Response".into(), match (&p.response) { Some(v) => iface_tokens__get_bungie_rewards_list_response_response__to_json(v), None => Value::Null });
+    m.insert("MessageData".into(), match (&p.message_data) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
+    m.insert("Response".into(), match (&p.response) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), iface_tokens__bungie_reward_display__to_json(&e.value))).collect()), None => Value::Null });
     m.insert("ThrottleSeconds".into(), match (&p.throttle_seconds) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_tokens__get_bungie_rewards_list_response_message_data__to_json(p: &iface_tokens::GetBungieRewardsListResponseMessageData) -> Value {
+fn iface_tokens__get_bungie_rewards_list_response_message_data_entry__to_json(p: &iface_tokens::GetBungieRewardsListResponseMessageDataEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
-fn iface_tokens__get_bungie_rewards_list_response_response__to_json(p: &iface_tokens::GetBungieRewardsListResponseResponse) -> Value {
+fn iface_tokens__bungie_reward_display__to_json(p: &iface_tokens::BungieRewardDisplay) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("ObjectiveDisplayProperties".into(), match (&p.objective_display_properties) { Some(v) => iface_tokens__reward_display_properties__to_json(v), None => Value::Null });
+    m.insert("RewardDisplayProperties".into(), match (&p.reward_display_properties) { Some(v) => iface_tokens__reward_display_properties__to_json(v), None => Value::Null });
+    m.insert("UserRewardAvailabilityModel".into(), match (&p.user_reward_availability_model) { Some(v) => iface_tokens__user_reward_availability_model__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_tokens__reward_display_properties__to_json(p: &iface_tokens::RewardDisplayProperties) -> Value {
+    let mut m = Map::new();
+    m.insert("Description".into(), match (&p.description) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("ImagePath".into(), match (&p.image_path) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("Name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_tokens__user_reward_availability_model__to_json(p: &iface_tokens::UserRewardAvailabilityModel) -> Value {
+    let mut m = Map::new();
+    m.insert("AvailabilityModel".into(), match (&p.availability_model) { Some(v) => iface_tokens__reward_availability_model__to_json(v), None => Value::Null });
+    m.insert("IsAvailableForUser".into(), match (&p.is_available_for_user) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("IsUnlockedForUser".into(), match (&p.is_unlocked_for_user) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_tokens__reward_availability_model__to_json(p: &iface_tokens::RewardAvailabilityModel) -> Value {
+    let mut m = Map::new();
+    m.insert("CollectibleDefinitions".into(), match (&p.collectible_definitions) { Some(v) => Value::Array((v).iter().map(|v| iface_tokens__collectible_definitions__to_json(v)).collect()), None => Value::Null });
+    m.insert("DecryptedToken".into(), match (&p.decrypted_token) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("GameEarnByDate".into(), match (&p.game_earn_by_date) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("HasExistingCode".into(), match (&p.has_existing_code) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("HasOffer".into(), match (&p.has_offer) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("IsLoyaltyReward".into(), match (&p.is_loyalty_reward) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("IsOffer".into(), match (&p.is_offer) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("OfferApplied".into(), match (&p.offer_applied) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("RecordDefinitions".into(), match (&p.record_definitions) { Some(v) => Value::Array((v).iter().map(|v| iface_tokens__destiny_definitions_records_destiny_record_definition__to_json(v)).collect()), None => Value::Null });
+    m.insert("RedemptionEndDate".into(), match (&p.redemption_end_date) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("ShopifyEndDate".into(), match (&p.shopify_end_date) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_tokens__collectible_definitions__to_json(p: &iface_tokens::CollectibleDefinitions) -> Value {
+    let mut m = Map::new();
+    m.insert("CollectibleDefinition".into(), match (&p.collectible_definition) { Some(v) => iface_tokens__destiny_definitions_collectibles_destiny_collectible_definition__to_json(v), None => Value::Null });
+    m.insert("DestinyInventoryItemDefinition".into(), match (&p.destiny_inventory_item_definition) { Some(v) => iface_tokens__destiny_definitions_destiny_inventory_item_definition__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_tokens__destiny_definitions_collectibles_destiny_collectible_definition__to_json(p: &iface_tokens::DestinyDefinitionsCollectiblesDestinyCollectibleDefinition) -> Value {
+    let mut m = Map::new();
+    m.insert("acquisitionInfo".into(), match (&p.acquisition_info) { Some(v) => iface_tokens__destiny_definitions_collectibles_destiny_collectible_acquisition_block__to_json(v), None => Value::Null });
+    m.insert("displayProperties".into(), match (&p.display_properties) { Some(v) => iface_tokens__destiny_definitions_common_destiny_display_properties_definition__to_json(v), None => Value::Null });
+    m.insert("hash".into(), match (&p.hash) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("index".into(), match (&p.index) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("itemHash".into(), match (&p.item_hash) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("parentNodeHashes".into(), match (&p.parent_node_hashes) { Some(v) => Value::Array((v).iter().map(|v| Value::Number(serde_json::Number::from(*(v)))).collect()), None => Value::Null });
+    m.insert("presentationInfo".into(), match (&p.presentation_info) { Some(v) => iface_tokens__destiny_definitions_presentation_destiny_presentation_child_block__to_json(v), None => Value::Null });
+    m.insert("presentationNodeType".into(), match (&p.presentation_node_type) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("redacted".into(), match (&p.redacted) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("scope".into(), match (&p.scope) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("sourceHash".into(), match (&p.source_hash) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("sourceString".into(), match (&p.source_string) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("stateInfo".into(), match (&p.state_info) { Some(v) => iface_tokens__destiny_definitions_collectibles_destiny_collectible_state_block__to_json(v), None => Value::Null });
+    m.insert("traitHashes".into(), match (&p.trait_hashes) { Some(v) => Value::Array((v).iter().map(|v| Value::Number(serde_json::Number::from(*(v)))).collect()), None => Value::Null });
+    m.insert("traitIds".into(), match (&p.trait_ids) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_tokens__destiny_definitions_collectibles_destiny_collectible_acquisition_block__to_json(p: &iface_tokens::DestinyDefinitionsCollectiblesDestinyCollectibleAcquisitionBlock) -> Value {
+    let mut m = Map::new();
+    m.insert("acquireMaterialRequirementHash".into(), match (&p.acquire_material_requirement_hash) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("acquireTimestampUnlockValueHash".into(), match (&p.acquire_timestamp_unlock_value_hash) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_tokens__destiny_definitions_common_destiny_display_properties_definition__to_json(p: &iface_tokens::DestinyDefinitionsCommonDestinyDisplayPropertiesDefinition) -> Value {
+    let mut m = Map::new();
+    m.insert("description".into(), match (&p.description) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("hasIcon".into(), match (&p.has_icon) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("highResIcon".into(), match (&p.high_res_icon) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("icon".into(), match (&p.icon) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("iconSequences".into(), match (&p.icon_sequences) { Some(v) => Value::Array((v).iter().map(|v| iface_tokens__destiny_definitions_common_destiny_icon_sequence_definition__to_json(v)).collect()), None => Value::Null });
+    m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_tokens__destiny_definitions_common_destiny_icon_sequence_definition__to_json(p: &iface_tokens::DestinyDefinitionsCommonDestinyIconSequenceDefinition) -> Value {
+    let mut m = Map::new();
+    m.insert("frames".into(), match (&p.frames) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_tokens__destiny_definitions_presentation_destiny_presentation_child_block__to_json(p: &iface_tokens::DestinyDefinitionsPresentationDestinyPresentationChildBlock) -> Value {
+    let mut m = Map::new();
+    m.insert("displayStyle".into(), match (&p.display_style) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("parentPresentationNodeHashes".into(), match (&p.parent_presentation_node_hashes) { Some(v) => Value::Array((v).iter().map(|v| Value::Number(serde_json::Number::from(*(v)))).collect()), None => Value::Null });
+    m.insert("presentationNodeType".into(), match (&p.presentation_node_type) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_tokens__destiny_definitions_collectibles_destiny_collectible_state_block__to_json(p: &iface_tokens::DestinyDefinitionsCollectiblesDestinyCollectibleStateBlock) -> Value {
+    let mut m = Map::new();
+    m.insert("obscuredOverrideItemHash".into(), match (&p.obscured_override_item_hash) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("requirements".into(), match (&p.requirements) { Some(v) => iface_tokens__destiny_definitions_presentation_destiny_presentation_node_requirements_block__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_tokens__destiny_definitions_presentation_destiny_presentation_node_requirements_block__to_json(p: &iface_tokens::DestinyDefinitionsPresentationDestinyPresentationNodeRequirementsBlock) -> Value {
+    let mut m = Map::new();
+    m.insert("entitlementUnavailableMessage".into(), match (&p.entitlement_unavailable_message) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_tokens__destiny_definitions_destiny_inventory_item_definition__to_json(p: &iface_tokens::DestinyDefinitionsDestinyInventoryItemDefinition) -> Value {
+    let mut m = Map::new();
+    m.insert("action".into(), match (&p.action) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("allowActions".into(), match (&p.allow_actions) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("animations".into(), match (&p.animations) { Some(v) => Value::Array((v).iter().map(|v| iface_tokens__destiny_definitions_animations_destiny_animation_reference__to_json(v)).collect()), None => Value::Null });
+    m.insert("backgroundColor".into(), match (&p.background_color) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("breakerType".into(), match (&p.breaker_type) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("breakerTypeHash".into(), match (&p.breaker_type_hash) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("classType".into(), match (&p.class_type) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("collectibleHash".into(), match (&p.collectible_hash) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("crafting".into(), match (&p.crafting) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("damageTypeHashes".into(), match (&p.damage_type_hashes) { Some(v) => Value::Array((v).iter().map(|v| Value::Number(serde_json::Number::from(*(v)))).collect()), None => Value::Null });
+    m.insert("damageTypes".into(), match (&p.damage_types) { Some(v) => Value::Array((v).iter().map(|v| Value::Number(serde_json::Number::from(*(v)))).collect()), None => Value::Null });
+    m.insert("defaultDamageType".into(), match (&p.default_damage_type) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("defaultDamageTypeHash".into(), match (&p.default_damage_type_hash) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("displayProperties".into(), match (&p.display_properties) { Some(v) => iface_tokens__destiny_definitions_common_destiny_display_properties_definition__to_json(v), None => Value::Null });
+    m.insert("displaySource".into(), match (&p.display_source) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("doesPostmasterPullHaveSideEffects".into(), match (&p.does_postmaster_pull_have_side_effects) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("emblemObjectiveHash".into(), match (&p.emblem_objective_hash) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("equippable".into(), match (&p.equippable) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("equippingBlock".into(), match (&p.equipping_block) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("flavorText".into(), match (&p.flavor_text) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("gearset".into(), match (&p.gearset) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("hash".into(), match (&p.hash) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("iconWatermark".into(), match (&p.icon_watermark) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("iconWatermarkShelved".into(), match (&p.icon_watermark_shelved) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("index".into(), match (&p.index) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("inventory".into(), match (&p.inventory) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("investmentStats".into(), match (&p.investment_stats) { Some(v) => Value::Array((v).iter().map(|v| iface_tokens__destiny_definitions_destiny_item_investment_stat_definition__to_json(v)).collect()), None => Value::Null });
+    m.insert("isWrapper".into(), match (&p.is_wrapper) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("itemCategoryHashes".into(), match (&p.item_category_hashes) { Some(v) => Value::Array((v).iter().map(|v| Value::Number(serde_json::Number::from(*(v)))).collect()), None => Value::Null });
+    m.insert("itemSubType".into(), match (&p.item_sub_type) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("itemType".into(), match (&p.item_type) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("itemTypeAndTierDisplayName".into(), match (&p.item_type_and_tier_display_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("itemTypeDisplayName".into(), match (&p.item_type_display_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("links".into(), match (&p.links) { Some(v) => Value::Array((v).iter().map(|v| iface_tokens__links_hyperlink_reference__to_json(v)).collect()), None => Value::Null });
+    m.insert("loreHash".into(), match (&p.lore_hash) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("metrics".into(), match (&p.metrics) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("nonTransferrable".into(), match (&p.non_transferrable) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("objectives".into(), match (&p.objectives) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("perks".into(), match (&p.perks) { Some(v) => Value::Array((v).iter().map(|v| iface_tokens__destiny_definitions_destiny_item_perk_entry_definition__to_json(v)).collect()), None => Value::Null });
+    m.insert("plug".into(), match (&p.plug) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("preview".into(), match (&p.preview) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("quality".into(), match (&p.quality) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("redacted".into(), match (&p.redacted) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("sack".into(), match (&p.sack) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("screenshot".into(), match (&p.screenshot) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("seasonHash".into(), match (&p.season_hash) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("secondaryIcon".into(), match (&p.secondary_icon) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("secondaryOverlay".into(), match (&p.secondary_overlay) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("secondarySpecial".into(), match (&p.secondary_special) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("setData".into(), match (&p.set_data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("sockets".into(), match (&p.sockets) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("sourceData".into(), match (&p.source_data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("specialItemType".into(), match (&p.special_item_type) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("stats".into(), match (&p.stats) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("summary".into(), match (&p.summary) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("summaryItemHash".into(), match (&p.summary_item_hash) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("talentGrid".into(), match (&p.talent_grid) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("tooltipNotifications".into(), match (&p.tooltip_notifications) { Some(v) => Value::Array((v).iter().map(|v| iface_tokens__destiny_definitions_destiny_item_tooltip_notification__to_json(v)).collect()), None => Value::Null });
+    m.insert("tooltipStyle".into(), match (&p.tooltip_style) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("traitHashes".into(), match (&p.trait_hashes) { Some(v) => Value::Array((v).iter().map(|v| Value::Number(serde_json::Number::from(*(v)))).collect()), None => Value::Null });
+    m.insert("traitIds".into(), match (&p.trait_ids) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("translationBlock".into(), match (&p.translation_block) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("uiItemDisplayStyle".into(), match (&p.ui_item_display_style) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("value".into(), match (&p.value) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_tokens__destiny_definitions_animations_destiny_animation_reference__to_json(p: &iface_tokens::DestinyDefinitionsAnimationsDestinyAnimationReference) -> Value {
+    let mut m = Map::new();
+    m.insert("animIdentifier".into(), match (&p.anim_identifier) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("animName".into(), match (&p.anim_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("path".into(), match (&p.path) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_tokens__destiny_definitions_destiny_item_investment_stat_definition__to_json(p: &iface_tokens::DestinyDefinitionsDestinyItemInvestmentStatDefinition) -> Value {
+    let mut m = Map::new();
+    m.insert("isConditionallyActive".into(), match (&p.is_conditionally_active) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("statTypeHash".into(), match (&p.stat_type_hash) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("value".into(), match (&p.value) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_tokens__links_hyperlink_reference__to_json(p: &iface_tokens::LinksHyperlinkReference) -> Value {
+    let mut m = Map::new();
+    m.insert("title".into(), match (&p.title) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("url".into(), match (&p.url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_tokens__destiny_definitions_destiny_item_perk_entry_definition__to_json(p: &iface_tokens::DestinyDefinitionsDestinyItemPerkEntryDefinition) -> Value {
+    let mut m = Map::new();
+    m.insert("perkHash".into(), match (&p.perk_hash) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("perkVisibility".into(), match (&p.perk_visibility) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("requirementDisplayString".into(), match (&p.requirement_display_string) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_tokens__destiny_definitions_destiny_item_tooltip_notification__to_json(p: &iface_tokens::DestinyDefinitionsDestinyItemTooltipNotification) -> Value {
+    let mut m = Map::new();
+    m.insert("displayString".into(), match (&p.display_string) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("displayStyle".into(), match (&p.display_style) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_tokens__destiny_definitions_records_destiny_record_definition__to_json(p: &iface_tokens::DestinyDefinitionsRecordsDestinyRecordDefinition) -> Value {
+    let mut m = Map::new();
+    m.insert("completionInfo".into(), match (&p.completion_info) { Some(v) => iface_tokens__destiny_definitions_records_destiny_record_completion_block__to_json(v), None => Value::Null });
+    m.insert("displayProperties".into(), match (&p.display_properties) { Some(v) => iface_tokens__destiny_definitions_common_destiny_display_properties_definition__to_json(v), None => Value::Null });
+    m.insert("expirationInfo".into(), match (&p.expiration_info) { Some(v) => iface_tokens__destiny_definitions_records_destiny_record_expiration_block__to_json(v), None => Value::Null });
+    m.insert("forTitleGilding".into(), match (&p.for_title_gilding) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("hash".into(), match (&p.hash) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("index".into(), match (&p.index) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("intervalInfo".into(), match (&p.interval_info) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("loreHash".into(), match (&p.lore_hash) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("objectiveHashes".into(), match (&p.objective_hashes) { Some(v) => Value::Array((v).iter().map(|v| Value::Number(serde_json::Number::from(*(v)))).collect()), None => Value::Null });
+    m.insert("parentNodeHashes".into(), match (&p.parent_node_hashes) { Some(v) => Value::Array((v).iter().map(|v| Value::Number(serde_json::Number::from(*(v)))).collect()), None => Value::Null });
+    m.insert("presentationInfo".into(), match (&p.presentation_info) { Some(v) => iface_tokens__destiny_definitions_presentation_destiny_presentation_child_block__to_json(v), None => Value::Null });
+    m.insert("presentationNodeType".into(), match (&p.presentation_node_type) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("recordValueStyle".into(), match (&p.record_value_style) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("redacted".into(), match (&p.redacted) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("requirements".into(), match (&p.requirements) { Some(v) => iface_tokens__destiny_definitions_presentation_destiny_presentation_node_requirements_block__to_json(v), None => Value::Null });
+    m.insert("rewardItems".into(), match (&p.reward_items) { Some(v) => Value::Array((v).iter().map(|v| iface_tokens__destiny_destiny_item_quantity__to_json(v)).collect()), None => Value::Null });
+    m.insert("scope".into(), match (&p.scope) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("shouldShowLargeIcons".into(), match (&p.should_show_large_icons) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("stateInfo".into(), match (&p.state_info) { Some(v) => iface_tokens__destiny_definitions_records_schema_record_state_block__to_json(v), None => Value::Null });
+    m.insert("titleInfo".into(), match (&p.title_info) { Some(v) => iface_tokens__destiny_definitions_records_destiny_record_title_block__to_json(v), None => Value::Null });
+    m.insert("traitHashes".into(), match (&p.trait_hashes) { Some(v) => Value::Array((v).iter().map(|v| Value::Number(serde_json::Number::from(*(v)))).collect()), None => Value::Null });
+    m.insert("traitIds".into(), match (&p.trait_ids) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_tokens__destiny_definitions_records_destiny_record_completion_block__to_json(p: &iface_tokens::DestinyDefinitionsRecordsDestinyRecordCompletionBlock) -> Value {
+    let mut m = Map::new();
+    m.insert("ScoreValue".into(), match (&p.score_value) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("partialCompletionObjectiveCountThreshold".into(), match (&p.partial_completion_objective_count_threshold) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("shouldFireToast".into(), match (&p.should_fire_toast) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("toastStyle".into(), match (&p.toast_style) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_tokens__destiny_definitions_records_destiny_record_expiration_block__to_json(p: &iface_tokens::DestinyDefinitionsRecordsDestinyRecordExpirationBlock) -> Value {
+    let mut m = Map::new();
+    m.insert("description".into(), match (&p.description) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("hasExpiration".into(), match (&p.has_expiration) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("icon".into(), match (&p.icon) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_tokens__destiny_destiny_item_quantity__to_json(p: &iface_tokens::DestinyDestinyItemQuantity) -> Value {
+    let mut m = Map::new();
+    m.insert("hasConditionalVisibility".into(), match (&p.has_conditional_visibility) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("itemHash".into(), match (&p.item_hash) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("itemInstanceId".into(), match (&p.item_instance_id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("quantity".into(), match (&p.quantity) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_tokens__destiny_definitions_records_schema_record_state_block__to_json(p: &iface_tokens::DestinyDefinitionsRecordsSchemaRecordStateBlock) -> Value {
+    let mut m = Map::new();
+    m.insert("featuredPriority".into(), match (&p.featured_priority) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("obscuredString".into(), match (&p.obscured_string) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_tokens__destiny_definitions_records_destiny_record_title_block__to_json(p: &iface_tokens::DestinyDefinitionsRecordsDestinyRecordTitleBlock) -> Value {
+    let mut m = Map::new();
+    m.insert("gildingTrackingRecordHash".into(), match (&p.gilding_tracking_record_hash) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("hasTitle".into(), match (&p.has_title) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("titlesByGender".into(), match (&p.titles_by_gender) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
+    m.insert("titlesByGenderHash".into(), match (&p.titles_by_gender_hash) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_tokens__destiny_definitions_records_destiny_record_title_block_titles_by_gender_entry__to_json(p: &iface_tokens::DestinyDefinitionsRecordsDestinyRecordTitleBlockTitlesByGenderEntry) -> Value {
+    let mut m = Map::new();
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
+}
+
+fn iface_tokens__destiny_definitions_records_destiny_record_title_block_titles_by_gender_hash_entry__to_json(p: &iface_tokens::DestinyDefinitionsRecordsDestinyRecordTitleBlockTitlesByGenderHashEntry) -> Value {
+    let mut m = Map::new();
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
+}
+
+fn iface_tokens__get_bungie_rewards_list_response_response_entry__to_json(p: &iface_tokens::GetBungieRewardsListResponseResponseEntry) -> Value {
+    let mut m = Map::new();
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), iface_tokens__bungie_reward_display__to_json(&p.value));
     Value::Object(m)
 }
 
@@ -253,21 +562,23 @@ fn iface_tokens__get_bungie_rewards_for_platform_user_response__to_json(p: &ifac
     m.insert("ErrorCode".into(), match (&p.error_code) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("ErrorStatus".into(), match (&p.error_status) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("Message".into(), match (&p.message) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("MessageData".into(), match (&p.message_data) { Some(v) => iface_tokens__get_bungie_rewards_for_platform_user_response_message_data__to_json(v), None => Value::Null });
-    m.insert("Response".into(), match (&p.response) { Some(v) => iface_tokens__get_bungie_rewards_for_platform_user_response_response__to_json(v), None => Value::Null });
+    m.insert("MessageData".into(), match (&p.message_data) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
+    m.insert("Response".into(), match (&p.response) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), iface_tokens__bungie_reward_display__to_json(&e.value))).collect()), None => Value::Null });
     m.insert("ThrottleSeconds".into(), match (&p.throttle_seconds) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_tokens__get_bungie_rewards_for_platform_user_response_message_data__to_json(p: &iface_tokens::GetBungieRewardsForPlatformUserResponseMessageData) -> Value {
+fn iface_tokens__get_bungie_rewards_for_platform_user_response_message_data_entry__to_json(p: &iface_tokens::GetBungieRewardsForPlatformUserResponseMessageDataEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
-fn iface_tokens__get_bungie_rewards_for_platform_user_response_response__to_json(p: &iface_tokens::GetBungieRewardsForPlatformUserResponseResponse) -> Value {
+fn iface_tokens__get_bungie_rewards_for_platform_user_response_response_entry__to_json(p: &iface_tokens::GetBungieRewardsForPlatformUserResponseResponseEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), iface_tokens__bungie_reward_display__to_json(&p.value));
     Value::Object(m)
 }
 
@@ -277,21 +588,23 @@ fn iface_tokens__get_bungie_rewards_for_user_response__to_json(p: &iface_tokens:
     m.insert("ErrorCode".into(), match (&p.error_code) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("ErrorStatus".into(), match (&p.error_status) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("Message".into(), match (&p.message) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("MessageData".into(), match (&p.message_data) { Some(v) => iface_tokens__get_bungie_rewards_for_user_response_message_data__to_json(v), None => Value::Null });
-    m.insert("Response".into(), match (&p.response) { Some(v) => iface_tokens__get_bungie_rewards_for_user_response_response__to_json(v), None => Value::Null });
+    m.insert("MessageData".into(), match (&p.message_data) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
+    m.insert("Response".into(), match (&p.response) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), iface_tokens__bungie_reward_display__to_json(&e.value))).collect()), None => Value::Null });
     m.insert("ThrottleSeconds".into(), match (&p.throttle_seconds) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_tokens__get_bungie_rewards_for_user_response_message_data__to_json(p: &iface_tokens::GetBungieRewardsForUserResponseMessageData) -> Value {
+fn iface_tokens__get_bungie_rewards_for_user_response_message_data_entry__to_json(p: &iface_tokens::GetBungieRewardsForUserResponseMessageDataEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
-fn iface_tokens__get_bungie_rewards_for_user_response_response__to_json(p: &iface_tokens::GetBungieRewardsForUserResponseResponse) -> Value {
+fn iface_tokens__get_bungie_rewards_for_user_response_response_entry__to_json(p: &iface_tokens::GetBungieRewardsForUserResponseResponseEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), iface_tokens__bungie_reward_display__to_json(&p.value));
     Value::Object(m)
 }
 
@@ -336,16 +649,17 @@ fn iface_tokens__apply_missing_partner_offers_without_claim_response__from_json(
         error_code: m.get("ErrorCode").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
         error_status: m.get("ErrorStatus").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         message: m.get("Message").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        message_data: m.get("MessageData").filter(|v| !v.is_null()).and_then(|v| iface_tokens__apply_missing_partner_offers_without_claim_response_message_data__from_json(v)),
+        message_data: m.get("MessageData").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_tokens::ApplyMissingPartnerOffersWithoutClaimResponseMessageDataEntry { key: k.clone(), value: val })).collect())),
         response: m.get("Response").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
         throttle_seconds: m.get("ThrottleSeconds").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
     })
 }
 
-fn iface_tokens__apply_missing_partner_offers_without_claim_response_message_data__from_json(v: &Value) -> Option<iface_tokens::ApplyMissingPartnerOffersWithoutClaimResponseMessageData> {
+fn iface_tokens__apply_missing_partner_offers_without_claim_response_message_data_entry__from_json(v: &Value) -> Option<iface_tokens::ApplyMissingPartnerOffersWithoutClaimResponseMessageDataEntry> {
     let m = v.as_object()?;
-    Some(iface_tokens::ApplyMissingPartnerOffersWithoutClaimResponseMessageData {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_tokens::ApplyMissingPartnerOffersWithoutClaimResponseMessageDataEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -356,16 +670,17 @@ fn iface_tokens__claim_partner_offer_response__from_json(v: &Value) -> Option<if
         error_code: m.get("ErrorCode").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
         error_status: m.get("ErrorStatus").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         message: m.get("Message").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        message_data: m.get("MessageData").filter(|v| !v.is_null()).and_then(|v| iface_tokens__claim_partner_offer_response_message_data__from_json(v)),
+        message_data: m.get("MessageData").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_tokens::ClaimPartnerOfferResponseMessageDataEntry { key: k.clone(), value: val })).collect())),
         response: m.get("Response").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
         throttle_seconds: m.get("ThrottleSeconds").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
     })
 }
 
-fn iface_tokens__claim_partner_offer_response_message_data__from_json(v: &Value) -> Option<iface_tokens::ClaimPartnerOfferResponseMessageData> {
+fn iface_tokens__claim_partner_offer_response_message_data_entry__from_json(v: &Value) -> Option<iface_tokens::ClaimPartnerOfferResponseMessageDataEntry> {
     let m = v.as_object()?;
-    Some(iface_tokens::ClaimPartnerOfferResponseMessageData {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_tokens::ClaimPartnerOfferResponseMessageDataEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -376,16 +691,17 @@ fn iface_tokens__force_drops_repair_response__from_json(v: &Value) -> Option<ifa
         error_code: m.get("ErrorCode").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
         error_status: m.get("ErrorStatus").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         message: m.get("Message").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        message_data: m.get("MessageData").filter(|v| !v.is_null()).and_then(|v| iface_tokens__force_drops_repair_response_message_data__from_json(v)),
+        message_data: m.get("MessageData").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_tokens::ForceDropsRepairResponseMessageDataEntry { key: k.clone(), value: val })).collect())),
         response: m.get("Response").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
         throttle_seconds: m.get("ThrottleSeconds").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
     })
 }
 
-fn iface_tokens__force_drops_repair_response_message_data__from_json(v: &Value) -> Option<iface_tokens::ForceDropsRepairResponseMessageData> {
+fn iface_tokens__force_drops_repair_response_message_data_entry__from_json(v: &Value) -> Option<iface_tokens::ForceDropsRepairResponseMessageDataEntry> {
     let m = v.as_object()?;
-    Some(iface_tokens::ForceDropsRepairResponseMessageData {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_tokens::ForceDropsRepairResponseMessageDataEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -396,16 +712,17 @@ fn iface_tokens__get_partner_offer_sku_history_response__from_json(v: &Value) ->
         error_code: m.get("ErrorCode").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
         error_status: m.get("ErrorStatus").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         message: m.get("Message").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        message_data: m.get("MessageData").filter(|v| !v.is_null()).and_then(|v| iface_tokens__get_partner_offer_sku_history_response_message_data__from_json(v)),
+        message_data: m.get("MessageData").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_tokens::GetPartnerOfferSkuHistoryResponseMessageDataEntry { key: k.clone(), value: val })).collect())),
         response: m.get("Response").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_tokens__partner_offer_sku_history_response__from_json(x)).collect())),
         throttle_seconds: m.get("ThrottleSeconds").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
     })
 }
 
-fn iface_tokens__get_partner_offer_sku_history_response_message_data__from_json(v: &Value) -> Option<iface_tokens::GetPartnerOfferSkuHistoryResponseMessageData> {
+fn iface_tokens__get_partner_offer_sku_history_response_message_data_entry__from_json(v: &Value) -> Option<iface_tokens::GetPartnerOfferSkuHistoryResponseMessageDataEntry> {
     let m = v.as_object()?;
-    Some(iface_tokens::GetPartnerOfferSkuHistoryResponseMessageData {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_tokens::GetPartnerOfferSkuHistoryResponseMessageDataEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -443,16 +760,17 @@ fn iface_tokens__get_partner_reward_history_response__from_json(v: &Value) -> Op
         error_code: m.get("ErrorCode").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
         error_status: m.get("ErrorStatus").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         message: m.get("Message").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        message_data: m.get("MessageData").filter(|v| !v.is_null()).and_then(|v| iface_tokens__get_partner_reward_history_response_message_data__from_json(v)),
+        message_data: m.get("MessageData").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_tokens::GetPartnerRewardHistoryResponseMessageDataEntry { key: k.clone(), value: val })).collect())),
         response: m.get("Response").filter(|v| !v.is_null()).and_then(|v| iface_tokens__partner_reward_history_response__from_json(v)),
         throttle_seconds: m.get("ThrottleSeconds").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
     })
 }
 
-fn iface_tokens__get_partner_reward_history_response_message_data__from_json(v: &Value) -> Option<iface_tokens::GetPartnerRewardHistoryResponseMessageData> {
+fn iface_tokens__get_partner_reward_history_response_message_data_entry__from_json(v: &Value) -> Option<iface_tokens::GetPartnerRewardHistoryResponseMessageDataEntry> {
     let m = v.as_object()?;
-    Some(iface_tokens::GetPartnerRewardHistoryResponseMessageData {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_tokens::GetPartnerRewardHistoryResponseMessageDataEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -481,23 +799,353 @@ fn iface_tokens__get_bungie_rewards_list_response__from_json(v: &Value) -> Optio
         error_code: m.get("ErrorCode").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
         error_status: m.get("ErrorStatus").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         message: m.get("Message").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        message_data: m.get("MessageData").filter(|v| !v.is_null()).and_then(|v| iface_tokens__get_bungie_rewards_list_response_message_data__from_json(v)),
-        response: m.get("Response").filter(|v| !v.is_null()).and_then(|v| iface_tokens__get_bungie_rewards_list_response_response__from_json(v)),
+        message_data: m.get("MessageData").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_tokens::GetBungieRewardsListResponseMessageDataEntry { key: k.clone(), value: val })).collect())),
+        response: m.get("Response").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| (iface_tokens__bungie_reward_display__from_json(x)).map(|val| iface_tokens::GetBungieRewardsListResponseResponseEntry { key: k.clone(), value: val })).collect())),
         throttle_seconds: m.get("ThrottleSeconds").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
     })
 }
 
-fn iface_tokens__get_bungie_rewards_list_response_message_data__from_json(v: &Value) -> Option<iface_tokens::GetBungieRewardsListResponseMessageData> {
+fn iface_tokens__get_bungie_rewards_list_response_message_data_entry__from_json(v: &Value) -> Option<iface_tokens::GetBungieRewardsListResponseMessageDataEntry> {
     let m = v.as_object()?;
-    Some(iface_tokens::GetBungieRewardsListResponseMessageData {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_tokens::GetBungieRewardsListResponseMessageDataEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
-fn iface_tokens__get_bungie_rewards_list_response_response__from_json(v: &Value) -> Option<iface_tokens::GetBungieRewardsListResponseResponse> {
+fn iface_tokens__bungie_reward_display__from_json(v: &Value) -> Option<iface_tokens::BungieRewardDisplay> {
     let m = v.as_object()?;
-    Some(iface_tokens::GetBungieRewardsListResponseResponse {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_tokens::BungieRewardDisplay {
+        objective_display_properties: m.get("ObjectiveDisplayProperties").filter(|v| !v.is_null()).and_then(|v| iface_tokens__reward_display_properties__from_json(v)),
+        reward_display_properties: m.get("RewardDisplayProperties").filter(|v| !v.is_null()).and_then(|v| iface_tokens__reward_display_properties__from_json(v)),
+        user_reward_availability_model: m.get("UserRewardAvailabilityModel").filter(|v| !v.is_null()).and_then(|v| iface_tokens__user_reward_availability_model__from_json(v)),
+    })
+}
+
+fn iface_tokens__reward_display_properties__from_json(v: &Value) -> Option<iface_tokens::RewardDisplayProperties> {
+    let m = v.as_object()?;
+    Some(iface_tokens::RewardDisplayProperties {
+        description: m.get("Description").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        image_path: m.get("ImagePath").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        name: m.get("Name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_tokens__user_reward_availability_model__from_json(v: &Value) -> Option<iface_tokens::UserRewardAvailabilityModel> {
+    let m = v.as_object()?;
+    Some(iface_tokens::UserRewardAvailabilityModel {
+        availability_model: m.get("AvailabilityModel").filter(|v| !v.is_null()).and_then(|v| iface_tokens__reward_availability_model__from_json(v)),
+        is_available_for_user: m.get("IsAvailableForUser").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        is_unlocked_for_user: m.get("IsUnlockedForUser").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+    })
+}
+
+fn iface_tokens__reward_availability_model__from_json(v: &Value) -> Option<iface_tokens::RewardAvailabilityModel> {
+    let m = v.as_object()?;
+    Some(iface_tokens::RewardAvailabilityModel {
+        collectible_definitions: m.get("CollectibleDefinitions").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_tokens__collectible_definitions__from_json(x)).collect())),
+        decrypted_token: m.get("DecryptedToken").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        game_earn_by_date: m.get("GameEarnByDate").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        has_existing_code: m.get("HasExistingCode").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        has_offer: m.get("HasOffer").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        is_loyalty_reward: m.get("IsLoyaltyReward").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        is_offer: m.get("IsOffer").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        offer_applied: m.get("OfferApplied").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        record_definitions: m.get("RecordDefinitions").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_tokens__destiny_definitions_records_destiny_record_definition__from_json(x)).collect())),
+        redemption_end_date: m.get("RedemptionEndDate").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        shopify_end_date: m.get("ShopifyEndDate").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_tokens__collectible_definitions__from_json(v: &Value) -> Option<iface_tokens::CollectibleDefinitions> {
+    let m = v.as_object()?;
+    Some(iface_tokens::CollectibleDefinitions {
+        collectible_definition: m.get("CollectibleDefinition").filter(|v| !v.is_null()).and_then(|v| iface_tokens__destiny_definitions_collectibles_destiny_collectible_definition__from_json(v)),
+        destiny_inventory_item_definition: m.get("DestinyInventoryItemDefinition").filter(|v| !v.is_null()).and_then(|v| iface_tokens__destiny_definitions_destiny_inventory_item_definition__from_json(v)),
+    })
+}
+
+fn iface_tokens__destiny_definitions_collectibles_destiny_collectible_definition__from_json(v: &Value) -> Option<iface_tokens::DestinyDefinitionsCollectiblesDestinyCollectibleDefinition> {
+    let m = v.as_object()?;
+    Some(iface_tokens::DestinyDefinitionsCollectiblesDestinyCollectibleDefinition {
+        acquisition_info: m.get("acquisitionInfo").filter(|v| !v.is_null()).and_then(|v| iface_tokens__destiny_definitions_collectibles_destiny_collectible_acquisition_block__from_json(v)),
+        display_properties: m.get("displayProperties").filter(|v| !v.is_null()).and_then(|v| iface_tokens__destiny_definitions_common_destiny_display_properties_definition__from_json(v)),
+        hash: m.get("hash").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        index: m.get("index").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        item_hash: m.get("itemHash").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        parent_node_hashes: m.get("parentNodeHashes").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_i64().map(|n| n as i32)).collect())),
+        presentation_info: m.get("presentationInfo").filter(|v| !v.is_null()).and_then(|v| iface_tokens__destiny_definitions_presentation_destiny_presentation_child_block__from_json(v)),
+        presentation_node_type: m.get("presentationNodeType").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        redacted: m.get("redacted").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        scope: m.get("scope").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        source_hash: m.get("sourceHash").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        source_string: m.get("sourceString").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        state_info: m.get("stateInfo").filter(|v| !v.is_null()).and_then(|v| iface_tokens__destiny_definitions_collectibles_destiny_collectible_state_block__from_json(v)),
+        trait_hashes: m.get("traitHashes").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_i64().map(|n| n as i32)).collect())),
+        trait_ids: m.get("traitIds").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+    })
+}
+
+fn iface_tokens__destiny_definitions_collectibles_destiny_collectible_acquisition_block__from_json(v: &Value) -> Option<iface_tokens::DestinyDefinitionsCollectiblesDestinyCollectibleAcquisitionBlock> {
+    let m = v.as_object()?;
+    Some(iface_tokens::DestinyDefinitionsCollectiblesDestinyCollectibleAcquisitionBlock {
+        acquire_material_requirement_hash: m.get("acquireMaterialRequirementHash").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        acquire_timestamp_unlock_value_hash: m.get("acquireTimestampUnlockValueHash").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+    })
+}
+
+fn iface_tokens__destiny_definitions_common_destiny_display_properties_definition__from_json(v: &Value) -> Option<iface_tokens::DestinyDefinitionsCommonDestinyDisplayPropertiesDefinition> {
+    let m = v.as_object()?;
+    Some(iface_tokens::DestinyDefinitionsCommonDestinyDisplayPropertiesDefinition {
+        description: m.get("description").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        has_icon: m.get("hasIcon").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        high_res_icon: m.get("highResIcon").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        icon: m.get("icon").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        icon_sequences: m.get("iconSequences").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_tokens__destiny_definitions_common_destiny_icon_sequence_definition__from_json(x)).collect())),
+        name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_tokens__destiny_definitions_common_destiny_icon_sequence_definition__from_json(v: &Value) -> Option<iface_tokens::DestinyDefinitionsCommonDestinyIconSequenceDefinition> {
+    let m = v.as_object()?;
+    Some(iface_tokens::DestinyDefinitionsCommonDestinyIconSequenceDefinition {
+        frames: m.get("frames").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+    })
+}
+
+fn iface_tokens__destiny_definitions_presentation_destiny_presentation_child_block__from_json(v: &Value) -> Option<iface_tokens::DestinyDefinitionsPresentationDestinyPresentationChildBlock> {
+    let m = v.as_object()?;
+    Some(iface_tokens::DestinyDefinitionsPresentationDestinyPresentationChildBlock {
+        display_style: m.get("displayStyle").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        parent_presentation_node_hashes: m.get("parentPresentationNodeHashes").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_i64().map(|n| n as i32)).collect())),
+        presentation_node_type: m.get("presentationNodeType").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+    })
+}
+
+fn iface_tokens__destiny_definitions_collectibles_destiny_collectible_state_block__from_json(v: &Value) -> Option<iface_tokens::DestinyDefinitionsCollectiblesDestinyCollectibleStateBlock> {
+    let m = v.as_object()?;
+    Some(iface_tokens::DestinyDefinitionsCollectiblesDestinyCollectibleStateBlock {
+        obscured_override_item_hash: m.get("obscuredOverrideItemHash").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        requirements: m.get("requirements").filter(|v| !v.is_null()).and_then(|v| iface_tokens__destiny_definitions_presentation_destiny_presentation_node_requirements_block__from_json(v)),
+    })
+}
+
+fn iface_tokens__destiny_definitions_presentation_destiny_presentation_node_requirements_block__from_json(v: &Value) -> Option<iface_tokens::DestinyDefinitionsPresentationDestinyPresentationNodeRequirementsBlock> {
+    let m = v.as_object()?;
+    Some(iface_tokens::DestinyDefinitionsPresentationDestinyPresentationNodeRequirementsBlock {
+        entitlement_unavailable_message: m.get("entitlementUnavailableMessage").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_tokens__destiny_definitions_destiny_inventory_item_definition__from_json(v: &Value) -> Option<iface_tokens::DestinyDefinitionsDestinyInventoryItemDefinition> {
+    let m = v.as_object()?;
+    Some(iface_tokens::DestinyDefinitionsDestinyInventoryItemDefinition {
+        action: m.get("action").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        allow_actions: m.get("allowActions").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        animations: m.get("animations").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_tokens__destiny_definitions_animations_destiny_animation_reference__from_json(x)).collect())),
+        background_color: m.get("backgroundColor").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        breaker_type: m.get("breakerType").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        breaker_type_hash: m.get("breakerTypeHash").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        class_type: m.get("classType").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        collectible_hash: m.get("collectibleHash").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        crafting: m.get("crafting").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        damage_type_hashes: m.get("damageTypeHashes").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_i64().map(|n| n as i32)).collect())),
+        damage_types: m.get("damageTypes").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_i64().map(|n| n as i32)).collect())),
+        default_damage_type: m.get("defaultDamageType").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        default_damage_type_hash: m.get("defaultDamageTypeHash").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        display_properties: m.get("displayProperties").filter(|v| !v.is_null()).and_then(|v| iface_tokens__destiny_definitions_common_destiny_display_properties_definition__from_json(v)),
+        display_source: m.get("displaySource").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        does_postmaster_pull_have_side_effects: m.get("doesPostmasterPullHaveSideEffects").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        emblem_objective_hash: m.get("emblemObjectiveHash").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        equippable: m.get("equippable").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        equipping_block: m.get("equippingBlock").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        flavor_text: m.get("flavorText").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        gearset: m.get("gearset").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        hash: m.get("hash").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        icon_watermark: m.get("iconWatermark").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        icon_watermark_shelved: m.get("iconWatermarkShelved").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        index: m.get("index").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        inventory: m.get("inventory").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        investment_stats: m.get("investmentStats").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_tokens__destiny_definitions_destiny_item_investment_stat_definition__from_json(x)).collect())),
+        is_wrapper: m.get("isWrapper").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        item_category_hashes: m.get("itemCategoryHashes").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_i64().map(|n| n as i32)).collect())),
+        item_sub_type: m.get("itemSubType").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        item_type: m.get("itemType").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        item_type_and_tier_display_name: m.get("itemTypeAndTierDisplayName").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        item_type_display_name: m.get("itemTypeDisplayName").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        links: m.get("links").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_tokens__links_hyperlink_reference__from_json(x)).collect())),
+        lore_hash: m.get("loreHash").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        metrics: m.get("metrics").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        non_transferrable: m.get("nonTransferrable").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        objectives: m.get("objectives").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        perks: m.get("perks").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_tokens__destiny_definitions_destiny_item_perk_entry_definition__from_json(x)).collect())),
+        plug: m.get("plug").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        preview: m.get("preview").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        quality: m.get("quality").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        redacted: m.get("redacted").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        sack: m.get("sack").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        screenshot: m.get("screenshot").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        season_hash: m.get("seasonHash").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        secondary_icon: m.get("secondaryIcon").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        secondary_overlay: m.get("secondaryOverlay").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        secondary_special: m.get("secondarySpecial").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        set_data: m.get("setData").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        sockets: m.get("sockets").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        source_data: m.get("sourceData").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        special_item_type: m.get("specialItemType").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        stats: m.get("stats").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        summary: m.get("summary").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        summary_item_hash: m.get("summaryItemHash").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        talent_grid: m.get("talentGrid").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        tooltip_notifications: m.get("tooltipNotifications").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_tokens__destiny_definitions_destiny_item_tooltip_notification__from_json(x)).collect())),
+        tooltip_style: m.get("tooltipStyle").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        trait_hashes: m.get("traitHashes").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_i64().map(|n| n as i32)).collect())),
+        trait_ids: m.get("traitIds").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        translation_block: m.get("translationBlock").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        ui_item_display_style: m.get("uiItemDisplayStyle").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        value: m.get("value").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_tokens__destiny_definitions_animations_destiny_animation_reference__from_json(v: &Value) -> Option<iface_tokens::DestinyDefinitionsAnimationsDestinyAnimationReference> {
+    let m = v.as_object()?;
+    Some(iface_tokens::DestinyDefinitionsAnimationsDestinyAnimationReference {
+        anim_identifier: m.get("animIdentifier").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        anim_name: m.get("animName").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        path: m.get("path").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_tokens__destiny_definitions_destiny_item_investment_stat_definition__from_json(v: &Value) -> Option<iface_tokens::DestinyDefinitionsDestinyItemInvestmentStatDefinition> {
+    let m = v.as_object()?;
+    Some(iface_tokens::DestinyDefinitionsDestinyItemInvestmentStatDefinition {
+        is_conditionally_active: m.get("isConditionallyActive").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        stat_type_hash: m.get("statTypeHash").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        value: m.get("value").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+    })
+}
+
+fn iface_tokens__links_hyperlink_reference__from_json(v: &Value) -> Option<iface_tokens::LinksHyperlinkReference> {
+    let m = v.as_object()?;
+    Some(iface_tokens::LinksHyperlinkReference {
+        title: m.get("title").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        url: m.get("url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_tokens__destiny_definitions_destiny_item_perk_entry_definition__from_json(v: &Value) -> Option<iface_tokens::DestinyDefinitionsDestinyItemPerkEntryDefinition> {
+    let m = v.as_object()?;
+    Some(iface_tokens::DestinyDefinitionsDestinyItemPerkEntryDefinition {
+        perk_hash: m.get("perkHash").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        perk_visibility: m.get("perkVisibility").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        requirement_display_string: m.get("requirementDisplayString").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_tokens__destiny_definitions_destiny_item_tooltip_notification__from_json(v: &Value) -> Option<iface_tokens::DestinyDefinitionsDestinyItemTooltipNotification> {
+    let m = v.as_object()?;
+    Some(iface_tokens::DestinyDefinitionsDestinyItemTooltipNotification {
+        display_string: m.get("displayString").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        display_style: m.get("displayStyle").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_tokens__destiny_definitions_records_destiny_record_definition__from_json(v: &Value) -> Option<iface_tokens::DestinyDefinitionsRecordsDestinyRecordDefinition> {
+    let m = v.as_object()?;
+    Some(iface_tokens::DestinyDefinitionsRecordsDestinyRecordDefinition {
+        completion_info: m.get("completionInfo").filter(|v| !v.is_null()).and_then(|v| iface_tokens__destiny_definitions_records_destiny_record_completion_block__from_json(v)),
+        display_properties: m.get("displayProperties").filter(|v| !v.is_null()).and_then(|v| iface_tokens__destiny_definitions_common_destiny_display_properties_definition__from_json(v)),
+        expiration_info: m.get("expirationInfo").filter(|v| !v.is_null()).and_then(|v| iface_tokens__destiny_definitions_records_destiny_record_expiration_block__from_json(v)),
+        for_title_gilding: m.get("forTitleGilding").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        hash: m.get("hash").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        index: m.get("index").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        interval_info: m.get("intervalInfo").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        lore_hash: m.get("loreHash").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        objective_hashes: m.get("objectiveHashes").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_i64().map(|n| n as i32)).collect())),
+        parent_node_hashes: m.get("parentNodeHashes").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_i64().map(|n| n as i32)).collect())),
+        presentation_info: m.get("presentationInfo").filter(|v| !v.is_null()).and_then(|v| iface_tokens__destiny_definitions_presentation_destiny_presentation_child_block__from_json(v)),
+        presentation_node_type: m.get("presentationNodeType").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        record_value_style: m.get("recordValueStyle").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        redacted: m.get("redacted").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        requirements: m.get("requirements").filter(|v| !v.is_null()).and_then(|v| iface_tokens__destiny_definitions_presentation_destiny_presentation_node_requirements_block__from_json(v)),
+        reward_items: m.get("rewardItems").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_tokens__destiny_destiny_item_quantity__from_json(x)).collect())),
+        scope: m.get("scope").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        should_show_large_icons: m.get("shouldShowLargeIcons").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        state_info: m.get("stateInfo").filter(|v| !v.is_null()).and_then(|v| iface_tokens__destiny_definitions_records_schema_record_state_block__from_json(v)),
+        title_info: m.get("titleInfo").filter(|v| !v.is_null()).and_then(|v| iface_tokens__destiny_definitions_records_destiny_record_title_block__from_json(v)),
+        trait_hashes: m.get("traitHashes").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_i64().map(|n| n as i32)).collect())),
+        trait_ids: m.get("traitIds").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+    })
+}
+
+fn iface_tokens__destiny_definitions_records_destiny_record_completion_block__from_json(v: &Value) -> Option<iface_tokens::DestinyDefinitionsRecordsDestinyRecordCompletionBlock> {
+    let m = v.as_object()?;
+    Some(iface_tokens::DestinyDefinitionsRecordsDestinyRecordCompletionBlock {
+        score_value: m.get("ScoreValue").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        partial_completion_objective_count_threshold: m.get("partialCompletionObjectiveCountThreshold").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        should_fire_toast: m.get("shouldFireToast").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        toast_style: m.get("toastStyle").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+    })
+}
+
+fn iface_tokens__destiny_definitions_records_destiny_record_expiration_block__from_json(v: &Value) -> Option<iface_tokens::DestinyDefinitionsRecordsDestinyRecordExpirationBlock> {
+    let m = v.as_object()?;
+    Some(iface_tokens::DestinyDefinitionsRecordsDestinyRecordExpirationBlock {
+        description: m.get("description").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        has_expiration: m.get("hasExpiration").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        icon: m.get("icon").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_tokens__destiny_destiny_item_quantity__from_json(v: &Value) -> Option<iface_tokens::DestinyDestinyItemQuantity> {
+    let m = v.as_object()?;
+    Some(iface_tokens::DestinyDestinyItemQuantity {
+        has_conditional_visibility: m.get("hasConditionalVisibility").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        item_hash: m.get("itemHash").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        item_instance_id: m.get("itemInstanceId").filter(|v| !v.is_null()).and_then(|v| (v).as_i64()),
+        quantity: m.get("quantity").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+    })
+}
+
+fn iface_tokens__destiny_definitions_records_schema_record_state_block__from_json(v: &Value) -> Option<iface_tokens::DestinyDefinitionsRecordsSchemaRecordStateBlock> {
+    let m = v.as_object()?;
+    Some(iface_tokens::DestinyDefinitionsRecordsSchemaRecordStateBlock {
+        featured_priority: m.get("featuredPriority").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        obscured_string: m.get("obscuredString").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_tokens__destiny_definitions_records_destiny_record_title_block__from_json(v: &Value) -> Option<iface_tokens::DestinyDefinitionsRecordsDestinyRecordTitleBlock> {
+    let m = v.as_object()?;
+    Some(iface_tokens::DestinyDefinitionsRecordsDestinyRecordTitleBlock {
+        gilding_tracking_record_hash: m.get("gildingTrackingRecordHash").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        has_title: m.get("hasTitle").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        titles_by_gender: m.get("titlesByGender").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_tokens::DestinyDefinitionsRecordsDestinyRecordTitleBlockTitlesByGenderEntry { key: k.clone(), value: val })).collect())),
+        titles_by_gender_hash: m.get("titlesByGenderHash").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_tokens::DestinyDefinitionsRecordsDestinyRecordTitleBlockTitlesByGenderHashEntry { key: k.clone(), value: val })).collect())),
+    })
+}
+
+fn iface_tokens__destiny_definitions_records_destiny_record_title_block_titles_by_gender_entry__from_json(v: &Value) -> Option<iface_tokens::DestinyDefinitionsRecordsDestinyRecordTitleBlockTitlesByGenderEntry> {
+    let m = v.as_object()?;
+    Some(iface_tokens::DestinyDefinitionsRecordsDestinyRecordTitleBlockTitlesByGenderEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_tokens__destiny_definitions_records_destiny_record_title_block_titles_by_gender_hash_entry__from_json(v: &Value) -> Option<iface_tokens::DestinyDefinitionsRecordsDestinyRecordTitleBlockTitlesByGenderHashEntry> {
+    let m = v.as_object()?;
+    Some(iface_tokens::DestinyDefinitionsRecordsDestinyRecordTitleBlockTitlesByGenderHashEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_tokens__get_bungie_rewards_list_response_response_entry__from_json(v: &Value) -> Option<iface_tokens::GetBungieRewardsListResponseResponseEntry> {
+    let m = v.as_object()?;
+    Some(iface_tokens::GetBungieRewardsListResponseResponseEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: match m.get("value").and_then(|v| iface_tokens__bungie_reward_display__from_json(v)) { Some(x) => x, None => return None },
     })
 }
 
@@ -508,23 +1156,25 @@ fn iface_tokens__get_bungie_rewards_for_platform_user_response__from_json(v: &Va
         error_code: m.get("ErrorCode").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
         error_status: m.get("ErrorStatus").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         message: m.get("Message").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        message_data: m.get("MessageData").filter(|v| !v.is_null()).and_then(|v| iface_tokens__get_bungie_rewards_for_platform_user_response_message_data__from_json(v)),
-        response: m.get("Response").filter(|v| !v.is_null()).and_then(|v| iface_tokens__get_bungie_rewards_for_platform_user_response_response__from_json(v)),
+        message_data: m.get("MessageData").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_tokens::GetBungieRewardsForPlatformUserResponseMessageDataEntry { key: k.clone(), value: val })).collect())),
+        response: m.get("Response").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| (iface_tokens__bungie_reward_display__from_json(x)).map(|val| iface_tokens::GetBungieRewardsForPlatformUserResponseResponseEntry { key: k.clone(), value: val })).collect())),
         throttle_seconds: m.get("ThrottleSeconds").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
     })
 }
 
-fn iface_tokens__get_bungie_rewards_for_platform_user_response_message_data__from_json(v: &Value) -> Option<iface_tokens::GetBungieRewardsForPlatformUserResponseMessageData> {
+fn iface_tokens__get_bungie_rewards_for_platform_user_response_message_data_entry__from_json(v: &Value) -> Option<iface_tokens::GetBungieRewardsForPlatformUserResponseMessageDataEntry> {
     let m = v.as_object()?;
-    Some(iface_tokens::GetBungieRewardsForPlatformUserResponseMessageData {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_tokens::GetBungieRewardsForPlatformUserResponseMessageDataEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
-fn iface_tokens__get_bungie_rewards_for_platform_user_response_response__from_json(v: &Value) -> Option<iface_tokens::GetBungieRewardsForPlatformUserResponseResponse> {
+fn iface_tokens__get_bungie_rewards_for_platform_user_response_response_entry__from_json(v: &Value) -> Option<iface_tokens::GetBungieRewardsForPlatformUserResponseResponseEntry> {
     let m = v.as_object()?;
-    Some(iface_tokens::GetBungieRewardsForPlatformUserResponseResponse {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_tokens::GetBungieRewardsForPlatformUserResponseResponseEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: match m.get("value").and_then(|v| iface_tokens__bungie_reward_display__from_json(v)) { Some(x) => x, None => return None },
     })
 }
 
@@ -535,23 +1185,25 @@ fn iface_tokens__get_bungie_rewards_for_user_response__from_json(v: &Value) -> O
         error_code: m.get("ErrorCode").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
         error_status: m.get("ErrorStatus").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         message: m.get("Message").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        message_data: m.get("MessageData").filter(|v| !v.is_null()).and_then(|v| iface_tokens__get_bungie_rewards_for_user_response_message_data__from_json(v)),
-        response: m.get("Response").filter(|v| !v.is_null()).and_then(|v| iface_tokens__get_bungie_rewards_for_user_response_response__from_json(v)),
+        message_data: m.get("MessageData").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_tokens::GetBungieRewardsForUserResponseMessageDataEntry { key: k.clone(), value: val })).collect())),
+        response: m.get("Response").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| (iface_tokens__bungie_reward_display__from_json(x)).map(|val| iface_tokens::GetBungieRewardsForUserResponseResponseEntry { key: k.clone(), value: val })).collect())),
         throttle_seconds: m.get("ThrottleSeconds").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
     })
 }
 
-fn iface_tokens__get_bungie_rewards_for_user_response_message_data__from_json(v: &Value) -> Option<iface_tokens::GetBungieRewardsForUserResponseMessageData> {
+fn iface_tokens__get_bungie_rewards_for_user_response_message_data_entry__from_json(v: &Value) -> Option<iface_tokens::GetBungieRewardsForUserResponseMessageDataEntry> {
     let m = v.as_object()?;
-    Some(iface_tokens::GetBungieRewardsForUserResponseMessageData {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_tokens::GetBungieRewardsForUserResponseMessageDataEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
-fn iface_tokens__get_bungie_rewards_for_user_response_response__from_json(v: &Value) -> Option<iface_tokens::GetBungieRewardsForUserResponseResponse> {
+fn iface_tokens__get_bungie_rewards_for_user_response_response_entry__from_json(v: &Value) -> Option<iface_tokens::GetBungieRewardsForUserResponseResponseEntry> {
     let m = v.as_object()?;
-    Some(iface_tokens::GetBungieRewardsForUserResponseResponse {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_tokens::GetBungieRewardsForUserResponseResponseEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: match m.get("value").and_then(|v| iface_tokens__bungie_reward_display__from_json(v)) { Some(x) => x, None => return None },
     })
 }
 

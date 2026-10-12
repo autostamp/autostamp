@@ -86,15 +86,16 @@ fn iface_pages__page__to_json(p: &iface_pages::Page) -> Value {
     m.insert("description".into(), Value::String((&p.description).clone()));
     m.insert("is_top_level_path".into(), match (&p.is_top_level_path) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     m.insert("slug".into(), Value::String((&p.slug).clone()));
-    m.insert("social_image".into(), match (&p.social_image) { Some(v) => iface_pages__page_social_image__to_json(v), None => Value::Null });
+    m.insert("social_image".into(), match (&p.social_image) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("template".into(), Value::String(iface_pages__page_template_enum__to_str(&p.template).into()));
     m.insert("title".into(), Value::String((&p.title).clone()));
     Value::Object(m)
 }
 
-fn iface_pages__page_social_image__to_json(p: &iface_pages::PageSocialImage) -> Value {
+fn iface_pages__page_social_image_entry__to_json(p: &iface_pages::PageSocialImageEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -124,7 +125,7 @@ fn iface_pages__put_api_pages_id_params__to_json(p: &iface_pages::PutApiPagesIdP
     m.insert("description".into(), Value::String((&p.description).clone()));
     m.insert("is_top_level_path".into(), match (&p.is_top_level_path) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     m.insert("slug".into(), Value::String((&p.slug).clone()));
-    m.insert("social_image".into(), match (&p.social_image) { Some(v) => iface_pages__page_social_image__to_json(v), None => Value::Null });
+    m.insert("social_image".into(), match (&p.social_image) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("template".into(), Value::String(iface_pages__page_template_enum__to_str(&p.template).into()));
     m.insert("title".into(), Value::String((&p.title).clone()));
     Value::Object(m)
@@ -144,16 +145,17 @@ fn iface_pages__page__from_json(v: &Value) -> Option<iface_pages::Page> {
         description: m.get("description").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         is_top_level_path: m.get("is_top_level_path").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
         slug: m.get("slug").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-        social_image: m.get("social_image").filter(|v| !v.is_null()).and_then(|v| iface_pages__page_social_image__from_json(v)),
+        social_image: m.get("social_image").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_pages::PageSocialImageEntry { key: k.clone(), value: val })).collect())),
         template: match m.get("template").and_then(|v| (v).as_str().and_then(iface_pages__page_template_enum__from_str)) { Some(x) => x, None => return None },
         title: m.get("title").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
-fn iface_pages__page_social_image__from_json(v: &Value) -> Option<iface_pages::PageSocialImage> {
+fn iface_pages__page_social_image_entry__from_json(v: &Value) -> Option<iface_pages::PageSocialImageEntry> {
     let m = v.as_object()?;
-    Some(iface_pages::PageSocialImage {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_pages::PageSocialImageEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 

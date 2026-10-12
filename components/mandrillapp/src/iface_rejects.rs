@@ -57,9 +57,34 @@ fn iface_rejects__delete_response__to_json(p: &iface_rejects::DeleteResponse) ->
     Value::Object(m)
 }
 
-fn iface_rejects__list_response__to_json(p: &iface_rejects::ListResponse) -> Value {
+fn iface_rejects__list_response_item__to_json(p: &iface_rejects::ListResponseItem) -> Value {
     let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
+    m.insert("created_at".into(), match (&p.created_at) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("detail".into(), match (&p.detail) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("email".into(), match (&p.email) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("expired".into(), match (&p.expired) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("expires_at".into(), match (&p.expires_at) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("last_event_at".into(), match (&p.last_event_at) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("reason".into(), match (&p.reason) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("sender".into(), match (&p.sender) { Some(v) => iface_rejects__list_response_item_sender__to_json(v), None => Value::Null });
+    m.insert("subaccount".into(), match (&p.subaccount) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_rejects__list_response_item_sender__to_json(p: &iface_rejects::ListResponseItemSender) -> Value {
+    let mut m = Map::new();
+    m.insert("address".into(), match (&p.address) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("clicks".into(), match (&p.clicks) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("complaints".into(), match (&p.complaints) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("created_at".into(), match (&p.created_at) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("hard_bounces".into(), match (&p.hard_bounces) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("opens".into(), match (&p.opens) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("rejects".into(), match (&p.rejects) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("sent".into(), match (&p.sent) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("soft_bounces".into(), match (&p.soft_bounces) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("unique_clicks".into(), match (&p.unique_clicks) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("unique_opens".into(), match (&p.unique_opens) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("unsubs".into(), match (&p.unsubs) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
@@ -106,10 +131,36 @@ fn iface_rejects__delete_response__from_json(v: &Value) -> Option<iface_rejects:
     })
 }
 
-fn iface_rejects__list_response__from_json(v: &Value) -> Option<iface_rejects::ListResponse> {
+fn iface_rejects__list_response_item__from_json(v: &Value) -> Option<iface_rejects::ListResponseItem> {
     let m = v.as_object()?;
-    Some(iface_rejects::ListResponse {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    Some(iface_rejects::ListResponseItem {
+        created_at: m.get("created_at").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        detail: m.get("detail").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        email: m.get("email").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        expired: m.get("expired").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        expires_at: m.get("expires_at").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        last_event_at: m.get("last_event_at").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        reason: m.get("reason").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        sender: m.get("sender").filter(|v| !v.is_null()).and_then(|v| iface_rejects__list_response_item_sender__from_json(v)),
+        subaccount: m.get("subaccount").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_rejects__list_response_item_sender__from_json(v: &Value) -> Option<iface_rejects::ListResponseItemSender> {
+    let m = v.as_object()?;
+    Some(iface_rejects::ListResponseItemSender {
+        address: m.get("address").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        clicks: m.get("clicks").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        complaints: m.get("complaints").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        created_at: m.get("created_at").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        hard_bounces: m.get("hard_bounces").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        opens: m.get("opens").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        rejects: m.get("rejects").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        sent: m.get("sent").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        soft_bounces: m.get("soft_bounces").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        unique_clicks: m.get("unique_clicks").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        unique_opens: m.get("unique_opens").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        unsubs: m.get("unsubs").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
     })
 }
 
@@ -149,12 +200,12 @@ fn iface_rejects__post_rejects_delete_json__err(e: crate::runtime::DispatchError
     }
 }
 
-fn iface_rejects__post_rejects_list_json__ok(body: String) -> Result<iface_rejects::ListResponse, crate::runtime::DispatchError> {
+fn iface_rejects__post_rejects_list_json__ok(body: String) -> Result<Vec<iface_rejects::ListResponseItem>, crate::runtime::DispatchError> {
     let v: Value = match serde_json::from_str(&body) {
         Ok(v) => v,
         Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
     };
-    match iface_rejects__list_response__from_json(&v) {
+    match (&v).as_array().map(|a| a.iter().filter_map(|x| iface_rejects__list_response_item__from_json(x)).collect()) {
         Some(x) => Ok(x),
         None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
@@ -182,7 +233,7 @@ impl iface_rejects::Guest for crate::Component {
             Err(e) => Err(iface_rejects__post_rejects_delete_json__err(e)),
         }
     }
-    fn post_rejects_list_json(params: iface_rejects::PostRejectsListJsonParams) -> Result<iface_rejects::ListResponse, String> {
+    fn post_rejects_list_json(params: iface_rejects::PostRejectsListJsonParams) -> Result<Vec<iface_rejects::ListResponseItem>, String> {
         let json = iface_rejects__post_rejects_list_json_params__to_json(&params);
         match dispatch(&OP_REJECTS_POST_REJECTS_LIST_JSON, json).and_then(iface_rejects__post_rejects_list_json__ok) {
             Ok(v) => Ok(v),

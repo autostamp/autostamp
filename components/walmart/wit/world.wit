@@ -1,4 +1,4 @@
-package autostamp:walmart@0.5.0;
+package autostamp:walmart@0.6.0;
 
 interface inventory {
   enum update-bulk-inventory-feed-type-enum {
@@ -24,20 +24,22 @@ interface inventory {
   }
 
   record update-bulk-inventory-response {
-    additional-attributes: option<update-bulk-inventory-response-additional-attributes>,
-    errors: option<update-bulk-inventory-response-errors>,
+    additional-attributes: option<list<update-bulk-inventory-response-additional-attributes-entry>>,
+    errors: option<list<update-bulk-inventory-response-errors-entry>>,
     /// A unique ID, returned from the Bulk Upload API, used for tracking the feed file
     feed-id: option<string>
   }
 
-  record update-bulk-inventory-response-additional-attributes {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record update-bulk-inventory-response-additional-attributes-entry {
+    key: string,
+    value: string
   }
 
-  record update-bulk-inventory-response-errors {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record update-bulk-inventory-response-errors-entry {
+    key: string,
+    value: string
   }
 
   record get-wfs-inventory-response {
@@ -163,7 +165,7 @@ interface inventory {
     causes: option<list<get-multi-node-inventory-for-sku-and-all-shipnodes-response-nodes-item-errors-item-causes-item>>,
     code: string,
     description: option<string>,
-    error-identifiers: option<get-multi-node-inventory-for-sku-and-all-shipnodes-response-nodes-item-errors-item-error-identifiers>,
+    error-identifiers: option<list<get-multi-node-inventory-for-sku-and-all-shipnodes-response-nodes-item-errors-item-error-identifiers-entry>>,
     field: option<string>,
     info: option<string>,
     severity: option<get-multi-node-inventory-for-sku-and-all-shipnodes-response-nodes-item-errors-item-severity-enum>
@@ -176,9 +178,16 @@ interface inventory {
     type-op: option<string>
   }
 
-  record get-multi-node-inventory-for-sku-and-all-shipnodes-response-nodes-item-errors-item-error-identifiers {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record get-multi-node-inventory-for-sku-and-all-shipnodes-response-nodes-item-errors-item-error-identifiers-value-entry {
+    key: string,
+    value: string
+  }
+
+  /// one entry of a string-keyed map (free-form object)
+  record get-multi-node-inventory-for-sku-and-all-shipnodes-response-nodes-item-errors-item-error-identifiers-entry {
+    key: string,
+    value: list<get-multi-node-inventory-for-sku-and-all-shipnodes-response-nodes-item-errors-item-error-identifiers-value-entry>
   }
 
   /// Quantity of an item that is input by the seller
@@ -236,7 +245,7 @@ interface inventory {
     causes: option<list<update-multi-node-inventory-response-nodes-item-errors-item-causes-item>>,
     code: string,
     description: option<string>,
-    error-identifiers: option<update-multi-node-inventory-response-nodes-item-errors-item-error-identifiers>,
+    error-identifiers: option<list<update-multi-node-inventory-response-nodes-item-errors-item-error-identifiers-entry>>,
     field: option<string>,
     info: option<string>,
     severity: option<get-multi-node-inventory-for-sku-and-all-shipnodes-response-nodes-item-errors-item-severity-enum>
@@ -249,9 +258,16 @@ interface inventory {
     type-op: option<string>
   }
 
-  record update-multi-node-inventory-response-nodes-item-errors-item-error-identifiers {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record update-multi-node-inventory-response-nodes-item-errors-item-error-identifiers-value-entry {
+    key: string,
+    value: string
+  }
+
+  /// one entry of a string-keyed map (free-form object)
+  record update-multi-node-inventory-response-nodes-item-errors-item-error-identifiers-entry {
+    key: string,
+    value: list<update-multi-node-inventory-response-nodes-item-errors-item-error-identifiers-value-entry>
   }
 
   record get-inventory-response {

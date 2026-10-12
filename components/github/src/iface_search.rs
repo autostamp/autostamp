@@ -144,6 +144,19 @@ fn iface_search__issues_and_pull_requests_sort_enum__to_str(e: &iface_search::Is
     }
 }
 
+fn iface_search__author_association__to_str(e: &iface_search::AuthorAssociation) -> &'static str {
+    match e {
+        iface_search::AuthorAssociation::Collaborator => "COLLABORATOR",
+        iface_search::AuthorAssociation::Contributor => "CONTRIBUTOR",
+        iface_search::AuthorAssociation::FirstTimer => "FIRST_TIMER",
+        iface_search::AuthorAssociation::FirstTimeContributor => "FIRST_TIME_CONTRIBUTOR",
+        iface_search::AuthorAssociation::Mannequin => "MANNEQUIN",
+        iface_search::AuthorAssociation::Member => "MEMBER",
+        iface_search::AuthorAssociation::None => "NONE",
+        iface_search::AuthorAssociation::Owner => "OWNER",
+    }
+}
+
 fn iface_search__nullable_milestone_state_enum__to_str(e: &iface_search::NullableMilestoneStateEnum) -> &'static str {
     match e {
         iface_search::NullableMilestoneStateEnum::Open => "open",
@@ -226,7 +239,7 @@ fn iface_search__code_search_result_item__to_json(p: &iface_search::CodeSearchRe
     m.insert("repository".into(), iface_search__minimal_repository__to_json(&p.repository));
     m.insert("score".into(), serde_json::Number::from_f64(*(&p.score)).map(Value::Number).unwrap_or(Value::Null));
     m.insert("sha".into(), Value::String((&p.sha).clone()));
-    m.insert("text_matches".into(), match (&p.text_matches) { Some(v) => iface_search__result_text_matches__to_json(v), None => Value::Null });
+    m.insert("text_matches".into(), match (&p.text_matches) { Some(v) => Value::Array((v).iter().map(|v| iface_search__result_text_matches_item__to_json(v)).collect()), None => Value::Null });
     m.insert("url".into(), Value::String((&p.url).clone()));
     Value::Object(m)
 }
@@ -405,9 +418,20 @@ fn iface_search__security_and_analysis_secret_scanning_push_protection__to_json(
     Value::Object(m)
 }
 
-fn iface_search__result_text_matches__to_json(p: &iface_search::ResultTextMatches) -> Value {
+fn iface_search__result_text_matches_item__to_json(p: &iface_search::ResultTextMatchesItem) -> Value {
     let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
+    m.insert("fragment".into(), match (&p.fragment) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("matches".into(), match (&p.matches) { Some(v) => Value::Array((v).iter().map(|v| iface_search__result_text_matches_item_matches_item__to_json(v)).collect()), None => Value::Null });
+    m.insert("object_type".into(), match (&p.object_type) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("object_url".into(), match (&p.object_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("property".into(), match (&p.property) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_search__result_text_matches_item_matches_item__to_json(p: &iface_search::ResultTextMatchesItemMatchesItem) -> Value {
+    let mut m = Map::new();
+    m.insert("indices".into(), match (&p.indices) { Some(v) => Value::Array((v).iter().map(|v| Value::Number(serde_json::Number::from(*(v)))).collect()), None => Value::Null });
+    m.insert("text".into(), match (&p.text) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -431,7 +455,7 @@ fn iface_search__commit_search_result_item__to_json(p: &iface_search::CommitSear
     m.insert("repository".into(), iface_search__minimal_repository__to_json(&p.repository));
     m.insert("score".into(), serde_json::Number::from_f64(*(&p.score)).map(Value::Number).unwrap_or(Value::Null));
     m.insert("sha".into(), Value::String((&p.sha).clone()));
-    m.insert("text_matches".into(), match (&p.text_matches) { Some(v) => iface_search__result_text_matches__to_json(v), None => Value::Null });
+    m.insert("text_matches".into(), match (&p.text_matches) { Some(v) => Value::Array((v).iter().map(|v| iface_search__result_text_matches_item_v2__to_json(v)).collect()), None => Value::Null });
     m.insert("url".into(), Value::String((&p.url).clone()));
     Value::Object(m)
 }
@@ -514,6 +538,23 @@ fn iface_search__commit_search_result_item_parents_item__to_json(p: &iface_searc
     Value::Object(m)
 }
 
+fn iface_search__result_text_matches_item_v2__to_json(p: &iface_search::ResultTextMatchesItemV2) -> Value {
+    let mut m = Map::new();
+    m.insert("fragment".into(), match (&p.fragment) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("matches".into(), match (&p.matches) { Some(v) => Value::Array((v).iter().map(|v| iface_search__result_text_matches_item_v2_matches_item__to_json(v)).collect()), None => Value::Null });
+    m.insert("object_type".into(), match (&p.object_type) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("object_url".into(), match (&p.object_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("property".into(), match (&p.property) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_search__result_text_matches_item_v2_matches_item__to_json(p: &iface_search::ResultTextMatchesItemV2MatchesItem) -> Value {
+    let mut m = Map::new();
+    m.insert("indices".into(), match (&p.indices) { Some(v) => Value::Array((v).iter().map(|v| Value::Number(serde_json::Number::from(*(v)))).collect()), None => Value::Null });
+    m.insert("text".into(), match (&p.text) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
 fn iface_search__issues_and_pull_requests_response__to_json(p: &iface_search::IssuesAndPullRequestsResponse) -> Value {
     let mut m = Map::new();
     m.insert("incomplete_results".into(), Value::Bool(*(&p.incomplete_results)));
@@ -527,7 +568,7 @@ fn iface_search__issue_search_result_item__to_json(p: &iface_search::IssueSearch
     m.insert("active_lock_reason".into(), match (&p.active_lock_reason) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("assignee".into(), iface_search__nullable_simple_user__to_json(&p.assignee));
     m.insert("assignees".into(), match (&p.assignees) { Some(v) => Value::Array((v).iter().map(|v| iface_search__simple_user__to_json(v)).collect()), None => Value::Null });
-    m.insert("author_association".into(), iface_search__author_association__to_json(&p.author_association));
+    m.insert("author_association".into(), Value::String(iface_search__author_association__to_str(&p.author_association).into()));
     m.insert("body".into(), match (&p.body) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("body_html".into(), match (&p.body_html) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("body_text".into(), match (&p.body_text) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -553,18 +594,12 @@ fn iface_search__issue_search_result_item__to_json(p: &iface_search::IssueSearch
     m.insert("score".into(), serde_json::Number::from_f64(*(&p.score)).map(Value::Number).unwrap_or(Value::Null));
     m.insert("state".into(), Value::String((&p.state).clone()));
     m.insert("state_reason".into(), match (&p.state_reason) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("text_matches".into(), match (&p.text_matches) { Some(v) => iface_search__result_text_matches__to_json(v), None => Value::Null });
+    m.insert("text_matches".into(), match (&p.text_matches) { Some(v) => Value::Array((v).iter().map(|v| iface_search__result_text_matches_item_v3__to_json(v)).collect()), None => Value::Null });
     m.insert("timeline_url".into(), match (&p.timeline_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("title".into(), Value::String((&p.title).clone()));
     m.insert("updated_at".into(), Value::String((&p.updated_at).clone()));
     m.insert("url".into(), Value::String((&p.url).clone()));
     m.insert("user".into(), iface_search__nullable_simple_user__to_json(&p.user));
-    Value::Object(m)
-}
-
-fn iface_search__author_association__to_json(p: &iface_search::AuthorAssociation) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -908,6 +943,23 @@ fn iface_search__repository_template_repository_permissions__to_json(p: &iface_s
     Value::Object(m)
 }
 
+fn iface_search__result_text_matches_item_v3__to_json(p: &iface_search::ResultTextMatchesItemV3) -> Value {
+    let mut m = Map::new();
+    m.insert("fragment".into(), match (&p.fragment) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("matches".into(), match (&p.matches) { Some(v) => Value::Array((v).iter().map(|v| iface_search__result_text_matches_item_v3_matches_item__to_json(v)).collect()), None => Value::Null });
+    m.insert("object_type".into(), match (&p.object_type) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("object_url".into(), match (&p.object_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("property".into(), match (&p.property) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_search__result_text_matches_item_v3_matches_item__to_json(p: &iface_search::ResultTextMatchesItemV3MatchesItem) -> Value {
+    let mut m = Map::new();
+    m.insert("indices".into(), match (&p.indices) { Some(v) => Value::Array((v).iter().map(|v| Value::Number(serde_json::Number::from(*(v)))).collect()), None => Value::Null });
+    m.insert("text".into(), match (&p.text) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
 fn iface_search__labels_response__to_json(p: &iface_search::LabelsResponse) -> Value {
     let mut m = Map::new();
     m.insert("incomplete_results".into(), Value::Bool(*(&p.incomplete_results)));
@@ -925,8 +977,25 @@ fn iface_search__label_search_result_item__to_json(p: &iface_search::LabelSearch
     m.insert("name".into(), Value::String((&p.name).clone()));
     m.insert("node_id".into(), Value::String((&p.node_id).clone()));
     m.insert("score".into(), serde_json::Number::from_f64(*(&p.score)).map(Value::Number).unwrap_or(Value::Null));
-    m.insert("text_matches".into(), match (&p.text_matches) { Some(v) => iface_search__result_text_matches__to_json(v), None => Value::Null });
+    m.insert("text_matches".into(), match (&p.text_matches) { Some(v) => Value::Array((v).iter().map(|v| iface_search__result_text_matches_item_v4__to_json(v)).collect()), None => Value::Null });
     m.insert("url".into(), Value::String((&p.url).clone()));
+    Value::Object(m)
+}
+
+fn iface_search__result_text_matches_item_v4__to_json(p: &iface_search::ResultTextMatchesItemV4) -> Value {
+    let mut m = Map::new();
+    m.insert("fragment".into(), match (&p.fragment) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("matches".into(), match (&p.matches) { Some(v) => Value::Array((v).iter().map(|v| iface_search__result_text_matches_item_v4_matches_item__to_json(v)).collect()), None => Value::Null });
+    m.insert("object_type".into(), match (&p.object_type) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("object_url".into(), match (&p.object_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("property".into(), match (&p.property) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_search__result_text_matches_item_v4_matches_item__to_json(p: &iface_search::ResultTextMatchesItemV4MatchesItem) -> Value {
+    let mut m = Map::new();
+    m.insert("indices".into(), match (&p.indices) { Some(v) => Value::Array((v).iter().map(|v| Value::Number(serde_json::Number::from(*(v)))).collect()), None => Value::Null });
+    m.insert("text".into(), match (&p.text) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -1020,7 +1089,7 @@ fn iface_search__repo_search_result_item__to_json(p: &iface_search::RepoSearchRe
     m.insert("tags_url".into(), Value::String((&p.tags_url).clone()));
     m.insert("teams_url".into(), Value::String((&p.teams_url).clone()));
     m.insert("temp_clone_token".into(), match (&p.temp_clone_token) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("text_matches".into(), match (&p.text_matches) { Some(v) => iface_search__result_text_matches__to_json(v), None => Value::Null });
+    m.insert("text_matches".into(), match (&p.text_matches) { Some(v) => Value::Array((v).iter().map(|v| iface_search__result_text_matches_item_v5__to_json(v)).collect()), None => Value::Null });
     m.insert("topics".into(), match (&p.topics) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
     m.insert("trees_url".into(), Value::String((&p.trees_url).clone()));
     m.insert("updated_at".into(), Value::String((&p.updated_at).clone()));
@@ -1039,6 +1108,23 @@ fn iface_search__repo_search_result_item_permissions__to_json(p: &iface_search::
     m.insert("pull".into(), Value::Bool(*(&p.pull)));
     m.insert("push".into(), Value::Bool(*(&p.push)));
     m.insert("triage".into(), match (&p.triage) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_search__result_text_matches_item_v5__to_json(p: &iface_search::ResultTextMatchesItemV5) -> Value {
+    let mut m = Map::new();
+    m.insert("fragment".into(), match (&p.fragment) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("matches".into(), match (&p.matches) { Some(v) => Value::Array((v).iter().map(|v| iface_search__result_text_matches_item_v5_matches_item__to_json(v)).collect()), None => Value::Null });
+    m.insert("object_type".into(), match (&p.object_type) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("object_url".into(), match (&p.object_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("property".into(), match (&p.property) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_search__result_text_matches_item_v5_matches_item__to_json(p: &iface_search::ResultTextMatchesItemV5MatchesItem) -> Value {
+    let mut m = Map::new();
+    m.insert("indices".into(), match (&p.indices) { Some(v) => Value::Array((v).iter().map(|v| Value::Number(serde_json::Number::from(*(v)))).collect()), None => Value::Null });
+    m.insert("text".into(), match (&p.text) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -1066,7 +1152,7 @@ fn iface_search__topic_search_result_item__to_json(p: &iface_search::TopicSearch
     m.insert("repository_count".into(), match (&p.repository_count) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("score".into(), serde_json::Number::from_f64(*(&p.score)).map(Value::Number).unwrap_or(Value::Null));
     m.insert("short_description".into(), Value::String((&p.short_description).clone()));
-    m.insert("text_matches".into(), match (&p.text_matches) { Some(v) => iface_search__result_text_matches__to_json(v), None => Value::Null });
+    m.insert("text_matches".into(), match (&p.text_matches) { Some(v) => Value::Array((v).iter().map(|v| iface_search__result_text_matches_item_v6__to_json(v)).collect()), None => Value::Null });
     m.insert("updated_at".into(), Value::String((&p.updated_at).clone()));
     Value::Object(m)
 }
@@ -1098,6 +1184,23 @@ fn iface_search__topic_search_result_item_related_item_topic_relation__to_json(p
     m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("relation_type".into(), match (&p.relation_type) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("topic_id".into(), match (&p.topic_id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_search__result_text_matches_item_v6__to_json(p: &iface_search::ResultTextMatchesItemV6) -> Value {
+    let mut m = Map::new();
+    m.insert("fragment".into(), match (&p.fragment) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("matches".into(), match (&p.matches) { Some(v) => Value::Array((v).iter().map(|v| iface_search__result_text_matches_item_v6_matches_item__to_json(v)).collect()), None => Value::Null });
+    m.insert("object_type".into(), match (&p.object_type) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("object_url".into(), match (&p.object_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("property".into(), match (&p.property) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_search__result_text_matches_item_v6_matches_item__to_json(p: &iface_search::ResultTextMatchesItemV6MatchesItem) -> Value {
+    let mut m = Map::new();
+    m.insert("indices".into(), match (&p.indices) { Some(v) => Value::Array((v).iter().map(|v| Value::Number(serde_json::Number::from(*(v)))).collect()), None => Value::Null });
+    m.insert("text".into(), match (&p.text) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -1141,10 +1244,27 @@ fn iface_search__user_search_result_item__to_json(p: &iface_search::UserSearchRe
     m.insert("starred_url".into(), Value::String((&p.starred_url).clone()));
     m.insert("subscriptions_url".into(), Value::String((&p.subscriptions_url).clone()));
     m.insert("suspended_at".into(), match (&p.suspended_at) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("text_matches".into(), match (&p.text_matches) { Some(v) => iface_search__result_text_matches__to_json(v), None => Value::Null });
+    m.insert("text_matches".into(), match (&p.text_matches) { Some(v) => Value::Array((v).iter().map(|v| iface_search__result_text_matches_item_v7__to_json(v)).collect()), None => Value::Null });
     m.insert("type".into(), Value::String((&p.type_op).clone()));
     m.insert("updated_at".into(), match (&p.updated_at) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("url".into(), Value::String((&p.url).clone()));
+    Value::Object(m)
+}
+
+fn iface_search__result_text_matches_item_v7__to_json(p: &iface_search::ResultTextMatchesItemV7) -> Value {
+    let mut m = Map::new();
+    m.insert("fragment".into(), match (&p.fragment) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("matches".into(), match (&p.matches) { Some(v) => Value::Array((v).iter().map(|v| iface_search__result_text_matches_item_v7_matches_item__to_json(v)).collect()), None => Value::Null });
+    m.insert("object_type".into(), match (&p.object_type) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("object_url".into(), match (&p.object_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("property".into(), match (&p.property) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_search__result_text_matches_item_v7_matches_item__to_json(p: &iface_search::ResultTextMatchesItemV7MatchesItem) -> Value {
+    let mut m = Map::new();
+    m.insert("indices".into(), match (&p.indices) { Some(v) => Value::Array((v).iter().map(|v| Value::Number(serde_json::Number::from(*(v)))).collect()), None => Value::Null });
+    m.insert("text".into(), match (&p.text) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -1240,7 +1360,7 @@ fn iface_search__code_search_result_item__from_json(v: &Value) -> Option<iface_s
         repository: match m.get("repository").and_then(|v| iface_search__minimal_repository__from_json(v)) { Some(x) => x, None => return None },
         score: m.get("score").and_then(|v| (v).as_f64()).unwrap_or_default(),
         sha: m.get("sha").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-        text_matches: m.get("text_matches").filter(|v| !v.is_null()).and_then(|v| iface_search__result_text_matches__from_json(v)),
+        text_matches: m.get("text_matches").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_search__result_text_matches_item__from_json(x)).collect())),
         url: m.get("url").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
@@ -1428,10 +1548,22 @@ fn iface_search__security_and_analysis_secret_scanning_push_protection__from_jso
     })
 }
 
-fn iface_search__result_text_matches__from_json(v: &Value) -> Option<iface_search::ResultTextMatches> {
+fn iface_search__result_text_matches_item__from_json(v: &Value) -> Option<iface_search::ResultTextMatchesItem> {
     let m = v.as_object()?;
-    Some(iface_search::ResultTextMatches {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    Some(iface_search::ResultTextMatchesItem {
+        fragment: m.get("fragment").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        matches: m.get("matches").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_search__result_text_matches_item_matches_item__from_json(x)).collect())),
+        object_type: m.get("object_type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        object_url: m.get("object_url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        property: m.get("property").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_search__result_text_matches_item_matches_item__from_json(v: &Value) -> Option<iface_search::ResultTextMatchesItemMatchesItem> {
+    let m = v.as_object()?;
+    Some(iface_search::ResultTextMatchesItemMatchesItem {
+        indices: m.get("indices").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_i64().map(|n| n as i32)).collect())),
+        text: m.get("text").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
     })
 }
 
@@ -1457,7 +1589,7 @@ fn iface_search__commit_search_result_item__from_json(v: &Value) -> Option<iface
         repository: match m.get("repository").and_then(|v| iface_search__minimal_repository__from_json(v)) { Some(x) => x, None => return None },
         score: m.get("score").and_then(|v| (v).as_f64()).unwrap_or_default(),
         sha: m.get("sha").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-        text_matches: m.get("text_matches").filter(|v| !v.is_null()).and_then(|v| iface_search__result_text_matches__from_json(v)),
+        text_matches: m.get("text_matches").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_search__result_text_matches_item_v2__from_json(x)).collect())),
         url: m.get("url").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
@@ -1547,6 +1679,25 @@ fn iface_search__commit_search_result_item_parents_item__from_json(v: &Value) ->
     })
 }
 
+fn iface_search__result_text_matches_item_v2__from_json(v: &Value) -> Option<iface_search::ResultTextMatchesItemV2> {
+    let m = v.as_object()?;
+    Some(iface_search::ResultTextMatchesItemV2 {
+        fragment: m.get("fragment").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        matches: m.get("matches").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_search__result_text_matches_item_v2_matches_item__from_json(x)).collect())),
+        object_type: m.get("object_type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        object_url: m.get("object_url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        property: m.get("property").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_search__result_text_matches_item_v2_matches_item__from_json(v: &Value) -> Option<iface_search::ResultTextMatchesItemV2MatchesItem> {
+    let m = v.as_object()?;
+    Some(iface_search::ResultTextMatchesItemV2MatchesItem {
+        indices: m.get("indices").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_i64().map(|n| n as i32)).collect())),
+        text: m.get("text").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
 fn iface_search__issues_and_pull_requests_response__from_json(v: &Value) -> Option<iface_search::IssuesAndPullRequestsResponse> {
     let m = v.as_object()?;
     Some(iface_search::IssuesAndPullRequestsResponse {
@@ -1562,7 +1713,7 @@ fn iface_search__issue_search_result_item__from_json(v: &Value) -> Option<iface_
         active_lock_reason: m.get("active_lock_reason").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         assignee: match m.get("assignee").and_then(|v| iface_search__nullable_simple_user__from_json(v)) { Some(x) => x, None => return None },
         assignees: m.get("assignees").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_search__simple_user__from_json(x)).collect())),
-        author_association: match m.get("author_association").and_then(|v| iface_search__author_association__from_json(v)) { Some(x) => x, None => return None },
+        author_association: match m.get("author_association").and_then(|v| (v).as_str().and_then(iface_search__author_association__from_str)) { Some(x) => x, None => return None },
         body: m.get("body").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         body_html: m.get("body_html").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         body_text: m.get("body_text").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
@@ -1588,19 +1739,12 @@ fn iface_search__issue_search_result_item__from_json(v: &Value) -> Option<iface_
         score: m.get("score").and_then(|v| (v).as_f64()).unwrap_or_default(),
         state: m.get("state").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         state_reason: m.get("state_reason").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        text_matches: m.get("text_matches").filter(|v| !v.is_null()).and_then(|v| iface_search__result_text_matches__from_json(v)),
+        text_matches: m.get("text_matches").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_search__result_text_matches_item_v3__from_json(x)).collect())),
         timeline_url: m.get("timeline_url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         title: m.get("title").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         updated_at: m.get("updated_at").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         url: m.get("url").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         user: match m.get("user").and_then(|v| iface_search__nullable_simple_user__from_json(v)) { Some(x) => x, None => return None },
-    })
-}
-
-fn iface_search__author_association__from_json(v: &Value) -> Option<iface_search::AuthorAssociation> {
-    let m = v.as_object()?;
-    Some(iface_search::AuthorAssociation {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -1956,6 +2100,25 @@ fn iface_search__repository_template_repository_permissions__from_json(v: &Value
     })
 }
 
+fn iface_search__result_text_matches_item_v3__from_json(v: &Value) -> Option<iface_search::ResultTextMatchesItemV3> {
+    let m = v.as_object()?;
+    Some(iface_search::ResultTextMatchesItemV3 {
+        fragment: m.get("fragment").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        matches: m.get("matches").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_search__result_text_matches_item_v3_matches_item__from_json(x)).collect())),
+        object_type: m.get("object_type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        object_url: m.get("object_url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        property: m.get("property").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_search__result_text_matches_item_v3_matches_item__from_json(v: &Value) -> Option<iface_search::ResultTextMatchesItemV3MatchesItem> {
+    let m = v.as_object()?;
+    Some(iface_search::ResultTextMatchesItemV3MatchesItem {
+        indices: m.get("indices").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_i64().map(|n| n as i32)).collect())),
+        text: m.get("text").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
 fn iface_search__labels_response__from_json(v: &Value) -> Option<iface_search::LabelsResponse> {
     let m = v.as_object()?;
     Some(iface_search::LabelsResponse {
@@ -1975,8 +2138,27 @@ fn iface_search__label_search_result_item__from_json(v: &Value) -> Option<iface_
         name: m.get("name").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         node_id: m.get("node_id").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         score: m.get("score").and_then(|v| (v).as_f64()).unwrap_or_default(),
-        text_matches: m.get("text_matches").filter(|v| !v.is_null()).and_then(|v| iface_search__result_text_matches__from_json(v)),
+        text_matches: m.get("text_matches").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_search__result_text_matches_item_v4__from_json(x)).collect())),
         url: m.get("url").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_search__result_text_matches_item_v4__from_json(v: &Value) -> Option<iface_search::ResultTextMatchesItemV4> {
+    let m = v.as_object()?;
+    Some(iface_search::ResultTextMatchesItemV4 {
+        fragment: m.get("fragment").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        matches: m.get("matches").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_search__result_text_matches_item_v4_matches_item__from_json(x)).collect())),
+        object_type: m.get("object_type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        object_url: m.get("object_url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        property: m.get("property").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_search__result_text_matches_item_v4_matches_item__from_json(v: &Value) -> Option<iface_search::ResultTextMatchesItemV4MatchesItem> {
+    let m = v.as_object()?;
+    Some(iface_search::ResultTextMatchesItemV4MatchesItem {
+        indices: m.get("indices").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_i64().map(|n| n as i32)).collect())),
+        text: m.get("text").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
     })
 }
 
@@ -2072,7 +2254,7 @@ fn iface_search__repo_search_result_item__from_json(v: &Value) -> Option<iface_s
         tags_url: m.get("tags_url").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         teams_url: m.get("teams_url").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         temp_clone_token: m.get("temp_clone_token").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        text_matches: m.get("text_matches").filter(|v| !v.is_null()).and_then(|v| iface_search__result_text_matches__from_json(v)),
+        text_matches: m.get("text_matches").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_search__result_text_matches_item_v5__from_json(x)).collect())),
         topics: m.get("topics").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
         trees_url: m.get("trees_url").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         updated_at: m.get("updated_at").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
@@ -2092,6 +2274,25 @@ fn iface_search__repo_search_result_item_permissions__from_json(v: &Value) -> Op
         pull: m.get("pull").and_then(|v| (v).as_bool()).unwrap_or_default(),
         push: m.get("push").and_then(|v| (v).as_bool()).unwrap_or_default(),
         triage: m.get("triage").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+    })
+}
+
+fn iface_search__result_text_matches_item_v5__from_json(v: &Value) -> Option<iface_search::ResultTextMatchesItemV5> {
+    let m = v.as_object()?;
+    Some(iface_search::ResultTextMatchesItemV5 {
+        fragment: m.get("fragment").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        matches: m.get("matches").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_search__result_text_matches_item_v5_matches_item__from_json(x)).collect())),
+        object_type: m.get("object_type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        object_url: m.get("object_url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        property: m.get("property").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_search__result_text_matches_item_v5_matches_item__from_json(v: &Value) -> Option<iface_search::ResultTextMatchesItemV5MatchesItem> {
+    let m = v.as_object()?;
+    Some(iface_search::ResultTextMatchesItemV5MatchesItem {
+        indices: m.get("indices").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_i64().map(|n| n as i32)).collect())),
+        text: m.get("text").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
     })
 }
 
@@ -2121,7 +2322,7 @@ fn iface_search__topic_search_result_item__from_json(v: &Value) -> Option<iface_
         repository_count: m.get("repository_count").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
         score: m.get("score").and_then(|v| (v).as_f64()).unwrap_or_default(),
         short_description: m.get("short_description").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-        text_matches: m.get("text_matches").filter(|v| !v.is_null()).and_then(|v| iface_search__result_text_matches__from_json(v)),
+        text_matches: m.get("text_matches").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_search__result_text_matches_item_v6__from_json(x)).collect())),
         updated_at: m.get("updated_at").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
@@ -2157,6 +2358,25 @@ fn iface_search__topic_search_result_item_related_item_topic_relation__from_json
         name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         relation_type: m.get("relation_type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         topic_id: m.get("topic_id").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+    })
+}
+
+fn iface_search__result_text_matches_item_v6__from_json(v: &Value) -> Option<iface_search::ResultTextMatchesItemV6> {
+    let m = v.as_object()?;
+    Some(iface_search::ResultTextMatchesItemV6 {
+        fragment: m.get("fragment").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        matches: m.get("matches").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_search__result_text_matches_item_v6_matches_item__from_json(x)).collect())),
+        object_type: m.get("object_type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        object_url: m.get("object_url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        property: m.get("property").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_search__result_text_matches_item_v6_matches_item__from_json(v: &Value) -> Option<iface_search::ResultTextMatchesItemV6MatchesItem> {
+    let m = v.as_object()?;
+    Some(iface_search::ResultTextMatchesItemV6MatchesItem {
+        indices: m.get("indices").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_i64().map(|n| n as i32)).collect())),
+        text: m.get("text").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
     })
 }
 
@@ -2202,10 +2422,29 @@ fn iface_search__user_search_result_item__from_json(v: &Value) -> Option<iface_s
         starred_url: m.get("starred_url").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         subscriptions_url: m.get("subscriptions_url").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         suspended_at: m.get("suspended_at").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        text_matches: m.get("text_matches").filter(|v| !v.is_null()).and_then(|v| iface_search__result_text_matches__from_json(v)),
+        text_matches: m.get("text_matches").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_search__result_text_matches_item_v7__from_json(x)).collect())),
         type_op: m.get("type").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         updated_at: m.get("updated_at").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         url: m.get("url").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_search__result_text_matches_item_v7__from_json(v: &Value) -> Option<iface_search::ResultTextMatchesItemV7> {
+    let m = v.as_object()?;
+    Some(iface_search::ResultTextMatchesItemV7 {
+        fragment: m.get("fragment").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        matches: m.get("matches").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_search__result_text_matches_item_v7_matches_item__from_json(x)).collect())),
+        object_type: m.get("object_type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        object_url: m.get("object_url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        property: m.get("property").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_search__result_text_matches_item_v7_matches_item__from_json(v: &Value) -> Option<iface_search::ResultTextMatchesItemV7MatchesItem> {
+    let m = v.as_object()?;
+    Some(iface_search::ResultTextMatchesItemV7MatchesItem {
+        indices: m.get("indices").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_i64().map(|n| n as i32)).collect())),
+        text: m.get("text").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
     })
 }
 
@@ -2213,6 +2452,20 @@ fn iface_search__security_and_analysis_advanced_security_status_enum__from_str(s
     match s {
         "enabled" => Some(iface_search::SecurityAndAnalysisAdvancedSecurityStatusEnum::Enabled),
         "disabled" => Some(iface_search::SecurityAndAnalysisAdvancedSecurityStatusEnum::Disabled),
+        _ => None,
+    }
+}
+
+fn iface_search__author_association__from_str(s: &str) -> Option<iface_search::AuthorAssociation> {
+    match s {
+        "COLLABORATOR" => Some(iface_search::AuthorAssociation::Collaborator),
+        "CONTRIBUTOR" => Some(iface_search::AuthorAssociation::Contributor),
+        "FIRST_TIMER" => Some(iface_search::AuthorAssociation::FirstTimer),
+        "FIRST_TIME_CONTRIBUTOR" => Some(iface_search::AuthorAssociation::FirstTimeContributor),
+        "MANNEQUIN" => Some(iface_search::AuthorAssociation::Mannequin),
+        "MEMBER" => Some(iface_search::AuthorAssociation::Member),
+        "NONE" => Some(iface_search::AuthorAssociation::None),
+        "OWNER" => Some(iface_search::AuthorAssociation::Owner),
         _ => None,
     }
 }

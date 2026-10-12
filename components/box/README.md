@@ -20,8 +20,8 @@ triggered.
 
 | Setting | Value |
 | --- | --- |
-| Package | `autostamp:box-api@0.5.0` |
-| Published version | `0.5.0+box-api-2.0.0` |
+| Package | `autostamp:box-api@0.6.0` |
+| Published version | `0.6.0+box-api-2.0.0` |
 | Tag filter | all tags |
 | Operations generated | 258 |
 | Infer API-key credentials | enabled — not triggered |

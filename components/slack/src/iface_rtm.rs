@@ -19,43 +19,25 @@ const OP_RTM_CONNECT: OpSpec = OpSpec {
 
 fn iface_rtm__connect_response__to_json(p: &iface_rtm::ConnectResponse) -> Value {
     let mut m = Map::new();
-    m.insert("ok".into(), iface_rtm__defs_ok_true__to_json(&p.ok));
+    m.insert("ok".into(), Value::Bool(*(&p.ok)));
     m.insert("self".into(), iface_rtm__connect_response_self__to_json(&p.self_));
     m.insert("team".into(), iface_rtm__connect_response_team__to_json(&p.team));
     m.insert("url".into(), Value::String((&p.url).clone()));
     Value::Object(m)
 }
 
-fn iface_rtm__defs_ok_true__to_json(p: &iface_rtm::DefsOkTrue) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
 fn iface_rtm__connect_response_self__to_json(p: &iface_rtm::ConnectResponseSelf) -> Value {
     let mut m = Map::new();
-    m.insert("id".into(), iface_rtm__defs_user_id__to_json(&p.id));
+    m.insert("id".into(), Value::String((&p.id).clone()));
     m.insert("name".into(), Value::String((&p.name).clone()));
-    Value::Object(m)
-}
-
-fn iface_rtm__defs_user_id__to_json(p: &iface_rtm::DefsUserId) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
 fn iface_rtm__connect_response_team__to_json(p: &iface_rtm::ConnectResponseTeam) -> Value {
     let mut m = Map::new();
     m.insert("domain".into(), Value::String((&p.domain).clone()));
-    m.insert("id".into(), iface_rtm__defs_team__to_json(&p.id));
+    m.insert("id".into(), Value::String((&p.id).clone()));
     m.insert("name".into(), Value::String((&p.name).clone()));
-    Value::Object(m)
-}
-
-fn iface_rtm__defs_team__to_json(p: &iface_rtm::DefsTeam) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -70,32 +52,18 @@ fn iface_rtm__connect_params__to_json(p: &iface_rtm::ConnectParams) -> Value {
 fn iface_rtm__connect_response__from_json(v: &Value) -> Option<iface_rtm::ConnectResponse> {
     let m = v.as_object()?;
     Some(iface_rtm::ConnectResponse {
-        ok: match m.get("ok").and_then(|v| iface_rtm__defs_ok_true__from_json(v)) { Some(x) => x, None => return None },
+        ok: m.get("ok").and_then(|v| (v).as_bool()).unwrap_or_default(),
         self_: match m.get("self").and_then(|v| iface_rtm__connect_response_self__from_json(v)) { Some(x) => x, None => return None },
         team: match m.get("team").and_then(|v| iface_rtm__connect_response_team__from_json(v)) { Some(x) => x, None => return None },
         url: m.get("url").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
-fn iface_rtm__defs_ok_true__from_json(v: &Value) -> Option<iface_rtm::DefsOkTrue> {
-    let m = v.as_object()?;
-    Some(iface_rtm::DefsOkTrue {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-    })
-}
-
 fn iface_rtm__connect_response_self__from_json(v: &Value) -> Option<iface_rtm::ConnectResponseSelf> {
     let m = v.as_object()?;
     Some(iface_rtm::ConnectResponseSelf {
-        id: match m.get("id").and_then(|v| iface_rtm__defs_user_id__from_json(v)) { Some(x) => x, None => return None },
+        id: m.get("id").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         name: m.get("name").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-    })
-}
-
-fn iface_rtm__defs_user_id__from_json(v: &Value) -> Option<iface_rtm::DefsUserId> {
-    let m = v.as_object()?;
-    Some(iface_rtm::DefsUserId {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -103,15 +71,8 @@ fn iface_rtm__connect_response_team__from_json(v: &Value) -> Option<iface_rtm::C
     let m = v.as_object()?;
     Some(iface_rtm::ConnectResponseTeam {
         domain: m.get("domain").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-        id: match m.get("id").and_then(|v| iface_rtm__defs_team__from_json(v)) { Some(x) => x, None => return None },
+        id: m.get("id").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         name: m.get("name").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-    })
-}
-
-fn iface_rtm__defs_team__from_json(v: &Value) -> Option<iface_rtm::DefsTeam> {
-    let m = v.as_object()?;
-    Some(iface_rtm::DefsTeam {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 

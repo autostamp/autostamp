@@ -589,13 +589,14 @@ fn iface_portfolios__update_portfolio_response__to_json(p: &iface_portfolios::Up
 
 fn iface_portfolios__delete_portfolio_response__to_json(p: &iface_portfolios::DeletePortfolioResponse) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => iface_portfolios__empty_response__to_json(v), None => Value::Null });
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_portfolios__empty_response__to_json(p: &iface_portfolios::EmptyResponse) -> Value {
+fn iface_portfolios__empty_response_entry__to_json(p: &iface_portfolios::EmptyResponseEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -624,7 +625,14 @@ fn iface_portfolios__portfolio_add_item_request__to_json(p: &iface_portfolios::P
 
 fn iface_portfolios__add_item_for_portfolio_response__to_json(p: &iface_portfolios::AddItemForPortfolioResponse) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => iface_portfolios__empty_response__to_json(v), None => Value::Null });
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_portfolios__empty_response_entry_v2__to_json(p: &iface_portfolios::EmptyResponseEntryV2) -> Value {
+    let mut m = Map::new();
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -662,7 +670,14 @@ fn iface_portfolios__remove_custom_field_setting_request__to_json(p: &iface_port
 
 fn iface_portfolios__remove_custom_field_setting_for_portfolio_response__to_json(p: &iface_portfolios::RemoveCustomFieldSettingForPortfolioResponse) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => iface_portfolios__empty_response__to_json(v), None => Value::Null });
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_portfolios__empty_response_entry_v3__to_json(p: &iface_portfolios::EmptyResponseEntryV3) -> Value {
+    let mut m = Map::new();
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -674,7 +689,14 @@ fn iface_portfolios__portfolio_remove_item_request__to_json(p: &iface_portfolios
 
 fn iface_portfolios__remove_item_for_portfolio_response__to_json(p: &iface_portfolios::RemoveItemForPortfolioResponse) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => iface_portfolios__empty_response__to_json(v), None => Value::Null });
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_portfolios__empty_response_entry_v4__to_json(p: &iface_portfolios::EmptyResponseEntryV4) -> Value {
+    let mut m = Map::new();
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -1014,14 +1036,15 @@ fn iface_portfolios__update_portfolio_response__from_json(v: &Value) -> Option<i
 fn iface_portfolios__delete_portfolio_response__from_json(v: &Value) -> Option<iface_portfolios::DeletePortfolioResponse> {
     let m = v.as_object()?;
     Some(iface_portfolios::DeletePortfolioResponse {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| iface_portfolios__empty_response__from_json(v)),
+        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_portfolios::EmptyResponseEntry { key: k.clone(), value: val })).collect())),
     })
 }
 
-fn iface_portfolios__empty_response__from_json(v: &Value) -> Option<iface_portfolios::EmptyResponse> {
+fn iface_portfolios__empty_response_entry__from_json(v: &Value) -> Option<iface_portfolios::EmptyResponseEntry> {
     let m = v.as_object()?;
-    Some(iface_portfolios::EmptyResponse {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_portfolios::EmptyResponseEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -1035,7 +1058,15 @@ fn iface_portfolios__add_custom_field_setting_for_portfolio_response__from_json(
 fn iface_portfolios__add_item_for_portfolio_response__from_json(v: &Value) -> Option<iface_portfolios::AddItemForPortfolioResponse> {
     let m = v.as_object()?;
     Some(iface_portfolios::AddItemForPortfolioResponse {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| iface_portfolios__empty_response__from_json(v)),
+        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_portfolios::EmptyResponseEntryV2 { key: k.clone(), value: val })).collect())),
+    })
+}
+
+fn iface_portfolios__empty_response_entry_v2__from_json(v: &Value) -> Option<iface_portfolios::EmptyResponseEntryV2> {
+    let m = v.as_object()?;
+    Some(iface_portfolios::EmptyResponseEntryV2 {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -1065,14 +1096,30 @@ fn iface_portfolios__project_compact__from_json(v: &Value) -> Option<iface_portf
 fn iface_portfolios__remove_custom_field_setting_for_portfolio_response__from_json(v: &Value) -> Option<iface_portfolios::RemoveCustomFieldSettingForPortfolioResponse> {
     let m = v.as_object()?;
     Some(iface_portfolios::RemoveCustomFieldSettingForPortfolioResponse {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| iface_portfolios__empty_response__from_json(v)),
+        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_portfolios::EmptyResponseEntryV3 { key: k.clone(), value: val })).collect())),
+    })
+}
+
+fn iface_portfolios__empty_response_entry_v3__from_json(v: &Value) -> Option<iface_portfolios::EmptyResponseEntryV3> {
+    let m = v.as_object()?;
+    Some(iface_portfolios::EmptyResponseEntryV3 {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
 fn iface_portfolios__remove_item_for_portfolio_response__from_json(v: &Value) -> Option<iface_portfolios::RemoveItemForPortfolioResponse> {
     let m = v.as_object()?;
     Some(iface_portfolios::RemoveItemForPortfolioResponse {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| iface_portfolios__empty_response__from_json(v)),
+        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_portfolios::EmptyResponseEntryV4 { key: k.clone(), value: val })).collect())),
+    })
+}
+
+fn iface_portfolios__empty_response_entry_v4__from_json(v: &Value) -> Option<iface_portfolios::EmptyResponseEntryV4> {
+    let m = v.as_object()?;
+    Some(iface_portfolios::EmptyResponseEntryV4 {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 

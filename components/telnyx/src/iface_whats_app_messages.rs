@@ -47,6 +47,41 @@ fn iface_whats_app_messages__language_policy_enum__to_str(e: &iface_whats_app_me
     }
 }
 
+fn iface_whats_app_messages__template_parameters_item_type_op_enum__to_str(e: &iface_whats_app_messages::TemplateParametersItemTypeOpEnum) -> &'static str {
+    match e {
+        iface_whats_app_messages::TemplateParametersItemTypeOpEnum::Text => "text",
+        iface_whats_app_messages::TemplateParametersItemTypeOpEnum::Currency => "currency",
+        iface_whats_app_messages::TemplateParametersItemTypeOpEnum::DateTime => "date_time",
+        iface_whats_app_messages::TemplateParametersItemTypeOpEnum::Image => "image",
+        iface_whats_app_messages::TemplateParametersItemTypeOpEnum::Document => "document",
+        iface_whats_app_messages::TemplateParametersItemTypeOpEnum::Video => "video",
+    }
+}
+
+fn iface_whats_app_messages__template_components_item_type_op_enum__to_str(e: &iface_whats_app_messages::TemplateComponentsItemTypeOpEnum) -> &'static str {
+    match e {
+        iface_whats_app_messages::TemplateComponentsItemTypeOpEnum::Header => "header",
+        iface_whats_app_messages::TemplateComponentsItemTypeOpEnum::Body => "body",
+        iface_whats_app_messages::TemplateComponentsItemTypeOpEnum::Footer => "footer",
+    }
+}
+
+fn iface_whats_app_messages__message_type__to_str(e: &iface_whats_app_messages::MessageType) -> &'static str {
+    match e {
+        iface_whats_app_messages::MessageType::Audio => "audio",
+        iface_whats_app_messages::MessageType::Contacts => "contacts",
+        iface_whats_app_messages::MessageType::Document => "document",
+        iface_whats_app_messages::MessageType::Hsm => "hsm",
+        iface_whats_app_messages::MessageType::Image => "image",
+        iface_whats_app_messages::MessageType::Location => "location",
+        iface_whats_app_messages::MessageType::Template => "template",
+        iface_whats_app_messages::MessageType::Text => "text",
+        iface_whats_app_messages::MessageType::Video => "video",
+        iface_whats_app_messages::MessageType::Voice => "voice",
+        iface_whats_app_messages::MessageType::Unknown => "unknown",
+    }
+}
+
 fn iface_whats_app_messages__message_record_type_enum__to_str(e: &iface_whats_app_messages::MessageRecordTypeEnum) -> &'static str {
     match e {
         iface_whats_app_messages::MessageRecordTypeEnum::WhatsappMessageId => "whatsapp_message_id",
@@ -209,28 +244,29 @@ fn iface_whats_app_messages__location__to_json(p: &iface_whats_app_messages::Loc
 
 fn iface_whats_app_messages__template__to_json(p: &iface_whats_app_messages::Template) -> Value {
     let mut m = Map::new();
-    m.insert("components".into(), match (&p.components) { Some(v) => iface_whats_app_messages__template_components__to_json(v), None => Value::Null });
+    m.insert("components".into(), match (&p.components) { Some(v) => Value::Array((v).iter().map(|v| iface_whats_app_messages__template_components_item__to_json(v)).collect()), None => Value::Null });
     m.insert("language".into(), iface_whats_app_messages__language__to_json(&p.language));
     m.insert("name".into(), Value::String((&p.name).clone()));
     m.insert("namespace".into(), Value::String((&p.namespace).clone()));
     Value::Object(m)
 }
 
-fn iface_whats_app_messages__template_components__to_json(p: &iface_whats_app_messages::TemplateComponents) -> Value {
+fn iface_whats_app_messages__template_components_item__to_json(p: &iface_whats_app_messages::TemplateComponentsItem) -> Value {
     let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
+    m.insert("parameters".into(), match (&p.parameters) { Some(v) => Value::Array((v).iter().map(|v| iface_whats_app_messages__template_parameters_item__to_json(v)).collect()), None => Value::Null });
+    m.insert("type".into(), Value::String(iface_whats_app_messages__template_components_item_type_op_enum__to_str(&p.type_op).into()));
     Value::Object(m)
 }
 
-fn iface_whats_app_messages__text__to_json(p: &iface_whats_app_messages::Text) -> Value {
+fn iface_whats_app_messages__template_parameters_item__to_json(p: &iface_whats_app_messages::TemplateParametersItem) -> Value {
     let mut m = Map::new();
-    m.insert("body".into(), Value::String((&p.body).clone()));
-    Value::Object(m)
-}
-
-fn iface_whats_app_messages__message_type__to_json(p: &iface_whats_app_messages::MessageType) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
+    m.insert("currency".into(), match (&p.currency) { Some(v) => iface_whats_app_messages__currency__to_json(v), None => Value::Null });
+    m.insert("date_time".into(), match (&p.date_time) { Some(v) => iface_whats_app_messages__date_time_object__to_json(v), None => Value::Null });
+    m.insert("document".into(), match (&p.document) { Some(v) => iface_whats_app_messages__document__to_json(v), None => Value::Null });
+    m.insert("image".into(), match (&p.image) { Some(v) => iface_whats_app_messages__image__to_json(v), None => Value::Null });
+    m.insert("text".into(), match (&p.text) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("type".into(), Value::String(iface_whats_app_messages__template_parameters_item_type_op_enum__to_str(&p.type_op).into()));
+    m.insert("video".into(), match (&p.video) { Some(v) => iface_whats_app_messages__video__to_json(v), None => Value::Null });
     Value::Object(m)
 }
 
@@ -239,6 +275,12 @@ fn iface_whats_app_messages__video__to_json(p: &iface_whats_app_messages::Video)
     m.insert("caption".into(), match (&p.caption) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("link".into(), match (&p.link) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_whats_app_messages__text__to_json(p: &iface_whats_app_messages::Text) -> Value {
+    let mut m = Map::new();
+    m.insert("body".into(), Value::String((&p.body).clone()));
     Value::Object(m)
 }
 
@@ -267,7 +309,7 @@ fn iface_whats_app_messages__send_message_params__to_json(p: &iface_whats_app_me
     m.insert("template".into(), match (&p.template) { Some(v) => iface_whats_app_messages__template__to_json(v), None => Value::Null });
     m.insert("text".into(), match (&p.text) { Some(v) => iface_whats_app_messages__text__to_json(v), None => Value::Null });
     m.insert("to".into(), Value::String((&p.to).clone()));
-    m.insert("type".into(), match (&p.type_op) { Some(v) => iface_whats_app_messages__message_type__to_json(v), None => Value::Null });
+    m.insert("type".into(), match (&p.type_op) { Some(v) => Value::String(iface_whats_app_messages__message_type__to_str(v).into()), None => Value::Null });
     m.insert("video".into(), match (&p.video) { Some(v) => iface_whats_app_messages__video__to_json(v), None => Value::Null });
     m.insert("whatsapp_user_id".into(), Value::String((&p.whatsapp_user_id).clone()));
     Value::Object(m)

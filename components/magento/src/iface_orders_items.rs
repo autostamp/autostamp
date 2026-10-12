@@ -189,30 +189,32 @@ fn iface_orders_items__catalog_data_product_option_extension_interface__to_json(
 
 fn iface_orders_items__bundle_data_bundle_option_interface__to_json(p: &iface_orders_items::BundleDataBundleOptionInterface) -> Value {
     let mut m = Map::new();
-    m.insert("extension_attributes".into(), match (&p.extension_attributes) { Some(v) => iface_orders_items__bundle_data_bundle_option_extension_interface__to_json(v), None => Value::Null });
+    m.insert("extension_attributes".into(), match (&p.extension_attributes) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("option_id".into(), Value::Number(serde_json::Number::from(*(&p.option_id))));
     m.insert("option_qty".into(), Value::Number(serde_json::Number::from(*(&p.option_qty))));
     m.insert("option_selections".into(), Value::Array((&p.option_selections).iter().map(|v| Value::Number(serde_json::Number::from(*(v)))).collect()));
     Value::Object(m)
 }
 
-fn iface_orders_items__bundle_data_bundle_option_extension_interface__to_json(p: &iface_orders_items::BundleDataBundleOptionExtensionInterface) -> Value {
+fn iface_orders_items__bundle_data_bundle_option_extension_interface_entry__to_json(p: &iface_orders_items::BundleDataBundleOptionExtensionInterfaceEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
 fn iface_orders_items__configurable_product_data_configurable_item_option_value_interface__to_json(p: &iface_orders_items::ConfigurableProductDataConfigurableItemOptionValueInterface) -> Value {
     let mut m = Map::new();
-    m.insert("extension_attributes".into(), match (&p.extension_attributes) { Some(v) => iface_orders_items__configurable_product_data_configurable_item_option_value_extension_interface__to_json(v), None => Value::Null });
+    m.insert("extension_attributes".into(), match (&p.extension_attributes) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("option_id".into(), Value::String((&p.option_id).clone()));
     m.insert("option_value".into(), match (&p.option_value) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_orders_items__configurable_product_data_configurable_item_option_value_extension_interface__to_json(p: &iface_orders_items::ConfigurableProductDataConfigurableItemOptionValueExtensionInterface) -> Value {
+fn iface_orders_items__configurable_product_data_configurable_item_option_value_extension_interface_entry__to_json(p: &iface_orders_items::ConfigurableProductDataConfigurableItemOptionValueExtensionInterfaceEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -247,7 +249,7 @@ fn iface_orders_items__downloadable_data_downloadable_option_interface__to_json(
 fn iface_orders_items__gift_card_data_gift_card_option_interface__to_json(p: &iface_orders_items::GiftCardDataGiftCardOptionInterface) -> Value {
     let mut m = Map::new();
     m.insert("custom_giftcard_amount".into(), match (&p.custom_giftcard_amount) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
-    m.insert("extension_attributes".into(), match (&p.extension_attributes) { Some(v) => iface_orders_items__gift_card_data_gift_card_option_extension_interface__to_json(v), None => Value::Null });
+    m.insert("extension_attributes".into(), match (&p.extension_attributes) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("giftcard_amount".into(), Value::String((&p.giftcard_amount).clone()));
     m.insert("giftcard_message".into(), match (&p.giftcard_message) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("giftcard_recipient_email".into(), Value::String((&p.giftcard_recipient_email).clone()));
@@ -257,9 +259,10 @@ fn iface_orders_items__gift_card_data_gift_card_option_interface__to_json(p: &if
     Value::Object(m)
 }
 
-fn iface_orders_items__gift_card_data_gift_card_option_extension_interface__to_json(p: &iface_orders_items::GiftCardDataGiftCardOptionExtensionInterface) -> Value {
+fn iface_orders_items__gift_card_data_gift_card_option_extension_interface_entry__to_json(p: &iface_orders_items::GiftCardDataGiftCardOptionExtensionInterfaceEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -482,33 +485,35 @@ fn iface_orders_items__catalog_data_product_option_extension_interface__from_jso
 fn iface_orders_items__bundle_data_bundle_option_interface__from_json(v: &Value) -> Option<iface_orders_items::BundleDataBundleOptionInterface> {
     let m = v.as_object()?;
     Some(iface_orders_items::BundleDataBundleOptionInterface {
-        extension_attributes: m.get("extension_attributes").filter(|v| !v.is_null()).and_then(|v| iface_orders_items__bundle_data_bundle_option_extension_interface__from_json(v)),
+        extension_attributes: m.get("extension_attributes").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_orders_items::BundleDataBundleOptionExtensionInterfaceEntry { key: k.clone(), value: val })).collect())),
         option_id: m.get("option_id").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
         option_qty: m.get("option_qty").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
         option_selections: m.get("option_selections").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_i64().map(|n| n as i32)).collect())).unwrap_or_default(),
     })
 }
 
-fn iface_orders_items__bundle_data_bundle_option_extension_interface__from_json(v: &Value) -> Option<iface_orders_items::BundleDataBundleOptionExtensionInterface> {
+fn iface_orders_items__bundle_data_bundle_option_extension_interface_entry__from_json(v: &Value) -> Option<iface_orders_items::BundleDataBundleOptionExtensionInterfaceEntry> {
     let m = v.as_object()?;
-    Some(iface_orders_items::BundleDataBundleOptionExtensionInterface {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_orders_items::BundleDataBundleOptionExtensionInterfaceEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
 fn iface_orders_items__configurable_product_data_configurable_item_option_value_interface__from_json(v: &Value) -> Option<iface_orders_items::ConfigurableProductDataConfigurableItemOptionValueInterface> {
     let m = v.as_object()?;
     Some(iface_orders_items::ConfigurableProductDataConfigurableItemOptionValueInterface {
-        extension_attributes: m.get("extension_attributes").filter(|v| !v.is_null()).and_then(|v| iface_orders_items__configurable_product_data_configurable_item_option_value_extension_interface__from_json(v)),
+        extension_attributes: m.get("extension_attributes").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_orders_items::ConfigurableProductDataConfigurableItemOptionValueExtensionInterfaceEntry { key: k.clone(), value: val })).collect())),
         option_id: m.get("option_id").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         option_value: m.get("option_value").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
     })
 }
 
-fn iface_orders_items__configurable_product_data_configurable_item_option_value_extension_interface__from_json(v: &Value) -> Option<iface_orders_items::ConfigurableProductDataConfigurableItemOptionValueExtensionInterface> {
+fn iface_orders_items__configurable_product_data_configurable_item_option_value_extension_interface_entry__from_json(v: &Value) -> Option<iface_orders_items::ConfigurableProductDataConfigurableItemOptionValueExtensionInterfaceEntry> {
     let m = v.as_object()?;
-    Some(iface_orders_items::ConfigurableProductDataConfigurableItemOptionValueExtensionInterface {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_orders_items::ConfigurableProductDataConfigurableItemOptionValueExtensionInterfaceEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -548,7 +553,7 @@ fn iface_orders_items__gift_card_data_gift_card_option_interface__from_json(v: &
     let m = v.as_object()?;
     Some(iface_orders_items::GiftCardDataGiftCardOptionInterface {
         custom_giftcard_amount: m.get("custom_giftcard_amount").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
-        extension_attributes: m.get("extension_attributes").filter(|v| !v.is_null()).and_then(|v| iface_orders_items__gift_card_data_gift_card_option_extension_interface__from_json(v)),
+        extension_attributes: m.get("extension_attributes").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_orders_items::GiftCardDataGiftCardOptionExtensionInterfaceEntry { key: k.clone(), value: val })).collect())),
         giftcard_amount: m.get("giftcard_amount").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         giftcard_message: m.get("giftcard_message").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         giftcard_recipient_email: m.get("giftcard_recipient_email").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
@@ -558,10 +563,11 @@ fn iface_orders_items__gift_card_data_gift_card_option_interface__from_json(v: &
     })
 }
 
-fn iface_orders_items__gift_card_data_gift_card_option_extension_interface__from_json(v: &Value) -> Option<iface_orders_items::GiftCardDataGiftCardOptionExtensionInterface> {
+fn iface_orders_items__gift_card_data_gift_card_option_extension_interface_entry__from_json(v: &Value) -> Option<iface_orders_items::GiftCardDataGiftCardOptionExtensionInterfaceEntry> {
     let m = v.as_object()?;
-    Some(iface_orders_items::GiftCardDataGiftCardOptionExtensionInterface {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_orders_items::GiftCardDataGiftCardOptionExtensionInterfaceEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 

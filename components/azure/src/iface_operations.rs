@@ -26,7 +26,7 @@ fn iface_operations__operation_entity__to_json(p: &iface_operations::OperationEn
     m.insert("display".into(), match (&p.display) { Some(v) => iface_operations__operation_display_info__to_json(v), None => Value::Null });
     m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("origin".into(), match (&p.origin) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("properties".into(), match (&p.properties) { Some(v) => iface_operations__operation_entity_properties__to_json(v), None => Value::Null });
+    m.insert("properties".into(), match (&p.properties) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -39,9 +39,10 @@ fn iface_operations__operation_display_info__to_json(p: &iface_operations::Opera
     Value::Object(m)
 }
 
-fn iface_operations__operation_entity_properties__to_json(p: &iface_operations::OperationEntityProperties) -> Value {
+fn iface_operations__operation_entity_properties_entry__to_json(p: &iface_operations::OperationEntityPropertiesEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -65,7 +66,7 @@ fn iface_operations__operation_entity__from_json(v: &Value) -> Option<iface_oper
         display: m.get("display").filter(|v| !v.is_null()).and_then(|v| iface_operations__operation_display_info__from_json(v)),
         name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         origin: m.get("origin").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        properties: m.get("properties").filter(|v| !v.is_null()).and_then(|v| iface_operations__operation_entity_properties__from_json(v)),
+        properties: m.get("properties").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_operations::OperationEntityPropertiesEntry { key: k.clone(), value: val })).collect())),
     })
 }
 
@@ -79,10 +80,11 @@ fn iface_operations__operation_display_info__from_json(v: &Value) -> Option<ifac
     })
 }
 
-fn iface_operations__operation_entity_properties__from_json(v: &Value) -> Option<iface_operations::OperationEntityProperties> {
+fn iface_operations__operation_entity_properties_entry__from_json(v: &Value) -> Option<iface_operations::OperationEntityPropertiesEntry> {
     let m = v.as_object()?;
-    Some(iface_operations::OperationEntityProperties {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_operations::OperationEntityPropertiesEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 

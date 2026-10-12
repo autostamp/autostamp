@@ -1,4 +1,4 @@
-package autostamp:googleapis@0.5.0;
+package autostamp:googleapis@0.6.0;
 
 interface violating-sites {
   enum abusiveexperiencereport-violating-sites-list-xgafv-enum {

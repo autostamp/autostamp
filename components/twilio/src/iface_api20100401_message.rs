@@ -95,6 +95,66 @@ const OP_API20100401_MESSAGE_DELETE_MESSAGE: OpSpec = OpSpec {
     ],
 };
 
+fn iface_api20100401_message__message_enum_direction__to_str(e: &iface_api20100401_message::MessageEnumDirection) -> &'static str {
+    match e {
+        iface_api20100401_message::MessageEnumDirection::Inbound => "inbound",
+        iface_api20100401_message::MessageEnumDirection::OutboundApi => "outbound-api",
+        iface_api20100401_message::MessageEnumDirection::OutboundCall => "outbound-call",
+        iface_api20100401_message::MessageEnumDirection::OutboundReply => "outbound-reply",
+    }
+}
+
+fn iface_api20100401_message__message_enum_status__to_str(e: &iface_api20100401_message::MessageEnumStatus) -> &'static str {
+    match e {
+        iface_api20100401_message::MessageEnumStatus::Queued => "queued",
+        iface_api20100401_message::MessageEnumStatus::Sending => "sending",
+        iface_api20100401_message::MessageEnumStatus::Sent => "sent",
+        iface_api20100401_message::MessageEnumStatus::Failed => "failed",
+        iface_api20100401_message::MessageEnumStatus::Delivered => "delivered",
+        iface_api20100401_message::MessageEnumStatus::Undelivered => "undelivered",
+        iface_api20100401_message::MessageEnumStatus::Receiving => "receiving",
+        iface_api20100401_message::MessageEnumStatus::Received => "received",
+        iface_api20100401_message::MessageEnumStatus::Accepted => "accepted",
+        iface_api20100401_message::MessageEnumStatus::Scheduled => "scheduled",
+        iface_api20100401_message::MessageEnumStatus::Read => "read",
+        iface_api20100401_message::MessageEnumStatus::PartiallyDelivered => "partially_delivered",
+        iface_api20100401_message::MessageEnumStatus::Canceled => "canceled",
+    }
+}
+
+fn iface_api20100401_message__message_enum_address_retention__to_str(e: &iface_api20100401_message::MessageEnumAddressRetention) -> &'static str {
+    match e {
+        iface_api20100401_message::MessageEnumAddressRetention::Retain => "retain",
+        iface_api20100401_message::MessageEnumAddressRetention::Obfuscate => "obfuscate",
+    }
+}
+
+fn iface_api20100401_message__message_enum_content_retention__to_str(e: &iface_api20100401_message::MessageEnumContentRetention) -> &'static str {
+    match e {
+        iface_api20100401_message::MessageEnumContentRetention::Retain => "retain",
+        iface_api20100401_message::MessageEnumContentRetention::Discard => "discard",
+    }
+}
+
+fn iface_api20100401_message__message_enum_risk_check__to_str(e: &iface_api20100401_message::MessageEnumRiskCheck) -> &'static str {
+    match e {
+        iface_api20100401_message::MessageEnumRiskCheck::Enable => "enable",
+        iface_api20100401_message::MessageEnumRiskCheck::Disable => "disable",
+    }
+}
+
+fn iface_api20100401_message__message_enum_schedule_type__to_str(e: &iface_api20100401_message::MessageEnumScheduleType) -> &'static str {
+    match e {
+        iface_api20100401_message::MessageEnumScheduleType::Fixed => "fixed",
+    }
+}
+
+fn iface_api20100401_message__message_enum_update_status__to_str(e: &iface_api20100401_message::MessageEnumUpdateStatus) -> &'static str {
+    match e {
+        iface_api20100401_message::MessageEnumUpdateStatus::Canceled => "canceled",
+    }
+}
+
 fn iface_api20100401_message__list_message_response__to_json(p: &iface_api20100401_message::ListMessageResponse) -> Value {
     let mut m = Map::new();
     m.insert("end".into(), match (&p.end) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
@@ -117,7 +177,7 @@ fn iface_api20100401_message__api_v2010_account_message__to_json(p: &iface_api20
     m.insert("date_created".into(), match (&p.date_created) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("date_sent".into(), match (&p.date_sent) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("date_updated".into(), match (&p.date_updated) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("direction".into(), match (&p.direction) { Some(v) => iface_api20100401_message__message_enum_direction__to_json(v), None => Value::Null });
+    m.insert("direction".into(), match (&p.direction) { Some(v) => Value::String(iface_api20100401_message__message_enum_direction__to_str(v).into()), None => Value::Null });
     m.insert("error_code".into(), match (&p.error_code) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("error_message".into(), match (&p.error_message) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("from".into(), match (&p.from_op) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -127,52 +187,10 @@ fn iface_api20100401_message__api_v2010_account_message__to_json(p: &iface_api20
     m.insert("price".into(), match (&p.price) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("price_unit".into(), match (&p.price_unit) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("sid".into(), match (&p.sid) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("status".into(), match (&p.status) { Some(v) => iface_api20100401_message__message_enum_status__to_json(v), None => Value::Null });
+    m.insert("status".into(), match (&p.status) { Some(v) => Value::String(iface_api20100401_message__message_enum_status__to_str(v).into()), None => Value::Null });
     m.insert("subresource_uris".into(), match (&p.subresource_uris) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("to".into(), match (&p.to) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("uri".into(), match (&p.uri) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_api20100401_message__message_enum_direction__to_json(p: &iface_api20100401_message::MessageEnumDirection) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_api20100401_message__message_enum_status__to_json(p: &iface_api20100401_message::MessageEnumStatus) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_api20100401_message__message_enum_address_retention__to_json(p: &iface_api20100401_message::MessageEnumAddressRetention) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_api20100401_message__message_enum_content_retention__to_json(p: &iface_api20100401_message::MessageEnumContentRetention) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_api20100401_message__message_enum_risk_check__to_json(p: &iface_api20100401_message::MessageEnumRiskCheck) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_api20100401_message__message_enum_schedule_type__to_json(p: &iface_api20100401_message::MessageEnumScheduleType) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_api20100401_message__message_enum_update_status__to_json(p: &iface_api20100401_message::MessageEnumUpdateStatus) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -193,11 +211,11 @@ fn iface_api20100401_message__list_message_params__to_json(p: &iface_api20100401
 fn iface_api20100401_message__create_message_params__to_json(p: &iface_api20100401_message::CreateMessageParams) -> Value {
     let mut m = Map::new();
     m.insert("account_sid".into(), Value::String((&p.account_sid).clone()));
-    m.insert("address_retention".into(), match (&p.address_retention) { Some(v) => iface_api20100401_message__message_enum_address_retention__to_json(v), None => Value::Null });
+    m.insert("address_retention".into(), match (&p.address_retention) { Some(v) => Value::String(iface_api20100401_message__message_enum_address_retention__to_str(v).into()), None => Value::Null });
     m.insert("application_sid".into(), match (&p.application_sid) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("attempt".into(), match (&p.attempt) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("body".into(), match (&p.body) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("content_retention".into(), match (&p.content_retention) { Some(v) => iface_api20100401_message__message_enum_content_retention__to_json(v), None => Value::Null });
+    m.insert("content_retention".into(), match (&p.content_retention) { Some(v) => Value::String(iface_api20100401_message__message_enum_content_retention__to_str(v).into()), None => Value::Null });
     m.insert("content_sid".into(), match (&p.content_sid) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("content_variables".into(), match (&p.content_variables) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("force_delivery".into(), match (&p.force_delivery) { Some(v) => Value::Bool(*(v)), None => Value::Null });
@@ -207,8 +225,8 @@ fn iface_api20100401_message__create_message_params__to_json(p: &iface_api201004
     m.insert("messaging_service_sid".into(), match (&p.messaging_service_sid) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("persistent_action".into(), match (&p.persistent_action) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
     m.insert("provide_feedback".into(), match (&p.provide_feedback) { Some(v) => Value::Bool(*(v)), None => Value::Null });
-    m.insert("risk_check".into(), match (&p.risk_check) { Some(v) => iface_api20100401_message__message_enum_risk_check__to_json(v), None => Value::Null });
-    m.insert("schedule_type".into(), match (&p.schedule_type) { Some(v) => iface_api20100401_message__message_enum_schedule_type__to_json(v), None => Value::Null });
+    m.insert("risk_check".into(), match (&p.risk_check) { Some(v) => Value::String(iface_api20100401_message__message_enum_risk_check__to_str(v).into()), None => Value::Null });
+    m.insert("schedule_type".into(), match (&p.schedule_type) { Some(v) => Value::String(iface_api20100401_message__message_enum_schedule_type__to_str(v).into()), None => Value::Null });
     m.insert("send_as_mms".into(), match (&p.send_as_mms) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     m.insert("send_at".into(), match (&p.send_at) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("shorten_urls".into(), match (&p.shorten_urls) { Some(v) => Value::Bool(*(v)), None => Value::Null });
@@ -231,7 +249,7 @@ fn iface_api20100401_message__update_message_params__to_json(p: &iface_api201004
     m.insert("account_sid".into(), Value::String((&p.account_sid).clone()));
     m.insert("sid".into(), Value::String((&p.sid).clone()));
     m.insert("body".into(), match (&p.body) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("status".into(), match (&p.status) { Some(v) => iface_api20100401_message__message_enum_update_status__to_json(v), None => Value::Null });
+    m.insert("status".into(), match (&p.status) { Some(v) => Value::String(iface_api20100401_message__message_enum_update_status__to_str(v).into()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -266,7 +284,7 @@ fn iface_api20100401_message__api_v2010_account_message__from_json(v: &Value) ->
         date_created: m.get("date_created").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         date_sent: m.get("date_sent").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         date_updated: m.get("date_updated").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        direction: m.get("direction").filter(|v| !v.is_null()).and_then(|v| iface_api20100401_message__message_enum_direction__from_json(v)),
+        direction: m.get("direction").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_api20100401_message__message_enum_direction__from_str)),
         error_code: m.get("error_code").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
         error_message: m.get("error_message").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         from_op: m.get("from").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
@@ -276,25 +294,40 @@ fn iface_api20100401_message__api_v2010_account_message__from_json(v: &Value) ->
         price: m.get("price").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         price_unit: m.get("price_unit").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         sid: m.get("sid").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        status: m.get("status").filter(|v| !v.is_null()).and_then(|v| iface_api20100401_message__message_enum_status__from_json(v)),
+        status: m.get("status").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_api20100401_message__message_enum_status__from_str)),
         subresource_uris: m.get("subresource_uris").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         to: m.get("to").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         uri: m.get("uri").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
     })
 }
 
-fn iface_api20100401_message__message_enum_direction__from_json(v: &Value) -> Option<iface_api20100401_message::MessageEnumDirection> {
-    let m = v.as_object()?;
-    Some(iface_api20100401_message::MessageEnumDirection {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-    })
+fn iface_api20100401_message__message_enum_direction__from_str(s: &str) -> Option<iface_api20100401_message::MessageEnumDirection> {
+    match s {
+        "inbound" => Some(iface_api20100401_message::MessageEnumDirection::Inbound),
+        "outbound-api" => Some(iface_api20100401_message::MessageEnumDirection::OutboundApi),
+        "outbound-call" => Some(iface_api20100401_message::MessageEnumDirection::OutboundCall),
+        "outbound-reply" => Some(iface_api20100401_message::MessageEnumDirection::OutboundReply),
+        _ => None,
+    }
 }
 
-fn iface_api20100401_message__message_enum_status__from_json(v: &Value) -> Option<iface_api20100401_message::MessageEnumStatus> {
-    let m = v.as_object()?;
-    Some(iface_api20100401_message::MessageEnumStatus {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-    })
+fn iface_api20100401_message__message_enum_status__from_str(s: &str) -> Option<iface_api20100401_message::MessageEnumStatus> {
+    match s {
+        "queued" => Some(iface_api20100401_message::MessageEnumStatus::Queued),
+        "sending" => Some(iface_api20100401_message::MessageEnumStatus::Sending),
+        "sent" => Some(iface_api20100401_message::MessageEnumStatus::Sent),
+        "failed" => Some(iface_api20100401_message::MessageEnumStatus::Failed),
+        "delivered" => Some(iface_api20100401_message::MessageEnumStatus::Delivered),
+        "undelivered" => Some(iface_api20100401_message::MessageEnumStatus::Undelivered),
+        "receiving" => Some(iface_api20100401_message::MessageEnumStatus::Receiving),
+        "received" => Some(iface_api20100401_message::MessageEnumStatus::Received),
+        "accepted" => Some(iface_api20100401_message::MessageEnumStatus::Accepted),
+        "scheduled" => Some(iface_api20100401_message::MessageEnumStatus::Scheduled),
+        "read" => Some(iface_api20100401_message::MessageEnumStatus::Read),
+        "partially_delivered" => Some(iface_api20100401_message::MessageEnumStatus::PartiallyDelivered),
+        "canceled" => Some(iface_api20100401_message::MessageEnumStatus::Canceled),
+        _ => None,
+    }
 }
 
 fn iface_api20100401_message__list_message__ok(body: String) -> Result<iface_api20100401_message::ListMessageResponse, crate::runtime::DispatchError> {

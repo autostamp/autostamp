@@ -8,7 +8,7 @@ const OP_MAPPING_POST_MAPPING: OpSpec = OpSpec {
     method: "POST",
     path_template: "/mapping",
     fields: &[
-        FieldSpec { snake: "value", wire: "value", location: FieldLocation::Body },
+        FieldSpec { snake: "body", wire: "body", location: FieldLocation::Body },
     ],
     auth: &[
     ],
@@ -24,9 +24,223 @@ const OP_MAPPING_GET_MAPPING_VALUES_KEY: OpSpec = OpSpec {
     ],
 };
 
-fn iface_mapping__bulk_mapping_job_result__to_json(p: &iface_mapping::BulkMappingJobResult) -> Value {
+fn iface_mapping__job_id_type_enum__to_str(e: &iface_mapping::JobIdTypeEnum) -> &'static str {
+    match e {
+        iface_mapping::JobIdTypeEnum::IdIsin => "ID_ISIN",
+        iface_mapping::JobIdTypeEnum::IdBbUnique => "ID_BB_UNIQUE",
+        iface_mapping::JobIdTypeEnum::IdSedol => "ID_SEDOL",
+        iface_mapping::JobIdTypeEnum::IdCommon => "ID_COMMON",
+        iface_mapping::JobIdTypeEnum::IdWertpapier => "ID_WERTPAPIER",
+        iface_mapping::JobIdTypeEnum::IdCusip => "ID_CUSIP",
+        iface_mapping::JobIdTypeEnum::IdBb => "ID_BB",
+        iface_mapping::JobIdTypeEnum::IdItaly => "ID_ITALY",
+        iface_mapping::JobIdTypeEnum::IdExchSymbol => "ID_EXCH_SYMBOL",
+        iface_mapping::JobIdTypeEnum::IdFullExchangeSymbol => "ID_FULL_EXCHANGE_SYMBOL",
+        iface_mapping::JobIdTypeEnum::CompositeIdBbGlobal => "COMPOSITE_ID_BB_GLOBAL",
+        iface_mapping::JobIdTypeEnum::IdBbGlobalShareClassLevel => "ID_BB_GLOBAL_SHARE_CLASS_LEVEL",
+        iface_mapping::JobIdTypeEnum::IdBbSecNumDes => "ID_BB_SEC_NUM_DES",
+        iface_mapping::JobIdTypeEnum::IdBbGlobal => "ID_BB_GLOBAL",
+        iface_mapping::JobIdTypeEnum::Ticker => "TICKER",
+        iface_mapping::JobIdTypeEnum::IdCusipV8Chr => "ID_CUSIP_8_CHR",
+        iface_mapping::JobIdTypeEnum::OccSymbol => "OCC_SYMBOL",
+        iface_mapping::JobIdTypeEnum::UniqueIdFutOpt => "UNIQUE_ID_FUT_OPT",
+        iface_mapping::JobIdTypeEnum::OpraSymbol => "OPRA_SYMBOL",
+        iface_mapping::JobIdTypeEnum::TradingSystemIdentifier => "TRADING_SYSTEM_IDENTIFIER",
+        iface_mapping::JobIdTypeEnum::IdCins => "ID_CINS",
+        iface_mapping::JobIdTypeEnum::IdShortCode => "ID_SHORT_CODE",
+        iface_mapping::JobIdTypeEnum::BaseTicker => "BASE_TICKER",
+        iface_mapping::JobIdTypeEnum::VendorIndexCode => "VENDOR_INDEX_CODE",
+    }
+}
+
+fn iface_mapping__job_option_type_enum__to_str(e: &iface_mapping::JobOptionTypeEnum) -> &'static str {
+    match e {
+        iface_mapping::JobOptionTypeEnum::Put => "Put",
+        iface_mapping::JobOptionTypeEnum::Call => "Call",
+    }
+}
+
+fn iface_mapping__job_state_code_enum__to_str(e: &iface_mapping::JobStateCodeEnum) -> &'static str {
+    match e {
+        iface_mapping::JobStateCodeEnum::Ab => "AB",
+        iface_mapping::JobStateCodeEnum::Ac => "AC",
+        iface_mapping::JobStateCodeEnum::AcV2 => "AC",
+        iface_mapping::JobStateCodeEnum::Ah => "AH",
+        iface_mapping::JobStateCodeEnum::Ak => "AK",
+        iface_mapping::JobStateCodeEnum::Al => "AL",
+        iface_mapping::JobStateCodeEnum::Am => "AM",
+        iface_mapping::JobStateCodeEnum::Ar => "AR",
+        iface_mapping::JobStateCodeEnum::AsOp => "AS",
+        iface_mapping::JobStateCodeEnum::At => "AT",
+        iface_mapping::JobStateCodeEnum::Az => "AZ",
+        iface_mapping::JobStateCodeEnum::Bc => "BC",
+        iface_mapping::JobStateCodeEnum::Bj => "BJ",
+        iface_mapping::JobStateCodeEnum::Ca => "CA",
+        iface_mapping::JobStateCodeEnum::Cb => "CB",
+        iface_mapping::JobStateCodeEnum::Co => "CO",
+        iface_mapping::JobStateCodeEnum::Cq => "CQ",
+        iface_mapping::JobStateCodeEnum::Ct => "CT",
+        iface_mapping::JobStateCodeEnum::Cz => "CZ",
+        iface_mapping::JobStateCodeEnum::Dc => "DC",
+        iface_mapping::JobStateCodeEnum::De => "DE",
+        iface_mapping::JobStateCodeEnum::Eh => "EH",
+        iface_mapping::JobStateCodeEnum::Fh => "FH",
+        iface_mapping::JobStateCodeEnum::Fi => "FI",
+        iface_mapping::JobStateCodeEnum::Fj => "FJ",
+        iface_mapping::JobStateCodeEnum::Fl => "FL",
+        iface_mapping::JobStateCodeEnum::Fo => "FO",
+        iface_mapping::JobStateCodeEnum::Fs => "FS",
+        iface_mapping::JobStateCodeEnum::Ga => "GA",
+        iface_mapping::JobStateCodeEnum::Gd => "GD",
+        iface_mapping::JobStateCodeEnum::Gf => "GF",
+        iface_mapping::JobStateCodeEnum::Gm => "GM",
+        iface_mapping::JobStateCodeEnum::Gs => "GS",
+        iface_mapping::JobStateCodeEnum::Gu => "GU",
+        iface_mapping::JobStateCodeEnum::Gx => "GX",
+        iface_mapping::JobStateCodeEnum::Gz => "GZ",
+        iface_mapping::JobStateCodeEnum::Ha => "HA",
+        iface_mapping::JobStateCodeEnum::Hb => "HB",
+        iface_mapping::JobStateCodeEnum::He => "HE",
+        iface_mapping::JobStateCodeEnum::Hg => "HG",
+        iface_mapping::JobStateCodeEnum::Hi => "HI",
+        iface_mapping::JobStateCodeEnum::HiV2 => "HI",
+        iface_mapping::JobStateCodeEnum::Hl => "HL",
+        iface_mapping::JobStateCodeEnum::Hn => "HN",
+        iface_mapping::JobStateCodeEnum::Ho => "HO",
+        iface_mapping::JobStateCodeEnum::Hs => "HS",
+        iface_mapping::JobStateCodeEnum::Ia => "IA",
+        iface_mapping::JobStateCodeEnum::Id => "ID",
+        iface_mapping::JobStateCodeEnum::Ig => "IG",
+        iface_mapping::JobStateCodeEnum::Ik => "IK",
+        iface_mapping::JobStateCodeEnum::Il => "IL",
+        iface_mapping::JobStateCodeEnum::In => "IN",
+        iface_mapping::JobStateCodeEnum::It => "IT",
+        iface_mapping::JobStateCodeEnum::Jl => "JL",
+        iface_mapping::JobStateCodeEnum::Js => "JS",
+        iface_mapping::JobStateCodeEnum::Jx => "JX",
+        iface_mapping::JobStateCodeEnum::Ka => "KA",
+        iface_mapping::JobStateCodeEnum::Kc => "KC",
+        iface_mapping::JobStateCodeEnum::Kn => "KN",
+        iface_mapping::JobStateCodeEnum::Ko => "KO",
+        iface_mapping::JobStateCodeEnum::Ks => "KS",
+        iface_mapping::JobStateCodeEnum::Kt => "KT",
+        iface_mapping::JobStateCodeEnum::Ku => "KU",
+        iface_mapping::JobStateCodeEnum::Ky => "KY",
+        iface_mapping::JobStateCodeEnum::La => "LA",
+        iface_mapping::JobStateCodeEnum::Ln => "LN",
+        iface_mapping::JobStateCodeEnum::Ma => "MA",
+        iface_mapping::JobStateCodeEnum::Mb => "MB",
+        iface_mapping::JobStateCodeEnum::Md => "MD",
+        iface_mapping::JobStateCodeEnum::Me => "ME",
+        iface_mapping::JobStateCodeEnum::MeV2 => "ME",
+        iface_mapping::JobStateCodeEnum::Mg => "MG",
+        iface_mapping::JobStateCodeEnum::Mi => "MI",
+        iface_mapping::JobStateCodeEnum::Mn => "MN",
+        iface_mapping::JobStateCodeEnum::Mo => "MO",
+        iface_mapping::JobStateCodeEnum::Ms => "MS",
+        iface_mapping::JobStateCodeEnum::Mt => "MT",
+        iface_mapping::JobStateCodeEnum::Mz => "MZ",
+        iface_mapping::JobStateCodeEnum::Nb => "NB",
+        iface_mapping::JobStateCodeEnum::Nc => "NC",
+        iface_mapping::JobStateCodeEnum::Nd => "ND",
+        iface_mapping::JobStateCodeEnum::Ne => "NE",
+        iface_mapping::JobStateCodeEnum::Ng => "NG",
+        iface_mapping::JobStateCodeEnum::Nh => "NH",
+        iface_mapping::JobStateCodeEnum::Nj => "NJ",
+        iface_mapping::JobStateCodeEnum::Nl => "NL",
+        iface_mapping::JobStateCodeEnum::Nm => "NM",
+        iface_mapping::JobStateCodeEnum::NmV2 => "NM",
+        iface_mapping::JobStateCodeEnum::Nn => "NN",
+        iface_mapping::JobStateCodeEnum::Nr => "NR",
+        iface_mapping::JobStateCodeEnum::Ns => "NS",
+        iface_mapping::JobStateCodeEnum::NsV2 => "NS",
+        iface_mapping::JobStateCodeEnum::NsV3 => "NS",
+        iface_mapping::JobStateCodeEnum::Nt => "NT",
+        iface_mapping::JobStateCodeEnum::Nu => "NU",
+        iface_mapping::JobStateCodeEnum::Nv => "NV",
+        iface_mapping::JobStateCodeEnum::Nw => "NW",
+        iface_mapping::JobStateCodeEnum::Nx => "NX",
+        iface_mapping::JobStateCodeEnum::Ny => "NY",
+        iface_mapping::JobStateCodeEnum::Oh => "OH",
+        iface_mapping::JobStateCodeEnum::Ok => "OK",
+        iface_mapping::JobStateCodeEnum::On => "ON",
+        iface_mapping::JobStateCodeEnum::OnV2 => "ON",
+        iface_mapping::JobStateCodeEnum::Or => "OR",
+        iface_mapping::JobStateCodeEnum::Os => "OS",
+        iface_mapping::JobStateCodeEnum::Ot => "OT",
+        iface_mapping::JobStateCodeEnum::OtV2 => "OT",
+        iface_mapping::JobStateCodeEnum::Oy => "OY",
+        iface_mapping::JobStateCodeEnum::Pa => "PA",
+        iface_mapping::JobStateCodeEnum::Pe => "PE",
+        iface_mapping::JobStateCodeEnum::Pr => "PR",
+        iface_mapping::JobStateCodeEnum::Qc => "QC",
+        iface_mapping::JobStateCodeEnum::Qh => "QH",
+        iface_mapping::JobStateCodeEnum::Ql => "QL",
+        iface_mapping::JobStateCodeEnum::Ri => "RI",
+        iface_mapping::JobStateCodeEnum::Sa => "SA",
+        iface_mapping::JobStateCodeEnum::SaV2 => "SA",
+        iface_mapping::JobStateCodeEnum::Sc => "SC",
+        iface_mapping::JobStateCodeEnum::ScV2 => "SC",
+        iface_mapping::JobStateCodeEnum::Sd => "SD",
+        iface_mapping::JobStateCodeEnum::SdV2 => "SD",
+        iface_mapping::JobStateCodeEnum::Sh => "SH",
+        iface_mapping::JobStateCodeEnum::Si => "SI",
+        iface_mapping::JobStateCodeEnum::Sk => "SK",
+        iface_mapping::JobStateCodeEnum::Sn => "SN",
+        iface_mapping::JobStateCodeEnum::SnV2 => "SN",
+        iface_mapping::JobStateCodeEnum::St => "ST",
+        iface_mapping::JobStateCodeEnum::Sx => "SX",
+        iface_mapping::JobStateCodeEnum::Sz => "SZ",
+        iface_mapping::JobStateCodeEnum::Ta => "TA",
+        iface_mapping::JobStateCodeEnum::Tg => "TG",
+        iface_mapping::JobStateCodeEnum::Tj => "TJ",
+        iface_mapping::JobStateCodeEnum::Tk => "TK",
+        iface_mapping::JobStateCodeEnum::Tn => "TN",
+        iface_mapping::JobStateCodeEnum::Ts => "TS",
+        iface_mapping::JobStateCodeEnum::Tt => "TT",
+        iface_mapping::JobStateCodeEnum::TtV2 => "TT",
+        iface_mapping::JobStateCodeEnum::Tx => "TX",
+        iface_mapping::JobStateCodeEnum::Ty => "TY",
+        iface_mapping::JobStateCodeEnum::Ut => "UT",
+        iface_mapping::JobStateCodeEnum::Va => "VA",
+        iface_mapping::JobStateCodeEnum::Vi => "VI",
+        iface_mapping::JobStateCodeEnum::ViV2 => "VI",
+        iface_mapping::JobStateCodeEnum::Vt => "VT",
+        iface_mapping::JobStateCodeEnum::Wa => "WA",
+        iface_mapping::JobStateCodeEnum::WaV2 => "WA",
+        iface_mapping::JobStateCodeEnum::Wi => "WI",
+        iface_mapping::JobStateCodeEnum::Wk => "WK",
+        iface_mapping::JobStateCodeEnum::Wv => "WV",
+        iface_mapping::JobStateCodeEnum::Wy => "WY",
+        iface_mapping::JobStateCodeEnum::Xj => "XJ",
+        iface_mapping::JobStateCodeEnum::Xz => "XZ",
+        iface_mapping::JobStateCodeEnum::Ya => "YA",
+        iface_mapping::JobStateCodeEnum::Yn => "YN",
+        iface_mapping::JobStateCodeEnum::YnV2 => "YN",
+        iface_mapping::JobStateCodeEnum::Yt => "YT",
+        iface_mapping::JobStateCodeEnum::Yu => "YU",
+        iface_mapping::JobStateCodeEnum::Zj => "ZJ",
+    }
+}
+
+fn iface_mapping__job__to_json(p: &iface_mapping::Job) -> Value {
     let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
+    m.insert("contractSize".into(), match (&p.contract_size) { Some(v) => Value::Array((v).iter().map(|v| serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null)).collect()), None => Value::Null });
+    m.insert("coupon".into(), match (&p.coupon) { Some(v) => Value::Array((v).iter().map(|v| serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null)).collect()), None => Value::Null });
+    m.insert("currency".into(), match (&p.currency) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("exchCode".into(), match (&p.exch_code) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("expiration".into(), match (&p.expiration) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("idType".into(), Value::String(iface_mapping__job_id_type_enum__to_str(&p.id_type).into()));
+    m.insert("idValue".into(), Value::String((&p.id_value).clone()));
+    m.insert("includeUnlistedEquities".into(), match (&p.include_unlisted_equities) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("marketSecDes".into(), match (&p.market_sec_des) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("maturity".into(), match (&p.maturity) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("micCode".into(), match (&p.mic_code) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("optionType".into(), match (&p.option_type) { Some(v) => Value::String(iface_mapping__job_option_type_enum__to_str(v).into()), None => Value::Null });
+    m.insert("securityType".into(), match (&p.security_type) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("securityType2".into(), match (&p.security_type2) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("stateCode".into(), match (&p.state_code) { Some(v) => Value::String(iface_mapping__job_state_code_enum__to_str(v).into()), None => Value::Null });
+    m.insert("strike".into(), match (&p.strike) { Some(v) => Value::Array((v).iter().map(|v| serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null)).collect()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -38,7 +252,7 @@ fn iface_mapping__get_mapping_values_key_response__to_json(p: &iface_mapping::Ge
 
 fn iface_mapping__post_mapping_params__to_json(p: &iface_mapping::PostMappingParams) -> Value {
     let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
+    m.insert("body".into(), match (&p.body) { Some(v) => Value::Array((v).iter().map(|v| iface_mapping__job__to_json(v)).collect()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -48,13 +262,6 @@ fn iface_mapping__get_mapping_values_key_params__to_json(p: &iface_mapping::GetM
     Value::Object(m)
 }
 
-fn iface_mapping__bulk_mapping_job_result__from_json(v: &Value) -> Option<iface_mapping::BulkMappingJobResult> {
-    let m = v.as_object()?;
-    Some(iface_mapping::BulkMappingJobResult {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-    })
-}
-
 fn iface_mapping__get_mapping_values_key_response__from_json(v: &Value) -> Option<iface_mapping::GetMappingValuesKeyResponse> {
     let m = v.as_object()?;
     Some(iface_mapping::GetMappingValuesKeyResponse {
@@ -62,12 +269,12 @@ fn iface_mapping__get_mapping_values_key_response__from_json(v: &Value) -> Optio
     })
 }
 
-fn iface_mapping__post_mapping__ok(body: String) -> Result<iface_mapping::BulkMappingJobResult, crate::runtime::DispatchError> {
+fn iface_mapping__post_mapping__ok(body: String) -> Result<Vec<String>, crate::runtime::DispatchError> {
     let v: Value = match serde_json::from_str(&body) {
         Ok(v) => v,
         Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
     };
-    match iface_mapping__bulk_mapping_job_result__from_json(&v) {
+    match (&v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect()) {
         Some(x) => Ok(x),
         None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
@@ -110,7 +317,7 @@ fn iface_mapping__get_mapping_values_key__err(e: crate::runtime::DispatchError) 
 }
 
 impl iface_mapping::Guest for crate::Component {
-    fn post_mapping(params: iface_mapping::PostMappingParams) -> Result<iface_mapping::BulkMappingJobResult, iface_mapping::PostMappingError> {
+    fn post_mapping(params: iface_mapping::PostMappingParams) -> Result<Vec<String>, iface_mapping::PostMappingError> {
         let json = iface_mapping__post_mapping_params__to_json(&params);
         match dispatch(&OP_MAPPING_POST_MAPPING, json).and_then(iface_mapping__post_mapping__ok) {
             Ok(v) => Ok(v),
