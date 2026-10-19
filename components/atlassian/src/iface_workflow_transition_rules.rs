@@ -112,15 +112,16 @@ fn iface_workflow_transition_rules__update_errors__to_json(p: &iface_workflow_tr
 
 fn iface_workflow_transition_rules__update_error_details__to_json(p: &iface_workflow_transition_rules::UpdateErrorDetails) -> Value {
     let mut m = Map::new();
-    m.insert("ruleUpdateErrors".into(), iface_workflow_transition_rules__update_error_details_rule_update_errors__to_json(&p.rule_update_errors));
+    m.insert("ruleUpdateErrors".into(), Value::Object((&p.rule_update_errors).iter().map(|e| (e.key.clone(), Value::Array((&e.value).iter().map(|v| Value::String((v).clone())).collect()))).collect()));
     m.insert("updateErrors".into(), Value::Array((&p.update_errors).iter().map(|v| Value::String((v).clone())).collect()));
     m.insert("workflowId".into(), iface_workflow_transition_rules__workflow_id__to_json(&p.workflow_id));
     Value::Object(m)
 }
 
-fn iface_workflow_transition_rules__update_error_details_rule_update_errors__to_json(p: &iface_workflow_transition_rules::UpdateErrorDetailsRuleUpdateErrors) -> Value {
+fn iface_workflow_transition_rules__update_error_details_rule_update_errors_entry__to_json(p: &iface_workflow_transition_rules::UpdateErrorDetailsRuleUpdateErrorsEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::Array((&p.value).iter().map(|v| Value::String((v).clone())).collect()));
     Value::Object(m)
 }
 
@@ -224,16 +225,17 @@ fn iface_workflow_transition_rules__update_errors__from_json(v: &Value) -> Optio
 fn iface_workflow_transition_rules__update_error_details__from_json(v: &Value) -> Option<iface_workflow_transition_rules::UpdateErrorDetails> {
     let m = v.as_object()?;
     Some(iface_workflow_transition_rules::UpdateErrorDetails {
-        rule_update_errors: match m.get("ruleUpdateErrors").and_then(|v| iface_workflow_transition_rules__update_error_details_rule_update_errors__from_json(v)) { Some(x) => x, None => return None },
+        rule_update_errors: m.get("ruleUpdateErrors").and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())).map(|val| iface_workflow_transition_rules::UpdateErrorDetailsRuleUpdateErrorsEntry { key: k.clone(), value: val })).collect())).unwrap_or_default(),
         update_errors: m.get("updateErrors").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())).unwrap_or_default(),
         workflow_id: match m.get("workflowId").and_then(|v| iface_workflow_transition_rules__workflow_id__from_json(v)) { Some(x) => x, None => return None },
     })
 }
 
-fn iface_workflow_transition_rules__update_error_details_rule_update_errors__from_json(v: &Value) -> Option<iface_workflow_transition_rules::UpdateErrorDetailsRuleUpdateErrors> {
+fn iface_workflow_transition_rules__update_error_details_rule_update_errors_entry__from_json(v: &Value) -> Option<iface_workflow_transition_rules::UpdateErrorDetailsRuleUpdateErrorsEntry> {
     let m = v.as_object()?;
-    Some(iface_workflow_transition_rules::UpdateErrorDetailsRuleUpdateErrors {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_workflow_transition_rules::UpdateErrorDetailsRuleUpdateErrorsEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())).unwrap_or_default(),
     })
 }
 

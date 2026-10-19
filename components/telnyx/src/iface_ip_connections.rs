@@ -102,6 +102,36 @@ fn iface_ip_connections__list_ip_connections_sort_enum__to_str(e: &iface_ip_conn
     }
 }
 
+fn iface_ip_connections__anchorsite_override__to_str(e: &iface_ip_connections::AnchorsiteOverride) -> &'static str {
+    match e {
+        iface_ip_connections::AnchorsiteOverride::Latency => "Latency",
+        iface_ip_connections::AnchorsiteOverride::ChicagoIl => "Chicago, IL",
+        iface_ip_connections::AnchorsiteOverride::AshburnVa => "Ashburn, VA",
+        iface_ip_connections::AnchorsiteOverride::SanJoseCa => "San Jose, CA",
+        iface_ip_connections::AnchorsiteOverride::SydneyAustralia => "Sydney, Australia",
+        iface_ip_connections::AnchorsiteOverride::AmsterdamNetherlands => "Amsterdam, Netherlands",
+        iface_ip_connections::AnchorsiteOverride::LondonUk => "London, UK",
+        iface_ip_connections::AnchorsiteOverride::TorontoCanada => "Toronto, Canada",
+        iface_ip_connections::AnchorsiteOverride::VancouverCanada => "Vancouver, Canada",
+        iface_ip_connections::AnchorsiteOverride::FrankfurtGermany => "Frankfurt, Germany",
+    }
+}
+
+fn iface_ip_connections__dtmf_type__to_str(e: &iface_ip_connections::DtmfType) -> &'static str {
+    match e {
+        iface_ip_connections::DtmfType::RfcV2833 => "RFC 2833",
+        iface_ip_connections::DtmfType::Inband => "Inband",
+        iface_ip_connections::DtmfType::SipInfo => "SIP INFO",
+    }
+}
+
+fn iface_ip_connections__encrypted_media__to_str(e: &iface_ip_connections::EncryptedMedia) -> &'static str {
+    match e {
+        iface_ip_connections::EncryptedMedia::Srtp => "SRTP",
+        iface_ip_connections::EncryptedMedia::Zrtp => "ZRTP",
+    }
+}
+
 fn iface_ip_connections__inbound_ip_ani_number_format_enum__to_str(e: &iface_ip_connections::InboundIpAniNumberFormatEnum) -> &'static str {
     match e {
         iface_ip_connections::InboundIpAniNumberFormatEnum::EV164 => "+E.164",
@@ -193,13 +223,13 @@ fn iface_ip_connections__list_ip_connections_response__to_json(p: &iface_ip_conn
 fn iface_ip_connections__ip_connection__to_json(p: &iface_ip_connections::IpConnection) -> Value {
     let mut m = Map::new();
     m.insert("active".into(), match (&p.active) { Some(v) => Value::Bool(*(v)), None => Value::Null });
-    m.insert("anchorsite_override".into(), match (&p.anchorsite_override) { Some(v) => iface_ip_connections__anchorsite_override__to_json(v), None => Value::Null });
+    m.insert("anchorsite_override".into(), match (&p.anchorsite_override) { Some(v) => Value::String(iface_ip_connections__anchorsite_override__to_str(v).into()), None => Value::Null });
     m.insert("connection_name".into(), match (&p.connection_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("created_at".into(), match (&p.created_at) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("default_on_hold_comfort_noise_enabled".into(), match (&p.default_on_hold_comfort_noise_enabled) { Some(v) => Value::Bool(*(v)), None => Value::Null });
-    m.insert("dtmf_type".into(), match (&p.dtmf_type) { Some(v) => iface_ip_connections__dtmf_type__to_json(v), None => Value::Null });
+    m.insert("dtmf_type".into(), match (&p.dtmf_type) { Some(v) => Value::String(iface_ip_connections__dtmf_type__to_str(v).into()), None => Value::Null });
     m.insert("encode_contact_header_enabled".into(), match (&p.encode_contact_header_enabled) { Some(v) => Value::Bool(*(v)), None => Value::Null });
-    m.insert("encrypted_media".into(), match (&p.encrypted_media) { Some(v) => iface_ip_connections__encrypted_media__to_json(v), None => Value::Null });
+    m.insert("encrypted_media".into(), match (&p.encrypted_media) { Some(v) => Value::String(iface_ip_connections__encrypted_media__to_str(v).into()), None => Value::Null });
     m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("inbound".into(), match (&p.inbound) { Some(v) => iface_ip_connections__inbound_ip__to_json(v), None => Value::Null });
     m.insert("onnet_t38_passthrough_enabled".into(), match (&p.onnet_t38_passthrough_enabled) { Some(v) => Value::Bool(*(v)), None => Value::Null });
@@ -212,24 +242,6 @@ fn iface_ip_connections__ip_connection__to_json(p: &iface_ip_connections::IpConn
     m.insert("webhook_event_failover_url".into(), match (&p.webhook_event_failover_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("webhook_event_url".into(), match (&p.webhook_event_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("webhook_timeout_secs".into(), match (&p.webhook_timeout_secs) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_ip_connections__anchorsite_override__to_json(p: &iface_ip_connections::AnchorsiteOverride) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_ip_connections__dtmf_type__to_json(p: &iface_ip_connections::DtmfType) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_ip_connections__encrypted_media__to_json(p: &iface_ip_connections::EncryptedMedia) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -267,15 +279,9 @@ fn iface_ip_connections__outbound_ip__to_json(p: &iface_ip_connections::Outbound
     m.insert("ip_authentication_method".into(), match (&p.ip_authentication_method) { Some(v) => Value::String(iface_ip_connections__outbound_ip_ip_authentication_method_enum__to_str(v).into()), None => Value::Null });
     m.insert("ip_authentication_token".into(), match (&p.ip_authentication_token) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("localization".into(), match (&p.localization) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("outbound_voice_profile_id".into(), match (&p.outbound_voice_profile_id) { Some(v) => iface_ip_connections__outbound_voice_profile_id__to_json(v), None => Value::Null });
+    m.insert("outbound_voice_profile_id".into(), match (&p.outbound_voice_profile_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("t38_reinvite_source".into(), match (&p.t38_reinvite_source) { Some(v) => Value::String(iface_ip_connections__outbound_ip_t38_reinvite_source_enum__to_str(v).into()), None => Value::Null });
     m.insert("tech_prefix".into(), match (&p.tech_prefix) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_ip_connections__outbound_voice_profile_id__to_json(p: &iface_ip_connections::OutboundVoiceProfileId) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -353,12 +359,12 @@ fn iface_ip_connections__list_ip_connections_params__to_json(p: &iface_ip_connec
 fn iface_ip_connections__create_ip_connection_params__to_json(p: &iface_ip_connections::CreateIpConnectionParams) -> Value {
     let mut m = Map::new();
     m.insert("active".into(), match (&p.active) { Some(v) => Value::Bool(*(v)), None => Value::Null });
-    m.insert("anchorsite_override".into(), match (&p.anchorsite_override) { Some(v) => iface_ip_connections__anchorsite_override__to_json(v), None => Value::Null });
+    m.insert("anchorsite_override".into(), match (&p.anchorsite_override) { Some(v) => Value::String(iface_ip_connections__anchorsite_override__to_str(v).into()), None => Value::Null });
     m.insert("connection_name".into(), match (&p.connection_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("default_on_hold_comfort_noise_enabled".into(), match (&p.default_on_hold_comfort_noise_enabled) { Some(v) => Value::Bool(*(v)), None => Value::Null });
-    m.insert("dtmf_type".into(), match (&p.dtmf_type) { Some(v) => iface_ip_connections__dtmf_type__to_json(v), None => Value::Null });
+    m.insert("dtmf_type".into(), match (&p.dtmf_type) { Some(v) => Value::String(iface_ip_connections__dtmf_type__to_str(v).into()), None => Value::Null });
     m.insert("encode_contact_header_enabled".into(), match (&p.encode_contact_header_enabled) { Some(v) => Value::Bool(*(v)), None => Value::Null });
-    m.insert("encrypted_media".into(), match (&p.encrypted_media) { Some(v) => iface_ip_connections__encrypted_media__to_json(v), None => Value::Null });
+    m.insert("encrypted_media".into(), match (&p.encrypted_media) { Some(v) => Value::String(iface_ip_connections__encrypted_media__to_str(v).into()), None => Value::Null });
     m.insert("inbound".into(), match (&p.inbound) { Some(v) => iface_ip_connections__create_inbound_ip_request__to_json(v), None => Value::Null });
     m.insert("onnet_t38_passthrough_enabled".into(), match (&p.onnet_t38_passthrough_enabled) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     m.insert("outbound".into(), match (&p.outbound) { Some(v) => iface_ip_connections__outbound_ip__to_json(v), None => Value::Null });
@@ -381,12 +387,12 @@ fn iface_ip_connections__update_ip_connection_params__to_json(p: &iface_ip_conne
     let mut m = Map::new();
     m.insert("id".into(), Value::String((&p.id).clone()));
     m.insert("active".into(), match (&p.active) { Some(v) => Value::Bool(*(v)), None => Value::Null });
-    m.insert("anchorsite_override".into(), match (&p.anchorsite_override) { Some(v) => iface_ip_connections__anchorsite_override__to_json(v), None => Value::Null });
+    m.insert("anchorsite_override".into(), match (&p.anchorsite_override) { Some(v) => Value::String(iface_ip_connections__anchorsite_override__to_str(v).into()), None => Value::Null });
     m.insert("connection_name".into(), match (&p.connection_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("default_on_hold_comfort_noise_enabled".into(), match (&p.default_on_hold_comfort_noise_enabled) { Some(v) => Value::Bool(*(v)), None => Value::Null });
-    m.insert("dtmf_type".into(), match (&p.dtmf_type) { Some(v) => iface_ip_connections__dtmf_type__to_json(v), None => Value::Null });
+    m.insert("dtmf_type".into(), match (&p.dtmf_type) { Some(v) => Value::String(iface_ip_connections__dtmf_type__to_str(v).into()), None => Value::Null });
     m.insert("encode_contact_header_enabled".into(), match (&p.encode_contact_header_enabled) { Some(v) => Value::Bool(*(v)), None => Value::Null });
-    m.insert("encrypted_media".into(), match (&p.encrypted_media) { Some(v) => iface_ip_connections__encrypted_media__to_json(v), None => Value::Null });
+    m.insert("encrypted_media".into(), match (&p.encrypted_media) { Some(v) => Value::String(iface_ip_connections__encrypted_media__to_str(v).into()), None => Value::Null });
     m.insert("inbound".into(), match (&p.inbound) { Some(v) => iface_ip_connections__inbound_ip__to_json(v), None => Value::Null });
     m.insert("onnet_t38_passthrough_enabled".into(), match (&p.onnet_t38_passthrough_enabled) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     m.insert("outbound".into(), match (&p.outbound) { Some(v) => iface_ip_connections__outbound_ip__to_json(v), None => Value::Null });
@@ -417,13 +423,13 @@ fn iface_ip_connections__ip_connection__from_json(v: &Value) -> Option<iface_ip_
     let m = v.as_object()?;
     Some(iface_ip_connections::IpConnection {
         active: m.get("active").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
-        anchorsite_override: m.get("anchorsite_override").filter(|v| !v.is_null()).and_then(|v| iface_ip_connections__anchorsite_override__from_json(v)),
+        anchorsite_override: m.get("anchorsite_override").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_ip_connections__anchorsite_override__from_str)),
         connection_name: m.get("connection_name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         created_at: m.get("created_at").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         default_on_hold_comfort_noise_enabled: m.get("default_on_hold_comfort_noise_enabled").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
-        dtmf_type: m.get("dtmf_type").filter(|v| !v.is_null()).and_then(|v| iface_ip_connections__dtmf_type__from_json(v)),
+        dtmf_type: m.get("dtmf_type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_ip_connections__dtmf_type__from_str)),
         encode_contact_header_enabled: m.get("encode_contact_header_enabled").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
-        encrypted_media: m.get("encrypted_media").filter(|v| !v.is_null()).and_then(|v| iface_ip_connections__encrypted_media__from_json(v)),
+        encrypted_media: m.get("encrypted_media").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_ip_connections__encrypted_media__from_str)),
         id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         inbound: m.get("inbound").filter(|v| !v.is_null()).and_then(|v| iface_ip_connections__inbound_ip__from_json(v)),
         onnet_t38_passthrough_enabled: m.get("onnet_t38_passthrough_enabled").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
@@ -436,27 +442,6 @@ fn iface_ip_connections__ip_connection__from_json(v: &Value) -> Option<iface_ip_
         webhook_event_failover_url: m.get("webhook_event_failover_url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         webhook_event_url: m.get("webhook_event_url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         webhook_timeout_secs: m.get("webhook_timeout_secs").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
-    })
-}
-
-fn iface_ip_connections__anchorsite_override__from_json(v: &Value) -> Option<iface_ip_connections::AnchorsiteOverride> {
-    let m = v.as_object()?;
-    Some(iface_ip_connections::AnchorsiteOverride {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-    })
-}
-
-fn iface_ip_connections__dtmf_type__from_json(v: &Value) -> Option<iface_ip_connections::DtmfType> {
-    let m = v.as_object()?;
-    Some(iface_ip_connections::DtmfType {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-    })
-}
-
-fn iface_ip_connections__encrypted_media__from_json(v: &Value) -> Option<iface_ip_connections::EncryptedMedia> {
-    let m = v.as_object()?;
-    Some(iface_ip_connections::EncryptedMedia {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -496,16 +481,9 @@ fn iface_ip_connections__outbound_ip__from_json(v: &Value) -> Option<iface_ip_co
         ip_authentication_method: m.get("ip_authentication_method").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_ip_connections__outbound_ip_ip_authentication_method_enum__from_str)),
         ip_authentication_token: m.get("ip_authentication_token").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         localization: m.get("localization").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        outbound_voice_profile_id: m.get("outbound_voice_profile_id").filter(|v| !v.is_null()).and_then(|v| iface_ip_connections__outbound_voice_profile_id__from_json(v)),
+        outbound_voice_profile_id: m.get("outbound_voice_profile_id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         t38_reinvite_source: m.get("t38_reinvite_source").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_ip_connections__outbound_ip_t38_reinvite_source_enum__from_str)),
         tech_prefix: m.get("tech_prefix").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-    })
-}
-
-fn iface_ip_connections__outbound_voice_profile_id__from_json(v: &Value) -> Option<iface_ip_connections::OutboundVoiceProfileId> {
-    let m = v.as_object()?;
-    Some(iface_ip_connections::OutboundVoiceProfileId {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -554,6 +532,39 @@ fn iface_ip_connections__delete_ip_connection_response__from_json(v: &Value) -> 
     Some(iface_ip_connections::DeleteIpConnectionResponse {
         data: m.get("data").filter(|v| !v.is_null()).and_then(|v| iface_ip_connections__ip_connection__from_json(v)),
     })
+}
+
+fn iface_ip_connections__anchorsite_override__from_str(s: &str) -> Option<iface_ip_connections::AnchorsiteOverride> {
+    match s {
+        "Latency" => Some(iface_ip_connections::AnchorsiteOverride::Latency),
+        "Chicago, IL" => Some(iface_ip_connections::AnchorsiteOverride::ChicagoIl),
+        "Ashburn, VA" => Some(iface_ip_connections::AnchorsiteOverride::AshburnVa),
+        "San Jose, CA" => Some(iface_ip_connections::AnchorsiteOverride::SanJoseCa),
+        "Sydney, Australia" => Some(iface_ip_connections::AnchorsiteOverride::SydneyAustralia),
+        "Amsterdam, Netherlands" => Some(iface_ip_connections::AnchorsiteOverride::AmsterdamNetherlands),
+        "London, UK" => Some(iface_ip_connections::AnchorsiteOverride::LondonUk),
+        "Toronto, Canada" => Some(iface_ip_connections::AnchorsiteOverride::TorontoCanada),
+        "Vancouver, Canada" => Some(iface_ip_connections::AnchorsiteOverride::VancouverCanada),
+        "Frankfurt, Germany" => Some(iface_ip_connections::AnchorsiteOverride::FrankfurtGermany),
+        _ => None,
+    }
+}
+
+fn iface_ip_connections__dtmf_type__from_str(s: &str) -> Option<iface_ip_connections::DtmfType> {
+    match s {
+        "RFC 2833" => Some(iface_ip_connections::DtmfType::RfcV2833),
+        "Inband" => Some(iface_ip_connections::DtmfType::Inband),
+        "SIP INFO" => Some(iface_ip_connections::DtmfType::SipInfo),
+        _ => None,
+    }
+}
+
+fn iface_ip_connections__encrypted_media__from_str(s: &str) -> Option<iface_ip_connections::EncryptedMedia> {
+    match s {
+        "SRTP" => Some(iface_ip_connections::EncryptedMedia::Srtp),
+        "ZRTP" => Some(iface_ip_connections::EncryptedMedia::Zrtp),
+        _ => None,
+    }
 }
 
 fn iface_ip_connections__inbound_ip_ani_number_format_enum__from_str(s: &str) -> Option<iface_ip_connections::InboundIpAniNumberFormatEnum> {

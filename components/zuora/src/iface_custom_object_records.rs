@@ -79,7 +79,7 @@ const OP_CUSTOM_OBJECT_RECORDS_PUT_CUSTOM_OBJECT_RECORD: OpSpec = OpSpec {
         FieldSpec { snake: "zuora_version", wire: "Zuora-Version", location: FieldLocation::Header },
         FieldSpec { snake: "object", wire: "object", location: FieldLocation::Path },
         FieldSpec { snake: "id", wire: "id", location: FieldLocation::Path },
-        FieldSpec { snake: "data", wire: "data", location: FieldLocation::Body },
+        FieldSpec { snake: "body", wire: "body", location: FieldLocation::Body },
     ],
     auth: &[
     ],
@@ -95,7 +95,7 @@ const OP_CUSTOM_OBJECT_RECORDS_PATCH_PARTIAL_UPDATE_CUSTOM_OBJECT_RECORD: OpSpec
         FieldSpec { snake: "zuora_version", wire: "Zuora-Version", location: FieldLocation::Header },
         FieldSpec { snake: "object", wire: "object", location: FieldLocation::Path },
         FieldSpec { snake: "id", wire: "id", location: FieldLocation::Path },
-        FieldSpec { snake: "data", wire: "data", location: FieldLocation::Body },
+        FieldSpec { snake: "body", wire: "body", location: FieldLocation::Body },
     ],
     auth: &[
     ],
@@ -127,14 +127,22 @@ fn iface_custom_object_records__custom_object_record_batch_action__to_json(p: &i
     let mut m = Map::new();
     m.insert("allowPartialSuccess".into(), match (&p.allow_partial_success) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     m.insert("ids".into(), match (&p.ids) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
-    m.insert("records".into(), match (&p.records) { Some(v) => iface_custom_object_records__custom_object_record_batch_update_mapping__to_json(v), None => Value::Null });
+    m.insert("records".into(), match (&p.records) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::Object((&e.value).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()))).collect()), None => Value::Null });
     m.insert("type".into(), Value::String(iface_custom_object_records__custom_object_record_batch_action_type_op_enum__to_str(&p.type_op).into()));
     Value::Object(m)
 }
 
-fn iface_custom_object_records__custom_object_record_batch_update_mapping__to_json(p: &iface_custom_object_records::CustomObjectRecordBatchUpdateMapping) -> Value {
+fn iface_custom_object_records__custom_object_record_batch_update_mapping_value_entry__to_json(p: &iface_custom_object_records::CustomObjectRecordBatchUpdateMappingValueEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
+}
+
+fn iface_custom_object_records__custom_object_record_batch_update_mapping_entry__to_json(p: &iface_custom_object_records::CustomObjectRecordBatchUpdateMappingEntry) -> Value {
+    let mut m = Map::new();
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::Object((&p.value).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()));
     Value::Object(m)
 }
 
@@ -173,9 +181,10 @@ fn iface_custom_object_records__query_custom_object_records_response__to_json(p:
     Value::Object(m)
 }
 
-fn iface_custom_object_records__custom_object_record_with_only_custom_fields__to_json(p: &iface_custom_object_records::CustomObjectRecordWithOnlyCustomFields) -> Value {
+fn iface_custom_object_records__custom_object_record_with_only_custom_fields_entry__to_json(p: &iface_custom_object_records::CustomObjectRecordWithOnlyCustomFieldsEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -183,6 +192,20 @@ fn iface_custom_object_records__post_custom_object_records_response__to_json(p: 
     let mut m = Map::new();
     m.insert("error".into(), match (&p.error) { Some(v) => iface_custom_object_records__error_response__to_json(v), None => Value::Null });
     m.insert("records".into(), match (&p.records) { Some(v) => Value::Array((v).iter().map(|v| iface_custom_object_records__custom_object_record_with_all_fields__to_json(v)).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_custom_object_records__custom_object_record_with_only_custom_fields_entry_v2__to_json(p: &iface_custom_object_records::CustomObjectRecordWithOnlyCustomFieldsEntryV2) -> Value {
+    let mut m = Map::new();
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
+}
+
+fn iface_custom_object_records__custom_object_record_with_only_custom_fields_entry_v3__to_json(p: &iface_custom_object_records::CustomObjectRecordWithOnlyCustomFieldsEntryV3) -> Value {
+    let mut m = Map::new();
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -219,7 +242,7 @@ fn iface_custom_object_records__post_custom_object_records_params__to_json(p: &i
     m.insert("zuora_version".into(), match (&p.zuora_version) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("object".into(), Value::String((&p.object).clone()));
     m.insert("allow_partial_success".into(), match (&p.allow_partial_success) { Some(v) => Value::Bool(*(v)), None => Value::Null });
-    m.insert("records".into(), Value::Array((&p.records).iter().map(|v| iface_custom_object_records__custom_object_record_with_only_custom_fields__to_json(v)).collect()));
+    m.insert("records".into(), Value::Array((&p.records).iter().map(|v| Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect())).collect()));
     Value::Object(m)
 }
 
@@ -243,7 +266,7 @@ fn iface_custom_object_records__put_custom_object_record_params__to_json(p: &ifa
     m.insert("zuora_version".into(), match (&p.zuora_version) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("object".into(), Value::String((&p.object).clone()));
     m.insert("id".into(), Value::String((&p.id).clone()));
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("body".into(), Value::Object((&p.body).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()));
     Value::Object(m)
 }
 
@@ -255,7 +278,7 @@ fn iface_custom_object_records__patch_partial_update_custom_object_record_params
     m.insert("zuora_version".into(), match (&p.zuora_version) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("object".into(), Value::String((&p.object).clone()));
     m.insert("id".into(), Value::String((&p.id).clone()));
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("body".into(), Value::Object((&p.body).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()));
     Value::Object(m)
 }
 

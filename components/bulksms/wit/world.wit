@@ -6,19 +6,13 @@
 /// | Secret name | Applied to each request as |
 /// | --- | --- |
 /// | `basicAuth` | `Authorization: Basic base64(<secret>)` |
-package autostamp:bulksms@0.5.0;
+package autostamp:bulksms@0.6.0;
 
 interface blocked-numbers {
   record blocked-number {
     /// A unique identifier that is assigned when the BlockedNumber is created.
     id: f64,
-    phone-number: phone-number
-  }
-
-  /// A phone number in E.164 format
-  record phone-number {
-    /// opaque schema; raw JSON
-    value: string
+    phone-number: string
   }
 
   /// List blocked numbers
@@ -32,7 +26,7 @@ interface blocked-numbers {
 
   /// Create a blocked number
   record post-blocked-numbers-params {
-    body: list<phone-number>
+    body: list<string>
   }
   post-blocked-numbers: func(params: post-blocked-numbers-params) -> result<string, string>;
 

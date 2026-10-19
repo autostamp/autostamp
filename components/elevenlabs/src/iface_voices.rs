@@ -119,7 +119,7 @@ fn iface_voices__voice_response_model__to_json(p: &iface_voices::VoiceResponseMo
     m.insert("category".into(), Value::String((&p.category).clone()));
     m.insert("description".into(), Value::String((&p.description).clone()));
     m.insert("fine_tuning".into(), iface_voices__fine_tuning_response_model__to_json(&p.fine_tuning));
-    m.insert("labels".into(), iface_voices__voice_response_model_labels__to_json(&p.labels));
+    m.insert("labels".into(), Value::Object((&p.labels).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()));
     m.insert("name".into(), Value::String((&p.name).clone()));
     m.insert("preview_url".into(), Value::String((&p.preview_url).clone()));
     m.insert("samples".into(), Value::Array((&p.samples).iter().map(|v| iface_voices__sample_response_model__to_json(v)).collect()));
@@ -162,9 +162,10 @@ fn iface_voices__recording_response_model__to_json(p: &iface_voices::RecordingRe
     Value::Object(m)
 }
 
-fn iface_voices__voice_response_model_labels__to_json(p: &iface_voices::VoiceResponseModelLabels) -> Value {
+fn iface_voices__voice_response_model_labels_entry__to_json(p: &iface_voices::VoiceResponseModelLabelsEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -263,7 +264,7 @@ fn iface_voices__voice_response_model__from_json(v: &Value) -> Option<iface_voic
         category: m.get("category").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         description: m.get("description").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         fine_tuning: match m.get("fine_tuning").and_then(|v| iface_voices__fine_tuning_response_model__from_json(v)) { Some(x) => x, None => return None },
-        labels: match m.get("labels").and_then(|v| iface_voices__voice_response_model_labels__from_json(v)) { Some(x) => x, None => return None },
+        labels: m.get("labels").and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_voices::VoiceResponseModelLabelsEntry { key: k.clone(), value: val })).collect())).unwrap_or_default(),
         name: m.get("name").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         preview_url: m.get("preview_url").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         samples: m.get("samples").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_voices__sample_response_model__from_json(x)).collect())).unwrap_or_default(),
@@ -309,10 +310,11 @@ fn iface_voices__recording_response_model__from_json(v: &Value) -> Option<iface_
     })
 }
 
-fn iface_voices__voice_response_model_labels__from_json(v: &Value) -> Option<iface_voices::VoiceResponseModelLabels> {
+fn iface_voices__voice_response_model_labels_entry__from_json(v: &Value) -> Option<iface_voices::VoiceResponseModelLabelsEntry> {
     let m = v.as_object()?;
-    Some(iface_voices::VoiceResponseModelLabels {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_voices::VoiceResponseModelLabelsEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 

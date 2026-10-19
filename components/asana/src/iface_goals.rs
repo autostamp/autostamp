@@ -355,13 +355,14 @@ fn iface_goals__update_goal_response__to_json(p: &iface_goals::UpdateGoalRespons
 
 fn iface_goals__delete_goal_response__to_json(p: &iface_goals::DeleteGoalResponse) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => iface_goals__empty_response__to_json(v), None => Value::Null });
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_goals__empty_response__to_json(p: &iface_goals::EmptyResponse) -> Value {
+fn iface_goals__empty_response_entry__to_json(p: &iface_goals::EmptyResponseEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -678,14 +679,15 @@ fn iface_goals__update_goal_response__from_json(v: &Value) -> Option<iface_goals
 fn iface_goals__delete_goal_response__from_json(v: &Value) -> Option<iface_goals::DeleteGoalResponse> {
     let m = v.as_object()?;
     Some(iface_goals::DeleteGoalResponse {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| iface_goals__empty_response__from_json(v)),
+        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_goals::EmptyResponseEntry { key: k.clone(), value: val })).collect())),
     })
 }
 
-fn iface_goals__empty_response__from_json(v: &Value) -> Option<iface_goals::EmptyResponse> {
+fn iface_goals__empty_response_entry__from_json(v: &Value) -> Option<iface_goals::EmptyResponseEntry> {
     let m = v.as_object()?;
-    Some(iface_goals::EmptyResponse {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_goals::EmptyResponseEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 

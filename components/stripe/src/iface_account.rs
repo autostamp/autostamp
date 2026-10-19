@@ -169,7 +169,7 @@ fn iface_account__account__to_json(p: &iface_account::Account) -> Value {
     m.insert("future_requirements".into(), match (&p.future_requirements) { Some(v) => iface_account__future_requirements__to_json(v), None => Value::Null });
     m.insert("id".into(), Value::String((&p.id).clone()));
     m.insert("individual".into(), match (&p.individual) { Some(v) => iface_account__person__to_json(v), None => Value::Null });
-    m.insert("metadata".into(), match (&p.metadata) { Some(v) => iface_account__account_metadata__to_json(v), None => Value::Null });
+    m.insert("metadata".into(), match (&p.metadata) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("object".into(), Value::String(iface_account__account_object_enum__to_str(&p.object).into()));
     m.insert("payouts_enabled".into(), match (&p.payouts_enabled) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     m.insert("requirements".into(), match (&p.requirements) { Some(v) => iface_account__requirements__to_json(v), None => Value::Null });
@@ -319,7 +319,7 @@ fn iface_account__person__to_json(p: &iface_account::Person) -> Value {
     m.insert("last_name_kana".into(), match (&p.last_name_kana) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("last_name_kanji".into(), match (&p.last_name_kanji) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("maiden_name".into(), match (&p.maiden_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("metadata".into(), match (&p.metadata) { Some(v) => iface_account__person_metadata__to_json(v), None => Value::Null });
+    m.insert("metadata".into(), match (&p.metadata) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("nationality".into(), match (&p.nationality) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("object".into(), Value::String(iface_account__person_object_enum__to_str(&p.object).into()));
     m.insert("phone".into(), match (&p.phone) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -340,9 +340,10 @@ fn iface_account__legal_entity_dob__to_json(p: &iface_account::LegalEntityDob) -
     Value::Object(m)
 }
 
-fn iface_account__person_metadata__to_json(p: &iface_account::PersonMetadata) -> Value {
+fn iface_account__person_metadata_entry__to_json(p: &iface_account::PersonMetadataEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -376,9 +377,10 @@ fn iface_account__legal_entity_person_verification_document__to_json(p: &iface_a
     Value::Object(m)
 }
 
-fn iface_account__account_metadata__to_json(p: &iface_account::AccountMetadata) -> Value {
+fn iface_account__account_metadata_entry__to_json(p: &iface_account::AccountMetadataEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -429,7 +431,7 @@ fn iface_account__account__from_json(v: &Value) -> Option<iface_account::Account
         future_requirements: m.get("future_requirements").filter(|v| !v.is_null()).and_then(|v| iface_account__future_requirements__from_json(v)),
         id: m.get("id").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         individual: m.get("individual").filter(|v| !v.is_null()).and_then(|v| iface_account__person__from_json(v)),
-        metadata: m.get("metadata").filter(|v| !v.is_null()).and_then(|v| iface_account__account_metadata__from_json(v)),
+        metadata: m.get("metadata").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_account::AccountMetadataEntry { key: k.clone(), value: val })).collect())),
         object: match m.get("object").and_then(|v| (v).as_str().and_then(iface_account__account_object_enum__from_str)) { Some(x) => x, None => return None },
         payouts_enabled: m.get("payouts_enabled").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
         requirements: m.get("requirements").filter(|v| !v.is_null()).and_then(|v| iface_account__requirements__from_json(v)),
@@ -588,7 +590,7 @@ fn iface_account__person__from_json(v: &Value) -> Option<iface_account::Person> 
         last_name_kana: m.get("last_name_kana").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         last_name_kanji: m.get("last_name_kanji").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         maiden_name: m.get("maiden_name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        metadata: m.get("metadata").filter(|v| !v.is_null()).and_then(|v| iface_account__person_metadata__from_json(v)),
+        metadata: m.get("metadata").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_account::PersonMetadataEntry { key: k.clone(), value: val })).collect())),
         nationality: m.get("nationality").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         object: match m.get("object").and_then(|v| (v).as_str().and_then(iface_account__person_object_enum__from_str)) { Some(x) => x, None => return None },
         phone: m.get("phone").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
@@ -610,10 +612,11 @@ fn iface_account__legal_entity_dob__from_json(v: &Value) -> Option<iface_account
     })
 }
 
-fn iface_account__person_metadata__from_json(v: &Value) -> Option<iface_account::PersonMetadata> {
+fn iface_account__person_metadata_entry__from_json(v: &Value) -> Option<iface_account::PersonMetadataEntry> {
     let m = v.as_object()?;
-    Some(iface_account::PersonMetadata {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_account::PersonMetadataEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -650,10 +653,11 @@ fn iface_account__legal_entity_person_verification_document__from_json(v: &Value
     })
 }
 
-fn iface_account__account_metadata__from_json(v: &Value) -> Option<iface_account::AccountMetadata> {
+fn iface_account__account_metadata_entry__from_json(v: &Value) -> Option<iface_account::AccountMetadataEntry> {
     let m = v.as_object()?;
-    Some(iface_account::AccountMetadata {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_account::AccountMetadataEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 

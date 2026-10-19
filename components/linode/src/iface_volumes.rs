@@ -146,9 +146,9 @@ fn iface_volumes__volume_status_enum__to_str(e: &iface_volumes::VolumeStatusEnum
 fn iface_volumes__get_volumes_response__to_json(p: &iface_volumes::GetVolumesResponse) -> Value {
     let mut m = Map::new();
     m.insert("data".into(), match (&p.data) { Some(v) => Value::Array((v).iter().map(|v| iface_volumes__volume__to_json(v)).collect()), None => Value::Null });
-    m.insert("page".into(), match (&p.page) { Some(v) => iface_volumes__pagination_envelope_properties_page__to_json(v), None => Value::Null });
-    m.insert("pages".into(), match (&p.pages) { Some(v) => iface_volumes__pagination_envelope_properties_pages__to_json(v), None => Value::Null });
-    m.insert("results".into(), match (&p.results) { Some(v) => iface_volumes__pagination_envelope_properties_results__to_json(v), None => Value::Null });
+    m.insert("page".into(), match (&p.page) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("pages".into(), match (&p.pages) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("results".into(), match (&p.results) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
@@ -161,7 +161,7 @@ fn iface_volumes__volume__to_json(p: &iface_volumes::Volume) -> Value {
     m.insert("label".into(), match (&p.label) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("linode_id".into(), match (&p.linode_id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("linode_label".into(), match (&p.linode_label) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("region".into(), match (&p.region) { Some(v) => iface_volumes__region_properties_id__to_json(v), None => Value::Null });
+    m.insert("region".into(), match (&p.region) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("size".into(), match (&p.size) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("status".into(), match (&p.status) { Some(v) => Value::String(iface_volumes__volume_status_enum__to_str(v).into()), None => Value::Null });
     m.insert("tags".into(), match (&p.tags) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
@@ -169,50 +169,16 @@ fn iface_volumes__volume__to_json(p: &iface_volumes::Volume) -> Value {
     Value::Object(m)
 }
 
-fn iface_volumes__region_properties_id__to_json(p: &iface_volumes::RegionPropertiesId) -> Value {
+fn iface_volumes__delete_volume_response_entry__to_json(p: &iface_volumes::DeleteVolumeResponseEntry) -> Value {
     let mut m = Map::new();
+    m.insert("key".into(), Value::String((&p.key).clone()));
     m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
-fn iface_volumes__pagination_envelope_properties_page__to_json(p: &iface_volumes::PaginationEnvelopePropertiesPage) -> Value {
+fn iface_volumes__detach_volume_response_entry__to_json(p: &iface_volumes::DetachVolumeResponseEntry) -> Value {
     let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_volumes__pagination_envelope_properties_pages__to_json(p: &iface_volumes::PaginationEnvelopePropertiesPages) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_volumes__pagination_envelope_properties_results__to_json(p: &iface_volumes::PaginationEnvelopePropertiesResults) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_volumes__delete_volume_response__to_json(p: &iface_volumes::DeleteVolumeResponse) -> Value {
-    let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_volumes__volume_properties_label__to_json(p: &iface_volumes::VolumePropertiesLabel) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_volumes__detach_volume_response__to_json(p: &iface_volumes::DetachVolumeResponse) -> Value {
-    let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_volumes__volume_properties_size__to_json(p: &iface_volumes::VolumePropertiesSize) -> Value {
-    let mut m = Map::new();
+    m.insert("key".into(), Value::String((&p.key).clone()));
     m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
@@ -253,7 +219,7 @@ fn iface_volumes__update_volume_params__to_json(p: &iface_volumes::UpdateVolumeP
     m.insert("label".into(), match (&p.label) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("linode_id".into(), match (&p.linode_id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("linode_label".into(), match (&p.linode_label) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("region".into(), match (&p.region) { Some(v) => iface_volumes__region_properties_id__to_json(v), None => Value::Null });
+    m.insert("region".into(), match (&p.region) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("size".into(), match (&p.size) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("status".into(), match (&p.status) { Some(v) => Value::String(iface_volumes__volume_status_enum__to_str(v).into()), None => Value::Null });
     m.insert("tags".into(), match (&p.tags) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
@@ -279,7 +245,7 @@ fn iface_volumes__attach_volume_params__to_json(p: &iface_volumes::AttachVolumeP
 fn iface_volumes__clone_volume_params__to_json(p: &iface_volumes::CloneVolumeParams) -> Value {
     let mut m = Map::new();
     m.insert("volume_id".into(), Value::String((&p.volume_id).clone()));
-    m.insert("label".into(), iface_volumes__volume_properties_label__to_json(&p.label));
+    m.insert("label".into(), Value::String((&p.label).clone()));
     Value::Object(m)
 }
 
@@ -292,7 +258,7 @@ fn iface_volumes__detach_volume_params__to_json(p: &iface_volumes::DetachVolumeP
 fn iface_volumes__resize_volume_params__to_json(p: &iface_volumes::ResizeVolumeParams) -> Value {
     let mut m = Map::new();
     m.insert("volume_id".into(), Value::String((&p.volume_id).clone()));
-    m.insert("size".into(), iface_volumes__volume_properties_size__to_json(&p.size));
+    m.insert("size".into(), Value::Number(serde_json::Number::from(*(&p.size))));
     Value::Object(m)
 }
 
@@ -300,9 +266,9 @@ fn iface_volumes__get_volumes_response__from_json(v: &Value) -> Option<iface_vol
     let m = v.as_object()?;
     Some(iface_volumes::GetVolumesResponse {
         data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_volumes__volume__from_json(x)).collect())),
-        page: m.get("page").filter(|v| !v.is_null()).and_then(|v| iface_volumes__pagination_envelope_properties_page__from_json(v)),
-        pages: m.get("pages").filter(|v| !v.is_null()).and_then(|v| iface_volumes__pagination_envelope_properties_pages__from_json(v)),
-        results: m.get("results").filter(|v| !v.is_null()).and_then(|v| iface_volumes__pagination_envelope_properties_results__from_json(v)),
+        page: m.get("page").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        pages: m.get("pages").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        results: m.get("results").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
     })
 }
 
@@ -316,7 +282,7 @@ fn iface_volumes__volume__from_json(v: &Value) -> Option<iface_volumes::Volume> 
         label: m.get("label").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         linode_id: m.get("linode_id").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
         linode_label: m.get("linode_label").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        region: m.get("region").filter(|v| !v.is_null()).and_then(|v| iface_volumes__region_properties_id__from_json(v)),
+        region: m.get("region").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         size: m.get("size").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
         status: m.get("status").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_volumes__volume_status_enum__from_str)),
         tags: m.get("tags").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
@@ -324,45 +290,19 @@ fn iface_volumes__volume__from_json(v: &Value) -> Option<iface_volumes::Volume> 
     })
 }
 
-fn iface_volumes__region_properties_id__from_json(v: &Value) -> Option<iface_volumes::RegionPropertiesId> {
+fn iface_volumes__delete_volume_response_entry__from_json(v: &Value) -> Option<iface_volumes::DeleteVolumeResponseEntry> {
     let m = v.as_object()?;
-    Some(iface_volumes::RegionPropertiesId {
+    Some(iface_volumes::DeleteVolumeResponseEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
-fn iface_volumes__pagination_envelope_properties_page__from_json(v: &Value) -> Option<iface_volumes::PaginationEnvelopePropertiesPage> {
+fn iface_volumes__detach_volume_response_entry__from_json(v: &Value) -> Option<iface_volumes::DetachVolumeResponseEntry> {
     let m = v.as_object()?;
-    Some(iface_volumes::PaginationEnvelopePropertiesPage {
+    Some(iface_volumes::DetachVolumeResponseEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-    })
-}
-
-fn iface_volumes__pagination_envelope_properties_pages__from_json(v: &Value) -> Option<iface_volumes::PaginationEnvelopePropertiesPages> {
-    let m = v.as_object()?;
-    Some(iface_volumes::PaginationEnvelopePropertiesPages {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-    })
-}
-
-fn iface_volumes__pagination_envelope_properties_results__from_json(v: &Value) -> Option<iface_volumes::PaginationEnvelopePropertiesResults> {
-    let m = v.as_object()?;
-    Some(iface_volumes::PaginationEnvelopePropertiesResults {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-    })
-}
-
-fn iface_volumes__delete_volume_response__from_json(v: &Value) -> Option<iface_volumes::DeleteVolumeResponse> {
-    let m = v.as_object()?;
-    Some(iface_volumes::DeleteVolumeResponse {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-    })
-}
-
-fn iface_volumes__detach_volume_response__from_json(v: &Value) -> Option<iface_volumes::DetachVolumeResponse> {
-    let m = v.as_object()?;
-    Some(iface_volumes::DetachVolumeResponse {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
     })
 }
 
@@ -455,12 +395,12 @@ fn iface_volumes__update_volume__err(e: crate::runtime::DispatchError) -> String
     }
 }
 
-fn iface_volumes__delete_volume__ok(body: String) -> Result<iface_volumes::DeleteVolumeResponse, crate::runtime::DispatchError> {
+fn iface_volumes__delete_volume__ok(body: String) -> Result<Vec<iface_volumes::DeleteVolumeResponseEntry>, crate::runtime::DispatchError> {
     let v: Value = match serde_json::from_str(&body) {
         Ok(v) => v,
         Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
     };
-    match iface_volumes__delete_volume_response__from_json(&v) {
+    match (&v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_volumes::DeleteVolumeResponseEntry { key: k.clone(), value: val })).collect()) {
         Some(x) => Ok(x),
         None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
@@ -509,12 +449,12 @@ fn iface_volumes__clone_volume__err(e: crate::runtime::DispatchError) -> String 
     }
 }
 
-fn iface_volumes__detach_volume__ok(body: String) -> Result<iface_volumes::DetachVolumeResponse, crate::runtime::DispatchError> {
+fn iface_volumes__detach_volume__ok(body: String) -> Result<Vec<iface_volumes::DetachVolumeResponseEntry>, crate::runtime::DispatchError> {
     let v: Value = match serde_json::from_str(&body) {
         Ok(v) => v,
         Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
     };
-    match iface_volumes__detach_volume_response__from_json(&v) {
+    match (&v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_volumes::DetachVolumeResponseEntry { key: k.clone(), value: val })).collect()) {
         Some(x) => Ok(x),
         None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
@@ -574,7 +514,7 @@ impl iface_volumes::Guest for crate::Component {
             Err(e) => Err(iface_volumes__update_volume__err(e)),
         }
     }
-    fn delete_volume(params: iface_volumes::DeleteVolumeParams) -> Result<iface_volumes::DeleteVolumeResponse, String> {
+    fn delete_volume(params: iface_volumes::DeleteVolumeParams) -> Result<Vec<iface_volumes::DeleteVolumeResponseEntry>, String> {
         let json = iface_volumes__delete_volume_params__to_json(&params);
         match dispatch(&OP_VOLUMES_DELETE_VOLUME, json).and_then(iface_volumes__delete_volume__ok) {
             Ok(v) => Ok(v),
@@ -595,7 +535,7 @@ impl iface_volumes::Guest for crate::Component {
             Err(e) => Err(iface_volumes__clone_volume__err(e)),
         }
     }
-    fn detach_volume(params: iface_volumes::DetachVolumeParams) -> Result<iface_volumes::DetachVolumeResponse, String> {
+    fn detach_volume(params: iface_volumes::DetachVolumeParams) -> Result<Vec<iface_volumes::DetachVolumeResponseEntry>, String> {
         let json = iface_volumes__detach_volume_params__to_json(&params);
         match dispatch(&OP_VOLUMES_DETACH_VOLUME, json).and_then(iface_volumes__detach_volume__ok) {
             Ok(v) => Ok(v),

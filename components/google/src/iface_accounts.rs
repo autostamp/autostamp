@@ -874,9 +874,10 @@ fn iface_accounts__display_name_disapproval_reason__to_json(p: &iface_accounts::
     Value::Object(m)
 }
 
-fn iface_accounts__empty__to_json(p: &iface_accounts::Empty) -> Value {
+fn iface_accounts__empty_entry__to_json(p: &iface_accounts::EmptyEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -1140,7 +1141,7 @@ fn iface_accounts__parsed_listing__to_json(p: &iface_accounts::ParsedListing) ->
     m.insert("partnerListId".into(), match (&p.partner_list_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("regionCode".into(), match (&p.region_code) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("review".into(), match (&p.review) { Some(v) => Value::Array((v).iter().map(|v| iface_accounts__review__to_json(v)).collect()), None => Value::Null });
-    m.insert("unitAttributes".into(), match (&p.unit_attributes) { Some(v) => iface_accounts__parsed_listing_unit_attributes__to_json(v), None => Value::Null });
+    m.insert("unitAttributes".into(), match (&p.unit_attributes) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -1181,9 +1182,10 @@ fn iface_accounts__rating__to_json(p: &iface_accounts::Rating) -> Value {
     Value::Object(m)
 }
 
-fn iface_accounts__parsed_listing_unit_attributes__to_json(p: &iface_accounts::ParsedListingUnitAttributes) -> Value {
+fn iface_accounts__parsed_listing_unit_attributes_entry__to_json(p: &iface_accounts::ParsedListingUnitAttributesEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -1810,10 +1812,11 @@ fn iface_accounts__display_name_disapproval_reason__from_json(v: &Value) -> Opti
     })
 }
 
-fn iface_accounts__empty__from_json(v: &Value) -> Option<iface_accounts::Empty> {
+fn iface_accounts__empty_entry__from_json(v: &Value) -> Option<iface_accounts::EmptyEntry> {
     let m = v.as_object()?;
-    Some(iface_accounts::Empty {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_accounts::EmptyEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -2103,7 +2106,7 @@ fn iface_accounts__parsed_listing__from_json(v: &Value) -> Option<iface_accounts
         partner_list_id: m.get("partnerListId").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         region_code: m.get("regionCode").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         review: m.get("review").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_accounts__review__from_json(x)).collect())),
-        unit_attributes: m.get("unitAttributes").filter(|v| !v.is_null()).and_then(|v| iface_accounts__parsed_listing_unit_attributes__from_json(v)),
+        unit_attributes: m.get("unitAttributes").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_accounts::ParsedListingUnitAttributesEntry { key: k.clone(), value: val })).collect())),
     })
 }
 
@@ -2148,10 +2151,11 @@ fn iface_accounts__rating__from_json(v: &Value) -> Option<iface_accounts::Rating
     })
 }
 
-fn iface_accounts__parsed_listing_unit_attributes__from_json(v: &Value) -> Option<iface_accounts::ParsedListingUnitAttributes> {
+fn iface_accounts__parsed_listing_unit_attributes_entry__from_json(v: &Value) -> Option<iface_accounts::ParsedListingUnitAttributesEntry> {
     let m = v.as_object()?;
-    Some(iface_accounts::ParsedListingUnitAttributes {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_accounts::ParsedListingUnitAttributesEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -2609,12 +2613,12 @@ fn iface_accounts__travelpartner_accounts_brands_patch__err(e: crate::runtime::D
     }
 }
 
-fn iface_accounts__travelpartner_accounts_account_links_delete__ok(body: String) -> Result<iface_accounts::Empty, crate::runtime::DispatchError> {
+fn iface_accounts__travelpartner_accounts_account_links_delete__ok(body: String) -> Result<Vec<iface_accounts::EmptyEntry>, crate::runtime::DispatchError> {
     let v: Value = match serde_json::from_str(&body) {
         Ok(v) => v,
         Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
     };
-    match iface_accounts__empty__from_json(&v) {
+    match (&v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_accounts::EmptyEntry { key: k.clone(), value: val })).collect()) {
         Some(x) => Ok(x),
         None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
@@ -2991,7 +2995,7 @@ impl iface_accounts::Guest for crate::Component {
             Err(e) => Err(iface_accounts__travelpartner_accounts_brands_patch__err(e)),
         }
     }
-    fn travelpartner_accounts_account_links_delete(params: iface_accounts::TravelpartnerAccountsAccountLinksDeleteParams) -> Result<iface_accounts::Empty, String> {
+    fn travelpartner_accounts_account_links_delete(params: iface_accounts::TravelpartnerAccountsAccountLinksDeleteParams) -> Result<Vec<iface_accounts::EmptyEntry>, String> {
         let json = iface_accounts__travelpartner_accounts_account_links_delete_params__to_json(&params);
         match dispatch(&OP_ACCOUNTS_TRAVELPARTNER_ACCOUNTS_ACCOUNT_LINKS_DELETE, json).and_then(iface_accounts__travelpartner_accounts_account_links_delete__ok) {
             Ok(v) => Ok(v),

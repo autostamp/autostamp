@@ -6,7 +6,7 @@
 /// | Secret name | Applied to each request as |
 /// | --- | --- |
 /// | `api_auth` | `Authorization: Bearer <secret>` |
-package autostamp:ebay@0.5.0;
+package autostamp:ebay@0.6.0;
 
 interface deal-item {
   /// The result set for the deal item search.

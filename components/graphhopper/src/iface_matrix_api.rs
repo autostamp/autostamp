@@ -69,10 +69,18 @@ fn iface_matrix_api__get_matrix_curbside_item_enum__to_str(e: &iface_matrix_api:
     }
 }
 
-fn iface_matrix_api__vehicle_profile_id__to_json(p: &iface_matrix_api::VehicleProfileId) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
+fn iface_matrix_api__vehicle_profile_id__to_str(e: &iface_matrix_api::VehicleProfileId) -> &'static str {
+    match e {
+        iface_matrix_api::VehicleProfileId::Car => "car",
+        iface_matrix_api::VehicleProfileId::Bike => "bike",
+        iface_matrix_api::VehicleProfileId::Foot => "foot",
+        iface_matrix_api::VehicleProfileId::Hike => "hike",
+        iface_matrix_api::VehicleProfileId::Mtb => "mtb",
+        iface_matrix_api::VehicleProfileId::Racingbike => "racingbike",
+        iface_matrix_api::VehicleProfileId::Scooter => "scooter",
+        iface_matrix_api::VehicleProfileId::Truck => "truck",
+        iface_matrix_api::VehicleProfileId::SmallTruck => "small_truck",
+    }
 }
 
 fn iface_matrix_api__matrix_response__to_json(p: &iface_matrix_api::MatrixResponse) -> Value {
@@ -121,7 +129,7 @@ fn iface_matrix_api__get_matrix_params__to_json(p: &iface_matrix_api::GetMatrixP
     m.insert("from_curbside".into(), match (&p.from_curbside) { Some(v) => Value::Array((v).iter().map(|v| Value::String(iface_matrix_api__get_matrix_curbside_item_enum__to_str(v).into())).collect()), None => Value::Null });
     m.insert("to_curbside".into(), match (&p.to_curbside) { Some(v) => Value::Array((v).iter().map(|v| Value::String(iface_matrix_api__get_matrix_curbside_item_enum__to_str(v).into())).collect()), None => Value::Null });
     m.insert("out_array".into(), match (&p.out_array) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
-    m.insert("vehicle".into(), match (&p.vehicle) { Some(v) => iface_matrix_api__vehicle_profile_id__to_json(v), None => Value::Null });
+    m.insert("vehicle".into(), match (&p.vehicle) { Some(v) => Value::String(iface_matrix_api__vehicle_profile_id__to_str(v).into()), None => Value::Null });
     m.insert("fail_fast".into(), match (&p.fail_fast) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     m.insert("turn_costs".into(), match (&p.turn_costs) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     Value::Object(m)

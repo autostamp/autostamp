@@ -61,31 +61,25 @@ const OP_VIEWS_UPDATE: OpSpec = OpSpec {
 
 fn iface_views__open_response__to_json(p: &iface_views::OpenResponse) -> Value {
     let mut m = Map::new();
-    m.insert("ok".into(), iface_views__defs_ok_true__to_json(&p.ok));
-    Value::Object(m)
-}
-
-fn iface_views__defs_ok_true__to_json(p: &iface_views::DefsOkTrue) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
+    m.insert("ok".into(), Value::Bool(*(&p.ok)));
     Value::Object(m)
 }
 
 fn iface_views__publish_response__to_json(p: &iface_views::PublishResponse) -> Value {
     let mut m = Map::new();
-    m.insert("ok".into(), iface_views__defs_ok_true__to_json(&p.ok));
+    m.insert("ok".into(), Value::Bool(*(&p.ok)));
     Value::Object(m)
 }
 
 fn iface_views__push_response__to_json(p: &iface_views::PushResponse) -> Value {
     let mut m = Map::new();
-    m.insert("ok".into(), iface_views__defs_ok_true__to_json(&p.ok));
+    m.insert("ok".into(), Value::Bool(*(&p.ok)));
     Value::Object(m)
 }
 
 fn iface_views__update_response__to_json(p: &iface_views::UpdateResponse) -> Value {
     let mut m = Map::new();
-    m.insert("ok".into(), iface_views__defs_ok_true__to_json(&p.ok));
+    m.insert("ok".into(), Value::Bool(*(&p.ok)));
     Value::Object(m)
 }
 
@@ -127,35 +121,28 @@ fn iface_views__update_params__to_json(p: &iface_views::UpdateParams) -> Value {
 fn iface_views__open_response__from_json(v: &Value) -> Option<iface_views::OpenResponse> {
     let m = v.as_object()?;
     Some(iface_views::OpenResponse {
-        ok: match m.get("ok").and_then(|v| iface_views__defs_ok_true__from_json(v)) { Some(x) => x, None => return None },
-    })
-}
-
-fn iface_views__defs_ok_true__from_json(v: &Value) -> Option<iface_views::DefsOkTrue> {
-    let m = v.as_object()?;
-    Some(iface_views::DefsOkTrue {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        ok: m.get("ok").and_then(|v| (v).as_bool()).unwrap_or_default(),
     })
 }
 
 fn iface_views__publish_response__from_json(v: &Value) -> Option<iface_views::PublishResponse> {
     let m = v.as_object()?;
     Some(iface_views::PublishResponse {
-        ok: match m.get("ok").and_then(|v| iface_views__defs_ok_true__from_json(v)) { Some(x) => x, None => return None },
+        ok: m.get("ok").and_then(|v| (v).as_bool()).unwrap_or_default(),
     })
 }
 
 fn iface_views__push_response__from_json(v: &Value) -> Option<iface_views::PushResponse> {
     let m = v.as_object()?;
     Some(iface_views::PushResponse {
-        ok: match m.get("ok").and_then(|v| iface_views__defs_ok_true__from_json(v)) { Some(x) => x, None => return None },
+        ok: m.get("ok").and_then(|v| (v).as_bool()).unwrap_or_default(),
     })
 }
 
 fn iface_views__update_response__from_json(v: &Value) -> Option<iface_views::UpdateResponse> {
     let m = v.as_object()?;
     Some(iface_views::UpdateResponse {
-        ok: match m.get("ok").and_then(|v| iface_views__defs_ok_true__from_json(v)) { Some(x) => x, None => return None },
+        ok: m.get("ok").and_then(|v| (v).as_bool()).unwrap_or_default(),
     })
 }
 

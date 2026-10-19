@@ -1,4 +1,4 @@
-package autostamp:ticketmaster@0.5.0;
+package autostamp:ticketmaster@0.6.0;
 
 interface discovery {
   enum find-source-enum {
@@ -65,7 +65,7 @@ interface discovery {
     /// Description's of the entity
     description: option<string>,
     /// List of external links
-    external-links: option<attraction-external-links>,
+    external-links: option<list<attraction-external-links-entry>>,
     /// Unique id of the entity in the discovery API
     id: string,
     /// Images of the entity
@@ -79,7 +79,7 @@ interface discovery {
     /// Type of the entity
     type-op: attraction-type-op-enum,
     /// number of upcoming events
-    upcoming-events: option<attraction-upcoming-events>,
+    upcoming-events: option<list<attraction-upcoming-events-entry>>,
     /// URL of a web site detail page of the entity
     url: option<string>
   }
@@ -110,10 +110,18 @@ interface discovery {
     name: option<string>
   }
 
-  /// List of external links
-  record attraction-external-links {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// ExternalLink
+  record external-link {
+    /// An external link id is the unique identifier of a resource on a different domain or api
+    id: option<string>,
+    /// An external link url is a url that goes to a different domain or api
+    url: option<string>
+  }
+
+  /// one entry of a string-keyed map (free-form object)
+  record attraction-external-links-entry {
+    key: string,
+    value: list<external-link>
   }
 
   /// Image
@@ -132,10 +140,10 @@ interface discovery {
     width: option<s32>
   }
 
-  /// number of upcoming events
-  record attraction-upcoming-events {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record attraction-upcoming-events-entry {
+    key: string,
+    value: s32
   }
 
   /// Secondary Genre
@@ -158,7 +166,7 @@ interface discovery {
     description: option<string>,
     distance: option<f64>,
     /// List of external links
-    external-links: option<event-external-links>,
+    external-links: option<list<event-external-links-entry>>,
     /// Unique id of the entity in the discovery API
     id: string,
     /// Images of the entity
@@ -310,10 +318,10 @@ interface discovery {
     code: option<event-status-code-enum>
   }
 
-  /// List of external links
-  record event-external-links {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record event-external-links-entry {
+    key: string,
+    value: list<external-link>
   }
 
   /// Location
@@ -483,7 +491,7 @@ interface discovery {
     /// The list of associated DMAs (Designated Market Areas) of the venue
     dma: option<list<dma>>,
     /// List of external links
-    external-links: option<venue-external-links>,
+    external-links: option<list<venue-external-links-entry>>,
     general-info: option<venue-general-info>,
     /// Unique id of the entity in the discovery API
     id: string,
@@ -510,7 +518,7 @@ interface discovery {
     type-op: attraction-type-op-enum,
     units: option<string>,
     /// number of upcoming events
-    upcoming-events: option<venue-upcoming-events>,
+    upcoming-events: option<list<venue-upcoming-events-entry>>,
     /// URL of a web site detail page of the entity
     url: option<string>
   }
@@ -533,10 +541,10 @@ interface discovery {
     id: option<s32>
   }
 
-  /// List of external links
-  record venue-external-links {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record venue-external-links-entry {
+    key: string,
+    value: list<external-link>
   }
 
   /// Venue general information
@@ -566,10 +574,10 @@ interface discovery {
     hashtags: option<list<string>>
   }
 
-  /// number of upcoming events
-  record venue-upcoming-events {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record venue-upcoming-events-entry {
+    key: string,
+    value: s32
   }
 
   /// Attraction Search

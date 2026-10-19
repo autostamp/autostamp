@@ -181,50 +181,38 @@ const OP_ADMIN_CONVERSATIONS_UNARCHIVE: OpSpec = OpSpec {
 
 fn iface_admin_conversations__archive_response__to_json(p: &iface_admin_conversations::ArchiveResponse) -> Value {
     let mut m = Map::new();
-    m.insert("ok".into(), iface_admin_conversations__defs_ok_true__to_json(&p.ok));
-    Value::Object(m)
-}
-
-fn iface_admin_conversations__defs_ok_true__to_json(p: &iface_admin_conversations::DefsOkTrue) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
+    m.insert("ok".into(), Value::Bool(*(&p.ok)));
     Value::Object(m)
 }
 
 fn iface_admin_conversations__convert_to_private_response__to_json(p: &iface_admin_conversations::ConvertToPrivateResponse) -> Value {
     let mut m = Map::new();
-    m.insert("ok".into(), iface_admin_conversations__defs_ok_true__to_json(&p.ok));
+    m.insert("ok".into(), Value::Bool(*(&p.ok)));
     Value::Object(m)
 }
 
 fn iface_admin_conversations__create_response__to_json(p: &iface_admin_conversations::CreateResponse) -> Value {
     let mut m = Map::new();
-    m.insert("channel_id".into(), match (&p.channel_id) { Some(v) => iface_admin_conversations__defs_channel_id__to_json(v), None => Value::Null });
-    m.insert("ok".into(), iface_admin_conversations__defs_ok_true__to_json(&p.ok));
-    Value::Object(m)
-}
-
-fn iface_admin_conversations__defs_channel_id__to_json(p: &iface_admin_conversations::DefsChannelId) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
+    m.insert("channel_id".into(), match (&p.channel_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("ok".into(), Value::Bool(*(&p.ok)));
     Value::Object(m)
 }
 
 fn iface_admin_conversations__delete_response__to_json(p: &iface_admin_conversations::DeleteResponse) -> Value {
     let mut m = Map::new();
-    m.insert("ok".into(), iface_admin_conversations__defs_ok_true__to_json(&p.ok));
+    m.insert("ok".into(), Value::Bool(*(&p.ok)));
     Value::Object(m)
 }
 
 fn iface_admin_conversations__disconnect_shared_response__to_json(p: &iface_admin_conversations::DisconnectSharedResponse) -> Value {
     let mut m = Map::new();
-    m.insert("ok".into(), iface_admin_conversations__defs_ok_true__to_json(&p.ok));
+    m.insert("ok".into(), Value::Bool(*(&p.ok)));
     Value::Object(m)
 }
 
 fn iface_admin_conversations__get_conversation_prefs_response__to_json(p: &iface_admin_conversations::GetConversationPrefsResponse) -> Value {
     let mut m = Map::new();
-    m.insert("ok".into(), iface_admin_conversations__defs_ok_true__to_json(&p.ok));
+    m.insert("ok".into(), Value::Bool(*(&p.ok)));
     m.insert("prefs".into(), match (&p.prefs) { Some(v) => iface_admin_conversations__get_conversation_prefs_response_prefs__to_json(v), None => Value::Null });
     Value::Object(m)
 }
@@ -252,9 +240,9 @@ fn iface_admin_conversations__get_conversation_prefs_response_prefs_who_can_post
 
 fn iface_admin_conversations__get_teams_response__to_json(p: &iface_admin_conversations::GetTeamsResponse) -> Value {
     let mut m = Map::new();
-    m.insert("ok".into(), iface_admin_conversations__defs_ok_true__to_json(&p.ok));
+    m.insert("ok".into(), Value::Bool(*(&p.ok)));
     m.insert("response_metadata".into(), match (&p.response_metadata) { Some(v) => iface_admin_conversations__get_teams_response_response_metadata__to_json(v), None => Value::Null });
-    m.insert("team_ids".into(), Value::Array((&p.team_ids).iter().map(|v| iface_admin_conversations__defs_team__to_json(v)).collect()));
+    m.insert("team_ids".into(), Value::Array((&p.team_ids).iter().map(|v| Value::String((v).clone())).collect()));
     Value::Object(m)
 }
 
@@ -264,21 +252,15 @@ fn iface_admin_conversations__get_teams_response_response_metadata__to_json(p: &
     Value::Object(m)
 }
 
-fn iface_admin_conversations__defs_team__to_json(p: &iface_admin_conversations::DefsTeam) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
 fn iface_admin_conversations__invite_response__to_json(p: &iface_admin_conversations::InviteResponse) -> Value {
     let mut m = Map::new();
-    m.insert("ok".into(), iface_admin_conversations__defs_ok_true__to_json(&p.ok));
+    m.insert("ok".into(), Value::Bool(*(&p.ok)));
     Value::Object(m)
 }
 
 fn iface_admin_conversations__rename_response__to_json(p: &iface_admin_conversations::RenameResponse) -> Value {
     let mut m = Map::new();
-    m.insert("ok".into(), iface_admin_conversations__defs_ok_true__to_json(&p.ok));
+    m.insert("ok".into(), Value::Bool(*(&p.ok)));
     Value::Object(m)
 }
 
@@ -291,10 +273,10 @@ fn iface_admin_conversations__search_response__to_json(p: &iface_admin_conversat
 
 fn iface_admin_conversations__objs_channel__to_json(p: &iface_admin_conversations::ObjsChannel) -> Value {
     let mut m = Map::new();
-    m.insert("accepted_user".into(), match (&p.accepted_user) { Some(v) => iface_admin_conversations__defs_user_id__to_json(v), None => Value::Null });
+    m.insert("accepted_user".into(), match (&p.accepted_user) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("created".into(), Value::Number(serde_json::Number::from(*(&p.created))));
-    m.insert("creator".into(), iface_admin_conversations__defs_user_id__to_json(&p.creator));
-    m.insert("id".into(), iface_admin_conversations__defs_channel_id__to_json(&p.id));
+    m.insert("creator".into(), Value::String((&p.creator).clone()));
+    m.insert("id".into(), Value::String((&p.id).clone()));
     m.insert("is_archived".into(), match (&p.is_archived) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     m.insert("is_channel".into(), Value::Bool(*(&p.is_channel)));
     m.insert("is_frozen".into(), match (&p.is_frozen) { Some(v) => Value::Bool(*(v)), None => Value::Null });
@@ -309,14 +291,14 @@ fn iface_admin_conversations__objs_channel__to_json(p: &iface_admin_conversation
     m.insert("is_read_only".into(), match (&p.is_read_only) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     m.insert("is_shared".into(), Value::Bool(*(&p.is_shared)));
     m.insert("is_thread_only".into(), match (&p.is_thread_only) { Some(v) => Value::Bool(*(v)), None => Value::Null });
-    m.insert("last_read".into(), match (&p.last_read) { Some(v) => iface_admin_conversations__defs_ts__to_json(v), None => Value::Null });
+    m.insert("last_read".into(), match (&p.last_read) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("latest".into(), match (&p.latest) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("members".into(), Value::Array((&p.members).iter().map(|v| iface_admin_conversations__defs_user_id__to_json(v)).collect()));
+    m.insert("members".into(), Value::Array((&p.members).iter().map(|v| Value::String((v).clone())).collect()));
     m.insert("name".into(), Value::String((&p.name).clone()));
     m.insert("name_normalized".into(), Value::String((&p.name_normalized).clone()));
     m.insert("num_members".into(), match (&p.num_members) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    m.insert("pending_shared".into(), match (&p.pending_shared) { Some(v) => Value::Array((v).iter().map(|v| iface_admin_conversations__defs_team__to_json(v)).collect()), None => Value::Null });
-    m.insert("previous_names".into(), match (&p.previous_names) { Some(v) => Value::Array((v).iter().map(|v| iface_admin_conversations__defs_channel_name__to_json(v)).collect()), None => Value::Null });
+    m.insert("pending_shared".into(), match (&p.pending_shared) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("previous_names".into(), match (&p.previous_names) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
     m.insert("priority".into(), match (&p.priority) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
     m.insert("purpose".into(), iface_admin_conversations__objs_channel_purpose__to_json(&p.purpose));
     m.insert("topic".into(), iface_admin_conversations__objs_channel_topic__to_json(&p.topic));
@@ -326,41 +308,17 @@ fn iface_admin_conversations__objs_channel__to_json(p: &iface_admin_conversation
     Value::Object(m)
 }
 
-fn iface_admin_conversations__defs_user_id__to_json(p: &iface_admin_conversations::DefsUserId) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_admin_conversations__defs_ts__to_json(p: &iface_admin_conversations::DefsTs) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_admin_conversations__defs_channel_name__to_json(p: &iface_admin_conversations::DefsChannelName) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
 fn iface_admin_conversations__objs_channel_purpose__to_json(p: &iface_admin_conversations::ObjsChannelPurpose) -> Value {
     let mut m = Map::new();
-    m.insert("creator".into(), iface_admin_conversations__defs_topic_purpose_creator__to_json(&p.creator));
+    m.insert("creator".into(), Value::String((&p.creator).clone()));
     m.insert("last_set".into(), Value::Number(serde_json::Number::from(*(&p.last_set))));
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_admin_conversations__defs_topic_purpose_creator__to_json(p: &iface_admin_conversations::DefsTopicPurposeCreator) -> Value {
-    let mut m = Map::new();
     m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
 fn iface_admin_conversations__objs_channel_topic__to_json(p: &iface_admin_conversations::ObjsChannelTopic) -> Value {
     let mut m = Map::new();
-    m.insert("creator".into(), iface_admin_conversations__defs_topic_purpose_creator__to_json(&p.creator));
+    m.insert("creator".into(), Value::String((&p.creator).clone()));
     m.insert("last_set".into(), Value::Number(serde_json::Number::from(*(&p.last_set))));
     m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
@@ -368,19 +326,19 @@ fn iface_admin_conversations__objs_channel_topic__to_json(p: &iface_admin_conver
 
 fn iface_admin_conversations__set_conversation_prefs_response__to_json(p: &iface_admin_conversations::SetConversationPrefsResponse) -> Value {
     let mut m = Map::new();
-    m.insert("ok".into(), iface_admin_conversations__defs_ok_true__to_json(&p.ok));
+    m.insert("ok".into(), Value::Bool(*(&p.ok)));
     Value::Object(m)
 }
 
 fn iface_admin_conversations__set_teams_response__to_json(p: &iface_admin_conversations::SetTeamsResponse) -> Value {
     let mut m = Map::new();
-    m.insert("ok".into(), iface_admin_conversations__defs_ok_true__to_json(&p.ok));
+    m.insert("ok".into(), Value::Bool(*(&p.ok)));
     Value::Object(m)
 }
 
 fn iface_admin_conversations__unarchive_response__to_json(p: &iface_admin_conversations::UnarchiveResponse) -> Value {
     let mut m = Map::new();
-    m.insert("ok".into(), iface_admin_conversations__defs_ok_true__to_json(&p.ok));
+    m.insert("ok".into(), Value::Bool(*(&p.ok)));
     Value::Object(m)
 }
 
@@ -497,57 +455,43 @@ fn iface_admin_conversations__unarchive_params__to_json(p: &iface_admin_conversa
 fn iface_admin_conversations__archive_response__from_json(v: &Value) -> Option<iface_admin_conversations::ArchiveResponse> {
     let m = v.as_object()?;
     Some(iface_admin_conversations::ArchiveResponse {
-        ok: match m.get("ok").and_then(|v| iface_admin_conversations__defs_ok_true__from_json(v)) { Some(x) => x, None => return None },
-    })
-}
-
-fn iface_admin_conversations__defs_ok_true__from_json(v: &Value) -> Option<iface_admin_conversations::DefsOkTrue> {
-    let m = v.as_object()?;
-    Some(iface_admin_conversations::DefsOkTrue {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        ok: m.get("ok").and_then(|v| (v).as_bool()).unwrap_or_default(),
     })
 }
 
 fn iface_admin_conversations__convert_to_private_response__from_json(v: &Value) -> Option<iface_admin_conversations::ConvertToPrivateResponse> {
     let m = v.as_object()?;
     Some(iface_admin_conversations::ConvertToPrivateResponse {
-        ok: match m.get("ok").and_then(|v| iface_admin_conversations__defs_ok_true__from_json(v)) { Some(x) => x, None => return None },
+        ok: m.get("ok").and_then(|v| (v).as_bool()).unwrap_or_default(),
     })
 }
 
 fn iface_admin_conversations__create_response__from_json(v: &Value) -> Option<iface_admin_conversations::CreateResponse> {
     let m = v.as_object()?;
     Some(iface_admin_conversations::CreateResponse {
-        channel_id: m.get("channel_id").filter(|v| !v.is_null()).and_then(|v| iface_admin_conversations__defs_channel_id__from_json(v)),
-        ok: match m.get("ok").and_then(|v| iface_admin_conversations__defs_ok_true__from_json(v)) { Some(x) => x, None => return None },
-    })
-}
-
-fn iface_admin_conversations__defs_channel_id__from_json(v: &Value) -> Option<iface_admin_conversations::DefsChannelId> {
-    let m = v.as_object()?;
-    Some(iface_admin_conversations::DefsChannelId {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        channel_id: m.get("channel_id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        ok: m.get("ok").and_then(|v| (v).as_bool()).unwrap_or_default(),
     })
 }
 
 fn iface_admin_conversations__delete_response__from_json(v: &Value) -> Option<iface_admin_conversations::DeleteResponse> {
     let m = v.as_object()?;
     Some(iface_admin_conversations::DeleteResponse {
-        ok: match m.get("ok").and_then(|v| iface_admin_conversations__defs_ok_true__from_json(v)) { Some(x) => x, None => return None },
+        ok: m.get("ok").and_then(|v| (v).as_bool()).unwrap_or_default(),
     })
 }
 
 fn iface_admin_conversations__disconnect_shared_response__from_json(v: &Value) -> Option<iface_admin_conversations::DisconnectSharedResponse> {
     let m = v.as_object()?;
     Some(iface_admin_conversations::DisconnectSharedResponse {
-        ok: match m.get("ok").and_then(|v| iface_admin_conversations__defs_ok_true__from_json(v)) { Some(x) => x, None => return None },
+        ok: m.get("ok").and_then(|v| (v).as_bool()).unwrap_or_default(),
     })
 }
 
 fn iface_admin_conversations__get_conversation_prefs_response__from_json(v: &Value) -> Option<iface_admin_conversations::GetConversationPrefsResponse> {
     let m = v.as_object()?;
     Some(iface_admin_conversations::GetConversationPrefsResponse {
-        ok: match m.get("ok").and_then(|v| iface_admin_conversations__defs_ok_true__from_json(v)) { Some(x) => x, None => return None },
+        ok: m.get("ok").and_then(|v| (v).as_bool()).unwrap_or_default(),
         prefs: m.get("prefs").filter(|v| !v.is_null()).and_then(|v| iface_admin_conversations__get_conversation_prefs_response_prefs__from_json(v)),
     })
 }
@@ -579,9 +523,9 @@ fn iface_admin_conversations__get_conversation_prefs_response_prefs_who_can_post
 fn iface_admin_conversations__get_teams_response__from_json(v: &Value) -> Option<iface_admin_conversations::GetTeamsResponse> {
     let m = v.as_object()?;
     Some(iface_admin_conversations::GetTeamsResponse {
-        ok: match m.get("ok").and_then(|v| iface_admin_conversations__defs_ok_true__from_json(v)) { Some(x) => x, None => return None },
+        ok: m.get("ok").and_then(|v| (v).as_bool()).unwrap_or_default(),
         response_metadata: m.get("response_metadata").filter(|v| !v.is_null()).and_then(|v| iface_admin_conversations__get_teams_response_response_metadata__from_json(v)),
-        team_ids: m.get("team_ids").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_admin_conversations__defs_team__from_json(x)).collect())).unwrap_or_default(),
+        team_ids: m.get("team_ids").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())).unwrap_or_default(),
     })
 }
 
@@ -592,24 +536,17 @@ fn iface_admin_conversations__get_teams_response_response_metadata__from_json(v:
     })
 }
 
-fn iface_admin_conversations__defs_team__from_json(v: &Value) -> Option<iface_admin_conversations::DefsTeam> {
-    let m = v.as_object()?;
-    Some(iface_admin_conversations::DefsTeam {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-    })
-}
-
 fn iface_admin_conversations__invite_response__from_json(v: &Value) -> Option<iface_admin_conversations::InviteResponse> {
     let m = v.as_object()?;
     Some(iface_admin_conversations::InviteResponse {
-        ok: match m.get("ok").and_then(|v| iface_admin_conversations__defs_ok_true__from_json(v)) { Some(x) => x, None => return None },
+        ok: m.get("ok").and_then(|v| (v).as_bool()).unwrap_or_default(),
     })
 }
 
 fn iface_admin_conversations__rename_response__from_json(v: &Value) -> Option<iface_admin_conversations::RenameResponse> {
     let m = v.as_object()?;
     Some(iface_admin_conversations::RenameResponse {
-        ok: match m.get("ok").and_then(|v| iface_admin_conversations__defs_ok_true__from_json(v)) { Some(x) => x, None => return None },
+        ok: m.get("ok").and_then(|v| (v).as_bool()).unwrap_or_default(),
     })
 }
 
@@ -624,10 +561,10 @@ fn iface_admin_conversations__search_response__from_json(v: &Value) -> Option<if
 fn iface_admin_conversations__objs_channel__from_json(v: &Value) -> Option<iface_admin_conversations::ObjsChannel> {
     let m = v.as_object()?;
     Some(iface_admin_conversations::ObjsChannel {
-        accepted_user: m.get("accepted_user").filter(|v| !v.is_null()).and_then(|v| iface_admin_conversations__defs_user_id__from_json(v)),
+        accepted_user: m.get("accepted_user").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         created: m.get("created").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
-        creator: match m.get("creator").and_then(|v| iface_admin_conversations__defs_user_id__from_json(v)) { Some(x) => x, None => return None },
-        id: match m.get("id").and_then(|v| iface_admin_conversations__defs_channel_id__from_json(v)) { Some(x) => x, None => return None },
+        creator: m.get("creator").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        id: m.get("id").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         is_archived: m.get("is_archived").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
         is_channel: m.get("is_channel").and_then(|v| (v).as_bool()).unwrap_or_default(),
         is_frozen: m.get("is_frozen").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
@@ -642,14 +579,14 @@ fn iface_admin_conversations__objs_channel__from_json(v: &Value) -> Option<iface
         is_read_only: m.get("is_read_only").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
         is_shared: m.get("is_shared").and_then(|v| (v).as_bool()).unwrap_or_default(),
         is_thread_only: m.get("is_thread_only").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
-        last_read: m.get("last_read").filter(|v| !v.is_null()).and_then(|v| iface_admin_conversations__defs_ts__from_json(v)),
+        last_read: m.get("last_read").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         latest: m.get("latest").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        members: m.get("members").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_admin_conversations__defs_user_id__from_json(x)).collect())).unwrap_or_default(),
+        members: m.get("members").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())).unwrap_or_default(),
         name: m.get("name").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         name_normalized: m.get("name_normalized").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         num_members: m.get("num_members").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
-        pending_shared: m.get("pending_shared").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_admin_conversations__defs_team__from_json(x)).collect())),
-        previous_names: m.get("previous_names").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_admin_conversations__defs_channel_name__from_json(x)).collect())),
+        pending_shared: m.get("pending_shared").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        previous_names: m.get("previous_names").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
         priority: m.get("priority").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
         purpose: match m.get("purpose").and_then(|v| iface_admin_conversations__objs_channel_purpose__from_json(v)) { Some(x) => x, None => return None },
         topic: match m.get("topic").and_then(|v| iface_admin_conversations__objs_channel_topic__from_json(v)) { Some(x) => x, None => return None },
@@ -659,39 +596,11 @@ fn iface_admin_conversations__objs_channel__from_json(v: &Value) -> Option<iface
     })
 }
 
-fn iface_admin_conversations__defs_user_id__from_json(v: &Value) -> Option<iface_admin_conversations::DefsUserId> {
-    let m = v.as_object()?;
-    Some(iface_admin_conversations::DefsUserId {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-    })
-}
-
-fn iface_admin_conversations__defs_ts__from_json(v: &Value) -> Option<iface_admin_conversations::DefsTs> {
-    let m = v.as_object()?;
-    Some(iface_admin_conversations::DefsTs {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-    })
-}
-
-fn iface_admin_conversations__defs_channel_name__from_json(v: &Value) -> Option<iface_admin_conversations::DefsChannelName> {
-    let m = v.as_object()?;
-    Some(iface_admin_conversations::DefsChannelName {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-    })
-}
-
 fn iface_admin_conversations__objs_channel_purpose__from_json(v: &Value) -> Option<iface_admin_conversations::ObjsChannelPurpose> {
     let m = v.as_object()?;
     Some(iface_admin_conversations::ObjsChannelPurpose {
-        creator: match m.get("creator").and_then(|v| iface_admin_conversations__defs_topic_purpose_creator__from_json(v)) { Some(x) => x, None => return None },
+        creator: m.get("creator").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         last_set: m.get("last_set").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-    })
-}
-
-fn iface_admin_conversations__defs_topic_purpose_creator__from_json(v: &Value) -> Option<iface_admin_conversations::DefsTopicPurposeCreator> {
-    let m = v.as_object()?;
-    Some(iface_admin_conversations::DefsTopicPurposeCreator {
         value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
@@ -699,7 +608,7 @@ fn iface_admin_conversations__defs_topic_purpose_creator__from_json(v: &Value) -
 fn iface_admin_conversations__objs_channel_topic__from_json(v: &Value) -> Option<iface_admin_conversations::ObjsChannelTopic> {
     let m = v.as_object()?;
     Some(iface_admin_conversations::ObjsChannelTopic {
-        creator: match m.get("creator").and_then(|v| iface_admin_conversations__defs_topic_purpose_creator__from_json(v)) { Some(x) => x, None => return None },
+        creator: m.get("creator").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         last_set: m.get("last_set").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
         value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
@@ -708,21 +617,21 @@ fn iface_admin_conversations__objs_channel_topic__from_json(v: &Value) -> Option
 fn iface_admin_conversations__set_conversation_prefs_response__from_json(v: &Value) -> Option<iface_admin_conversations::SetConversationPrefsResponse> {
     let m = v.as_object()?;
     Some(iface_admin_conversations::SetConversationPrefsResponse {
-        ok: match m.get("ok").and_then(|v| iface_admin_conversations__defs_ok_true__from_json(v)) { Some(x) => x, None => return None },
+        ok: m.get("ok").and_then(|v| (v).as_bool()).unwrap_or_default(),
     })
 }
 
 fn iface_admin_conversations__set_teams_response__from_json(v: &Value) -> Option<iface_admin_conversations::SetTeamsResponse> {
     let m = v.as_object()?;
     Some(iface_admin_conversations::SetTeamsResponse {
-        ok: match m.get("ok").and_then(|v| iface_admin_conversations__defs_ok_true__from_json(v)) { Some(x) => x, None => return None },
+        ok: m.get("ok").and_then(|v| (v).as_bool()).unwrap_or_default(),
     })
 }
 
 fn iface_admin_conversations__unarchive_response__from_json(v: &Value) -> Option<iface_admin_conversations::UnarchiveResponse> {
     let m = v.as_object()?;
     Some(iface_admin_conversations::UnarchiveResponse {
-        ok: match m.get("ok").and_then(|v| iface_admin_conversations__defs_ok_true__from_json(v)) { Some(x) => x, None => return None },
+        ok: m.get("ok").and_then(|v| (v).as_bool()).unwrap_or_default(),
     })
 }
 

@@ -41,16 +41,17 @@ fn iface_company_role__company_data_role_search_results_interface__to_json(p: &i
 fn iface_company_role__company_data_role_interface__to_json(p: &iface_company_role::CompanyDataRoleInterface) -> Value {
     let mut m = Map::new();
     m.insert("company_id".into(), match (&p.company_id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    m.insert("extension_attributes".into(), match (&p.extension_attributes) { Some(v) => iface_company_role__company_data_role_extension_interface__to_json(v), None => Value::Null });
+    m.insert("extension_attributes".into(), match (&p.extension_attributes) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("id".into(), match (&p.id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("permissions".into(), Value::Array((&p.permissions).iter().map(|v| iface_company_role__company_data_permission_interface__to_json(v)).collect()));
     m.insert("role_name".into(), match (&p.role_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_company_role__company_data_role_extension_interface__to_json(p: &iface_company_role::CompanyDataRoleExtensionInterface) -> Value {
+fn iface_company_role__company_data_role_extension_interface_entry__to_json(p: &iface_company_role::CompanyDataRoleExtensionInterfaceEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -124,17 +125,18 @@ fn iface_company_role__company_data_role_interface__from_json(v: &Value) -> Opti
     let m = v.as_object()?;
     Some(iface_company_role::CompanyDataRoleInterface {
         company_id: m.get("company_id").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
-        extension_attributes: m.get("extension_attributes").filter(|v| !v.is_null()).and_then(|v| iface_company_role__company_data_role_extension_interface__from_json(v)),
+        extension_attributes: m.get("extension_attributes").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_company_role::CompanyDataRoleExtensionInterfaceEntry { key: k.clone(), value: val })).collect())),
         id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
         permissions: m.get("permissions").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_company_role__company_data_permission_interface__from_json(x)).collect())).unwrap_or_default(),
         role_name: m.get("role_name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
     })
 }
 
-fn iface_company_role__company_data_role_extension_interface__from_json(v: &Value) -> Option<iface_company_role::CompanyDataRoleExtensionInterface> {
+fn iface_company_role__company_data_role_extension_interface_entry__from_json(v: &Value) -> Option<iface_company_role::CompanyDataRoleExtensionInterfaceEntry> {
     let m = v.as_object()?;
-    Some(iface_company_role::CompanyDataRoleExtensionInterface {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_company_role::CompanyDataRoleExtensionInterfaceEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 

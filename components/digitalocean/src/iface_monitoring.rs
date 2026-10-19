@@ -496,14 +496,15 @@ fn iface_monitoring__get_droplet_bandwidth_metrics_response_data__to_json(p: &if
 
 fn iface_monitoring__get_droplet_bandwidth_metrics_response_data_result_op_item__to_json(p: &iface_monitoring::GetDropletBandwidthMetricsResponseDataResultOpItem) -> Value {
     let mut m = Map::new();
-    m.insert("metric".into(), iface_monitoring__get_droplet_bandwidth_metrics_response_data_result_op_item_metric__to_json(&p.metric));
+    m.insert("metric".into(), Value::Object((&p.metric).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()));
     m.insert("values".into(), Value::Array((&p.values).iter().map(|v| Value::Array((v).iter().map(|v| Value::String((v).clone())).collect())).collect()));
     Value::Object(m)
 }
 
-fn iface_monitoring__get_droplet_bandwidth_metrics_response_data_result_op_item_metric__to_json(p: &iface_monitoring::GetDropletBandwidthMetricsResponseDataResultOpItemMetric) -> Value {
+fn iface_monitoring__get_droplet_bandwidth_metrics_response_data_result_op_item_metric_entry__to_json(p: &iface_monitoring::GetDropletBandwidthMetricsResponseDataResultOpItemMetricEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -523,14 +524,15 @@ fn iface_monitoring__get_droplet_cpu_metrics_response_data__to_json(p: &iface_mo
 
 fn iface_monitoring__get_droplet_cpu_metrics_response_data_result_op_item__to_json(p: &iface_monitoring::GetDropletCpuMetricsResponseDataResultOpItem) -> Value {
     let mut m = Map::new();
-    m.insert("metric".into(), iface_monitoring__get_droplet_cpu_metrics_response_data_result_op_item_metric__to_json(&p.metric));
+    m.insert("metric".into(), Value::Object((&p.metric).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()));
     m.insert("values".into(), Value::Array((&p.values).iter().map(|v| Value::Array((v).iter().map(|v| Value::String((v).clone())).collect())).collect()));
     Value::Object(m)
 }
 
-fn iface_monitoring__get_droplet_cpu_metrics_response_data_result_op_item_metric__to_json(p: &iface_monitoring::GetDropletCpuMetricsResponseDataResultOpItemMetric) -> Value {
+fn iface_monitoring__get_droplet_cpu_metrics_response_data_result_op_item_metric_entry__to_json(p: &iface_monitoring::GetDropletCpuMetricsResponseDataResultOpItemMetricEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -550,14 +552,15 @@ fn iface_monitoring__get_droplet_filesystem_free_metrics_response_data__to_json(
 
 fn iface_monitoring__get_droplet_filesystem_free_metrics_response_data_result_op_item__to_json(p: &iface_monitoring::GetDropletFilesystemFreeMetricsResponseDataResultOpItem) -> Value {
     let mut m = Map::new();
-    m.insert("metric".into(), iface_monitoring__get_droplet_filesystem_free_metrics_response_data_result_op_item_metric__to_json(&p.metric));
+    m.insert("metric".into(), Value::Object((&p.metric).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()));
     m.insert("values".into(), Value::Array((&p.values).iter().map(|v| Value::Array((v).iter().map(|v| Value::String((v).clone())).collect())).collect()));
     Value::Object(m)
 }
 
-fn iface_monitoring__get_droplet_filesystem_free_metrics_response_data_result_op_item_metric__to_json(p: &iface_monitoring::GetDropletFilesystemFreeMetricsResponseDataResultOpItemMetric) -> Value {
+fn iface_monitoring__get_droplet_filesystem_free_metrics_response_data_result_op_item_metric_entry__to_json(p: &iface_monitoring::GetDropletFilesystemFreeMetricsResponseDataResultOpItemMetricEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -577,14 +580,15 @@ fn iface_monitoring__get_droplet_filesystem_size_metrics_response_data__to_json(
 
 fn iface_monitoring__get_droplet_filesystem_size_metrics_response_data_result_op_item__to_json(p: &iface_monitoring::GetDropletFilesystemSizeMetricsResponseDataResultOpItem) -> Value {
     let mut m = Map::new();
-    m.insert("metric".into(), iface_monitoring__get_droplet_filesystem_size_metrics_response_data_result_op_item_metric__to_json(&p.metric));
+    m.insert("metric".into(), Value::Object((&p.metric).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()));
     m.insert("values".into(), Value::Array((&p.values).iter().map(|v| Value::Array((v).iter().map(|v| Value::String((v).clone())).collect())).collect()));
     Value::Object(m)
 }
 
-fn iface_monitoring__get_droplet_filesystem_size_metrics_response_data_result_op_item_metric__to_json(p: &iface_monitoring::GetDropletFilesystemSizeMetricsResponseDataResultOpItemMetric) -> Value {
+fn iface_monitoring__get_droplet_filesystem_size_metrics_response_data_result_op_item_metric_entry__to_json(p: &iface_monitoring::GetDropletFilesystemSizeMetricsResponseDataResultOpItemMetricEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -604,14 +608,15 @@ fn iface_monitoring__get_droplet_load1_metrics_response_data__to_json(p: &iface_
 
 fn iface_monitoring__get_droplet_load1_metrics_response_data_result_op_item__to_json(p: &iface_monitoring::GetDropletLoad1MetricsResponseDataResultOpItem) -> Value {
     let mut m = Map::new();
-    m.insert("metric".into(), iface_monitoring__get_droplet_load1_metrics_response_data_result_op_item_metric__to_json(&p.metric));
+    m.insert("metric".into(), Value::Object((&p.metric).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()));
     m.insert("values".into(), Value::Array((&p.values).iter().map(|v| Value::Array((v).iter().map(|v| Value::String((v).clone())).collect())).collect()));
     Value::Object(m)
 }
 
-fn iface_monitoring__get_droplet_load1_metrics_response_data_result_op_item_metric__to_json(p: &iface_monitoring::GetDropletLoad1MetricsResponseDataResultOpItemMetric) -> Value {
+fn iface_monitoring__get_droplet_load1_metrics_response_data_result_op_item_metric_entry__to_json(p: &iface_monitoring::GetDropletLoad1MetricsResponseDataResultOpItemMetricEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -631,14 +636,15 @@ fn iface_monitoring__get_droplet_load15_metrics_response_data__to_json(p: &iface
 
 fn iface_monitoring__get_droplet_load15_metrics_response_data_result_op_item__to_json(p: &iface_monitoring::GetDropletLoad15MetricsResponseDataResultOpItem) -> Value {
     let mut m = Map::new();
-    m.insert("metric".into(), iface_monitoring__get_droplet_load15_metrics_response_data_result_op_item_metric__to_json(&p.metric));
+    m.insert("metric".into(), Value::Object((&p.metric).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()));
     m.insert("values".into(), Value::Array((&p.values).iter().map(|v| Value::Array((v).iter().map(|v| Value::String((v).clone())).collect())).collect()));
     Value::Object(m)
 }
 
-fn iface_monitoring__get_droplet_load15_metrics_response_data_result_op_item_metric__to_json(p: &iface_monitoring::GetDropletLoad15MetricsResponseDataResultOpItemMetric) -> Value {
+fn iface_monitoring__get_droplet_load15_metrics_response_data_result_op_item_metric_entry__to_json(p: &iface_monitoring::GetDropletLoad15MetricsResponseDataResultOpItemMetricEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -658,14 +664,15 @@ fn iface_monitoring__get_droplet_load5_metrics_response_data__to_json(p: &iface_
 
 fn iface_monitoring__get_droplet_load5_metrics_response_data_result_op_item__to_json(p: &iface_monitoring::GetDropletLoad5MetricsResponseDataResultOpItem) -> Value {
     let mut m = Map::new();
-    m.insert("metric".into(), iface_monitoring__get_droplet_load5_metrics_response_data_result_op_item_metric__to_json(&p.metric));
+    m.insert("metric".into(), Value::Object((&p.metric).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()));
     m.insert("values".into(), Value::Array((&p.values).iter().map(|v| Value::Array((v).iter().map(|v| Value::String((v).clone())).collect())).collect()));
     Value::Object(m)
 }
 
-fn iface_monitoring__get_droplet_load5_metrics_response_data_result_op_item_metric__to_json(p: &iface_monitoring::GetDropletLoad5MetricsResponseDataResultOpItemMetric) -> Value {
+fn iface_monitoring__get_droplet_load5_metrics_response_data_result_op_item_metric_entry__to_json(p: &iface_monitoring::GetDropletLoad5MetricsResponseDataResultOpItemMetricEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -685,14 +692,15 @@ fn iface_monitoring__get_droplet_memory_available_metrics_response_data__to_json
 
 fn iface_monitoring__get_droplet_memory_available_metrics_response_data_result_op_item__to_json(p: &iface_monitoring::GetDropletMemoryAvailableMetricsResponseDataResultOpItem) -> Value {
     let mut m = Map::new();
-    m.insert("metric".into(), iface_monitoring__get_droplet_memory_available_metrics_response_data_result_op_item_metric__to_json(&p.metric));
+    m.insert("metric".into(), Value::Object((&p.metric).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()));
     m.insert("values".into(), Value::Array((&p.values).iter().map(|v| Value::Array((v).iter().map(|v| Value::String((v).clone())).collect())).collect()));
     Value::Object(m)
 }
 
-fn iface_monitoring__get_droplet_memory_available_metrics_response_data_result_op_item_metric__to_json(p: &iface_monitoring::GetDropletMemoryAvailableMetricsResponseDataResultOpItemMetric) -> Value {
+fn iface_monitoring__get_droplet_memory_available_metrics_response_data_result_op_item_metric_entry__to_json(p: &iface_monitoring::GetDropletMemoryAvailableMetricsResponseDataResultOpItemMetricEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -712,14 +720,15 @@ fn iface_monitoring__get_droplet_memory_cached_metrics_response_data__to_json(p:
 
 fn iface_monitoring__get_droplet_memory_cached_metrics_response_data_result_op_item__to_json(p: &iface_monitoring::GetDropletMemoryCachedMetricsResponseDataResultOpItem) -> Value {
     let mut m = Map::new();
-    m.insert("metric".into(), iface_monitoring__get_droplet_memory_cached_metrics_response_data_result_op_item_metric__to_json(&p.metric));
+    m.insert("metric".into(), Value::Object((&p.metric).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()));
     m.insert("values".into(), Value::Array((&p.values).iter().map(|v| Value::Array((v).iter().map(|v| Value::String((v).clone())).collect())).collect()));
     Value::Object(m)
 }
 
-fn iface_monitoring__get_droplet_memory_cached_metrics_response_data_result_op_item_metric__to_json(p: &iface_monitoring::GetDropletMemoryCachedMetricsResponseDataResultOpItemMetric) -> Value {
+fn iface_monitoring__get_droplet_memory_cached_metrics_response_data_result_op_item_metric_entry__to_json(p: &iface_monitoring::GetDropletMemoryCachedMetricsResponseDataResultOpItemMetricEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -739,14 +748,15 @@ fn iface_monitoring__get_droplet_memory_free_metrics_response_data__to_json(p: &
 
 fn iface_monitoring__get_droplet_memory_free_metrics_response_data_result_op_item__to_json(p: &iface_monitoring::GetDropletMemoryFreeMetricsResponseDataResultOpItem) -> Value {
     let mut m = Map::new();
-    m.insert("metric".into(), iface_monitoring__get_droplet_memory_free_metrics_response_data_result_op_item_metric__to_json(&p.metric));
+    m.insert("metric".into(), Value::Object((&p.metric).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()));
     m.insert("values".into(), Value::Array((&p.values).iter().map(|v| Value::Array((v).iter().map(|v| Value::String((v).clone())).collect())).collect()));
     Value::Object(m)
 }
 
-fn iface_monitoring__get_droplet_memory_free_metrics_response_data_result_op_item_metric__to_json(p: &iface_monitoring::GetDropletMemoryFreeMetricsResponseDataResultOpItemMetric) -> Value {
+fn iface_monitoring__get_droplet_memory_free_metrics_response_data_result_op_item_metric_entry__to_json(p: &iface_monitoring::GetDropletMemoryFreeMetricsResponseDataResultOpItemMetricEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -766,14 +776,15 @@ fn iface_monitoring__get_droplet_memory_total_metrics_response_data__to_json(p: 
 
 fn iface_monitoring__get_droplet_memory_total_metrics_response_data_result_op_item__to_json(p: &iface_monitoring::GetDropletMemoryTotalMetricsResponseDataResultOpItem) -> Value {
     let mut m = Map::new();
-    m.insert("metric".into(), iface_monitoring__get_droplet_memory_total_metrics_response_data_result_op_item_metric__to_json(&p.metric));
+    m.insert("metric".into(), Value::Object((&p.metric).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()));
     m.insert("values".into(), Value::Array((&p.values).iter().map(|v| Value::Array((v).iter().map(|v| Value::String((v).clone())).collect())).collect()));
     Value::Object(m)
 }
 
-fn iface_monitoring__get_droplet_memory_total_metrics_response_data_result_op_item_metric__to_json(p: &iface_monitoring::GetDropletMemoryTotalMetricsResponseDataResultOpItemMetric) -> Value {
+fn iface_monitoring__get_droplet_memory_total_metrics_response_data_result_op_item_metric_entry__to_json(p: &iface_monitoring::GetDropletMemoryTotalMetricsResponseDataResultOpItemMetricEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -1106,15 +1117,16 @@ fn iface_monitoring__get_droplet_bandwidth_metrics_response_data__from_json(v: &
 fn iface_monitoring__get_droplet_bandwidth_metrics_response_data_result_op_item__from_json(v: &Value) -> Option<iface_monitoring::GetDropletBandwidthMetricsResponseDataResultOpItem> {
     let m = v.as_object()?;
     Some(iface_monitoring::GetDropletBandwidthMetricsResponseDataResultOpItem {
-        metric: match m.get("metric").and_then(|v| iface_monitoring__get_droplet_bandwidth_metrics_response_data_result_op_item_metric__from_json(v)) { Some(x) => x, None => return None },
+        metric: m.get("metric").and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_monitoring::GetDropletBandwidthMetricsResponseDataResultOpItemMetricEntry { key: k.clone(), value: val })).collect())).unwrap_or_default(),
         values: m.get("values").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())).collect())).unwrap_or_default(),
     })
 }
 
-fn iface_monitoring__get_droplet_bandwidth_metrics_response_data_result_op_item_metric__from_json(v: &Value) -> Option<iface_monitoring::GetDropletBandwidthMetricsResponseDataResultOpItemMetric> {
+fn iface_monitoring__get_droplet_bandwidth_metrics_response_data_result_op_item_metric_entry__from_json(v: &Value) -> Option<iface_monitoring::GetDropletBandwidthMetricsResponseDataResultOpItemMetricEntry> {
     let m = v.as_object()?;
-    Some(iface_monitoring::GetDropletBandwidthMetricsResponseDataResultOpItemMetric {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_monitoring::GetDropletBandwidthMetricsResponseDataResultOpItemMetricEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -1137,15 +1149,16 @@ fn iface_monitoring__get_droplet_cpu_metrics_response_data__from_json(v: &Value)
 fn iface_monitoring__get_droplet_cpu_metrics_response_data_result_op_item__from_json(v: &Value) -> Option<iface_monitoring::GetDropletCpuMetricsResponseDataResultOpItem> {
     let m = v.as_object()?;
     Some(iface_monitoring::GetDropletCpuMetricsResponseDataResultOpItem {
-        metric: match m.get("metric").and_then(|v| iface_monitoring__get_droplet_cpu_metrics_response_data_result_op_item_metric__from_json(v)) { Some(x) => x, None => return None },
+        metric: m.get("metric").and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_monitoring::GetDropletCpuMetricsResponseDataResultOpItemMetricEntry { key: k.clone(), value: val })).collect())).unwrap_or_default(),
         values: m.get("values").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())).collect())).unwrap_or_default(),
     })
 }
 
-fn iface_monitoring__get_droplet_cpu_metrics_response_data_result_op_item_metric__from_json(v: &Value) -> Option<iface_monitoring::GetDropletCpuMetricsResponseDataResultOpItemMetric> {
+fn iface_monitoring__get_droplet_cpu_metrics_response_data_result_op_item_metric_entry__from_json(v: &Value) -> Option<iface_monitoring::GetDropletCpuMetricsResponseDataResultOpItemMetricEntry> {
     let m = v.as_object()?;
-    Some(iface_monitoring::GetDropletCpuMetricsResponseDataResultOpItemMetric {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_monitoring::GetDropletCpuMetricsResponseDataResultOpItemMetricEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -1168,15 +1181,16 @@ fn iface_monitoring__get_droplet_filesystem_free_metrics_response_data__from_jso
 fn iface_monitoring__get_droplet_filesystem_free_metrics_response_data_result_op_item__from_json(v: &Value) -> Option<iface_monitoring::GetDropletFilesystemFreeMetricsResponseDataResultOpItem> {
     let m = v.as_object()?;
     Some(iface_monitoring::GetDropletFilesystemFreeMetricsResponseDataResultOpItem {
-        metric: match m.get("metric").and_then(|v| iface_monitoring__get_droplet_filesystem_free_metrics_response_data_result_op_item_metric__from_json(v)) { Some(x) => x, None => return None },
+        metric: m.get("metric").and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_monitoring::GetDropletFilesystemFreeMetricsResponseDataResultOpItemMetricEntry { key: k.clone(), value: val })).collect())).unwrap_or_default(),
         values: m.get("values").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())).collect())).unwrap_or_default(),
     })
 }
 
-fn iface_monitoring__get_droplet_filesystem_free_metrics_response_data_result_op_item_metric__from_json(v: &Value) -> Option<iface_monitoring::GetDropletFilesystemFreeMetricsResponseDataResultOpItemMetric> {
+fn iface_monitoring__get_droplet_filesystem_free_metrics_response_data_result_op_item_metric_entry__from_json(v: &Value) -> Option<iface_monitoring::GetDropletFilesystemFreeMetricsResponseDataResultOpItemMetricEntry> {
     let m = v.as_object()?;
-    Some(iface_monitoring::GetDropletFilesystemFreeMetricsResponseDataResultOpItemMetric {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_monitoring::GetDropletFilesystemFreeMetricsResponseDataResultOpItemMetricEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -1199,15 +1213,16 @@ fn iface_monitoring__get_droplet_filesystem_size_metrics_response_data__from_jso
 fn iface_monitoring__get_droplet_filesystem_size_metrics_response_data_result_op_item__from_json(v: &Value) -> Option<iface_monitoring::GetDropletFilesystemSizeMetricsResponseDataResultOpItem> {
     let m = v.as_object()?;
     Some(iface_monitoring::GetDropletFilesystemSizeMetricsResponseDataResultOpItem {
-        metric: match m.get("metric").and_then(|v| iface_monitoring__get_droplet_filesystem_size_metrics_response_data_result_op_item_metric__from_json(v)) { Some(x) => x, None => return None },
+        metric: m.get("metric").and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_monitoring::GetDropletFilesystemSizeMetricsResponseDataResultOpItemMetricEntry { key: k.clone(), value: val })).collect())).unwrap_or_default(),
         values: m.get("values").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())).collect())).unwrap_or_default(),
     })
 }
 
-fn iface_monitoring__get_droplet_filesystem_size_metrics_response_data_result_op_item_metric__from_json(v: &Value) -> Option<iface_monitoring::GetDropletFilesystemSizeMetricsResponseDataResultOpItemMetric> {
+fn iface_monitoring__get_droplet_filesystem_size_metrics_response_data_result_op_item_metric_entry__from_json(v: &Value) -> Option<iface_monitoring::GetDropletFilesystemSizeMetricsResponseDataResultOpItemMetricEntry> {
     let m = v.as_object()?;
-    Some(iface_monitoring::GetDropletFilesystemSizeMetricsResponseDataResultOpItemMetric {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_monitoring::GetDropletFilesystemSizeMetricsResponseDataResultOpItemMetricEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -1230,15 +1245,16 @@ fn iface_monitoring__get_droplet_load1_metrics_response_data__from_json(v: &Valu
 fn iface_monitoring__get_droplet_load1_metrics_response_data_result_op_item__from_json(v: &Value) -> Option<iface_monitoring::GetDropletLoad1MetricsResponseDataResultOpItem> {
     let m = v.as_object()?;
     Some(iface_monitoring::GetDropletLoad1MetricsResponseDataResultOpItem {
-        metric: match m.get("metric").and_then(|v| iface_monitoring__get_droplet_load1_metrics_response_data_result_op_item_metric__from_json(v)) { Some(x) => x, None => return None },
+        metric: m.get("metric").and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_monitoring::GetDropletLoad1MetricsResponseDataResultOpItemMetricEntry { key: k.clone(), value: val })).collect())).unwrap_or_default(),
         values: m.get("values").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())).collect())).unwrap_or_default(),
     })
 }
 
-fn iface_monitoring__get_droplet_load1_metrics_response_data_result_op_item_metric__from_json(v: &Value) -> Option<iface_monitoring::GetDropletLoad1MetricsResponseDataResultOpItemMetric> {
+fn iface_monitoring__get_droplet_load1_metrics_response_data_result_op_item_metric_entry__from_json(v: &Value) -> Option<iface_monitoring::GetDropletLoad1MetricsResponseDataResultOpItemMetricEntry> {
     let m = v.as_object()?;
-    Some(iface_monitoring::GetDropletLoad1MetricsResponseDataResultOpItemMetric {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_monitoring::GetDropletLoad1MetricsResponseDataResultOpItemMetricEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -1261,15 +1277,16 @@ fn iface_monitoring__get_droplet_load15_metrics_response_data__from_json(v: &Val
 fn iface_monitoring__get_droplet_load15_metrics_response_data_result_op_item__from_json(v: &Value) -> Option<iface_monitoring::GetDropletLoad15MetricsResponseDataResultOpItem> {
     let m = v.as_object()?;
     Some(iface_monitoring::GetDropletLoad15MetricsResponseDataResultOpItem {
-        metric: match m.get("metric").and_then(|v| iface_monitoring__get_droplet_load15_metrics_response_data_result_op_item_metric__from_json(v)) { Some(x) => x, None => return None },
+        metric: m.get("metric").and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_monitoring::GetDropletLoad15MetricsResponseDataResultOpItemMetricEntry { key: k.clone(), value: val })).collect())).unwrap_or_default(),
         values: m.get("values").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())).collect())).unwrap_or_default(),
     })
 }
 
-fn iface_monitoring__get_droplet_load15_metrics_response_data_result_op_item_metric__from_json(v: &Value) -> Option<iface_monitoring::GetDropletLoad15MetricsResponseDataResultOpItemMetric> {
+fn iface_monitoring__get_droplet_load15_metrics_response_data_result_op_item_metric_entry__from_json(v: &Value) -> Option<iface_monitoring::GetDropletLoad15MetricsResponseDataResultOpItemMetricEntry> {
     let m = v.as_object()?;
-    Some(iface_monitoring::GetDropletLoad15MetricsResponseDataResultOpItemMetric {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_monitoring::GetDropletLoad15MetricsResponseDataResultOpItemMetricEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -1292,15 +1309,16 @@ fn iface_monitoring__get_droplet_load5_metrics_response_data__from_json(v: &Valu
 fn iface_monitoring__get_droplet_load5_metrics_response_data_result_op_item__from_json(v: &Value) -> Option<iface_monitoring::GetDropletLoad5MetricsResponseDataResultOpItem> {
     let m = v.as_object()?;
     Some(iface_monitoring::GetDropletLoad5MetricsResponseDataResultOpItem {
-        metric: match m.get("metric").and_then(|v| iface_monitoring__get_droplet_load5_metrics_response_data_result_op_item_metric__from_json(v)) { Some(x) => x, None => return None },
+        metric: m.get("metric").and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_monitoring::GetDropletLoad5MetricsResponseDataResultOpItemMetricEntry { key: k.clone(), value: val })).collect())).unwrap_or_default(),
         values: m.get("values").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())).collect())).unwrap_or_default(),
     })
 }
 
-fn iface_monitoring__get_droplet_load5_metrics_response_data_result_op_item_metric__from_json(v: &Value) -> Option<iface_monitoring::GetDropletLoad5MetricsResponseDataResultOpItemMetric> {
+fn iface_monitoring__get_droplet_load5_metrics_response_data_result_op_item_metric_entry__from_json(v: &Value) -> Option<iface_monitoring::GetDropletLoad5MetricsResponseDataResultOpItemMetricEntry> {
     let m = v.as_object()?;
-    Some(iface_monitoring::GetDropletLoad5MetricsResponseDataResultOpItemMetric {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_monitoring::GetDropletLoad5MetricsResponseDataResultOpItemMetricEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -1323,15 +1341,16 @@ fn iface_monitoring__get_droplet_memory_available_metrics_response_data__from_js
 fn iface_monitoring__get_droplet_memory_available_metrics_response_data_result_op_item__from_json(v: &Value) -> Option<iface_monitoring::GetDropletMemoryAvailableMetricsResponseDataResultOpItem> {
     let m = v.as_object()?;
     Some(iface_monitoring::GetDropletMemoryAvailableMetricsResponseDataResultOpItem {
-        metric: match m.get("metric").and_then(|v| iface_monitoring__get_droplet_memory_available_metrics_response_data_result_op_item_metric__from_json(v)) { Some(x) => x, None => return None },
+        metric: m.get("metric").and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_monitoring::GetDropletMemoryAvailableMetricsResponseDataResultOpItemMetricEntry { key: k.clone(), value: val })).collect())).unwrap_or_default(),
         values: m.get("values").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())).collect())).unwrap_or_default(),
     })
 }
 
-fn iface_monitoring__get_droplet_memory_available_metrics_response_data_result_op_item_metric__from_json(v: &Value) -> Option<iface_monitoring::GetDropletMemoryAvailableMetricsResponseDataResultOpItemMetric> {
+fn iface_monitoring__get_droplet_memory_available_metrics_response_data_result_op_item_metric_entry__from_json(v: &Value) -> Option<iface_monitoring::GetDropletMemoryAvailableMetricsResponseDataResultOpItemMetricEntry> {
     let m = v.as_object()?;
-    Some(iface_monitoring::GetDropletMemoryAvailableMetricsResponseDataResultOpItemMetric {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_monitoring::GetDropletMemoryAvailableMetricsResponseDataResultOpItemMetricEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -1354,15 +1373,16 @@ fn iface_monitoring__get_droplet_memory_cached_metrics_response_data__from_json(
 fn iface_monitoring__get_droplet_memory_cached_metrics_response_data_result_op_item__from_json(v: &Value) -> Option<iface_monitoring::GetDropletMemoryCachedMetricsResponseDataResultOpItem> {
     let m = v.as_object()?;
     Some(iface_monitoring::GetDropletMemoryCachedMetricsResponseDataResultOpItem {
-        metric: match m.get("metric").and_then(|v| iface_monitoring__get_droplet_memory_cached_metrics_response_data_result_op_item_metric__from_json(v)) { Some(x) => x, None => return None },
+        metric: m.get("metric").and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_monitoring::GetDropletMemoryCachedMetricsResponseDataResultOpItemMetricEntry { key: k.clone(), value: val })).collect())).unwrap_or_default(),
         values: m.get("values").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())).collect())).unwrap_or_default(),
     })
 }
 
-fn iface_monitoring__get_droplet_memory_cached_metrics_response_data_result_op_item_metric__from_json(v: &Value) -> Option<iface_monitoring::GetDropletMemoryCachedMetricsResponseDataResultOpItemMetric> {
+fn iface_monitoring__get_droplet_memory_cached_metrics_response_data_result_op_item_metric_entry__from_json(v: &Value) -> Option<iface_monitoring::GetDropletMemoryCachedMetricsResponseDataResultOpItemMetricEntry> {
     let m = v.as_object()?;
-    Some(iface_monitoring::GetDropletMemoryCachedMetricsResponseDataResultOpItemMetric {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_monitoring::GetDropletMemoryCachedMetricsResponseDataResultOpItemMetricEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -1385,15 +1405,16 @@ fn iface_monitoring__get_droplet_memory_free_metrics_response_data__from_json(v:
 fn iface_monitoring__get_droplet_memory_free_metrics_response_data_result_op_item__from_json(v: &Value) -> Option<iface_monitoring::GetDropletMemoryFreeMetricsResponseDataResultOpItem> {
     let m = v.as_object()?;
     Some(iface_monitoring::GetDropletMemoryFreeMetricsResponseDataResultOpItem {
-        metric: match m.get("metric").and_then(|v| iface_monitoring__get_droplet_memory_free_metrics_response_data_result_op_item_metric__from_json(v)) { Some(x) => x, None => return None },
+        metric: m.get("metric").and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_monitoring::GetDropletMemoryFreeMetricsResponseDataResultOpItemMetricEntry { key: k.clone(), value: val })).collect())).unwrap_or_default(),
         values: m.get("values").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())).collect())).unwrap_or_default(),
     })
 }
 
-fn iface_monitoring__get_droplet_memory_free_metrics_response_data_result_op_item_metric__from_json(v: &Value) -> Option<iface_monitoring::GetDropletMemoryFreeMetricsResponseDataResultOpItemMetric> {
+fn iface_monitoring__get_droplet_memory_free_metrics_response_data_result_op_item_metric_entry__from_json(v: &Value) -> Option<iface_monitoring::GetDropletMemoryFreeMetricsResponseDataResultOpItemMetricEntry> {
     let m = v.as_object()?;
-    Some(iface_monitoring::GetDropletMemoryFreeMetricsResponseDataResultOpItemMetric {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_monitoring::GetDropletMemoryFreeMetricsResponseDataResultOpItemMetricEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -1416,15 +1437,16 @@ fn iface_monitoring__get_droplet_memory_total_metrics_response_data__from_json(v
 fn iface_monitoring__get_droplet_memory_total_metrics_response_data_result_op_item__from_json(v: &Value) -> Option<iface_monitoring::GetDropletMemoryTotalMetricsResponseDataResultOpItem> {
     let m = v.as_object()?;
     Some(iface_monitoring::GetDropletMemoryTotalMetricsResponseDataResultOpItem {
-        metric: match m.get("metric").and_then(|v| iface_monitoring__get_droplet_memory_total_metrics_response_data_result_op_item_metric__from_json(v)) { Some(x) => x, None => return None },
+        metric: m.get("metric").and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_monitoring::GetDropletMemoryTotalMetricsResponseDataResultOpItemMetricEntry { key: k.clone(), value: val })).collect())).unwrap_or_default(),
         values: m.get("values").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())).collect())).unwrap_or_default(),
     })
 }
 
-fn iface_monitoring__get_droplet_memory_total_metrics_response_data_result_op_item_metric__from_json(v: &Value) -> Option<iface_monitoring::GetDropletMemoryTotalMetricsResponseDataResultOpItemMetric> {
+fn iface_monitoring__get_droplet_memory_total_metrics_response_data_result_op_item_metric_entry__from_json(v: &Value) -> Option<iface_monitoring::GetDropletMemoryTotalMetricsResponseDataResultOpItemMetricEntry> {
     let m = v.as_object()?;
-    Some(iface_monitoring::GetDropletMemoryTotalMetricsResponseDataResultOpItemMetric {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_monitoring::GetDropletMemoryTotalMetricsResponseDataResultOpItemMetricEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 

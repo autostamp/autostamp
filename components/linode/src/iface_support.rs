@@ -109,9 +109,9 @@ fn iface_support__ticket_status_enum__to_str(e: &iface_support::TicketStatusEnum
 fn iface_support__get_tickets_response__to_json(p: &iface_support::GetTicketsResponse) -> Value {
     let mut m = Map::new();
     m.insert("data".into(), match (&p.data) { Some(v) => Value::Array((v).iter().map(|v| iface_support__ticket__to_json(v)).collect()), None => Value::Null });
-    m.insert("page".into(), match (&p.page) { Some(v) => iface_support__pagination_envelope_properties_page__to_json(v), None => Value::Null });
-    m.insert("pages".into(), match (&p.pages) { Some(v) => iface_support__pagination_envelope_properties_pages__to_json(v), None => Value::Null });
-    m.insert("results".into(), match (&p.results) { Some(v) => iface_support__pagination_envelope_properties_results__to_json(v), None => Value::Null });
+    m.insert("page".into(), match (&p.page) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("pages".into(), match (&p.pages) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("results".into(), match (&p.results) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
@@ -142,42 +142,26 @@ fn iface_support__ticket_entity__to_json(p: &iface_support::TicketEntity) -> Val
     Value::Object(m)
 }
 
-fn iface_support__pagination_envelope_properties_page__to_json(p: &iface_support::PaginationEnvelopePropertiesPage) -> Value {
+fn iface_support__create_ticket_attachment_response_entry__to_json(p: &iface_support::CreateTicketAttachmentResponseEntry) -> Value {
     let mut m = Map::new();
+    m.insert("key".into(), Value::String((&p.key).clone()));
     m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
-fn iface_support__pagination_envelope_properties_pages__to_json(p: &iface_support::PaginationEnvelopePropertiesPages) -> Value {
+fn iface_support__close_ticket_response_entry__to_json(p: &iface_support::CloseTicketResponseEntry) -> Value {
     let mut m = Map::new();
+    m.insert("key".into(), Value::String((&p.key).clone()));
     m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_support__pagination_envelope_properties_results__to_json(p: &iface_support::PaginationEnvelopePropertiesResults) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_support__create_ticket_attachment_response__to_json(p: &iface_support::CreateTicketAttachmentResponse) -> Value {
-    let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_support__close_ticket_response__to_json(p: &iface_support::CloseTicketResponse) -> Value {
-    let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
 fn iface_support__get_ticket_replies_response__to_json(p: &iface_support::GetTicketRepliesResponse) -> Value {
     let mut m = Map::new();
     m.insert("data".into(), match (&p.data) { Some(v) => Value::Array((v).iter().map(|v| iface_support__ticket_reply__to_json(v)).collect()), None => Value::Null });
-    m.insert("page".into(), match (&p.page) { Some(v) => iface_support__pagination_envelope_properties_page__to_json(v), None => Value::Null });
-    m.insert("pages".into(), match (&p.pages) { Some(v) => iface_support__pagination_envelope_properties_pages__to_json(v), None => Value::Null });
-    m.insert("results".into(), match (&p.results) { Some(v) => iface_support__pagination_envelope_properties_results__to_json(v), None => Value::Null });
+    m.insert("page".into(), match (&p.page) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("pages".into(), match (&p.pages) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("results".into(), match (&p.results) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
@@ -255,9 +239,9 @@ fn iface_support__get_tickets_response__from_json(v: &Value) -> Option<iface_sup
     let m = v.as_object()?;
     Some(iface_support::GetTicketsResponse {
         data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_support__ticket__from_json(x)).collect())),
-        page: m.get("page").filter(|v| !v.is_null()).and_then(|v| iface_support__pagination_envelope_properties_page__from_json(v)),
-        pages: m.get("pages").filter(|v| !v.is_null()).and_then(|v| iface_support__pagination_envelope_properties_pages__from_json(v)),
-        results: m.get("results").filter(|v| !v.is_null()).and_then(|v| iface_support__pagination_envelope_properties_results__from_json(v)),
+        page: m.get("page").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        pages: m.get("pages").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        results: m.get("results").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
     })
 }
 
@@ -290,38 +274,19 @@ fn iface_support__ticket_entity__from_json(v: &Value) -> Option<iface_support::T
     })
 }
 
-fn iface_support__pagination_envelope_properties_page__from_json(v: &Value) -> Option<iface_support::PaginationEnvelopePropertiesPage> {
+fn iface_support__create_ticket_attachment_response_entry__from_json(v: &Value) -> Option<iface_support::CreateTicketAttachmentResponseEntry> {
     let m = v.as_object()?;
-    Some(iface_support::PaginationEnvelopePropertiesPage {
+    Some(iface_support::CreateTicketAttachmentResponseEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
-fn iface_support__pagination_envelope_properties_pages__from_json(v: &Value) -> Option<iface_support::PaginationEnvelopePropertiesPages> {
+fn iface_support__close_ticket_response_entry__from_json(v: &Value) -> Option<iface_support::CloseTicketResponseEntry> {
     let m = v.as_object()?;
-    Some(iface_support::PaginationEnvelopePropertiesPages {
+    Some(iface_support::CloseTicketResponseEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-    })
-}
-
-fn iface_support__pagination_envelope_properties_results__from_json(v: &Value) -> Option<iface_support::PaginationEnvelopePropertiesResults> {
-    let m = v.as_object()?;
-    Some(iface_support::PaginationEnvelopePropertiesResults {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-    })
-}
-
-fn iface_support__create_ticket_attachment_response__from_json(v: &Value) -> Option<iface_support::CreateTicketAttachmentResponse> {
-    let m = v.as_object()?;
-    Some(iface_support::CreateTicketAttachmentResponse {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-    })
-}
-
-fn iface_support__close_ticket_response__from_json(v: &Value) -> Option<iface_support::CloseTicketResponse> {
-    let m = v.as_object()?;
-    Some(iface_support::CloseTicketResponse {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
     })
 }
 
@@ -329,9 +294,9 @@ fn iface_support__get_ticket_replies_response__from_json(v: &Value) -> Option<if
     let m = v.as_object()?;
     Some(iface_support::GetTicketRepliesResponse {
         data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_support__ticket_reply__from_json(x)).collect())),
-        page: m.get("page").filter(|v| !v.is_null()).and_then(|v| iface_support__pagination_envelope_properties_page__from_json(v)),
-        pages: m.get("pages").filter(|v| !v.is_null()).and_then(|v| iface_support__pagination_envelope_properties_pages__from_json(v)),
-        results: m.get("results").filter(|v| !v.is_null()).and_then(|v| iface_support__pagination_envelope_properties_results__from_json(v)),
+        page: m.get("page").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        pages: m.get("pages").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        results: m.get("results").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
     })
 }
 
@@ -410,12 +375,12 @@ fn iface_support__get_ticket__err(e: crate::runtime::DispatchError) -> String {
     }
 }
 
-fn iface_support__create_ticket_attachment__ok(body: String) -> Result<iface_support::CreateTicketAttachmentResponse, crate::runtime::DispatchError> {
+fn iface_support__create_ticket_attachment__ok(body: String) -> Result<Vec<iface_support::CreateTicketAttachmentResponseEntry>, crate::runtime::DispatchError> {
     let v: Value = match serde_json::from_str(&body) {
         Ok(v) => v,
         Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
     };
-    match iface_support__create_ticket_attachment_response__from_json(&v) {
+    match (&v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_support::CreateTicketAttachmentResponseEntry { key: k.clone(), value: val })).collect()) {
         Some(x) => Ok(x),
         None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
@@ -428,12 +393,12 @@ fn iface_support__create_ticket_attachment__err(e: crate::runtime::DispatchError
     }
 }
 
-fn iface_support__close_ticket__ok(body: String) -> Result<iface_support::CloseTicketResponse, crate::runtime::DispatchError> {
+fn iface_support__close_ticket__ok(body: String) -> Result<Vec<iface_support::CloseTicketResponseEntry>, crate::runtime::DispatchError> {
     let v: Value = match serde_json::from_str(&body) {
         Ok(v) => v,
         Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
     };
-    match iface_support__close_ticket_response__from_json(&v) {
+    match (&v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_support::CloseTicketResponseEntry { key: k.clone(), value: val })).collect()) {
         Some(x) => Ok(x),
         None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
@@ -504,14 +469,14 @@ impl iface_support::Guest for crate::Component {
             Err(e) => Err(iface_support__get_ticket__err(e)),
         }
     }
-    fn create_ticket_attachment(params: iface_support::CreateTicketAttachmentParams) -> Result<iface_support::CreateTicketAttachmentResponse, String> {
+    fn create_ticket_attachment(params: iface_support::CreateTicketAttachmentParams) -> Result<Vec<iface_support::CreateTicketAttachmentResponseEntry>, String> {
         let json = iface_support__create_ticket_attachment_params__to_json(&params);
         match dispatch(&OP_SUPPORT_CREATE_TICKET_ATTACHMENT, json).and_then(iface_support__create_ticket_attachment__ok) {
             Ok(v) => Ok(v),
             Err(e) => Err(iface_support__create_ticket_attachment__err(e)),
         }
     }
-    fn close_ticket(params: iface_support::CloseTicketParams) -> Result<iface_support::CloseTicketResponse, String> {
+    fn close_ticket(params: iface_support::CloseTicketParams) -> Result<Vec<iface_support::CloseTicketResponseEntry>, String> {
         let json = iface_support__close_ticket_params__to_json(&params);
         match dispatch(&OP_SUPPORT_CLOSE_TICKET, json).and_then(iface_support__close_ticket__ok) {
             Ok(v) => Ok(v),

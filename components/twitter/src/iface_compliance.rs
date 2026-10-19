@@ -114,6 +114,23 @@ fn iface_compliance__list_batch_compliance_jobs_compliance_job_fields_item_enum_
     }
 }
 
+fn iface_compliance__job_status__to_str(e: &iface_compliance::JobStatus) -> &'static str {
+    match e {
+        iface_compliance::JobStatus::Created => "created",
+        iface_compliance::JobStatus::InProgress => "in_progress",
+        iface_compliance::JobStatus::Failed => "failed",
+        iface_compliance::JobStatus::Complete => "complete",
+        iface_compliance::JobStatus::Expired => "expired",
+    }
+}
+
+fn iface_compliance__job_type__to_str(e: &iface_compliance::JobType) -> &'static str {
+    match e {
+        iface_compliance::JobType::Tweets => "tweets",
+        iface_compliance::JobType::Users => "users",
+    }
+}
+
 fn iface_compliance__get2_compliance_jobs_response__to_json(p: &iface_compliance::Get2ComplianceJobsResponse) -> Value {
     let mut m = Map::new();
     m.insert("data".into(), match (&p.data) { Some(v) => Value::Array((v).iter().map(|v| iface_compliance__job__to_json(v)).collect()), None => Value::Null });
@@ -124,69 +141,15 @@ fn iface_compliance__get2_compliance_jobs_response__to_json(p: &iface_compliance
 
 fn iface_compliance__job__to_json(p: &iface_compliance::Job) -> Value {
     let mut m = Map::new();
-    m.insert("created_at".into(), iface_compliance__created_at__to_json(&p.created_at));
-    m.insert("download_expires_at".into(), iface_compliance__download_expiration__to_json(&p.download_expires_at));
-    m.insert("download_url".into(), iface_compliance__download_url__to_json(&p.download_url));
-    m.insert("id".into(), iface_compliance__job_id__to_json(&p.id));
-    m.insert("name".into(), match (&p.name) { Some(v) => iface_compliance__job_name__to_json(v), None => Value::Null });
-    m.insert("status".into(), iface_compliance__job_status__to_json(&p.status));
-    m.insert("type".into(), iface_compliance__job_type__to_json(&p.type_op));
-    m.insert("upload_expires_at".into(), iface_compliance__upload_expiration__to_json(&p.upload_expires_at));
-    m.insert("upload_url".into(), iface_compliance__upload_url__to_json(&p.upload_url));
-    Value::Object(m)
-}
-
-fn iface_compliance__created_at__to_json(p: &iface_compliance::CreatedAt) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_compliance__download_expiration__to_json(p: &iface_compliance::DownloadExpiration) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_compliance__download_url__to_json(p: &iface_compliance::DownloadUrl) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_compliance__job_id__to_json(p: &iface_compliance::JobId) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_compliance__job_name__to_json(p: &iface_compliance::JobName) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_compliance__job_status__to_json(p: &iface_compliance::JobStatus) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_compliance__job_type__to_json(p: &iface_compliance::JobType) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_compliance__upload_expiration__to_json(p: &iface_compliance::UploadExpiration) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_compliance__upload_url__to_json(p: &iface_compliance::UploadUrl) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
+    m.insert("created_at".into(), Value::String((&p.created_at).clone()));
+    m.insert("download_expires_at".into(), Value::String((&p.download_expires_at).clone()));
+    m.insert("download_url".into(), Value::String((&p.download_url).clone()));
+    m.insert("id".into(), Value::String((&p.id).clone()));
+    m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("status".into(), Value::String(iface_compliance__job_status__to_str(&p.status).into()));
+    m.insert("type".into(), Value::String(iface_compliance__job_type__to_str(&p.type_op).into()));
+    m.insert("upload_expires_at".into(), Value::String((&p.upload_expires_at).clone()));
+    m.insert("upload_url".into(), Value::String((&p.upload_url).clone()));
     Value::Object(m)
 }
 
@@ -201,13 +164,7 @@ fn iface_compliance__problem__to_json(p: &iface_compliance::Problem) -> Value {
 
 fn iface_compliance__get2_compliance_jobs_response_meta__to_json(p: &iface_compliance::Get2ComplianceJobsResponseMeta) -> Value {
     let mut m = Map::new();
-    m.insert("result_count".into(), match (&p.result_count) { Some(v) => iface_compliance__result_count__to_json(v), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_compliance__result_count__to_json(p: &iface_compliance::ResultCount) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
+    m.insert("result_count".into(), match (&p.result_count) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
@@ -225,24 +182,6 @@ fn iface_compliance__get2_compliance_jobs_id_response__to_json(p: &iface_complia
     Value::Object(m)
 }
 
-fn iface_compliance__tweet_compliance_stream_response__to_json(p: &iface_compliance::TweetComplianceStreamResponse) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_compliance__tweet_label_stream_response__to_json(p: &iface_compliance::TweetLabelStreamResponse) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_compliance__user_compliance_stream_response__to_json(p: &iface_compliance::UserComplianceStreamResponse) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
 fn iface_compliance__list_batch_compliance_jobs_params__to_json(p: &iface_compliance::ListBatchComplianceJobsParams) -> Value {
     let mut m = Map::new();
     m.insert("type".into(), Value::String(iface_compliance__list_batch_compliance_jobs_type_op_enum__to_str(&p.type_op).into()));
@@ -253,7 +192,7 @@ fn iface_compliance__list_batch_compliance_jobs_params__to_json(p: &iface_compli
 
 fn iface_compliance__create_batch_compliance_job_params__to_json(p: &iface_compliance::CreateBatchComplianceJobParams) -> Value {
     let mut m = Map::new();
-    m.insert("name".into(), match (&p.name) { Some(v) => iface_compliance__job_name__to_json(v), None => Value::Null });
+    m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("resumable".into(), match (&p.resumable) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     m.insert("type".into(), Value::String(iface_compliance__list_batch_compliance_jobs_type_op_enum__to_str(&p.type_op).into()));
     Value::Object(m)
@@ -304,78 +243,15 @@ fn iface_compliance__get2_compliance_jobs_response__from_json(v: &Value) -> Opti
 fn iface_compliance__job__from_json(v: &Value) -> Option<iface_compliance::Job> {
     let m = v.as_object()?;
     Some(iface_compliance::Job {
-        created_at: match m.get("created_at").and_then(|v| iface_compliance__created_at__from_json(v)) { Some(x) => x, None => return None },
-        download_expires_at: match m.get("download_expires_at").and_then(|v| iface_compliance__download_expiration__from_json(v)) { Some(x) => x, None => return None },
-        download_url: match m.get("download_url").and_then(|v| iface_compliance__download_url__from_json(v)) { Some(x) => x, None => return None },
-        id: match m.get("id").and_then(|v| iface_compliance__job_id__from_json(v)) { Some(x) => x, None => return None },
-        name: m.get("name").filter(|v| !v.is_null()).and_then(|v| iface_compliance__job_name__from_json(v)),
-        status: match m.get("status").and_then(|v| iface_compliance__job_status__from_json(v)) { Some(x) => x, None => return None },
-        type_op: match m.get("type").and_then(|v| iface_compliance__job_type__from_json(v)) { Some(x) => x, None => return None },
-        upload_expires_at: match m.get("upload_expires_at").and_then(|v| iface_compliance__upload_expiration__from_json(v)) { Some(x) => x, None => return None },
-        upload_url: match m.get("upload_url").and_then(|v| iface_compliance__upload_url__from_json(v)) { Some(x) => x, None => return None },
-    })
-}
-
-fn iface_compliance__created_at__from_json(v: &Value) -> Option<iface_compliance::CreatedAt> {
-    let m = v.as_object()?;
-    Some(iface_compliance::CreatedAt {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-    })
-}
-
-fn iface_compliance__download_expiration__from_json(v: &Value) -> Option<iface_compliance::DownloadExpiration> {
-    let m = v.as_object()?;
-    Some(iface_compliance::DownloadExpiration {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-    })
-}
-
-fn iface_compliance__download_url__from_json(v: &Value) -> Option<iface_compliance::DownloadUrl> {
-    let m = v.as_object()?;
-    Some(iface_compliance::DownloadUrl {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-    })
-}
-
-fn iface_compliance__job_id__from_json(v: &Value) -> Option<iface_compliance::JobId> {
-    let m = v.as_object()?;
-    Some(iface_compliance::JobId {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-    })
-}
-
-fn iface_compliance__job_name__from_json(v: &Value) -> Option<iface_compliance::JobName> {
-    let m = v.as_object()?;
-    Some(iface_compliance::JobName {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-    })
-}
-
-fn iface_compliance__job_status__from_json(v: &Value) -> Option<iface_compliance::JobStatus> {
-    let m = v.as_object()?;
-    Some(iface_compliance::JobStatus {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-    })
-}
-
-fn iface_compliance__job_type__from_json(v: &Value) -> Option<iface_compliance::JobType> {
-    let m = v.as_object()?;
-    Some(iface_compliance::JobType {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-    })
-}
-
-fn iface_compliance__upload_expiration__from_json(v: &Value) -> Option<iface_compliance::UploadExpiration> {
-    let m = v.as_object()?;
-    Some(iface_compliance::UploadExpiration {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-    })
-}
-
-fn iface_compliance__upload_url__from_json(v: &Value) -> Option<iface_compliance::UploadUrl> {
-    let m = v.as_object()?;
-    Some(iface_compliance::UploadUrl {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        created_at: m.get("created_at").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        download_expires_at: m.get("download_expires_at").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        download_url: m.get("download_url").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        id: m.get("id").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        status: match m.get("status").and_then(|v| (v).as_str().and_then(iface_compliance__job_status__from_str)) { Some(x) => x, None => return None },
+        type_op: match m.get("type").and_then(|v| (v).as_str().and_then(iface_compliance__job_type__from_str)) { Some(x) => x, None => return None },
+        upload_expires_at: m.get("upload_expires_at").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        upload_url: m.get("upload_url").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -392,14 +268,7 @@ fn iface_compliance__problem__from_json(v: &Value) -> Option<iface_compliance::P
 fn iface_compliance__get2_compliance_jobs_response_meta__from_json(v: &Value) -> Option<iface_compliance::Get2ComplianceJobsResponseMeta> {
     let m = v.as_object()?;
     Some(iface_compliance::Get2ComplianceJobsResponseMeta {
-        result_count: m.get("result_count").filter(|v| !v.is_null()).and_then(|v| iface_compliance__result_count__from_json(v)),
-    })
-}
-
-fn iface_compliance__result_count__from_json(v: &Value) -> Option<iface_compliance::ResultCount> {
-    let m = v.as_object()?;
-    Some(iface_compliance::ResultCount {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        result_count: m.get("result_count").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
     })
 }
 
@@ -419,25 +288,23 @@ fn iface_compliance__get2_compliance_jobs_id_response__from_json(v: &Value) -> O
     })
 }
 
-fn iface_compliance__tweet_compliance_stream_response__from_json(v: &Value) -> Option<iface_compliance::TweetComplianceStreamResponse> {
-    let m = v.as_object()?;
-    Some(iface_compliance::TweetComplianceStreamResponse {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-    })
+fn iface_compliance__job_status__from_str(s: &str) -> Option<iface_compliance::JobStatus> {
+    match s {
+        "created" => Some(iface_compliance::JobStatus::Created),
+        "in_progress" => Some(iface_compliance::JobStatus::InProgress),
+        "failed" => Some(iface_compliance::JobStatus::Failed),
+        "complete" => Some(iface_compliance::JobStatus::Complete),
+        "expired" => Some(iface_compliance::JobStatus::Expired),
+        _ => None,
+    }
 }
 
-fn iface_compliance__tweet_label_stream_response__from_json(v: &Value) -> Option<iface_compliance::TweetLabelStreamResponse> {
-    let m = v.as_object()?;
-    Some(iface_compliance::TweetLabelStreamResponse {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-    })
-}
-
-fn iface_compliance__user_compliance_stream_response__from_json(v: &Value) -> Option<iface_compliance::UserComplianceStreamResponse> {
-    let m = v.as_object()?;
-    Some(iface_compliance::UserComplianceStreamResponse {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-    })
+fn iface_compliance__job_type__from_str(s: &str) -> Option<iface_compliance::JobType> {
+    match s {
+        "tweets" => Some(iface_compliance::JobType::Tweets),
+        "users" => Some(iface_compliance::JobType::Users),
+        _ => None,
+    }
 }
 
 fn iface_compliance__list_batch_compliance_jobs__ok(body: String) -> Result<iface_compliance::Get2ComplianceJobsResponse, crate::runtime::DispatchError> {
@@ -494,15 +361,8 @@ fn iface_compliance__get_batch_compliance_job__err(e: crate::runtime::DispatchEr
     }
 }
 
-fn iface_compliance__get_tweets_compliance_stream__ok(body: String) -> Result<iface_compliance::TweetComplianceStreamResponse, crate::runtime::DispatchError> {
-    let v: Value = match serde_json::from_str(&body) {
-        Ok(v) => v,
-        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
-    };
-    match iface_compliance__tweet_compliance_stream_response__from_json(&v) {
-        Some(x) => Ok(x),
-        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
-    }
+fn iface_compliance__get_tweets_compliance_stream__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
 }
 
 fn iface_compliance__get_tweets_compliance_stream__err(e: crate::runtime::DispatchError) -> String {
@@ -512,15 +372,8 @@ fn iface_compliance__get_tweets_compliance_stream__err(e: crate::runtime::Dispat
     }
 }
 
-fn iface_compliance__get_tweets_label_stream__ok(body: String) -> Result<iface_compliance::TweetLabelStreamResponse, crate::runtime::DispatchError> {
-    let v: Value = match serde_json::from_str(&body) {
-        Ok(v) => v,
-        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
-    };
-    match iface_compliance__tweet_label_stream_response__from_json(&v) {
-        Some(x) => Ok(x),
-        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
-    }
+fn iface_compliance__get_tweets_label_stream__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
 }
 
 fn iface_compliance__get_tweets_label_stream__err(e: crate::runtime::DispatchError) -> String {
@@ -530,15 +383,8 @@ fn iface_compliance__get_tweets_label_stream__err(e: crate::runtime::DispatchErr
     }
 }
 
-fn iface_compliance__get_users_compliance_stream__ok(body: String) -> Result<iface_compliance::UserComplianceStreamResponse, crate::runtime::DispatchError> {
-    let v: Value = match serde_json::from_str(&body) {
-        Ok(v) => v,
-        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
-    };
-    match iface_compliance__user_compliance_stream_response__from_json(&v) {
-        Some(x) => Ok(x),
-        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
-    }
+fn iface_compliance__get_users_compliance_stream__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
 }
 
 fn iface_compliance__get_users_compliance_stream__err(e: crate::runtime::DispatchError) -> String {
@@ -570,21 +416,21 @@ impl iface_compliance::Guest for crate::Component {
             Err(e) => Err(iface_compliance__get_batch_compliance_job__err(e)),
         }
     }
-    fn get_tweets_compliance_stream(params: iface_compliance::GetTweetsComplianceStreamParams) -> Result<iface_compliance::TweetComplianceStreamResponse, String> {
+    fn get_tweets_compliance_stream(params: iface_compliance::GetTweetsComplianceStreamParams) -> Result<String, String> {
         let json = iface_compliance__get_tweets_compliance_stream_params__to_json(&params);
         match dispatch(&OP_COMPLIANCE_GET_TWEETS_COMPLIANCE_STREAM, json).and_then(iface_compliance__get_tweets_compliance_stream__ok) {
             Ok(v) => Ok(v),
             Err(e) => Err(iface_compliance__get_tweets_compliance_stream__err(e)),
         }
     }
-    fn get_tweets_label_stream(params: iface_compliance::GetTweetsLabelStreamParams) -> Result<iface_compliance::TweetLabelStreamResponse, String> {
+    fn get_tweets_label_stream(params: iface_compliance::GetTweetsLabelStreamParams) -> Result<String, String> {
         let json = iface_compliance__get_tweets_label_stream_params__to_json(&params);
         match dispatch(&OP_COMPLIANCE_GET_TWEETS_LABEL_STREAM, json).and_then(iface_compliance__get_tweets_label_stream__ok) {
             Ok(v) => Ok(v),
             Err(e) => Err(iface_compliance__get_tweets_label_stream__err(e)),
         }
     }
-    fn get_users_compliance_stream(params: iface_compliance::GetUsersComplianceStreamParams) -> Result<iface_compliance::UserComplianceStreamResponse, String> {
+    fn get_users_compliance_stream(params: iface_compliance::GetUsersComplianceStreamParams) -> Result<String, String> {
         let json = iface_compliance__get_users_compliance_stream_params__to_json(&params);
         match dispatch(&OP_COMPLIANCE_GET_USERS_COMPLIANCE_STREAM, json).and_then(iface_compliance__get_users_compliance_stream__ok) {
             Ok(v) => Ok(v),
