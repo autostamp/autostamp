@@ -151,9 +151,10 @@ fn iface_sender_verification__get_verified_senders_domains_response_results__to_
     Value::Object(m)
 }
 
-fn iface_sender_verification__post_verified_senders_resend_id_response__to_json(p: &iface_sender_verification::PostVerifiedSendersResendIdResponse) -> Value {
+fn iface_sender_verification__post_verified_senders_resend_id_response_entry__to_json(p: &iface_sender_verification::PostVerifiedSendersResendIdResponseEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -170,9 +171,10 @@ fn iface_sender_verification__get_verified_senders_steps_completed_response_resu
     Value::Object(m)
 }
 
-fn iface_sender_verification__delete_verified_senders_id_response__to_json(p: &iface_sender_verification::DeleteVerifiedSendersIdResponse) -> Value {
+fn iface_sender_verification__delete_verified_senders_id_response_entry__to_json(p: &iface_sender_verification::DeleteVerifiedSendersIdResponseEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -277,10 +279,11 @@ fn iface_sender_verification__get_verified_senders_domains_response_results__fro
     })
 }
 
-fn iface_sender_verification__post_verified_senders_resend_id_response__from_json(v: &Value) -> Option<iface_sender_verification::PostVerifiedSendersResendIdResponse> {
+fn iface_sender_verification__post_verified_senders_resend_id_response_entry__from_json(v: &Value) -> Option<iface_sender_verification::PostVerifiedSendersResendIdResponseEntry> {
     let m = v.as_object()?;
-    Some(iface_sender_verification::PostVerifiedSendersResendIdResponse {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_sender_verification::PostVerifiedSendersResendIdResponseEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -299,10 +302,11 @@ fn iface_sender_verification__get_verified_senders_steps_completed_response_resu
     })
 }
 
-fn iface_sender_verification__delete_verified_senders_id_response__from_json(v: &Value) -> Option<iface_sender_verification::DeleteVerifiedSendersIdResponse> {
+fn iface_sender_verification__delete_verified_senders_id_response_entry__from_json(v: &Value) -> Option<iface_sender_verification::DeleteVerifiedSendersIdResponseEntry> {
     let m = v.as_object()?;
-    Some(iface_sender_verification::DeleteVerifiedSendersIdResponse {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_sender_verification::DeleteVerifiedSendersIdResponseEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -379,12 +383,12 @@ fn iface_sender_verification__get_verified_senders_domains__err(e: crate::runtim
     }
 }
 
-fn iface_sender_verification__post_verified_senders_resend_id__ok(body: String) -> Result<iface_sender_verification::PostVerifiedSendersResendIdResponse, crate::runtime::DispatchError> {
+fn iface_sender_verification__post_verified_senders_resend_id__ok(body: String) -> Result<Vec<iface_sender_verification::PostVerifiedSendersResendIdResponseEntry>, crate::runtime::DispatchError> {
     let v: Value = match serde_json::from_str(&body) {
         Ok(v) => v,
         Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
     };
-    match iface_sender_verification__post_verified_senders_resend_id_response__from_json(&v) {
+    match (&v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_sender_verification::PostVerifiedSendersResendIdResponseEntry { key: k.clone(), value: val })).collect()) {
         Some(x) => Ok(x),
         None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
@@ -470,12 +474,12 @@ fn iface_sender_verification__patch_verified_senders_id__err(e: crate::runtime::
     }
 }
 
-fn iface_sender_verification__delete_verified_senders_id__ok(body: String) -> Result<iface_sender_verification::DeleteVerifiedSendersIdResponse, crate::runtime::DispatchError> {
+fn iface_sender_verification__delete_verified_senders_id__ok(body: String) -> Result<Vec<iface_sender_verification::DeleteVerifiedSendersIdResponseEntry>, crate::runtime::DispatchError> {
     let v: Value = match serde_json::from_str(&body) {
         Ok(v) => v,
         Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
     };
-    match iface_sender_verification__delete_verified_senders_id_response__from_json(&v) {
+    match (&v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_sender_verification::DeleteVerifiedSendersIdResponseEntry { key: k.clone(), value: val })).collect()) {
         Some(x) => Ok(x),
         None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
@@ -515,7 +519,7 @@ impl iface_sender_verification::Guest for crate::Component {
             Err(e) => Err(iface_sender_verification__get_verified_senders_domains__err(e)),
         }
     }
-    fn post_verified_senders_resend_id(params: iface_sender_verification::PostVerifiedSendersResendIdParams) -> Result<iface_sender_verification::PostVerifiedSendersResendIdResponse, iface_sender_verification::PostVerifiedSendersResendIdError> {
+    fn post_verified_senders_resend_id(params: iface_sender_verification::PostVerifiedSendersResendIdParams) -> Result<Vec<iface_sender_verification::PostVerifiedSendersResendIdResponseEntry>, iface_sender_verification::PostVerifiedSendersResendIdError> {
         let json = iface_sender_verification__post_verified_senders_resend_id_params__to_json(&params);
         match dispatch(&OP_SENDER_VERIFICATION_POST_VERIFIED_SENDERS_RESEND_ID, json).and_then(iface_sender_verification__post_verified_senders_resend_id__ok) {
             Ok(v) => Ok(v),
@@ -542,7 +546,7 @@ impl iface_sender_verification::Guest for crate::Component {
             Err(e) => Err(iface_sender_verification__patch_verified_senders_id__err(e)),
         }
     }
-    fn delete_verified_senders_id(params: iface_sender_verification::DeleteVerifiedSendersIdParams) -> Result<iface_sender_verification::DeleteVerifiedSendersIdResponse, iface_sender_verification::DeleteVerifiedSendersIdError> {
+    fn delete_verified_senders_id(params: iface_sender_verification::DeleteVerifiedSendersIdParams) -> Result<Vec<iface_sender_verification::DeleteVerifiedSendersIdResponseEntry>, iface_sender_verification::DeleteVerifiedSendersIdError> {
         let json = iface_sender_verification__delete_verified_senders_id_params__to_json(&params);
         match dispatch(&OP_SENDER_VERIFICATION_DELETE_VERIFIED_SENDERS_ID, json).and_then(iface_sender_verification__delete_verified_senders_id__ok) {
             Ok(v) => Ok(v),

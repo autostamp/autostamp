@@ -133,6 +133,17 @@ const OP_API20100401_PARTICIPANT_DELETE_PARTICIPANT: OpSpec = OpSpec {
     ],
 };
 
+fn iface_api20100401_participant__participant_enum_status__to_str(e: &iface_api20100401_participant::ParticipantEnumStatus) -> &'static str {
+    match e {
+        iface_api20100401_participant::ParticipantEnumStatus::Queued => "queued",
+        iface_api20100401_participant::ParticipantEnumStatus::Connecting => "connecting",
+        iface_api20100401_participant::ParticipantEnumStatus::Ringing => "ringing",
+        iface_api20100401_participant::ParticipantEnumStatus::Connected => "connected",
+        iface_api20100401_participant::ParticipantEnumStatus::Complete => "complete",
+        iface_api20100401_participant::ParticipantEnumStatus::Failed => "failed",
+    }
+}
+
 fn iface_api20100401_participant__create_participant_body_amd_status_callback_method_enum__to_str(e: &iface_api20100401_participant::CreateParticipantBodyAmdStatusCallbackMethodEnum) -> &'static str {
     match e {
         iface_api20100401_participant::CreateParticipantBodyAmdStatusCallbackMethodEnum::Head => "HEAD",
@@ -172,14 +183,8 @@ fn iface_api20100401_participant__api_v2010_account_conference_participant__to_j
     m.insert("label".into(), match (&p.label) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("muted".into(), match (&p.muted) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     m.insert("start_conference_on_enter".into(), match (&p.start_conference_on_enter) { Some(v) => Value::Bool(*(v)), None => Value::Null });
-    m.insert("status".into(), match (&p.status) { Some(v) => iface_api20100401_participant__participant_enum_status__to_json(v), None => Value::Null });
+    m.insert("status".into(), match (&p.status) { Some(v) => Value::String(iface_api20100401_participant__participant_enum_status__to_str(v).into()), None => Value::Null });
     m.insert("uri".into(), match (&p.uri) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_api20100401_participant__participant_enum_status__to_json(p: &iface_api20100401_participant::ParticipantEnumStatus) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -317,16 +322,21 @@ fn iface_api20100401_participant__api_v2010_account_conference_participant__from
         label: m.get("label").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         muted: m.get("muted").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
         start_conference_on_enter: m.get("start_conference_on_enter").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
-        status: m.get("status").filter(|v| !v.is_null()).and_then(|v| iface_api20100401_participant__participant_enum_status__from_json(v)),
+        status: m.get("status").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_api20100401_participant__participant_enum_status__from_str)),
         uri: m.get("uri").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
     })
 }
 
-fn iface_api20100401_participant__participant_enum_status__from_json(v: &Value) -> Option<iface_api20100401_participant::ParticipantEnumStatus> {
-    let m = v.as_object()?;
-    Some(iface_api20100401_participant::ParticipantEnumStatus {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-    })
+fn iface_api20100401_participant__participant_enum_status__from_str(s: &str) -> Option<iface_api20100401_participant::ParticipantEnumStatus> {
+    match s {
+        "queued" => Some(iface_api20100401_participant::ParticipantEnumStatus::Queued),
+        "connecting" => Some(iface_api20100401_participant::ParticipantEnumStatus::Connecting),
+        "ringing" => Some(iface_api20100401_participant::ParticipantEnumStatus::Ringing),
+        "connected" => Some(iface_api20100401_participant::ParticipantEnumStatus::Connected),
+        "complete" => Some(iface_api20100401_participant::ParticipantEnumStatus::Complete),
+        "failed" => Some(iface_api20100401_participant::ParticipantEnumStatus::Failed),
+        _ => None,
+    }
 }
 
 fn iface_api20100401_participant__list_participant__ok(body: String) -> Result<iface_api20100401_participant::ListParticipantResponse, crate::runtime::DispatchError> {

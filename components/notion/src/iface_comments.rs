@@ -11,15 +11,22 @@ const OP_COMMENTS_RETRIEVE_COMMENTS: OpSpec = OpSpec {
         FieldSpec { snake: "block_id", wire: "block_id", location: FieldLocation::Query },
         FieldSpec { snake: "page_size", wire: "page_size", location: FieldLocation::Query },
         FieldSpec { snake: "notion_version", wire: "Notion-Version", location: FieldLocation::Header },
-        FieldSpec { snake: "data", wire: "data", location: FieldLocation::Body },
+        FieldSpec { snake: "body", wire: "body", location: FieldLocation::Body },
     ],
     auth: &[
     ],
 };
 
+fn iface_comments__retrieve_comments_body_entry__to_json(p: &iface_comments::RetrieveCommentsBodyEntry) -> Value {
+    let mut m = Map::new();
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
+}
+
 fn iface_comments__retrieve_comments_response__to_json(p: &iface_comments::RetrieveCommentsResponse) -> Value {
     let mut m = Map::new();
-    m.insert("comment".into(), match (&p.comment) { Some(v) => iface_comments__retrieve_comments_response_comment__to_json(v), None => Value::Null });
+    m.insert("comment".into(), match (&p.comment) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("has_more".into(), match (&p.has_more) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     m.insert("next_cursor".into(), match (&p.next_cursor) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("object".into(), match (&p.object) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -28,9 +35,10 @@ fn iface_comments__retrieve_comments_response__to_json(p: &iface_comments::Retri
     Value::Object(m)
 }
 
-fn iface_comments__retrieve_comments_response_comment__to_json(p: &iface_comments::RetrieveCommentsResponseComment) -> Value {
+fn iface_comments__retrieve_comments_response_comment_entry__to_json(p: &iface_comments::RetrieveCommentsResponseCommentEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -94,14 +102,14 @@ fn iface_comments__retrieve_comments_params__to_json(p: &iface_comments::Retriev
     m.insert("block_id".into(), match (&p.block_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("page_size".into(), match (&p.page_size) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("notion_version".into(), match (&p.notion_version) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("body".into(), match (&p.body) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     Value::Object(m)
 }
 
 fn iface_comments__retrieve_comments_response__from_json(v: &Value) -> Option<iface_comments::RetrieveCommentsResponse> {
     let m = v.as_object()?;
     Some(iface_comments::RetrieveCommentsResponse {
-        comment: m.get("comment").filter(|v| !v.is_null()).and_then(|v| iface_comments__retrieve_comments_response_comment__from_json(v)),
+        comment: m.get("comment").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_comments::RetrieveCommentsResponseCommentEntry { key: k.clone(), value: val })).collect())),
         has_more: m.get("has_more").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
         next_cursor: m.get("next_cursor").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         object: m.get("object").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
@@ -110,10 +118,11 @@ fn iface_comments__retrieve_comments_response__from_json(v: &Value) -> Option<if
     })
 }
 
-fn iface_comments__retrieve_comments_response_comment__from_json(v: &Value) -> Option<iface_comments::RetrieveCommentsResponseComment> {
+fn iface_comments__retrieve_comments_response_comment_entry__from_json(v: &Value) -> Option<iface_comments::RetrieveCommentsResponseCommentEntry> {
     let m = v.as_object()?;
-    Some(iface_comments::RetrieveCommentsResponseComment {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_comments::RetrieveCommentsResponseCommentEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 

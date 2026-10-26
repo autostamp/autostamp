@@ -97,6 +97,13 @@ const OP_TEAM_UPDATE_WAGE_SETTING: OpSpec = OpSpec {
     ],
 };
 
+fn iface_team__create_team_member_request__to_json(p: &iface_team::CreateTeamMemberRequest) -> Value {
+    let mut m = Map::new();
+    m.insert("idempotency_key".into(), match (&p.idempotency_key) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("team_member".into(), match (&p.team_member) { Some(v) => iface_team__member__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
 fn iface_team__member__to_json(p: &iface_team::Member) -> Value {
     let mut m = Map::new();
     m.insert("assigned_locations".into(), match (&p.assigned_locations) { Some(v) => iface_team__member_assigned_locations__to_json(v), None => Value::Null });
@@ -136,41 +143,58 @@ fn iface_team__error__to_json(p: &iface_team::Error) -> Value {
     Value::Object(m)
 }
 
-fn iface_team__bulk_create_team_members_request_team_members__to_json(p: &iface_team::BulkCreateTeamMembersRequestTeamMembers) -> Value {
+fn iface_team__bulk_create_team_members_request_team_members_entry__to_json(p: &iface_team::BulkCreateTeamMembersRequestTeamMembersEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), iface_team__create_team_member_request__to_json(&p.value));
     Value::Object(m)
 }
 
 fn iface_team__bulk_create_team_members_response__to_json(p: &iface_team::BulkCreateTeamMembersResponse) -> Value {
     let mut m = Map::new();
     m.insert("errors".into(), match (&p.errors) { Some(v) => Value::Array((v).iter().map(|v| iface_team__error__to_json(v)).collect()), None => Value::Null });
-    m.insert("team_members".into(), match (&p.team_members) { Some(v) => iface_team__bulk_create_team_members_response_team_members__to_json(v), None => Value::Null });
+    m.insert("team_members".into(), match (&p.team_members) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), iface_team__create_team_member_response__to_json(&e.value))).collect()), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_team__bulk_create_team_members_response_team_members__to_json(p: &iface_team::BulkCreateTeamMembersResponseTeamMembers) -> Value {
+fn iface_team__bulk_create_team_members_response_team_members_entry__to_json(p: &iface_team::BulkCreateTeamMembersResponseTeamMembersEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), iface_team__create_team_member_response__to_json(&p.value));
     Value::Object(m)
 }
 
-fn iface_team__bulk_update_team_members_request_team_members__to_json(p: &iface_team::BulkUpdateTeamMembersRequestTeamMembers) -> Value {
+fn iface_team__update_team_member_request__to_json(p: &iface_team::UpdateTeamMemberRequest) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("team_member".into(), match (&p.team_member) { Some(v) => iface_team__member__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_team__bulk_update_team_members_request_team_members_entry__to_json(p: &iface_team::BulkUpdateTeamMembersRequestTeamMembersEntry) -> Value {
+    let mut m = Map::new();
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), iface_team__update_team_member_request__to_json(&p.value));
     Value::Object(m)
 }
 
 fn iface_team__bulk_update_team_members_response__to_json(p: &iface_team::BulkUpdateTeamMembersResponse) -> Value {
     let mut m = Map::new();
     m.insert("errors".into(), match (&p.errors) { Some(v) => Value::Array((v).iter().map(|v| iface_team__error__to_json(v)).collect()), None => Value::Null });
-    m.insert("team_members".into(), match (&p.team_members) { Some(v) => iface_team__bulk_update_team_members_response_team_members__to_json(v), None => Value::Null });
+    m.insert("team_members".into(), match (&p.team_members) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), iface_team__update_team_member_response__to_json(&e.value))).collect()), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_team__bulk_update_team_members_response_team_members__to_json(p: &iface_team::BulkUpdateTeamMembersResponseTeamMembers) -> Value {
+fn iface_team__update_team_member_response__to_json(p: &iface_team::UpdateTeamMemberResponse) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("errors".into(), match (&p.errors) { Some(v) => Value::Array((v).iter().map(|v| iface_team__error__to_json(v)).collect()), None => Value::Null });
+    m.insert("team_member".into(), match (&p.team_member) { Some(v) => iface_team__member__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_team__bulk_update_team_members_response_team_members_entry__to_json(p: &iface_team::BulkUpdateTeamMembersResponseTeamMembersEntry) -> Value {
+    let mut m = Map::new();
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), iface_team__update_team_member_response__to_json(&p.value));
     Value::Object(m)
 }
 
@@ -196,13 +220,6 @@ fn iface_team__search_team_members_response__to_json(p: &iface_team::SearchTeamM
 }
 
 fn iface_team__retrieve_team_member_response__to_json(p: &iface_team::RetrieveTeamMemberResponse) -> Value {
-    let mut m = Map::new();
-    m.insert("errors".into(), match (&p.errors) { Some(v) => Value::Array((v).iter().map(|v| iface_team__error__to_json(v)).collect()), None => Value::Null });
-    m.insert("team_member".into(), match (&p.team_member) { Some(v) => iface_team__member__to_json(v), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_team__update_team_member_response__to_json(p: &iface_team::UpdateTeamMemberResponse) -> Value {
     let mut m = Map::new();
     m.insert("errors".into(), match (&p.errors) { Some(v) => Value::Array((v).iter().map(|v| iface_team__error__to_json(v)).collect()), None => Value::Null });
     m.insert("team_member".into(), match (&p.team_member) { Some(v) => iface_team__member__to_json(v), None => Value::Null });
@@ -260,13 +277,13 @@ fn iface_team__create_team_member_params__to_json(p: &iface_team::CreateTeamMemb
 
 fn iface_team__bulk_create_team_members_params__to_json(p: &iface_team::BulkCreateTeamMembersParams) -> Value {
     let mut m = Map::new();
-    m.insert("team_members".into(), iface_team__bulk_create_team_members_request_team_members__to_json(&p.team_members));
+    m.insert("team_members".into(), Value::Object((&p.team_members).iter().map(|e| (e.key.clone(), iface_team__create_team_member_request__to_json(&e.value))).collect()));
     Value::Object(m)
 }
 
 fn iface_team__bulk_update_team_members_params__to_json(p: &iface_team::BulkUpdateTeamMembersParams) -> Value {
     let mut m = Map::new();
-    m.insert("team_members".into(), iface_team__bulk_update_team_members_request_team_members__to_json(&p.team_members));
+    m.insert("team_members".into(), Value::Object((&p.team_members).iter().map(|e| (e.key.clone(), iface_team__update_team_member_request__to_json(&e.value))).collect()));
     Value::Object(m)
 }
 
@@ -351,14 +368,15 @@ fn iface_team__bulk_create_team_members_response__from_json(v: &Value) -> Option
     let m = v.as_object()?;
     Some(iface_team::BulkCreateTeamMembersResponse {
         errors: m.get("errors").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_team__error__from_json(x)).collect())),
-        team_members: m.get("team_members").filter(|v| !v.is_null()).and_then(|v| iface_team__bulk_create_team_members_response_team_members__from_json(v)),
+        team_members: m.get("team_members").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| (iface_team__create_team_member_response__from_json(x)).map(|val| iface_team::BulkCreateTeamMembersResponseTeamMembersEntry { key: k.clone(), value: val })).collect())),
     })
 }
 
-fn iface_team__bulk_create_team_members_response_team_members__from_json(v: &Value) -> Option<iface_team::BulkCreateTeamMembersResponseTeamMembers> {
+fn iface_team__bulk_create_team_members_response_team_members_entry__from_json(v: &Value) -> Option<iface_team::BulkCreateTeamMembersResponseTeamMembersEntry> {
     let m = v.as_object()?;
-    Some(iface_team::BulkCreateTeamMembersResponseTeamMembers {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_team::BulkCreateTeamMembersResponseTeamMembersEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: match m.get("value").and_then(|v| iface_team__create_team_member_response__from_json(v)) { Some(x) => x, None => return None },
     })
 }
 
@@ -366,14 +384,23 @@ fn iface_team__bulk_update_team_members_response__from_json(v: &Value) -> Option
     let m = v.as_object()?;
     Some(iface_team::BulkUpdateTeamMembersResponse {
         errors: m.get("errors").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_team__error__from_json(x)).collect())),
-        team_members: m.get("team_members").filter(|v| !v.is_null()).and_then(|v| iface_team__bulk_update_team_members_response_team_members__from_json(v)),
+        team_members: m.get("team_members").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| (iface_team__update_team_member_response__from_json(x)).map(|val| iface_team::BulkUpdateTeamMembersResponseTeamMembersEntry { key: k.clone(), value: val })).collect())),
     })
 }
 
-fn iface_team__bulk_update_team_members_response_team_members__from_json(v: &Value) -> Option<iface_team::BulkUpdateTeamMembersResponseTeamMembers> {
+fn iface_team__update_team_member_response__from_json(v: &Value) -> Option<iface_team::UpdateTeamMemberResponse> {
     let m = v.as_object()?;
-    Some(iface_team::BulkUpdateTeamMembersResponseTeamMembers {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_team::UpdateTeamMemberResponse {
+        errors: m.get("errors").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_team__error__from_json(x)).collect())),
+        team_member: m.get("team_member").filter(|v| !v.is_null()).and_then(|v| iface_team__member__from_json(v)),
+    })
+}
+
+fn iface_team__bulk_update_team_members_response_team_members_entry__from_json(v: &Value) -> Option<iface_team::BulkUpdateTeamMembersResponseTeamMembersEntry> {
+    let m = v.as_object()?;
+    Some(iface_team::BulkUpdateTeamMembersResponseTeamMembersEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: match m.get("value").and_then(|v| iface_team__update_team_member_response__from_json(v)) { Some(x) => x, None => return None },
     })
 }
 
@@ -389,14 +416,6 @@ fn iface_team__search_team_members_response__from_json(v: &Value) -> Option<ifac
 fn iface_team__retrieve_team_member_response__from_json(v: &Value) -> Option<iface_team::RetrieveTeamMemberResponse> {
     let m = v.as_object()?;
     Some(iface_team::RetrieveTeamMemberResponse {
-        errors: m.get("errors").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_team__error__from_json(x)).collect())),
-        team_member: m.get("team_member").filter(|v| !v.is_null()).and_then(|v| iface_team__member__from_json(v)),
-    })
-}
-
-fn iface_team__update_team_member_response__from_json(v: &Value) -> Option<iface_team::UpdateTeamMemberResponse> {
-    let m = v.as_object()?;
-    Some(iface_team::UpdateTeamMemberResponse {
         errors: m.get("errors").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_team__error__from_json(x)).collect())),
         team_member: m.get("team_member").filter(|v| !v.is_null()).and_then(|v| iface_team__member__from_json(v)),
     })

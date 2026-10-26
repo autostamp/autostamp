@@ -110,15 +110,17 @@ fn iface_subusers_api__get_subusers_reputations_response_item__to_json(p: &iface
     Value::Object(m)
 }
 
-fn iface_subusers_api__patch_subusers_subuser_name_response__to_json(p: &iface_subusers_api::PatchSubusersSubuserNameResponse) -> Value {
+fn iface_subusers_api__patch_subusers_subuser_name_response_entry__to_json(p: &iface_subusers_api::PatchSubusersSubuserNameResponseEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
-fn iface_subusers_api__delete_subusers_subuser_name_response__to_json(p: &iface_subusers_api::DeleteSubusersSubuserNameResponse) -> Value {
+fn iface_subusers_api__delete_subusers_subuser_name_response_entry__to_json(p: &iface_subusers_api::DeleteSubusersSubuserNameResponseEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -208,17 +210,19 @@ fn iface_subusers_api__get_subusers_reputations_response_item__from_json(v: &Val
     })
 }
 
-fn iface_subusers_api__patch_subusers_subuser_name_response__from_json(v: &Value) -> Option<iface_subusers_api::PatchSubusersSubuserNameResponse> {
+fn iface_subusers_api__patch_subusers_subuser_name_response_entry__from_json(v: &Value) -> Option<iface_subusers_api::PatchSubusersSubuserNameResponseEntry> {
     let m = v.as_object()?;
-    Some(iface_subusers_api::PatchSubusersSubuserNameResponse {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_subusers_api::PatchSubusersSubuserNameResponseEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
-fn iface_subusers_api__delete_subusers_subuser_name_response__from_json(v: &Value) -> Option<iface_subusers_api::DeleteSubusersSubuserNameResponse> {
+fn iface_subusers_api__delete_subusers_subuser_name_response_entry__from_json(v: &Value) -> Option<iface_subusers_api::DeleteSubusersSubuserNameResponseEntry> {
     let m = v.as_object()?;
-    Some(iface_subusers_api::DeleteSubusersSubuserNameResponse {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_subusers_api::DeleteSubusersSubuserNameResponseEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -292,12 +296,12 @@ fn iface_subusers_api__get_subusers_reputations__err(e: crate::runtime::Dispatch
     }
 }
 
-fn iface_subusers_api__patch_subusers_subuser_name__ok(body: String) -> Result<iface_subusers_api::PatchSubusersSubuserNameResponse, crate::runtime::DispatchError> {
+fn iface_subusers_api__patch_subusers_subuser_name__ok(body: String) -> Result<Vec<iface_subusers_api::PatchSubusersSubuserNameResponseEntry>, crate::runtime::DispatchError> {
     let v: Value = match serde_json::from_str(&body) {
         Ok(v) => v,
         Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
     };
-    match iface_subusers_api__patch_subusers_subuser_name_response__from_json(&v) {
+    match (&v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_subusers_api::PatchSubusersSubuserNameResponseEntry { key: k.clone(), value: val })).collect()) {
         Some(x) => Ok(x),
         None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
@@ -315,12 +319,12 @@ fn iface_subusers_api__patch_subusers_subuser_name__err(e: crate::runtime::Dispa
     }
 }
 
-fn iface_subusers_api__delete_subusers_subuser_name__ok(body: String) -> Result<iface_subusers_api::DeleteSubusersSubuserNameResponse, crate::runtime::DispatchError> {
+fn iface_subusers_api__delete_subusers_subuser_name__ok(body: String) -> Result<Vec<iface_subusers_api::DeleteSubusersSubuserNameResponseEntry>, crate::runtime::DispatchError> {
     let v: Value = match serde_json::from_str(&body) {
         Ok(v) => v,
         Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
     };
-    match iface_subusers_api__delete_subusers_subuser_name_response__from_json(&v) {
+    match (&v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_subusers_api::DeleteSubusersSubuserNameResponseEntry { key: k.clone(), value: val })).collect()) {
         Some(x) => Ok(x),
         None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
@@ -379,14 +383,14 @@ impl iface_subusers_api::Guest for crate::Component {
             Err(e) => Err(iface_subusers_api__get_subusers_reputations__err(e)),
         }
     }
-    fn patch_subusers_subuser_name(params: iface_subusers_api::PatchSubusersSubuserNameParams) -> Result<iface_subusers_api::PatchSubusersSubuserNameResponse, iface_subusers_api::PatchSubusersSubuserNameError> {
+    fn patch_subusers_subuser_name(params: iface_subusers_api::PatchSubusersSubuserNameParams) -> Result<Vec<iface_subusers_api::PatchSubusersSubuserNameResponseEntry>, iface_subusers_api::PatchSubusersSubuserNameError> {
         let json = iface_subusers_api__patch_subusers_subuser_name_params__to_json(&params);
         match dispatch(&OP_SUBUSERS_API_PATCH_SUBUSERS_SUBUSER_NAME, json).and_then(iface_subusers_api__patch_subusers_subuser_name__ok) {
             Ok(v) => Ok(v),
             Err(e) => Err(iface_subusers_api__patch_subusers_subuser_name__err(e)),
         }
     }
-    fn delete_subusers_subuser_name(params: iface_subusers_api::DeleteSubusersSubuserNameParams) -> Result<iface_subusers_api::DeleteSubusersSubuserNameResponse, iface_subusers_api::DeleteSubusersSubuserNameError> {
+    fn delete_subusers_subuser_name(params: iface_subusers_api::DeleteSubusersSubuserNameParams) -> Result<Vec<iface_subusers_api::DeleteSubusersSubuserNameResponseEntry>, iface_subusers_api::DeleteSubusersSubuserNameError> {
         let json = iface_subusers_api__delete_subusers_subuser_name_params__to_json(&params);
         match dispatch(&OP_SUBUSERS_API_DELETE_SUBUSERS_SUBUSER_NAME, json).and_then(iface_subusers_api__delete_subusers_subuser_name__ok) {
             Ok(v) => Ok(v),

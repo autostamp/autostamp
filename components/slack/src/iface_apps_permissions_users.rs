@@ -33,19 +33,13 @@ const OP_APPS_PERMISSIONS_USERS_REQUEST: OpSpec = OpSpec {
 
 fn iface_apps_permissions_users__list_op_response__to_json(p: &iface_apps_permissions_users::ListOpResponse) -> Value {
     let mut m = Map::new();
-    m.insert("ok".into(), iface_apps_permissions_users__defs_ok_true__to_json(&p.ok));
-    Value::Object(m)
-}
-
-fn iface_apps_permissions_users__defs_ok_true__to_json(p: &iface_apps_permissions_users::DefsOkTrue) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
+    m.insert("ok".into(), Value::Bool(*(&p.ok)));
     Value::Object(m)
 }
 
 fn iface_apps_permissions_users__request_response__to_json(p: &iface_apps_permissions_users::RequestResponse) -> Value {
     let mut m = Map::new();
-    m.insert("ok".into(), iface_apps_permissions_users__defs_ok_true__to_json(&p.ok));
+    m.insert("ok".into(), Value::Bool(*(&p.ok)));
     Value::Object(m)
 }
 
@@ -69,21 +63,14 @@ fn iface_apps_permissions_users__request_params__to_json(p: &iface_apps_permissi
 fn iface_apps_permissions_users__list_op_response__from_json(v: &Value) -> Option<iface_apps_permissions_users::ListOpResponse> {
     let m = v.as_object()?;
     Some(iface_apps_permissions_users::ListOpResponse {
-        ok: match m.get("ok").and_then(|v| iface_apps_permissions_users__defs_ok_true__from_json(v)) { Some(x) => x, None => return None },
-    })
-}
-
-fn iface_apps_permissions_users__defs_ok_true__from_json(v: &Value) -> Option<iface_apps_permissions_users::DefsOkTrue> {
-    let m = v.as_object()?;
-    Some(iface_apps_permissions_users::DefsOkTrue {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        ok: m.get("ok").and_then(|v| (v).as_bool()).unwrap_or_default(),
     })
 }
 
 fn iface_apps_permissions_users__request_response__from_json(v: &Value) -> Option<iface_apps_permissions_users::RequestResponse> {
     let m = v.as_object()?;
     Some(iface_apps_permissions_users::RequestResponse {
-        ok: match m.get("ok").and_then(|v| iface_apps_permissions_users__defs_ok_true__from_json(v)) { Some(x) => x, None => return None },
+        ok: m.get("ok").and_then(|v| (v).as_bool()).unwrap_or_default(),
     })
 }
 

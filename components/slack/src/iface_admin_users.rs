@@ -122,55 +122,49 @@ const OP_ADMIN_USERS_SET_REGULAR: OpSpec = OpSpec {
 
 fn iface_admin_users__assign_response__to_json(p: &iface_admin_users::AssignResponse) -> Value {
     let mut m = Map::new();
-    m.insert("ok".into(), iface_admin_users__defs_ok_true__to_json(&p.ok));
-    Value::Object(m)
-}
-
-fn iface_admin_users__defs_ok_true__to_json(p: &iface_admin_users::DefsOkTrue) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
+    m.insert("ok".into(), Value::Bool(*(&p.ok)));
     Value::Object(m)
 }
 
 fn iface_admin_users__invite_response__to_json(p: &iface_admin_users::InviteResponse) -> Value {
     let mut m = Map::new();
-    m.insert("ok".into(), iface_admin_users__defs_ok_true__to_json(&p.ok));
+    m.insert("ok".into(), Value::Bool(*(&p.ok)));
     Value::Object(m)
 }
 
 fn iface_admin_users__list_op_response__to_json(p: &iface_admin_users::ListOpResponse) -> Value {
     let mut m = Map::new();
-    m.insert("ok".into(), iface_admin_users__defs_ok_true__to_json(&p.ok));
+    m.insert("ok".into(), Value::Bool(*(&p.ok)));
     Value::Object(m)
 }
 
 fn iface_admin_users__remove_response__to_json(p: &iface_admin_users::RemoveResponse) -> Value {
     let mut m = Map::new();
-    m.insert("ok".into(), iface_admin_users__defs_ok_true__to_json(&p.ok));
+    m.insert("ok".into(), Value::Bool(*(&p.ok)));
     Value::Object(m)
 }
 
 fn iface_admin_users__set_admin_response__to_json(p: &iface_admin_users::SetAdminResponse) -> Value {
     let mut m = Map::new();
-    m.insert("ok".into(), iface_admin_users__defs_ok_true__to_json(&p.ok));
+    m.insert("ok".into(), Value::Bool(*(&p.ok)));
     Value::Object(m)
 }
 
 fn iface_admin_users__set_expiration_response__to_json(p: &iface_admin_users::SetExpirationResponse) -> Value {
     let mut m = Map::new();
-    m.insert("ok".into(), iface_admin_users__defs_ok_true__to_json(&p.ok));
+    m.insert("ok".into(), Value::Bool(*(&p.ok)));
     Value::Object(m)
 }
 
 fn iface_admin_users__set_owner_response__to_json(p: &iface_admin_users::SetOwnerResponse) -> Value {
     let mut m = Map::new();
-    m.insert("ok".into(), iface_admin_users__defs_ok_true__to_json(&p.ok));
+    m.insert("ok".into(), Value::Bool(*(&p.ok)));
     Value::Object(m)
 }
 
 fn iface_admin_users__set_regular_response__to_json(p: &iface_admin_users::SetRegularResponse) -> Value {
     let mut m = Map::new();
-    m.insert("ok".into(), iface_admin_users__defs_ok_true__to_json(&p.ok));
+    m.insert("ok".into(), Value::Bool(*(&p.ok)));
     Value::Object(m)
 }
 
@@ -253,63 +247,56 @@ fn iface_admin_users__set_regular_params__to_json(p: &iface_admin_users::SetRegu
 fn iface_admin_users__assign_response__from_json(v: &Value) -> Option<iface_admin_users::AssignResponse> {
     let m = v.as_object()?;
     Some(iface_admin_users::AssignResponse {
-        ok: match m.get("ok").and_then(|v| iface_admin_users__defs_ok_true__from_json(v)) { Some(x) => x, None => return None },
-    })
-}
-
-fn iface_admin_users__defs_ok_true__from_json(v: &Value) -> Option<iface_admin_users::DefsOkTrue> {
-    let m = v.as_object()?;
-    Some(iface_admin_users::DefsOkTrue {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        ok: m.get("ok").and_then(|v| (v).as_bool()).unwrap_or_default(),
     })
 }
 
 fn iface_admin_users__invite_response__from_json(v: &Value) -> Option<iface_admin_users::InviteResponse> {
     let m = v.as_object()?;
     Some(iface_admin_users::InviteResponse {
-        ok: match m.get("ok").and_then(|v| iface_admin_users__defs_ok_true__from_json(v)) { Some(x) => x, None => return None },
+        ok: m.get("ok").and_then(|v| (v).as_bool()).unwrap_or_default(),
     })
 }
 
 fn iface_admin_users__list_op_response__from_json(v: &Value) -> Option<iface_admin_users::ListOpResponse> {
     let m = v.as_object()?;
     Some(iface_admin_users::ListOpResponse {
-        ok: match m.get("ok").and_then(|v| iface_admin_users__defs_ok_true__from_json(v)) { Some(x) => x, None => return None },
+        ok: m.get("ok").and_then(|v| (v).as_bool()).unwrap_or_default(),
     })
 }
 
 fn iface_admin_users__remove_response__from_json(v: &Value) -> Option<iface_admin_users::RemoveResponse> {
     let m = v.as_object()?;
     Some(iface_admin_users::RemoveResponse {
-        ok: match m.get("ok").and_then(|v| iface_admin_users__defs_ok_true__from_json(v)) { Some(x) => x, None => return None },
+        ok: m.get("ok").and_then(|v| (v).as_bool()).unwrap_or_default(),
     })
 }
 
 fn iface_admin_users__set_admin_response__from_json(v: &Value) -> Option<iface_admin_users::SetAdminResponse> {
     let m = v.as_object()?;
     Some(iface_admin_users::SetAdminResponse {
-        ok: match m.get("ok").and_then(|v| iface_admin_users__defs_ok_true__from_json(v)) { Some(x) => x, None => return None },
+        ok: m.get("ok").and_then(|v| (v).as_bool()).unwrap_or_default(),
     })
 }
 
 fn iface_admin_users__set_expiration_response__from_json(v: &Value) -> Option<iface_admin_users::SetExpirationResponse> {
     let m = v.as_object()?;
     Some(iface_admin_users::SetExpirationResponse {
-        ok: match m.get("ok").and_then(|v| iface_admin_users__defs_ok_true__from_json(v)) { Some(x) => x, None => return None },
+        ok: m.get("ok").and_then(|v| (v).as_bool()).unwrap_or_default(),
     })
 }
 
 fn iface_admin_users__set_owner_response__from_json(v: &Value) -> Option<iface_admin_users::SetOwnerResponse> {
     let m = v.as_object()?;
     Some(iface_admin_users::SetOwnerResponse {
-        ok: match m.get("ok").and_then(|v| iface_admin_users__defs_ok_true__from_json(v)) { Some(x) => x, None => return None },
+        ok: m.get("ok").and_then(|v| (v).as_bool()).unwrap_or_default(),
     })
 }
 
 fn iface_admin_users__set_regular_response__from_json(v: &Value) -> Option<iface_admin_users::SetRegularResponse> {
     let m = v.as_object()?;
     Some(iface_admin_users::SetRegularResponse {
-        ok: match m.get("ok").and_then(|v| iface_admin_users__defs_ok_true__from_json(v)) { Some(x) => x, None => return None },
+        ok: m.get("ok").and_then(|v| (v).as_bool()).unwrap_or_default(),
     })
 }
 

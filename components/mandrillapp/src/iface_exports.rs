@@ -86,9 +86,14 @@ fn iface_exports__info_response__to_json(p: &iface_exports::InfoResponse) -> Val
     Value::Object(m)
 }
 
-fn iface_exports__list_response__to_json(p: &iface_exports::ListResponse) -> Value {
+fn iface_exports__list_response_item__to_json(p: &iface_exports::ListResponseItem) -> Value {
     let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
+    m.insert("created_at".into(), match (&p.created_at) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("finished_at".into(), match (&p.finished_at) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("result_url".into(), match (&p.result_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("state".into(), match (&p.state) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("type".into(), match (&p.type_op) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -156,10 +161,15 @@ fn iface_exports__info_response__from_json(v: &Value) -> Option<iface_exports::I
     })
 }
 
-fn iface_exports__list_response__from_json(v: &Value) -> Option<iface_exports::ListResponse> {
+fn iface_exports__list_response_item__from_json(v: &Value) -> Option<iface_exports::ListResponseItem> {
     let m = v.as_object()?;
-    Some(iface_exports::ListResponse {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    Some(iface_exports::ListResponseItem {
+        created_at: m.get("created_at").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        finished_at: m.get("finished_at").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        result_url: m.get("result_url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        state: m.get("state").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        type_op: m.get("type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
     })
 }
 
@@ -199,12 +209,12 @@ fn iface_exports__post_exports_info_json__err(e: crate::runtime::DispatchError) 
     }
 }
 
-fn iface_exports__post_exports_list_json__ok(body: String) -> Result<iface_exports::ListResponse, crate::runtime::DispatchError> {
+fn iface_exports__post_exports_list_json__ok(body: String) -> Result<Vec<iface_exports::ListResponseItem>, crate::runtime::DispatchError> {
     let v: Value = match serde_json::from_str(&body) {
         Ok(v) => v,
         Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
     };
-    match iface_exports__list_response__from_json(&v) {
+    match (&v).as_array().map(|a| a.iter().filter_map(|x| iface_exports__list_response_item__from_json(x)).collect()) {
         Some(x) => Ok(x),
         None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
@@ -268,7 +278,7 @@ impl iface_exports::Guest for crate::Component {
             Err(e) => Err(iface_exports__post_exports_info_json__err(e)),
         }
     }
-    fn post_exports_list_json(params: iface_exports::PostExportsListJsonParams) -> Result<iface_exports::ListResponse, String> {
+    fn post_exports_list_json(params: iface_exports::PostExportsListJsonParams) -> Result<Vec<iface_exports::ListResponseItem>, String> {
         let json = iface_exports__post_exports_list_json_params__to_json(&params);
         match dispatch(&OP_EXPORTS_POST_EXPORTS_LIST_JSON, json).and_then(iface_exports__post_exports_list_json__ok) {
             Ok(v) => Ok(v),

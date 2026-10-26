@@ -244,10 +244,25 @@ fn iface_api20100401_siprec__create_siprec_body_status_callback_method_enum__to_
     }
 }
 
-fn iface_api20100401_siprec__siprec_enum_track__to_json(p: &iface_api20100401_siprec::SiprecEnumTrack) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
+fn iface_api20100401_siprec__siprec_enum_track__to_str(e: &iface_api20100401_siprec::SiprecEnumTrack) -> &'static str {
+    match e {
+        iface_api20100401_siprec::SiprecEnumTrack::InboundTrack => "inbound_track",
+        iface_api20100401_siprec::SiprecEnumTrack::OutboundTrack => "outbound_track",
+        iface_api20100401_siprec::SiprecEnumTrack::BothTracks => "both_tracks",
+    }
+}
+
+fn iface_api20100401_siprec__siprec_enum_status__to_str(e: &iface_api20100401_siprec::SiprecEnumStatus) -> &'static str {
+    match e {
+        iface_api20100401_siprec::SiprecEnumStatus::InProgress => "in-progress",
+        iface_api20100401_siprec::SiprecEnumStatus::Stopped => "stopped",
+    }
+}
+
+fn iface_api20100401_siprec__siprec_enum_update_status__to_str(e: &iface_api20100401_siprec::SiprecEnumUpdateStatus) -> &'static str {
+    match e {
+        iface_api20100401_siprec::SiprecEnumUpdateStatus::Stopped => "stopped",
+    }
 }
 
 fn iface_api20100401_siprec__api_v2010_account_call_siprec__to_json(p: &iface_api20100401_siprec::ApiV2010AccountCallSiprec) -> Value {
@@ -257,20 +272,8 @@ fn iface_api20100401_siprec__api_v2010_account_call_siprec__to_json(p: &iface_ap
     m.insert("date_updated".into(), match (&p.date_updated) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("sid".into(), match (&p.sid) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("status".into(), match (&p.status) { Some(v) => iface_api20100401_siprec__siprec_enum_status__to_json(v), None => Value::Null });
+    m.insert("status".into(), match (&p.status) { Some(v) => Value::String(iface_api20100401_siprec__siprec_enum_status__to_str(v).into()), None => Value::Null });
     m.insert("uri".into(), match (&p.uri) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_api20100401_siprec__siprec_enum_status__to_json(p: &iface_api20100401_siprec::SiprecEnumStatus) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_api20100401_siprec__siprec_enum_update_status__to_json(p: &iface_api20100401_siprec::SiprecEnumUpdateStatus) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -480,7 +483,7 @@ fn iface_api20100401_siprec__create_siprec_params__to_json(p: &iface_api20100401
     m.insert("parameter99_value".into(), match (&p.parameter99_value) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("status_callback".into(), match (&p.status_callback) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("status_callback_method".into(), match (&p.status_callback_method) { Some(v) => Value::String(iface_api20100401_siprec__create_siprec_body_status_callback_method_enum__to_str(v).into()), None => Value::Null });
-    m.insert("track".into(), match (&p.track) { Some(v) => iface_api20100401_siprec__siprec_enum_track__to_json(v), None => Value::Null });
+    m.insert("track".into(), match (&p.track) { Some(v) => Value::String(iface_api20100401_siprec__siprec_enum_track__to_str(v).into()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -489,7 +492,7 @@ fn iface_api20100401_siprec__update_siprec_params__to_json(p: &iface_api20100401
     m.insert("account_sid".into(), Value::String((&p.account_sid).clone()));
     m.insert("call_sid".into(), Value::String((&p.call_sid).clone()));
     m.insert("sid".into(), Value::String((&p.sid).clone()));
-    m.insert("status".into(), iface_api20100401_siprec__siprec_enum_update_status__to_json(&p.status));
+    m.insert("status".into(), Value::String(iface_api20100401_siprec__siprec_enum_update_status__to_str(&p.status).into()));
     Value::Object(m)
 }
 
@@ -501,16 +504,17 @@ fn iface_api20100401_siprec__api_v2010_account_call_siprec__from_json(v: &Value)
         date_updated: m.get("date_updated").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         sid: m.get("sid").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        status: m.get("status").filter(|v| !v.is_null()).and_then(|v| iface_api20100401_siprec__siprec_enum_status__from_json(v)),
+        status: m.get("status").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_api20100401_siprec__siprec_enum_status__from_str)),
         uri: m.get("uri").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
     })
 }
 
-fn iface_api20100401_siprec__siprec_enum_status__from_json(v: &Value) -> Option<iface_api20100401_siprec::SiprecEnumStatus> {
-    let m = v.as_object()?;
-    Some(iface_api20100401_siprec::SiprecEnumStatus {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-    })
+fn iface_api20100401_siprec__siprec_enum_status__from_str(s: &str) -> Option<iface_api20100401_siprec::SiprecEnumStatus> {
+    match s {
+        "in-progress" => Some(iface_api20100401_siprec::SiprecEnumStatus::InProgress),
+        "stopped" => Some(iface_api20100401_siprec::SiprecEnumStatus::Stopped),
+        _ => None,
+    }
 }
 
 fn iface_api20100401_siprec__create_siprec__ok(body: String) -> Result<iface_api20100401_siprec::ApiV2010AccountCallSiprec, crate::runtime::DispatchError> {

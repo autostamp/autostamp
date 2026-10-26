@@ -20,8 +20,8 @@ triggered.
 
 | Setting | Value |
 | --- | --- |
-| Package | `autostamp:amazonaws@0.5.0` |
-| Published version | `0.5.0+amazonaws-2017-05-31` |
+| Package | `autostamp:amazonaws@0.6.0` |
+| Published version | `0.6.0+amazonaws-2017-05-31` |
 | Tag filter | all tags |
 | Operations generated | 17 |
 | Infer API-key credentials | enabled — not triggered |

@@ -19,25 +19,19 @@ const OP_BOTS_INFO: OpSpec = OpSpec {
 fn iface_bots__info_response__to_json(p: &iface_bots::InfoResponse) -> Value {
     let mut m = Map::new();
     m.insert("bot".into(), iface_bots__info_response_bot__to_json(&p.bot));
-    m.insert("ok".into(), iface_bots__defs_ok_true__to_json(&p.ok));
+    m.insert("ok".into(), Value::Bool(*(&p.ok)));
     Value::Object(m)
 }
 
 fn iface_bots__info_response_bot__to_json(p: &iface_bots::InfoResponseBot) -> Value {
     let mut m = Map::new();
-    m.insert("app_id".into(), iface_bots__defs_app_id__to_json(&p.app_id));
+    m.insert("app_id".into(), Value::String((&p.app_id).clone()));
     m.insert("deleted".into(), Value::Bool(*(&p.deleted)));
     m.insert("icons".into(), iface_bots__info_response_bot_icons__to_json(&p.icons));
-    m.insert("id".into(), iface_bots__defs_bot_id__to_json(&p.id));
+    m.insert("id".into(), Value::String((&p.id).clone()));
     m.insert("name".into(), Value::String((&p.name).clone()));
     m.insert("updated".into(), Value::Number(serde_json::Number::from(*(&p.updated))));
-    m.insert("user_id".into(), match (&p.user_id) { Some(v) => iface_bots__defs_user_id__to_json(v), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_bots__defs_app_id__to_json(p: &iface_bots::DefsAppId) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
+    m.insert("user_id".into(), match (&p.user_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -46,24 +40,6 @@ fn iface_bots__info_response_bot_icons__to_json(p: &iface_bots::InfoResponseBotI
     m.insert("image_36".into(), Value::String((&p.image_v36).clone()));
     m.insert("image_48".into(), Value::String((&p.image_v48).clone()));
     m.insert("image_72".into(), Value::String((&p.image_v72).clone()));
-    Value::Object(m)
-}
-
-fn iface_bots__defs_bot_id__to_json(p: &iface_bots::DefsBotId) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_bots__defs_user_id__to_json(p: &iface_bots::DefsUserId) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_bots__defs_ok_true__to_json(p: &iface_bots::DefsOkTrue) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -78,27 +54,20 @@ fn iface_bots__info_response__from_json(v: &Value) -> Option<iface_bots::InfoRes
     let m = v.as_object()?;
     Some(iface_bots::InfoResponse {
         bot: match m.get("bot").and_then(|v| iface_bots__info_response_bot__from_json(v)) { Some(x) => x, None => return None },
-        ok: match m.get("ok").and_then(|v| iface_bots__defs_ok_true__from_json(v)) { Some(x) => x, None => return None },
+        ok: m.get("ok").and_then(|v| (v).as_bool()).unwrap_or_default(),
     })
 }
 
 fn iface_bots__info_response_bot__from_json(v: &Value) -> Option<iface_bots::InfoResponseBot> {
     let m = v.as_object()?;
     Some(iface_bots::InfoResponseBot {
-        app_id: match m.get("app_id").and_then(|v| iface_bots__defs_app_id__from_json(v)) { Some(x) => x, None => return None },
+        app_id: m.get("app_id").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         deleted: m.get("deleted").and_then(|v| (v).as_bool()).unwrap_or_default(),
         icons: match m.get("icons").and_then(|v| iface_bots__info_response_bot_icons__from_json(v)) { Some(x) => x, None => return None },
-        id: match m.get("id").and_then(|v| iface_bots__defs_bot_id__from_json(v)) { Some(x) => x, None => return None },
+        id: m.get("id").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         name: m.get("name").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         updated: m.get("updated").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
-        user_id: m.get("user_id").filter(|v| !v.is_null()).and_then(|v| iface_bots__defs_user_id__from_json(v)),
-    })
-}
-
-fn iface_bots__defs_app_id__from_json(v: &Value) -> Option<iface_bots::DefsAppId> {
-    let m = v.as_object()?;
-    Some(iface_bots::DefsAppId {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        user_id: m.get("user_id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
     })
 }
 
@@ -108,27 +77,6 @@ fn iface_bots__info_response_bot_icons__from_json(v: &Value) -> Option<iface_bot
         image_v36: m.get("image_36").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         image_v48: m.get("image_48").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         image_v72: m.get("image_72").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-    })
-}
-
-fn iface_bots__defs_bot_id__from_json(v: &Value) -> Option<iface_bots::DefsBotId> {
-    let m = v.as_object()?;
-    Some(iface_bots::DefsBotId {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-    })
-}
-
-fn iface_bots__defs_user_id__from_json(v: &Value) -> Option<iface_bots::DefsUserId> {
-    let m = v.as_object()?;
-    Some(iface_bots::DefsUserId {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-    })
-}
-
-fn iface_bots__defs_ok_true__from_json(v: &Value) -> Option<iface_bots::DefsOkTrue> {
-    let m = v.as_object()?;
-    Some(iface_bots::DefsOkTrue {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 

@@ -45,6 +45,19 @@ const OP_API20100401_ADD_ON_RESULT_DELETE_RECORDING_ADD_ON_RESULT: OpSpec = OpSp
     ],
 };
 
+fn iface_api20100401_add_on_result__recording_add_on_result_enum_status__to_str(e: &iface_api20100401_add_on_result::RecordingAddOnResultEnumStatus) -> &'static str {
+    match e {
+        iface_api20100401_add_on_result::RecordingAddOnResultEnumStatus::Canceled => "canceled",
+        iface_api20100401_add_on_result::RecordingAddOnResultEnumStatus::Completed => "completed",
+        iface_api20100401_add_on_result::RecordingAddOnResultEnumStatus::Deleted => "deleted",
+        iface_api20100401_add_on_result::RecordingAddOnResultEnumStatus::Failed => "failed",
+        iface_api20100401_add_on_result::RecordingAddOnResultEnumStatus::InProgress => "in-progress",
+        iface_api20100401_add_on_result::RecordingAddOnResultEnumStatus::Init => "init",
+        iface_api20100401_add_on_result::RecordingAddOnResultEnumStatus::Processing => "processing",
+        iface_api20100401_add_on_result::RecordingAddOnResultEnumStatus::Queued => "queued",
+    }
+}
+
 fn iface_api20100401_add_on_result__list_recording_add_on_result_response__to_json(p: &iface_api20100401_add_on_result::ListRecordingAddOnResultResponse) -> Value {
     let mut m = Map::new();
     m.insert("add_on_results".into(), match (&p.add_on_results) { Some(v) => Value::Array((v).iter().map(|v| iface_api20100401_add_on_result__api_v2010_account_recording_recording_add_on_result__to_json(v)).collect()), None => Value::Null });
@@ -69,14 +82,8 @@ fn iface_api20100401_add_on_result__api_v2010_account_recording_recording_add_on
     m.insert("date_updated".into(), match (&p.date_updated) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("reference_sid".into(), match (&p.reference_sid) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("sid".into(), match (&p.sid) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("status".into(), match (&p.status) { Some(v) => iface_api20100401_add_on_result__recording_add_on_result_enum_status__to_json(v), None => Value::Null });
+    m.insert("status".into(), match (&p.status) { Some(v) => Value::String(iface_api20100401_add_on_result__recording_add_on_result_enum_status__to_str(v).into()), None => Value::Null });
     m.insert("subresource_uris".into(), match (&p.subresource_uris) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_api20100401_add_on_result__recording_add_on_result_enum_status__to_json(p: &iface_api20100401_add_on_result::RecordingAddOnResultEnumStatus) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -132,16 +139,23 @@ fn iface_api20100401_add_on_result__api_v2010_account_recording_recording_add_on
         date_updated: m.get("date_updated").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         reference_sid: m.get("reference_sid").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         sid: m.get("sid").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        status: m.get("status").filter(|v| !v.is_null()).and_then(|v| iface_api20100401_add_on_result__recording_add_on_result_enum_status__from_json(v)),
+        status: m.get("status").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_api20100401_add_on_result__recording_add_on_result_enum_status__from_str)),
         subresource_uris: m.get("subresource_uris").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
     })
 }
 
-fn iface_api20100401_add_on_result__recording_add_on_result_enum_status__from_json(v: &Value) -> Option<iface_api20100401_add_on_result::RecordingAddOnResultEnumStatus> {
-    let m = v.as_object()?;
-    Some(iface_api20100401_add_on_result::RecordingAddOnResultEnumStatus {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-    })
+fn iface_api20100401_add_on_result__recording_add_on_result_enum_status__from_str(s: &str) -> Option<iface_api20100401_add_on_result::RecordingAddOnResultEnumStatus> {
+    match s {
+        "canceled" => Some(iface_api20100401_add_on_result::RecordingAddOnResultEnumStatus::Canceled),
+        "completed" => Some(iface_api20100401_add_on_result::RecordingAddOnResultEnumStatus::Completed),
+        "deleted" => Some(iface_api20100401_add_on_result::RecordingAddOnResultEnumStatus::Deleted),
+        "failed" => Some(iface_api20100401_add_on_result::RecordingAddOnResultEnumStatus::Failed),
+        "in-progress" => Some(iface_api20100401_add_on_result::RecordingAddOnResultEnumStatus::InProgress),
+        "init" => Some(iface_api20100401_add_on_result::RecordingAddOnResultEnumStatus::Init),
+        "processing" => Some(iface_api20100401_add_on_result::RecordingAddOnResultEnumStatus::Processing),
+        "queued" => Some(iface_api20100401_add_on_result::RecordingAddOnResultEnumStatus::Queued),
+        _ => None,
+    }
 }
 
 fn iface_api20100401_add_on_result__list_recording_add_on_result__ok(body: String) -> Result<iface_api20100401_add_on_result::ListRecordingAddOnResultResponse, crate::runtime::DispatchError> {

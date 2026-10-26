@@ -213,13 +213,14 @@ fn iface_teams__team_remove_user_request__to_json(p: &iface_teams::TeamRemoveUse
 
 fn iface_teams__remove_user_for_team_response__to_json(p: &iface_teams::RemoveUserForTeamResponse) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => iface_teams__empty_response__to_json(v), None => Value::Null });
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_teams__empty_response__to_json(p: &iface_teams::EmptyResponse) -> Value {
+fn iface_teams__empty_response_entry__to_json(p: &iface_teams::EmptyResponseEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -387,14 +388,15 @@ fn iface_teams__user_compact__from_json(v: &Value) -> Option<iface_teams::UserCo
 fn iface_teams__remove_user_for_team_response__from_json(v: &Value) -> Option<iface_teams::RemoveUserForTeamResponse> {
     let m = v.as_object()?;
     Some(iface_teams::RemoveUserForTeamResponse {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| iface_teams__empty_response__from_json(v)),
+        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_teams::EmptyResponseEntry { key: k.clone(), value: val })).collect())),
     })
 }
 
-fn iface_teams__empty_response__from_json(v: &Value) -> Option<iface_teams::EmptyResponse> {
+fn iface_teams__empty_response_entry__from_json(v: &Value) -> Option<iface_teams::EmptyResponseEntry> {
     let m = v.as_object()?;
-    Some(iface_teams::EmptyResponse {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_teams::EmptyResponseEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 

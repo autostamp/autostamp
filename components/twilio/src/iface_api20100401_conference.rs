@@ -53,6 +53,24 @@ const OP_API20100401_CONFERENCE_UPDATE_CONFERENCE: OpSpec = OpSpec {
     ],
 };
 
+fn iface_api20100401_conference__conference_enum_status__to_str(e: &iface_api20100401_conference::ConferenceEnumStatus) -> &'static str {
+    match e {
+        iface_api20100401_conference::ConferenceEnumStatus::Init => "init",
+        iface_api20100401_conference::ConferenceEnumStatus::InProgress => "in-progress",
+        iface_api20100401_conference::ConferenceEnumStatus::Completed => "completed",
+    }
+}
+
+fn iface_api20100401_conference__conference_enum_reason_conference_ended__to_str(e: &iface_api20100401_conference::ConferenceEnumReasonConferenceEnded) -> &'static str {
+    match e {
+        iface_api20100401_conference::ConferenceEnumReasonConferenceEnded::ConferenceEndedViaApi => "conference-ended-via-api",
+        iface_api20100401_conference::ConferenceEnumReasonConferenceEnded::ParticipantWithEndConferenceOnExitLeft => "participant-with-end-conference-on-exit-left",
+        iface_api20100401_conference::ConferenceEnumReasonConferenceEnded::ParticipantWithEndConferenceOnExitKicked => "participant-with-end-conference-on-exit-kicked",
+        iface_api20100401_conference::ConferenceEnumReasonConferenceEnded::LastParticipantKicked => "last-participant-kicked",
+        iface_api20100401_conference::ConferenceEnumReasonConferenceEnded::LastParticipantLeft => "last-participant-left",
+    }
+}
+
 fn iface_api20100401_conference__update_conference_body_announce_method_enum__to_str(e: &iface_api20100401_conference::UpdateConferenceBodyAnnounceMethodEnum) -> &'static str {
     match e {
         iface_api20100401_conference::UpdateConferenceBodyAnnounceMethodEnum::Head => "HEAD",
@@ -64,10 +82,10 @@ fn iface_api20100401_conference__update_conference_body_announce_method_enum__to
     }
 }
 
-fn iface_api20100401_conference__conference_enum_status__to_json(p: &iface_api20100401_conference::ConferenceEnumStatus) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
+fn iface_api20100401_conference__conference_enum_update_status__to_str(e: &iface_api20100401_conference::ConferenceEnumUpdateStatus) -> &'static str {
+    match e {
+        iface_api20100401_conference::ConferenceEnumUpdateStatus::Completed => "completed",
+    }
 }
 
 fn iface_api20100401_conference__list_conference_response__to_json(p: &iface_api20100401_conference::ListConferenceResponse) -> Value {
@@ -92,24 +110,12 @@ fn iface_api20100401_conference__api_v2010_account_conference__to_json(p: &iface
     m.insert("date_created".into(), match (&p.date_created) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("date_updated".into(), match (&p.date_updated) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("friendly_name".into(), match (&p.friendly_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("reason_conference_ended".into(), match (&p.reason_conference_ended) { Some(v) => iface_api20100401_conference__conference_enum_reason_conference_ended__to_json(v), None => Value::Null });
+    m.insert("reason_conference_ended".into(), match (&p.reason_conference_ended) { Some(v) => Value::String(iface_api20100401_conference__conference_enum_reason_conference_ended__to_str(v).into()), None => Value::Null });
     m.insert("region".into(), match (&p.region) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("sid".into(), match (&p.sid) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("status".into(), match (&p.status) { Some(v) => iface_api20100401_conference__conference_enum_status__to_json(v), None => Value::Null });
+    m.insert("status".into(), match (&p.status) { Some(v) => Value::String(iface_api20100401_conference__conference_enum_status__to_str(v).into()), None => Value::Null });
     m.insert("subresource_uris".into(), match (&p.subresource_uris) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("uri".into(), match (&p.uri) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_api20100401_conference__conference_enum_reason_conference_ended__to_json(p: &iface_api20100401_conference::ConferenceEnumReasonConferenceEnded) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_api20100401_conference__conference_enum_update_status__to_json(p: &iface_api20100401_conference::ConferenceEnumUpdateStatus) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -123,7 +129,7 @@ fn iface_api20100401_conference__list_conference_params__to_json(p: &iface_api20
     m.insert("date_updated_v2".into(), match (&p.date_updated_v2) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("date_updated_v3".into(), match (&p.date_updated_v3) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("friendly_name".into(), match (&p.friendly_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("status".into(), match (&p.status) { Some(v) => iface_api20100401_conference__conference_enum_status__to_json(v), None => Value::Null });
+    m.insert("status".into(), match (&p.status) { Some(v) => Value::String(iface_api20100401_conference__conference_enum_status__to_str(v).into()), None => Value::Null });
     m.insert("page_size".into(), match (&p.page_size) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("page".into(), match (&p.page) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("page_token".into(), match (&p.page_token) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -143,15 +149,8 @@ fn iface_api20100401_conference__update_conference_params__to_json(p: &iface_api
     m.insert("sid".into(), Value::String((&p.sid).clone()));
     m.insert("announce_method".into(), match (&p.announce_method) { Some(v) => Value::String(iface_api20100401_conference__update_conference_body_announce_method_enum__to_str(v).into()), None => Value::Null });
     m.insert("announce_url".into(), match (&p.announce_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("status".into(), match (&p.status) { Some(v) => iface_api20100401_conference__conference_enum_update_status__to_json(v), None => Value::Null });
+    m.insert("status".into(), match (&p.status) { Some(v) => Value::String(iface_api20100401_conference__conference_enum_update_status__to_str(v).into()), None => Value::Null });
     Value::Object(m)
-}
-
-fn iface_api20100401_conference__conference_enum_status__from_json(v: &Value) -> Option<iface_api20100401_conference::ConferenceEnumStatus> {
-    let m = v.as_object()?;
-    Some(iface_api20100401_conference::ConferenceEnumStatus {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-    })
 }
 
 fn iface_api20100401_conference__list_conference_response__from_json(v: &Value) -> Option<iface_api20100401_conference::ListConferenceResponse> {
@@ -178,20 +177,33 @@ fn iface_api20100401_conference__api_v2010_account_conference__from_json(v: &Val
         date_created: m.get("date_created").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         date_updated: m.get("date_updated").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         friendly_name: m.get("friendly_name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        reason_conference_ended: m.get("reason_conference_ended").filter(|v| !v.is_null()).and_then(|v| iface_api20100401_conference__conference_enum_reason_conference_ended__from_json(v)),
+        reason_conference_ended: m.get("reason_conference_ended").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_api20100401_conference__conference_enum_reason_conference_ended__from_str)),
         region: m.get("region").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         sid: m.get("sid").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        status: m.get("status").filter(|v| !v.is_null()).and_then(|v| iface_api20100401_conference__conference_enum_status__from_json(v)),
+        status: m.get("status").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_api20100401_conference__conference_enum_status__from_str)),
         subresource_uris: m.get("subresource_uris").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         uri: m.get("uri").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
     })
 }
 
-fn iface_api20100401_conference__conference_enum_reason_conference_ended__from_json(v: &Value) -> Option<iface_api20100401_conference::ConferenceEnumReasonConferenceEnded> {
-    let m = v.as_object()?;
-    Some(iface_api20100401_conference::ConferenceEnumReasonConferenceEnded {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-    })
+fn iface_api20100401_conference__conference_enum_status__from_str(s: &str) -> Option<iface_api20100401_conference::ConferenceEnumStatus> {
+    match s {
+        "init" => Some(iface_api20100401_conference::ConferenceEnumStatus::Init),
+        "in-progress" => Some(iface_api20100401_conference::ConferenceEnumStatus::InProgress),
+        "completed" => Some(iface_api20100401_conference::ConferenceEnumStatus::Completed),
+        _ => None,
+    }
+}
+
+fn iface_api20100401_conference__conference_enum_reason_conference_ended__from_str(s: &str) -> Option<iface_api20100401_conference::ConferenceEnumReasonConferenceEnded> {
+    match s {
+        "conference-ended-via-api" => Some(iface_api20100401_conference::ConferenceEnumReasonConferenceEnded::ConferenceEndedViaApi),
+        "participant-with-end-conference-on-exit-left" => Some(iface_api20100401_conference::ConferenceEnumReasonConferenceEnded::ParticipantWithEndConferenceOnExitLeft),
+        "participant-with-end-conference-on-exit-kicked" => Some(iface_api20100401_conference::ConferenceEnumReasonConferenceEnded::ParticipantWithEndConferenceOnExitKicked),
+        "last-participant-kicked" => Some(iface_api20100401_conference::ConferenceEnumReasonConferenceEnded::LastParticipantKicked),
+        "last-participant-left" => Some(iface_api20100401_conference::ConferenceEnumReasonConferenceEnded::LastParticipantLeft),
+        _ => None,
+    }
 }
 
 fn iface_api20100401_conference__list_conference__ok(body: String) -> Result<iface_api20100401_conference::ListConferenceResponse, crate::runtime::DispatchError> {

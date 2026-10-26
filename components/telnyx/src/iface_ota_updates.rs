@@ -93,13 +93,15 @@ fn iface_ota_updates__complete_ota_update__to_json(p: &iface_ota_updates::Comple
 
 fn iface_ota_updates__complete_ota_update_settings__to_json(p: &iface_ota_updates::CompleteOtaUpdateSettings) -> Value {
     let mut m = Map::new();
-    m.insert("mobile_operator_networks_preferences".into(), match (&p.mobile_operator_networks_preferences) { Some(v) => iface_ota_updates__mobile_operator_networks_preferences_response__to_json(v), None => Value::Null });
+    m.insert("mobile_operator_networks_preferences".into(), match (&p.mobile_operator_networks_preferences) { Some(v) => Value::Array((v).iter().map(|v| iface_ota_updates__mobile_operator_network_preferences_response__to_json(v)).collect()), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_ota_updates__mobile_operator_networks_preferences_response__to_json(p: &iface_ota_updates::MobileOperatorNetworksPreferencesResponse) -> Value {
+fn iface_ota_updates__mobile_operator_network_preferences_response__to_json(p: &iface_ota_updates::MobileOperatorNetworkPreferencesResponse) -> Value {
     let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
+    m.insert("mobile_operator_network_id".into(), match (&p.mobile_operator_network_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("mobile_operator_network_name".into(), match (&p.mobile_operator_network_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("priority".into(), match (&p.priority) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
@@ -174,14 +176,16 @@ fn iface_ota_updates__complete_ota_update__from_json(v: &Value) -> Option<iface_
 fn iface_ota_updates__complete_ota_update_settings__from_json(v: &Value) -> Option<iface_ota_updates::CompleteOtaUpdateSettings> {
     let m = v.as_object()?;
     Some(iface_ota_updates::CompleteOtaUpdateSettings {
-        mobile_operator_networks_preferences: m.get("mobile_operator_networks_preferences").filter(|v| !v.is_null()).and_then(|v| iface_ota_updates__mobile_operator_networks_preferences_response__from_json(v)),
+        mobile_operator_networks_preferences: m.get("mobile_operator_networks_preferences").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_ota_updates__mobile_operator_network_preferences_response__from_json(x)).collect())),
     })
 }
 
-fn iface_ota_updates__mobile_operator_networks_preferences_response__from_json(v: &Value) -> Option<iface_ota_updates::MobileOperatorNetworksPreferencesResponse> {
+fn iface_ota_updates__mobile_operator_network_preferences_response__from_json(v: &Value) -> Option<iface_ota_updates::MobileOperatorNetworkPreferencesResponse> {
     let m = v.as_object()?;
-    Some(iface_ota_updates::MobileOperatorNetworksPreferencesResponse {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    Some(iface_ota_updates::MobileOperatorNetworkPreferencesResponse {
+        mobile_operator_network_id: m.get("mobile_operator_network_id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        mobile_operator_network_name: m.get("mobile_operator_network_name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        priority: m.get("priority").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
     })
 }
 

@@ -6,13 +6,19 @@
 /// | Secret name | Applied to each request as |
 /// | --- | --- |
 /// | `itc-bearer-token` | `Authorization: Bearer <secret>` |
-package autostamp:apple@0.5.0;
+package autostamp:apple@0.6.0;
 
 interface age-rating-declarations {
   enum age-rating-declaration-update-request-data-attributes-alcohol-tobacco-or-drug-use-or-references-enum {
     none,
     infrequent-or-mild,
     frequent-or-intense,
+  }
+
+  enum kids-age-band {
+    five-and-under,
+    six-to-eight,
+    nine-to-eleven,
   }
 
   enum age-rating-declaration-update-request-data-type-op-enum {
@@ -43,11 +49,6 @@ interface age-rating-declarations {
     violence-cartoon-or-fantasy: option<age-rating-declaration-update-request-data-attributes-alcohol-tobacco-or-drug-use-or-references-enum>,
     violence-realistic: option<age-rating-declaration-update-request-data-attributes-alcohol-tobacco-or-drug-use-or-references-enum>,
     violence-realistic-prolonged-graphic-or-sadistic: option<age-rating-declaration-update-request-data-attributes-alcohol-tobacco-or-drug-use-or-references-enum>
-  }
-
-  record kids-age-band {
-    /// opaque schema; raw JSON
-    value: string
   }
 
   record age-rating-declaration-response {
@@ -126,6 +127,12 @@ interface app-categories {
     subcategories,
   }
 
+  enum platform {
+    ios,
+    mac-os,
+    tv-os,
+  }
+
   enum app-category-relationships-parent-data-type-op-enum {
     app-categories,
   }
@@ -147,11 +154,6 @@ interface app-categories {
 
   record app-category-attributes {
     platforms: option<list<platform>>
-  }
-
-  record platform {
-    /// opaque schema; raw JSON
-    value: string
   }
 
   record resource-links {
@@ -348,6 +350,20 @@ interface app-encryption-declarations {
     sku,
   }
 
+  enum app-encryption-declaration-state {
+    in-review,
+    approved,
+    rejected,
+    invalid,
+    expired,
+  }
+
+  enum platform {
+    ios,
+    mac-os,
+    tv-os,
+  }
+
   enum app-encryption-declaration-relationships-app-data-type-op-enum {
     apps,
   }
@@ -445,16 +461,6 @@ interface app-encryption-declarations {
     platform: option<platform>,
     uploaded-date: option<string>,
     uses-encryption: option<bool>
-  }
-
-  record app-encryption-declaration-state {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
-  record platform {
-    /// opaque schema; raw JSON
-    value: string
   }
 
   record resource-links {
@@ -1079,6 +1085,48 @@ interface app-infos {
     subtitle,
   }
 
+  enum app-store-age-rating {
+    four-plus,
+    nine-plus,
+    twelve-plus,
+    seventeen-plus,
+  }
+
+  enum app-store-version-state {
+    developer-removed-from-sale,
+    developer-rejected,
+    in-review,
+    invalid-binary,
+    metadata-rejected,
+    pending-apple-release,
+    pending-contract,
+    pending-developer-release,
+    prepare-for-submission,
+    preorder-ready-for-sale,
+    processing-for-app-store,
+    ready-for-sale,
+    rejected,
+    removed-from-sale,
+    waiting-for-export-compliance,
+    waiting-for-review,
+    replaced-with-new-version,
+  }
+
+  enum brazil-age-rating {
+    l,
+    ten,
+    twelve,
+    fourteen,
+    sixteen,
+    eighteen,
+  }
+
+  enum kids-age-band {
+    five-and-under,
+    six-to-eight,
+    nine-to-eleven,
+  }
+
   enum app-info-relationships-age-rating-declaration-data-type-op-enum {
     age-rating-declarations,
   }
@@ -1109,6 +1157,12 @@ interface app-infos {
     app-info,
   }
 
+  enum platform {
+    ios,
+    mac-os,
+    tv-os,
+  }
+
   record app-info-response {
     data: app-info,
     included: option<list<string>>,
@@ -1128,26 +1182,6 @@ interface app-infos {
     app-store-state: option<app-store-version-state>,
     brazil-age-rating: option<brazil-age-rating>,
     kids-age-band: option<kids-age-band>
-  }
-
-  record app-store-age-rating {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
-  record app-store-version-state {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
-  record brazil-age-rating {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
-  record kids-age-band {
-    /// opaque schema; raw JSON
-    value: string
   }
 
   record resource-links {
@@ -1479,11 +1513,6 @@ interface app-infos {
 
   record app-category-attributes {
     platforms: option<list<platform>>
-  }
-
-  record platform {
-    /// opaque schema; raw JSON
-    value: string
   }
 
   record app-category-relationships {
@@ -1850,6 +1879,24 @@ interface app-pre-orders {
 }
 
 interface app-preview-sets {
+  enum preview-type {
+    iphone-v65,
+    iphone-v58,
+    iphone-v55,
+    iphone-v47,
+    iphone-v40,
+    iphone-v35,
+    ipad-pro-v3gen-v129,
+    ipad-pro-v3gen-v11,
+    ipad-pro-v129,
+    ipad-v105,
+    ipad-v97,
+    desktop,
+    watch-series-v4,
+    watch-series-v3,
+    apple-tv,
+  }
+
   enum app-preview-set-create-request-data-relationships-app-store-version-localization-data-type-op-enum {
     app-store-version-localizations,
   }
@@ -1906,11 +1953,6 @@ interface app-preview-sets {
 
   record app-preview-set-create-request-data-attributes {
     preview-type: preview-type
-  }
-
-  record preview-type {
-    /// opaque schema; raw JSON
-    value: string
   }
 
   record app-preview-set-create-request-data-relationships {
@@ -2902,6 +2944,34 @@ interface app-prices {
 }
 
 interface app-screenshot-sets {
+  enum screenshot-display-type {
+    app-iphone-v65,
+    app-iphone-v58,
+    app-iphone-v55,
+    app-iphone-v47,
+    app-iphone-v40,
+    app-iphone-v35,
+    app-ipad-pro-v3gen-v129,
+    app-ipad-pro-v3gen-v11,
+    app-ipad-pro-v129,
+    app-ipad-v105,
+    app-ipad-v97,
+    app-desktop,
+    app-watch-series-v4,
+    app-watch-series-v3,
+    app-apple-tv,
+    imessage-app-iphone-v65,
+    imessage-app-iphone-v58,
+    imessage-app-iphone-v55,
+    imessage-app-iphone-v47,
+    imessage-app-iphone-v40,
+    imessage-app-ipad-pro-v3gen-v129,
+    imessage-app-ipad-pro-v3gen-v11,
+    imessage-app-ipad-pro-v129,
+    imessage-app-ipad-v105,
+    imessage-app-ipad-v97,
+  }
+
   enum app-screenshot-set-create-request-data-relationships-app-store-version-localization-data-type-op-enum {
     app-store-version-localizations,
   }
@@ -2957,11 +3027,6 @@ interface app-screenshot-sets {
 
   record app-screenshot-set-create-request-data-attributes {
     screenshot-display-type: screenshot-display-type
-  }
-
-  record screenshot-display-type {
-    /// opaque schema; raw JSON
-    value: string
   }
 
   record app-screenshot-set-create-request-data-relationships {
@@ -4053,6 +4118,24 @@ interface app-store-version-localizations {
     app-store-version-localization,
   }
 
+  enum preview-type {
+    iphone-v65,
+    iphone-v58,
+    iphone-v55,
+    iphone-v47,
+    iphone-v40,
+    iphone-v35,
+    ipad-pro-v3gen-v129,
+    ipad-pro-v3gen-v11,
+    ipad-pro-v129,
+    ipad-v105,
+    ipad-v97,
+    desktop,
+    watch-series-v4,
+    watch-series-v3,
+    apple-tv,
+  }
+
   enum app-preview-set-relationships-app-previews-data-item-type-op-enum {
     app-previews,
   }
@@ -4108,6 +4191,34 @@ interface app-store-version-localizations {
   enum app-screenshot-sets-get-to-many-related-include-op-item-enum {
     app-screenshots,
     app-store-version-localization,
+  }
+
+  enum screenshot-display-type {
+    app-iphone-v65,
+    app-iphone-v58,
+    app-iphone-v55,
+    app-iphone-v47,
+    app-iphone-v40,
+    app-iphone-v35,
+    app-ipad-pro-v3gen-v129,
+    app-ipad-pro-v3gen-v11,
+    app-ipad-pro-v129,
+    app-ipad-v105,
+    app-ipad-v97,
+    app-desktop,
+    app-watch-series-v4,
+    app-watch-series-v3,
+    app-apple-tv,
+    imessage-app-iphone-v65,
+    imessage-app-iphone-v58,
+    imessage-app-iphone-v55,
+    imessage-app-iphone-v47,
+    imessage-app-iphone-v40,
+    imessage-app-ipad-pro-v3gen-v129,
+    imessage-app-ipad-pro-v3gen-v11,
+    imessage-app-ipad-pro-v129,
+    imessage-app-ipad-v105,
+    imessage-app-ipad-v97,
   }
 
   enum app-screenshot-set-relationships-app-screenshots-data-item-type-op-enum {
@@ -4271,11 +4382,6 @@ interface app-store-version-localizations {
     preview-type: option<preview-type>
   }
 
-  record preview-type {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
   record app-preview-set-relationships {
     app-previews: option<app-preview-set-relationships-app-previews>,
     app-store-version-localization: option<app-preview-set-relationships-app-store-version-localization>
@@ -4404,11 +4510,6 @@ interface app-store-version-localizations {
 
   record app-screenshot-set-attributes {
     screenshot-display-type: option<screenshot-display-type>
-  }
-
-  record screenshot-display-type {
-    /// opaque schema; raw JSON
-    value: string
   }
 
   record app-screenshot-set-relationships {
@@ -4604,6 +4705,13 @@ interface app-store-version-localizations {
 }
 
 interface app-store-version-phased-releases {
+  enum phased-release-state {
+    inactive,
+    active,
+    paused,
+    complete,
+  }
+
   enum app-store-version-phased-release-create-request-data-relationships-app-store-version-data-type-op-enum {
     app-store-versions,
   }
@@ -4620,11 +4728,6 @@ interface app-store-version-phased-releases {
 
   record app-store-version-phased-release-create-request-data-attributes {
     phased-release-state: option<phased-release-state>
-  }
-
-  record phased-release-state {
-    /// opaque schema; raw JSON
-    value: string
   }
 
   record app-store-version-phased-release-create-request-data-relationships {
@@ -4815,6 +4918,12 @@ interface app-store-version-submissions {
 }
 
 interface app-store-versions {
+  enum platform {
+    ios,
+    mac-os,
+    tv-os,
+  }
+
   enum app-store-version-create-request-data-attributes-release-type-enum {
     manual,
     after-approval,
@@ -4831,6 +4940,26 @@ interface app-store-versions {
 
   enum app-store-version-create-request-data-type-op-enum {
     app-store-versions,
+  }
+
+  enum app-store-version-state {
+    developer-removed-from-sale,
+    developer-rejected,
+    in-review,
+    invalid-binary,
+    metadata-rejected,
+    pending-apple-release,
+    pending-contract,
+    pending-developer-release,
+    prepare-for-submission,
+    preorder-ready-for-sale,
+    processing-for-app-store,
+    ready-for-sale,
+    rejected,
+    removed-from-sale,
+    waiting-for-export-compliance,
+    waiting-for-review,
+    replaced-with-new-version,
   }
 
   enum app-store-version-relationships-age-rating-declaration-data-type-op-enum {
@@ -4996,6 +5125,12 @@ interface app-store-versions {
     frequent-or-intense,
   }
 
+  enum kids-age-band {
+    five-and-under,
+    six-to-eight,
+    nine-to-eleven,
+  }
+
   enum app-store-review-detail-get-to-one-related-fields-app-store-review-attachments-item-enum {
     app-store-review-detail,
     asset-delivery-state,
@@ -5028,6 +5163,13 @@ interface app-store-versions {
 
   enum app-store-version-localization-relationships-app-screenshot-sets-data-item-type-op-enum {
     app-screenshot-sets,
+  }
+
+  enum phased-release-state {
+    inactive,
+    active,
+    paused,
+    complete,
   }
 
   enum build-attributes-processing-state-enum {
@@ -5080,11 +5222,6 @@ interface app-store-versions {
     version-string: string
   }
 
-  record platform {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
   record app-store-version-create-request-data-relationships {
     app: app-store-version-create-request-data-relationships-app,
     build: option<app-store-version-create-request-data-relationships-build>
@@ -5132,11 +5269,6 @@ interface app-store-versions {
     release-type: option<app-store-version-create-request-data-attributes-release-type-enum>,
     uses-idfa: option<bool>,
     version-string: option<string>
-  }
-
-  record app-store-version-state {
-    /// opaque schema; raw JSON
-    value: string
   }
 
   record resource-links {
@@ -5365,11 +5497,6 @@ interface app-store-versions {
     violence-realistic-prolonged-graphic-or-sadistic: option<age-rating-declaration-attributes-alcohol-tobacco-or-drug-use-or-references-enum>
   }
 
-  record kids-age-band {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
   record app-store-review-detail-response {
     data: app-store-review-detail,
     included: option<list<app-store-review-attachment>>,
@@ -5591,11 +5718,6 @@ interface app-store-versions {
     phased-release-state: option<phased-release-state>,
     start-date: option<string>,
     total-pause-duration: option<s32>
-  }
-
-  record phased-release-state {
-    /// opaque schema; raw JSON
-    value: string
   }
 
   record app-store-version-submission-response {
@@ -6483,6 +6605,48 @@ interface apps {
     secondary-subcategory-two,
   }
 
+  enum app-store-age-rating {
+    four-plus,
+    nine-plus,
+    twelve-plus,
+    seventeen-plus,
+  }
+
+  enum app-store-version-state {
+    developer-removed-from-sale,
+    developer-rejected,
+    in-review,
+    invalid-binary,
+    metadata-rejected,
+    pending-apple-release,
+    pending-contract,
+    pending-developer-release,
+    prepare-for-submission,
+    preorder-ready-for-sale,
+    processing-for-app-store,
+    ready-for-sale,
+    rejected,
+    removed-from-sale,
+    waiting-for-export-compliance,
+    waiting-for-review,
+    replaced-with-new-version,
+  }
+
+  enum brazil-age-rating {
+    l,
+    ten,
+    twelve,
+    fourteen,
+    sixteen,
+    eighteen,
+  }
+
+  enum kids-age-band {
+    five-and-under,
+    six-to-eight,
+    nine-to-eleven,
+  }
+
   enum app-info-relationships-age-rating-declaration-data-type-op-enum {
     age-rating-declarations,
   }
@@ -6578,6 +6742,12 @@ interface apps {
     build,
     idfa-declaration,
     routing-app-coverage,
+  }
+
+  enum platform {
+    ios,
+    mac-os,
+    tv-os,
   }
 
   enum app-store-version-attributes-release-type-enum {
@@ -7066,26 +7236,6 @@ interface apps {
     kids-age-band: option<kids-age-band>
   }
 
-  record app-store-age-rating {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
-  record app-store-version-state {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
-  record brazil-age-rating {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
-  record kids-age-band {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
   record app-info-relationships {
     age-rating-declaration: option<app-info-relationships-age-rating-declaration>,
     app: option<app-info-relationships-app>,
@@ -7259,11 +7409,6 @@ interface apps {
     release-type: option<app-store-version-attributes-release-type-enum>,
     uses-idfa: option<bool>,
     version-string: option<string>
-  }
-
-  record platform {
-    /// opaque schema; raw JSON
-    value: string
   }
 
   record app-store-version-relationships {
@@ -9782,6 +9927,13 @@ interface beta-app-review-submissions {
     version,
   }
 
+  enum beta-review-state {
+    waiting-for-review,
+    in-review,
+    rejected,
+    approved,
+  }
+
   enum beta-app-review-submission-relationships-build-data-type-op-enum {
     builds,
   }
@@ -9846,11 +9998,6 @@ interface beta-app-review-submissions {
 
   record beta-app-review-submission-attributes {
     beta-review-state: option<beta-review-state>
-  }
-
-  record beta-review-state {
-    /// opaque schema; raw JSON
-    value: string
   }
 
   record resource-links {
@@ -10794,6 +10941,11 @@ interface beta-groups {
     app-prices,
   }
 
+  enum beta-invite-type {
+    email,
+    public-link,
+  }
+
   enum build-attributes-processing-state-enum {
     processing,
     failed,
@@ -11272,11 +11424,6 @@ interface beta-groups {
     first-name: option<string>,
     invite-type: option<beta-invite-type>,
     last-name: option<string>
-  }
-
-  record beta-invite-type {
-    /// opaque schema; raw JSON
-    value: string
   }
 
   record beta-tester-relationships {
@@ -12477,6 +12624,11 @@ interface beta-testers {
     sku,
   }
 
+  enum beta-invite-type {
+    email,
+    public-link,
+  }
+
   enum beta-tester-relationships-apps-data-item-type-op-enum {
     apps,
   }
@@ -12593,11 +12745,6 @@ interface beta-testers {
     first-name: option<string>,
     invite-type: option<beta-invite-type>,
     last-name: option<string>
-  }
-
-  record beta-invite-type {
-    /// opaque schema; raw JSON
-    value: string
   }
 
   record resource-links {
@@ -13592,6 +13739,31 @@ interface build-beta-details {
     version,
   }
 
+  enum external-beta-state {
+    processing,
+    processing-exception,
+    missing-export-compliance,
+    ready-for-beta-testing,
+    in-beta-testing,
+    expired,
+    ready-for-beta-submission,
+    in-export-compliance-review,
+    waiting-for-beta-review,
+    in-beta-review,
+    beta-rejected,
+    beta-approved,
+  }
+
+  enum internal-beta-state {
+    processing,
+    processing-exception,
+    missing-export-compliance,
+    ready-for-beta-testing,
+    in-beta-testing,
+    expired,
+    in-export-compliance-review,
+  }
+
   enum build-beta-detail-relationships-build-data-type-op-enum {
     builds,
   }
@@ -13658,16 +13830,6 @@ interface build-beta-details {
     auto-notify-enabled: option<bool>,
     external-build-state: option<external-beta-state>,
     internal-build-state: option<internal-beta-state>
-  }
-
-  record external-beta-state {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
-  record internal-beta-state {
-    /// opaque schema; raw JSON
-    value: string
   }
 
   record resource-links {
@@ -14313,6 +14475,40 @@ interface builds {
     app-prices,
   }
 
+  enum app-encryption-declaration-state {
+    in-review,
+    approved,
+    rejected,
+    invalid,
+    expired,
+  }
+
+  enum platform {
+    ios,
+    mac-os,
+    tv-os,
+  }
+
+  enum app-store-version-state {
+    developer-removed-from-sale,
+    developer-rejected,
+    in-review,
+    invalid-binary,
+    metadata-rejected,
+    pending-apple-release,
+    pending-contract,
+    pending-developer-release,
+    prepare-for-submission,
+    preorder-ready-for-sale,
+    processing-for-app-store,
+    ready-for-sale,
+    rejected,
+    removed-from-sale,
+    waiting-for-export-compliance,
+    waiting-for-review,
+    replaced-with-new-version,
+  }
+
   enum app-store-version-attributes-release-type-enum {
     manual,
     after-approval,
@@ -14347,6 +14543,38 @@ interface builds {
     routing-app-coverages,
   }
 
+  enum beta-review-state {
+    waiting-for-review,
+    in-review,
+    rejected,
+    approved,
+  }
+
+  enum external-beta-state {
+    processing,
+    processing-exception,
+    missing-export-compliance,
+    ready-for-beta-testing,
+    in-beta-testing,
+    expired,
+    ready-for-beta-submission,
+    in-export-compliance-review,
+    waiting-for-beta-review,
+    in-beta-review,
+    beta-rejected,
+    beta-approved,
+  }
+
+  enum internal-beta-state {
+    processing,
+    processing-exception,
+    missing-export-compliance,
+    ready-for-beta-testing,
+    in-beta-testing,
+    expired,
+    in-export-compliance-review,
+  }
+
   enum diagnostic-signatures-get-to-many-related-filter-diagnostic-type-item-enum {
     disk-writes,
   }
@@ -14357,6 +14585,19 @@ interface builds {
 
   enum diagnostic-log-type-op-enum {
     diagnostic-logs,
+  }
+
+  enum icon-asset-type {
+    app-store,
+    messages-app-store,
+    watch-app-store,
+    tv-os-home-screen,
+    tv-os-top-shelf,
+  }
+
+  enum beta-invite-type {
+    email,
+    public-link,
   }
 
   enum perf-power-metrics-get-to-many-related-filter-metric-type-item-enum {
@@ -14903,16 +15144,6 @@ interface builds {
     uses-encryption: option<bool>
   }
 
-  record app-encryption-declaration-state {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
-  record platform {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
   record app-encryption-declaration-relationships {
     app: option<app-encryption-declaration-relationships-app>
   }
@@ -14956,11 +15187,6 @@ interface builds {
     release-type: option<app-store-version-attributes-release-type-enum>,
     uses-idfa: option<bool>,
     version-string: option<string>
-  }
-
-  record app-store-version-state {
-    /// opaque schema; raw JSON
-    value: string
   }
 
   record app-store-version-relationships {
@@ -15129,11 +15355,6 @@ interface builds {
     beta-review-state: option<beta-review-state>
   }
 
-  record beta-review-state {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
   record beta-app-review-submission-relationships {
     build: option<beta-app-review-submission-relationships-build>
   }
@@ -15212,16 +15433,6 @@ interface builds {
     internal-build-state: option<internal-beta-state>
   }
 
-  record external-beta-state {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
-  record internal-beta-state {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
   record build-beta-detail-relationships {
     build: option<build-beta-detail-relationships-build>
   }
@@ -15285,11 +15496,6 @@ interface builds {
     icon-type: option<icon-asset-type>
   }
 
-  record icon-asset-type {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
   record beta-testers-response {
     data: list<beta-tester>,
     included: option<list<string>>,
@@ -15310,11 +15516,6 @@ interface builds {
     first-name: option<string>,
     invite-type: option<beta-invite-type>,
     last-name: option<string>
-  }
-
-  record beta-invite-type {
-    /// opaque schema; raw JSON
-    value: string
   }
 
   record beta-tester-relationships {
@@ -15891,6 +16092,37 @@ interface builds {
 }
 
 interface bundle-id-capabilities {
+  enum capability-type {
+    icloud,
+    in-app-purchase,
+    game-center,
+    push-notifications,
+    wallet,
+    inter-app-audio,
+    maps,
+    associated-domains,
+    personal-vpn,
+    app-groups,
+    healthkit,
+    homekit,
+    wireless-accessory-configuration,
+    apple-pay,
+    data-protection,
+    sirikit,
+    network-extensions,
+    multipath,
+    hot-spot,
+    nfc-tag-reading,
+    classkit,
+    autofill-credential-provider,
+    access-wifi-information,
+    network-custom-protocol,
+    coremedia-hls-low-latency,
+    system-extension-install,
+    user-management,
+    apple-id-auth,
+  }
+
   enum capability-setting-allowed-instances-enum {
     entry,
     single,
@@ -15929,11 +16161,6 @@ interface bundle-id-capabilities {
   record bundle-id-capability-create-request-data-attributes {
     capability-type: capability-type,
     settings: option<list<capability-setting>>
-  }
-
-  record capability-type {
-    /// opaque schema; raw JSON
-    value: string
   }
 
   record capability-setting {
@@ -16129,6 +16356,11 @@ interface bundle-ids {
     sku,
   }
 
+  enum bundle-id-platform {
+    ios,
+    mac-os,
+  }
+
   enum bundle-id-relationships-app-data-type-op-enum {
     apps,
   }
@@ -16206,6 +16438,37 @@ interface bundle-ids {
     app-prices,
   }
 
+  enum capability-type {
+    icloud,
+    in-app-purchase,
+    game-center,
+    push-notifications,
+    wallet,
+    inter-app-audio,
+    maps,
+    associated-domains,
+    personal-vpn,
+    app-groups,
+    healthkit,
+    homekit,
+    wireless-accessory-configuration,
+    apple-pay,
+    data-protection,
+    sirikit,
+    network-extensions,
+    multipath,
+    hot-spot,
+    nfc-tag-reading,
+    classkit,
+    autofill-credential-provider,
+    access-wifi-information,
+    network-custom-protocol,
+    coremedia-hls-low-latency,
+    system-extension-install,
+    user-management,
+    apple-id-auth,
+  }
+
   enum capability-setting-allowed-instances-enum {
     entry,
     single,
@@ -16277,11 +16540,6 @@ interface bundle-ids {
     name: option<string>,
     platform: option<bundle-id-platform>,
     seed-id: option<string>
-  }
-
-  record bundle-id-platform {
-    /// opaque schema; raw JSON
-    value: string
   }
 
   record resource-links {
@@ -16667,11 +16925,6 @@ interface bundle-ids {
     settings: option<list<capability-setting>>
   }
 
-  record capability-type {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
   record capability-setting {
     allowed-instances: option<capability-setting-allowed-instances-enum>,
     description: option<string>,
@@ -16963,6 +17216,23 @@ interface certificates {
     serial-number,
   }
 
+  enum certificate-type {
+    ios-development,
+    ios-distribution,
+    mac-app-distribution,
+    mac-installer-distribution,
+    mac-app-development,
+    developer-id-kext,
+    developer-id-application,
+    development,
+    distribution,
+  }
+
+  enum bundle-id-platform {
+    ios,
+    mac-os,
+  }
+
   enum certificate-type-op-enum {
     certificates,
   }
@@ -16988,16 +17258,6 @@ interface certificates {
     name: option<string>,
     platform: option<bundle-id-platform>,
     serial-number: option<string>
-  }
-
-  record certificate-type {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
-  record bundle-id-platform {
-    /// opaque schema; raw JSON
-    value: string
   }
 
   record resource-links {
@@ -17148,6 +17408,11 @@ interface devices {
     mac,
   }
 
+  enum bundle-id-platform {
+    ios,
+    mac-os,
+  }
+
   enum device-type-op-enum {
     devices,
   }
@@ -17173,11 +17438,6 @@ interface devices {
     platform: option<bundle-id-platform>,
     status: option<get-collection-filter-status-item-enum>,
     udid: option<string>
-  }
-
-  record bundle-id-platform {
-    /// opaque schema; raw JSON
-    value: string
   }
 
   record resource-links {
@@ -17690,6 +17950,12 @@ interface game-center-enabled-versions {
     compatible-versions,
   }
 
+  enum platform {
+    ios,
+    mac-os,
+    tv-os,
+  }
+
   enum game-center-enabled-version-relationships-app-data-type-op-enum {
     apps,
   }
@@ -17723,11 +17989,6 @@ interface game-center-enabled-versions {
     height: option<s32>,
     template-url: option<string>,
     width: option<s32>
-  }
-
-  record platform {
-    /// opaque schema; raw JSON
-    value: string
   }
 
   record resource-links {
@@ -18234,6 +18495,12 @@ interface pre-release-versions {
     sku,
   }
 
+  enum platform {
+    ios,
+    mac-os,
+    tv-os,
+  }
+
   enum prerelease-version-relationships-app-data-type-op-enum {
     apps,
   }
@@ -18341,11 +18608,6 @@ interface pre-release-versions {
   record prerelease-version-attributes {
     platform: option<platform>,
     version: option<string>
-  }
-
-  record platform {
-    /// opaque schema; raw JSON
-    value: string
   }
 
   record resource-links {
@@ -19034,6 +19296,11 @@ interface profiles {
     seed-id,
   }
 
+  enum bundle-id-platform {
+    ios,
+    mac-os,
+  }
+
   enum profile-relationships-bundle-id-data-type-op-enum {
     bundle-ids,
   }
@@ -19056,6 +19323,18 @@ interface profiles {
 
   enum bundle-id-relationships-bundle-id-capabilities-data-item-type-op-enum {
     bundle-id-capabilities,
+  }
+
+  enum certificate-type {
+    ios-development,
+    ios-distribution,
+    mac-app-distribution,
+    mac-installer-distribution,
+    mac-app-development,
+    developer-id-kext,
+    developer-id-application,
+    development,
+    distribution,
   }
 
   enum device-attributes-device-class-enum {
@@ -19096,11 +19375,6 @@ interface profiles {
     profile-state: option<get-collection-filter-profile-state-item-enum>,
     profile-type: option<get-collection-filter-profile-type-item-enum>,
     uuid: option<string>
-  }
-
-  record bundle-id-platform {
-    /// opaque schema; raw JSON
-    value: string
   }
 
   record resource-links {
@@ -19324,11 +19598,6 @@ interface profiles {
     name: option<string>,
     platform: option<bundle-id-platform>,
     serial-number: option<string>
-  }
-
-  record certificate-type {
-    /// opaque schema; raw JSON
-    value: string
   }
 
   record devices-response {
@@ -19865,6 +20134,23 @@ interface user-invitations {
     sku,
   }
 
+  enum user-role {
+    admin,
+    finance,
+    technical,
+    account-holder,
+    read-only,
+    sales,
+    marketing,
+    app-manager,
+    developer,
+    access-to-reports,
+    customer-support,
+    create-apps,
+    cloud-managed-developer-id,
+    cloud-managed-app-distribution,
+  }
+
   enum user-invitation-relationships-visible-apps-data-item-type-op-enum {
     apps,
   }
@@ -19957,11 +20243,6 @@ interface user-invitations {
     last-name: option<string>,
     provisioning-allowed: option<bool>,
     roles: option<list<user-role>>
-  }
-
-  record user-role {
-    /// opaque schema; raw JSON
-    value: string
   }
 
   record resource-links {
@@ -20462,6 +20743,23 @@ interface users {
     sku,
   }
 
+  enum user-role {
+    admin,
+    finance,
+    technical,
+    account-holder,
+    read-only,
+    sales,
+    marketing,
+    app-manager,
+    developer,
+    access-to-reports,
+    customer-support,
+    create-apps,
+    cloud-managed-developer-id,
+    cloud-managed-app-distribution,
+  }
+
   enum user-relationships-visible-apps-data-item-type-op-enum {
     apps,
   }
@@ -20553,11 +20851,6 @@ interface users {
     provisioning-allowed: option<bool>,
     roles: option<list<user-role>>,
     username: option<string>
-  }
-
-  record user-role {
-    /// opaque schema; raw JSON
-    value: string
   }
 
   record resource-links {

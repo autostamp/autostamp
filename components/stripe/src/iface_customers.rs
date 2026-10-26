@@ -868,17 +868,17 @@ fn iface_customers__price_billing_scheme_enum__to_str(e: &iface_customers::Price
     }
 }
 
-fn iface_customers__price_object_enum__to_str(e: &iface_customers::PriceObjectEnum) -> &'static str {
+fn iface_customers__currency_option_tax_behavior_enum__to_str(e: &iface_customers::CurrencyOptionTaxBehaviorEnum) -> &'static str {
     match e {
-        iface_customers::PriceObjectEnum::Price => "price",
+        iface_customers::CurrencyOptionTaxBehaviorEnum::Exclusive => "exclusive",
+        iface_customers::CurrencyOptionTaxBehaviorEnum::Inclusive => "inclusive",
+        iface_customers::CurrencyOptionTaxBehaviorEnum::Unspecified => "unspecified",
     }
 }
 
-fn iface_customers__price_tax_behavior_enum__to_str(e: &iface_customers::PriceTaxBehaviorEnum) -> &'static str {
+fn iface_customers__price_object_enum__to_str(e: &iface_customers::PriceObjectEnum) -> &'static str {
     match e {
-        iface_customers::PriceTaxBehaviorEnum::Exclusive => "exclusive",
-        iface_customers::PriceTaxBehaviorEnum::Inclusive => "inclusive",
-        iface_customers::PriceTaxBehaviorEnum::Unspecified => "unspecified",
+        iface_customers::PriceObjectEnum::Price => "price",
     }
 }
 
@@ -1515,11 +1515,11 @@ fn iface_customers__customer__to_json(p: &iface_customers::Customer) -> Value {
     m.insert("discount".into(), match (&p.discount) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("email".into(), match (&p.email) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("id".into(), Value::String((&p.id).clone()));
-    m.insert("invoice_credit_balance".into(), match (&p.invoice_credit_balance) { Some(v) => iface_customers__customer_invoice_credit_balance__to_json(v), None => Value::Null });
+    m.insert("invoice_credit_balance".into(), match (&p.invoice_credit_balance) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::Number(serde_json::Number::from(*(&e.value))))).collect()), None => Value::Null });
     m.insert("invoice_prefix".into(), match (&p.invoice_prefix) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("invoice_settings".into(), match (&p.invoice_settings) { Some(v) => iface_customers__invoice_setting_customer_setting__to_json(v), None => Value::Null });
     m.insert("livemode".into(), Value::Bool(*(&p.livemode)));
-    m.insert("metadata".into(), match (&p.metadata) { Some(v) => iface_customers__customer_metadata__to_json(v), None => Value::Null });
+    m.insert("metadata".into(), match (&p.metadata) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("next_invoice_sequence".into(), match (&p.next_invoice_sequence) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("object".into(), Value::String(iface_customers__customer_object_enum__to_str(&p.object).into()));
@@ -1535,9 +1535,10 @@ fn iface_customers__customer__to_json(p: &iface_customers::Customer) -> Value {
     Value::Object(m)
 }
 
-fn iface_customers__customer_invoice_credit_balance__to_json(p: &iface_customers::CustomerInvoiceCreditBalance) -> Value {
+fn iface_customers__customer_invoice_credit_balance_entry__to_json(p: &iface_customers::CustomerInvoiceCreditBalanceEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::Number(serde_json::Number::from(*(&p.value))));
     Value::Object(m)
 }
 
@@ -1557,9 +1558,10 @@ fn iface_customers__invoice_setting_custom_field__to_json(p: &iface_customers::I
     Value::Object(m)
 }
 
-fn iface_customers__customer_metadata__to_json(p: &iface_customers::CustomerMetadata) -> Value {
+fn iface_customers__customer_metadata_entry__to_json(p: &iface_customers::CustomerMetadataEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -1609,7 +1611,7 @@ fn iface_customers__subscription__to_json(p: &iface_customers::Subscription) -> 
     m.insert("items".into(), iface_customers__subscription_items__to_json(&p.items));
     m.insert("latest_invoice".into(), match (&p.latest_invoice) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("livemode".into(), Value::Bool(*(&p.livemode)));
-    m.insert("metadata".into(), iface_customers__subscription_metadata__to_json(&p.metadata));
+    m.insert("metadata".into(), Value::Object((&p.metadata).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()));
     m.insert("next_pending_invoice_item_invoice".into(), match (&p.next_pending_invoice_item_invoice) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("object".into(), Value::String(iface_customers__subscription_object_enum__to_str(&p.object).into()));
     m.insert("on_behalf_of".into(), match (&p.on_behalf_of) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -1646,7 +1648,7 @@ fn iface_customers__tax_rate__to_json(p: &iface_customers::TaxRate) -> Value {
     m.insert("inclusive".into(), Value::Bool(*(&p.inclusive)));
     m.insert("jurisdiction".into(), match (&p.jurisdiction) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("livemode".into(), Value::Bool(*(&p.livemode)));
-    m.insert("metadata".into(), match (&p.metadata) { Some(v) => iface_customers__tax_rate_metadata__to_json(v), None => Value::Null });
+    m.insert("metadata".into(), match (&p.metadata) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("object".into(), Value::String(iface_customers__tax_rate_object_enum__to_str(&p.object).into()));
     m.insert("percentage".into(), serde_json::Number::from_f64(*(&p.percentage)).map(Value::Number).unwrap_or(Value::Null));
     m.insert("state".into(), match (&p.state) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -1654,9 +1656,10 @@ fn iface_customers__tax_rate__to_json(p: &iface_customers::TaxRate) -> Value {
     Value::Object(m)
 }
 
-fn iface_customers__tax_rate_metadata__to_json(p: &iface_customers::TaxRateMetadata) -> Value {
+fn iface_customers__tax_rate_metadata_entry__to_json(p: &iface_customers::TaxRateMetadataEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -1674,7 +1677,7 @@ fn iface_customers__subscription_item__to_json(p: &iface_customers::Subscription
     m.insert("billing_thresholds".into(), match (&p.billing_thresholds) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("created".into(), Value::Number(serde_json::Number::from(*(&p.created))));
     m.insert("id".into(), Value::String((&p.id).clone()));
-    m.insert("metadata".into(), iface_customers__subscription_item_metadata__to_json(&p.metadata));
+    m.insert("metadata".into(), Value::Object((&p.metadata).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()));
     m.insert("object".into(), Value::String(iface_customers__subscription_item_object_enum__to_str(&p.object).into()));
     m.insert("price".into(), iface_customers__price__to_json(&p.price));
     m.insert("quantity".into(), match (&p.quantity) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
@@ -1683,9 +1686,10 @@ fn iface_customers__subscription_item__to_json(p: &iface_customers::Subscription
     Value::Object(m)
 }
 
-fn iface_customers__subscription_item_metadata__to_json(p: &iface_customers::SubscriptionItemMetadata) -> Value {
+fn iface_customers__subscription_item_metadata_entry__to_json(p: &iface_customers::SubscriptionItemMetadataEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -1695,17 +1699,17 @@ fn iface_customers__price__to_json(p: &iface_customers::Price) -> Value {
     m.insert("billing_scheme".into(), Value::String(iface_customers__price_billing_scheme_enum__to_str(&p.billing_scheme).into()));
     m.insert("created".into(), Value::Number(serde_json::Number::from(*(&p.created))));
     m.insert("currency".into(), Value::String((&p.currency).clone()));
-    m.insert("currency_options".into(), match (&p.currency_options) { Some(v) => iface_customers__price_currency_options__to_json(v), None => Value::Null });
+    m.insert("currency_options".into(), match (&p.currency_options) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), iface_customers__currency_option__to_json(&e.value))).collect()), None => Value::Null });
     m.insert("custom_unit_amount".into(), match (&p.custom_unit_amount) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("id".into(), Value::String((&p.id).clone()));
     m.insert("livemode".into(), Value::Bool(*(&p.livemode)));
     m.insert("lookup_key".into(), match (&p.lookup_key) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("metadata".into(), iface_customers__price_metadata__to_json(&p.metadata));
+    m.insert("metadata".into(), Value::Object((&p.metadata).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()));
     m.insert("nickname".into(), match (&p.nickname) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("object".into(), Value::String(iface_customers__price_object_enum__to_str(&p.object).into()));
     m.insert("product".into(), Value::String((&p.product).clone()));
     m.insert("recurring".into(), match (&p.recurring) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("tax_behavior".into(), match (&p.tax_behavior) { Some(v) => Value::String(iface_customers__price_tax_behavior_enum__to_str(v).into()), None => Value::Null });
+    m.insert("tax_behavior".into(), match (&p.tax_behavior) { Some(v) => Value::String(iface_customers__currency_option_tax_behavior_enum__to_str(v).into()), None => Value::Null });
     m.insert("tiers".into(), match (&p.tiers) { Some(v) => Value::Array((v).iter().map(|v| iface_customers__price_tier__to_json(v)).collect()), None => Value::Null });
     m.insert("tiers_mode".into(), match (&p.tiers_mode) { Some(v) => Value::String(iface_customers__price_tiers_mode_enum__to_str(v).into()), None => Value::Null });
     m.insert("transform_quantity".into(), match (&p.transform_quantity) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -1715,15 +1719,13 @@ fn iface_customers__price__to_json(p: &iface_customers::Price) -> Value {
     Value::Object(m)
 }
 
-fn iface_customers__price_currency_options__to_json(p: &iface_customers::PriceCurrencyOptions) -> Value {
+fn iface_customers__currency_option__to_json(p: &iface_customers::CurrencyOption) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_customers__price_metadata__to_json(p: &iface_customers::PriceMetadata) -> Value {
-    let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("custom_unit_amount".into(), match (&p.custom_unit_amount) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("tax_behavior".into(), match (&p.tax_behavior) { Some(v) => Value::String(iface_customers__currency_option_tax_behavior_enum__to_str(v).into()), None => Value::Null });
+    m.insert("tiers".into(), match (&p.tiers) { Some(v) => Value::Array((v).iter().map(|v| iface_customers__price_tier__to_json(v)).collect()), None => Value::Null });
+    m.insert("unit_amount".into(), match (&p.unit_amount) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("unit_amount_decimal".into(), match (&p.unit_amount_decimal) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -1737,9 +1739,24 @@ fn iface_customers__price_tier__to_json(p: &iface_customers::PriceTier) -> Value
     Value::Object(m)
 }
 
-fn iface_customers__subscription_metadata__to_json(p: &iface_customers::SubscriptionMetadata) -> Value {
+fn iface_customers__price_currency_options_entry__to_json(p: &iface_customers::PriceCurrencyOptionsEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), iface_customers__currency_option__to_json(&p.value));
+    Value::Object(m)
+}
+
+fn iface_customers__price_metadata_entry__to_json(p: &iface_customers::PriceMetadataEntry) -> Value {
+    let mut m = Map::new();
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
+}
+
+fn iface_customers__subscription_metadata_entry__to_json(p: &iface_customers::SubscriptionMetadataEntry) -> Value {
+    let mut m = Map::new();
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -1875,15 +1892,16 @@ fn iface_customers__customer_balance_transaction__to_json(p: &iface_customers::C
     m.insert("id".into(), Value::String((&p.id).clone()));
     m.insert("invoice".into(), match (&p.invoice) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("livemode".into(), Value::Bool(*(&p.livemode)));
-    m.insert("metadata".into(), match (&p.metadata) { Some(v) => iface_customers__customer_balance_transaction_metadata__to_json(v), None => Value::Null });
+    m.insert("metadata".into(), match (&p.metadata) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("object".into(), Value::String(iface_customers__customer_balance_transaction_object_enum__to_str(&p.object).into()));
     m.insert("type".into(), Value::String(iface_customers__customer_balance_transaction_type_op_enum__to_str(&p.type_op).into()));
     Value::Object(m)
 }
 
-fn iface_customers__customer_balance_transaction_metadata__to_json(p: &iface_customers::CustomerBalanceTransactionMetadata) -> Value {
+fn iface_customers__customer_balance_transaction_metadata_entry__to_json(p: &iface_customers::CustomerBalanceTransactionMetadataEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -1912,7 +1930,7 @@ fn iface_customers__bank_account__to_json(p: &iface_customers::BankAccount) -> V
     m.insert("future_requirements".into(), match (&p.future_requirements) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("id".into(), Value::String((&p.id).clone()));
     m.insert("last4".into(), Value::String((&p.last4).clone()));
-    m.insert("metadata".into(), match (&p.metadata) { Some(v) => iface_customers__bank_account_metadata__to_json(v), None => Value::Null });
+    m.insert("metadata".into(), match (&p.metadata) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("object".into(), Value::String(iface_customers__bank_account_object_enum__to_str(&p.object).into()));
     m.insert("requirements".into(), match (&p.requirements) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("routing_number".into(), match (&p.routing_number) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -1920,20 +1938,16 @@ fn iface_customers__bank_account__to_json(p: &iface_customers::BankAccount) -> V
     Value::Object(m)
 }
 
-fn iface_customers__bank_account_metadata__to_json(p: &iface_customers::BankAccountMetadata) -> Value {
+fn iface_customers__bank_account_metadata_entry__to_json(p: &iface_customers::BankAccountMetadataEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
-fn iface_customers__post_customers_customer_bank_accounts_body_metadata__to_json(p: &iface_customers::PostCustomersCustomerBankAccountsBodyMetadata) -> Value {
+fn iface_customers__post_customers_customer_bank_accounts_body_metadata_entry__to_json(p: &iface_customers::PostCustomersCustomerBankAccountsBodyMetadataEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_customers__payment_source__to_json(p: &iface_customers::PaymentSource) -> Value {
-    let mut m = Map::new();
+    m.insert("key".into(), Value::String((&p.key).clone()));
     m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
@@ -1992,7 +2006,7 @@ fn iface_customers__card__to_json(p: &iface_customers::Card) -> Value {
     m.insert("funding".into(), Value::String((&p.funding).clone()));
     m.insert("id".into(), Value::String((&p.id).clone()));
     m.insert("last4".into(), Value::String((&p.last4).clone()));
-    m.insert("metadata".into(), match (&p.metadata) { Some(v) => iface_customers__card_metadata__to_json(v), None => Value::Null });
+    m.insert("metadata".into(), match (&p.metadata) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("object".into(), Value::String(iface_customers__card_object_enum__to_str(&p.object).into()));
     m.insert("status".into(), match (&p.status) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -2000,15 +2014,17 @@ fn iface_customers__card__to_json(p: &iface_customers::Card) -> Value {
     Value::Object(m)
 }
 
-fn iface_customers__card_metadata__to_json(p: &iface_customers::CardMetadata) -> Value {
+fn iface_customers__card_metadata_entry__to_json(p: &iface_customers::CardMetadataEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
-fn iface_customers__post_customers_customer_cards_body_metadata__to_json(p: &iface_customers::PostCustomersCustomerCardsBodyMetadata) -> Value {
+fn iface_customers__post_customers_customer_cards_body_metadata_entry__to_json(p: &iface_customers::PostCustomersCustomerCardsBodyMetadataEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -2034,7 +2050,7 @@ fn iface_customers__post_customers_customer_cards_id_body_owner_address__to_json
 
 fn iface_customers__cash_balance__to_json(p: &iface_customers::CashBalance) -> Value {
     let mut m = Map::new();
-    m.insert("available".into(), match (&p.available) { Some(v) => iface_customers__cash_balance_available__to_json(v), None => Value::Null });
+    m.insert("available".into(), match (&p.available) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::Number(serde_json::Number::from(*(&e.value))))).collect()), None => Value::Null });
     m.insert("customer".into(), Value::String((&p.customer).clone()));
     m.insert("livemode".into(), Value::Bool(*(&p.livemode)));
     m.insert("object".into(), Value::String(iface_customers__cash_balance_object_enum__to_str(&p.object).into()));
@@ -2042,9 +2058,10 @@ fn iface_customers__cash_balance__to_json(p: &iface_customers::CashBalance) -> V
     Value::Object(m)
 }
 
-fn iface_customers__cash_balance_available__to_json(p: &iface_customers::CashBalanceAvailable) -> Value {
+fn iface_customers__cash_balance_available_entry__to_json(p: &iface_customers::CashBalanceAvailableEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::Number(serde_json::Number::from(*(&p.value))));
     Value::Object(m)
 }
 
@@ -2150,13 +2167,13 @@ fn iface_customers__coupon__to_json(p: &iface_customers::Coupon) -> Value {
     m.insert("applies_to".into(), match (&p.applies_to) { Some(v) => iface_customers__coupon_applies_to__to_json(v), None => Value::Null });
     m.insert("created".into(), Value::Number(serde_json::Number::from(*(&p.created))));
     m.insert("currency".into(), match (&p.currency) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("currency_options".into(), match (&p.currency_options) { Some(v) => iface_customers__coupon_currency_options__to_json(v), None => Value::Null });
+    m.insert("currency_options".into(), match (&p.currency_options) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), iface_customers__coupon_currency_option__to_json(&e.value))).collect()), None => Value::Null });
     m.insert("duration".into(), Value::String(iface_customers__coupon_duration_enum__to_str(&p.duration).into()));
     m.insert("duration_in_months".into(), match (&p.duration_in_months) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("id".into(), Value::String((&p.id).clone()));
     m.insert("livemode".into(), Value::Bool(*(&p.livemode)));
     m.insert("max_redemptions".into(), match (&p.max_redemptions) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    m.insert("metadata".into(), match (&p.metadata) { Some(v) => iface_customers__coupon_metadata__to_json(v), None => Value::Null });
+    m.insert("metadata".into(), match (&p.metadata) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("object".into(), Value::String(iface_customers__coupon_object_enum__to_str(&p.object).into()));
     m.insert("percent_off".into(), match (&p.percent_off) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
@@ -2172,15 +2189,23 @@ fn iface_customers__coupon_applies_to__to_json(p: &iface_customers::CouponApplie
     Value::Object(m)
 }
 
-fn iface_customers__coupon_currency_options__to_json(p: &iface_customers::CouponCurrencyOptions) -> Value {
+fn iface_customers__coupon_currency_option__to_json(p: &iface_customers::CouponCurrencyOption) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("amount_off".into(), Value::Number(serde_json::Number::from(*(&p.amount_off))));
     Value::Object(m)
 }
 
-fn iface_customers__coupon_metadata__to_json(p: &iface_customers::CouponMetadata) -> Value {
+fn iface_customers__coupon_currency_options_entry__to_json(p: &iface_customers::CouponCurrencyOptionsEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), iface_customers__coupon_currency_option__to_json(&p.value));
+    Value::Object(m)
+}
+
+fn iface_customers__coupon_metadata_entry__to_json(p: &iface_customers::CouponMetadataEntry) -> Value {
+    let mut m = Map::new();
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -2292,45 +2317,45 @@ fn iface_customers__get_customers_customer_payment_methods_response__to_json(p: 
 fn iface_customers__payment_method__to_json(p: &iface_customers::PaymentMethod) -> Value {
     let mut m = Map::new();
     m.insert("acss_debit".into(), match (&p.acss_debit) { Some(v) => iface_customers__payment_method_acss_debit__to_json(v), None => Value::Null });
-    m.insert("affirm".into(), match (&p.affirm) { Some(v) => iface_customers__payment_method_affirm__to_json(v), None => Value::Null });
-    m.insert("afterpay_clearpay".into(), match (&p.afterpay_clearpay) { Some(v) => iface_customers__payment_method_afterpay_clearpay__to_json(v), None => Value::Null });
-    m.insert("alipay".into(), match (&p.alipay) { Some(v) => iface_customers__payment_flows_private_payment_methods_alipay__to_json(v), None => Value::Null });
+    m.insert("affirm".into(), match (&p.affirm) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
+    m.insert("afterpay_clearpay".into(), match (&p.afterpay_clearpay) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
+    m.insert("alipay".into(), match (&p.alipay) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("au_becs_debit".into(), match (&p.au_becs_debit) { Some(v) => iface_customers__payment_method_au_becs_debit__to_json(v), None => Value::Null });
     m.insert("bacs_debit".into(), match (&p.bacs_debit) { Some(v) => iface_customers__payment_method_bacs_debit__to_json(v), None => Value::Null });
-    m.insert("bancontact".into(), match (&p.bancontact) { Some(v) => iface_customers__payment_method_bancontact__to_json(v), None => Value::Null });
+    m.insert("bancontact".into(), match (&p.bancontact) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("billing_details".into(), iface_customers__billing_details__to_json(&p.billing_details));
-    m.insert("blik".into(), match (&p.blik) { Some(v) => iface_customers__payment_method_blik__to_json(v), None => Value::Null });
+    m.insert("blik".into(), match (&p.blik) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("boleto".into(), match (&p.boleto) { Some(v) => iface_customers__payment_method_boleto__to_json(v), None => Value::Null });
     m.insert("card".into(), match (&p.card) { Some(v) => iface_customers__payment_method_card__to_json(v), None => Value::Null });
-    m.insert("card_present".into(), match (&p.card_present) { Some(v) => iface_customers__payment_method_card_present__to_json(v), None => Value::Null });
-    m.insert("cashapp".into(), match (&p.cashapp) { Some(v) => iface_customers__payment_method_cashapp__to_json(v), None => Value::Null });
+    m.insert("card_present".into(), match (&p.card_present) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
+    m.insert("cashapp".into(), match (&p.cashapp) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("created".into(), Value::Number(serde_json::Number::from(*(&p.created))));
     m.insert("customer".into(), match (&p.customer) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("customer_balance".into(), match (&p.customer_balance) { Some(v) => iface_customers__payment_method_customer_balance__to_json(v), None => Value::Null });
+    m.insert("customer_balance".into(), match (&p.customer_balance) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("eps".into(), match (&p.eps) { Some(v) => iface_customers__payment_method_eps__to_json(v), None => Value::Null });
     m.insert("fpx".into(), match (&p.fpx) { Some(v) => iface_customers__payment_method_fpx__to_json(v), None => Value::Null });
-    m.insert("giropay".into(), match (&p.giropay) { Some(v) => iface_customers__payment_method_giropay__to_json(v), None => Value::Null });
-    m.insert("grabpay".into(), match (&p.grabpay) { Some(v) => iface_customers__payment_method_grabpay__to_json(v), None => Value::Null });
+    m.insert("giropay".into(), match (&p.giropay) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
+    m.insert("grabpay".into(), match (&p.grabpay) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("id".into(), Value::String((&p.id).clone()));
     m.insert("ideal".into(), match (&p.ideal) { Some(v) => iface_customers__payment_method_ideal__to_json(v), None => Value::Null });
-    m.insert("interac_present".into(), match (&p.interac_present) { Some(v) => iface_customers__payment_method_interac_present__to_json(v), None => Value::Null });
+    m.insert("interac_present".into(), match (&p.interac_present) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("klarna".into(), match (&p.klarna) { Some(v) => iface_customers__payment_method_klarna__to_json(v), None => Value::Null });
-    m.insert("konbini".into(), match (&p.konbini) { Some(v) => iface_customers__payment_method_konbini__to_json(v), None => Value::Null });
+    m.insert("konbini".into(), match (&p.konbini) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("link".into(), match (&p.link) { Some(v) => iface_customers__payment_method_link__to_json(v), None => Value::Null });
     m.insert("livemode".into(), Value::Bool(*(&p.livemode)));
-    m.insert("metadata".into(), match (&p.metadata) { Some(v) => iface_customers__payment_method_metadata__to_json(v), None => Value::Null });
+    m.insert("metadata".into(), match (&p.metadata) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("object".into(), Value::String(iface_customers__payment_method_object_enum__to_str(&p.object).into()));
-    m.insert("oxxo".into(), match (&p.oxxo) { Some(v) => iface_customers__payment_method_oxxo__to_json(v), None => Value::Null });
+    m.insert("oxxo".into(), match (&p.oxxo) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("p24".into(), match (&p.p24) { Some(v) => iface_customers__payment_method_p24__to_json(v), None => Value::Null });
-    m.insert("paynow".into(), match (&p.paynow) { Some(v) => iface_customers__payment_method_paynow__to_json(v), None => Value::Null });
-    m.insert("pix".into(), match (&p.pix) { Some(v) => iface_customers__payment_method_pix__to_json(v), None => Value::Null });
-    m.insert("promptpay".into(), match (&p.promptpay) { Some(v) => iface_customers__payment_method_promptpay__to_json(v), None => Value::Null });
+    m.insert("paynow".into(), match (&p.paynow) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
+    m.insert("pix".into(), match (&p.pix) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
+    m.insert("promptpay".into(), match (&p.promptpay) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("radar_options".into(), match (&p.radar_options) { Some(v) => iface_customers__radar_radar_options__to_json(v), None => Value::Null });
     m.insert("sepa_debit".into(), match (&p.sepa_debit) { Some(v) => iface_customers__payment_method_sepa_debit__to_json(v), None => Value::Null });
     m.insert("sofort".into(), match (&p.sofort) { Some(v) => iface_customers__payment_method_sofort__to_json(v), None => Value::Null });
     m.insert("type".into(), Value::String(iface_customers__payment_method_type_op_enum__to_str(&p.type_op).into()));
     m.insert("us_bank_account".into(), match (&p.us_bank_account) { Some(v) => iface_customers__payment_method_us_bank_account__to_json(v), None => Value::Null });
-    m.insert("wechat_pay".into(), match (&p.wechat_pay) { Some(v) => iface_customers__payment_method_wechat_pay__to_json(v), None => Value::Null });
+    m.insert("wechat_pay".into(), match (&p.wechat_pay) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -2344,21 +2369,24 @@ fn iface_customers__payment_method_acss_debit__to_json(p: &iface_customers::Paym
     Value::Object(m)
 }
 
-fn iface_customers__payment_method_affirm__to_json(p: &iface_customers::PaymentMethodAffirm) -> Value {
+fn iface_customers__payment_method_affirm_entry__to_json(p: &iface_customers::PaymentMethodAffirmEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
-fn iface_customers__payment_method_afterpay_clearpay__to_json(p: &iface_customers::PaymentMethodAfterpayClearpay) -> Value {
+fn iface_customers__payment_method_afterpay_clearpay_entry__to_json(p: &iface_customers::PaymentMethodAfterpayClearpayEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
-fn iface_customers__payment_flows_private_payment_methods_alipay__to_json(p: &iface_customers::PaymentFlowsPrivatePaymentMethodsAlipay) -> Value {
+fn iface_customers__payment_flows_private_payment_methods_alipay_entry__to_json(p: &iface_customers::PaymentFlowsPrivatePaymentMethodsAlipayEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -2378,9 +2406,10 @@ fn iface_customers__payment_method_bacs_debit__to_json(p: &iface_customers::Paym
     Value::Object(m)
 }
 
-fn iface_customers__payment_method_bancontact__to_json(p: &iface_customers::PaymentMethodBancontact) -> Value {
+fn iface_customers__payment_method_bancontact_entry__to_json(p: &iface_customers::PaymentMethodBancontactEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -2393,9 +2422,10 @@ fn iface_customers__billing_details__to_json(p: &iface_customers::BillingDetails
     Value::Object(m)
 }
 
-fn iface_customers__payment_method_blik__to_json(p: &iface_customers::PaymentMethodBlik) -> Value {
+fn iface_customers__payment_method_blik_entry__to_json(p: &iface_customers::PaymentMethodBlikEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -2422,21 +2452,24 @@ fn iface_customers__payment_method_card__to_json(p: &iface_customers::PaymentMet
     Value::Object(m)
 }
 
-fn iface_customers__payment_method_card_present__to_json(p: &iface_customers::PaymentMethodCardPresent) -> Value {
+fn iface_customers__payment_method_card_present_entry__to_json(p: &iface_customers::PaymentMethodCardPresentEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
-fn iface_customers__payment_method_cashapp__to_json(p: &iface_customers::PaymentMethodCashapp) -> Value {
+fn iface_customers__payment_method_cashapp_entry__to_json(p: &iface_customers::PaymentMethodCashappEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
-fn iface_customers__payment_method_customer_balance__to_json(p: &iface_customers::PaymentMethodCustomerBalance) -> Value {
+fn iface_customers__payment_method_customer_balance_entry__to_json(p: &iface_customers::PaymentMethodCustomerBalanceEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -2452,15 +2485,17 @@ fn iface_customers__payment_method_fpx__to_json(p: &iface_customers::PaymentMeth
     Value::Object(m)
 }
 
-fn iface_customers__payment_method_giropay__to_json(p: &iface_customers::PaymentMethodGiropay) -> Value {
+fn iface_customers__payment_method_giropay_entry__to_json(p: &iface_customers::PaymentMethodGiropayEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
-fn iface_customers__payment_method_grabpay__to_json(p: &iface_customers::PaymentMethodGrabpay) -> Value {
+fn iface_customers__payment_method_grabpay_entry__to_json(p: &iface_customers::PaymentMethodGrabpayEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -2471,9 +2506,10 @@ fn iface_customers__payment_method_ideal__to_json(p: &iface_customers::PaymentMe
     Value::Object(m)
 }
 
-fn iface_customers__payment_method_interac_present__to_json(p: &iface_customers::PaymentMethodInteracPresent) -> Value {
+fn iface_customers__payment_method_interac_present_entry__to_json(p: &iface_customers::PaymentMethodInteracPresentEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -2483,9 +2519,10 @@ fn iface_customers__payment_method_klarna__to_json(p: &iface_customers::PaymentM
     Value::Object(m)
 }
 
-fn iface_customers__payment_method_konbini__to_json(p: &iface_customers::PaymentMethodKonbini) -> Value {
+fn iface_customers__payment_method_konbini_entry__to_json(p: &iface_customers::PaymentMethodKonbiniEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -2496,15 +2533,17 @@ fn iface_customers__payment_method_link__to_json(p: &iface_customers::PaymentMet
     Value::Object(m)
 }
 
-fn iface_customers__payment_method_metadata__to_json(p: &iface_customers::PaymentMethodMetadata) -> Value {
+fn iface_customers__payment_method_metadata_entry__to_json(p: &iface_customers::PaymentMethodMetadataEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
-fn iface_customers__payment_method_oxxo__to_json(p: &iface_customers::PaymentMethodOxxo) -> Value {
+fn iface_customers__payment_method_oxxo_entry__to_json(p: &iface_customers::PaymentMethodOxxoEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -2514,21 +2553,24 @@ fn iface_customers__payment_method_p24__to_json(p: &iface_customers::PaymentMeth
     Value::Object(m)
 }
 
-fn iface_customers__payment_method_paynow__to_json(p: &iface_customers::PaymentMethodPaynow) -> Value {
+fn iface_customers__payment_method_paynow_entry__to_json(p: &iface_customers::PaymentMethodPaynowEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
-fn iface_customers__payment_method_pix__to_json(p: &iface_customers::PaymentMethodPix) -> Value {
+fn iface_customers__payment_method_pix_entry__to_json(p: &iface_customers::PaymentMethodPixEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
-fn iface_customers__payment_method_promptpay__to_json(p: &iface_customers::PaymentMethodPromptpay) -> Value {
+fn iface_customers__payment_method_promptpay_entry__to_json(p: &iface_customers::PaymentMethodPromptpayEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -2569,9 +2611,10 @@ fn iface_customers__payment_method_us_bank_account__to_json(p: &iface_customers:
     Value::Object(m)
 }
 
-fn iface_customers__payment_method_wechat_pay__to_json(p: &iface_customers::PaymentMethodWechatPay) -> Value {
+fn iface_customers__payment_method_wechat_pay_entry__to_json(p: &iface_customers::PaymentMethodWechatPayEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -2584,9 +2627,10 @@ fn iface_customers__get_customers_customer_sources_response__to_json(p: &iface_c
     Value::Object(m)
 }
 
-fn iface_customers__post_customers_customer_sources_body_metadata__to_json(p: &iface_customers::PostCustomersCustomerSourcesBodyMetadata) -> Value {
+fn iface_customers__post_customers_customer_sources_body_metadata_entry__to_json(p: &iface_customers::PostCustomersCustomerSourcesBodyMetadataEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -2632,7 +2676,7 @@ fn iface_customers__post_customers_customer_subscriptions_body_add_invoice_items
     let mut m = Map::new();
     m.insert("currency".into(), Value::String((&p.currency).clone()));
     m.insert("product".into(), Value::String((&p.product).clone()));
-    m.insert("tax_behavior".into(), match (&p.tax_behavior) { Some(v) => Value::String(iface_customers__price_tax_behavior_enum__to_str(v).into()), None => Value::Null });
+    m.insert("tax_behavior".into(), match (&p.tax_behavior) { Some(v) => Value::String(iface_customers__currency_option_tax_behavior_enum__to_str(v).into()), None => Value::Null });
     m.insert("unit_amount".into(), match (&p.unit_amount) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("unit_amount_decimal".into(), match (&p.unit_amount_decimal) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
@@ -2647,7 +2691,7 @@ fn iface_customers__post_customers_customer_subscriptions_body_automatic_tax__to
 fn iface_customers__post_customers_customer_subscriptions_body_items_item__to_json(p: &iface_customers::PostCustomersCustomerSubscriptionsBodyItemsItem) -> Value {
     let mut m = Map::new();
     m.insert("billing_thresholds".into(), match (&p.billing_thresholds) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("metadata".into(), match (&p.metadata) { Some(v) => iface_customers__post_customers_customer_subscriptions_body_items_item_metadata__to_json(v), None => Value::Null });
+    m.insert("metadata".into(), match (&p.metadata) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("price".into(), match (&p.price) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("price_data".into(), match (&p.price_data) { Some(v) => iface_customers__post_customers_customer_subscriptions_body_items_item_price_data__to_json(v), None => Value::Null });
     m.insert("quantity".into(), match (&p.quantity) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
@@ -2655,9 +2699,10 @@ fn iface_customers__post_customers_customer_subscriptions_body_items_item__to_js
     Value::Object(m)
 }
 
-fn iface_customers__post_customers_customer_subscriptions_body_items_item_metadata__to_json(p: &iface_customers::PostCustomersCustomerSubscriptionsBodyItemsItemMetadata) -> Value {
+fn iface_customers__post_customers_customer_subscriptions_body_items_item_metadata_entry__to_json(p: &iface_customers::PostCustomersCustomerSubscriptionsBodyItemsItemMetadataEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -2666,7 +2711,7 @@ fn iface_customers__post_customers_customer_subscriptions_body_items_item_price_
     m.insert("currency".into(), Value::String((&p.currency).clone()));
     m.insert("product".into(), Value::String((&p.product).clone()));
     m.insert("recurring".into(), iface_customers__post_customers_customer_subscriptions_body_items_item_price_data_recurring__to_json(&p.recurring));
-    m.insert("tax_behavior".into(), match (&p.tax_behavior) { Some(v) => Value::String(iface_customers__price_tax_behavior_enum__to_str(v).into()), None => Value::Null });
+    m.insert("tax_behavior".into(), match (&p.tax_behavior) { Some(v) => Value::String(iface_customers__currency_option_tax_behavior_enum__to_str(v).into()), None => Value::Null });
     m.insert("unit_amount".into(), match (&p.unit_amount) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("unit_amount_decimal".into(), match (&p.unit_amount_decimal) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
@@ -2730,7 +2775,7 @@ fn iface_customers__post_customers_customer_subscriptions_subscription_exposed_i
     let mut m = Map::new();
     m.insert("currency".into(), Value::String((&p.currency).clone()));
     m.insert("product".into(), Value::String((&p.product).clone()));
-    m.insert("tax_behavior".into(), match (&p.tax_behavior) { Some(v) => Value::String(iface_customers__price_tax_behavior_enum__to_str(v).into()), None => Value::Null });
+    m.insert("tax_behavior".into(), match (&p.tax_behavior) { Some(v) => Value::String(iface_customers__currency_option_tax_behavior_enum__to_str(v).into()), None => Value::Null });
     m.insert("unit_amount".into(), match (&p.unit_amount) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("unit_amount_decimal".into(), match (&p.unit_amount_decimal) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
@@ -2768,7 +2813,7 @@ fn iface_customers__post_customers_customer_subscriptions_subscription_exposed_i
     m.insert("currency".into(), Value::String((&p.currency).clone()));
     m.insert("product".into(), Value::String((&p.product).clone()));
     m.insert("recurring".into(), iface_customers__post_customers_customer_subscriptions_subscription_exposed_id_body_items_item_price_data_recurring__to_json(&p.recurring));
-    m.insert("tax_behavior".into(), match (&p.tax_behavior) { Some(v) => Value::String(iface_customers__price_tax_behavior_enum__to_str(v).into()), None => Value::Null });
+    m.insert("tax_behavior".into(), match (&p.tax_behavior) { Some(v) => Value::String(iface_customers__currency_option_tax_behavior_enum__to_str(v).into()), None => Value::Null });
     m.insert("unit_amount".into(), match (&p.unit_amount) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("unit_amount_decimal".into(), match (&p.unit_amount_decimal) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
@@ -2984,7 +3029,7 @@ fn iface_customers__post_customers_customer_bank_accounts_params__to_json(p: &if
     m.insert("bank_account".into(), match (&p.bank_account) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("card".into(), match (&p.card) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("expand".into(), match (&p.expand) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
-    m.insert("metadata".into(), match (&p.metadata) { Some(v) => iface_customers__post_customers_customer_bank_accounts_body_metadata__to_json(v), None => Value::Null });
+    m.insert("metadata".into(), match (&p.metadata) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("source".into(), match (&p.source) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
@@ -3054,7 +3099,7 @@ fn iface_customers__post_customers_customer_cards_params__to_json(p: &iface_cust
     m.insert("bank_account".into(), match (&p.bank_account) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("card".into(), match (&p.card) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("expand".into(), match (&p.expand) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
-    m.insert("metadata".into(), match (&p.metadata) { Some(v) => iface_customers__post_customers_customer_cards_body_metadata__to_json(v), None => Value::Null });
+    m.insert("metadata".into(), match (&p.metadata) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("source".into(), match (&p.source) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
@@ -3198,7 +3243,7 @@ fn iface_customers__post_customers_customer_sources_params__to_json(p: &iface_cu
     m.insert("bank_account".into(), match (&p.bank_account) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("card".into(), match (&p.card) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("expand".into(), match (&p.expand) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
-    m.insert("metadata".into(), match (&p.metadata) { Some(v) => iface_customers__post_customers_customer_sources_body_metadata__to_json(v), None => Value::Null });
+    m.insert("metadata".into(), match (&p.metadata) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("source".into(), match (&p.source) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
@@ -3429,11 +3474,11 @@ fn iface_customers__customer__from_json(v: &Value) -> Option<iface_customers::Cu
         discount: m.get("discount").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         email: m.get("email").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         id: m.get("id").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-        invoice_credit_balance: m.get("invoice_credit_balance").filter(|v| !v.is_null()).and_then(|v| iface_customers__customer_invoice_credit_balance__from_json(v)),
+        invoice_credit_balance: m.get("invoice_credit_balance").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_i64().map(|n| n as i32)).map(|val| iface_customers::CustomerInvoiceCreditBalanceEntry { key: k.clone(), value: val })).collect())),
         invoice_prefix: m.get("invoice_prefix").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         invoice_settings: m.get("invoice_settings").filter(|v| !v.is_null()).and_then(|v| iface_customers__invoice_setting_customer_setting__from_json(v)),
         livemode: m.get("livemode").and_then(|v| (v).as_bool()).unwrap_or_default(),
-        metadata: m.get("metadata").filter(|v| !v.is_null()).and_then(|v| iface_customers__customer_metadata__from_json(v)),
+        metadata: m.get("metadata").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_customers::CustomerMetadataEntry { key: k.clone(), value: val })).collect())),
         name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         next_invoice_sequence: m.get("next_invoice_sequence").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
         object: match m.get("object").and_then(|v| (v).as_str().and_then(iface_customers__customer_object_enum__from_str)) { Some(x) => x, None => return None },
@@ -3449,10 +3494,11 @@ fn iface_customers__customer__from_json(v: &Value) -> Option<iface_customers::Cu
     })
 }
 
-fn iface_customers__customer_invoice_credit_balance__from_json(v: &Value) -> Option<iface_customers::CustomerInvoiceCreditBalance> {
+fn iface_customers__customer_invoice_credit_balance_entry__from_json(v: &Value) -> Option<iface_customers::CustomerInvoiceCreditBalanceEntry> {
     let m = v.as_object()?;
-    Some(iface_customers::CustomerInvoiceCreditBalance {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_customers::CustomerInvoiceCreditBalanceEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
     })
 }
 
@@ -3474,10 +3520,11 @@ fn iface_customers__invoice_setting_custom_field__from_json(v: &Value) -> Option
     })
 }
 
-fn iface_customers__customer_metadata__from_json(v: &Value) -> Option<iface_customers::CustomerMetadata> {
+fn iface_customers__customer_metadata_entry__from_json(v: &Value) -> Option<iface_customers::CustomerMetadataEntry> {
     let m = v.as_object()?;
-    Some(iface_customers::CustomerMetadata {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_customers::CustomerMetadataEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -3530,7 +3577,7 @@ fn iface_customers__subscription__from_json(v: &Value) -> Option<iface_customers
         items: match m.get("items").and_then(|v| iface_customers__subscription_items__from_json(v)) { Some(x) => x, None => return None },
         latest_invoice: m.get("latest_invoice").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         livemode: m.get("livemode").and_then(|v| (v).as_bool()).unwrap_or_default(),
-        metadata: match m.get("metadata").and_then(|v| iface_customers__subscription_metadata__from_json(v)) { Some(x) => x, None => return None },
+        metadata: m.get("metadata").and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_customers::SubscriptionMetadataEntry { key: k.clone(), value: val })).collect())).unwrap_or_default(),
         next_pending_invoice_item_invoice: m.get("next_pending_invoice_item_invoice").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
         object: match m.get("object").and_then(|v| (v).as_str().and_then(iface_customers__subscription_object_enum__from_str)) { Some(x) => x, None => return None },
         on_behalf_of: m.get("on_behalf_of").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
@@ -3569,7 +3616,7 @@ fn iface_customers__tax_rate__from_json(v: &Value) -> Option<iface_customers::Ta
         inclusive: m.get("inclusive").and_then(|v| (v).as_bool()).unwrap_or_default(),
         jurisdiction: m.get("jurisdiction").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         livemode: m.get("livemode").and_then(|v| (v).as_bool()).unwrap_or_default(),
-        metadata: m.get("metadata").filter(|v| !v.is_null()).and_then(|v| iface_customers__tax_rate_metadata__from_json(v)),
+        metadata: m.get("metadata").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_customers::TaxRateMetadataEntry { key: k.clone(), value: val })).collect())),
         object: match m.get("object").and_then(|v| (v).as_str().and_then(iface_customers__tax_rate_object_enum__from_str)) { Some(x) => x, None => return None },
         percentage: m.get("percentage").and_then(|v| (v).as_f64()).unwrap_or_default(),
         state: m.get("state").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
@@ -3577,10 +3624,11 @@ fn iface_customers__tax_rate__from_json(v: &Value) -> Option<iface_customers::Ta
     })
 }
 
-fn iface_customers__tax_rate_metadata__from_json(v: &Value) -> Option<iface_customers::TaxRateMetadata> {
+fn iface_customers__tax_rate_metadata_entry__from_json(v: &Value) -> Option<iface_customers::TaxRateMetadataEntry> {
     let m = v.as_object()?;
-    Some(iface_customers::TaxRateMetadata {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_customers::TaxRateMetadataEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -3600,7 +3648,7 @@ fn iface_customers__subscription_item__from_json(v: &Value) -> Option<iface_cust
         billing_thresholds: m.get("billing_thresholds").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         created: m.get("created").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
         id: m.get("id").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-        metadata: match m.get("metadata").and_then(|v| iface_customers__subscription_item_metadata__from_json(v)) { Some(x) => x, None => return None },
+        metadata: m.get("metadata").and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_customers::SubscriptionItemMetadataEntry { key: k.clone(), value: val })).collect())).unwrap_or_default(),
         object: match m.get("object").and_then(|v| (v).as_str().and_then(iface_customers__subscription_item_object_enum__from_str)) { Some(x) => x, None => return None },
         price: match m.get("price").and_then(|v| iface_customers__price__from_json(v)) { Some(x) => x, None => return None },
         quantity: m.get("quantity").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
@@ -3609,10 +3657,11 @@ fn iface_customers__subscription_item__from_json(v: &Value) -> Option<iface_cust
     })
 }
 
-fn iface_customers__subscription_item_metadata__from_json(v: &Value) -> Option<iface_customers::SubscriptionItemMetadata> {
+fn iface_customers__subscription_item_metadata_entry__from_json(v: &Value) -> Option<iface_customers::SubscriptionItemMetadataEntry> {
     let m = v.as_object()?;
-    Some(iface_customers::SubscriptionItemMetadata {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_customers::SubscriptionItemMetadataEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -3623,17 +3672,17 @@ fn iface_customers__price__from_json(v: &Value) -> Option<iface_customers::Price
         billing_scheme: match m.get("billing_scheme").and_then(|v| (v).as_str().and_then(iface_customers__price_billing_scheme_enum__from_str)) { Some(x) => x, None => return None },
         created: m.get("created").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
         currency: m.get("currency").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-        currency_options: m.get("currency_options").filter(|v| !v.is_null()).and_then(|v| iface_customers__price_currency_options__from_json(v)),
+        currency_options: m.get("currency_options").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| (iface_customers__currency_option__from_json(x)).map(|val| iface_customers::PriceCurrencyOptionsEntry { key: k.clone(), value: val })).collect())),
         custom_unit_amount: m.get("custom_unit_amount").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         id: m.get("id").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         livemode: m.get("livemode").and_then(|v| (v).as_bool()).unwrap_or_default(),
         lookup_key: m.get("lookup_key").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        metadata: match m.get("metadata").and_then(|v| iface_customers__price_metadata__from_json(v)) { Some(x) => x, None => return None },
+        metadata: m.get("metadata").and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_customers::PriceMetadataEntry { key: k.clone(), value: val })).collect())).unwrap_or_default(),
         nickname: m.get("nickname").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         object: match m.get("object").and_then(|v| (v).as_str().and_then(iface_customers__price_object_enum__from_str)) { Some(x) => x, None => return None },
         product: m.get("product").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         recurring: m.get("recurring").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        tax_behavior: m.get("tax_behavior").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_customers__price_tax_behavior_enum__from_str)),
+        tax_behavior: m.get("tax_behavior").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_customers__currency_option_tax_behavior_enum__from_str)),
         tiers: m.get("tiers").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_customers__price_tier__from_json(x)).collect())),
         tiers_mode: m.get("tiers_mode").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_customers__price_tiers_mode_enum__from_str)),
         transform_quantity: m.get("transform_quantity").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
@@ -3643,17 +3692,14 @@ fn iface_customers__price__from_json(v: &Value) -> Option<iface_customers::Price
     })
 }
 
-fn iface_customers__price_currency_options__from_json(v: &Value) -> Option<iface_customers::PriceCurrencyOptions> {
+fn iface_customers__currency_option__from_json(v: &Value) -> Option<iface_customers::CurrencyOption> {
     let m = v.as_object()?;
-    Some(iface_customers::PriceCurrencyOptions {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-    })
-}
-
-fn iface_customers__price_metadata__from_json(v: &Value) -> Option<iface_customers::PriceMetadata> {
-    let m = v.as_object()?;
-    Some(iface_customers::PriceMetadata {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_customers::CurrencyOption {
+        custom_unit_amount: m.get("custom_unit_amount").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        tax_behavior: m.get("tax_behavior").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_customers__currency_option_tax_behavior_enum__from_str)),
+        tiers: m.get("tiers").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_customers__price_tier__from_json(x)).collect())),
+        unit_amount: m.get("unit_amount").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        unit_amount_decimal: m.get("unit_amount_decimal").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
     })
 }
 
@@ -3668,10 +3714,27 @@ fn iface_customers__price_tier__from_json(v: &Value) -> Option<iface_customers::
     })
 }
 
-fn iface_customers__subscription_metadata__from_json(v: &Value) -> Option<iface_customers::SubscriptionMetadata> {
+fn iface_customers__price_currency_options_entry__from_json(v: &Value) -> Option<iface_customers::PriceCurrencyOptionsEntry> {
     let m = v.as_object()?;
-    Some(iface_customers::SubscriptionMetadata {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_customers::PriceCurrencyOptionsEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: match m.get("value").and_then(|v| iface_customers__currency_option__from_json(v)) { Some(x) => x, None => return None },
+    })
+}
+
+fn iface_customers__price_metadata_entry__from_json(v: &Value) -> Option<iface_customers::PriceMetadataEntry> {
+    let m = v.as_object()?;
+    Some(iface_customers::PriceMetadataEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_customers__subscription_metadata_entry__from_json(v: &Value) -> Option<iface_customers::SubscriptionMetadataEntry> {
+    let m = v.as_object()?;
+    Some(iface_customers::SubscriptionMetadataEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -3753,16 +3816,17 @@ fn iface_customers__customer_balance_transaction__from_json(v: &Value) -> Option
         id: m.get("id").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         invoice: m.get("invoice").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         livemode: m.get("livemode").and_then(|v| (v).as_bool()).unwrap_or_default(),
-        metadata: m.get("metadata").filter(|v| !v.is_null()).and_then(|v| iface_customers__customer_balance_transaction_metadata__from_json(v)),
+        metadata: m.get("metadata").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_customers::CustomerBalanceTransactionMetadataEntry { key: k.clone(), value: val })).collect())),
         object: match m.get("object").and_then(|v| (v).as_str().and_then(iface_customers__customer_balance_transaction_object_enum__from_str)) { Some(x) => x, None => return None },
         type_op: match m.get("type").and_then(|v| (v).as_str().and_then(iface_customers__customer_balance_transaction_type_op_enum__from_str)) { Some(x) => x, None => return None },
     })
 }
 
-fn iface_customers__customer_balance_transaction_metadata__from_json(v: &Value) -> Option<iface_customers::CustomerBalanceTransactionMetadata> {
+fn iface_customers__customer_balance_transaction_metadata_entry__from_json(v: &Value) -> Option<iface_customers::CustomerBalanceTransactionMetadataEntry> {
     let m = v.as_object()?;
-    Some(iface_customers::CustomerBalanceTransactionMetadata {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_customers::CustomerBalanceTransactionMetadataEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -3793,7 +3857,7 @@ fn iface_customers__bank_account__from_json(v: &Value) -> Option<iface_customers
         future_requirements: m.get("future_requirements").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         id: m.get("id").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         last4: m.get("last4").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-        metadata: m.get("metadata").filter(|v| !v.is_null()).and_then(|v| iface_customers__bank_account_metadata__from_json(v)),
+        metadata: m.get("metadata").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_customers::BankAccountMetadataEntry { key: k.clone(), value: val })).collect())),
         object: match m.get("object").and_then(|v| (v).as_str().and_then(iface_customers__bank_account_object_enum__from_str)) { Some(x) => x, None => return None },
         requirements: m.get("requirements").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         routing_number: m.get("routing_number").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
@@ -3801,16 +3865,10 @@ fn iface_customers__bank_account__from_json(v: &Value) -> Option<iface_customers
     })
 }
 
-fn iface_customers__bank_account_metadata__from_json(v: &Value) -> Option<iface_customers::BankAccountMetadata> {
+fn iface_customers__bank_account_metadata_entry__from_json(v: &Value) -> Option<iface_customers::BankAccountMetadataEntry> {
     let m = v.as_object()?;
-    Some(iface_customers::BankAccountMetadata {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-    })
-}
-
-fn iface_customers__payment_source__from_json(v: &Value) -> Option<iface_customers::PaymentSource> {
-    let m = v.as_object()?;
-    Some(iface_customers::PaymentSource {
+    Some(iface_customers::BankAccountMetadataEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
@@ -3851,7 +3909,7 @@ fn iface_customers__card__from_json(v: &Value) -> Option<iface_customers::Card> 
         funding: m.get("funding").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         id: m.get("id").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         last4: m.get("last4").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-        metadata: m.get("metadata").filter(|v| !v.is_null()).and_then(|v| iface_customers__card_metadata__from_json(v)),
+        metadata: m.get("metadata").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_customers::CardMetadataEntry { key: k.clone(), value: val })).collect())),
         name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         object: match m.get("object").and_then(|v| (v).as_str().and_then(iface_customers__card_object_enum__from_str)) { Some(x) => x, None => return None },
         status: m.get("status").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
@@ -3859,17 +3917,18 @@ fn iface_customers__card__from_json(v: &Value) -> Option<iface_customers::Card> 
     })
 }
 
-fn iface_customers__card_metadata__from_json(v: &Value) -> Option<iface_customers::CardMetadata> {
+fn iface_customers__card_metadata_entry__from_json(v: &Value) -> Option<iface_customers::CardMetadataEntry> {
     let m = v.as_object()?;
-    Some(iface_customers::CardMetadata {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_customers::CardMetadataEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
 fn iface_customers__cash_balance__from_json(v: &Value) -> Option<iface_customers::CashBalance> {
     let m = v.as_object()?;
     Some(iface_customers::CashBalance {
-        available: m.get("available").filter(|v| !v.is_null()).and_then(|v| iface_customers__cash_balance_available__from_json(v)),
+        available: m.get("available").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_i64().map(|n| n as i32)).map(|val| iface_customers::CashBalanceAvailableEntry { key: k.clone(), value: val })).collect())),
         customer: m.get("customer").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         livemode: m.get("livemode").and_then(|v| (v).as_bool()).unwrap_or_default(),
         object: match m.get("object").and_then(|v| (v).as_str().and_then(iface_customers__cash_balance_object_enum__from_str)) { Some(x) => x, None => return None },
@@ -3877,10 +3936,11 @@ fn iface_customers__cash_balance__from_json(v: &Value) -> Option<iface_customers
     })
 }
 
-fn iface_customers__cash_balance_available__from_json(v: &Value) -> Option<iface_customers::CashBalanceAvailable> {
+fn iface_customers__cash_balance_available_entry__from_json(v: &Value) -> Option<iface_customers::CashBalanceAvailableEntry> {
     let m = v.as_object()?;
-    Some(iface_customers::CashBalanceAvailable {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_customers::CashBalanceAvailableEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
     })
 }
 
@@ -3991,13 +4051,13 @@ fn iface_customers__coupon__from_json(v: &Value) -> Option<iface_customers::Coup
         applies_to: m.get("applies_to").filter(|v| !v.is_null()).and_then(|v| iface_customers__coupon_applies_to__from_json(v)),
         created: m.get("created").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
         currency: m.get("currency").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        currency_options: m.get("currency_options").filter(|v| !v.is_null()).and_then(|v| iface_customers__coupon_currency_options__from_json(v)),
+        currency_options: m.get("currency_options").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| (iface_customers__coupon_currency_option__from_json(x)).map(|val| iface_customers::CouponCurrencyOptionsEntry { key: k.clone(), value: val })).collect())),
         duration: match m.get("duration").and_then(|v| (v).as_str().and_then(iface_customers__coupon_duration_enum__from_str)) { Some(x) => x, None => return None },
         duration_in_months: m.get("duration_in_months").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
         id: m.get("id").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         livemode: m.get("livemode").and_then(|v| (v).as_bool()).unwrap_or_default(),
         max_redemptions: m.get("max_redemptions").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
-        metadata: m.get("metadata").filter(|v| !v.is_null()).and_then(|v| iface_customers__coupon_metadata__from_json(v)),
+        metadata: m.get("metadata").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_customers::CouponMetadataEntry { key: k.clone(), value: val })).collect())),
         name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         object: match m.get("object").and_then(|v| (v).as_str().and_then(iface_customers__coupon_object_enum__from_str)) { Some(x) => x, None => return None },
         percent_off: m.get("percent_off").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
@@ -4014,17 +4074,26 @@ fn iface_customers__coupon_applies_to__from_json(v: &Value) -> Option<iface_cust
     })
 }
 
-fn iface_customers__coupon_currency_options__from_json(v: &Value) -> Option<iface_customers::CouponCurrencyOptions> {
+fn iface_customers__coupon_currency_option__from_json(v: &Value) -> Option<iface_customers::CouponCurrencyOption> {
     let m = v.as_object()?;
-    Some(iface_customers::CouponCurrencyOptions {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_customers::CouponCurrencyOption {
+        amount_off: m.get("amount_off").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
     })
 }
 
-fn iface_customers__coupon_metadata__from_json(v: &Value) -> Option<iface_customers::CouponMetadata> {
+fn iface_customers__coupon_currency_options_entry__from_json(v: &Value) -> Option<iface_customers::CouponCurrencyOptionsEntry> {
     let m = v.as_object()?;
-    Some(iface_customers::CouponMetadata {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_customers::CouponCurrencyOptionsEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: match m.get("value").and_then(|v| iface_customers__coupon_currency_option__from_json(v)) { Some(x) => x, None => return None },
+    })
+}
+
+fn iface_customers__coupon_metadata_entry__from_json(v: &Value) -> Option<iface_customers::CouponMetadataEntry> {
+    let m = v.as_object()?;
+    Some(iface_customers::CouponMetadataEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -4132,45 +4201,45 @@ fn iface_customers__payment_method__from_json(v: &Value) -> Option<iface_custome
     let m = v.as_object()?;
     Some(iface_customers::PaymentMethod {
         acss_debit: m.get("acss_debit").filter(|v| !v.is_null()).and_then(|v| iface_customers__payment_method_acss_debit__from_json(v)),
-        affirm: m.get("affirm").filter(|v| !v.is_null()).and_then(|v| iface_customers__payment_method_affirm__from_json(v)),
-        afterpay_clearpay: m.get("afterpay_clearpay").filter(|v| !v.is_null()).and_then(|v| iface_customers__payment_method_afterpay_clearpay__from_json(v)),
-        alipay: m.get("alipay").filter(|v| !v.is_null()).and_then(|v| iface_customers__payment_flows_private_payment_methods_alipay__from_json(v)),
+        affirm: m.get("affirm").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_customers::PaymentMethodAffirmEntry { key: k.clone(), value: val })).collect())),
+        afterpay_clearpay: m.get("afterpay_clearpay").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_customers::PaymentMethodAfterpayClearpayEntry { key: k.clone(), value: val })).collect())),
+        alipay: m.get("alipay").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_customers::PaymentFlowsPrivatePaymentMethodsAlipayEntry { key: k.clone(), value: val })).collect())),
         au_becs_debit: m.get("au_becs_debit").filter(|v| !v.is_null()).and_then(|v| iface_customers__payment_method_au_becs_debit__from_json(v)),
         bacs_debit: m.get("bacs_debit").filter(|v| !v.is_null()).and_then(|v| iface_customers__payment_method_bacs_debit__from_json(v)),
-        bancontact: m.get("bancontact").filter(|v| !v.is_null()).and_then(|v| iface_customers__payment_method_bancontact__from_json(v)),
+        bancontact: m.get("bancontact").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_customers::PaymentMethodBancontactEntry { key: k.clone(), value: val })).collect())),
         billing_details: match m.get("billing_details").and_then(|v| iface_customers__billing_details__from_json(v)) { Some(x) => x, None => return None },
-        blik: m.get("blik").filter(|v| !v.is_null()).and_then(|v| iface_customers__payment_method_blik__from_json(v)),
+        blik: m.get("blik").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_customers::PaymentMethodBlikEntry { key: k.clone(), value: val })).collect())),
         boleto: m.get("boleto").filter(|v| !v.is_null()).and_then(|v| iface_customers__payment_method_boleto__from_json(v)),
         card: m.get("card").filter(|v| !v.is_null()).and_then(|v| iface_customers__payment_method_card__from_json(v)),
-        card_present: m.get("card_present").filter(|v| !v.is_null()).and_then(|v| iface_customers__payment_method_card_present__from_json(v)),
-        cashapp: m.get("cashapp").filter(|v| !v.is_null()).and_then(|v| iface_customers__payment_method_cashapp__from_json(v)),
+        card_present: m.get("card_present").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_customers::PaymentMethodCardPresentEntry { key: k.clone(), value: val })).collect())),
+        cashapp: m.get("cashapp").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_customers::PaymentMethodCashappEntry { key: k.clone(), value: val })).collect())),
         created: m.get("created").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
         customer: m.get("customer").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        customer_balance: m.get("customer_balance").filter(|v| !v.is_null()).and_then(|v| iface_customers__payment_method_customer_balance__from_json(v)),
+        customer_balance: m.get("customer_balance").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_customers::PaymentMethodCustomerBalanceEntry { key: k.clone(), value: val })).collect())),
         eps: m.get("eps").filter(|v| !v.is_null()).and_then(|v| iface_customers__payment_method_eps__from_json(v)),
         fpx: m.get("fpx").filter(|v| !v.is_null()).and_then(|v| iface_customers__payment_method_fpx__from_json(v)),
-        giropay: m.get("giropay").filter(|v| !v.is_null()).and_then(|v| iface_customers__payment_method_giropay__from_json(v)),
-        grabpay: m.get("grabpay").filter(|v| !v.is_null()).and_then(|v| iface_customers__payment_method_grabpay__from_json(v)),
+        giropay: m.get("giropay").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_customers::PaymentMethodGiropayEntry { key: k.clone(), value: val })).collect())),
+        grabpay: m.get("grabpay").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_customers::PaymentMethodGrabpayEntry { key: k.clone(), value: val })).collect())),
         id: m.get("id").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         ideal: m.get("ideal").filter(|v| !v.is_null()).and_then(|v| iface_customers__payment_method_ideal__from_json(v)),
-        interac_present: m.get("interac_present").filter(|v| !v.is_null()).and_then(|v| iface_customers__payment_method_interac_present__from_json(v)),
+        interac_present: m.get("interac_present").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_customers::PaymentMethodInteracPresentEntry { key: k.clone(), value: val })).collect())),
         klarna: m.get("klarna").filter(|v| !v.is_null()).and_then(|v| iface_customers__payment_method_klarna__from_json(v)),
-        konbini: m.get("konbini").filter(|v| !v.is_null()).and_then(|v| iface_customers__payment_method_konbini__from_json(v)),
+        konbini: m.get("konbini").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_customers::PaymentMethodKonbiniEntry { key: k.clone(), value: val })).collect())),
         link: m.get("link").filter(|v| !v.is_null()).and_then(|v| iface_customers__payment_method_link__from_json(v)),
         livemode: m.get("livemode").and_then(|v| (v).as_bool()).unwrap_or_default(),
-        metadata: m.get("metadata").filter(|v| !v.is_null()).and_then(|v| iface_customers__payment_method_metadata__from_json(v)),
+        metadata: m.get("metadata").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_customers::PaymentMethodMetadataEntry { key: k.clone(), value: val })).collect())),
         object: match m.get("object").and_then(|v| (v).as_str().and_then(iface_customers__payment_method_object_enum__from_str)) { Some(x) => x, None => return None },
-        oxxo: m.get("oxxo").filter(|v| !v.is_null()).and_then(|v| iface_customers__payment_method_oxxo__from_json(v)),
+        oxxo: m.get("oxxo").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_customers::PaymentMethodOxxoEntry { key: k.clone(), value: val })).collect())),
         p24: m.get("p24").filter(|v| !v.is_null()).and_then(|v| iface_customers__payment_method_p24__from_json(v)),
-        paynow: m.get("paynow").filter(|v| !v.is_null()).and_then(|v| iface_customers__payment_method_paynow__from_json(v)),
-        pix: m.get("pix").filter(|v| !v.is_null()).and_then(|v| iface_customers__payment_method_pix__from_json(v)),
-        promptpay: m.get("promptpay").filter(|v| !v.is_null()).and_then(|v| iface_customers__payment_method_promptpay__from_json(v)),
+        paynow: m.get("paynow").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_customers::PaymentMethodPaynowEntry { key: k.clone(), value: val })).collect())),
+        pix: m.get("pix").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_customers::PaymentMethodPixEntry { key: k.clone(), value: val })).collect())),
+        promptpay: m.get("promptpay").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_customers::PaymentMethodPromptpayEntry { key: k.clone(), value: val })).collect())),
         radar_options: m.get("radar_options").filter(|v| !v.is_null()).and_then(|v| iface_customers__radar_radar_options__from_json(v)),
         sepa_debit: m.get("sepa_debit").filter(|v| !v.is_null()).and_then(|v| iface_customers__payment_method_sepa_debit__from_json(v)),
         sofort: m.get("sofort").filter(|v| !v.is_null()).and_then(|v| iface_customers__payment_method_sofort__from_json(v)),
         type_op: match m.get("type").and_then(|v| (v).as_str().and_then(iface_customers__payment_method_type_op_enum__from_str)) { Some(x) => x, None => return None },
         us_bank_account: m.get("us_bank_account").filter(|v| !v.is_null()).and_then(|v| iface_customers__payment_method_us_bank_account__from_json(v)),
-        wechat_pay: m.get("wechat_pay").filter(|v| !v.is_null()).and_then(|v| iface_customers__payment_method_wechat_pay__from_json(v)),
+        wechat_pay: m.get("wechat_pay").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_customers::PaymentMethodWechatPayEntry { key: k.clone(), value: val })).collect())),
     })
 }
 
@@ -4185,24 +4254,27 @@ fn iface_customers__payment_method_acss_debit__from_json(v: &Value) -> Option<if
     })
 }
 
-fn iface_customers__payment_method_affirm__from_json(v: &Value) -> Option<iface_customers::PaymentMethodAffirm> {
+fn iface_customers__payment_method_affirm_entry__from_json(v: &Value) -> Option<iface_customers::PaymentMethodAffirmEntry> {
     let m = v.as_object()?;
-    Some(iface_customers::PaymentMethodAffirm {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_customers::PaymentMethodAffirmEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
-fn iface_customers__payment_method_afterpay_clearpay__from_json(v: &Value) -> Option<iface_customers::PaymentMethodAfterpayClearpay> {
+fn iface_customers__payment_method_afterpay_clearpay_entry__from_json(v: &Value) -> Option<iface_customers::PaymentMethodAfterpayClearpayEntry> {
     let m = v.as_object()?;
-    Some(iface_customers::PaymentMethodAfterpayClearpay {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_customers::PaymentMethodAfterpayClearpayEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
-fn iface_customers__payment_flows_private_payment_methods_alipay__from_json(v: &Value) -> Option<iface_customers::PaymentFlowsPrivatePaymentMethodsAlipay> {
+fn iface_customers__payment_flows_private_payment_methods_alipay_entry__from_json(v: &Value) -> Option<iface_customers::PaymentFlowsPrivatePaymentMethodsAlipayEntry> {
     let m = v.as_object()?;
-    Some(iface_customers::PaymentFlowsPrivatePaymentMethodsAlipay {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_customers::PaymentFlowsPrivatePaymentMethodsAlipayEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -4224,10 +4296,11 @@ fn iface_customers__payment_method_bacs_debit__from_json(v: &Value) -> Option<if
     })
 }
 
-fn iface_customers__payment_method_bancontact__from_json(v: &Value) -> Option<iface_customers::PaymentMethodBancontact> {
+fn iface_customers__payment_method_bancontact_entry__from_json(v: &Value) -> Option<iface_customers::PaymentMethodBancontactEntry> {
     let m = v.as_object()?;
-    Some(iface_customers::PaymentMethodBancontact {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_customers::PaymentMethodBancontactEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -4241,10 +4314,11 @@ fn iface_customers__billing_details__from_json(v: &Value) -> Option<iface_custom
     })
 }
 
-fn iface_customers__payment_method_blik__from_json(v: &Value) -> Option<iface_customers::PaymentMethodBlik> {
+fn iface_customers__payment_method_blik_entry__from_json(v: &Value) -> Option<iface_customers::PaymentMethodBlikEntry> {
     let m = v.as_object()?;
-    Some(iface_customers::PaymentMethodBlik {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_customers::PaymentMethodBlikEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -4273,24 +4347,27 @@ fn iface_customers__payment_method_card__from_json(v: &Value) -> Option<iface_cu
     })
 }
 
-fn iface_customers__payment_method_card_present__from_json(v: &Value) -> Option<iface_customers::PaymentMethodCardPresent> {
+fn iface_customers__payment_method_card_present_entry__from_json(v: &Value) -> Option<iface_customers::PaymentMethodCardPresentEntry> {
     let m = v.as_object()?;
-    Some(iface_customers::PaymentMethodCardPresent {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_customers::PaymentMethodCardPresentEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
-fn iface_customers__payment_method_cashapp__from_json(v: &Value) -> Option<iface_customers::PaymentMethodCashapp> {
+fn iface_customers__payment_method_cashapp_entry__from_json(v: &Value) -> Option<iface_customers::PaymentMethodCashappEntry> {
     let m = v.as_object()?;
-    Some(iface_customers::PaymentMethodCashapp {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_customers::PaymentMethodCashappEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
-fn iface_customers__payment_method_customer_balance__from_json(v: &Value) -> Option<iface_customers::PaymentMethodCustomerBalance> {
+fn iface_customers__payment_method_customer_balance_entry__from_json(v: &Value) -> Option<iface_customers::PaymentMethodCustomerBalanceEntry> {
     let m = v.as_object()?;
-    Some(iface_customers::PaymentMethodCustomerBalance {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_customers::PaymentMethodCustomerBalanceEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -4308,17 +4385,19 @@ fn iface_customers__payment_method_fpx__from_json(v: &Value) -> Option<iface_cus
     })
 }
 
-fn iface_customers__payment_method_giropay__from_json(v: &Value) -> Option<iface_customers::PaymentMethodGiropay> {
+fn iface_customers__payment_method_giropay_entry__from_json(v: &Value) -> Option<iface_customers::PaymentMethodGiropayEntry> {
     let m = v.as_object()?;
-    Some(iface_customers::PaymentMethodGiropay {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_customers::PaymentMethodGiropayEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
-fn iface_customers__payment_method_grabpay__from_json(v: &Value) -> Option<iface_customers::PaymentMethodGrabpay> {
+fn iface_customers__payment_method_grabpay_entry__from_json(v: &Value) -> Option<iface_customers::PaymentMethodGrabpayEntry> {
     let m = v.as_object()?;
-    Some(iface_customers::PaymentMethodGrabpay {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_customers::PaymentMethodGrabpayEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -4330,10 +4409,11 @@ fn iface_customers__payment_method_ideal__from_json(v: &Value) -> Option<iface_c
     })
 }
 
-fn iface_customers__payment_method_interac_present__from_json(v: &Value) -> Option<iface_customers::PaymentMethodInteracPresent> {
+fn iface_customers__payment_method_interac_present_entry__from_json(v: &Value) -> Option<iface_customers::PaymentMethodInteracPresentEntry> {
     let m = v.as_object()?;
-    Some(iface_customers::PaymentMethodInteracPresent {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_customers::PaymentMethodInteracPresentEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -4344,10 +4424,11 @@ fn iface_customers__payment_method_klarna__from_json(v: &Value) -> Option<iface_
     })
 }
 
-fn iface_customers__payment_method_konbini__from_json(v: &Value) -> Option<iface_customers::PaymentMethodKonbini> {
+fn iface_customers__payment_method_konbini_entry__from_json(v: &Value) -> Option<iface_customers::PaymentMethodKonbiniEntry> {
     let m = v.as_object()?;
-    Some(iface_customers::PaymentMethodKonbini {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_customers::PaymentMethodKonbiniEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -4359,17 +4440,19 @@ fn iface_customers__payment_method_link__from_json(v: &Value) -> Option<iface_cu
     })
 }
 
-fn iface_customers__payment_method_metadata__from_json(v: &Value) -> Option<iface_customers::PaymentMethodMetadata> {
+fn iface_customers__payment_method_metadata_entry__from_json(v: &Value) -> Option<iface_customers::PaymentMethodMetadataEntry> {
     let m = v.as_object()?;
-    Some(iface_customers::PaymentMethodMetadata {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_customers::PaymentMethodMetadataEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
-fn iface_customers__payment_method_oxxo__from_json(v: &Value) -> Option<iface_customers::PaymentMethodOxxo> {
+fn iface_customers__payment_method_oxxo_entry__from_json(v: &Value) -> Option<iface_customers::PaymentMethodOxxoEntry> {
     let m = v.as_object()?;
-    Some(iface_customers::PaymentMethodOxxo {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_customers::PaymentMethodOxxoEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -4380,24 +4463,27 @@ fn iface_customers__payment_method_p24__from_json(v: &Value) -> Option<iface_cus
     })
 }
 
-fn iface_customers__payment_method_paynow__from_json(v: &Value) -> Option<iface_customers::PaymentMethodPaynow> {
+fn iface_customers__payment_method_paynow_entry__from_json(v: &Value) -> Option<iface_customers::PaymentMethodPaynowEntry> {
     let m = v.as_object()?;
-    Some(iface_customers::PaymentMethodPaynow {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_customers::PaymentMethodPaynowEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
-fn iface_customers__payment_method_pix__from_json(v: &Value) -> Option<iface_customers::PaymentMethodPix> {
+fn iface_customers__payment_method_pix_entry__from_json(v: &Value) -> Option<iface_customers::PaymentMethodPixEntry> {
     let m = v.as_object()?;
-    Some(iface_customers::PaymentMethodPix {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_customers::PaymentMethodPixEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
-fn iface_customers__payment_method_promptpay__from_json(v: &Value) -> Option<iface_customers::PaymentMethodPromptpay> {
+fn iface_customers__payment_method_promptpay_entry__from_json(v: &Value) -> Option<iface_customers::PaymentMethodPromptpayEntry> {
     let m = v.as_object()?;
-    Some(iface_customers::PaymentMethodPromptpay {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_customers::PaymentMethodPromptpayEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -4442,10 +4528,11 @@ fn iface_customers__payment_method_us_bank_account__from_json(v: &Value) -> Opti
     })
 }
 
-fn iface_customers__payment_method_wechat_pay__from_json(v: &Value) -> Option<iface_customers::PaymentMethodWechatPay> {
+fn iface_customers__payment_method_wechat_pay_entry__from_json(v: &Value) -> Option<iface_customers::PaymentMethodWechatPayEntry> {
     let m = v.as_object()?;
-    Some(iface_customers::PaymentMethodWechatPay {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_customers::PaymentMethodWechatPayEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -4548,18 +4635,18 @@ fn iface_customers__price_billing_scheme_enum__from_str(s: &str) -> Option<iface
     }
 }
 
-fn iface_customers__price_object_enum__from_str(s: &str) -> Option<iface_customers::PriceObjectEnum> {
+fn iface_customers__currency_option_tax_behavior_enum__from_str(s: &str) -> Option<iface_customers::CurrencyOptionTaxBehaviorEnum> {
     match s {
-        "price" => Some(iface_customers::PriceObjectEnum::Price),
+        "exclusive" => Some(iface_customers::CurrencyOptionTaxBehaviorEnum::Exclusive),
+        "inclusive" => Some(iface_customers::CurrencyOptionTaxBehaviorEnum::Inclusive),
+        "unspecified" => Some(iface_customers::CurrencyOptionTaxBehaviorEnum::Unspecified),
         _ => None,
     }
 }
 
-fn iface_customers__price_tax_behavior_enum__from_str(s: &str) -> Option<iface_customers::PriceTaxBehaviorEnum> {
+fn iface_customers__price_object_enum__from_str(s: &str) -> Option<iface_customers::PriceObjectEnum> {
     match s {
-        "exclusive" => Some(iface_customers::PriceTaxBehaviorEnum::Exclusive),
-        "inclusive" => Some(iface_customers::PriceTaxBehaviorEnum::Inclusive),
-        "unspecified" => Some(iface_customers::PriceTaxBehaviorEnum::Unspecified),
+        "price" => Some(iface_customers::PriceObjectEnum::Price),
         _ => None,
     }
 }
@@ -5233,15 +5320,8 @@ fn iface_customers__get_customers_customer_bank_accounts__err(e: crate::runtime:
     }
 }
 
-fn iface_customers__post_customers_customer_bank_accounts__ok(body: String) -> Result<iface_customers::PaymentSource, crate::runtime::DispatchError> {
-    let v: Value = match serde_json::from_str(&body) {
-        Ok(v) => v,
-        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
-    };
-    match iface_customers__payment_source__from_json(&v) {
-        Some(x) => Ok(x),
-        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
-    }
+fn iface_customers__post_customers_customer_bank_accounts__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
 }
 
 fn iface_customers__post_customers_customer_bank_accounts__err(e: crate::runtime::DispatchError) -> String {
@@ -5327,15 +5407,8 @@ fn iface_customers__get_customers_customer_cards__err(e: crate::runtime::Dispatc
     }
 }
 
-fn iface_customers__post_customers_customer_cards__ok(body: String) -> Result<iface_customers::PaymentSource, crate::runtime::DispatchError> {
-    let v: Value = match serde_json::from_str(&body) {
-        Ok(v) => v,
-        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
-    };
-    match iface_customers__payment_source__from_json(&v) {
-        Some(x) => Ok(x),
-        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
-    }
+fn iface_customers__post_customers_customer_cards__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
 }
 
 fn iface_customers__post_customers_customer_cards__err(e: crate::runtime::DispatchError) -> String {
@@ -5565,15 +5638,8 @@ fn iface_customers__get_customers_customer_sources__err(e: crate::runtime::Dispa
     }
 }
 
-fn iface_customers__post_customers_customer_sources__ok(body: String) -> Result<iface_customers::PaymentSource, crate::runtime::DispatchError> {
-    let v: Value = match serde_json::from_str(&body) {
-        Ok(v) => v,
-        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
-    };
-    match iface_customers__payment_source__from_json(&v) {
-        Some(x) => Ok(x),
-        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
-    }
+fn iface_customers__post_customers_customer_sources__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
 }
 
 fn iface_customers__post_customers_customer_sources__err(e: crate::runtime::DispatchError) -> String {
@@ -5583,15 +5649,8 @@ fn iface_customers__post_customers_customer_sources__err(e: crate::runtime::Disp
     }
 }
 
-fn iface_customers__get_customers_customer_sources_id__ok(body: String) -> Result<iface_customers::PaymentSource, crate::runtime::DispatchError> {
-    let v: Value = match serde_json::from_str(&body) {
-        Ok(v) => v,
-        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
-    };
-    match iface_customers__payment_source__from_json(&v) {
-        Some(x) => Ok(x),
-        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
-    }
+fn iface_customers__get_customers_customer_sources_id__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
 }
 
 fn iface_customers__get_customers_customer_sources_id__err(e: crate::runtime::DispatchError) -> String {
@@ -5917,7 +5976,7 @@ impl iface_customers::Guest for crate::Component {
             Err(e) => Err(iface_customers__get_customers_customer_bank_accounts__err(e)),
         }
     }
-    fn post_customers_customer_bank_accounts(params: iface_customers::PostCustomersCustomerBankAccountsParams) -> Result<iface_customers::PaymentSource, String> {
+    fn post_customers_customer_bank_accounts(params: iface_customers::PostCustomersCustomerBankAccountsParams) -> Result<String, String> {
         let json = iface_customers__post_customers_customer_bank_accounts_params__to_json(&params);
         match dispatch(&OP_CUSTOMERS_POST_CUSTOMERS_CUSTOMER_BANK_ACCOUNTS, json).and_then(iface_customers__post_customers_customer_bank_accounts__ok) {
             Ok(v) => Ok(v),
@@ -5959,7 +6018,7 @@ impl iface_customers::Guest for crate::Component {
             Err(e) => Err(iface_customers__get_customers_customer_cards__err(e)),
         }
     }
-    fn post_customers_customer_cards(params: iface_customers::PostCustomersCustomerCardsParams) -> Result<iface_customers::PaymentSource, String> {
+    fn post_customers_customer_cards(params: iface_customers::PostCustomersCustomerCardsParams) -> Result<String, String> {
         let json = iface_customers__post_customers_customer_cards_params__to_json(&params);
         match dispatch(&OP_CUSTOMERS_POST_CUSTOMERS_CUSTOMER_CARDS, json).and_then(iface_customers__post_customers_customer_cards__ok) {
             Ok(v) => Ok(v),
@@ -6057,14 +6116,14 @@ impl iface_customers::Guest for crate::Component {
             Err(e) => Err(iface_customers__get_customers_customer_sources__err(e)),
         }
     }
-    fn post_customers_customer_sources(params: iface_customers::PostCustomersCustomerSourcesParams) -> Result<iface_customers::PaymentSource, String> {
+    fn post_customers_customer_sources(params: iface_customers::PostCustomersCustomerSourcesParams) -> Result<String, String> {
         let json = iface_customers__post_customers_customer_sources_params__to_json(&params);
         match dispatch(&OP_CUSTOMERS_POST_CUSTOMERS_CUSTOMER_SOURCES, json).and_then(iface_customers__post_customers_customer_sources__ok) {
             Ok(v) => Ok(v),
             Err(e) => Err(iface_customers__post_customers_customer_sources__err(e)),
         }
     }
-    fn get_customers_customer_sources_id(params: iface_customers::GetCustomersCustomerSourcesIdParams) -> Result<iface_customers::PaymentSource, String> {
+    fn get_customers_customer_sources_id(params: iface_customers::GetCustomersCustomerSourcesIdParams) -> Result<String, String> {
         let json = iface_customers__get_customers_customer_sources_id_params__to_json(&params);
         match dispatch(&OP_CUSTOMERS_GET_CUSTOMERS_CUSTOMER_SOURCES_ID, json).and_then(iface_customers__get_customers_customer_sources_id__ok) {
             Ok(v) => Ok(v),

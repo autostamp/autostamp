@@ -169,14 +169,15 @@ fn iface_application_fees__fee_refund__to_json(p: &iface_application_fees::FeeRe
     m.insert("currency".into(), Value::String((&p.currency).clone()));
     m.insert("fee".into(), Value::String((&p.fee).clone()));
     m.insert("id".into(), Value::String((&p.id).clone()));
-    m.insert("metadata".into(), match (&p.metadata) { Some(v) => iface_application_fees__fee_refund_metadata__to_json(v), None => Value::Null });
+    m.insert("metadata".into(), match (&p.metadata) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("object".into(), Value::String(iface_application_fees__fee_refund_object_enum__to_str(&p.object).into()));
     Value::Object(m)
 }
 
-fn iface_application_fees__fee_refund_metadata__to_json(p: &iface_application_fees::FeeRefundMetadata) -> Value {
+fn iface_application_fees__fee_refund_metadata_entry__to_json(p: &iface_application_fees::FeeRefundMetadataEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -189,9 +190,10 @@ fn iface_application_fees__get_application_fees_id_refunds_response__to_json(p: 
     Value::Object(m)
 }
 
-fn iface_application_fees__post_application_fees_id_refunds_body_metadata__to_json(p: &iface_application_fees::PostApplicationFeesIdRefundsBodyMetadata) -> Value {
+fn iface_application_fees__post_application_fees_id_refunds_body_metadata_entry__to_json(p: &iface_application_fees::PostApplicationFeesIdRefundsBodyMetadataEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -258,7 +260,7 @@ fn iface_application_fees__post_application_fees_id_refunds_params__to_json(p: &
     m.insert("id".into(), Value::String((&p.id).clone()));
     m.insert("amount".into(), match (&p.amount) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("expand".into(), match (&p.expand) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
-    m.insert("metadata".into(), match (&p.metadata) { Some(v) => iface_application_fees__post_application_fees_id_refunds_body_metadata__to_json(v), None => Value::Null });
+    m.insert("metadata".into(), match (&p.metadata) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -311,15 +313,16 @@ fn iface_application_fees__fee_refund__from_json(v: &Value) -> Option<iface_appl
         currency: m.get("currency").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         fee: m.get("fee").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         id: m.get("id").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-        metadata: m.get("metadata").filter(|v| !v.is_null()).and_then(|v| iface_application_fees__fee_refund_metadata__from_json(v)),
+        metadata: m.get("metadata").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_application_fees::FeeRefundMetadataEntry { key: k.clone(), value: val })).collect())),
         object: match m.get("object").and_then(|v| (v).as_str().and_then(iface_application_fees__fee_refund_object_enum__from_str)) { Some(x) => x, None => return None },
     })
 }
 
-fn iface_application_fees__fee_refund_metadata__from_json(v: &Value) -> Option<iface_application_fees::FeeRefundMetadata> {
+fn iface_application_fees__fee_refund_metadata_entry__from_json(v: &Value) -> Option<iface_application_fees::FeeRefundMetadataEntry> {
     let m = v.as_object()?;
-    Some(iface_application_fees::FeeRefundMetadata {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_application_fees::FeeRefundMetadataEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 

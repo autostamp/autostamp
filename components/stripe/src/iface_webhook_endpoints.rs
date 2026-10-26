@@ -439,7 +439,7 @@ fn iface_webhook_endpoints__webhook_endpoint__to_json(p: &iface_webhook_endpoint
     m.insert("enabled_events".into(), Value::Array((&p.enabled_events).iter().map(|v| Value::String((v).clone())).collect()));
     m.insert("id".into(), Value::String((&p.id).clone()));
     m.insert("livemode".into(), Value::Bool(*(&p.livemode)));
-    m.insert("metadata".into(), iface_webhook_endpoints__webhook_endpoint_metadata__to_json(&p.metadata));
+    m.insert("metadata".into(), Value::Object((&p.metadata).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()));
     m.insert("object".into(), Value::String(iface_webhook_endpoints__webhook_endpoint_object_enum__to_str(&p.object).into()));
     m.insert("secret".into(), match (&p.secret) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("status".into(), Value::String((&p.status).clone()));
@@ -447,9 +447,10 @@ fn iface_webhook_endpoints__webhook_endpoint__to_json(p: &iface_webhook_endpoint
     Value::Object(m)
 }
 
-fn iface_webhook_endpoints__webhook_endpoint_metadata__to_json(p: &iface_webhook_endpoints::WebhookEndpointMetadata) -> Value {
+fn iface_webhook_endpoints__webhook_endpoint_metadata_entry__to_json(p: &iface_webhook_endpoints::WebhookEndpointMetadataEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -530,7 +531,7 @@ fn iface_webhook_endpoints__webhook_endpoint__from_json(v: &Value) -> Option<ifa
         enabled_events: m.get("enabled_events").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())).unwrap_or_default(),
         id: m.get("id").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         livemode: m.get("livemode").and_then(|v| (v).as_bool()).unwrap_or_default(),
-        metadata: match m.get("metadata").and_then(|v| iface_webhook_endpoints__webhook_endpoint_metadata__from_json(v)) { Some(x) => x, None => return None },
+        metadata: m.get("metadata").and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_webhook_endpoints::WebhookEndpointMetadataEntry { key: k.clone(), value: val })).collect())).unwrap_or_default(),
         object: match m.get("object").and_then(|v| (v).as_str().and_then(iface_webhook_endpoints__webhook_endpoint_object_enum__from_str)) { Some(x) => x, None => return None },
         secret: m.get("secret").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         status: m.get("status").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
@@ -538,10 +539,11 @@ fn iface_webhook_endpoints__webhook_endpoint__from_json(v: &Value) -> Option<ifa
     })
 }
 
-fn iface_webhook_endpoints__webhook_endpoint_metadata__from_json(v: &Value) -> Option<iface_webhook_endpoints::WebhookEndpointMetadata> {
+fn iface_webhook_endpoints__webhook_endpoint_metadata_entry__from_json(v: &Value) -> Option<iface_webhook_endpoints::WebhookEndpointMetadataEntry> {
     let m = v.as_object()?;
-    Some(iface_webhook_endpoints::WebhookEndpointMetadata {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_webhook_endpoints::WebhookEndpointMetadataEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 

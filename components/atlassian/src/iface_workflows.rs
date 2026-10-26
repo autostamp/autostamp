@@ -155,13 +155,14 @@ fn iface_workflows__updated_project_category__to_json(p: &iface_workflows::Updat
 fn iface_workflows__create_workflow_status_details__to_json(p: &iface_workflows::CreateWorkflowStatusDetails) -> Value {
     let mut m = Map::new();
     m.insert("id".into(), Value::String((&p.id).clone()));
-    m.insert("properties".into(), match (&p.properties) { Some(v) => iface_workflows__create_workflow_status_details_properties__to_json(v), None => Value::Null });
+    m.insert("properties".into(), match (&p.properties) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_workflows__create_workflow_status_details_properties__to_json(p: &iface_workflows::CreateWorkflowStatusDetailsProperties) -> Value {
+fn iface_workflows__create_workflow_status_details_properties_entry__to_json(p: &iface_workflows::CreateWorkflowStatusDetailsPropertiesEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -170,7 +171,7 @@ fn iface_workflows__create_workflow_transition_details__to_json(p: &iface_workfl
     m.insert("description".into(), match (&p.description) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("from".into(), match (&p.from_op) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
     m.insert("name".into(), Value::String((&p.name).clone()));
-    m.insert("properties".into(), match (&p.properties) { Some(v) => iface_workflows__create_workflow_transition_details_properties__to_json(v), None => Value::Null });
+    m.insert("properties".into(), match (&p.properties) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("rules".into(), match (&p.rules) { Some(v) => iface_workflows__create_workflow_transition_rules_details__to_json(v), None => Value::Null });
     m.insert("screen".into(), match (&p.screen) { Some(v) => iface_workflows__create_workflow_transition_screen_details__to_json(v), None => Value::Null });
     m.insert("to".into(), Value::String((&p.to).clone()));
@@ -178,9 +179,10 @@ fn iface_workflows__create_workflow_transition_details__to_json(p: &iface_workfl
     Value::Object(m)
 }
 
-fn iface_workflows__create_workflow_transition_details_properties__to_json(p: &iface_workflows::CreateWorkflowTransitionDetailsProperties) -> Value {
+fn iface_workflows__create_workflow_transition_details_properties_entry__to_json(p: &iface_workflows::CreateWorkflowTransitionDetailsPropertiesEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -195,28 +197,30 @@ fn iface_workflows__create_workflow_transition_rules_details__to_json(p: &iface_
 fn iface_workflows__create_workflow_condition__to_json(p: &iface_workflows::CreateWorkflowCondition) -> Value {
     let mut m = Map::new();
     m.insert("conditions".into(), match (&p.conditions) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
-    m.insert("configuration".into(), match (&p.configuration) { Some(v) => iface_workflows__create_workflow_condition_configuration__to_json(v), None => Value::Null });
+    m.insert("configuration".into(), match (&p.configuration) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("operator".into(), match (&p.operator) { Some(v) => Value::String(iface_workflows__create_workflow_condition_operator_enum__to_str(v).into()), None => Value::Null });
     m.insert("type".into(), match (&p.type_op) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_workflows__create_workflow_condition_configuration__to_json(p: &iface_workflows::CreateWorkflowConditionConfiguration) -> Value {
+fn iface_workflows__create_workflow_condition_configuration_entry__to_json(p: &iface_workflows::CreateWorkflowConditionConfigurationEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
 fn iface_workflows__create_workflow_transition_rule__to_json(p: &iface_workflows::CreateWorkflowTransitionRule) -> Value {
     let mut m = Map::new();
-    m.insert("configuration".into(), match (&p.configuration) { Some(v) => iface_workflows__create_workflow_transition_rule_configuration__to_json(v), None => Value::Null });
+    m.insert("configuration".into(), match (&p.configuration) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("type".into(), Value::String((&p.type_op).clone()));
     Value::Object(m)
 }
 
-fn iface_workflows__create_workflow_transition_rule_configuration__to_json(p: &iface_workflows::CreateWorkflowTransitionRuleConfiguration) -> Value {
+fn iface_workflows__create_workflow_transition_rule_configuration_entry__to_json(p: &iface_workflows::CreateWorkflowTransitionRuleConfigurationEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -286,13 +290,14 @@ fn iface_workflows__workflow_status__to_json(p: &iface_workflows::WorkflowStatus
     let mut m = Map::new();
     m.insert("id".into(), Value::String((&p.id).clone()));
     m.insert("name".into(), Value::String((&p.name).clone()));
-    m.insert("properties".into(), match (&p.properties) { Some(v) => iface_workflows__workflow_status_properties__to_json(v), None => Value::Null });
+    m.insert("properties".into(), match (&p.properties) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_workflows__workflow_status_properties__to_json(p: &iface_workflows::WorkflowStatusProperties) -> Value {
+fn iface_workflows__workflow_status_properties_entry__to_json(p: &iface_workflows::WorkflowStatusPropertiesEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -302,7 +307,7 @@ fn iface_workflows__transition__to_json(p: &iface_workflows::Transition) -> Valu
     m.insert("from".into(), Value::Array((&p.from_op).iter().map(|v| Value::String((v).clone())).collect()));
     m.insert("id".into(), Value::String((&p.id).clone()));
     m.insert("name".into(), Value::String((&p.name).clone()));
-    m.insert("properties".into(), match (&p.properties) { Some(v) => iface_workflows__transition_properties__to_json(v), None => Value::Null });
+    m.insert("properties".into(), match (&p.properties) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("rules".into(), match (&p.rules) { Some(v) => iface_workflows__workflow_rules__to_json(v), None => Value::Null });
     m.insert("screen".into(), match (&p.screen) { Some(v) => iface_workflows__transition_screen_details__to_json(v), None => Value::Null });
     m.insert("to".into(), Value::String((&p.to).clone()));
@@ -310,9 +315,10 @@ fn iface_workflows__transition__to_json(p: &iface_workflows::Transition) -> Valu
     Value::Object(m)
 }
 
-fn iface_workflows__transition_properties__to_json(p: &iface_workflows::TransitionProperties) -> Value {
+fn iface_workflows__transition_properties_entry__to_json(p: &iface_workflows::TransitionPropertiesEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -500,14 +506,15 @@ fn iface_workflows__workflow_status__from_json(v: &Value) -> Option<iface_workfl
     Some(iface_workflows::WorkflowStatus {
         id: m.get("id").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         name: m.get("name").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-        properties: m.get("properties").filter(|v| !v.is_null()).and_then(|v| iface_workflows__workflow_status_properties__from_json(v)),
+        properties: m.get("properties").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_workflows::WorkflowStatusPropertiesEntry { key: k.clone(), value: val })).collect())),
     })
 }
 
-fn iface_workflows__workflow_status_properties__from_json(v: &Value) -> Option<iface_workflows::WorkflowStatusProperties> {
+fn iface_workflows__workflow_status_properties_entry__from_json(v: &Value) -> Option<iface_workflows::WorkflowStatusPropertiesEntry> {
     let m = v.as_object()?;
-    Some(iface_workflows::WorkflowStatusProperties {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_workflows::WorkflowStatusPropertiesEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -518,7 +525,7 @@ fn iface_workflows__transition__from_json(v: &Value) -> Option<iface_workflows::
         from_op: m.get("from").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())).unwrap_or_default(),
         id: m.get("id").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         name: m.get("name").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-        properties: m.get("properties").filter(|v| !v.is_null()).and_then(|v| iface_workflows__transition_properties__from_json(v)),
+        properties: m.get("properties").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_workflows::TransitionPropertiesEntry { key: k.clone(), value: val })).collect())),
         rules: m.get("rules").filter(|v| !v.is_null()).and_then(|v| iface_workflows__workflow_rules__from_json(v)),
         screen: m.get("screen").filter(|v| !v.is_null()).and_then(|v| iface_workflows__transition_screen_details__from_json(v)),
         to: m.get("to").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
@@ -526,10 +533,11 @@ fn iface_workflows__transition__from_json(v: &Value) -> Option<iface_workflows::
     })
 }
 
-fn iface_workflows__transition_properties__from_json(v: &Value) -> Option<iface_workflows::TransitionProperties> {
+fn iface_workflows__transition_properties_entry__from_json(v: &Value) -> Option<iface_workflows::TransitionPropertiesEntry> {
     let m = v.as_object()?;
-    Some(iface_workflows::TransitionProperties {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_workflows::TransitionPropertiesEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 

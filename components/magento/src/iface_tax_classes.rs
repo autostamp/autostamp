@@ -19,13 +19,14 @@ fn iface_tax_classes__tax_data_tax_class_interface__to_json(p: &iface_tax_classe
     m.insert("class_id".into(), match (&p.class_id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("class_name".into(), Value::String((&p.class_name).clone()));
     m.insert("class_type".into(), Value::String((&p.class_type).clone()));
-    m.insert("extension_attributes".into(), match (&p.extension_attributes) { Some(v) => iface_tax_classes__tax_data_tax_class_extension_interface__to_json(v), None => Value::Null });
+    m.insert("extension_attributes".into(), match (&p.extension_attributes) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_tax_classes__tax_data_tax_class_extension_interface__to_json(p: &iface_tax_classes::TaxDataTaxClassExtensionInterface) -> Value {
+fn iface_tax_classes__tax_data_tax_class_extension_interface_entry__to_json(p: &iface_tax_classes::TaxDataTaxClassExtensionInterfaceEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 

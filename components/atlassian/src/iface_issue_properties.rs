@@ -102,9 +102,83 @@ const OP_ISSUE_PROPERTIES_DELETE_ISSUE_PROPERTY: OpSpec = OpSpec {
     ],
 };
 
-fn iface_issue_properties__issue_entity_properties_properties__to_json(p: &iface_issue_properties::IssueEntityPropertiesProperties) -> Value {
+fn iface_issue_properties__json_node_number_type_enum__to_str(e: &iface_issue_properties::JsonNodeNumberTypeEnum) -> &'static str {
+    match e {
+        iface_issue_properties::JsonNodeNumberTypeEnum::Int => "INT",
+        iface_issue_properties::JsonNodeNumberTypeEnum::Long => "LONG",
+        iface_issue_properties::JsonNodeNumberTypeEnum::BigInteger => "BIG_INTEGER",
+        iface_issue_properties::JsonNodeNumberTypeEnum::Float => "FLOAT",
+        iface_issue_properties::JsonNodeNumberTypeEnum::Double => "DOUBLE",
+        iface_issue_properties::JsonNodeNumberTypeEnum::BigDecimal => "BIG_DECIMAL",
+    }
+}
+
+fn iface_issue_properties__json_node__to_json(p: &iface_issue_properties::JsonNode) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("array".into(), match (&p.array) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("bigDecimal".into(), match (&p.big_decimal) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("bigInteger".into(), match (&p.big_integer) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("bigIntegerValue".into(), match (&p.big_integer_value) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("binary".into(), match (&p.binary) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("binaryValue".into(), match (&p.binary_value) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("boolean".into(), match (&p.boolean) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("booleanValue".into(), match (&p.boolean_value) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("containerNode".into(), match (&p.container_node) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("decimalValue".into(), match (&p.decimal_value) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("double".into(), match (&p.double) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("doubleValue".into(), match (&p.double_value) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("elements".into(), match (&p.elements) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
+    m.insert("fieldNames".into(), match (&p.field_names) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
+    m.insert("fields".into(), match (&p.fields) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
+    m.insert("floatingPointNumber".into(), match (&p.floating_point_number) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("int".into(), match (&p.int) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("intValue".into(), match (&p.int_value) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("integralNumber".into(), match (&p.integral_number) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("long".into(), match (&p.long) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("longValue".into(), match (&p.long_value) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("missingNode".into(), match (&p.missing_node) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("null".into(), match (&p.null) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("number".into(), match (&p.number) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("numberType".into(), match (&p.number_type) { Some(v) => Value::String(iface_issue_properties__json_node_number_type_enum__to_str(v).into()), None => Value::Null });
+    m.insert("numberValue".into(), match (&p.number_value) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("object".into(), match (&p.object) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("pojo".into(), match (&p.pojo) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("textValue".into(), match (&p.text_value) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("textual".into(), match (&p.textual) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("valueAsBoolean".into(), match (&p.value_as_boolean) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("valueAsDouble".into(), match (&p.value_as_double) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("valueAsInt".into(), match (&p.value_as_int) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("valueAsLong".into(), match (&p.value_as_long) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("valueAsText".into(), match (&p.value_as_text) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("valueNode".into(), match (&p.value_node) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_issue_properties__json_node_elements_entry__to_json(p: &iface_issue_properties::JsonNodeElementsEntry) -> Value {
+    let mut m = Map::new();
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
+}
+
+fn iface_issue_properties__json_node_field_names_entry__to_json(p: &iface_issue_properties::JsonNodeFieldNamesEntry) -> Value {
+    let mut m = Map::new();
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
+}
+
+fn iface_issue_properties__json_node_fields_entry__to_json(p: &iface_issue_properties::JsonNodeFieldsEntry) -> Value {
+    let mut m = Map::new();
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
+}
+
+fn iface_issue_properties__issue_entity_properties_properties_entry__to_json(p: &iface_issue_properties::IssueEntityPropertiesPropertiesEntry) -> Value {
+    let mut m = Map::new();
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), iface_issue_properties__json_node__to_json(&p.value));
     Value::Object(m)
 }
 
@@ -139,7 +213,7 @@ fn iface_issue_properties__entity_property__to_json(p: &iface_issue_properties::
 fn iface_issue_properties__bulk_set_issues_properties_list_params__to_json(p: &iface_issue_properties::BulkSetIssuesPropertiesListParams) -> Value {
     let mut m = Map::new();
     m.insert("entities_ids".into(), match (&p.entities_ids) { Some(v) => Value::Array((v).iter().map(|v| Value::Number(serde_json::Number::from(*(v)))).collect()), None => Value::Null });
-    m.insert("properties".into(), match (&p.properties) { Some(v) => iface_issue_properties__issue_entity_properties_properties__to_json(v), None => Value::Null });
+    m.insert("properties".into(), match (&p.properties) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), iface_issue_properties__json_node__to_json(&e.value))).collect()), None => Value::Null });
     Value::Object(m)
 }
 

@@ -6,7 +6,7 @@
 /// | Secret name | Applied to each request as |
 /// | --- | --- |
 /// | `basicAuth` | `Authorization: Basic base64(<secret>)` |
-package autostamp:atlassian@0.5.0;
+package autostamp:atlassian@0.6.0;
 
 interface announcement-banner {
   enum configuration-visibility-enum {
@@ -392,9 +392,10 @@ interface issue-attachments {
     unknown,
   }
 
-  record get-attachment-content-response {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record get-attachment-content-response-entry {
+    key: string,
+    value: string
   }
 
   /// Details of the instance's attachment settings.
@@ -405,9 +406,10 @@ interface issue-attachments {
     upload-limit: option<s64>
   }
 
-  record get-attachment-thumbnail-response {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record get-attachment-thumbnail-response-entry {
+    key: string,
+    value: string
   }
 
   /// Metadata for an issue attachment.
@@ -425,7 +427,7 @@ interface issue-attachments {
     /// The MIME type of the attachment.
     mime-type: option<string>,
     /// Additional properties of the attachment.
-    properties: option<attachment-metadata-properties>,
+    properties: option<list<attachment-metadata-properties-entry>>,
     /// The URL of the attachment metadata details.
     self: option<string>,
     /// The size of the attachment.
@@ -549,10 +551,10 @@ interface issue-attachments {
     data: option<string>
   }
 
-  /// Additional properties of the attachment.
-  record attachment-metadata-properties {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record attachment-metadata-properties-entry {
+    key: string,
+    value: string
   }
 
   /// Metadata for an archive (for example a zip) and its contents.
@@ -715,7 +717,7 @@ interface issue-attachments {
     /// Whether a redirect is provided for the attachment download. Clients that do not automatically follow redirects can set this to `false` to avoid making multiple requests to download the attachment.
     redirect: option<bool>
   }
-  get-attachment-content: func(params: get-attachment-content-params) -> result<get-attachment-content-response, get-attachment-content-error>;
+  get-attachment-content: func(params: get-attachment-content-params) -> result<list<get-attachment-content-response-entry>, get-attachment-content-error>;
 
   /// Get Jira attachment settings
   get-attachment-meta: func() -> result<attachment-settings, get-attachment-meta-error>;
@@ -733,7 +735,7 @@ interface issue-attachments {
     /// The maximum height to scale the thumbnail to.
     height: option<s32>
   }
-  get-attachment-thumbnail: func(params: get-attachment-thumbnail-params) -> result<get-attachment-thumbnail-response, get-attachment-thumbnail-error>;
+  get-attachment-thumbnail: func(params: get-attachment-thumbnail-params) -> result<list<get-attachment-thumbnail-response-entry>, get-attachment-thumbnail-error>;
 
   /// Get attachment metadata
   record get-attachment-params {
@@ -893,13 +895,13 @@ interface avatars {
     /// The owner of the avatar. For a system avatar the owner is null (and nothing is returned). For non-system avatars this is the appropriate identifier, such as the ID for a project or the account ID for a user.
     owner: option<string>,
     /// The list of avatar icon URLs.
-    urls: option<avatar-urls>
+    urls: option<list<avatar-urls-entry>>
   }
 
-  /// The list of avatar icon URLs.
-  record avatar-urls {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record avatar-urls-entry {
+    key: string,
+    value: string
   }
 
   /// Details about system and custom avatars.
@@ -910,19 +912,22 @@ interface avatars {
     system: option<list<avatar>>
   }
 
-  record get-avatar-image-by-type-response {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record get-avatar-image-by-type-response-entry {
+    key: string,
+    value: string
   }
 
-  record get-avatar-image-by-id-response {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record get-avatar-image-by-id-response-entry {
+    key: string,
+    value: string
   }
 
-  record get-avatar-image-by-owner-response {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record get-avatar-image-by-owner-response-entry {
+    key: string,
+    value: string
   }
 
   variant get-all-system-avatars-error {
@@ -1027,7 +1032,7 @@ interface avatars {
     /// The format to return the avatar image in. If not provided the original content format is returned.
     format: option<get-avatar-image-by-type-format-enum>
   }
-  get-avatar-image-by-type: func(params: get-avatar-image-by-type-params) -> result<get-avatar-image-by-type-response, get-avatar-image-by-type-error>;
+  get-avatar-image-by-type: func(params: get-avatar-image-by-type-params) -> result<list<get-avatar-image-by-type-response-entry>, get-avatar-image-by-type-error>;
 
   /// Get avatar image by ID
   record get-avatar-image-by-id-params {
@@ -1040,7 +1045,7 @@ interface avatars {
     /// The format to return the avatar image in. If not provided the original content format is returned.
     format: option<get-avatar-image-by-type-format-enum>
   }
-  get-avatar-image-by-id: func(params: get-avatar-image-by-id-params) -> result<get-avatar-image-by-id-response, get-avatar-image-by-id-error>;
+  get-avatar-image-by-id: func(params: get-avatar-image-by-id-params) -> result<list<get-avatar-image-by-id-response-entry>, get-avatar-image-by-id-error>;
 
   /// Get avatar image by owner
   record get-avatar-image-by-owner-params {
@@ -1053,7 +1058,7 @@ interface avatars {
     /// The format to return the avatar image in. If not provided the original content format is returned.
     format: option<get-avatar-image-by-type-format-enum>
   }
-  get-avatar-image-by-owner: func(params: get-avatar-image-by-owner-params) -> result<get-avatar-image-by-owner-response, get-avatar-image-by-owner-error>;
+  get-avatar-image-by-owner: func(params: get-avatar-image-by-owner-params) -> result<list<get-avatar-image-by-owner-response-entry>, get-avatar-image-by-owner-error>;
 
 }
 
@@ -2362,11 +2367,11 @@ interface dashboards {
     /// The [project type](https://confluence.atlassian.com/x/GwiiLQ#Jiraapplicationsoverview-Productfeaturesandprojecttypes) of the project.
     project-type-key: option<project-details-project-type-key-enum>,
     /// Map of project properties
-    properties: option<project-properties>,
+    properties: option<list<project-properties-entry>>,
     /// The date when the project is deleted permanently.
     retention-till-date: option<string>,
     /// The name and self URL for each role defined in the project. For more information, see [Create project role](#api-rest-api-3-role-post).
-    roles: option<project-roles>,
+    roles: option<list<project-roles-entry>>,
     /// The URL of the project details.
     self: option<string>,
     /// Whether the project is simplified.
@@ -2621,7 +2626,7 @@ interface dashboards {
   }
 
   record project-landing-page-info {
-    attributes: option<project-landing-page-info-attributes>,
+    attributes: option<list<project-landing-page-info-attributes-entry>>,
     board-id: option<s64>,
     board-name: option<string>,
     project-key: option<string>,
@@ -2634,9 +2639,10 @@ interface dashboards {
     url: option<string>
   }
 
-  record project-landing-page-info-attributes {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record project-landing-page-info-attributes-entry {
+    key: string,
+    value: string
   }
 
   /// Permissions which a user has on a project.
@@ -2657,16 +2663,16 @@ interface dashboards {
     self: option<string>
   }
 
-  /// Map of project properties
-  record project-properties {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record project-properties-entry {
+    key: string,
+    value: string
   }
 
-  /// The name and self URL for each role defined in the project. For more information, see [Create project role](#api-rest-api-3-role-post).
-  record project-roles {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record project-roles-entry {
+    key: string,
+    value: string
   }
 
   /// Details about a project version.
@@ -3244,7 +3250,7 @@ interface issues {
   /// Details of an issue update request.
   record issue-update-details {
     /// List of issue screen fields to update, specifying the sub-field to update and its value for each field. This field provides a straightforward option when setting a sub-field. When multiple sub-fields or other operations are required, use `update`. Fields included in here cannot be included in `update`.
-    fields: option<issue-update-details-fields>,
+    fields: option<list<issue-update-details-fields-entry>>,
     /// Additional issue history details.
     history-metadata: option<history-metadata>,
     /// Details of issue properties to be add or update.
@@ -3252,13 +3258,13 @@ interface issues {
     /// Details of a transition. Required when performing a transition, optional when creating or editing an issue.
     transition: option<issue-transition>,
     /// A Map containing the field field name and a list of operations to perform on the issue screen field. Note that fields included in here cannot be included in `fields`.
-    update: option<issue-update-details-update>
+    update: option<list<issue-update-details-update-entry>>
   }
 
-  /// List of issue screen fields to update, specifying the sub-field to update and its value for each field. This field provides a straightforward option when setting a sub-field. When multiple sub-fields or other operations are required, use `update`. Fields included in here cannot be included in `update`.
-  record issue-update-details-fields {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record issue-update-details-fields-entry {
+    key: string,
+    value: string
   }
 
   /// Details of issue history metadata.
@@ -3280,7 +3286,7 @@ interface issues {
     /// The description key of the email address associated the history record.
     email-description-key: option<string>,
     /// Additional arbitrary information about the history record.
-    extra-data: option<history-metadata-extra-data>,
+    extra-data: option<list<history-metadata-extra-data-entry>>,
     /// Details of the system that generated the history record.
     generator: option<history-metadata-participant>,
     /// The type of the history record.
@@ -3303,10 +3309,10 @@ interface issues {
     url: option<string>
   }
 
-  /// Additional arbitrary information about the history record.
-  record history-metadata-extra-data {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record history-metadata-extra-data-entry {
+    key: string,
+    value: string
   }
 
   /// An entity property, for more information see [Entity properties](https://developer.atlassian.com/cloud/jira/platform/jira-entity-properties/).
@@ -3322,7 +3328,7 @@ interface issues {
     /// Expand options that include additional transition details in the response.
     expand: option<string>,
     /// Details of the fields associated with the issue transition screen. Use this information to populate `fields` and `update` in a transition request.
-    fields: option<issue-transition-fields>,
+    fields: option<list<issue-transition-fields-entry>>,
     /// Whether there is a screen associated with the issue transition.
     has-screen: option<bool>,
     /// The ID of the issue transition. Required when specifying a transition to undertake.
@@ -3342,10 +3348,62 @@ interface issues {
     to: option<status-details>
   }
 
-  /// Details of the fields associated with the issue transition screen. Use this information to populate `fields` and `update` in a transition request.
-  record issue-transition-fields {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// The metadata describing an issue field.
+  record field-metadata {
+    /// The list of values allowed in the field.
+    allowed-values: option<list<string>>,
+    /// The URL that can be used to automatically complete the field.
+    auto-complete-url: option<string>,
+    /// The configuration properties.
+    configuration: option<list<field-metadata-configuration-entry>>,
+    /// The default value of the field.
+    default-value: option<string>,
+    /// Whether the field has a default value.
+    has-default-value: option<bool>,
+    /// The key of the field.
+    key: string,
+    /// The name of the field.
+    name: string,
+    /// The list of operations that can be performed on the field.
+    operations: list<string>,
+    /// Whether the field is required.
+    required: bool,
+    /// The data type of the field.
+    schema: json-type-bean
+  }
+
+  /// one entry of a string-keyed map (free-form object)
+  record field-metadata-configuration-entry {
+    key: string,
+    value: string
+  }
+
+  /// The schema of a field.
+  record json-type-bean {
+    /// If the field is a custom field, the configuration of the field.
+    configuration: option<list<json-type-bean-configuration-entry>>,
+    /// If the field is a custom field, the URI of the field.
+    custom: option<string>,
+    /// If the field is a custom field, the custom ID of the field.
+    custom-id: option<s64>,
+    /// When the data type is an array, the name of the field items within the array.
+    items: option<string>,
+    /// If the field is a system field, the name of the field.
+    system: option<string>,
+    /// The data type of the field.
+    type-op: string
+  }
+
+  /// one entry of a string-keyed map (free-form object)
+  record json-type-bean-configuration-entry {
+    key: string,
+    value: string
+  }
+
+  /// one entry of a string-keyed map (free-form object)
+  record issue-transition-fields-entry {
+    key: string,
+    value: field-metadata
   }
 
   /// A status.
@@ -3378,10 +3436,24 @@ interface issues {
     self: option<string>
   }
 
-  /// A Map containing the field field name and a list of operations to perform on the issue screen field. Note that fields included in here cannot be included in `fields`.
-  record issue-update-details-update {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// Details of an operation to perform on a field.
+  record field-update-operation {
+    /// The value to add to the field.
+    add: option<string>,
+    /// The field value to copy from another issue.
+    copy: option<string>,
+    /// The value to edit in the field.
+    edit: option<string>,
+    /// The value to removed from the field.
+    remove: option<string>,
+    /// The value to set in the field.
+    set: option<string>
+  }
+
+  /// one entry of a string-keyed map (free-form object)
+  record issue-update-details-update-entry {
+    key: string,
+    value: list<field-update-operation>
   }
 
   /// Details about a created issue or subtask.
@@ -3409,14 +3481,14 @@ interface issues {
     /// The list of error messages produced by this operation. For example, "input parameter 'key' must be provided"
     error-messages: option<list<string>>,
     /// The list of errors by parameter returned by the operation. For example,"projectKey": "Project keys must start with an uppercase letter, followed by one or more uppercase alphanumeric characters."
-    errors: option<error-collection-errors>,
+    errors: option<list<error-collection-errors-entry>>,
     status: option<s32>
   }
 
-  /// The list of errors by parameter returned by the operation. For example,"projectKey": "Project keys must start with an uppercase letter, followed by one or more uppercase alphanumeric characters."
-  record error-collection-errors {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record error-collection-errors-entry {
+    key: string,
+    value: string
   }
 
   record warning-collection {
@@ -3485,7 +3557,7 @@ interface issues {
     /// Expand options that include additional issue type metadata details in the response.
     expand: option<string>,
     /// List of the fields available when creating an issue for the issue type.
-    fields: option<issue-type-issue-create-metadata-fields>,
+    fields: option<list<issue-type-issue-create-metadata-fields-entry>>,
     /// Hierarchy level of the issue type.
     hierarchy-level: option<s32>,
     /// The URL of the issue type's avatar.
@@ -3502,10 +3574,10 @@ interface issues {
     subtask: option<bool>
   }
 
-  /// List of the fields available when creating an issue for the issue type.
-  record issue-type-issue-create-metadata-fields {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record issue-type-issue-create-metadata-fields-entry {
+    key: string,
+    value: field-metadata
   }
 
   /// The projects the item is associated with. Indicated for items associated with [next-gen projects](https://confluence.atlassian.com/x/loMyO).
@@ -3556,28 +3628,28 @@ interface issues {
     editmeta: option<issue-update-metadata>,
     /// Expand options that include additional issue details in the response.
     expand: option<string>,
-    fields: option<issue-bean-fields>,
+    fields: option<list<issue-bean-fields-entry>>,
     fields-to-include: option<included-fields>,
     /// The ID of the issue.
     id: option<string>,
     /// The key of the issue.
     key: option<string>,
     /// The ID and name of each field present on the issue.
-    names: option<issue-bean-names>,
+    names: option<list<issue-bean-names-entry>>,
     /// The operations that can be performed on the issue.
     operations: option<operations>,
     /// Details of the issue properties identified in the request.
-    properties: option<issue-bean-properties>,
+    properties: option<list<issue-bean-properties-entry>>,
     /// The rendered value of each field present on the issue.
-    rendered-fields: option<issue-bean-rendered-fields>,
+    rendered-fields: option<list<issue-bean-rendered-fields-entry>>,
     /// The schema describing each field present on the issue.
-    schema: option<issue-bean-schema>,
+    schema: option<list<issue-bean-schema-entry>>,
     /// The URL of the issue details.
     self: option<string>,
     /// The transitions that can be performed on the issue.
     transitions: option<list<issue-transition>>,
     /// The versions of each field on the issue.
-    versioned-representations: option<issue-bean-versioned-representations>
+    versioned-representations: option<list<issue-bean-versioned-representations-entry>>
   }
 
   /// A page of changelogs.
@@ -3652,17 +3724,19 @@ interface issues {
 
   /// A list of editable field details.
   record issue-update-metadata {
-    fields: option<issue-update-metadata-fields>
+    fields: option<list<issue-update-metadata-fields-entry>>
   }
 
-  record issue-update-metadata-fields {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record issue-update-metadata-fields-entry {
+    key: string,
+    value: field-metadata
   }
 
-  record issue-bean-fields {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record issue-bean-fields-entry {
+    key: string,
+    value: string
   }
 
   record included-fields {
@@ -3671,10 +3745,10 @@ interface issues {
     included: option<list<string>>
   }
 
-  /// The ID and name of each field present on the issue.
-  record issue-bean-names {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record issue-bean-names-entry {
+    key: string,
+    value: string
   }
 
   /// Details of the operations that can be performed on the issue.
@@ -3704,28 +3778,34 @@ interface issues {
     weight: option<s32>
   }
 
-  /// Details of the issue properties identified in the request.
-  record issue-bean-properties {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record issue-bean-properties-entry {
+    key: string,
+    value: string
   }
 
-  /// The rendered value of each field present on the issue.
-  record issue-bean-rendered-fields {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record issue-bean-rendered-fields-entry {
+    key: string,
+    value: string
   }
 
-  /// The schema describing each field present on the issue.
-  record issue-bean-schema {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record issue-bean-schema-entry {
+    key: string,
+    value: json-type-bean
   }
 
-  /// The versions of each field on the issue.
-  record issue-bean-versioned-representations {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record issue-bean-versioned-representations-value-entry {
+    key: string,
+    value: string
+  }
+
+  /// one entry of a string-keyed map (free-form object)
+  record issue-bean-versioned-representations-entry {
+    key: string,
+    value: list<issue-bean-versioned-representations-value-entry>
   }
 
   record simple-list-wrapper-application-role {
@@ -3956,7 +4036,7 @@ interface issues {
     /// Whether the project in which the issue is created is added to the user's **Recently viewed** project list, as shown under **Projects** in Jira. When provided, the issue type and request type are added to the user's history for a project. These values are then used to provide defaults on the issue create screen.
     update-history: option<bool>,
     /// List of issue screen fields to update, specifying the sub-field to update and its value for each field. This field provides a straightforward option when setting a sub-field. When multiple sub-fields or other operations are required, use `update`. Fields included in here cannot be included in `update`.
-    fields: option<issue-update-details-fields>,
+    fields: option<list<issue-update-details-fields-entry>>,
     /// Additional issue history details.
     history-metadata: option<history-metadata>,
     /// Details of issue properties to be add or update.
@@ -3964,7 +4044,7 @@ interface issues {
     /// Details of a transition. Required when performing a transition, optional when creating or editing an issue.
     transition: option<issue-transition>,
     /// A Map containing the field field name and a list of operations to perform on the issue screen field. Note that fields included in here cannot be included in `fields`.
-    update: option<issue-update-details-update>
+    update: option<list<issue-update-details-update-entry>>
   }
   create-issue: func(params: create-issue-params) -> result<created-issue, create-issue-error>;
 
@@ -4020,7 +4100,7 @@ interface issues {
     /// Whether screen security is overridden to enable uneditable fields to be edited. Available to Connect app users with *Administer Jira* [global permission](https://confluence.atlassian.com/x/x4dKLg) and Forge apps acting on behalf of users with *Administer Jira* [global permission](https://confluence.atlassian.com/x/x4dKLg).
     override-editable-flag: option<bool>,
     /// List of issue screen fields to update, specifying the sub-field to update and its value for each field. This field provides a straightforward option when setting a sub-field. When multiple sub-fields or other operations are required, use `update`. Fields included in here cannot be included in `update`.
-    fields: option<issue-update-details-fields>,
+    fields: option<list<issue-update-details-fields-entry>>,
     /// Additional issue history details.
     history-metadata: option<history-metadata>,
     /// Details of issue properties to be add or update.
@@ -4028,7 +4108,7 @@ interface issues {
     /// Details of a transition. Required when performing a transition, optional when creating or editing an issue.
     transition: option<issue-transition>,
     /// A Map containing the field field name and a list of operations to perform on the issue screen field. Note that fields included in here cannot be included in `fields`.
-    update: option<issue-update-details-update>
+    update: option<list<issue-update-details-update-entry>>
   }
   edit-issue: func(params: edit-issue-params) -> result<string, edit-issue-error>;
 
@@ -4147,7 +4227,7 @@ interface issues {
     /// The ID or key of the issue.
     issue-id-or-key: string,
     /// List of issue screen fields to update, specifying the sub-field to update and its value for each field. This field provides a straightforward option when setting a sub-field. When multiple sub-fields or other operations are required, use `update`. Fields included in here cannot be included in `update`.
-    fields: option<issue-update-details-fields>,
+    fields: option<list<issue-update-details-fields-entry>>,
     /// Additional issue history details.
     history-metadata: option<history-metadata>,
     /// Details of issue properties to be add or update.
@@ -4155,7 +4235,7 @@ interface issues {
     /// Details of a transition. Required when performing a transition, optional when creating or editing an issue.
     transition: option<issue-transition>,
     /// A Map containing the field field name and a list of operations to perform on the issue screen field. Note that fields included in here cannot be included in `fields`.
-    update: option<issue-update-details-update>
+    update: option<list<issue-update-details-update-entry>>
   }
   do-transition: func(params: do-transition-params) -> result<string, do-transition-error>;
 
@@ -4180,10 +4260,10 @@ interface jira-expressions {
     none,
   }
 
-  /// Context variables and their types. The type checker assumes that [common context variables](https://developer.atlassian.com/cloud/jira/platform/jira-expressions/#context-variables), such as `issue` or `project`, are available in context and sets their type. Use this property to override the default types or provide details of new variables.
-  record jira-expression-for-analysis-context-variables {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record jira-expression-for-analysis-context-variables-entry {
+    key: string,
+    value: string
   }
 
   /// Details about the analysed Jira expression.
@@ -4211,13 +4291,13 @@ interface jira-expressions {
     /// 
     expensive-operations: string,
     /// Variables used in the formula, mapped to the parts of the expression they refer to.
-    variables: option<jira-expression-complexity-variables>
+    variables: option<list<jira-expression-complexity-variables-entry>>
   }
 
-  /// Variables used in the formula, mapped to the parts of the expression they refer to.
-  record jira-expression-complexity-variables {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record jira-expression-complexity-variables-entry {
+    key: string,
+    value: string
   }
 
   /// Details about syntax and type errors. The error details apply to the entire expression, unless the object includes:
@@ -4359,7 +4439,7 @@ interface jira-expressions {
     /// 
     check: option<analyse-expression-check-enum>,
     /// Context variables and their types. The type checker assumes that [common context variables](https://developer.atlassian.com/cloud/jira/platform/jira-expressions/#context-variables), such as `issue` or `project`, are available in context and sets their type. Use this property to override the default types or provide details of new variables.
-    context-variables: option<jira-expression-for-analysis-context-variables>,
+    context-variables: option<list<jira-expression-for-analysis-context-variables-entry>>,
     /// The list of Jira expressions to analyse.
     expressions: list<string>
   }
@@ -4477,7 +4557,7 @@ interface issue-fields {
   /// The schema of a field.
   record json-type-bean {
     /// If the field is a custom field, the configuration of the field.
-    configuration: option<json-type-bean-configuration>,
+    configuration: option<list<json-type-bean-configuration-entry>>,
     /// If the field is a custom field, the URI of the field.
     custom: option<string>,
     /// If the field is a custom field, the custom ID of the field.
@@ -4490,10 +4570,10 @@ interface issue-fields {
     type-op: string
   }
 
-  /// If the field is a custom field, the configuration of the field.
-  record json-type-bean-configuration {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record json-type-bean-configuration-entry {
+    key: string,
+    value: string
   }
 
   /// The projects the item is associated with. Indicated for items associated with [next-gen projects](https://confluence.atlassian.com/x/loMyO).
@@ -5528,7 +5608,7 @@ interface issue-custom-field-options-apps {
     /// The unique identifier for the option. This is only unique within the select field's set of options.
     id: s64,
     /// The properties of the object, as arbitrary key-value pairs. These properties can be searched using JQL, if the extractions (see [Issue Field Option Property Index](https://developer.atlassian.com/cloud/jira/platform/modules/issue-field-option-property-index/)) are defined in the descriptor for the issue field module.
-    properties: option<issue-field-option-properties>,
+    properties: option<list<issue-field-option-properties-entry>>,
     /// The option's name, which is displayed in Jira.
     value: string
   }
@@ -5562,16 +5642,16 @@ interface issue-custom-field-options-apps {
     id: option<s64>
   }
 
-  /// The properties of the object, as arbitrary key-value pairs. These properties can be searched using JQL, if the extractions (see [Issue Field Option Property Index](https://developer.atlassian.com/cloud/jira/platform/modules/issue-field-option-property-index/)) are defined in the descriptor for the issue field module.
-  record issue-field-option-properties {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record issue-field-option-properties-entry {
+    key: string,
+    value: string
   }
 
-  /// The properties of the option as arbitrary key-value pairs. These properties can be searched using JQL, if the extractions (see https://developer.atlassian.com/cloud/jira/platform/modules/issue-field-option-property-index/) are defined in the descriptor for the issue field module.
-  record issue-field-option-create-bean-properties {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record issue-field-option-create-bean-properties-entry {
+    key: string,
+    value: string
   }
 
   variant get-all-issue-field-options-error {
@@ -5647,7 +5727,7 @@ interface issue-custom-field-options-apps {
     field-key: string,
     config: option<issue-field-option-configuration>,
     /// The properties of the option as arbitrary key-value pairs. These properties can be searched using JQL, if the extractions (see https://developer.atlassian.com/cloud/jira/platform/modules/issue-field-option-property-index/) are defined in the descriptor for the issue field module.
-    properties: option<issue-field-option-create-bean-properties>,
+    properties: option<list<issue-field-option-create-bean-properties-entry>>,
     /// The option's name, which is displayed in Jira.
     value: string
   }
@@ -5702,7 +5782,7 @@ interface issue-custom-field-options-apps {
     /// The unique identifier for the option. This is only unique within the select field's set of options.
     id: s64,
     /// The properties of the object, as arbitrary key-value pairs. These properties can be searched using JQL, if the extractions (see [Issue Field Option Property Index](https://developer.atlassian.com/cloud/jira/platform/modules/issue-field-option-property-index/)) are defined in the descriptor for the issue field module.
-    properties: option<issue-field-option-properties>,
+    properties: option<list<issue-field-option-properties-entry>>,
     /// The option's name, which is displayed in Jira.
     value: string
   }
@@ -6352,11 +6432,11 @@ interface filters {
     /// The [project type](https://confluence.atlassian.com/x/GwiiLQ#Jiraapplicationsoverview-Productfeaturesandprojecttypes) of the project.
     project-type-key: option<project-details-project-type-key-enum>,
     /// Map of project properties
-    properties: option<project-properties>,
+    properties: option<list<project-properties-entry>>,
     /// The date when the project is deleted permanently.
     retention-till-date: option<string>,
     /// The name and self URL for each role defined in the project. For more information, see [Create project role](#api-rest-api-3-role-post).
-    roles: option<project-roles>,
+    roles: option<list<project-roles-entry>>,
     /// The URL of the project details.
     self: option<string>,
     /// Whether the project is simplified.
@@ -6611,7 +6691,7 @@ interface filters {
   }
 
   record project-landing-page-info {
-    attributes: option<project-landing-page-info-attributes>,
+    attributes: option<list<project-landing-page-info-attributes-entry>>,
     board-id: option<s64>,
     board-name: option<string>,
     project-key: option<string>,
@@ -6624,9 +6704,10 @@ interface filters {
     url: option<string>
   }
 
-  record project-landing-page-info-attributes {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record project-landing-page-info-attributes-entry {
+    key: string,
+    value: string
   }
 
   /// Permissions which a user has on a project.
@@ -6647,16 +6728,16 @@ interface filters {
     self: option<string>
   }
 
-  /// Map of project properties
-  record project-properties {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record project-properties-entry {
+    key: string,
+    value: string
   }
 
-  /// The name and self URL for each role defined in the project. For more information, see [Create project role](#api-rest-api-3-role-post).
-  record project-roles {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record project-roles-entry {
+    key: string,
+    value: string
   }
 
   /// Details about a project version.
@@ -7336,11 +7417,11 @@ interface filter-sharing {
     /// The [project type](https://confluence.atlassian.com/x/GwiiLQ#Jiraapplicationsoverview-Productfeaturesandprojecttypes) of the project.
     project-type-key: option<project-details-project-type-key-enum>,
     /// Map of project properties
-    properties: option<project-properties>,
+    properties: option<list<project-properties-entry>>,
     /// The date when the project is deleted permanently.
     retention-till-date: option<string>,
     /// The name and self URL for each role defined in the project. For more information, see [Create project role](#api-rest-api-3-role-post).
-    roles: option<project-roles>,
+    roles: option<list<project-roles-entry>>,
     /// The URL of the project details.
     self: option<string>,
     /// Whether the project is simplified.
@@ -7595,7 +7676,7 @@ interface filter-sharing {
   }
 
   record project-landing-page-info {
-    attributes: option<project-landing-page-info-attributes>,
+    attributes: option<list<project-landing-page-info-attributes-entry>>,
     board-id: option<s64>,
     board-name: option<string>,
     project-key: option<string>,
@@ -7608,9 +7689,10 @@ interface filter-sharing {
     url: option<string>
   }
 
-  record project-landing-page-info-attributes {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record project-landing-page-info-attributes-entry {
+    key: string,
+    value: string
   }
 
   /// Permissions which a user has on a project.
@@ -7631,16 +7713,16 @@ interface filter-sharing {
     self: option<string>
   }
 
-  /// Map of project properties
-  record project-properties {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record project-properties-entry {
+    key: string,
+    value: string
   }
 
-  /// The name and self URL for each role defined in the project. For more information, see [Create project role](#api-rest-api-3-role-post).
-  record project-roles {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record project-roles-entry {
+    key: string,
+    value: string
   }
 
   /// Details about a project version.
@@ -8429,9 +8511,9 @@ interface issue-search {
     /// The maximum number of results that could be on the page.
     max-results: option<s32>,
     /// The ID and name of each field in the search results.
-    names: option<search-results-names>,
+    names: option<list<search-results-names-entry>>,
     /// The schema describing the field types in the search results.
-    schema: option<search-results-schema>,
+    schema: option<list<search-results-schema-entry>>,
     /// The index of the first item returned on the page.
     start-at: option<s32>,
     /// The number of results on the page.
@@ -8448,28 +8530,28 @@ interface issue-search {
     editmeta: option<issue-update-metadata>,
     /// Expand options that include additional issue details in the response.
     expand: option<string>,
-    fields: option<issue-bean-fields>,
+    fields: option<list<issue-bean-fields-entry>>,
     fields-to-include: option<included-fields>,
     /// The ID of the issue.
     id: option<string>,
     /// The key of the issue.
     key: option<string>,
     /// The ID and name of each field present on the issue.
-    names: option<issue-bean-names>,
+    names: option<list<issue-bean-names-entry>>,
     /// The operations that can be performed on the issue.
     operations: option<operations>,
     /// Details of the issue properties identified in the request.
-    properties: option<issue-bean-properties>,
+    properties: option<list<issue-bean-properties-entry>>,
     /// The rendered value of each field present on the issue.
-    rendered-fields: option<issue-bean-rendered-fields>,
+    rendered-fields: option<list<issue-bean-rendered-fields-entry>>,
     /// The schema describing each field present on the issue.
-    schema: option<issue-bean-schema>,
+    schema: option<list<issue-bean-schema-entry>>,
     /// The URL of the issue details.
     self: option<string>,
     /// The transitions that can be performed on the issue.
     transitions: option<list<issue-transition>>,
     /// The versions of each field on the issue.
-    versioned-representations: option<issue-bean-versioned-representations>
+    versioned-representations: option<list<issue-bean-versioned-representations-entry>>
   }
 
   /// A page of changelogs.
@@ -8556,7 +8638,7 @@ interface issue-search {
     /// The description key of the email address associated the history record.
     email-description-key: option<string>,
     /// Additional arbitrary information about the history record.
-    extra-data: option<history-metadata-extra-data>,
+    extra-data: option<list<history-metadata-extra-data-entry>>,
     /// Details of the system that generated the history record.
     generator: option<history-metadata-participant>,
     /// The type of the history record.
@@ -8579,10 +8661,10 @@ interface issue-search {
     url: option<string>
   }
 
-  /// Additional arbitrary information about the history record.
-  record history-metadata-extra-data {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record history-metadata-extra-data-entry {
+    key: string,
+    value: string
   }
 
   /// A change item.
@@ -8603,17 +8685,71 @@ interface issue-search {
 
   /// A list of editable field details.
   record issue-update-metadata {
-    fields: option<issue-update-metadata-fields>
+    fields: option<list<issue-update-metadata-fields-entry>>
   }
 
-  record issue-update-metadata-fields {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// The metadata describing an issue field.
+  record field-metadata {
+    /// The list of values allowed in the field.
+    allowed-values: option<list<string>>,
+    /// The URL that can be used to automatically complete the field.
+    auto-complete-url: option<string>,
+    /// The configuration properties.
+    configuration: option<list<field-metadata-configuration-entry>>,
+    /// The default value of the field.
+    default-value: option<string>,
+    /// Whether the field has a default value.
+    has-default-value: option<bool>,
+    /// The key of the field.
+    key: string,
+    /// The name of the field.
+    name: string,
+    /// The list of operations that can be performed on the field.
+    operations: list<string>,
+    /// Whether the field is required.
+    required: bool,
+    /// The data type of the field.
+    schema: json-type-bean
   }
 
-  record issue-bean-fields {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record field-metadata-configuration-entry {
+    key: string,
+    value: string
+  }
+
+  /// The schema of a field.
+  record json-type-bean {
+    /// If the field is a custom field, the configuration of the field.
+    configuration: option<list<json-type-bean-configuration-entry>>,
+    /// If the field is a custom field, the URI of the field.
+    custom: option<string>,
+    /// If the field is a custom field, the custom ID of the field.
+    custom-id: option<s64>,
+    /// When the data type is an array, the name of the field items within the array.
+    items: option<string>,
+    /// If the field is a system field, the name of the field.
+    system: option<string>,
+    /// The data type of the field.
+    type-op: string
+  }
+
+  /// one entry of a string-keyed map (free-form object)
+  record json-type-bean-configuration-entry {
+    key: string,
+    value: string
+  }
+
+  /// one entry of a string-keyed map (free-form object)
+  record issue-update-metadata-fields-entry {
+    key: string,
+    value: field-metadata
+  }
+
+  /// one entry of a string-keyed map (free-form object)
+  record issue-bean-fields-entry {
+    key: string,
+    value: string
   }
 
   record included-fields {
@@ -8622,10 +8758,10 @@ interface issue-search {
     included: option<list<string>>
   }
 
-  /// The ID and name of each field present on the issue.
-  record issue-bean-names {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record issue-bean-names-entry {
+    key: string,
+    value: string
   }
 
   /// Details of the operations that can be performed on the issue.
@@ -8655,22 +8791,22 @@ interface issue-search {
     weight: option<s32>
   }
 
-  /// Details of the issue properties identified in the request.
-  record issue-bean-properties {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record issue-bean-properties-entry {
+    key: string,
+    value: string
   }
 
-  /// The rendered value of each field present on the issue.
-  record issue-bean-rendered-fields {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record issue-bean-rendered-fields-entry {
+    key: string,
+    value: string
   }
 
-  /// The schema describing each field present on the issue.
-  record issue-bean-schema {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record issue-bean-schema-entry {
+    key: string,
+    value: json-type-bean
   }
 
   /// Details of an issue transition.
@@ -8678,7 +8814,7 @@ interface issue-search {
     /// Expand options that include additional transition details in the response.
     expand: option<string>,
     /// Details of the fields associated with the issue transition screen. Use this information to populate `fields` and `update` in a transition request.
-    fields: option<issue-transition-fields>,
+    fields: option<list<issue-transition-fields-entry>>,
     /// Whether there is a screen associated with the issue transition.
     has-screen: option<bool>,
     /// The ID of the issue transition. Required when specifying a transition to undertake.
@@ -8698,10 +8834,10 @@ interface issue-search {
     to: option<status-details>
   }
 
-  /// Details of the fields associated with the issue transition screen. Use this information to populate `fields` and `update` in a transition request.
-  record issue-transition-fields {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record issue-transition-fields-entry {
+    key: string,
+    value: field-metadata
   }
 
   /// A status.
@@ -8734,22 +8870,28 @@ interface issue-search {
     self: option<string>
   }
 
-  /// The versions of each field on the issue.
-  record issue-bean-versioned-representations {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record issue-bean-versioned-representations-value-entry {
+    key: string,
+    value: string
   }
 
-  /// The ID and name of each field in the search results.
-  record search-results-names {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record issue-bean-versioned-representations-entry {
+    key: string,
+    value: list<issue-bean-versioned-representations-value-entry>
   }
 
-  /// The schema describing the field types in the search results.
-  record search-results-schema {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record search-results-names-entry {
+    key: string,
+    value: string
+  }
+
+  /// one entry of a string-keyed map (free-form object)
+  record search-results-schema-entry {
+    key: string,
+    value: json-type-bean
   }
 
   variant get-issue-picker-resource-error {
@@ -8852,10 +8994,76 @@ interface issue-search {
 }
 
 interface issue-properties {
-  /// A list of entity property keys and values.
-  record issue-entity-properties-properties {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  enum json-node-number-type-enum {
+    int,
+    long,
+    big-integer,
+    float,
+    double,
+    big-decimal,
+  }
+
+  record json-node {
+    array: option<bool>,
+    big-decimal: option<bool>,
+    big-integer: option<bool>,
+    big-integer-value: option<s32>,
+    binary: option<bool>,
+    binary-value: option<list<string>>,
+    boolean: option<bool>,
+    boolean-value: option<bool>,
+    container-node: option<bool>,
+    decimal-value: option<f64>,
+    double: option<bool>,
+    double-value: option<f64>,
+    elements: option<list<json-node-elements-entry>>,
+    field-names: option<list<json-node-field-names-entry>>,
+    fields: option<list<json-node-fields-entry>>,
+    floating-point-number: option<bool>,
+    int: option<bool>,
+    int-value: option<s32>,
+    integral-number: option<bool>,
+    long: option<bool>,
+    long-value: option<s64>,
+    missing-node: option<bool>,
+    null: option<bool>,
+    number: option<bool>,
+    number-type: option<json-node-number-type-enum>,
+    number-value: option<f64>,
+    object: option<bool>,
+    pojo: option<bool>,
+    text-value: option<string>,
+    textual: option<bool>,
+    value-as-boolean: option<bool>,
+    value-as-double: option<f64>,
+    value-as-int: option<s32>,
+    value-as-long: option<s64>,
+    value-as-text: option<string>,
+    value-node: option<bool>
+  }
+
+  /// one entry of a string-keyed map (free-form object)
+  record json-node-elements-entry {
+    key: string,
+    value: string
+  }
+
+  /// one entry of a string-keyed map (free-form object)
+  record json-node-field-names-entry {
+    key: string,
+    value: string
+  }
+
+  /// one entry of a string-keyed map (free-form object)
+  record json-node-fields-entry {
+    key: string,
+    value: string
+  }
+
+  /// one entry of a string-keyed map (free-form object)
+  record issue-entity-properties-properties-entry {
+    key: string,
+    value: json-node
   }
 
   /// Bulk operation filter details.
@@ -8949,7 +9157,7 @@ interface issue-properties {
     /// A list of entity property IDs.
     entities-ids: option<list<s64>>,
     /// A list of entity property keys and values.
-    properties: option<issue-entity-properties-properties>
+    properties: option<list<issue-entity-properties-properties-entry>>
   }
   bulk-set-issues-properties-list: func(params: bulk-set-issues-properties-list-params) -> result<string, bulk-set-issues-properties-list-error>;
 
@@ -9025,13 +9233,13 @@ interface issue-watchers {
   /// A container for the watch status of a list of issues.
   record bulk-issue-is-watching {
     /// The map of issue ID to boolean watch status.
-    issues-is-watching: option<bulk-issue-is-watching-issues-is-watching>
+    issues-is-watching: option<list<bulk-issue-is-watching-issues-is-watching-entry>>
   }
 
-  /// The map of issue ID to boolean watch status.
-  record bulk-issue-is-watching-issues-is-watching {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record bulk-issue-is-watching-issues-is-watching-entry {
+    key: string,
+    value: bool
   }
 
   /// The details of watchers on an issue.
@@ -11084,13 +11292,13 @@ interface issue-types {
     /// The owner of the avatar. For a system avatar the owner is null (and nothing is returned). For non-system avatars this is the appropriate identifier, such as the ID for a project or the account ID for a user.
     owner: option<string>,
     /// The list of avatar icon URLs.
-    urls: option<avatar-urls>
+    urls: option<list<avatar-urls-entry>>
   }
 
-  /// The list of avatar icon URLs.
-  record avatar-urls {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record avatar-urls-entry {
+    key: string,
+    value: string
   }
 
   variant get-issue-all-types-error {
@@ -12123,14 +12331,14 @@ interface jql {
     /// The list of error messages produced by this operation. For example, "input parameter 'key' must be provided"
     error-messages: option<list<string>>,
     /// The list of errors by parameter returned by the operation. For example,"projectKey": "Project keys must start with an uppercase letter, followed by one or more uppercase alphanumeric characters."
-    errors: option<error-collection-errors>,
+    errors: option<list<error-collection-errors-entry>>,
     status: option<s32>
   }
 
-  /// The list of errors by parameter returned by the operation. For example,"projectKey": "Project keys must start with an uppercase letter, followed by one or more uppercase alphanumeric characters."
-  record error-collection-errors {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record error-collection-errors-entry {
+    key: string,
+    value: string
   }
 
   variant get-auto-complete-error {
@@ -12361,16 +12569,39 @@ interface license-metrics {
 }
 
 interface permissions {
+  enum user-permission-type-op-enum {
+    global,
+    project,
+  }
+
   /// Details about permissions.
   record permissions {
     /// List of permissions.
-    permissions: option<permissions-permissions>
+    permissions: option<list<permissions-permissions-entry>>
   }
 
-  /// List of permissions.
-  record permissions-permissions {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// Details of a permission and its availability to a user.
+  record user-permission {
+    /// Indicate whether the permission key is deprecated. Note that deprecated keys cannot be used in the `permissions parameter of Get my permissions. Deprecated keys are not returned by Get all permissions.`
+    deprecated-key: option<bool>,
+    /// The description of the permission.
+    description: option<string>,
+    /// Whether the permission is available to the user in the queried context.
+    have-permission: option<bool>,
+    /// The ID of the permission. Either `id` or `key` must be specified. Use [Get all permissions](#api-rest-api-3-permissions-get) to get the list of permissions.
+    id: option<string>,
+    /// The key of the permission. Either `id` or `key` must be specified. Use [Get all permissions](#api-rest-api-3-permissions-get) to get the list of permissions.
+    key: option<string>,
+    /// The name of the permission.
+    name: option<string>,
+    /// The type of the permission.
+    type-op: option<user-permission-type-op-enum>
+  }
+
+  /// one entry of a string-keyed map (free-form object)
+  record permissions-permissions-entry {
+    key: string,
+    value: user-permission
   }
 
   /// Details of project permissions and associated issues and projects to look up.
@@ -12835,7 +13066,7 @@ interface issue-notification-schemes {
   /// The schema of a field.
   record json-type-bean {
     /// If the field is a custom field, the configuration of the field.
-    configuration: option<json-type-bean-configuration>,
+    configuration: option<list<json-type-bean-configuration-entry>>,
     /// If the field is a custom field, the URI of the field.
     custom: option<string>,
     /// If the field is a custom field, the custom ID of the field.
@@ -12848,10 +13079,10 @@ interface issue-notification-schemes {
     type-op: string
   }
 
-  /// If the field is a custom field, the configuration of the field.
-  record json-type-bean-configuration {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record json-type-bean-configuration-entry {
+    key: string,
+    value: string
   }
 
   /// The projects the item is associated with. Indicated for items associated with [next-gen projects](https://confluence.atlassian.com/x/loMyO).
@@ -13864,11 +14095,11 @@ interface projects {
     /// The [project type](https://confluence.atlassian.com/x/GwiiLQ#Jiraapplicationsoverview-Productfeaturesandprojecttypes) of the project.
     project-type-key: option<project-details-project-type-key-enum>,
     /// Map of project properties
-    properties: option<project-properties>,
+    properties: option<list<project-properties-entry>>,
     /// The date when the project is deleted permanently.
     retention-till-date: option<string>,
     /// The name and self URL for each role defined in the project. For more information, see [Create project role](#api-rest-api-3-role-post).
-    roles: option<project-roles>,
+    roles: option<list<project-roles-entry>>,
     /// The URL of the project details.
     self: option<string>,
     /// Whether the project is simplified.
@@ -14133,7 +14364,7 @@ interface projects {
   }
 
   record project-landing-page-info {
-    attributes: option<project-landing-page-info-attributes>,
+    attributes: option<list<project-landing-page-info-attributes-entry>>,
     board-id: option<s64>,
     board-name: option<string>,
     project-key: option<string>,
@@ -14146,9 +14377,10 @@ interface projects {
     url: option<string>
   }
 
-  record project-landing-page-info-attributes {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record project-landing-page-info-attributes-entry {
+    key: string,
+    value: string
   }
 
   /// Permissions which a user has on a project.
@@ -14169,16 +14401,16 @@ interface projects {
     self: option<string>
   }
 
-  /// Map of project properties
-  record project-properties {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record project-properties-entry {
+    key: string,
+    value: string
   }
 
-  /// The name and self URL for each role defined in the project. For more information, see [Create project role](#api-rest-api-3-role-post).
-  record project-roles {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record project-roles-entry {
+    key: string,
+    value: string
   }
 
   /// Details about a project version.
@@ -14440,7 +14672,7 @@ interface projects {
   /// The schema of a field.
   record json-type-bean {
     /// If the field is a custom field, the configuration of the field.
-    configuration: option<json-type-bean-configuration>,
+    configuration: option<list<json-type-bean-configuration-entry>>,
     /// If the field is a custom field, the URI of the field.
     custom: option<string>,
     /// If the field is a custom field, the custom ID of the field.
@@ -14453,10 +14685,10 @@ interface projects {
     type-op: string
   }
 
-  /// If the field is a custom field, the configuration of the field.
-  record json-type-bean-configuration {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record json-type-bean-configuration-entry {
+    key: string,
+    value: string
   }
 
   /// Details about the roles in a project.
@@ -14919,13 +15151,13 @@ interface project-avatars {
     /// The owner of the avatar. For a system avatar the owner is null (and nothing is returned). For non-system avatars this is the appropriate identifier, such as the ID for a project or the account ID for a user.
     owner: option<string>,
     /// The list of avatar icon URLs.
-    urls: option<avatar-urls>
+    urls: option<list<avatar-urls-entry>>
   }
 
-  /// The list of avatar icon URLs.
-  record avatar-urls {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record avatar-urls-entry {
+    key: string,
+    value: string
   }
 
   /// List of project avatars.
@@ -14981,7 +15213,7 @@ interface project-avatars {
     /// The owner of the avatar. For a system avatar the owner is null (and nothing is returned). For non-system avatars this is the appropriate identifier, such as the ID for a project or the account ID for a user.
     owner: option<string>,
     /// The list of avatar icon URLs.
-    urls: option<avatar-urls>
+    urls: option<list<avatar-urls-entry>>
   }
   update-project-avatar: func(params: update-project-avatar-params) -> result<string, update-project-avatar-error>;
 
@@ -15195,9 +15427,10 @@ interface project-roles {
     template,
   }
 
-  record get-project-roles-response {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record get-project-roles-response-entry {
+    key: string,
+    value: string
   }
 
   /// Details about the roles in a project.
@@ -15401,7 +15634,7 @@ interface project-roles {
     /// The project ID or project key (case sensitive).
     project-id-or-key: string
   }
-  get-project-roles: func(params: get-project-roles-params) -> result<get-project-roles-response, get-project-roles-error>;
+  get-project-roles: func(params: get-project-roles-params) -> result<list<get-project-roles-response-entry>, get-project-roles-error>;
 
   /// Get project role for project
   record get-project-role-params {
@@ -15602,19 +15835,10 @@ interface project-role-actors {
     self: option<string>
   }
 
-  /// The actors to add to the project role.
-  /// 
-  /// Add groups using:
-  /// 
-  ///  *  `atlassian-group-role-actor` and a list of group names.
-  ///  *  `atlassian-group-role-actor-id` and a list of group IDs.
-  /// 
-  /// As a group's name can change, use of `atlassian-group-role-actor-id` is recommended. For example, `"atlassian-group-role-actor-id":["eef79f81-0b89-4fca-a736-4be531a10869","77f6ab39-e755-4570-a6ae-2d7a8df0bcb8"]`.
-  /// 
-  /// Add users using `atlassian-user-role-actor` and a list of account IDs. For example, `"atlassian-user-role-actor":["12345678-9abc-def1-2345-6789abcdef12", "abcdef12-3456-789a-bcde-f123456789ab"]`.
-  record update-bean-categorised-actors {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record update-bean-categorised-actors-entry {
+    key: string,
+    value: list<string>
   }
 
   variant add-actor-users-error {
@@ -15684,7 +15908,7 @@ interface project-role-actors {
     id: string,
     /// The actors to add to the project role.
     /// 
-    categorised-actors: option<update-bean-categorised-actors>,
+    categorised-actors: option<list<update-bean-categorised-actors-entry>>,
     /// The ID of the project role. Use [Get all project roles](#api-rest-api-3-role-get) to get a list of project role IDs.
     id-v2: option<s64>
   }
@@ -16502,14 +16726,14 @@ interface project-key-and-name-validation {
     /// The list of error messages produced by this operation. For example, "input parameter 'key' must be provided"
     error-messages: option<list<string>>,
     /// The list of errors by parameter returned by the operation. For example,"projectKey": "Project keys must start with an uppercase letter, followed by one or more uppercase alphanumeric characters."
-    errors: option<error-collection-errors>,
+    errors: option<list<error-collection-errors-entry>>,
     status: option<s32>
   }
 
-  /// The list of errors by parameter returned by the operation. For example,"projectKey": "Project keys must start with an uppercase letter, followed by one or more uppercase alphanumeric characters."
-  record error-collection-errors {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record error-collection-errors-entry {
+    key: string,
+    value: string
   }
 
   variant validate-project-key-error {
@@ -18843,13 +19067,13 @@ interface workflows {
     /// The ID of the status.
     id: string,
     /// The properties of the status.
-    properties: option<create-workflow-status-details-properties>
+    properties: option<list<create-workflow-status-details-properties-entry>>
   }
 
-  /// The properties of the status.
-  record create-workflow-status-details-properties {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record create-workflow-status-details-properties-entry {
+    key: string,
+    value: string
   }
 
   /// The details of a workflow transition.
@@ -18861,7 +19085,7 @@ interface workflows {
     /// The name of the transition. The maximum length is 60 characters.
     name: string,
     /// The properties of the transition.
-    properties: option<create-workflow-transition-details-properties>,
+    properties: option<list<create-workflow-transition-details-properties-entry>>,
     /// The rules of the transition.
     rules: option<create-workflow-transition-rules-details>,
     /// The screen of the transition.
@@ -18872,10 +19096,10 @@ interface workflows {
     type-op: create-workflow-transition-details-type-op-enum
   }
 
-  /// The properties of the transition.
-  record create-workflow-transition-details-properties {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record create-workflow-transition-details-properties-entry {
+    key: string,
+    value: string
   }
 
   /// The details of a workflow transition rules.
@@ -18895,31 +19119,31 @@ interface workflows {
     /// The list of workflow conditions.
     conditions: option<list<string>>,
     /// EXPERIMENTAL. The configuration of the transition rule.
-    configuration: option<create-workflow-condition-configuration>,
+    configuration: option<list<create-workflow-condition-configuration-entry>>,
     /// The compound condition operator.
     operator: option<create-workflow-condition-operator-enum>,
     /// The type of the transition rule.
     type-op: option<string>
   }
 
-  /// EXPERIMENTAL. The configuration of the transition rule.
-  record create-workflow-condition-configuration {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record create-workflow-condition-configuration-entry {
+    key: string,
+    value: string
   }
 
   /// A workflow transition rule.
   record create-workflow-transition-rule {
     /// EXPERIMENTAL. The configuration of the transition rule.
-    configuration: option<create-workflow-transition-rule-configuration>,
+    configuration: option<list<create-workflow-transition-rule-configuration-entry>>,
     /// The type of the transition rule.
     type-op: string
   }
 
-  /// EXPERIMENTAL. The configuration of the transition rule.
-  record create-workflow-transition-rule-configuration {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record create-workflow-transition-rule-configuration-entry {
+    key: string,
+    value: string
   }
 
   /// The details of a transition screen.
@@ -19009,13 +19233,13 @@ interface workflows {
     /// The name of the status in the workflow.
     name: string,
     /// Additional properties that modify the behavior of issues in this status. Supports the properties `jira.issue.editable` and `issueEditable` (deprecated) that indicate whether issues are editable.
-    properties: option<workflow-status-properties>
+    properties: option<list<workflow-status-properties-entry>>
   }
 
-  /// Additional properties that modify the behavior of issues in this status. Supports the properties `jira.issue.editable` and `issueEditable` (deprecated) that indicate whether issues are editable.
-  record workflow-status-properties {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record workflow-status-properties-entry {
+    key: string,
+    value: string
   }
 
   /// Details of a workflow transition.
@@ -19029,7 +19253,7 @@ interface workflows {
     /// The name of the transition.
     name: string,
     /// The properties of the transition.
-    properties: option<transition-properties>,
+    properties: option<list<transition-properties-entry>>,
     rules: option<workflow-rules>,
     screen: option<transition-screen-details>,
     /// The status the transition goes to.
@@ -19038,10 +19262,10 @@ interface workflows {
     type-op: create-workflow-transition-details-type-op-enum
   }
 
-  /// The properties of the transition.
-  record transition-properties {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record transition-properties-entry {
+    key: string,
+    value: string
   }
 
   /// A collection of transition rules.
@@ -19234,16 +19458,16 @@ interface workflow-transition-rules {
   /// Details of any errors encountered while updating workflow transition rules for a workflow.
   record update-error-details {
     /// A list of transition rule update errors, indexed by the transition rule ID. Any transition rule that appears here wasn't updated.
-    rule-update-errors: update-error-details-rule-update-errors,
+    rule-update-errors: list<update-error-details-rule-update-errors-entry>,
     /// The list of errors that specify why the workflow update failed. The workflow was not updated if the list contains any entries.
     update-errors: list<string>,
     workflow-id: workflow-id
   }
 
-  /// A list of transition rule update errors, indexed by the transition rule ID. Any transition rule that appears here wasn't updated.
-  record update-error-details-rule-update-errors {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record update-error-details-rule-update-errors-entry {
+    key: string,
+    value: list<string>
   }
 
   /// Details about a workflow configuration update request.
@@ -19428,6 +19652,17 @@ interface workflow-transition-properties {
 }
 
 interface workflow-schemes {
+  enum project-details-project-type-key-enum {
+    software,
+    service-desk,
+    business,
+  }
+
+  enum scope-type-op-enum {
+    project,
+    template,
+  }
+
   enum user-account-type-enum {
     atlassian,
     app,
@@ -19464,9 +19699,9 @@ interface workflow-schemes {
     /// The ID of the workflow scheme.
     id: option<s64>,
     /// The issue type to workflow mappings, where each mapping is an issue type ID and workflow name pair. Note that an issue type can only be mapped to one workflow in a workflow scheme.
-    issue-type-mappings: option<workflow-scheme-issue-type-mappings>,
+    issue-type-mappings: option<list<workflow-scheme-issue-type-mappings-entry>>,
     /// The issue types available in Jira.
-    issue-types: option<workflow-scheme-issue-types>,
+    issue-types: option<list<workflow-scheme-issue-types-entry>>,
     /// The date-time that the draft workflow scheme was last modified. A modification is a change to the issue type-project mappings only. This property does not apply to non-draft workflows.
     last-modified: option<string>,
     /// The user that last modified the draft workflow scheme. A modification is a change to the issue type-project mappings only. This property does not apply to non-draft workflows.
@@ -19476,23 +19711,98 @@ interface workflow-schemes {
     /// For draft workflow schemes, this property is the name of the default workflow for the original workflow scheme. The default workflow has *All Unassigned Issue Types* assigned to it in Jira.
     original-default-workflow: option<string>,
     /// For draft workflow schemes, this property is the issue type to workflow mappings for the original workflow scheme, where each mapping is an issue type ID and workflow name pair. Note that an issue type can only be mapped to one workflow in a workflow scheme.
-    original-issue-type-mappings: option<workflow-scheme-original-issue-type-mappings>,
+    original-issue-type-mappings: option<list<workflow-scheme-original-issue-type-mappings-entry>>,
     self: option<string>,
     /// Whether to create or update a draft workflow scheme when updating an active workflow scheme. An active workflow scheme is a workflow scheme that is used by at least one project. The following examples show how this property works:
     /// 
     update-draft-if-needed: option<bool>
   }
 
-  /// The issue type to workflow mappings, where each mapping is an issue type ID and workflow name pair. Note that an issue type can only be mapped to one workflow in a workflow scheme.
-  record workflow-scheme-issue-type-mappings {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record workflow-scheme-issue-type-mappings-entry {
+    key: string,
+    value: string
   }
 
-  /// The issue types available in Jira.
-  record workflow-scheme-issue-types {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// Details about an issue type.
+  record issue-type-details {
+    /// The ID of the issue type's avatar.
+    avatar-id: option<s64>,
+    /// The description of the issue type.
+    description: option<string>,
+    /// Unique ID for next-gen projects.
+    entity-id: option<string>,
+    /// Hierarchy level of the issue type.
+    hierarchy-level: option<s32>,
+    /// The URL of the issue type's avatar.
+    icon-url: option<string>,
+    /// The ID of the issue type.
+    id: option<string>,
+    /// The name of the issue type.
+    name: option<string>,
+    /// Details of the next-gen projects the issue type is available in.
+    scope: option<scope>,
+    /// The URL of these issue type details.
+    self: option<string>,
+    /// Whether this issue type is used to create subtasks.
+    subtask: option<bool>
+  }
+
+  /// The projects the item is associated with. Indicated for items associated with [next-gen projects](https://confluence.atlassian.com/x/loMyO).
+  record scope {
+    /// The project the item has scope in.
+    project: option<project-details>,
+    /// The type of scope.
+    type-op: option<scope-type-op-enum>
+  }
+
+  /// Details about a project.
+  record project-details {
+    /// The URLs of the project's avatars.
+    avatar-urls: option<avatar-urls-bean>,
+    /// The ID of the project.
+    id: option<string>,
+    /// The key of the project.
+    key: option<string>,
+    /// The name of the project.
+    name: option<string>,
+    /// The category the project belongs to.
+    project-category: option<updated-project-category>,
+    /// The [project type](https://confluence.atlassian.com/x/GwiiLQ#Jiraapplicationsoverview-Productfeaturesandprojecttypes) of the project.
+    project-type-key: option<project-details-project-type-key-enum>,
+    /// The URL of the project details.
+    self: option<string>,
+    /// Whether or not the project is simplified.
+    simplified: option<bool>
+  }
+
+  record avatar-urls-bean {
+    /// The URL of the item's 16x16 pixel avatar.
+    v16x16: option<string>,
+    /// The URL of the item's 24x24 pixel avatar.
+    v24x24: option<string>,
+    /// The URL of the item's 32x32 pixel avatar.
+    v32x32: option<string>,
+    /// The URL of the item's 48x48 pixel avatar.
+    v48x48: option<string>
+  }
+
+  /// A project category.
+  record updated-project-category {
+    /// The name of the project category.
+    description: option<string>,
+    /// The ID of the project category.
+    id: option<string>,
+    /// The description of the project category.
+    name: option<string>,
+    /// The URL of the project category.
+    self: option<string>
+  }
+
+  /// one entry of a string-keyed map (free-form object)
+  record workflow-scheme-issue-types-entry {
+    key: string,
+    value: issue-type-details
   }
 
   /// A user with details as permitted by the user's Atlassian Account privacy settings. However, be aware of these exceptions:
@@ -19586,17 +19896,6 @@ interface workflow-schemes {
     self: option<string>
   }
 
-  record avatar-urls-bean {
-    /// The URL of the item's 16x16 pixel avatar.
-    v16x16: option<string>,
-    /// The URL of the item's 24x24 pixel avatar.
-    v24x24: option<string>,
-    /// The URL of the item's 32x32 pixel avatar.
-    v32x32: option<string>,
-    /// The URL of the item's 48x48 pixel avatar.
-    v48x48: option<string>
-  }
-
   record simple-list-wrapper-group-name {
     callback: option<list-wrapper-callback-group-name>,
     items: option<list<group-name>>,
@@ -19610,10 +19909,10 @@ interface workflow-schemes {
     data: option<string>
   }
 
-  /// For draft workflow schemes, this property is the issue type to workflow mappings for the original workflow scheme, where each mapping is an issue type ID and workflow name pair. Note that an issue type can only be mapped to one workflow in a workflow scheme.
-  record workflow-scheme-original-issue-type-mappings {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record workflow-scheme-original-issue-type-mappings-entry {
+    key: string,
+    value: string
   }
 
   /// Details about the default workflow.
@@ -19771,9 +20070,9 @@ interface workflow-schemes {
     /// The ID of the workflow scheme.
     id: option<s64>,
     /// The issue type to workflow mappings, where each mapping is an issue type ID and workflow name pair. Note that an issue type can only be mapped to one workflow in a workflow scheme.
-    issue-type-mappings: option<workflow-scheme-issue-type-mappings>,
+    issue-type-mappings: option<list<workflow-scheme-issue-type-mappings-entry>>,
     /// The issue types available in Jira.
-    issue-types: option<workflow-scheme-issue-types>,
+    issue-types: option<list<workflow-scheme-issue-types-entry>>,
     /// The date-time that the draft workflow scheme was last modified. A modification is a change to the issue type-project mappings only. This property does not apply to non-draft workflows.
     last-modified: option<string>,
     /// The user that last modified the draft workflow scheme. A modification is a change to the issue type-project mappings only. This property does not apply to non-draft workflows.
@@ -19783,7 +20082,7 @@ interface workflow-schemes {
     /// For draft workflow schemes, this property is the name of the default workflow for the original workflow scheme. The default workflow has *All Unassigned Issue Types* assigned to it in Jira.
     original-default-workflow: option<string>,
     /// For draft workflow schemes, this property is the issue type to workflow mappings for the original workflow scheme, where each mapping is an issue type ID and workflow name pair. Note that an issue type can only be mapped to one workflow in a workflow scheme.
-    original-issue-type-mappings: option<workflow-scheme-original-issue-type-mappings>,
+    original-issue-type-mappings: option<list<workflow-scheme-original-issue-type-mappings-entry>>,
     self: option<string>,
     /// Whether to create or update a draft workflow scheme when updating an active workflow scheme. An active workflow scheme is a workflow scheme that is used by at least one project. The following examples show how this property works:
     /// 
@@ -19813,9 +20112,9 @@ interface workflow-schemes {
     /// The ID of the workflow scheme.
     id-v2: option<s64>,
     /// The issue type to workflow mappings, where each mapping is an issue type ID and workflow name pair. Note that an issue type can only be mapped to one workflow in a workflow scheme.
-    issue-type-mappings: option<workflow-scheme-issue-type-mappings>,
+    issue-type-mappings: option<list<workflow-scheme-issue-type-mappings-entry>>,
     /// The issue types available in Jira.
-    issue-types: option<workflow-scheme-issue-types>,
+    issue-types: option<list<workflow-scheme-issue-types-entry>>,
     /// The date-time that the draft workflow scheme was last modified. A modification is a change to the issue type-project mappings only. This property does not apply to non-draft workflows.
     last-modified: option<string>,
     /// The user that last modified the draft workflow scheme. A modification is a change to the issue type-project mappings only. This property does not apply to non-draft workflows.
@@ -19825,7 +20124,7 @@ interface workflow-schemes {
     /// For draft workflow schemes, this property is the name of the default workflow for the original workflow scheme. The default workflow has *All Unassigned Issue Types* assigned to it in Jira.
     original-default-workflow: option<string>,
     /// For draft workflow schemes, this property is the issue type to workflow mappings for the original workflow scheme, where each mapping is an issue type ID and workflow name pair. Note that an issue type can only be mapped to one workflow in a workflow scheme.
-    original-issue-type-mappings: option<workflow-scheme-original-issue-type-mappings>,
+    original-issue-type-mappings: option<list<workflow-scheme-original-issue-type-mappings-entry>>,
     self: option<string>,
     /// Whether to create or update a draft workflow scheme when updating an active workflow scheme. An active workflow scheme is a workflow scheme that is used by at least one project. The following examples show how this property works:
     /// 
@@ -19948,6 +20247,17 @@ interface workflow-schemes {
 }
 
 interface workflow-scheme-project-associations {
+  enum project-details-project-type-key-enum {
+    software,
+    service-desk,
+    business,
+  }
+
+  enum scope-type-op-enum {
+    project,
+    template,
+  }
+
   enum user-account-type-enum {
     atlassian,
     app,
@@ -19980,9 +20290,9 @@ interface workflow-scheme-project-associations {
     /// The ID of the workflow scheme.
     id: option<s64>,
     /// The issue type to workflow mappings, where each mapping is an issue type ID and workflow name pair. Note that an issue type can only be mapped to one workflow in a workflow scheme.
-    issue-type-mappings: option<workflow-scheme-issue-type-mappings>,
+    issue-type-mappings: option<list<workflow-scheme-issue-type-mappings-entry>>,
     /// The issue types available in Jira.
-    issue-types: option<workflow-scheme-issue-types>,
+    issue-types: option<list<workflow-scheme-issue-types-entry>>,
     /// The date-time that the draft workflow scheme was last modified. A modification is a change to the issue type-project mappings only. This property does not apply to non-draft workflows.
     last-modified: option<string>,
     /// The user that last modified the draft workflow scheme. A modification is a change to the issue type-project mappings only. This property does not apply to non-draft workflows.
@@ -19992,23 +20302,98 @@ interface workflow-scheme-project-associations {
     /// For draft workflow schemes, this property is the name of the default workflow for the original workflow scheme. The default workflow has *All Unassigned Issue Types* assigned to it in Jira.
     original-default-workflow: option<string>,
     /// For draft workflow schemes, this property is the issue type to workflow mappings for the original workflow scheme, where each mapping is an issue type ID and workflow name pair. Note that an issue type can only be mapped to one workflow in a workflow scheme.
-    original-issue-type-mappings: option<workflow-scheme-original-issue-type-mappings>,
+    original-issue-type-mappings: option<list<workflow-scheme-original-issue-type-mappings-entry>>,
     self: option<string>,
     /// Whether to create or update a draft workflow scheme when updating an active workflow scheme. An active workflow scheme is a workflow scheme that is used by at least one project. The following examples show how this property works:
     /// 
     update-draft-if-needed: option<bool>
   }
 
-  /// The issue type to workflow mappings, where each mapping is an issue type ID and workflow name pair. Note that an issue type can only be mapped to one workflow in a workflow scheme.
-  record workflow-scheme-issue-type-mappings {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record workflow-scheme-issue-type-mappings-entry {
+    key: string,
+    value: string
   }
 
-  /// The issue types available in Jira.
-  record workflow-scheme-issue-types {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// Details about an issue type.
+  record issue-type-details {
+    /// The ID of the issue type's avatar.
+    avatar-id: option<s64>,
+    /// The description of the issue type.
+    description: option<string>,
+    /// Unique ID for next-gen projects.
+    entity-id: option<string>,
+    /// Hierarchy level of the issue type.
+    hierarchy-level: option<s32>,
+    /// The URL of the issue type's avatar.
+    icon-url: option<string>,
+    /// The ID of the issue type.
+    id: option<string>,
+    /// The name of the issue type.
+    name: option<string>,
+    /// Details of the next-gen projects the issue type is available in.
+    scope: option<scope>,
+    /// The URL of these issue type details.
+    self: option<string>,
+    /// Whether this issue type is used to create subtasks.
+    subtask: option<bool>
+  }
+
+  /// The projects the item is associated with. Indicated for items associated with [next-gen projects](https://confluence.atlassian.com/x/loMyO).
+  record scope {
+    /// The project the item has scope in.
+    project: option<project-details>,
+    /// The type of scope.
+    type-op: option<scope-type-op-enum>
+  }
+
+  /// Details about a project.
+  record project-details {
+    /// The URLs of the project's avatars.
+    avatar-urls: option<avatar-urls-bean>,
+    /// The ID of the project.
+    id: option<string>,
+    /// The key of the project.
+    key: option<string>,
+    /// The name of the project.
+    name: option<string>,
+    /// The category the project belongs to.
+    project-category: option<updated-project-category>,
+    /// The [project type](https://confluence.atlassian.com/x/GwiiLQ#Jiraapplicationsoverview-Productfeaturesandprojecttypes) of the project.
+    project-type-key: option<project-details-project-type-key-enum>,
+    /// The URL of the project details.
+    self: option<string>,
+    /// Whether or not the project is simplified.
+    simplified: option<bool>
+  }
+
+  record avatar-urls-bean {
+    /// The URL of the item's 16x16 pixel avatar.
+    v16x16: option<string>,
+    /// The URL of the item's 24x24 pixel avatar.
+    v24x24: option<string>,
+    /// The URL of the item's 32x32 pixel avatar.
+    v32x32: option<string>,
+    /// The URL of the item's 48x48 pixel avatar.
+    v48x48: option<string>
+  }
+
+  /// A project category.
+  record updated-project-category {
+    /// The name of the project category.
+    description: option<string>,
+    /// The ID of the project category.
+    id: option<string>,
+    /// The description of the project category.
+    name: option<string>,
+    /// The URL of the project category.
+    self: option<string>
+  }
+
+  /// one entry of a string-keyed map (free-form object)
+  record workflow-scheme-issue-types-entry {
+    key: string,
+    value: issue-type-details
   }
 
   /// A user with details as permitted by the user's Atlassian Account privacy settings. However, be aware of these exceptions:
@@ -20102,17 +20487,6 @@ interface workflow-scheme-project-associations {
     self: option<string>
   }
 
-  record avatar-urls-bean {
-    /// The URL of the item's 16x16 pixel avatar.
-    v16x16: option<string>,
-    /// The URL of the item's 24x24 pixel avatar.
-    v24x24: option<string>,
-    /// The URL of the item's 32x32 pixel avatar.
-    v32x32: option<string>,
-    /// The URL of the item's 48x48 pixel avatar.
-    v48x48: option<string>
-  }
-
   record simple-list-wrapper-group-name {
     callback: option<list-wrapper-callback-group-name>,
     items: option<list<group-name>>,
@@ -20126,10 +20500,10 @@ interface workflow-scheme-project-associations {
     data: option<string>
   }
 
-  /// For draft workflow schemes, this property is the issue type to workflow mappings for the original workflow scheme, where each mapping is an issue type ID and workflow name pair. Note that an issue type can only be mapped to one workflow in a workflow scheme.
-  record workflow-scheme-original-issue-type-mappings {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record workflow-scheme-original-issue-type-mappings-entry {
+    key: string,
+    value: string
   }
 
   variant get-workflow-scheme-project-associations-error {
@@ -20166,6 +20540,17 @@ interface workflow-scheme-project-associations {
 }
 
 interface workflow-scheme-drafts {
+  enum project-details-project-type-key-enum {
+    software,
+    service-desk,
+    business,
+  }
+
+  enum scope-type-op-enum {
+    project,
+    template,
+  }
+
   enum user-account-type-enum {
     atlassian,
     app,
@@ -20184,9 +20569,9 @@ interface workflow-scheme-drafts {
     /// The ID of the workflow scheme.
     id: option<s64>,
     /// The issue type to workflow mappings, where each mapping is an issue type ID and workflow name pair. Note that an issue type can only be mapped to one workflow in a workflow scheme.
-    issue-type-mappings: option<workflow-scheme-issue-type-mappings>,
+    issue-type-mappings: option<list<workflow-scheme-issue-type-mappings-entry>>,
     /// The issue types available in Jira.
-    issue-types: option<workflow-scheme-issue-types>,
+    issue-types: option<list<workflow-scheme-issue-types-entry>>,
     /// The date-time that the draft workflow scheme was last modified. A modification is a change to the issue type-project mappings only. This property does not apply to non-draft workflows.
     last-modified: option<string>,
     /// The user that last modified the draft workflow scheme. A modification is a change to the issue type-project mappings only. This property does not apply to non-draft workflows.
@@ -20196,23 +20581,98 @@ interface workflow-scheme-drafts {
     /// For draft workflow schemes, this property is the name of the default workflow for the original workflow scheme. The default workflow has *All Unassigned Issue Types* assigned to it in Jira.
     original-default-workflow: option<string>,
     /// For draft workflow schemes, this property is the issue type to workflow mappings for the original workflow scheme, where each mapping is an issue type ID and workflow name pair. Note that an issue type can only be mapped to one workflow in a workflow scheme.
-    original-issue-type-mappings: option<workflow-scheme-original-issue-type-mappings>,
+    original-issue-type-mappings: option<list<workflow-scheme-original-issue-type-mappings-entry>>,
     self: option<string>,
     /// Whether to create or update a draft workflow scheme when updating an active workflow scheme. An active workflow scheme is a workflow scheme that is used by at least one project. The following examples show how this property works:
     /// 
     update-draft-if-needed: option<bool>
   }
 
-  /// The issue type to workflow mappings, where each mapping is an issue type ID and workflow name pair. Note that an issue type can only be mapped to one workflow in a workflow scheme.
-  record workflow-scheme-issue-type-mappings {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record workflow-scheme-issue-type-mappings-entry {
+    key: string,
+    value: string
   }
 
-  /// The issue types available in Jira.
-  record workflow-scheme-issue-types {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// Details about an issue type.
+  record issue-type-details {
+    /// The ID of the issue type's avatar.
+    avatar-id: option<s64>,
+    /// The description of the issue type.
+    description: option<string>,
+    /// Unique ID for next-gen projects.
+    entity-id: option<string>,
+    /// Hierarchy level of the issue type.
+    hierarchy-level: option<s32>,
+    /// The URL of the issue type's avatar.
+    icon-url: option<string>,
+    /// The ID of the issue type.
+    id: option<string>,
+    /// The name of the issue type.
+    name: option<string>,
+    /// Details of the next-gen projects the issue type is available in.
+    scope: option<scope>,
+    /// The URL of these issue type details.
+    self: option<string>,
+    /// Whether this issue type is used to create subtasks.
+    subtask: option<bool>
+  }
+
+  /// The projects the item is associated with. Indicated for items associated with [next-gen projects](https://confluence.atlassian.com/x/loMyO).
+  record scope {
+    /// The project the item has scope in.
+    project: option<project-details>,
+    /// The type of scope.
+    type-op: option<scope-type-op-enum>
+  }
+
+  /// Details about a project.
+  record project-details {
+    /// The URLs of the project's avatars.
+    avatar-urls: option<avatar-urls-bean>,
+    /// The ID of the project.
+    id: option<string>,
+    /// The key of the project.
+    key: option<string>,
+    /// The name of the project.
+    name: option<string>,
+    /// The category the project belongs to.
+    project-category: option<updated-project-category>,
+    /// The [project type](https://confluence.atlassian.com/x/GwiiLQ#Jiraapplicationsoverview-Productfeaturesandprojecttypes) of the project.
+    project-type-key: option<project-details-project-type-key-enum>,
+    /// The URL of the project details.
+    self: option<string>,
+    /// Whether or not the project is simplified.
+    simplified: option<bool>
+  }
+
+  record avatar-urls-bean {
+    /// The URL of the item's 16x16 pixel avatar.
+    v16x16: option<string>,
+    /// The URL of the item's 24x24 pixel avatar.
+    v24x24: option<string>,
+    /// The URL of the item's 32x32 pixel avatar.
+    v32x32: option<string>,
+    /// The URL of the item's 48x48 pixel avatar.
+    v48x48: option<string>
+  }
+
+  /// A project category.
+  record updated-project-category {
+    /// The name of the project category.
+    description: option<string>,
+    /// The ID of the project category.
+    id: option<string>,
+    /// The description of the project category.
+    name: option<string>,
+    /// The URL of the project category.
+    self: option<string>
+  }
+
+  /// one entry of a string-keyed map (free-form object)
+  record workflow-scheme-issue-types-entry {
+    key: string,
+    value: issue-type-details
   }
 
   /// A user with details as permitted by the user's Atlassian Account privacy settings. However, be aware of these exceptions:
@@ -20306,17 +20766,6 @@ interface workflow-scheme-drafts {
     self: option<string>
   }
 
-  record avatar-urls-bean {
-    /// The URL of the item's 16x16 pixel avatar.
-    v16x16: option<string>,
-    /// The URL of the item's 24x24 pixel avatar.
-    v24x24: option<string>,
-    /// The URL of the item's 32x32 pixel avatar.
-    v32x32: option<string>,
-    /// The URL of the item's 48x48 pixel avatar.
-    v48x48: option<string>
-  }
-
   record simple-list-wrapper-group-name {
     callback: option<list-wrapper-callback-group-name>,
     items: option<list<group-name>>,
@@ -20330,10 +20779,10 @@ interface workflow-scheme-drafts {
     data: option<string>
   }
 
-  /// For draft workflow schemes, this property is the issue type to workflow mappings for the original workflow scheme, where each mapping is an issue type ID and workflow name pair. Note that an issue type can only be mapped to one workflow in a workflow scheme.
-  record workflow-scheme-original-issue-type-mappings {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record workflow-scheme-original-issue-type-mappings-entry {
+    key: string,
+    value: string
   }
 
   /// Details about the default workflow.
@@ -20507,9 +20956,9 @@ interface workflow-scheme-drafts {
     /// The ID of the workflow scheme.
     id-v2: option<s64>,
     /// The issue type to workflow mappings, where each mapping is an issue type ID and workflow name pair. Note that an issue type can only be mapped to one workflow in a workflow scheme.
-    issue-type-mappings: option<workflow-scheme-issue-type-mappings>,
+    issue-type-mappings: option<list<workflow-scheme-issue-type-mappings-entry>>,
     /// The issue types available in Jira.
-    issue-types: option<workflow-scheme-issue-types>,
+    issue-types: option<list<workflow-scheme-issue-types-entry>>,
     /// The date-time that the draft workflow scheme was last modified. A modification is a change to the issue type-project mappings only. This property does not apply to non-draft workflows.
     last-modified: option<string>,
     /// The user that last modified the draft workflow scheme. A modification is a change to the issue type-project mappings only. This property does not apply to non-draft workflows.
@@ -20519,7 +20968,7 @@ interface workflow-scheme-drafts {
     /// For draft workflow schemes, this property is the name of the default workflow for the original workflow scheme. The default workflow has *All Unassigned Issue Types* assigned to it in Jira.
     original-default-workflow: option<string>,
     /// For draft workflow schemes, this property is the issue type to workflow mappings for the original workflow scheme, where each mapping is an issue type ID and workflow name pair. Note that an issue type can only be mapped to one workflow in a workflow scheme.
-    original-issue-type-mappings: option<workflow-scheme-original-issue-type-mappings>,
+    original-issue-type-mappings: option<list<workflow-scheme-original-issue-type-mappings-entry>>,
     self: option<string>,
     /// Whether to create or update a draft workflow scheme when updating an active workflow scheme. An active workflow scheme is a workflow scheme that is used by at least one project. The following examples show how this property works:
     /// 
@@ -20736,14 +21185,13 @@ interface dynamic-modules {
   record connect-modules {
     /// A list of app modules in the same format as the `modules` property in the
     /// [app descriptor](https://developer.atlassian.com/cloud/jira/platform/app-descriptor/).
-    modules: list<connect-module>
+    modules: list<list<connect-module-entry>>
   }
 
-  /// A [Connect module](https://developer.atlassian.com/cloud/jira/platform/about-jira-modules/) in the same format as in the
-  /// [app descriptor](https://developer.atlassian.com/cloud/jira/platform/app-descriptor/).
-  record connect-module {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record connect-module-entry {
+    key: string,
+    value: string
   }
 
   variant resource-get-modules-get-error {
@@ -20769,7 +21217,7 @@ interface dynamic-modules {
   record resource-register-modules-post-params {
     /// A list of app modules in the same format as the `modules` property in the
     /// [app descriptor](https://developer.atlassian.com/cloud/jira/platform/app-descriptor/).
-    modules: list<connect-module>
+    modules: list<list<connect-module-entry>>
   }
   resource-register-modules-post: func(params: resource-register-modules-post-params) -> result<string, resource-register-modules-post-error>;
 

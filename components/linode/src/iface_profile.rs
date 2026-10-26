@@ -423,9 +423,9 @@ fn iface_profile__profile_referrals__to_json(p: &iface_profile::ProfileReferrals
 fn iface_profile__get_profile_apps_response__to_json(p: &iface_profile::GetProfileAppsResponse) -> Value {
     let mut m = Map::new();
     m.insert("data".into(), match (&p.data) { Some(v) => Value::Array((v).iter().map(|v| iface_profile__authorized_app__to_json(v)).collect()), None => Value::Null });
-    m.insert("page".into(), match (&p.page) { Some(v) => iface_profile__pagination_envelope_properties_page__to_json(v), None => Value::Null });
-    m.insert("pages".into(), match (&p.pages) { Some(v) => iface_profile__pagination_envelope_properties_pages__to_json(v), None => Value::Null });
-    m.insert("results".into(), match (&p.results) { Some(v) => iface_profile__pagination_envelope_properties_results__to_json(v), None => Value::Null });
+    m.insert("page".into(), match (&p.page) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("pages".into(), match (&p.pages) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("results".into(), match (&p.results) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
@@ -441,36 +441,19 @@ fn iface_profile__authorized_app__to_json(p: &iface_profile::AuthorizedApp) -> V
     Value::Object(m)
 }
 
-fn iface_profile__pagination_envelope_properties_page__to_json(p: &iface_profile::PaginationEnvelopePropertiesPage) -> Value {
+fn iface_profile__delete_profile_app_response_entry__to_json(p: &iface_profile::DeleteProfileAppResponseEntry) -> Value {
     let mut m = Map::new();
+    m.insert("key".into(), Value::String((&p.key).clone()));
     m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_profile__pagination_envelope_properties_pages__to_json(p: &iface_profile::PaginationEnvelopePropertiesPages) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_profile__pagination_envelope_properties_results__to_json(p: &iface_profile::PaginationEnvelopePropertiesResults) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_profile__delete_profile_app_response__to_json(p: &iface_profile::DeleteProfileAppResponse) -> Value {
-    let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
 fn iface_profile__get_devices_response__to_json(p: &iface_profile::GetDevicesResponse) -> Value {
     let mut m = Map::new();
     m.insert("data".into(), match (&p.data) { Some(v) => Value::Array((v).iter().map(|v| iface_profile__trusted_device__to_json(v)).collect()), None => Value::Null });
-    m.insert("page".into(), match (&p.page) { Some(v) => iface_profile__pagination_envelope_properties_page__to_json(v), None => Value::Null });
-    m.insert("pages".into(), match (&p.pages) { Some(v) => iface_profile__pagination_envelope_properties_pages__to_json(v), None => Value::Null });
-    m.insert("results".into(), match (&p.results) { Some(v) => iface_profile__pagination_envelope_properties_results__to_json(v), None => Value::Null });
+    m.insert("page".into(), match (&p.page) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("pages".into(), match (&p.pages) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("results".into(), match (&p.results) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
@@ -485,9 +468,10 @@ fn iface_profile__trusted_device__to_json(p: &iface_profile::TrustedDevice) -> V
     Value::Object(m)
 }
 
-fn iface_profile__revoke_trusted_device_response__to_json(p: &iface_profile::RevokeTrustedDeviceResponse) -> Value {
+fn iface_profile__revoke_trusted_device_response_entry__to_json(p: &iface_profile::RevokeTrustedDeviceResponseEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -533,9 +517,9 @@ fn iface_profile__grants_response_global__to_json(p: &iface_profile::GrantsRespo
 fn iface_profile__get_profile_logins_response__to_json(p: &iface_profile::GetProfileLoginsResponse) -> Value {
     let mut m = Map::new();
     m.insert("data".into(), match (&p.data) { Some(v) => Value::Array((v).iter().map(|v| iface_profile__login__to_json(v)).collect()), None => Value::Null });
-    m.insert("page".into(), match (&p.page) { Some(v) => iface_profile__pagination_envelope_properties_page__to_json(v), None => Value::Null });
-    m.insert("pages".into(), match (&p.pages) { Some(v) => iface_profile__pagination_envelope_properties_pages__to_json(v), None => Value::Null });
-    m.insert("results".into(), match (&p.results) { Some(v) => iface_profile__pagination_envelope_properties_results__to_json(v), None => Value::Null });
+    m.insert("page".into(), match (&p.page) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("pages".into(), match (&p.pages) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("results".into(), match (&p.results) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
@@ -550,33 +534,38 @@ fn iface_profile__login__to_json(p: &iface_profile::Login) -> Value {
     Value::Object(m)
 }
 
-fn iface_profile__post_profile_phone_number_response__to_json(p: &iface_profile::PostProfilePhoneNumberResponse) -> Value {
+fn iface_profile__post_profile_phone_number_response_entry__to_json(p: &iface_profile::PostProfilePhoneNumberResponseEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
-fn iface_profile__delete_profile_phone_number_response__to_json(p: &iface_profile::DeleteProfilePhoneNumberResponse) -> Value {
+fn iface_profile__delete_profile_phone_number_response_entry__to_json(p: &iface_profile::DeleteProfilePhoneNumberResponseEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
-fn iface_profile__post_profile_phone_number_verify_response__to_json(p: &iface_profile::PostProfilePhoneNumberVerifyResponse) -> Value {
+fn iface_profile__post_profile_phone_number_verify_response_entry__to_json(p: &iface_profile::PostProfilePhoneNumberVerifyResponseEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
-fn iface_profile__get_user_preferences_response__to_json(p: &iface_profile::GetUserPreferencesResponse) -> Value {
+fn iface_profile__get_user_preferences_response_entry__to_json(p: &iface_profile::GetUserPreferencesResponseEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
-fn iface_profile__update_user_preferences_response__to_json(p: &iface_profile::UpdateUserPreferencesResponse) -> Value {
+fn iface_profile__update_user_preferences_response_entry__to_json(p: &iface_profile::UpdateUserPreferencesResponseEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -588,27 +577,9 @@ fn iface_profile__security_questions_get__to_json(p: &iface_profile::SecurityQue
 
 fn iface_profile__security_questions_get_security_questions_item__to_json(p: &iface_profile::SecurityQuestionsGetSecurityQuestionsItem) -> Value {
     let mut m = Map::new();
-    m.insert("id".into(), match (&p.id) { Some(v) => iface_profile__security_question_properties_id__to_json(v), None => Value::Null });
-    m.insert("question".into(), match (&p.question) { Some(v) => iface_profile__security_question_properties_question__to_json(v), None => Value::Null });
-    m.insert("response".into(), match (&p.response) { Some(v) => iface_profile__security_question_properties_response__to_json(v), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_profile__security_question_properties_id__to_json(p: &iface_profile::SecurityQuestionPropertiesId) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_profile__security_question_properties_question__to_json(p: &iface_profile::SecurityQuestionPropertiesQuestion) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_profile__security_question_properties_response__to_json(p: &iface_profile::SecurityQuestionPropertiesResponse) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("question".into(), match (&p.question) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("response".into(), match (&p.response) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -620,18 +591,18 @@ fn iface_profile__security_questions_post__to_json(p: &iface_profile::SecurityQu
 
 fn iface_profile__security_questions_post_security_questions_item__to_json(p: &iface_profile::SecurityQuestionsPostSecurityQuestionsItem) -> Value {
     let mut m = Map::new();
-    m.insert("question_id".into(), match (&p.question_id) { Some(v) => iface_profile__security_question_properties_id__to_json(v), None => Value::Null });
-    m.insert("response".into(), match (&p.response) { Some(v) => iface_profile__security_question_properties_response__to_json(v), None => Value::Null });
-    m.insert("security_question".into(), match (&p.security_question) { Some(v) => iface_profile__security_question_properties_question__to_json(v), None => Value::Null });
+    m.insert("question_id".into(), match (&p.question_id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("response".into(), match (&p.response) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("security_question".into(), match (&p.security_question) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
 fn iface_profile__get_ssh_keys_response__to_json(p: &iface_profile::GetSshKeysResponse) -> Value {
     let mut m = Map::new();
     m.insert("data".into(), match (&p.data) { Some(v) => Value::Array((v).iter().map(|v| iface_profile__ssh_key__to_json(v)).collect()), None => Value::Null });
-    m.insert("page".into(), match (&p.page) { Some(v) => iface_profile__pagination_envelope_properties_page__to_json(v), None => Value::Null });
-    m.insert("pages".into(), match (&p.pages) { Some(v) => iface_profile__pagination_envelope_properties_pages__to_json(v), None => Value::Null });
-    m.insert("results".into(), match (&p.results) { Some(v) => iface_profile__pagination_envelope_properties_results__to_json(v), None => Value::Null });
+    m.insert("page".into(), match (&p.page) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("pages".into(), match (&p.pages) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("results".into(), match (&p.results) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
@@ -644,21 +615,17 @@ fn iface_profile__ssh_key__to_json(p: &iface_profile::SshKey) -> Value {
     Value::Object(m)
 }
 
-fn iface_profile__ssh_key_properties_label__to_json(p: &iface_profile::SshKeyPropertiesLabel) -> Value {
+fn iface_profile__delete_ssh_key_response_entry__to_json(p: &iface_profile::DeleteSshKeyResponseEntry) -> Value {
     let mut m = Map::new();
+    m.insert("key".into(), Value::String((&p.key).clone()));
     m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
-fn iface_profile__delete_ssh_key_response__to_json(p: &iface_profile::DeleteSshKeyResponse) -> Value {
+fn iface_profile__tfa_disable_response_entry__to_json(p: &iface_profile::TfaDisableResponseEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_profile__tfa_disable_response__to_json(p: &iface_profile::TfaDisableResponse) -> Value {
-    let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -678,9 +645,9 @@ fn iface_profile__tfa_confirm_response__to_json(p: &iface_profile::TfaConfirmRes
 fn iface_profile__get_personal_access_tokens_response__to_json(p: &iface_profile::GetPersonalAccessTokensResponse) -> Value {
     let mut m = Map::new();
     m.insert("data".into(), match (&p.data) { Some(v) => Value::Array((v).iter().map(|v| iface_profile__personal_access_token__to_json(v)).collect()), None => Value::Null });
-    m.insert("page".into(), match (&p.page) { Some(v) => iface_profile__pagination_envelope_properties_page__to_json(v), None => Value::Null });
-    m.insert("pages".into(), match (&p.pages) { Some(v) => iface_profile__pagination_envelope_properties_pages__to_json(v), None => Value::Null });
-    m.insert("results".into(), match (&p.results) { Some(v) => iface_profile__pagination_envelope_properties_results__to_json(v), None => Value::Null });
+    m.insert("page".into(), match (&p.page) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("pages".into(), match (&p.pages) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("results".into(), match (&p.results) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
@@ -695,15 +662,10 @@ fn iface_profile__personal_access_token__to_json(p: &iface_profile::PersonalAcce
     Value::Object(m)
 }
 
-fn iface_profile__personal_access_token_properties_label__to_json(p: &iface_profile::PersonalAccessTokenPropertiesLabel) -> Value {
+fn iface_profile__delete_personal_access_token_response_entry__to_json(p: &iface_profile::DeletePersonalAccessTokenResponseEntry) -> Value {
     let mut m = Map::new();
+    m.insert("key".into(), Value::String((&p.key).clone()));
     m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_profile__delete_personal_access_token_response__to_json(p: &iface_profile::DeletePersonalAccessTokenResponse) -> Value {
-    let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -812,7 +774,7 @@ fn iface_profile__get_ssh_key_params__to_json(p: &iface_profile::GetSshKeyParams
 fn iface_profile__update_ssh_key_params__to_json(p: &iface_profile::UpdateSshKeyParams) -> Value {
     let mut m = Map::new();
     m.insert("ssh_key_id".into(), Value::String((&p.ssh_key_id).clone()));
-    m.insert("label".into(), match (&p.label) { Some(v) => iface_profile__ssh_key_properties_label__to_json(v), None => Value::Null });
+    m.insert("label".into(), match (&p.label) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -831,7 +793,7 @@ fn iface_profile__tfa_confirm_params__to_json(p: &iface_profile::TfaConfirmParam
 fn iface_profile__create_personal_access_token_params__to_json(p: &iface_profile::CreatePersonalAccessTokenParams) -> Value {
     let mut m = Map::new();
     m.insert("expiry".into(), match (&p.expiry) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("label".into(), match (&p.label) { Some(v) => iface_profile__personal_access_token_properties_label__to_json(v), None => Value::Null });
+    m.insert("label".into(), match (&p.label) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("scopes".into(), match (&p.scopes) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
@@ -895,9 +857,9 @@ fn iface_profile__get_profile_apps_response__from_json(v: &Value) -> Option<ifac
     let m = v.as_object()?;
     Some(iface_profile::GetProfileAppsResponse {
         data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_profile__authorized_app__from_json(x)).collect())),
-        page: m.get("page").filter(|v| !v.is_null()).and_then(|v| iface_profile__pagination_envelope_properties_page__from_json(v)),
-        pages: m.get("pages").filter(|v| !v.is_null()).and_then(|v| iface_profile__pagination_envelope_properties_pages__from_json(v)),
-        results: m.get("results").filter(|v| !v.is_null()).and_then(|v| iface_profile__pagination_envelope_properties_results__from_json(v)),
+        page: m.get("page").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        pages: m.get("pages").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        results: m.get("results").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
     })
 }
 
@@ -914,31 +876,11 @@ fn iface_profile__authorized_app__from_json(v: &Value) -> Option<iface_profile::
     })
 }
 
-fn iface_profile__pagination_envelope_properties_page__from_json(v: &Value) -> Option<iface_profile::PaginationEnvelopePropertiesPage> {
+fn iface_profile__delete_profile_app_response_entry__from_json(v: &Value) -> Option<iface_profile::DeleteProfileAppResponseEntry> {
     let m = v.as_object()?;
-    Some(iface_profile::PaginationEnvelopePropertiesPage {
+    Some(iface_profile::DeleteProfileAppResponseEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-    })
-}
-
-fn iface_profile__pagination_envelope_properties_pages__from_json(v: &Value) -> Option<iface_profile::PaginationEnvelopePropertiesPages> {
-    let m = v.as_object()?;
-    Some(iface_profile::PaginationEnvelopePropertiesPages {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-    })
-}
-
-fn iface_profile__pagination_envelope_properties_results__from_json(v: &Value) -> Option<iface_profile::PaginationEnvelopePropertiesResults> {
-    let m = v.as_object()?;
-    Some(iface_profile::PaginationEnvelopePropertiesResults {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-    })
-}
-
-fn iface_profile__delete_profile_app_response__from_json(v: &Value) -> Option<iface_profile::DeleteProfileAppResponse> {
-    let m = v.as_object()?;
-    Some(iface_profile::DeleteProfileAppResponse {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
     })
 }
 
@@ -946,9 +888,9 @@ fn iface_profile__get_devices_response__from_json(v: &Value) -> Option<iface_pro
     let m = v.as_object()?;
     Some(iface_profile::GetDevicesResponse {
         data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_profile__trusted_device__from_json(x)).collect())),
-        page: m.get("page").filter(|v| !v.is_null()).and_then(|v| iface_profile__pagination_envelope_properties_page__from_json(v)),
-        pages: m.get("pages").filter(|v| !v.is_null()).and_then(|v| iface_profile__pagination_envelope_properties_pages__from_json(v)),
-        results: m.get("results").filter(|v| !v.is_null()).and_then(|v| iface_profile__pagination_envelope_properties_results__from_json(v)),
+        page: m.get("page").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        pages: m.get("pages").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        results: m.get("results").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
     })
 }
 
@@ -964,10 +906,11 @@ fn iface_profile__trusted_device__from_json(v: &Value) -> Option<iface_profile::
     })
 }
 
-fn iface_profile__revoke_trusted_device_response__from_json(v: &Value) -> Option<iface_profile::RevokeTrustedDeviceResponse> {
+fn iface_profile__revoke_trusted_device_response_entry__from_json(v: &Value) -> Option<iface_profile::RevokeTrustedDeviceResponseEntry> {
     let m = v.as_object()?;
-    Some(iface_profile::RevokeTrustedDeviceResponse {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_profile::RevokeTrustedDeviceResponseEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -1017,9 +960,9 @@ fn iface_profile__get_profile_logins_response__from_json(v: &Value) -> Option<if
     let m = v.as_object()?;
     Some(iface_profile::GetProfileLoginsResponse {
         data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_profile__login__from_json(x)).collect())),
-        page: m.get("page").filter(|v| !v.is_null()).and_then(|v| iface_profile__pagination_envelope_properties_page__from_json(v)),
-        pages: m.get("pages").filter(|v| !v.is_null()).and_then(|v| iface_profile__pagination_envelope_properties_pages__from_json(v)),
-        results: m.get("results").filter(|v| !v.is_null()).and_then(|v| iface_profile__pagination_envelope_properties_results__from_json(v)),
+        page: m.get("page").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        pages: m.get("pages").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        results: m.get("results").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
     })
 }
 
@@ -1035,38 +978,43 @@ fn iface_profile__login__from_json(v: &Value) -> Option<iface_profile::Login> {
     })
 }
 
-fn iface_profile__post_profile_phone_number_response__from_json(v: &Value) -> Option<iface_profile::PostProfilePhoneNumberResponse> {
+fn iface_profile__post_profile_phone_number_response_entry__from_json(v: &Value) -> Option<iface_profile::PostProfilePhoneNumberResponseEntry> {
     let m = v.as_object()?;
-    Some(iface_profile::PostProfilePhoneNumberResponse {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_profile::PostProfilePhoneNumberResponseEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
-fn iface_profile__delete_profile_phone_number_response__from_json(v: &Value) -> Option<iface_profile::DeleteProfilePhoneNumberResponse> {
+fn iface_profile__delete_profile_phone_number_response_entry__from_json(v: &Value) -> Option<iface_profile::DeleteProfilePhoneNumberResponseEntry> {
     let m = v.as_object()?;
-    Some(iface_profile::DeleteProfilePhoneNumberResponse {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_profile::DeleteProfilePhoneNumberResponseEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
-fn iface_profile__post_profile_phone_number_verify_response__from_json(v: &Value) -> Option<iface_profile::PostProfilePhoneNumberVerifyResponse> {
+fn iface_profile__post_profile_phone_number_verify_response_entry__from_json(v: &Value) -> Option<iface_profile::PostProfilePhoneNumberVerifyResponseEntry> {
     let m = v.as_object()?;
-    Some(iface_profile::PostProfilePhoneNumberVerifyResponse {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_profile::PostProfilePhoneNumberVerifyResponseEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
-fn iface_profile__get_user_preferences_response__from_json(v: &Value) -> Option<iface_profile::GetUserPreferencesResponse> {
+fn iface_profile__get_user_preferences_response_entry__from_json(v: &Value) -> Option<iface_profile::GetUserPreferencesResponseEntry> {
     let m = v.as_object()?;
-    Some(iface_profile::GetUserPreferencesResponse {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_profile::GetUserPreferencesResponseEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
-fn iface_profile__update_user_preferences_response__from_json(v: &Value) -> Option<iface_profile::UpdateUserPreferencesResponse> {
+fn iface_profile__update_user_preferences_response_entry__from_json(v: &Value) -> Option<iface_profile::UpdateUserPreferencesResponseEntry> {
     let m = v.as_object()?;
-    Some(iface_profile::UpdateUserPreferencesResponse {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_profile::UpdateUserPreferencesResponseEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -1080,30 +1028,9 @@ fn iface_profile__security_questions_get__from_json(v: &Value) -> Option<iface_p
 fn iface_profile__security_questions_get_security_questions_item__from_json(v: &Value) -> Option<iface_profile::SecurityQuestionsGetSecurityQuestionsItem> {
     let m = v.as_object()?;
     Some(iface_profile::SecurityQuestionsGetSecurityQuestionsItem {
-        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| iface_profile__security_question_properties_id__from_json(v)),
-        question: m.get("question").filter(|v| !v.is_null()).and_then(|v| iface_profile__security_question_properties_question__from_json(v)),
-        response: m.get("response").filter(|v| !v.is_null()).and_then(|v| iface_profile__security_question_properties_response__from_json(v)),
-    })
-}
-
-fn iface_profile__security_question_properties_id__from_json(v: &Value) -> Option<iface_profile::SecurityQuestionPropertiesId> {
-    let m = v.as_object()?;
-    Some(iface_profile::SecurityQuestionPropertiesId {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-    })
-}
-
-fn iface_profile__security_question_properties_question__from_json(v: &Value) -> Option<iface_profile::SecurityQuestionPropertiesQuestion> {
-    let m = v.as_object()?;
-    Some(iface_profile::SecurityQuestionPropertiesQuestion {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-    })
-}
-
-fn iface_profile__security_question_properties_response__from_json(v: &Value) -> Option<iface_profile::SecurityQuestionPropertiesResponse> {
-    let m = v.as_object()?;
-    Some(iface_profile::SecurityQuestionPropertiesResponse {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        question: m.get("question").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        response: m.get("response").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
     })
 }
 
@@ -1117,9 +1044,9 @@ fn iface_profile__security_questions_post__from_json(v: &Value) -> Option<iface_
 fn iface_profile__security_questions_post_security_questions_item__from_json(v: &Value) -> Option<iface_profile::SecurityQuestionsPostSecurityQuestionsItem> {
     let m = v.as_object()?;
     Some(iface_profile::SecurityQuestionsPostSecurityQuestionsItem {
-        question_id: m.get("question_id").filter(|v| !v.is_null()).and_then(|v| iface_profile__security_question_properties_id__from_json(v)),
-        response: m.get("response").filter(|v| !v.is_null()).and_then(|v| iface_profile__security_question_properties_response__from_json(v)),
-        security_question: m.get("security_question").filter(|v| !v.is_null()).and_then(|v| iface_profile__security_question_properties_question__from_json(v)),
+        question_id: m.get("question_id").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        response: m.get("response").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        security_question: m.get("security_question").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
     })
 }
 
@@ -1127,9 +1054,9 @@ fn iface_profile__get_ssh_keys_response__from_json(v: &Value) -> Option<iface_pr
     let m = v.as_object()?;
     Some(iface_profile::GetSshKeysResponse {
         data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_profile__ssh_key__from_json(x)).collect())),
-        page: m.get("page").filter(|v| !v.is_null()).and_then(|v| iface_profile__pagination_envelope_properties_page__from_json(v)),
-        pages: m.get("pages").filter(|v| !v.is_null()).and_then(|v| iface_profile__pagination_envelope_properties_pages__from_json(v)),
-        results: m.get("results").filter(|v| !v.is_null()).and_then(|v| iface_profile__pagination_envelope_properties_results__from_json(v)),
+        page: m.get("page").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        pages: m.get("pages").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        results: m.get("results").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
     })
 }
 
@@ -1143,17 +1070,19 @@ fn iface_profile__ssh_key__from_json(v: &Value) -> Option<iface_profile::SshKey>
     })
 }
 
-fn iface_profile__delete_ssh_key_response__from_json(v: &Value) -> Option<iface_profile::DeleteSshKeyResponse> {
+fn iface_profile__delete_ssh_key_response_entry__from_json(v: &Value) -> Option<iface_profile::DeleteSshKeyResponseEntry> {
     let m = v.as_object()?;
-    Some(iface_profile::DeleteSshKeyResponse {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_profile::DeleteSshKeyResponseEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
-fn iface_profile__tfa_disable_response__from_json(v: &Value) -> Option<iface_profile::TfaDisableResponse> {
+fn iface_profile__tfa_disable_response_entry__from_json(v: &Value) -> Option<iface_profile::TfaDisableResponseEntry> {
     let m = v.as_object()?;
-    Some(iface_profile::TfaDisableResponse {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_profile::TfaDisableResponseEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -1176,9 +1105,9 @@ fn iface_profile__get_personal_access_tokens_response__from_json(v: &Value) -> O
     let m = v.as_object()?;
     Some(iface_profile::GetPersonalAccessTokensResponse {
         data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_profile__personal_access_token__from_json(x)).collect())),
-        page: m.get("page").filter(|v| !v.is_null()).and_then(|v| iface_profile__pagination_envelope_properties_page__from_json(v)),
-        pages: m.get("pages").filter(|v| !v.is_null()).and_then(|v| iface_profile__pagination_envelope_properties_pages__from_json(v)),
-        results: m.get("results").filter(|v| !v.is_null()).and_then(|v| iface_profile__pagination_envelope_properties_results__from_json(v)),
+        page: m.get("page").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        pages: m.get("pages").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        results: m.get("results").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
     })
 }
 
@@ -1194,10 +1123,11 @@ fn iface_profile__personal_access_token__from_json(v: &Value) -> Option<iface_pr
     })
 }
 
-fn iface_profile__delete_personal_access_token_response__from_json(v: &Value) -> Option<iface_profile::DeletePersonalAccessTokenResponse> {
+fn iface_profile__delete_personal_access_token_response_entry__from_json(v: &Value) -> Option<iface_profile::DeletePersonalAccessTokenResponseEntry> {
     let m = v.as_object()?;
-    Some(iface_profile::DeletePersonalAccessTokenResponse {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_profile::DeletePersonalAccessTokenResponseEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -1306,12 +1236,12 @@ fn iface_profile__get_profile_app__err(e: crate::runtime::DispatchError) -> Stri
     }
 }
 
-fn iface_profile__delete_profile_app__ok(body: String) -> Result<iface_profile::DeleteProfileAppResponse, crate::runtime::DispatchError> {
+fn iface_profile__delete_profile_app__ok(body: String) -> Result<Vec<iface_profile::DeleteProfileAppResponseEntry>, crate::runtime::DispatchError> {
     let v: Value = match serde_json::from_str(&body) {
         Ok(v) => v,
         Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
     };
-    match iface_profile__delete_profile_app_response__from_json(&v) {
+    match (&v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_profile::DeleteProfileAppResponseEntry { key: k.clone(), value: val })).collect()) {
         Some(x) => Ok(x),
         None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
@@ -1360,12 +1290,12 @@ fn iface_profile__get_trusted_device__err(e: crate::runtime::DispatchError) -> S
     }
 }
 
-fn iface_profile__revoke_trusted_device__ok(body: String) -> Result<iface_profile::RevokeTrustedDeviceResponse, crate::runtime::DispatchError> {
+fn iface_profile__revoke_trusted_device__ok(body: String) -> Result<Vec<iface_profile::RevokeTrustedDeviceResponseEntry>, crate::runtime::DispatchError> {
     let v: Value = match serde_json::from_str(&body) {
         Ok(v) => v,
         Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
     };
-    match iface_profile__revoke_trusted_device_response__from_json(&v) {
+    match (&v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_profile::RevokeTrustedDeviceResponseEntry { key: k.clone(), value: val })).collect()) {
         Some(x) => Ok(x),
         None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
@@ -1432,12 +1362,12 @@ fn iface_profile__get_profile_login__err(e: crate::runtime::DispatchError) -> St
     }
 }
 
-fn iface_profile__post_profile_phone_number__ok(body: String) -> Result<iface_profile::PostProfilePhoneNumberResponse, crate::runtime::DispatchError> {
+fn iface_profile__post_profile_phone_number__ok(body: String) -> Result<Vec<iface_profile::PostProfilePhoneNumberResponseEntry>, crate::runtime::DispatchError> {
     let v: Value = match serde_json::from_str(&body) {
         Ok(v) => v,
         Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
     };
-    match iface_profile__post_profile_phone_number_response__from_json(&v) {
+    match (&v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_profile::PostProfilePhoneNumberResponseEntry { key: k.clone(), value: val })).collect()) {
         Some(x) => Ok(x),
         None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
@@ -1450,12 +1380,12 @@ fn iface_profile__post_profile_phone_number__err(e: crate::runtime::DispatchErro
     }
 }
 
-fn iface_profile__delete_profile_phone_number__ok(body: String) -> Result<iface_profile::DeleteProfilePhoneNumberResponse, crate::runtime::DispatchError> {
+fn iface_profile__delete_profile_phone_number__ok(body: String) -> Result<Vec<iface_profile::DeleteProfilePhoneNumberResponseEntry>, crate::runtime::DispatchError> {
     let v: Value = match serde_json::from_str(&body) {
         Ok(v) => v,
         Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
     };
-    match iface_profile__delete_profile_phone_number_response__from_json(&v) {
+    match (&v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_profile::DeleteProfilePhoneNumberResponseEntry { key: k.clone(), value: val })).collect()) {
         Some(x) => Ok(x),
         None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
@@ -1468,12 +1398,12 @@ fn iface_profile__delete_profile_phone_number__err(e: crate::runtime::DispatchEr
     }
 }
 
-fn iface_profile__post_profile_phone_number_verify__ok(body: String) -> Result<iface_profile::PostProfilePhoneNumberVerifyResponse, crate::runtime::DispatchError> {
+fn iface_profile__post_profile_phone_number_verify__ok(body: String) -> Result<Vec<iface_profile::PostProfilePhoneNumberVerifyResponseEntry>, crate::runtime::DispatchError> {
     let v: Value = match serde_json::from_str(&body) {
         Ok(v) => v,
         Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
     };
-    match iface_profile__post_profile_phone_number_verify_response__from_json(&v) {
+    match (&v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_profile::PostProfilePhoneNumberVerifyResponseEntry { key: k.clone(), value: val })).collect()) {
         Some(x) => Ok(x),
         None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
@@ -1486,12 +1416,12 @@ fn iface_profile__post_profile_phone_number_verify__err(e: crate::runtime::Dispa
     }
 }
 
-fn iface_profile__get_user_preferences__ok(body: String) -> Result<iface_profile::GetUserPreferencesResponse, crate::runtime::DispatchError> {
+fn iface_profile__get_user_preferences__ok(body: String) -> Result<Vec<iface_profile::GetUserPreferencesResponseEntry>, crate::runtime::DispatchError> {
     let v: Value = match serde_json::from_str(&body) {
         Ok(v) => v,
         Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
     };
-    match iface_profile__get_user_preferences_response__from_json(&v) {
+    match (&v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_profile::GetUserPreferencesResponseEntry { key: k.clone(), value: val })).collect()) {
         Some(x) => Ok(x),
         None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
@@ -1504,12 +1434,12 @@ fn iface_profile__get_user_preferences__err(e: crate::runtime::DispatchError) ->
     }
 }
 
-fn iface_profile__update_user_preferences__ok(body: String) -> Result<iface_profile::UpdateUserPreferencesResponse, crate::runtime::DispatchError> {
+fn iface_profile__update_user_preferences__ok(body: String) -> Result<Vec<iface_profile::UpdateUserPreferencesResponseEntry>, crate::runtime::DispatchError> {
     let v: Value = match serde_json::from_str(&body) {
         Ok(v) => v,
         Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
     };
-    match iface_profile__update_user_preferences_response__from_json(&v) {
+    match (&v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_profile::UpdateUserPreferencesResponseEntry { key: k.clone(), value: val })).collect()) {
         Some(x) => Ok(x),
         None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
@@ -1630,12 +1560,12 @@ fn iface_profile__update_ssh_key__err(e: crate::runtime::DispatchError) -> Strin
     }
 }
 
-fn iface_profile__delete_ssh_key__ok(body: String) -> Result<iface_profile::DeleteSshKeyResponse, crate::runtime::DispatchError> {
+fn iface_profile__delete_ssh_key__ok(body: String) -> Result<Vec<iface_profile::DeleteSshKeyResponseEntry>, crate::runtime::DispatchError> {
     let v: Value = match serde_json::from_str(&body) {
         Ok(v) => v,
         Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
     };
-    match iface_profile__delete_ssh_key_response__from_json(&v) {
+    match (&v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_profile::DeleteSshKeyResponseEntry { key: k.clone(), value: val })).collect()) {
         Some(x) => Ok(x),
         None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
@@ -1648,12 +1578,12 @@ fn iface_profile__delete_ssh_key__err(e: crate::runtime::DispatchError) -> Strin
     }
 }
 
-fn iface_profile__tfa_disable__ok(body: String) -> Result<iface_profile::TfaDisableResponse, crate::runtime::DispatchError> {
+fn iface_profile__tfa_disable__ok(body: String) -> Result<Vec<iface_profile::TfaDisableResponseEntry>, crate::runtime::DispatchError> {
     let v: Value = match serde_json::from_str(&body) {
         Ok(v) => v,
         Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
     };
-    match iface_profile__tfa_disable_response__from_json(&v) {
+    match (&v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_profile::TfaDisableResponseEntry { key: k.clone(), value: val })).collect()) {
         Some(x) => Ok(x),
         None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
@@ -1774,12 +1704,12 @@ fn iface_profile__update_personal_access_token__err(e: crate::runtime::DispatchE
     }
 }
 
-fn iface_profile__delete_personal_access_token__ok(body: String) -> Result<iface_profile::DeletePersonalAccessTokenResponse, crate::runtime::DispatchError> {
+fn iface_profile__delete_personal_access_token__ok(body: String) -> Result<Vec<iface_profile::DeletePersonalAccessTokenResponseEntry>, crate::runtime::DispatchError> {
     let v: Value = match serde_json::from_str(&body) {
         Ok(v) => v,
         Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
     };
-    match iface_profile__delete_personal_access_token_response__from_json(&v) {
+    match (&v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_profile::DeletePersonalAccessTokenResponseEntry { key: k.clone(), value: val })).collect()) {
         Some(x) => Ok(x),
         None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
@@ -1820,7 +1750,7 @@ impl iface_profile::Guest for crate::Component {
             Err(e) => Err(iface_profile__get_profile_app__err(e)),
         }
     }
-    fn delete_profile_app(params: iface_profile::DeleteProfileAppParams) -> Result<iface_profile::DeleteProfileAppResponse, String> {
+    fn delete_profile_app(params: iface_profile::DeleteProfileAppParams) -> Result<Vec<iface_profile::DeleteProfileAppResponseEntry>, String> {
         let json = iface_profile__delete_profile_app_params__to_json(&params);
         match dispatch(&OP_PROFILE_DELETE_PROFILE_APP, json).and_then(iface_profile__delete_profile_app__ok) {
             Ok(v) => Ok(v),
@@ -1840,7 +1770,7 @@ impl iface_profile::Guest for crate::Component {
             Err(e) => Err(iface_profile__get_trusted_device__err(e)),
         }
     }
-    fn revoke_trusted_device(params: iface_profile::RevokeTrustedDeviceParams) -> Result<iface_profile::RevokeTrustedDeviceResponse, String> {
+    fn revoke_trusted_device(params: iface_profile::RevokeTrustedDeviceParams) -> Result<Vec<iface_profile::RevokeTrustedDeviceResponseEntry>, String> {
         let json = iface_profile__revoke_trusted_device_params__to_json(&params);
         match dispatch(&OP_PROFILE_REVOKE_TRUSTED_DEVICE, json).and_then(iface_profile__revoke_trusted_device__ok) {
             Ok(v) => Ok(v),
@@ -1866,33 +1796,33 @@ impl iface_profile::Guest for crate::Component {
             Err(e) => Err(iface_profile__get_profile_login__err(e)),
         }
     }
-    fn post_profile_phone_number(params: iface_profile::PostProfilePhoneNumberParams) -> Result<iface_profile::PostProfilePhoneNumberResponse, String> {
+    fn post_profile_phone_number(params: iface_profile::PostProfilePhoneNumberParams) -> Result<Vec<iface_profile::PostProfilePhoneNumberResponseEntry>, String> {
         let json = iface_profile__post_profile_phone_number_params__to_json(&params);
         match dispatch(&OP_PROFILE_POST_PROFILE_PHONE_NUMBER, json).and_then(iface_profile__post_profile_phone_number__ok) {
             Ok(v) => Ok(v),
             Err(e) => Err(iface_profile__post_profile_phone_number__err(e)),
         }
     }
-    fn delete_profile_phone_number() -> Result<iface_profile::DeleteProfilePhoneNumberResponse, String> {
+    fn delete_profile_phone_number() -> Result<Vec<iface_profile::DeleteProfilePhoneNumberResponseEntry>, String> {
         match dispatch(&OP_PROFILE_DELETE_PROFILE_PHONE_NUMBER, Value::Object(Map::new())).and_then(iface_profile__delete_profile_phone_number__ok) {
             Ok(v) => Ok(v),
             Err(e) => Err(iface_profile__delete_profile_phone_number__err(e)),
         }
     }
-    fn post_profile_phone_number_verify(params: iface_profile::PostProfilePhoneNumberVerifyParams) -> Result<iface_profile::PostProfilePhoneNumberVerifyResponse, String> {
+    fn post_profile_phone_number_verify(params: iface_profile::PostProfilePhoneNumberVerifyParams) -> Result<Vec<iface_profile::PostProfilePhoneNumberVerifyResponseEntry>, String> {
         let json = iface_profile__post_profile_phone_number_verify_params__to_json(&params);
         match dispatch(&OP_PROFILE_POST_PROFILE_PHONE_NUMBER_VERIFY, json).and_then(iface_profile__post_profile_phone_number_verify__ok) {
             Ok(v) => Ok(v),
             Err(e) => Err(iface_profile__post_profile_phone_number_verify__err(e)),
         }
     }
-    fn get_user_preferences() -> Result<iface_profile::GetUserPreferencesResponse, String> {
+    fn get_user_preferences() -> Result<Vec<iface_profile::GetUserPreferencesResponseEntry>, String> {
         match dispatch(&OP_PROFILE_GET_USER_PREFERENCES, Value::Object(Map::new())).and_then(iface_profile__get_user_preferences__ok) {
             Ok(v) => Ok(v),
             Err(e) => Err(iface_profile__get_user_preferences__err(e)),
         }
     }
-    fn update_user_preferences(params: iface_profile::UpdateUserPreferencesParams) -> Result<iface_profile::UpdateUserPreferencesResponse, String> {
+    fn update_user_preferences(params: iface_profile::UpdateUserPreferencesParams) -> Result<Vec<iface_profile::UpdateUserPreferencesResponseEntry>, String> {
         let json = iface_profile__update_user_preferences_params__to_json(&params);
         match dispatch(&OP_PROFILE_UPDATE_USER_PREFERENCES, json).and_then(iface_profile__update_user_preferences__ok) {
             Ok(v) => Ok(v),
@@ -1940,14 +1870,14 @@ impl iface_profile::Guest for crate::Component {
             Err(e) => Err(iface_profile__update_ssh_key__err(e)),
         }
     }
-    fn delete_ssh_key(params: iface_profile::DeleteSshKeyParams) -> Result<iface_profile::DeleteSshKeyResponse, String> {
+    fn delete_ssh_key(params: iface_profile::DeleteSshKeyParams) -> Result<Vec<iface_profile::DeleteSshKeyResponseEntry>, String> {
         let json = iface_profile__delete_ssh_key_params__to_json(&params);
         match dispatch(&OP_PROFILE_DELETE_SSH_KEY, json).and_then(iface_profile__delete_ssh_key__ok) {
             Ok(v) => Ok(v),
             Err(e) => Err(iface_profile__delete_ssh_key__err(e)),
         }
     }
-    fn tfa_disable() -> Result<iface_profile::TfaDisableResponse, String> {
+    fn tfa_disable() -> Result<Vec<iface_profile::TfaDisableResponseEntry>, String> {
         match dispatch(&OP_PROFILE_TFA_DISABLE, Value::Object(Map::new())).and_then(iface_profile__tfa_disable__ok) {
             Ok(v) => Ok(v),
             Err(e) => Err(iface_profile__tfa_disable__err(e)),
@@ -1993,7 +1923,7 @@ impl iface_profile::Guest for crate::Component {
             Err(e) => Err(iface_profile__update_personal_access_token__err(e)),
         }
     }
-    fn delete_personal_access_token(params: iface_profile::DeletePersonalAccessTokenParams) -> Result<iface_profile::DeletePersonalAccessTokenResponse, String> {
+    fn delete_personal_access_token(params: iface_profile::DeletePersonalAccessTokenParams) -> Result<Vec<iface_profile::DeletePersonalAccessTokenResponseEntry>, String> {
         let json = iface_profile__delete_personal_access_token_params__to_json(&params);
         match dispatch(&OP_PROFILE_DELETE_PERSONAL_ACCESS_TOKEN, json).and_then(iface_profile__delete_personal_access_token__ok) {
             Ok(v) => Ok(v),

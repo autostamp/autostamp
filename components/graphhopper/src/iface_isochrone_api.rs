@@ -21,17 +21,25 @@ const OP_ISOCHRONE_API_GET_ISOCHRONE: OpSpec = OpSpec {
     ],
 };
 
+fn iface_isochrone_api__vehicle_profile_id__to_str(e: &iface_isochrone_api::VehicleProfileId) -> &'static str {
+    match e {
+        iface_isochrone_api::VehicleProfileId::Car => "car",
+        iface_isochrone_api::VehicleProfileId::Bike => "bike",
+        iface_isochrone_api::VehicleProfileId::Foot => "foot",
+        iface_isochrone_api::VehicleProfileId::Hike => "hike",
+        iface_isochrone_api::VehicleProfileId::Mtb => "mtb",
+        iface_isochrone_api::VehicleProfileId::Racingbike => "racingbike",
+        iface_isochrone_api::VehicleProfileId::Scooter => "scooter",
+        iface_isochrone_api::VehicleProfileId::Truck => "truck",
+        iface_isochrone_api::VehicleProfileId::SmallTruck => "small_truck",
+    }
+}
+
 fn iface_isochrone_api__get_isochrone_weighting_enum__to_str(e: &iface_isochrone_api::GetIsochroneWeightingEnum) -> &'static str {
     match e {
         iface_isochrone_api::GetIsochroneWeightingEnum::Fastest => "fastest",
         iface_isochrone_api::GetIsochroneWeightingEnum::Shortest => "shortest",
     }
-}
-
-fn iface_isochrone_api__vehicle_profile_id__to_json(p: &iface_isochrone_api::VehicleProfileId) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
 }
 
 fn iface_isochrone_api__isochrone_response__to_json(p: &iface_isochrone_api::IsochroneResponse) -> Value {
@@ -67,7 +75,7 @@ fn iface_isochrone_api__get_isochrone_params__to_json(p: &iface_isochrone_api::G
     m.insert("point".into(), Value::String((&p.point).clone()));
     m.insert("time_limit".into(), match (&p.time_limit) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("distance_limit".into(), match (&p.distance_limit) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    m.insert("vehicle".into(), match (&p.vehicle) { Some(v) => iface_isochrone_api__vehicle_profile_id__to_json(v), None => Value::Null });
+    m.insert("vehicle".into(), match (&p.vehicle) { Some(v) => Value::String(iface_isochrone_api__vehicle_profile_id__to_str(v).into()), None => Value::Null });
     m.insert("buckets".into(), match (&p.buckets) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("reverse_flow".into(), match (&p.reverse_flow) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     m.insert("weighting".into(), match (&p.weighting) { Some(v) => Value::String(iface_isochrone_api__get_isochrone_weighting_enum__to_str(v).into()), None => Value::Null });

@@ -47,16 +47,17 @@ fn iface_products_render_info__catalog_data_product_render_interface__to_json(p:
 
 fn iface_products_render_info__catalog_data_product_render_button_interface__to_json(p: &iface_products_render_info::CatalogDataProductRenderButtonInterface) -> Value {
     let mut m = Map::new();
-    m.insert("extension_attributes".into(), match (&p.extension_attributes) { Some(v) => iface_products_render_info__catalog_data_product_render_button_extension_interface__to_json(v), None => Value::Null });
+    m.insert("extension_attributes".into(), match (&p.extension_attributes) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("post_data".into(), Value::String((&p.post_data).clone()));
     m.insert("required_options".into(), Value::Bool(*(&p.required_options)));
     m.insert("url".into(), Value::String((&p.url).clone()));
     Value::Object(m)
 }
 
-fn iface_products_render_info__catalog_data_product_render_button_extension_interface__to_json(p: &iface_products_render_info::CatalogDataProductRenderButtonExtensionInterface) -> Value {
+fn iface_products_render_info__catalog_data_product_render_button_extension_interface_entry__to_json(p: &iface_products_render_info::CatalogDataProductRenderButtonExtensionInterfaceEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -70,7 +71,7 @@ fn iface_products_render_info__catalog_data_product_render_extension_interface__
 fn iface_products_render_info__catalog_data_product_render_image_interface__to_json(p: &iface_products_render_info::CatalogDataProductRenderImageInterface) -> Value {
     let mut m = Map::new();
     m.insert("code".into(), Value::String((&p.code).clone()));
-    m.insert("extension_attributes".into(), match (&p.extension_attributes) { Some(v) => iface_products_render_info__catalog_data_product_render_image_extension_interface__to_json(v), None => Value::Null });
+    m.insert("extension_attributes".into(), match (&p.extension_attributes) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("height".into(), serde_json::Number::from_f64(*(&p.height)).map(Value::Number).unwrap_or(Value::Null));
     m.insert("label".into(), Value::String((&p.label).clone()));
     m.insert("resized_height".into(), serde_json::Number::from_f64(*(&p.resized_height)).map(Value::Number).unwrap_or(Value::Null));
@@ -80,9 +81,10 @@ fn iface_products_render_info__catalog_data_product_render_image_interface__to_j
     Value::Object(m)
 }
 
-fn iface_products_render_info__catalog_data_product_render_image_extension_interface__to_json(p: &iface_products_render_info::CatalogDataProductRenderImageExtensionInterface) -> Value {
+fn iface_products_render_info__catalog_data_product_render_image_extension_interface_entry__to_json(p: &iface_products_render_info::CatalogDataProductRenderImageExtensionInterfaceEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -112,7 +114,7 @@ fn iface_products_render_info__catalog_data_product_render_price_info_extension_
 fn iface_products_render_info__msrp_data_product_render_msrp_price_info_interface__to_json(p: &iface_products_render_info::MsrpDataProductRenderMsrpPriceInfoInterface) -> Value {
     let mut m = Map::new();
     m.insert("explanation_message".into(), Value::String((&p.explanation_message).clone()));
-    m.insert("extension_attributes".into(), match (&p.extension_attributes) { Some(v) => iface_products_render_info__msrp_data_product_render_msrp_price_info_extension_interface__to_json(v), None => Value::Null });
+    m.insert("extension_attributes".into(), match (&p.extension_attributes) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("is_applicable".into(), Value::String((&p.is_applicable).clone()));
     m.insert("is_shown_price_on_gesture".into(), Value::String((&p.is_shown_price_on_gesture).clone()));
     m.insert("msrp_message".into(), Value::String((&p.msrp_message).clone()));
@@ -120,9 +122,10 @@ fn iface_products_render_info__msrp_data_product_render_msrp_price_info_interfac
     Value::Object(m)
 }
 
-fn iface_products_render_info__msrp_data_product_render_msrp_price_info_extension_interface__to_json(p: &iface_products_render_info::MsrpDataProductRenderMsrpPriceInfoExtensionInterface) -> Value {
+fn iface_products_render_info__msrp_data_product_render_msrp_price_info_extension_interface_entry__to_json(p: &iface_products_render_info::MsrpDataProductRenderMsrpPriceInfoExtensionInterfaceEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -131,21 +134,22 @@ fn iface_products_render_info__weee_data_product_render_weee_adjustment_attribut
     m.insert("amount".into(), Value::String((&p.amount).clone()));
     m.insert("amount_excl_tax".into(), Value::String((&p.amount_excl_tax).clone()));
     m.insert("attribute_code".into(), Value::String((&p.attribute_code).clone()));
-    m.insert("extension_attributes".into(), iface_products_render_info__weee_data_product_render_weee_adjustment_attribute_extension_interface__to_json(&p.extension_attributes));
+    m.insert("extension_attributes".into(), Value::Object((&p.extension_attributes).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()));
     m.insert("tax_amount".into(), Value::String((&p.tax_amount).clone()));
     m.insert("tax_amount_incl_tax".into(), Value::String((&p.tax_amount_incl_tax).clone()));
     Value::Object(m)
 }
 
-fn iface_products_render_info__weee_data_product_render_weee_adjustment_attribute_extension_interface__to_json(p: &iface_products_render_info::WeeeDataProductRenderWeeeAdjustmentAttributeExtensionInterface) -> Value {
+fn iface_products_render_info__weee_data_product_render_weee_adjustment_attribute_extension_interface_entry__to_json(p: &iface_products_render_info::WeeeDataProductRenderWeeeAdjustmentAttributeExtensionInterfaceEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
 fn iface_products_render_info__catalog_data_product_render_formatted_price_info_interface__to_json(p: &iface_products_render_info::CatalogDataProductRenderFormattedPriceInfoInterface) -> Value {
     let mut m = Map::new();
-    m.insert("extension_attributes".into(), match (&p.extension_attributes) { Some(v) => iface_products_render_info__catalog_data_product_render_formatted_price_info_extension_interface__to_json(v), None => Value::Null });
+    m.insert("extension_attributes".into(), match (&p.extension_attributes) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("final_price".into(), Value::String((&p.final_price).clone()));
     m.insert("max_price".into(), Value::String((&p.max_price).clone()));
     m.insert("max_regular_price".into(), Value::String((&p.max_regular_price).clone()));
@@ -156,9 +160,10 @@ fn iface_products_render_info__catalog_data_product_render_formatted_price_info_
     Value::Object(m)
 }
 
-fn iface_products_render_info__catalog_data_product_render_formatted_price_info_extension_interface__to_json(p: &iface_products_render_info::CatalogDataProductRenderFormattedPriceInfoExtensionInterface) -> Value {
+fn iface_products_render_info__catalog_data_product_render_formatted_price_info_extension_interface_entry__to_json(p: &iface_products_render_info::CatalogDataProductRenderFormattedPriceInfoExtensionInterfaceEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -204,17 +209,18 @@ fn iface_products_render_info__catalog_data_product_render_interface__from_json(
 fn iface_products_render_info__catalog_data_product_render_button_interface__from_json(v: &Value) -> Option<iface_products_render_info::CatalogDataProductRenderButtonInterface> {
     let m = v.as_object()?;
     Some(iface_products_render_info::CatalogDataProductRenderButtonInterface {
-        extension_attributes: m.get("extension_attributes").filter(|v| !v.is_null()).and_then(|v| iface_products_render_info__catalog_data_product_render_button_extension_interface__from_json(v)),
+        extension_attributes: m.get("extension_attributes").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_products_render_info::CatalogDataProductRenderButtonExtensionInterfaceEntry { key: k.clone(), value: val })).collect())),
         post_data: m.get("post_data").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         required_options: m.get("required_options").and_then(|v| (v).as_bool()).unwrap_or_default(),
         url: m.get("url").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
-fn iface_products_render_info__catalog_data_product_render_button_extension_interface__from_json(v: &Value) -> Option<iface_products_render_info::CatalogDataProductRenderButtonExtensionInterface> {
+fn iface_products_render_info__catalog_data_product_render_button_extension_interface_entry__from_json(v: &Value) -> Option<iface_products_render_info::CatalogDataProductRenderButtonExtensionInterfaceEntry> {
     let m = v.as_object()?;
-    Some(iface_products_render_info::CatalogDataProductRenderButtonExtensionInterface {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_products_render_info::CatalogDataProductRenderButtonExtensionInterfaceEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -230,7 +236,7 @@ fn iface_products_render_info__catalog_data_product_render_image_interface__from
     let m = v.as_object()?;
     Some(iface_products_render_info::CatalogDataProductRenderImageInterface {
         code: m.get("code").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-        extension_attributes: m.get("extension_attributes").filter(|v| !v.is_null()).and_then(|v| iface_products_render_info__catalog_data_product_render_image_extension_interface__from_json(v)),
+        extension_attributes: m.get("extension_attributes").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_products_render_info::CatalogDataProductRenderImageExtensionInterfaceEntry { key: k.clone(), value: val })).collect())),
         height: m.get("height").and_then(|v| (v).as_f64()).unwrap_or_default(),
         label: m.get("label").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         resized_height: m.get("resized_height").and_then(|v| (v).as_f64()).unwrap_or_default(),
@@ -240,10 +246,11 @@ fn iface_products_render_info__catalog_data_product_render_image_interface__from
     })
 }
 
-fn iface_products_render_info__catalog_data_product_render_image_extension_interface__from_json(v: &Value) -> Option<iface_products_render_info::CatalogDataProductRenderImageExtensionInterface> {
+fn iface_products_render_info__catalog_data_product_render_image_extension_interface_entry__from_json(v: &Value) -> Option<iface_products_render_info::CatalogDataProductRenderImageExtensionInterfaceEntry> {
     let m = v.as_object()?;
-    Some(iface_products_render_info::CatalogDataProductRenderImageExtensionInterface {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_products_render_info::CatalogDataProductRenderImageExtensionInterfaceEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -276,7 +283,7 @@ fn iface_products_render_info__msrp_data_product_render_msrp_price_info_interfac
     let m = v.as_object()?;
     Some(iface_products_render_info::MsrpDataProductRenderMsrpPriceInfoInterface {
         explanation_message: m.get("explanation_message").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-        extension_attributes: m.get("extension_attributes").filter(|v| !v.is_null()).and_then(|v| iface_products_render_info__msrp_data_product_render_msrp_price_info_extension_interface__from_json(v)),
+        extension_attributes: m.get("extension_attributes").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_products_render_info::MsrpDataProductRenderMsrpPriceInfoExtensionInterfaceEntry { key: k.clone(), value: val })).collect())),
         is_applicable: m.get("is_applicable").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         is_shown_price_on_gesture: m.get("is_shown_price_on_gesture").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         msrp_message: m.get("msrp_message").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
@@ -284,10 +291,11 @@ fn iface_products_render_info__msrp_data_product_render_msrp_price_info_interfac
     })
 }
 
-fn iface_products_render_info__msrp_data_product_render_msrp_price_info_extension_interface__from_json(v: &Value) -> Option<iface_products_render_info::MsrpDataProductRenderMsrpPriceInfoExtensionInterface> {
+fn iface_products_render_info__msrp_data_product_render_msrp_price_info_extension_interface_entry__from_json(v: &Value) -> Option<iface_products_render_info::MsrpDataProductRenderMsrpPriceInfoExtensionInterfaceEntry> {
     let m = v.as_object()?;
-    Some(iface_products_render_info::MsrpDataProductRenderMsrpPriceInfoExtensionInterface {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_products_render_info::MsrpDataProductRenderMsrpPriceInfoExtensionInterfaceEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -297,23 +305,24 @@ fn iface_products_render_info__weee_data_product_render_weee_adjustment_attribut
         amount: m.get("amount").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         amount_excl_tax: m.get("amount_excl_tax").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         attribute_code: m.get("attribute_code").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-        extension_attributes: match m.get("extension_attributes").and_then(|v| iface_products_render_info__weee_data_product_render_weee_adjustment_attribute_extension_interface__from_json(v)) { Some(x) => x, None => return None },
+        extension_attributes: m.get("extension_attributes").and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_products_render_info::WeeeDataProductRenderWeeeAdjustmentAttributeExtensionInterfaceEntry { key: k.clone(), value: val })).collect())).unwrap_or_default(),
         tax_amount: m.get("tax_amount").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         tax_amount_incl_tax: m.get("tax_amount_incl_tax").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
-fn iface_products_render_info__weee_data_product_render_weee_adjustment_attribute_extension_interface__from_json(v: &Value) -> Option<iface_products_render_info::WeeeDataProductRenderWeeeAdjustmentAttributeExtensionInterface> {
+fn iface_products_render_info__weee_data_product_render_weee_adjustment_attribute_extension_interface_entry__from_json(v: &Value) -> Option<iface_products_render_info::WeeeDataProductRenderWeeeAdjustmentAttributeExtensionInterfaceEntry> {
     let m = v.as_object()?;
-    Some(iface_products_render_info::WeeeDataProductRenderWeeeAdjustmentAttributeExtensionInterface {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_products_render_info::WeeeDataProductRenderWeeeAdjustmentAttributeExtensionInterfaceEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
 fn iface_products_render_info__catalog_data_product_render_formatted_price_info_interface__from_json(v: &Value) -> Option<iface_products_render_info::CatalogDataProductRenderFormattedPriceInfoInterface> {
     let m = v.as_object()?;
     Some(iface_products_render_info::CatalogDataProductRenderFormattedPriceInfoInterface {
-        extension_attributes: m.get("extension_attributes").filter(|v| !v.is_null()).and_then(|v| iface_products_render_info__catalog_data_product_render_formatted_price_info_extension_interface__from_json(v)),
+        extension_attributes: m.get("extension_attributes").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_products_render_info::CatalogDataProductRenderFormattedPriceInfoExtensionInterfaceEntry { key: k.clone(), value: val })).collect())),
         final_price: m.get("final_price").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         max_price: m.get("max_price").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         max_regular_price: m.get("max_regular_price").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
@@ -324,10 +333,11 @@ fn iface_products_render_info__catalog_data_product_render_formatted_price_info_
     })
 }
 
-fn iface_products_render_info__catalog_data_product_render_formatted_price_info_extension_interface__from_json(v: &Value) -> Option<iface_products_render_info::CatalogDataProductRenderFormattedPriceInfoExtensionInterface> {
+fn iface_products_render_info__catalog_data_product_render_formatted_price_info_extension_interface_entry__from_json(v: &Value) -> Option<iface_products_render_info::CatalogDataProductRenderFormattedPriceInfoExtensionInterfaceEntry> {
     let m = v.as_object()?;
-    Some(iface_products_render_info::CatalogDataProductRenderFormattedPriceInfoExtensionInterface {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_products_render_info::CatalogDataProductRenderFormattedPriceInfoExtensionInterfaceEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 

@@ -20,8 +20,8 @@ triggered.
 
 | Setting | Value |
 | --- | --- |
-| Package | `autostamp:xero@0.5.0` |
-| Published version | `0.5.0+xero-2.9.4` |
+| Package | `autostamp:xero@0.6.0` |
+| Published version | `0.6.0+xero-2.9.4` |
 | Tag filter | all tags |
 | Operations generated | 2 |
 | Infer API-key credentials | enabled — not triggered |

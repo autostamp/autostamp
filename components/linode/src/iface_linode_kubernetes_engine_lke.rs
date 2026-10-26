@@ -293,9 +293,9 @@ fn iface_linode_kubernetes_engine_lke__lke_node_pool_disks_item_type_op_enum__to
 fn iface_linode_kubernetes_engine_lke__get_lke_clusters_response__to_json(p: &iface_linode_kubernetes_engine_lke::GetLkeClustersResponse) -> Value {
     let mut m = Map::new();
     m.insert("data".into(), match (&p.data) { Some(v) => Value::Array((v).iter().map(|v| iface_linode_kubernetes_engine_lke__lke_cluster__to_json(v)).collect()), None => Value::Null });
-    m.insert("page".into(), match (&p.page) { Some(v) => iface_linode_kubernetes_engine_lke__pagination_envelope_properties_page__to_json(v), None => Value::Null });
-    m.insert("pages".into(), match (&p.pages) { Some(v) => iface_linode_kubernetes_engine_lke__pagination_envelope_properties_pages__to_json(v), None => Value::Null });
-    m.insert("results".into(), match (&p.results) { Some(v) => iface_linode_kubernetes_engine_lke__pagination_envelope_properties_results__to_json(v), None => Value::Null });
+    m.insert("page".into(), match (&p.page) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("pages".into(), match (&p.pages) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("results".into(), match (&p.results) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
@@ -318,51 +318,9 @@ fn iface_linode_kubernetes_engine_lke__lke_cluster_control_plane__to_json(p: &if
     Value::Object(m)
 }
 
-fn iface_linode_kubernetes_engine_lke__pagination_envelope_properties_page__to_json(p: &iface_linode_kubernetes_engine_lke::PaginationEnvelopePropertiesPage) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_linode_kubernetes_engine_lke__pagination_envelope_properties_pages__to_json(p: &iface_linode_kubernetes_engine_lke::PaginationEnvelopePropertiesPages) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_linode_kubernetes_engine_lke__pagination_envelope_properties_results__to_json(p: &iface_linode_kubernetes_engine_lke::PaginationEnvelopePropertiesResults) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
 fn iface_linode_kubernetes_engine_lke__create_lke_cluster_body_control_plane__to_json(p: &iface_linode_kubernetes_engine_lke::CreateLkeClusterBodyControlPlane) -> Value {
     let mut m = Map::new();
     m.insert("high_availability".into(), match (&p.high_availability) { Some(v) => Value::Bool(*(v)), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_linode_kubernetes_engine_lke__lke_cluster_properties_k8s_version__to_json(p: &iface_linode_kubernetes_engine_lke::LkeClusterPropertiesK8sVersion) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_linode_kubernetes_engine_lke__lke_cluster_properties_label__to_json(p: &iface_linode_kubernetes_engine_lke::LkeClusterPropertiesLabel) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_linode_kubernetes_engine_lke__lke_cluster_properties_region__to_json(p: &iface_linode_kubernetes_engine_lke::LkeClusterPropertiesRegion) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_linode_kubernetes_engine_lke__lke_cluster_properties_tags__to_json(p: &iface_linode_kubernetes_engine_lke::LkeClusterPropertiesTags) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -374,39 +332,28 @@ fn iface_linode_kubernetes_engine_lke__put_lke_cluster_body_control_plane__to_js
 
 fn iface_linode_kubernetes_engine_lke__put_lke_cluster_response__to_json(p: &iface_linode_kubernetes_engine_lke::PutLkeClusterResponse) -> Value {
     let mut m = Map::new();
-    m.insert("created".into(), match (&p.created) { Some(v) => iface_linode_kubernetes_engine_lke__lke_cluster_properties_created__to_json(v), None => Value::Null });
-    m.insert("k8s_version".into(), match (&p.k8s_version) { Some(v) => iface_linode_kubernetes_engine_lke__lke_cluster_properties_k8s_version__to_json(v), None => Value::Null });
-    m.insert("label".into(), match (&p.label) { Some(v) => iface_linode_kubernetes_engine_lke__lke_cluster_properties_label__to_json(v), None => Value::Null });
-    m.insert("region".into(), match (&p.region) { Some(v) => iface_linode_kubernetes_engine_lke__lke_cluster_properties_region__to_json(v), None => Value::Null });
+    m.insert("created".into(), match (&p.created) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("k8s_version".into(), match (&p.k8s_version) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("label".into(), match (&p.label) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("region".into(), match (&p.region) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("tags".into(), match (&p.tags) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
-    m.insert("updated".into(), match (&p.updated) { Some(v) => iface_linode_kubernetes_engine_lke__lke_cluster_properties_updated__to_json(v), None => Value::Null });
+    m.insert("updated".into(), match (&p.updated) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_linode_kubernetes_engine_lke__lke_cluster_properties_created__to_json(p: &iface_linode_kubernetes_engine_lke::LkeClusterPropertiesCreated) -> Value {
+fn iface_linode_kubernetes_engine_lke__delete_lke_cluster_response_entry__to_json(p: &iface_linode_kubernetes_engine_lke::DeleteLkeClusterResponseEntry) -> Value {
     let mut m = Map::new();
+    m.insert("key".into(), Value::String((&p.key).clone()));
     m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_linode_kubernetes_engine_lke__lke_cluster_properties_updated__to_json(p: &iface_linode_kubernetes_engine_lke::LkeClusterPropertiesUpdated) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_linode_kubernetes_engine_lke__delete_lke_cluster_response__to_json(p: &iface_linode_kubernetes_engine_lke::DeleteLkeClusterResponse) -> Value {
-    let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
 fn iface_linode_kubernetes_engine_lke__get_lke_cluster_api_endpoints_response__to_json(p: &iface_linode_kubernetes_engine_lke::GetLkeClusterApiEndpointsResponse) -> Value {
     let mut m = Map::new();
     m.insert("data".into(), match (&p.data) { Some(v) => Value::Array((v).iter().map(|v| iface_linode_kubernetes_engine_lke__get_lke_cluster_api_endpoints_response_data_item__to_json(v)).collect()), None => Value::Null });
-    m.insert("page".into(), match (&p.page) { Some(v) => iface_linode_kubernetes_engine_lke__pagination_envelope_properties_page__to_json(v), None => Value::Null });
-    m.insert("pages".into(), match (&p.pages) { Some(v) => iface_linode_kubernetes_engine_lke__pagination_envelope_properties_pages__to_json(v), None => Value::Null });
-    m.insert("results".into(), match (&p.results) { Some(v) => iface_linode_kubernetes_engine_lke__pagination_envelope_properties_results__to_json(v), None => Value::Null });
+    m.insert("page".into(), match (&p.page) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("pages".into(), match (&p.pages) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("results".into(), match (&p.results) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
@@ -428,9 +375,10 @@ fn iface_linode_kubernetes_engine_lke__get_lke_cluster_kubeconfig_response__to_j
     Value::Object(m)
 }
 
-fn iface_linode_kubernetes_engine_lke__delete_lke_cluster_kubeconfig_response__to_json(p: &iface_linode_kubernetes_engine_lke::DeleteLkeClusterKubeconfigResponse) -> Value {
+fn iface_linode_kubernetes_engine_lke__delete_lke_cluster_kubeconfig_response_entry__to_json(p: &iface_linode_kubernetes_engine_lke::DeleteLkeClusterKubeconfigResponseEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -442,24 +390,26 @@ fn iface_linode_kubernetes_engine_lke__get_lke_cluster_node_response__to_json(p:
     Value::Object(m)
 }
 
-fn iface_linode_kubernetes_engine_lke__delete_lke_cluster_node_response__to_json(p: &iface_linode_kubernetes_engine_lke::DeleteLkeClusterNodeResponse) -> Value {
+fn iface_linode_kubernetes_engine_lke__delete_lke_cluster_node_response_entry__to_json(p: &iface_linode_kubernetes_engine_lke::DeleteLkeClusterNodeResponseEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
-fn iface_linode_kubernetes_engine_lke__post_lke_cluster_node_recycle_response__to_json(p: &iface_linode_kubernetes_engine_lke::PostLkeClusterNodeRecycleResponse) -> Value {
+fn iface_linode_kubernetes_engine_lke__post_lke_cluster_node_recycle_response_entry__to_json(p: &iface_linode_kubernetes_engine_lke::PostLkeClusterNodeRecycleResponseEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
 fn iface_linode_kubernetes_engine_lke__get_lke_cluster_pools_response__to_json(p: &iface_linode_kubernetes_engine_lke::GetLkeClusterPoolsResponse) -> Value {
     let mut m = Map::new();
     m.insert("data".into(), match (&p.data) { Some(v) => Value::Array((v).iter().map(|v| iface_linode_kubernetes_engine_lke__lke_node_pool__to_json(v)).collect()), None => Value::Null });
-    m.insert("page".into(), match (&p.page) { Some(v) => iface_linode_kubernetes_engine_lke__pagination_envelope_properties_page__to_json(v), None => Value::Null });
-    m.insert("pages".into(), match (&p.pages) { Some(v) => iface_linode_kubernetes_engine_lke__pagination_envelope_properties_pages__to_json(v), None => Value::Null });
-    m.insert("results".into(), match (&p.results) { Some(v) => iface_linode_kubernetes_engine_lke__pagination_envelope_properties_results__to_json(v), None => Value::Null });
+    m.insert("page".into(), match (&p.page) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("pages".into(), match (&p.pages) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("results".into(), match (&p.results) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
@@ -506,48 +456,47 @@ fn iface_linode_kubernetes_engine_lke__lke_node_pool_request_body_properties_aut
     Value::Object(m)
 }
 
-fn iface_linode_kubernetes_engine_lke__lke_node_pool_request_body_properties_count__to_json(p: &iface_linode_kubernetes_engine_lke::LkeNodePoolRequestBodyPropertiesCount) -> Value {
+fn iface_linode_kubernetes_engine_lke__delete_lke_node_pool_response_entry__to_json(p: &iface_linode_kubernetes_engine_lke::DeleteLkeNodePoolResponseEntry) -> Value {
     let mut m = Map::new();
+    m.insert("key".into(), Value::String((&p.key).clone()));
     m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
-fn iface_linode_kubernetes_engine_lke__delete_lke_node_pool_response__to_json(p: &iface_linode_kubernetes_engine_lke::DeleteLkeNodePoolResponse) -> Value {
+fn iface_linode_kubernetes_engine_lke__post_lke_cluster_pool_recycle_response_entry__to_json(p: &iface_linode_kubernetes_engine_lke::PostLkeClusterPoolRecycleResponseEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
-fn iface_linode_kubernetes_engine_lke__post_lke_cluster_pool_recycle_response__to_json(p: &iface_linode_kubernetes_engine_lke::PostLkeClusterPoolRecycleResponse) -> Value {
+fn iface_linode_kubernetes_engine_lke__post_lke_cluster_recycle_response_entry__to_json(p: &iface_linode_kubernetes_engine_lke::PostLkeClusterRecycleResponseEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
-fn iface_linode_kubernetes_engine_lke__post_lke_cluster_recycle_response__to_json(p: &iface_linode_kubernetes_engine_lke::PostLkeClusterRecycleResponse) -> Value {
+fn iface_linode_kubernetes_engine_lke__post_lke_cluster_regenerate_response_entry__to_json(p: &iface_linode_kubernetes_engine_lke::PostLkeClusterRegenerateResponseEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
-fn iface_linode_kubernetes_engine_lke__post_lke_cluster_regenerate_response__to_json(p: &iface_linode_kubernetes_engine_lke::PostLkeClusterRegenerateResponse) -> Value {
+fn iface_linode_kubernetes_engine_lke__post_lkec_service_token_delete_response_entry__to_json(p: &iface_linode_kubernetes_engine_lke::PostLkecServiceTokenDeleteResponseEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_linode_kubernetes_engine_lke__post_lkec_service_token_delete_response__to_json(p: &iface_linode_kubernetes_engine_lke::PostLkecServiceTokenDeleteResponse) -> Value {
-    let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
 fn iface_linode_kubernetes_engine_lke__get_lke_versions_response__to_json(p: &iface_linode_kubernetes_engine_lke::GetLkeVersionsResponse) -> Value {
     let mut m = Map::new();
     m.insert("data".into(), match (&p.data) { Some(v) => Value::Array((v).iter().map(|v| iface_linode_kubernetes_engine_lke__lke_version__to_json(v)).collect()), None => Value::Null });
-    m.insert("page".into(), match (&p.page) { Some(v) => iface_linode_kubernetes_engine_lke__pagination_envelope_properties_page__to_json(v), None => Value::Null });
-    m.insert("pages".into(), match (&p.pages) { Some(v) => iface_linode_kubernetes_engine_lke__pagination_envelope_properties_pages__to_json(v), None => Value::Null });
-    m.insert("results".into(), match (&p.results) { Some(v) => iface_linode_kubernetes_engine_lke__pagination_envelope_properties_results__to_json(v), None => Value::Null });
+    m.insert("page".into(), match (&p.page) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("pages".into(), match (&p.pages) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("results".into(), match (&p.results) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
@@ -560,11 +509,11 @@ fn iface_linode_kubernetes_engine_lke__lke_version__to_json(p: &iface_linode_kub
 fn iface_linode_kubernetes_engine_lke__create_lke_cluster_params__to_json(p: &iface_linode_kubernetes_engine_lke::CreateLkeClusterParams) -> Value {
     let mut m = Map::new();
     m.insert("control_plane".into(), match (&p.control_plane) { Some(v) => iface_linode_kubernetes_engine_lke__create_lke_cluster_body_control_plane__to_json(v), None => Value::Null });
-    m.insert("k8s_version".into(), iface_linode_kubernetes_engine_lke__lke_cluster_properties_k8s_version__to_json(&p.k8s_version));
-    m.insert("label".into(), iface_linode_kubernetes_engine_lke__lke_cluster_properties_label__to_json(&p.label));
+    m.insert("k8s_version".into(), Value::String((&p.k8s_version).clone()));
+    m.insert("label".into(), Value::String((&p.label).clone()));
     m.insert("node_pools".into(), Value::String((&p.node_pools).clone()));
-    m.insert("region".into(), iface_linode_kubernetes_engine_lke__lke_cluster_properties_region__to_json(&p.region));
-    m.insert("tags".into(), match (&p.tags) { Some(v) => iface_linode_kubernetes_engine_lke__lke_cluster_properties_tags__to_json(v), None => Value::Null });
+    m.insert("region".into(), Value::String((&p.region).clone()));
+    m.insert("tags".into(), match (&p.tags) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -579,7 +528,7 @@ fn iface_linode_kubernetes_engine_lke__put_lke_cluster_params__to_json(p: &iface
     m.insert("cluster_id".into(), Value::String((&p.cluster_id).clone()));
     m.insert("control_plane".into(), match (&p.control_plane) { Some(v) => iface_linode_kubernetes_engine_lke__put_lke_cluster_body_control_plane__to_json(v), None => Value::Null });
     m.insert("k8s_version".into(), match (&p.k8s_version) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("label".into(), match (&p.label) { Some(v) => iface_linode_kubernetes_engine_lke__lke_cluster_properties_label__to_json(v), None => Value::Null });
+    m.insert("label".into(), match (&p.label) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("tags".into(), match (&p.tags) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
     Value::Object(m)
 }
@@ -660,7 +609,7 @@ fn iface_linode_kubernetes_engine_lke__put_lke_node_pool_params__to_json(p: &ifa
     m.insert("cluster_id".into(), Value::String((&p.cluster_id).clone()));
     m.insert("pool_id".into(), Value::String((&p.pool_id).clone()));
     m.insert("autoscaler".into(), match (&p.autoscaler) { Some(v) => iface_linode_kubernetes_engine_lke__lke_node_pool_request_body_properties_autoscaler__to_json(v), None => Value::Null });
-    m.insert("count".into(), match (&p.count) { Some(v) => iface_linode_kubernetes_engine_lke__lke_node_pool_request_body_properties_count__to_json(v), None => Value::Null });
+    m.insert("count".into(), match (&p.count) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
@@ -708,9 +657,9 @@ fn iface_linode_kubernetes_engine_lke__get_lke_clusters_response__from_json(v: &
     let m = v.as_object()?;
     Some(iface_linode_kubernetes_engine_lke::GetLkeClustersResponse {
         data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_linode_kubernetes_engine_lke__lke_cluster__from_json(x)).collect())),
-        page: m.get("page").filter(|v| !v.is_null()).and_then(|v| iface_linode_kubernetes_engine_lke__pagination_envelope_properties_page__from_json(v)),
-        pages: m.get("pages").filter(|v| !v.is_null()).and_then(|v| iface_linode_kubernetes_engine_lke__pagination_envelope_properties_pages__from_json(v)),
-        results: m.get("results").filter(|v| !v.is_null()).and_then(|v| iface_linode_kubernetes_engine_lke__pagination_envelope_properties_results__from_json(v)),
+        page: m.get("page").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        pages: m.get("pages").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        results: m.get("results").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
     })
 }
 
@@ -735,78 +684,23 @@ fn iface_linode_kubernetes_engine_lke__lke_cluster_control_plane__from_json(v: &
     })
 }
 
-fn iface_linode_kubernetes_engine_lke__pagination_envelope_properties_page__from_json(v: &Value) -> Option<iface_linode_kubernetes_engine_lke::PaginationEnvelopePropertiesPage> {
-    let m = v.as_object()?;
-    Some(iface_linode_kubernetes_engine_lke::PaginationEnvelopePropertiesPage {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-    })
-}
-
-fn iface_linode_kubernetes_engine_lke__pagination_envelope_properties_pages__from_json(v: &Value) -> Option<iface_linode_kubernetes_engine_lke::PaginationEnvelopePropertiesPages> {
-    let m = v.as_object()?;
-    Some(iface_linode_kubernetes_engine_lke::PaginationEnvelopePropertiesPages {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-    })
-}
-
-fn iface_linode_kubernetes_engine_lke__pagination_envelope_properties_results__from_json(v: &Value) -> Option<iface_linode_kubernetes_engine_lke::PaginationEnvelopePropertiesResults> {
-    let m = v.as_object()?;
-    Some(iface_linode_kubernetes_engine_lke::PaginationEnvelopePropertiesResults {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-    })
-}
-
-fn iface_linode_kubernetes_engine_lke__lke_cluster_properties_k8s_version__from_json(v: &Value) -> Option<iface_linode_kubernetes_engine_lke::LkeClusterPropertiesK8sVersion> {
-    let m = v.as_object()?;
-    Some(iface_linode_kubernetes_engine_lke::LkeClusterPropertiesK8sVersion {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-    })
-}
-
-fn iface_linode_kubernetes_engine_lke__lke_cluster_properties_label__from_json(v: &Value) -> Option<iface_linode_kubernetes_engine_lke::LkeClusterPropertiesLabel> {
-    let m = v.as_object()?;
-    Some(iface_linode_kubernetes_engine_lke::LkeClusterPropertiesLabel {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-    })
-}
-
-fn iface_linode_kubernetes_engine_lke__lke_cluster_properties_region__from_json(v: &Value) -> Option<iface_linode_kubernetes_engine_lke::LkeClusterPropertiesRegion> {
-    let m = v.as_object()?;
-    Some(iface_linode_kubernetes_engine_lke::LkeClusterPropertiesRegion {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-    })
-}
-
 fn iface_linode_kubernetes_engine_lke__put_lke_cluster_response__from_json(v: &Value) -> Option<iface_linode_kubernetes_engine_lke::PutLkeClusterResponse> {
     let m = v.as_object()?;
     Some(iface_linode_kubernetes_engine_lke::PutLkeClusterResponse {
-        created: m.get("created").filter(|v| !v.is_null()).and_then(|v| iface_linode_kubernetes_engine_lke__lke_cluster_properties_created__from_json(v)),
-        k8s_version: m.get("k8s_version").filter(|v| !v.is_null()).and_then(|v| iface_linode_kubernetes_engine_lke__lke_cluster_properties_k8s_version__from_json(v)),
-        label: m.get("label").filter(|v| !v.is_null()).and_then(|v| iface_linode_kubernetes_engine_lke__lke_cluster_properties_label__from_json(v)),
-        region: m.get("region").filter(|v| !v.is_null()).and_then(|v| iface_linode_kubernetes_engine_lke__lke_cluster_properties_region__from_json(v)),
+        created: m.get("created").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        k8s_version: m.get("k8s_version").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        label: m.get("label").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        region: m.get("region").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         tags: m.get("tags").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
-        updated: m.get("updated").filter(|v| !v.is_null()).and_then(|v| iface_linode_kubernetes_engine_lke__lke_cluster_properties_updated__from_json(v)),
+        updated: m.get("updated").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
     })
 }
 
-fn iface_linode_kubernetes_engine_lke__lke_cluster_properties_created__from_json(v: &Value) -> Option<iface_linode_kubernetes_engine_lke::LkeClusterPropertiesCreated> {
+fn iface_linode_kubernetes_engine_lke__delete_lke_cluster_response_entry__from_json(v: &Value) -> Option<iface_linode_kubernetes_engine_lke::DeleteLkeClusterResponseEntry> {
     let m = v.as_object()?;
-    Some(iface_linode_kubernetes_engine_lke::LkeClusterPropertiesCreated {
+    Some(iface_linode_kubernetes_engine_lke::DeleteLkeClusterResponseEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-    })
-}
-
-fn iface_linode_kubernetes_engine_lke__lke_cluster_properties_updated__from_json(v: &Value) -> Option<iface_linode_kubernetes_engine_lke::LkeClusterPropertiesUpdated> {
-    let m = v.as_object()?;
-    Some(iface_linode_kubernetes_engine_lke::LkeClusterPropertiesUpdated {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-    })
-}
-
-fn iface_linode_kubernetes_engine_lke__delete_lke_cluster_response__from_json(v: &Value) -> Option<iface_linode_kubernetes_engine_lke::DeleteLkeClusterResponse> {
-    let m = v.as_object()?;
-    Some(iface_linode_kubernetes_engine_lke::DeleteLkeClusterResponse {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
     })
 }
 
@@ -814,9 +708,9 @@ fn iface_linode_kubernetes_engine_lke__get_lke_cluster_api_endpoints_response__f
     let m = v.as_object()?;
     Some(iface_linode_kubernetes_engine_lke::GetLkeClusterApiEndpointsResponse {
         data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_linode_kubernetes_engine_lke__get_lke_cluster_api_endpoints_response_data_item__from_json(x)).collect())),
-        page: m.get("page").filter(|v| !v.is_null()).and_then(|v| iface_linode_kubernetes_engine_lke__pagination_envelope_properties_page__from_json(v)),
-        pages: m.get("pages").filter(|v| !v.is_null()).and_then(|v| iface_linode_kubernetes_engine_lke__pagination_envelope_properties_pages__from_json(v)),
-        results: m.get("results").filter(|v| !v.is_null()).and_then(|v| iface_linode_kubernetes_engine_lke__pagination_envelope_properties_results__from_json(v)),
+        page: m.get("page").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        pages: m.get("pages").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        results: m.get("results").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
     })
 }
 
@@ -841,10 +735,11 @@ fn iface_linode_kubernetes_engine_lke__get_lke_cluster_kubeconfig_response__from
     })
 }
 
-fn iface_linode_kubernetes_engine_lke__delete_lke_cluster_kubeconfig_response__from_json(v: &Value) -> Option<iface_linode_kubernetes_engine_lke::DeleteLkeClusterKubeconfigResponse> {
+fn iface_linode_kubernetes_engine_lke__delete_lke_cluster_kubeconfig_response_entry__from_json(v: &Value) -> Option<iface_linode_kubernetes_engine_lke::DeleteLkeClusterKubeconfigResponseEntry> {
     let m = v.as_object()?;
-    Some(iface_linode_kubernetes_engine_lke::DeleteLkeClusterKubeconfigResponse {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_linode_kubernetes_engine_lke::DeleteLkeClusterKubeconfigResponseEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -857,17 +752,19 @@ fn iface_linode_kubernetes_engine_lke__get_lke_cluster_node_response__from_json(
     })
 }
 
-fn iface_linode_kubernetes_engine_lke__delete_lke_cluster_node_response__from_json(v: &Value) -> Option<iface_linode_kubernetes_engine_lke::DeleteLkeClusterNodeResponse> {
+fn iface_linode_kubernetes_engine_lke__delete_lke_cluster_node_response_entry__from_json(v: &Value) -> Option<iface_linode_kubernetes_engine_lke::DeleteLkeClusterNodeResponseEntry> {
     let m = v.as_object()?;
-    Some(iface_linode_kubernetes_engine_lke::DeleteLkeClusterNodeResponse {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_linode_kubernetes_engine_lke::DeleteLkeClusterNodeResponseEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
-fn iface_linode_kubernetes_engine_lke__post_lke_cluster_node_recycle_response__from_json(v: &Value) -> Option<iface_linode_kubernetes_engine_lke::PostLkeClusterNodeRecycleResponse> {
+fn iface_linode_kubernetes_engine_lke__post_lke_cluster_node_recycle_response_entry__from_json(v: &Value) -> Option<iface_linode_kubernetes_engine_lke::PostLkeClusterNodeRecycleResponseEntry> {
     let m = v.as_object()?;
-    Some(iface_linode_kubernetes_engine_lke::PostLkeClusterNodeRecycleResponse {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_linode_kubernetes_engine_lke::PostLkeClusterNodeRecycleResponseEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -875,9 +772,9 @@ fn iface_linode_kubernetes_engine_lke__get_lke_cluster_pools_response__from_json
     let m = v.as_object()?;
     Some(iface_linode_kubernetes_engine_lke::GetLkeClusterPoolsResponse {
         data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_linode_kubernetes_engine_lke__lke_node_pool__from_json(x)).collect())),
-        page: m.get("page").filter(|v| !v.is_null()).and_then(|v| iface_linode_kubernetes_engine_lke__pagination_envelope_properties_page__from_json(v)),
-        pages: m.get("pages").filter(|v| !v.is_null()).and_then(|v| iface_linode_kubernetes_engine_lke__pagination_envelope_properties_pages__from_json(v)),
-        results: m.get("results").filter(|v| !v.is_null()).and_then(|v| iface_linode_kubernetes_engine_lke__pagination_envelope_properties_results__from_json(v)),
+        page: m.get("page").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        pages: m.get("pages").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        results: m.get("results").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
     })
 }
 
@@ -920,38 +817,43 @@ fn iface_linode_kubernetes_engine_lke__lke_node_status__from_json(v: &Value) -> 
     })
 }
 
-fn iface_linode_kubernetes_engine_lke__delete_lke_node_pool_response__from_json(v: &Value) -> Option<iface_linode_kubernetes_engine_lke::DeleteLkeNodePoolResponse> {
+fn iface_linode_kubernetes_engine_lke__delete_lke_node_pool_response_entry__from_json(v: &Value) -> Option<iface_linode_kubernetes_engine_lke::DeleteLkeNodePoolResponseEntry> {
     let m = v.as_object()?;
-    Some(iface_linode_kubernetes_engine_lke::DeleteLkeNodePoolResponse {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_linode_kubernetes_engine_lke::DeleteLkeNodePoolResponseEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
-fn iface_linode_kubernetes_engine_lke__post_lke_cluster_pool_recycle_response__from_json(v: &Value) -> Option<iface_linode_kubernetes_engine_lke::PostLkeClusterPoolRecycleResponse> {
+fn iface_linode_kubernetes_engine_lke__post_lke_cluster_pool_recycle_response_entry__from_json(v: &Value) -> Option<iface_linode_kubernetes_engine_lke::PostLkeClusterPoolRecycleResponseEntry> {
     let m = v.as_object()?;
-    Some(iface_linode_kubernetes_engine_lke::PostLkeClusterPoolRecycleResponse {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_linode_kubernetes_engine_lke::PostLkeClusterPoolRecycleResponseEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
-fn iface_linode_kubernetes_engine_lke__post_lke_cluster_recycle_response__from_json(v: &Value) -> Option<iface_linode_kubernetes_engine_lke::PostLkeClusterRecycleResponse> {
+fn iface_linode_kubernetes_engine_lke__post_lke_cluster_recycle_response_entry__from_json(v: &Value) -> Option<iface_linode_kubernetes_engine_lke::PostLkeClusterRecycleResponseEntry> {
     let m = v.as_object()?;
-    Some(iface_linode_kubernetes_engine_lke::PostLkeClusterRecycleResponse {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_linode_kubernetes_engine_lke::PostLkeClusterRecycleResponseEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
-fn iface_linode_kubernetes_engine_lke__post_lke_cluster_regenerate_response__from_json(v: &Value) -> Option<iface_linode_kubernetes_engine_lke::PostLkeClusterRegenerateResponse> {
+fn iface_linode_kubernetes_engine_lke__post_lke_cluster_regenerate_response_entry__from_json(v: &Value) -> Option<iface_linode_kubernetes_engine_lke::PostLkeClusterRegenerateResponseEntry> {
     let m = v.as_object()?;
-    Some(iface_linode_kubernetes_engine_lke::PostLkeClusterRegenerateResponse {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_linode_kubernetes_engine_lke::PostLkeClusterRegenerateResponseEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
-fn iface_linode_kubernetes_engine_lke__post_lkec_service_token_delete_response__from_json(v: &Value) -> Option<iface_linode_kubernetes_engine_lke::PostLkecServiceTokenDeleteResponse> {
+fn iface_linode_kubernetes_engine_lke__post_lkec_service_token_delete_response_entry__from_json(v: &Value) -> Option<iface_linode_kubernetes_engine_lke::PostLkecServiceTokenDeleteResponseEntry> {
     let m = v.as_object()?;
-    Some(iface_linode_kubernetes_engine_lke::PostLkecServiceTokenDeleteResponse {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_linode_kubernetes_engine_lke::PostLkecServiceTokenDeleteResponseEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -959,9 +861,9 @@ fn iface_linode_kubernetes_engine_lke__get_lke_versions_response__from_json(v: &
     let m = v.as_object()?;
     Some(iface_linode_kubernetes_engine_lke::GetLkeVersionsResponse {
         data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_linode_kubernetes_engine_lke__lke_version__from_json(x)).collect())),
-        page: m.get("page").filter(|v| !v.is_null()).and_then(|v| iface_linode_kubernetes_engine_lke__pagination_envelope_properties_page__from_json(v)),
-        pages: m.get("pages").filter(|v| !v.is_null()).and_then(|v| iface_linode_kubernetes_engine_lke__pagination_envelope_properties_pages__from_json(v)),
-        results: m.get("results").filter(|v| !v.is_null()).and_then(|v| iface_linode_kubernetes_engine_lke__pagination_envelope_properties_results__from_json(v)),
+        page: m.get("page").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        pages: m.get("pages").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        results: m.get("results").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
     })
 }
 
@@ -1060,12 +962,12 @@ fn iface_linode_kubernetes_engine_lke__put_lke_cluster__err(e: crate::runtime::D
     }
 }
 
-fn iface_linode_kubernetes_engine_lke__delete_lke_cluster__ok(body: String) -> Result<iface_linode_kubernetes_engine_lke::DeleteLkeClusterResponse, crate::runtime::DispatchError> {
+fn iface_linode_kubernetes_engine_lke__delete_lke_cluster__ok(body: String) -> Result<Vec<iface_linode_kubernetes_engine_lke::DeleteLkeClusterResponseEntry>, crate::runtime::DispatchError> {
     let v: Value = match serde_json::from_str(&body) {
         Ok(v) => v,
         Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
     };
-    match iface_linode_kubernetes_engine_lke__delete_lke_cluster_response__from_json(&v) {
+    match (&v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_linode_kubernetes_engine_lke::DeleteLkeClusterResponseEntry { key: k.clone(), value: val })).collect()) {
         Some(x) => Ok(x),
         None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
@@ -1132,12 +1034,12 @@ fn iface_linode_kubernetes_engine_lke__get_lke_cluster_kubeconfig__err(e: crate:
     }
 }
 
-fn iface_linode_kubernetes_engine_lke__delete_lke_cluster_kubeconfig__ok(body: String) -> Result<iface_linode_kubernetes_engine_lke::DeleteLkeClusterKubeconfigResponse, crate::runtime::DispatchError> {
+fn iface_linode_kubernetes_engine_lke__delete_lke_cluster_kubeconfig__ok(body: String) -> Result<Vec<iface_linode_kubernetes_engine_lke::DeleteLkeClusterKubeconfigResponseEntry>, crate::runtime::DispatchError> {
     let v: Value = match serde_json::from_str(&body) {
         Ok(v) => v,
         Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
     };
-    match iface_linode_kubernetes_engine_lke__delete_lke_cluster_kubeconfig_response__from_json(&v) {
+    match (&v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_linode_kubernetes_engine_lke::DeleteLkeClusterKubeconfigResponseEntry { key: k.clone(), value: val })).collect()) {
         Some(x) => Ok(x),
         None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
@@ -1168,12 +1070,12 @@ fn iface_linode_kubernetes_engine_lke__get_lke_cluster_node__err(e: crate::runti
     }
 }
 
-fn iface_linode_kubernetes_engine_lke__delete_lke_cluster_node__ok(body: String) -> Result<iface_linode_kubernetes_engine_lke::DeleteLkeClusterNodeResponse, crate::runtime::DispatchError> {
+fn iface_linode_kubernetes_engine_lke__delete_lke_cluster_node__ok(body: String) -> Result<Vec<iface_linode_kubernetes_engine_lke::DeleteLkeClusterNodeResponseEntry>, crate::runtime::DispatchError> {
     let v: Value = match serde_json::from_str(&body) {
         Ok(v) => v,
         Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
     };
-    match iface_linode_kubernetes_engine_lke__delete_lke_cluster_node_response__from_json(&v) {
+    match (&v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_linode_kubernetes_engine_lke::DeleteLkeClusterNodeResponseEntry { key: k.clone(), value: val })).collect()) {
         Some(x) => Ok(x),
         None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
@@ -1186,12 +1088,12 @@ fn iface_linode_kubernetes_engine_lke__delete_lke_cluster_node__err(e: crate::ru
     }
 }
 
-fn iface_linode_kubernetes_engine_lke__post_lke_cluster_node_recycle__ok(body: String) -> Result<iface_linode_kubernetes_engine_lke::PostLkeClusterNodeRecycleResponse, crate::runtime::DispatchError> {
+fn iface_linode_kubernetes_engine_lke__post_lke_cluster_node_recycle__ok(body: String) -> Result<Vec<iface_linode_kubernetes_engine_lke::PostLkeClusterNodeRecycleResponseEntry>, crate::runtime::DispatchError> {
     let v: Value = match serde_json::from_str(&body) {
         Ok(v) => v,
         Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
     };
-    match iface_linode_kubernetes_engine_lke__post_lke_cluster_node_recycle_response__from_json(&v) {
+    match (&v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_linode_kubernetes_engine_lke::PostLkeClusterNodeRecycleResponseEntry { key: k.clone(), value: val })).collect()) {
         Some(x) => Ok(x),
         None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
@@ -1276,12 +1178,12 @@ fn iface_linode_kubernetes_engine_lke__put_lke_node_pool__err(e: crate::runtime:
     }
 }
 
-fn iface_linode_kubernetes_engine_lke__delete_lke_node_pool__ok(body: String) -> Result<iface_linode_kubernetes_engine_lke::DeleteLkeNodePoolResponse, crate::runtime::DispatchError> {
+fn iface_linode_kubernetes_engine_lke__delete_lke_node_pool__ok(body: String) -> Result<Vec<iface_linode_kubernetes_engine_lke::DeleteLkeNodePoolResponseEntry>, crate::runtime::DispatchError> {
     let v: Value = match serde_json::from_str(&body) {
         Ok(v) => v,
         Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
     };
-    match iface_linode_kubernetes_engine_lke__delete_lke_node_pool_response__from_json(&v) {
+    match (&v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_linode_kubernetes_engine_lke::DeleteLkeNodePoolResponseEntry { key: k.clone(), value: val })).collect()) {
         Some(x) => Ok(x),
         None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
@@ -1294,12 +1196,12 @@ fn iface_linode_kubernetes_engine_lke__delete_lke_node_pool__err(e: crate::runti
     }
 }
 
-fn iface_linode_kubernetes_engine_lke__post_lke_cluster_pool_recycle__ok(body: String) -> Result<iface_linode_kubernetes_engine_lke::PostLkeClusterPoolRecycleResponse, crate::runtime::DispatchError> {
+fn iface_linode_kubernetes_engine_lke__post_lke_cluster_pool_recycle__ok(body: String) -> Result<Vec<iface_linode_kubernetes_engine_lke::PostLkeClusterPoolRecycleResponseEntry>, crate::runtime::DispatchError> {
     let v: Value = match serde_json::from_str(&body) {
         Ok(v) => v,
         Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
     };
-    match iface_linode_kubernetes_engine_lke__post_lke_cluster_pool_recycle_response__from_json(&v) {
+    match (&v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_linode_kubernetes_engine_lke::PostLkeClusterPoolRecycleResponseEntry { key: k.clone(), value: val })).collect()) {
         Some(x) => Ok(x),
         None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
@@ -1312,12 +1214,12 @@ fn iface_linode_kubernetes_engine_lke__post_lke_cluster_pool_recycle__err(e: cra
     }
 }
 
-fn iface_linode_kubernetes_engine_lke__post_lke_cluster_recycle__ok(body: String) -> Result<iface_linode_kubernetes_engine_lke::PostLkeClusterRecycleResponse, crate::runtime::DispatchError> {
+fn iface_linode_kubernetes_engine_lke__post_lke_cluster_recycle__ok(body: String) -> Result<Vec<iface_linode_kubernetes_engine_lke::PostLkeClusterRecycleResponseEntry>, crate::runtime::DispatchError> {
     let v: Value = match serde_json::from_str(&body) {
         Ok(v) => v,
         Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
     };
-    match iface_linode_kubernetes_engine_lke__post_lke_cluster_recycle_response__from_json(&v) {
+    match (&v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_linode_kubernetes_engine_lke::PostLkeClusterRecycleResponseEntry { key: k.clone(), value: val })).collect()) {
         Some(x) => Ok(x),
         None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
@@ -1330,12 +1232,12 @@ fn iface_linode_kubernetes_engine_lke__post_lke_cluster_recycle__err(e: crate::r
     }
 }
 
-fn iface_linode_kubernetes_engine_lke__post_lke_cluster_regenerate__ok(body: String) -> Result<iface_linode_kubernetes_engine_lke::PostLkeClusterRegenerateResponse, crate::runtime::DispatchError> {
+fn iface_linode_kubernetes_engine_lke__post_lke_cluster_regenerate__ok(body: String) -> Result<Vec<iface_linode_kubernetes_engine_lke::PostLkeClusterRegenerateResponseEntry>, crate::runtime::DispatchError> {
     let v: Value = match serde_json::from_str(&body) {
         Ok(v) => v,
         Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
     };
-    match iface_linode_kubernetes_engine_lke__post_lke_cluster_regenerate_response__from_json(&v) {
+    match (&v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_linode_kubernetes_engine_lke::PostLkeClusterRegenerateResponseEntry { key: k.clone(), value: val })).collect()) {
         Some(x) => Ok(x),
         None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
@@ -1348,12 +1250,12 @@ fn iface_linode_kubernetes_engine_lke__post_lke_cluster_regenerate__err(e: crate
     }
 }
 
-fn iface_linode_kubernetes_engine_lke__post_lkec_service_token_delete__ok(body: String) -> Result<iface_linode_kubernetes_engine_lke::PostLkecServiceTokenDeleteResponse, crate::runtime::DispatchError> {
+fn iface_linode_kubernetes_engine_lke__post_lkec_service_token_delete__ok(body: String) -> Result<Vec<iface_linode_kubernetes_engine_lke::PostLkecServiceTokenDeleteResponseEntry>, crate::runtime::DispatchError> {
     let v: Value = match serde_json::from_str(&body) {
         Ok(v) => v,
         Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
     };
-    match iface_linode_kubernetes_engine_lke__post_lkec_service_token_delete_response__from_json(&v) {
+    match (&v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_linode_kubernetes_engine_lke::PostLkecServiceTokenDeleteResponseEntry { key: k.clone(), value: val })).collect()) {
         Some(x) => Ok(x),
         None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
@@ -1430,7 +1332,7 @@ impl iface_linode_kubernetes_engine_lke::Guest for crate::Component {
             Err(e) => Err(iface_linode_kubernetes_engine_lke__put_lke_cluster__err(e)),
         }
     }
-    fn delete_lke_cluster(params: iface_linode_kubernetes_engine_lke::DeleteLkeClusterParams) -> Result<iface_linode_kubernetes_engine_lke::DeleteLkeClusterResponse, String> {
+    fn delete_lke_cluster(params: iface_linode_kubernetes_engine_lke::DeleteLkeClusterParams) -> Result<Vec<iface_linode_kubernetes_engine_lke::DeleteLkeClusterResponseEntry>, String> {
         let json = iface_linode_kubernetes_engine_lke__delete_lke_cluster_params__to_json(&params);
         match dispatch(&OP_LINODE_KUBERNETES_ENGINE_LKE_DELETE_LKE_CLUSTER, json).and_then(iface_linode_kubernetes_engine_lke__delete_lke_cluster__ok) {
             Ok(v) => Ok(v),
@@ -1458,7 +1360,7 @@ impl iface_linode_kubernetes_engine_lke::Guest for crate::Component {
             Err(e) => Err(iface_linode_kubernetes_engine_lke__get_lke_cluster_kubeconfig__err(e)),
         }
     }
-    fn delete_lke_cluster_kubeconfig(params: iface_linode_kubernetes_engine_lke::DeleteLkeClusterKubeconfigParams) -> Result<iface_linode_kubernetes_engine_lke::DeleteLkeClusterKubeconfigResponse, String> {
+    fn delete_lke_cluster_kubeconfig(params: iface_linode_kubernetes_engine_lke::DeleteLkeClusterKubeconfigParams) -> Result<Vec<iface_linode_kubernetes_engine_lke::DeleteLkeClusterKubeconfigResponseEntry>, String> {
         let json = iface_linode_kubernetes_engine_lke__delete_lke_cluster_kubeconfig_params__to_json(&params);
         match dispatch(&OP_LINODE_KUBERNETES_ENGINE_LKE_DELETE_LKE_CLUSTER_KUBECONFIG, json).and_then(iface_linode_kubernetes_engine_lke__delete_lke_cluster_kubeconfig__ok) {
             Ok(v) => Ok(v),
@@ -1472,14 +1374,14 @@ impl iface_linode_kubernetes_engine_lke::Guest for crate::Component {
             Err(e) => Err(iface_linode_kubernetes_engine_lke__get_lke_cluster_node__err(e)),
         }
     }
-    fn delete_lke_cluster_node(params: iface_linode_kubernetes_engine_lke::DeleteLkeClusterNodeParams) -> Result<iface_linode_kubernetes_engine_lke::DeleteLkeClusterNodeResponse, String> {
+    fn delete_lke_cluster_node(params: iface_linode_kubernetes_engine_lke::DeleteLkeClusterNodeParams) -> Result<Vec<iface_linode_kubernetes_engine_lke::DeleteLkeClusterNodeResponseEntry>, String> {
         let json = iface_linode_kubernetes_engine_lke__delete_lke_cluster_node_params__to_json(&params);
         match dispatch(&OP_LINODE_KUBERNETES_ENGINE_LKE_DELETE_LKE_CLUSTER_NODE, json).and_then(iface_linode_kubernetes_engine_lke__delete_lke_cluster_node__ok) {
             Ok(v) => Ok(v),
             Err(e) => Err(iface_linode_kubernetes_engine_lke__delete_lke_cluster_node__err(e)),
         }
     }
-    fn post_lke_cluster_node_recycle(params: iface_linode_kubernetes_engine_lke::PostLkeClusterNodeRecycleParams) -> Result<iface_linode_kubernetes_engine_lke::PostLkeClusterNodeRecycleResponse, String> {
+    fn post_lke_cluster_node_recycle(params: iface_linode_kubernetes_engine_lke::PostLkeClusterNodeRecycleParams) -> Result<Vec<iface_linode_kubernetes_engine_lke::PostLkeClusterNodeRecycleResponseEntry>, String> {
         let json = iface_linode_kubernetes_engine_lke__post_lke_cluster_node_recycle_params__to_json(&params);
         match dispatch(&OP_LINODE_KUBERNETES_ENGINE_LKE_POST_LKE_CLUSTER_NODE_RECYCLE, json).and_then(iface_linode_kubernetes_engine_lke__post_lke_cluster_node_recycle__ok) {
             Ok(v) => Ok(v),
@@ -1514,35 +1416,35 @@ impl iface_linode_kubernetes_engine_lke::Guest for crate::Component {
             Err(e) => Err(iface_linode_kubernetes_engine_lke__put_lke_node_pool__err(e)),
         }
     }
-    fn delete_lke_node_pool(params: iface_linode_kubernetes_engine_lke::DeleteLkeNodePoolParams) -> Result<iface_linode_kubernetes_engine_lke::DeleteLkeNodePoolResponse, String> {
+    fn delete_lke_node_pool(params: iface_linode_kubernetes_engine_lke::DeleteLkeNodePoolParams) -> Result<Vec<iface_linode_kubernetes_engine_lke::DeleteLkeNodePoolResponseEntry>, String> {
         let json = iface_linode_kubernetes_engine_lke__delete_lke_node_pool_params__to_json(&params);
         match dispatch(&OP_LINODE_KUBERNETES_ENGINE_LKE_DELETE_LKE_NODE_POOL, json).and_then(iface_linode_kubernetes_engine_lke__delete_lke_node_pool__ok) {
             Ok(v) => Ok(v),
             Err(e) => Err(iface_linode_kubernetes_engine_lke__delete_lke_node_pool__err(e)),
         }
     }
-    fn post_lke_cluster_pool_recycle(params: iface_linode_kubernetes_engine_lke::PostLkeClusterPoolRecycleParams) -> Result<iface_linode_kubernetes_engine_lke::PostLkeClusterPoolRecycleResponse, String> {
+    fn post_lke_cluster_pool_recycle(params: iface_linode_kubernetes_engine_lke::PostLkeClusterPoolRecycleParams) -> Result<Vec<iface_linode_kubernetes_engine_lke::PostLkeClusterPoolRecycleResponseEntry>, String> {
         let json = iface_linode_kubernetes_engine_lke__post_lke_cluster_pool_recycle_params__to_json(&params);
         match dispatch(&OP_LINODE_KUBERNETES_ENGINE_LKE_POST_LKE_CLUSTER_POOL_RECYCLE, json).and_then(iface_linode_kubernetes_engine_lke__post_lke_cluster_pool_recycle__ok) {
             Ok(v) => Ok(v),
             Err(e) => Err(iface_linode_kubernetes_engine_lke__post_lke_cluster_pool_recycle__err(e)),
         }
     }
-    fn post_lke_cluster_recycle(params: iface_linode_kubernetes_engine_lke::PostLkeClusterRecycleParams) -> Result<iface_linode_kubernetes_engine_lke::PostLkeClusterRecycleResponse, String> {
+    fn post_lke_cluster_recycle(params: iface_linode_kubernetes_engine_lke::PostLkeClusterRecycleParams) -> Result<Vec<iface_linode_kubernetes_engine_lke::PostLkeClusterRecycleResponseEntry>, String> {
         let json = iface_linode_kubernetes_engine_lke__post_lke_cluster_recycle_params__to_json(&params);
         match dispatch(&OP_LINODE_KUBERNETES_ENGINE_LKE_POST_LKE_CLUSTER_RECYCLE, json).and_then(iface_linode_kubernetes_engine_lke__post_lke_cluster_recycle__ok) {
             Ok(v) => Ok(v),
             Err(e) => Err(iface_linode_kubernetes_engine_lke__post_lke_cluster_recycle__err(e)),
         }
     }
-    fn post_lke_cluster_regenerate(params: iface_linode_kubernetes_engine_lke::PostLkeClusterRegenerateParams) -> Result<iface_linode_kubernetes_engine_lke::PostLkeClusterRegenerateResponse, String> {
+    fn post_lke_cluster_regenerate(params: iface_linode_kubernetes_engine_lke::PostLkeClusterRegenerateParams) -> Result<Vec<iface_linode_kubernetes_engine_lke::PostLkeClusterRegenerateResponseEntry>, String> {
         let json = iface_linode_kubernetes_engine_lke__post_lke_cluster_regenerate_params__to_json(&params);
         match dispatch(&OP_LINODE_KUBERNETES_ENGINE_LKE_POST_LKE_CLUSTER_REGENERATE, json).and_then(iface_linode_kubernetes_engine_lke__post_lke_cluster_regenerate__ok) {
             Ok(v) => Ok(v),
             Err(e) => Err(iface_linode_kubernetes_engine_lke__post_lke_cluster_regenerate__err(e)),
         }
     }
-    fn post_lkec_service_token_delete(params: iface_linode_kubernetes_engine_lke::PostLkecServiceTokenDeleteParams) -> Result<iface_linode_kubernetes_engine_lke::PostLkecServiceTokenDeleteResponse, String> {
+    fn post_lkec_service_token_delete(params: iface_linode_kubernetes_engine_lke::PostLkecServiceTokenDeleteParams) -> Result<Vec<iface_linode_kubernetes_engine_lke::PostLkecServiceTokenDeleteResponseEntry>, String> {
         let json = iface_linode_kubernetes_engine_lke__post_lkec_service_token_delete_params__to_json(&params);
         match dispatch(&OP_LINODE_KUBERNETES_ENGINE_LKE_POST_LKEC_SERVICE_TOKEN_DELETE, json).and_then(iface_linode_kubernetes_engine_lke__post_lkec_service_token_delete__ok) {
             Ok(v) => Ok(v),

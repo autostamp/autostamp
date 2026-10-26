@@ -95,15 +95,16 @@ fn iface_number_blocks_background_jobs__error__to_json(p: &iface_number_blocks_b
     let mut m = Map::new();
     m.insert("code".into(), Value::String((&p.code).clone()));
     m.insert("detail".into(), match (&p.detail) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("meta".into(), match (&p.meta) { Some(v) => iface_number_blocks_background_jobs__error_meta__to_json(v), None => Value::Null });
+    m.insert("meta".into(), match (&p.meta) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("source".into(), match (&p.source) { Some(v) => iface_number_blocks_background_jobs__error_source__to_json(v), None => Value::Null });
     m.insert("title".into(), Value::String((&p.title).clone()));
     Value::Object(m)
 }
 
-fn iface_number_blocks_background_jobs__error_meta__to_json(p: &iface_number_blocks_background_jobs::ErrorMeta) -> Value {
+fn iface_number_blocks_background_jobs__error_meta_entry__to_json(p: &iface_number_blocks_background_jobs::ErrorMetaEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -201,16 +202,17 @@ fn iface_number_blocks_background_jobs__error__from_json(v: &Value) -> Option<if
     Some(iface_number_blocks_background_jobs::Error {
         code: m.get("code").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         detail: m.get("detail").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        meta: m.get("meta").filter(|v| !v.is_null()).and_then(|v| iface_number_blocks_background_jobs__error_meta__from_json(v)),
+        meta: m.get("meta").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_number_blocks_background_jobs::ErrorMetaEntry { key: k.clone(), value: val })).collect())),
         source: m.get("source").filter(|v| !v.is_null()).and_then(|v| iface_number_blocks_background_jobs__error_source__from_json(v)),
         title: m.get("title").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
-fn iface_number_blocks_background_jobs__error_meta__from_json(v: &Value) -> Option<iface_number_blocks_background_jobs::ErrorMeta> {
+fn iface_number_blocks_background_jobs__error_meta_entry__from_json(v: &Value) -> Option<iface_number_blocks_background_jobs::ErrorMetaEntry> {
     let m = v.as_object()?;
-    Some(iface_number_blocks_background_jobs::ErrorMeta {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_number_blocks_background_jobs::ErrorMetaEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 

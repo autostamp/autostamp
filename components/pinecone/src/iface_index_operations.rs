@@ -111,65 +111,52 @@ const OP_INDEX_OPERATIONS_DELETE_INDEX: OpSpec = OpSpec {
     ],
 };
 
-fn iface_index_operations__collections_list__to_json(p: &iface_index_operations::CollectionsList) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
+fn iface_index_operations__index_metric__to_str(e: &iface_index_operations::IndexMetric) -> &'static str {
+    match e {
+        iface_index_operations::IndexMetric::Euclidean => "euclidean",
+        iface_index_operations::IndexMetric::Cosine => "cosine",
+        iface_index_operations::IndexMetric::Dotproduct => "dotproduct",
+    }
 }
 
-fn iface_index_operations__collection_name__to_json(p: &iface_index_operations::CollectionName) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
+fn iface_index_operations__pod_type__to_str(e: &iface_index_operations::PodType) -> &'static str {
+    match e {
+        iface_index_operations::PodType::S1X1 => "s1.x1",
+        iface_index_operations::PodType::S1X2 => "s1.x2",
+        iface_index_operations::PodType::S1X4 => "s1.x4",
+        iface_index_operations::PodType::S1X8 => "s1.x8",
+        iface_index_operations::PodType::P1X1 => "p1.x1",
+        iface_index_operations::PodType::P1X2 => "p1.x2",
+        iface_index_operations::PodType::P1X4 => "p1.x4",
+        iface_index_operations::PodType::P1X8 => "p1.x8",
+        iface_index_operations::PodType::P2X1 => "p2.x1",
+        iface_index_operations::PodType::P2X2 => "p2.x2",
+        iface_index_operations::PodType::P2X4 => "p2.x4",
+        iface_index_operations::PodType::P2X8 => "p2.x8",
+    }
 }
 
-fn iface_index_operations__index_name__to_json(p: &iface_index_operations::IndexName) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
+fn iface_index_operations__index_state__to_str(e: &iface_index_operations::IndexState) -> &'static str {
+    match e {
+        iface_index_operations::IndexState::Initializing => "Initializing",
+        iface_index_operations::IndexState::ScalingUp => "ScalingUp",
+        iface_index_operations::IndexState::ScalingDown => "ScalingDown",
+        iface_index_operations::IndexState::Terminating => "Terminating",
+        iface_index_operations::IndexState::Ready => "Ready",
+    }
 }
 
 fn iface_index_operations__collection__to_json(p: &iface_index_operations::Collection) -> Value {
     let mut m = Map::new();
-    m.insert("name".into(), iface_index_operations__collection_name__to_json(&p.name));
+    m.insert("name".into(), Value::String((&p.name).clone()));
     m.insert("size".into(), Value::Number(serde_json::Number::from(*(&p.size))));
-    m.insert("status".into(), iface_index_operations__collection_state__to_json(&p.status));
-    Value::Object(m)
-}
-
-fn iface_index_operations__collection_state__to_json(p: &iface_index_operations::CollectionState) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_index_operations__indexes_list__to_json(p: &iface_index_operations::IndexesList) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_index_operations__vector_dimensionality__to_json(p: &iface_index_operations::VectorDimensionality) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
+    m.insert("status".into(), Value::String((&p.status).clone()));
     Value::Object(m)
 }
 
 fn iface_index_operations__index_metadata_config__to_json(p: &iface_index_operations::IndexMetadataConfig) -> Value {
     let mut m = Map::new();
     m.insert("indexed".into(), match (&p.indexed) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_index_operations__index_metric__to_json(p: &iface_index_operations::IndexMetric) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_index_operations__pod_type__to_json(p: &iface_index_operations::PodType) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -182,10 +169,10 @@ fn iface_index_operations__index__to_json(p: &iface_index_operations::Index) -> 
 
 fn iface_index_operations__index_database__to_json(p: &iface_index_operations::IndexDatabase) -> Value {
     let mut m = Map::new();
-    m.insert("dimension".into(), match (&p.dimension) { Some(v) => iface_index_operations__vector_dimensionality__to_json(v), None => Value::Null });
-    m.insert("metric".into(), match (&p.metric) { Some(v) => iface_index_operations__index_metric__to_json(v), None => Value::Null });
-    m.insert("name".into(), match (&p.name) { Some(v) => iface_index_operations__index_name__to_json(v), None => Value::Null });
-    m.insert("pod_type".into(), match (&p.pod_type) { Some(v) => iface_index_operations__pod_type__to_json(v), None => Value::Null });
+    m.insert("dimension".into(), match (&p.dimension) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("metric".into(), match (&p.metric) { Some(v) => Value::String(iface_index_operations__index_metric__to_str(v).into()), None => Value::Null });
+    m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("pod_type".into(), match (&p.pod_type) { Some(v) => Value::String(iface_index_operations__pod_type__to_str(v).into()), None => Value::Null });
     m.insert("pods".into(), match (&p.pods) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("replicas".into(), match (&p.replicas) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("shards".into(), match (&p.shards) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
@@ -197,20 +184,14 @@ fn iface_index_operations__index_status__to_json(p: &iface_index_operations::Ind
     m.insert("host".into(), match (&p.host) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("port".into(), match (&p.port) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("ready".into(), match (&p.ready) { Some(v) => Value::Bool(*(v)), None => Value::Null });
-    m.insert("state".into(), match (&p.state) { Some(v) => iface_index_operations__index_state__to_json(v), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_index_operations__index_state__to_json(p: &iface_index_operations::IndexState) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
+    m.insert("state".into(), match (&p.state) { Some(v) => Value::String(iface_index_operations__index_state__to_str(v).into()), None => Value::Null });
     Value::Object(m)
 }
 
 fn iface_index_operations__create_collection_params__to_json(p: &iface_index_operations::CreateCollectionParams) -> Value {
     let mut m = Map::new();
-    m.insert("name".into(), iface_index_operations__collection_name__to_json(&p.name));
-    m.insert("source".into(), iface_index_operations__index_name__to_json(&p.source));
+    m.insert("name".into(), Value::String((&p.name).clone()));
+    m.insert("source".into(), Value::String((&p.source).clone()));
     Value::Object(m)
 }
 
@@ -228,14 +209,14 @@ fn iface_index_operations__delete_collection_params__to_json(p: &iface_index_ope
 
 fn iface_index_operations__create_index_params__to_json(p: &iface_index_operations::CreateIndexParams) -> Value {
     let mut m = Map::new();
-    m.insert("dimension".into(), iface_index_operations__vector_dimensionality__to_json(&p.dimension));
+    m.insert("dimension".into(), Value::Number(serde_json::Number::from(*(&p.dimension))));
     m.insert("metadata_config".into(), match (&p.metadata_config) { Some(v) => iface_index_operations__index_metadata_config__to_json(v), None => Value::Null });
-    m.insert("metric".into(), match (&p.metric) { Some(v) => iface_index_operations__index_metric__to_json(v), None => Value::Null });
-    m.insert("name".into(), iface_index_operations__index_name__to_json(&p.name));
-    m.insert("pod_type".into(), match (&p.pod_type) { Some(v) => iface_index_operations__pod_type__to_json(v), None => Value::Null });
+    m.insert("metric".into(), match (&p.metric) { Some(v) => Value::String(iface_index_operations__index_metric__to_str(v).into()), None => Value::Null });
+    m.insert("name".into(), Value::String((&p.name).clone()));
+    m.insert("pod_type".into(), match (&p.pod_type) { Some(v) => Value::String(iface_index_operations__pod_type__to_str(v).into()), None => Value::Null });
     m.insert("pods".into(), match (&p.pods) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("replicas".into(), match (&p.replicas) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    m.insert("source_collection".into(), match (&p.source_collection) { Some(v) => iface_index_operations__collection_name__to_json(v), None => Value::Null });
+    m.insert("source_collection".into(), match (&p.source_collection) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -248,7 +229,7 @@ fn iface_index_operations__describe_index_params__to_json(p: &iface_index_operat
 fn iface_index_operations__configure_index_params__to_json(p: &iface_index_operations::ConfigureIndexParams) -> Value {
     let mut m = Map::new();
     m.insert("index_name".into(), Value::String((&p.index_name).clone()));
-    m.insert("pod_type".into(), match (&p.pod_type) { Some(v) => iface_index_operations__pod_type__to_json(v), None => Value::Null });
+    m.insert("pod_type".into(), match (&p.pod_type) { Some(v) => Value::String(iface_index_operations__pod_type__to_str(v).into()), None => Value::Null });
     m.insert("replicas".into(), match (&p.replicas) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
@@ -259,68 +240,12 @@ fn iface_index_operations__delete_index_params__to_json(p: &iface_index_operatio
     Value::Object(m)
 }
 
-fn iface_index_operations__collections_list__from_json(v: &Value) -> Option<iface_index_operations::CollectionsList> {
-    let m = v.as_object()?;
-    Some(iface_index_operations::CollectionsList {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-    })
-}
-
-fn iface_index_operations__collection_name__from_json(v: &Value) -> Option<iface_index_operations::CollectionName> {
-    let m = v.as_object()?;
-    Some(iface_index_operations::CollectionName {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-    })
-}
-
-fn iface_index_operations__index_name__from_json(v: &Value) -> Option<iface_index_operations::IndexName> {
-    let m = v.as_object()?;
-    Some(iface_index_operations::IndexName {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-    })
-}
-
 fn iface_index_operations__collection__from_json(v: &Value) -> Option<iface_index_operations::Collection> {
     let m = v.as_object()?;
     Some(iface_index_operations::Collection {
-        name: match m.get("name").and_then(|v| iface_index_operations__collection_name__from_json(v)) { Some(x) => x, None => return None },
+        name: m.get("name").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         size: m.get("size").and_then(|v| (v).as_i64()).unwrap_or_default(),
-        status: match m.get("status").and_then(|v| iface_index_operations__collection_state__from_json(v)) { Some(x) => x, None => return None },
-    })
-}
-
-fn iface_index_operations__collection_state__from_json(v: &Value) -> Option<iface_index_operations::CollectionState> {
-    let m = v.as_object()?;
-    Some(iface_index_operations::CollectionState {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-    })
-}
-
-fn iface_index_operations__indexes_list__from_json(v: &Value) -> Option<iface_index_operations::IndexesList> {
-    let m = v.as_object()?;
-    Some(iface_index_operations::IndexesList {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-    })
-}
-
-fn iface_index_operations__vector_dimensionality__from_json(v: &Value) -> Option<iface_index_operations::VectorDimensionality> {
-    let m = v.as_object()?;
-    Some(iface_index_operations::VectorDimensionality {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-    })
-}
-
-fn iface_index_operations__index_metric__from_json(v: &Value) -> Option<iface_index_operations::IndexMetric> {
-    let m = v.as_object()?;
-    Some(iface_index_operations::IndexMetric {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-    })
-}
-
-fn iface_index_operations__pod_type__from_json(v: &Value) -> Option<iface_index_operations::PodType> {
-    let m = v.as_object()?;
-    Some(iface_index_operations::PodType {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        status: m.get("status").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -335,10 +260,10 @@ fn iface_index_operations__index__from_json(v: &Value) -> Option<iface_index_ope
 fn iface_index_operations__index_database__from_json(v: &Value) -> Option<iface_index_operations::IndexDatabase> {
     let m = v.as_object()?;
     Some(iface_index_operations::IndexDatabase {
-        dimension: m.get("dimension").filter(|v| !v.is_null()).and_then(|v| iface_index_operations__vector_dimensionality__from_json(v)),
-        metric: m.get("metric").filter(|v| !v.is_null()).and_then(|v| iface_index_operations__index_metric__from_json(v)),
-        name: m.get("name").filter(|v| !v.is_null()).and_then(|v| iface_index_operations__index_name__from_json(v)),
-        pod_type: m.get("pod_type").filter(|v| !v.is_null()).and_then(|v| iface_index_operations__pod_type__from_json(v)),
+        dimension: m.get("dimension").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        metric: m.get("metric").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_index_operations__index_metric__from_str)),
+        name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        pod_type: m.get("pod_type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_index_operations__pod_type__from_str)),
         pods: m.get("pods").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
         replicas: m.get("replicas").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
         shards: m.get("shards").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
@@ -351,23 +276,54 @@ fn iface_index_operations__index_status__from_json(v: &Value) -> Option<iface_in
         host: m.get("host").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         port: m.get("port").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
         ready: m.get("ready").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
-        state: m.get("state").filter(|v| !v.is_null()).and_then(|v| iface_index_operations__index_state__from_json(v)),
+        state: m.get("state").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_index_operations__index_state__from_str)),
     })
 }
 
-fn iface_index_operations__index_state__from_json(v: &Value) -> Option<iface_index_operations::IndexState> {
-    let m = v.as_object()?;
-    Some(iface_index_operations::IndexState {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-    })
+fn iface_index_operations__index_metric__from_str(s: &str) -> Option<iface_index_operations::IndexMetric> {
+    match s {
+        "euclidean" => Some(iface_index_operations::IndexMetric::Euclidean),
+        "cosine" => Some(iface_index_operations::IndexMetric::Cosine),
+        "dotproduct" => Some(iface_index_operations::IndexMetric::Dotproduct),
+        _ => None,
+    }
 }
 
-fn iface_index_operations__list_collections__ok(body: String) -> Result<iface_index_operations::CollectionsList, crate::runtime::DispatchError> {
+fn iface_index_operations__pod_type__from_str(s: &str) -> Option<iface_index_operations::PodType> {
+    match s {
+        "s1.x1" => Some(iface_index_operations::PodType::S1X1),
+        "s1.x2" => Some(iface_index_operations::PodType::S1X2),
+        "s1.x4" => Some(iface_index_operations::PodType::S1X4),
+        "s1.x8" => Some(iface_index_operations::PodType::S1X8),
+        "p1.x1" => Some(iface_index_operations::PodType::P1X1),
+        "p1.x2" => Some(iface_index_operations::PodType::P1X2),
+        "p1.x4" => Some(iface_index_operations::PodType::P1X4),
+        "p1.x8" => Some(iface_index_operations::PodType::P1X8),
+        "p2.x1" => Some(iface_index_operations::PodType::P2X1),
+        "p2.x2" => Some(iface_index_operations::PodType::P2X2),
+        "p2.x4" => Some(iface_index_operations::PodType::P2X4),
+        "p2.x8" => Some(iface_index_operations::PodType::P2X8),
+        _ => None,
+    }
+}
+
+fn iface_index_operations__index_state__from_str(s: &str) -> Option<iface_index_operations::IndexState> {
+    match s {
+        "Initializing" => Some(iface_index_operations::IndexState::Initializing),
+        "ScalingUp" => Some(iface_index_operations::IndexState::ScalingUp),
+        "ScalingDown" => Some(iface_index_operations::IndexState::ScalingDown),
+        "Terminating" => Some(iface_index_operations::IndexState::Terminating),
+        "Ready" => Some(iface_index_operations::IndexState::Ready),
+        _ => None,
+    }
+}
+
+fn iface_index_operations__list_collections__ok(body: String) -> Result<Vec<String>, crate::runtime::DispatchError> {
     let v: Value = match serde_json::from_str(&body) {
         Ok(v) => v,
         Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
     };
-    match iface_index_operations__collections_list__from_json(&v) {
+    match (&v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect()) {
         Some(x) => Ok(x),
         None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
@@ -433,12 +389,12 @@ fn iface_index_operations__delete_collection__err(e: crate::runtime::DispatchErr
     }
 }
 
-fn iface_index_operations__list_indexes__ok(body: String) -> Result<iface_index_operations::IndexesList, crate::runtime::DispatchError> {
+fn iface_index_operations__list_indexes__ok(body: String) -> Result<Vec<String>, crate::runtime::DispatchError> {
     let v: Value = match serde_json::from_str(&body) {
         Ok(v) => v,
         Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
     };
-    match iface_index_operations__indexes_list__from_json(&v) {
+    match (&v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect()) {
         Some(x) => Ok(x),
         None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
@@ -521,7 +477,7 @@ fn iface_index_operations__delete_index__err(e: crate::runtime::DispatchError) -
 }
 
 impl iface_index_operations::Guest for crate::Component {
-    fn list_collections() -> Result<iface_index_operations::CollectionsList, String> {
+    fn list_collections() -> Result<Vec<String>, String> {
         match dispatch(&OP_INDEX_OPERATIONS_LIST_COLLECTIONS, Value::Object(Map::new())).and_then(iface_index_operations__list_collections__ok) {
             Ok(v) => Ok(v),
             Err(e) => Err(iface_index_operations__list_collections__err(e)),
@@ -548,7 +504,7 @@ impl iface_index_operations::Guest for crate::Component {
             Err(e) => Err(iface_index_operations__delete_collection__err(e)),
         }
     }
-    fn list_indexes() -> Result<iface_index_operations::IndexesList, String> {
+    fn list_indexes() -> Result<Vec<String>, String> {
         match dispatch(&OP_INDEX_OPERATIONS_LIST_INDEXES, Value::Object(Map::new())).and_then(iface_index_operations__list_indexes__ok) {
             Ok(v) => Ok(v),
             Err(e) => Err(iface_index_operations__list_indexes__err(e)),
