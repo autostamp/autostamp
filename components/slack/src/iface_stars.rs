@@ -51,20 +51,14 @@ const OP_STARS_REMOVE: OpSpec = OpSpec {
 
 fn iface_stars__add_response__to_json(p: &iface_stars::AddResponse) -> Value {
     let mut m = Map::new();
-    m.insert("ok".into(), iface_stars__defs_ok_true__to_json(&p.ok));
-    Value::Object(m)
-}
-
-fn iface_stars__defs_ok_true__to_json(p: &iface_stars::DefsOkTrue) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
+    m.insert("ok".into(), Value::Bool(*(&p.ok)));
     Value::Object(m)
 }
 
 fn iface_stars__list_op_response__to_json(p: &iface_stars::ListOpResponse) -> Value {
     let mut m = Map::new();
     m.insert("items".into(), Value::Array((&p.items).iter().map(|v| Value::String((v).clone())).collect()));
-    m.insert("ok".into(), iface_stars__defs_ok_true__to_json(&p.ok));
+    m.insert("ok".into(), Value::Bool(*(&p.ok)));
     m.insert("paging".into(), match (&p.paging) { Some(v) => iface_stars__objs_paging__to_json(v), None => Value::Null });
     Value::Object(m)
 }
@@ -82,7 +76,7 @@ fn iface_stars__objs_paging__to_json(p: &iface_stars::ObjsPaging) -> Value {
 
 fn iface_stars__remove_response__to_json(p: &iface_stars::RemoveResponse) -> Value {
     let mut m = Map::new();
-    m.insert("ok".into(), iface_stars__defs_ok_true__to_json(&p.ok));
+    m.insert("ok".into(), Value::Bool(*(&p.ok)));
     Value::Object(m)
 }
 
@@ -119,14 +113,7 @@ fn iface_stars__remove_params__to_json(p: &iface_stars::RemoveParams) -> Value {
 fn iface_stars__add_response__from_json(v: &Value) -> Option<iface_stars::AddResponse> {
     let m = v.as_object()?;
     Some(iface_stars::AddResponse {
-        ok: match m.get("ok").and_then(|v| iface_stars__defs_ok_true__from_json(v)) { Some(x) => x, None => return None },
-    })
-}
-
-fn iface_stars__defs_ok_true__from_json(v: &Value) -> Option<iface_stars::DefsOkTrue> {
-    let m = v.as_object()?;
-    Some(iface_stars::DefsOkTrue {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        ok: m.get("ok").and_then(|v| (v).as_bool()).unwrap_or_default(),
     })
 }
 
@@ -134,7 +121,7 @@ fn iface_stars__list_op_response__from_json(v: &Value) -> Option<iface_stars::Li
     let m = v.as_object()?;
     Some(iface_stars::ListOpResponse {
         items: m.get("items").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())).unwrap_or_default(),
-        ok: match m.get("ok").and_then(|v| iface_stars__defs_ok_true__from_json(v)) { Some(x) => x, None => return None },
+        ok: m.get("ok").and_then(|v| (v).as_bool()).unwrap_or_default(),
         paging: m.get("paging").filter(|v| !v.is_null()).and_then(|v| iface_stars__objs_paging__from_json(v)),
     })
 }
@@ -154,7 +141,7 @@ fn iface_stars__objs_paging__from_json(v: &Value) -> Option<iface_stars::ObjsPag
 fn iface_stars__remove_response__from_json(v: &Value) -> Option<iface_stars::RemoveResponse> {
     let m = v.as_object()?;
     Some(iface_stars::RemoveResponse {
-        ok: match m.get("ok").and_then(|v| iface_stars__defs_ok_true__from_json(v)) { Some(x) => x, None => return None },
+        ok: m.get("ok").and_then(|v| (v).as_bool()).unwrap_or_default(),
     })
 }
 

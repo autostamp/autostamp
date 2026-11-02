@@ -53,14 +53,15 @@ fn iface_shared_catalog_shared_catalog_id_unassign_companies__company_data_compa
 fn iface_shared_catalog_shared_catalog_id_unassign_companies__negotiable_quote_data_company_quote_config_interface__to_json(p: &iface_shared_catalog_shared_catalog_id_unassign_companies::NegotiableQuoteDataCompanyQuoteConfigInterface) -> Value {
     let mut m = Map::new();
     m.insert("company_id".into(), match (&p.company_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("extension_attributes".into(), match (&p.extension_attributes) { Some(v) => iface_shared_catalog_shared_catalog_id_unassign_companies__negotiable_quote_data_company_quote_config_extension_interface__to_json(v), None => Value::Null });
+    m.insert("extension_attributes".into(), match (&p.extension_attributes) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("is_quote_enabled".into(), Value::Bool(*(&p.is_quote_enabled)));
     Value::Object(m)
 }
 
-fn iface_shared_catalog_shared_catalog_id_unassign_companies__negotiable_quote_data_company_quote_config_extension_interface__to_json(p: &iface_shared_catalog_shared_catalog_id_unassign_companies::NegotiableQuoteDataCompanyQuoteConfigExtensionInterface) -> Value {
+fn iface_shared_catalog_shared_catalog_id_unassign_companies__negotiable_quote_data_company_quote_config_extension_interface_entry__to_json(p: &iface_shared_catalog_shared_catalog_id_unassign_companies::NegotiableQuoteDataCompanyQuoteConfigExtensionInterfaceEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 

@@ -403,7 +403,7 @@ fn iface_charges__charge__to_json(p: &iface_charges::Charge) -> Value {
     m.insert("id".into(), Value::String((&p.id).clone()));
     m.insert("invoice".into(), match (&p.invoice) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("livemode".into(), Value::Bool(*(&p.livemode)));
-    m.insert("metadata".into(), iface_charges__charge_metadata__to_json(&p.metadata));
+    m.insert("metadata".into(), Value::Object((&p.metadata).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()));
     m.insert("object".into(), Value::String(iface_charges__charge_object_enum__to_str(&p.object).into()));
     m.insert("on_behalf_of".into(), match (&p.on_behalf_of) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("outcome".into(), match (&p.outcome) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -438,9 +438,10 @@ fn iface_charges__billing_details__to_json(p: &iface_charges::BillingDetails) ->
     Value::Object(m)
 }
 
-fn iface_charges__charge_metadata__to_json(p: &iface_charges::ChargeMetadata) -> Value {
+fn iface_charges__charge_metadata_entry__to_json(p: &iface_charges::ChargeMetadataEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -471,7 +472,7 @@ fn iface_charges__refund__to_json(p: &iface_charges::Refund) -> Value {
     m.insert("failure_reason".into(), match (&p.failure_reason) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("id".into(), Value::String((&p.id).clone()));
     m.insert("instructions_email".into(), match (&p.instructions_email) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("metadata".into(), match (&p.metadata) { Some(v) => iface_charges__refund_metadata__to_json(v), None => Value::Null });
+    m.insert("metadata".into(), match (&p.metadata) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("next_action".into(), match (&p.next_action) { Some(v) => iface_charges__refund_next_action__to_json(v), None => Value::Null });
     m.insert("object".into(), Value::String(iface_charges__refund_object_enum__to_str(&p.object).into()));
     m.insert("payment_intent".into(), match (&p.payment_intent) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -483,9 +484,10 @@ fn iface_charges__refund__to_json(p: &iface_charges::Refund) -> Value {
     Value::Object(m)
 }
 
-fn iface_charges__refund_metadata__to_json(p: &iface_charges::RefundMetadata) -> Value {
+fn iface_charges__refund_metadata_entry__to_json(p: &iface_charges::RefundMetadataEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -586,7 +588,7 @@ fn iface_charges__dispute__to_json(p: &iface_charges::Dispute) -> Value {
     m.insert("id".into(), Value::String((&p.id).clone()));
     m.insert("is_charge_refundable".into(), Value::Bool(*(&p.is_charge_refundable)));
     m.insert("livemode".into(), Value::Bool(*(&p.livemode)));
-    m.insert("metadata".into(), iface_charges__dispute_metadata__to_json(&p.metadata));
+    m.insert("metadata".into(), Value::Object((&p.metadata).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()));
     m.insert("object".into(), Value::String(iface_charges__dispute_object_enum__to_str(&p.object).into()));
     m.insert("payment_intent".into(), match (&p.payment_intent) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("reason".into(), Value::String((&p.reason).clone()));
@@ -665,9 +667,10 @@ fn iface_charges__dispute_evidence_details__to_json(p: &iface_charges::DisputeEv
     Value::Object(m)
 }
 
-fn iface_charges__dispute_metadata__to_json(p: &iface_charges::DisputeMetadata) -> Value {
+fn iface_charges__dispute_metadata_entry__to_json(p: &iface_charges::DisputeMetadataEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -918,7 +921,7 @@ fn iface_charges__charge__from_json(v: &Value) -> Option<iface_charges::Charge> 
         id: m.get("id").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         invoice: m.get("invoice").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         livemode: m.get("livemode").and_then(|v| (v).as_bool()).unwrap_or_default(),
-        metadata: match m.get("metadata").and_then(|v| iface_charges__charge_metadata__from_json(v)) { Some(x) => x, None => return None },
+        metadata: m.get("metadata").and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_charges::ChargeMetadataEntry { key: k.clone(), value: val })).collect())).unwrap_or_default(),
         object: match m.get("object").and_then(|v| (v).as_str().and_then(iface_charges__charge_object_enum__from_str)) { Some(x) => x, None => return None },
         on_behalf_of: m.get("on_behalf_of").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         outcome: m.get("outcome").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
@@ -954,10 +957,11 @@ fn iface_charges__billing_details__from_json(v: &Value) -> Option<iface_charges:
     })
 }
 
-fn iface_charges__charge_metadata__from_json(v: &Value) -> Option<iface_charges::ChargeMetadata> {
+fn iface_charges__charge_metadata_entry__from_json(v: &Value) -> Option<iface_charges::ChargeMetadataEntry> {
     let m = v.as_object()?;
-    Some(iface_charges::ChargeMetadata {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_charges::ChargeMetadataEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -991,7 +995,7 @@ fn iface_charges__refund__from_json(v: &Value) -> Option<iface_charges::Refund> 
         failure_reason: m.get("failure_reason").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         id: m.get("id").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         instructions_email: m.get("instructions_email").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        metadata: m.get("metadata").filter(|v| !v.is_null()).and_then(|v| iface_charges__refund_metadata__from_json(v)),
+        metadata: m.get("metadata").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_charges::RefundMetadataEntry { key: k.clone(), value: val })).collect())),
         next_action: m.get("next_action").filter(|v| !v.is_null()).and_then(|v| iface_charges__refund_next_action__from_json(v)),
         object: match m.get("object").and_then(|v| (v).as_str().and_then(iface_charges__refund_object_enum__from_str)) { Some(x) => x, None => return None },
         payment_intent: m.get("payment_intent").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
@@ -1003,10 +1007,11 @@ fn iface_charges__refund__from_json(v: &Value) -> Option<iface_charges::Refund> 
     })
 }
 
-fn iface_charges__refund_metadata__from_json(v: &Value) -> Option<iface_charges::RefundMetadata> {
+fn iface_charges__refund_metadata_entry__from_json(v: &Value) -> Option<iface_charges::RefundMetadataEntry> {
     let m = v.as_object()?;
-    Some(iface_charges::RefundMetadata {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_charges::RefundMetadataEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -1043,7 +1048,7 @@ fn iface_charges__dispute__from_json(v: &Value) -> Option<iface_charges::Dispute
         id: m.get("id").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         is_charge_refundable: m.get("is_charge_refundable").and_then(|v| (v).as_bool()).unwrap_or_default(),
         livemode: m.get("livemode").and_then(|v| (v).as_bool()).unwrap_or_default(),
-        metadata: match m.get("metadata").and_then(|v| iface_charges__dispute_metadata__from_json(v)) { Some(x) => x, None => return None },
+        metadata: m.get("metadata").and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_charges::DisputeMetadataEntry { key: k.clone(), value: val })).collect())).unwrap_or_default(),
         object: match m.get("object").and_then(|v| (v).as_str().and_then(iface_charges__dispute_object_enum__from_str)) { Some(x) => x, None => return None },
         payment_intent: m.get("payment_intent").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         reason: m.get("reason").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
@@ -1126,10 +1131,11 @@ fn iface_charges__dispute_evidence_details__from_json(v: &Value) -> Option<iface
     })
 }
 
-fn iface_charges__dispute_metadata__from_json(v: &Value) -> Option<iface_charges::DisputeMetadata> {
+fn iface_charges__dispute_metadata_entry__from_json(v: &Value) -> Option<iface_charges::DisputeMetadataEntry> {
     let m = v.as_object()?;
-    Some(iface_charges::DisputeMetadata {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_charges::DisputeMetadataEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 

@@ -190,10 +190,48 @@ fn iface_code_scanning__list_alerts_for_org_direction_enum__to_str(e: &iface_cod
     }
 }
 
+fn iface_code_scanning__alert_state__to_str(e: &iface_code_scanning::AlertState) -> &'static str {
+    match e {
+        iface_code_scanning::AlertState::Open => "open",
+        iface_code_scanning::AlertState::Closed => "closed",
+        iface_code_scanning::AlertState::Dismissed => "dismissed",
+        iface_code_scanning::AlertState::Fixed => "fixed",
+    }
+}
+
 fn iface_code_scanning__list_alerts_for_org_sort_enum__to_str(e: &iface_code_scanning::ListAlertsForOrgSortEnum) -> &'static str {
     match e {
         iface_code_scanning::ListAlertsForOrgSortEnum::Created => "created",
         iface_code_scanning::ListAlertsForOrgSortEnum::Updated => "updated",
+    }
+}
+
+fn iface_code_scanning__alert_severity__to_str(e: &iface_code_scanning::AlertSeverity) -> &'static str {
+    match e {
+        iface_code_scanning::AlertSeverity::Critical => "critical",
+        iface_code_scanning::AlertSeverity::High => "high",
+        iface_code_scanning::AlertSeverity::Medium => "medium",
+        iface_code_scanning::AlertSeverity::Low => "low",
+        iface_code_scanning::AlertSeverity::Warning => "warning",
+        iface_code_scanning::AlertSeverity::Note => "note",
+        iface_code_scanning::AlertSeverity::Error => "error",
+    }
+}
+
+fn iface_code_scanning__alert_dismissed_reason__to_str(e: &iface_code_scanning::AlertDismissedReason) -> &'static str {
+    match e {
+        iface_code_scanning::AlertDismissedReason::FalsePositive => "false positive",
+        iface_code_scanning::AlertDismissedReason::WonTFix => "won't fix",
+        iface_code_scanning::AlertDismissedReason::UsedInTests => "used in tests",
+    }
+}
+
+fn iface_code_scanning__alert_classification__to_str(e: &iface_code_scanning::AlertClassification) -> &'static str {
+    match e {
+        iface_code_scanning::AlertClassification::Source => "source",
+        iface_code_scanning::AlertClassification::Generated => "generated",
+        iface_code_scanning::AlertClassification::Test => "test",
+        iface_code_scanning::AlertClassification::Library => "library",
     }
 }
 
@@ -215,6 +253,13 @@ fn iface_code_scanning__alert_rule_severity_enum__to_str(e: &iface_code_scanning
     }
 }
 
+fn iface_code_scanning__alert_set_state__to_str(e: &iface_code_scanning::AlertSetState) -> &'static str {
+    match e {
+        iface_code_scanning::AlertSetState::Open => "open",
+        iface_code_scanning::AlertSetState::Dismissed => "dismissed",
+    }
+}
+
 fn iface_code_scanning__list_recent_analyses_sort_enum__to_str(e: &iface_code_scanning::ListRecentAnalysesSortEnum) -> &'static str {
     match e {
         iface_code_scanning::ListRecentAnalysesSortEnum::Created => "created",
@@ -229,60 +274,24 @@ fn iface_code_scanning__sarifs_status_processing_status_enum__to_str(e: &iface_c
     }
 }
 
-fn iface_code_scanning__analysis_tool_name__to_json(p: &iface_code_scanning::AnalysisToolName) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_code_scanning__analysis_tool_guid__to_json(p: &iface_code_scanning::AnalysisToolGuid) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_code_scanning__alert_state__to_json(p: &iface_code_scanning::AlertState) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_code_scanning__alert_severity__to_json(p: &iface_code_scanning::AlertSeverity) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
 fn iface_code_scanning__organization_alert_items__to_json(p: &iface_code_scanning::OrganizationAlertItems) -> Value {
     let mut m = Map::new();
-    m.insert("created_at".into(), iface_code_scanning__alert_created_at__to_json(&p.created_at));
-    m.insert("dismissed_at".into(), iface_code_scanning__alert_dismissed_at__to_json(&p.dismissed_at));
+    m.insert("created_at".into(), Value::String((&p.created_at).clone()));
+    m.insert("dismissed_at".into(), Value::String((&p.dismissed_at).clone()));
     m.insert("dismissed_by".into(), iface_code_scanning__nullable_simple_user__to_json(&p.dismissed_by));
-    m.insert("dismissed_comment".into(), match (&p.dismissed_comment) { Some(v) => iface_code_scanning__alert_dismissed_comment__to_json(v), None => Value::Null });
-    m.insert("dismissed_reason".into(), iface_code_scanning__alert_dismissed_reason__to_json(&p.dismissed_reason));
-    m.insert("fixed_at".into(), match (&p.fixed_at) { Some(v) => iface_code_scanning__alert_fixed_at__to_json(v), None => Value::Null });
-    m.insert("html_url".into(), iface_code_scanning__alert_html_url__to_json(&p.html_url));
-    m.insert("instances_url".into(), iface_code_scanning__alert_instances_url__to_json(&p.instances_url));
+    m.insert("dismissed_comment".into(), match (&p.dismissed_comment) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("dismissed_reason".into(), Value::String(iface_code_scanning__alert_dismissed_reason__to_str(&p.dismissed_reason).into()));
+    m.insert("fixed_at".into(), match (&p.fixed_at) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("html_url".into(), Value::String((&p.html_url).clone()));
+    m.insert("instances_url".into(), Value::String((&p.instances_url).clone()));
     m.insert("most_recent_instance".into(), iface_code_scanning__alert_instance__to_json(&p.most_recent_instance));
-    m.insert("number".into(), iface_code_scanning__alert_number__to_json(&p.number));
+    m.insert("number".into(), Value::Number(serde_json::Number::from(*(&p.number))));
     m.insert("repository".into(), iface_code_scanning__simple_repository__to_json(&p.repository));
     m.insert("rule".into(), iface_code_scanning__alert_rule__to_json(&p.rule));
-    m.insert("state".into(), iface_code_scanning__alert_state__to_json(&p.state));
+    m.insert("state".into(), Value::String(iface_code_scanning__alert_state__to_str(&p.state).into()));
     m.insert("tool".into(), iface_code_scanning__analysis_tool__to_json(&p.tool));
-    m.insert("updated_at".into(), match (&p.updated_at) { Some(v) => iface_code_scanning__alert_updated_at__to_json(v), None => Value::Null });
-    m.insert("url".into(), iface_code_scanning__alert_url__to_json(&p.url));
-    Value::Object(m)
-}
-
-fn iface_code_scanning__alert_created_at__to_json(p: &iface_code_scanning::AlertCreatedAt) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_code_scanning__alert_dismissed_at__to_json(p: &iface_code_scanning::AlertDismissedAt) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
+    m.insert("updated_at".into(), match (&p.updated_at) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("url".into(), Value::String((&p.url).clone()));
     Value::Object(m)
 }
 
@@ -312,72 +321,18 @@ fn iface_code_scanning__nullable_simple_user__to_json(p: &iface_code_scanning::N
     Value::Object(m)
 }
 
-fn iface_code_scanning__alert_dismissed_comment__to_json(p: &iface_code_scanning::AlertDismissedComment) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_code_scanning__alert_dismissed_reason__to_json(p: &iface_code_scanning::AlertDismissedReason) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_code_scanning__alert_fixed_at__to_json(p: &iface_code_scanning::AlertFixedAt) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_code_scanning__alert_html_url__to_json(p: &iface_code_scanning::AlertHtmlUrl) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_code_scanning__alert_instances_url__to_json(p: &iface_code_scanning::AlertInstancesUrl) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
 fn iface_code_scanning__alert_instance__to_json(p: &iface_code_scanning::AlertInstance) -> Value {
     let mut m = Map::new();
-    m.insert("analysis_key".into(), match (&p.analysis_key) { Some(v) => iface_code_scanning__analysis_analysis_key__to_json(v), None => Value::Null });
-    m.insert("category".into(), match (&p.category) { Some(v) => iface_code_scanning__analysis_category__to_json(v), None => Value::Null });
-    m.insert("classifications".into(), match (&p.classifications) { Some(v) => Value::Array((v).iter().map(|v| iface_code_scanning__alert_classification__to_json(v)).collect()), None => Value::Null });
+    m.insert("analysis_key".into(), match (&p.analysis_key) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("category".into(), match (&p.category) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("classifications".into(), match (&p.classifications) { Some(v) => Value::Array((v).iter().map(|v| Value::String(iface_code_scanning__alert_classification__to_str(v).into())).collect()), None => Value::Null });
     m.insert("commit_sha".into(), match (&p.commit_sha) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("environment".into(), match (&p.environment) { Some(v) => iface_code_scanning__alert_environment__to_json(v), None => Value::Null });
+    m.insert("environment".into(), match (&p.environment) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("html_url".into(), match (&p.html_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("location".into(), match (&p.location) { Some(v) => iface_code_scanning__alert_location__to_json(v), None => Value::Null });
     m.insert("message".into(), match (&p.message) { Some(v) => iface_code_scanning__alert_instance_message__to_json(v), None => Value::Null });
-    m.insert("ref".into(), match (&p.ref_) { Some(v) => iface_code_scanning__ref__to_json(v), None => Value::Null });
-    m.insert("state".into(), match (&p.state) { Some(v) => iface_code_scanning__alert_state__to_json(v), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_code_scanning__analysis_analysis_key__to_json(p: &iface_code_scanning::AnalysisAnalysisKey) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_code_scanning__analysis_category__to_json(p: &iface_code_scanning::AnalysisCategory) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_code_scanning__alert_classification__to_json(p: &iface_code_scanning::AlertClassification) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_code_scanning__alert_environment__to_json(p: &iface_code_scanning::AlertEnvironment) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
+    m.insert("ref".into(), match (&p.ref_) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("state".into(), match (&p.state) { Some(v) => Value::String(iface_code_scanning__alert_state__to_str(v).into()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -394,18 +349,6 @@ fn iface_code_scanning__alert_location__to_json(p: &iface_code_scanning::AlertLo
 fn iface_code_scanning__alert_instance_message__to_json(p: &iface_code_scanning::AlertInstanceMessage) -> Value {
     let mut m = Map::new();
     m.insert("text".into(), match (&p.text) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_code_scanning__ref__to_json(p: &iface_code_scanning::Ref) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_code_scanning__alert_number__to_json(p: &iface_code_scanning::AlertNumber) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -502,47 +445,29 @@ fn iface_code_scanning__alert_rule__to_json(p: &iface_code_scanning::AlertRule) 
 
 fn iface_code_scanning__analysis_tool__to_json(p: &iface_code_scanning::AnalysisTool) -> Value {
     let mut m = Map::new();
-    m.insert("guid".into(), match (&p.guid) { Some(v) => iface_code_scanning__analysis_tool_guid__to_json(v), None => Value::Null });
-    m.insert("name".into(), match (&p.name) { Some(v) => iface_code_scanning__analysis_tool_name__to_json(v), None => Value::Null });
-    m.insert("version".into(), match (&p.version) { Some(v) => iface_code_scanning__analysis_tool_version__to_json(v), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_code_scanning__analysis_tool_version__to_json(p: &iface_code_scanning::AnalysisToolVersion) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_code_scanning__alert_updated_at__to_json(p: &iface_code_scanning::AlertUpdatedAt) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_code_scanning__alert_url__to_json(p: &iface_code_scanning::AlertUrl) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
+    m.insert("guid".into(), match (&p.guid) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("version".into(), match (&p.version) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
 fn iface_code_scanning__alert_items__to_json(p: &iface_code_scanning::AlertItems) -> Value {
     let mut m = Map::new();
-    m.insert("created_at".into(), iface_code_scanning__alert_created_at__to_json(&p.created_at));
-    m.insert("dismissed_at".into(), iface_code_scanning__alert_dismissed_at__to_json(&p.dismissed_at));
+    m.insert("created_at".into(), Value::String((&p.created_at).clone()));
+    m.insert("dismissed_at".into(), Value::String((&p.dismissed_at).clone()));
     m.insert("dismissed_by".into(), iface_code_scanning__nullable_simple_user__to_json(&p.dismissed_by));
-    m.insert("dismissed_comment".into(), match (&p.dismissed_comment) { Some(v) => iface_code_scanning__alert_dismissed_comment__to_json(v), None => Value::Null });
-    m.insert("dismissed_reason".into(), iface_code_scanning__alert_dismissed_reason__to_json(&p.dismissed_reason));
-    m.insert("fixed_at".into(), match (&p.fixed_at) { Some(v) => iface_code_scanning__alert_fixed_at__to_json(v), None => Value::Null });
-    m.insert("html_url".into(), iface_code_scanning__alert_html_url__to_json(&p.html_url));
-    m.insert("instances_url".into(), iface_code_scanning__alert_instances_url__to_json(&p.instances_url));
+    m.insert("dismissed_comment".into(), match (&p.dismissed_comment) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("dismissed_reason".into(), Value::String(iface_code_scanning__alert_dismissed_reason__to_str(&p.dismissed_reason).into()));
+    m.insert("fixed_at".into(), match (&p.fixed_at) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("html_url".into(), Value::String((&p.html_url).clone()));
+    m.insert("instances_url".into(), Value::String((&p.instances_url).clone()));
     m.insert("most_recent_instance".into(), iface_code_scanning__alert_instance__to_json(&p.most_recent_instance));
-    m.insert("number".into(), iface_code_scanning__alert_number__to_json(&p.number));
+    m.insert("number".into(), Value::Number(serde_json::Number::from(*(&p.number))));
     m.insert("rule".into(), iface_code_scanning__alert_rule_summary__to_json(&p.rule));
-    m.insert("state".into(), iface_code_scanning__alert_state__to_json(&p.state));
+    m.insert("state".into(), Value::String(iface_code_scanning__alert_state__to_str(&p.state).into()));
     m.insert("tool".into(), iface_code_scanning__analysis_tool__to_json(&p.tool));
-    m.insert("updated_at".into(), match (&p.updated_at) { Some(v) => iface_code_scanning__alert_updated_at__to_json(v), None => Value::Null });
-    m.insert("url".into(), iface_code_scanning__alert_url__to_json(&p.url));
+    m.insert("updated_at".into(), match (&p.updated_at) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("url".into(), Value::String((&p.url).clone()));
     Value::Object(m)
 }
 
@@ -558,77 +483,41 @@ fn iface_code_scanning__alert_rule_summary__to_json(p: &iface_code_scanning::Ale
 
 fn iface_code_scanning__alert__to_json(p: &iface_code_scanning::Alert) -> Value {
     let mut m = Map::new();
-    m.insert("created_at".into(), iface_code_scanning__alert_created_at__to_json(&p.created_at));
-    m.insert("dismissed_at".into(), iface_code_scanning__alert_dismissed_at__to_json(&p.dismissed_at));
+    m.insert("created_at".into(), Value::String((&p.created_at).clone()));
+    m.insert("dismissed_at".into(), Value::String((&p.dismissed_at).clone()));
     m.insert("dismissed_by".into(), iface_code_scanning__nullable_simple_user__to_json(&p.dismissed_by));
-    m.insert("dismissed_comment".into(), match (&p.dismissed_comment) { Some(v) => iface_code_scanning__alert_dismissed_comment__to_json(v), None => Value::Null });
-    m.insert("dismissed_reason".into(), iface_code_scanning__alert_dismissed_reason__to_json(&p.dismissed_reason));
-    m.insert("fixed_at".into(), match (&p.fixed_at) { Some(v) => iface_code_scanning__alert_fixed_at__to_json(v), None => Value::Null });
-    m.insert("html_url".into(), iface_code_scanning__alert_html_url__to_json(&p.html_url));
-    m.insert("instances_url".into(), iface_code_scanning__alert_instances_url__to_json(&p.instances_url));
+    m.insert("dismissed_comment".into(), match (&p.dismissed_comment) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("dismissed_reason".into(), Value::String(iface_code_scanning__alert_dismissed_reason__to_str(&p.dismissed_reason).into()));
+    m.insert("fixed_at".into(), match (&p.fixed_at) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("html_url".into(), Value::String((&p.html_url).clone()));
+    m.insert("instances_url".into(), Value::String((&p.instances_url).clone()));
     m.insert("most_recent_instance".into(), iface_code_scanning__alert_instance__to_json(&p.most_recent_instance));
-    m.insert("number".into(), iface_code_scanning__alert_number__to_json(&p.number));
+    m.insert("number".into(), Value::Number(serde_json::Number::from(*(&p.number))));
     m.insert("rule".into(), iface_code_scanning__alert_rule__to_json(&p.rule));
-    m.insert("state".into(), iface_code_scanning__alert_state__to_json(&p.state));
+    m.insert("state".into(), Value::String(iface_code_scanning__alert_state__to_str(&p.state).into()));
     m.insert("tool".into(), iface_code_scanning__analysis_tool__to_json(&p.tool));
-    m.insert("updated_at".into(), match (&p.updated_at) { Some(v) => iface_code_scanning__alert_updated_at__to_json(v), None => Value::Null });
-    m.insert("url".into(), iface_code_scanning__alert_url__to_json(&p.url));
-    Value::Object(m)
-}
-
-fn iface_code_scanning__alert_set_state__to_json(p: &iface_code_scanning::AlertSetState) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_code_scanning__analysis_sarif_id__to_json(p: &iface_code_scanning::AnalysisSarifId) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
+    m.insert("updated_at".into(), match (&p.updated_at) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("url".into(), Value::String((&p.url).clone()));
     Value::Object(m)
 }
 
 fn iface_code_scanning__analysis__to_json(p: &iface_code_scanning::Analysis) -> Value {
     let mut m = Map::new();
-    m.insert("analysis_key".into(), iface_code_scanning__analysis_analysis_key__to_json(&p.analysis_key));
-    m.insert("category".into(), match (&p.category) { Some(v) => iface_code_scanning__analysis_category__to_json(v), None => Value::Null });
-    m.insert("commit_sha".into(), iface_code_scanning__analysis_commit_sha__to_json(&p.commit_sha));
-    m.insert("created_at".into(), iface_code_scanning__analysis_created_at__to_json(&p.created_at));
+    m.insert("analysis_key".into(), Value::String((&p.analysis_key).clone()));
+    m.insert("category".into(), match (&p.category) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("commit_sha".into(), Value::String((&p.commit_sha).clone()));
+    m.insert("created_at".into(), Value::String((&p.created_at).clone()));
     m.insert("deletable".into(), Value::Bool(*(&p.deletable)));
-    m.insert("environment".into(), iface_code_scanning__analysis_environment__to_json(&p.environment));
+    m.insert("environment".into(), Value::String((&p.environment).clone()));
     m.insert("error".into(), Value::String((&p.error).clone()));
     m.insert("id".into(), Value::Number(serde_json::Number::from(*(&p.id))));
-    m.insert("ref".into(), iface_code_scanning__ref__to_json(&p.ref_));
+    m.insert("ref".into(), Value::String((&p.ref_).clone()));
     m.insert("results_count".into(), Value::Number(serde_json::Number::from(*(&p.results_count))));
     m.insert("rules_count".into(), Value::Number(serde_json::Number::from(*(&p.rules_count))));
-    m.insert("sarif_id".into(), iface_code_scanning__analysis_sarif_id__to_json(&p.sarif_id));
+    m.insert("sarif_id".into(), Value::String((&p.sarif_id).clone()));
     m.insert("tool".into(), iface_code_scanning__analysis_tool__to_json(&p.tool));
-    m.insert("url".into(), iface_code_scanning__analysis_url__to_json(&p.url));
+    m.insert("url".into(), Value::String((&p.url).clone()));
     m.insert("warning".into(), Value::String((&p.warning).clone()));
-    Value::Object(m)
-}
-
-fn iface_code_scanning__analysis_commit_sha__to_json(p: &iface_code_scanning::AnalysisCommitSha) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_code_scanning__analysis_created_at__to_json(p: &iface_code_scanning::AnalysisCreatedAt) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_code_scanning__analysis_environment__to_json(p: &iface_code_scanning::AnalysisEnvironment) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_code_scanning__analysis_url__to_json(p: &iface_code_scanning::AnalysisUrl) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -653,15 +542,9 @@ fn iface_code_scanning__codeql_database__to_json(p: &iface_code_scanning::Codeql
     Value::Object(m)
 }
 
-fn iface_code_scanning__analysis_sarif_file__to_json(p: &iface_code_scanning::AnalysisSarifFile) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
 fn iface_code_scanning__sarifs_receipt__to_json(p: &iface_code_scanning::SarifsReceipt) -> Value {
     let mut m = Map::new();
-    m.insert("id".into(), match (&p.id) { Some(v) => iface_code_scanning__analysis_sarif_id__to_json(v), None => Value::Null });
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("url".into(), match (&p.url) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
@@ -677,16 +560,16 @@ fn iface_code_scanning__sarifs_status__to_json(p: &iface_code_scanning::SarifsSt
 fn iface_code_scanning__list_alerts_for_org_params__to_json(p: &iface_code_scanning::ListAlertsForOrgParams) -> Value {
     let mut m = Map::new();
     m.insert("org".into(), Value::String((&p.org).clone()));
-    m.insert("tool_name".into(), match (&p.tool_name) { Some(v) => iface_code_scanning__analysis_tool_name__to_json(v), None => Value::Null });
-    m.insert("tool_guid".into(), match (&p.tool_guid) { Some(v) => iface_code_scanning__analysis_tool_guid__to_json(v), None => Value::Null });
+    m.insert("tool_name".into(), match (&p.tool_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("tool_guid".into(), match (&p.tool_guid) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("before".into(), match (&p.before) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("after".into(), match (&p.after) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("page".into(), match (&p.page) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("per_page".into(), match (&p.per_page) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("direction".into(), match (&p.direction) { Some(v) => Value::String(iface_code_scanning__list_alerts_for_org_direction_enum__to_str(v).into()), None => Value::Null });
-    m.insert("state".into(), match (&p.state) { Some(v) => iface_code_scanning__alert_state__to_json(v), None => Value::Null });
+    m.insert("state".into(), match (&p.state) { Some(v) => Value::String(iface_code_scanning__alert_state__to_str(v).into()), None => Value::Null });
     m.insert("sort".into(), match (&p.sort) { Some(v) => Value::String(iface_code_scanning__list_alerts_for_org_sort_enum__to_str(v).into()), None => Value::Null });
-    m.insert("severity".into(), match (&p.severity) { Some(v) => iface_code_scanning__alert_severity__to_json(v), None => Value::Null });
+    m.insert("severity".into(), match (&p.severity) { Some(v) => Value::String(iface_code_scanning__alert_severity__to_str(v).into()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -694,15 +577,15 @@ fn iface_code_scanning__list_alerts_for_repo_params__to_json(p: &iface_code_scan
     let mut m = Map::new();
     m.insert("owner".into(), Value::String((&p.owner).clone()));
     m.insert("repo".into(), Value::String((&p.repo).clone()));
-    m.insert("tool_name".into(), match (&p.tool_name) { Some(v) => iface_code_scanning__analysis_tool_name__to_json(v), None => Value::Null });
-    m.insert("tool_guid".into(), match (&p.tool_guid) { Some(v) => iface_code_scanning__analysis_tool_guid__to_json(v), None => Value::Null });
+    m.insert("tool_name".into(), match (&p.tool_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("tool_guid".into(), match (&p.tool_guid) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("page".into(), match (&p.page) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("per_page".into(), match (&p.per_page) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    m.insert("ref".into(), match (&p.ref_) { Some(v) => iface_code_scanning__ref__to_json(v), None => Value::Null });
+    m.insert("ref".into(), match (&p.ref_) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("direction".into(), match (&p.direction) { Some(v) => Value::String(iface_code_scanning__list_alerts_for_org_direction_enum__to_str(v).into()), None => Value::Null });
     m.insert("sort".into(), match (&p.sort) { Some(v) => Value::String(iface_code_scanning__list_alerts_for_org_sort_enum__to_str(v).into()), None => Value::Null });
-    m.insert("state".into(), match (&p.state) { Some(v) => iface_code_scanning__alert_state__to_json(v), None => Value::Null });
-    m.insert("severity".into(), match (&p.severity) { Some(v) => iface_code_scanning__alert_severity__to_json(v), None => Value::Null });
+    m.insert("state".into(), match (&p.state) { Some(v) => Value::String(iface_code_scanning__alert_state__to_str(v).into()), None => Value::Null });
+    m.insert("severity".into(), match (&p.severity) { Some(v) => Value::String(iface_code_scanning__alert_severity__to_str(v).into()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -719,9 +602,9 @@ fn iface_code_scanning__update_alert_params__to_json(p: &iface_code_scanning::Up
     m.insert("owner".into(), Value::String((&p.owner).clone()));
     m.insert("repo".into(), Value::String((&p.repo).clone()));
     m.insert("alert_number".into(), Value::String((&p.alert_number).clone()));
-    m.insert("dismissed_comment".into(), match (&p.dismissed_comment) { Some(v) => iface_code_scanning__alert_dismissed_comment__to_json(v), None => Value::Null });
-    m.insert("dismissed_reason".into(), match (&p.dismissed_reason) { Some(v) => iface_code_scanning__alert_dismissed_reason__to_json(v), None => Value::Null });
-    m.insert("state".into(), iface_code_scanning__alert_set_state__to_json(&p.state));
+    m.insert("dismissed_comment".into(), match (&p.dismissed_comment) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("dismissed_reason".into(), match (&p.dismissed_reason) { Some(v) => Value::String(iface_code_scanning__alert_dismissed_reason__to_str(v).into()), None => Value::Null });
+    m.insert("state".into(), Value::String(iface_code_scanning__alert_set_state__to_str(&p.state).into()));
     Value::Object(m)
 }
 
@@ -732,7 +615,7 @@ fn iface_code_scanning__list_alert_instances_params__to_json(p: &iface_code_scan
     m.insert("alert_number".into(), Value::String((&p.alert_number).clone()));
     m.insert("page".into(), match (&p.page) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("per_page".into(), match (&p.per_page) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    m.insert("ref".into(), match (&p.ref_) { Some(v) => iface_code_scanning__ref__to_json(v), None => Value::Null });
+    m.insert("ref".into(), match (&p.ref_) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -740,12 +623,12 @@ fn iface_code_scanning__list_recent_analyses_params__to_json(p: &iface_code_scan
     let mut m = Map::new();
     m.insert("owner".into(), Value::String((&p.owner).clone()));
     m.insert("repo".into(), Value::String((&p.repo).clone()));
-    m.insert("tool_name".into(), match (&p.tool_name) { Some(v) => iface_code_scanning__analysis_tool_name__to_json(v), None => Value::Null });
-    m.insert("tool_guid".into(), match (&p.tool_guid) { Some(v) => iface_code_scanning__analysis_tool_guid__to_json(v), None => Value::Null });
+    m.insert("tool_name".into(), match (&p.tool_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("tool_guid".into(), match (&p.tool_guid) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("page".into(), match (&p.page) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("per_page".into(), match (&p.per_page) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    m.insert("ref".into(), match (&p.ref_) { Some(v) => iface_code_scanning__ref__to_json(v), None => Value::Null });
-    m.insert("sarif_id".into(), match (&p.sarif_id) { Some(v) => iface_code_scanning__analysis_sarif_id__to_json(v), None => Value::Null });
+    m.insert("ref".into(), match (&p.ref_) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("sarif_id".into(), match (&p.sarif_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("direction".into(), match (&p.direction) { Some(v) => Value::String(iface_code_scanning__list_alerts_for_org_direction_enum__to_str(v).into()), None => Value::Null });
     m.insert("sort".into(), match (&p.sort) { Some(v) => Value::String(iface_code_scanning__list_recent_analyses_sort_enum__to_str(v).into()), None => Value::Null });
     Value::Object(m)
@@ -788,9 +671,9 @@ fn iface_code_scanning__upload_sarif_params__to_json(p: &iface_code_scanning::Up
     m.insert("owner".into(), Value::String((&p.owner).clone()));
     m.insert("repo".into(), Value::String((&p.repo).clone()));
     m.insert("checkout_uri".into(), match (&p.checkout_uri) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("commit_sha".into(), iface_code_scanning__analysis_commit_sha__to_json(&p.commit_sha));
-    m.insert("ref".into(), iface_code_scanning__ref__to_json(&p.ref_));
-    m.insert("sarif".into(), iface_code_scanning__analysis_sarif_file__to_json(&p.sarif));
+    m.insert("commit_sha".into(), Value::String((&p.commit_sha).clone()));
+    m.insert("ref".into(), Value::String((&p.ref_).clone()));
+    m.insert("sarif".into(), Value::String((&p.sarif).clone()));
     m.insert("started_at".into(), match (&p.started_at) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("tool_name".into(), match (&p.tool_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("validate".into(), match (&p.validate) { Some(v) => Value::Bool(*(v)), None => Value::Null });
@@ -805,60 +688,25 @@ fn iface_code_scanning__get_sarif_params__to_json(p: &iface_code_scanning::GetSa
     Value::Object(m)
 }
 
-fn iface_code_scanning__analysis_tool_name__from_json(v: &Value) -> Option<iface_code_scanning::AnalysisToolName> {
-    let m = v.as_object()?;
-    Some(iface_code_scanning::AnalysisToolName {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-    })
-}
-
-fn iface_code_scanning__analysis_tool_guid__from_json(v: &Value) -> Option<iface_code_scanning::AnalysisToolGuid> {
-    let m = v.as_object()?;
-    Some(iface_code_scanning::AnalysisToolGuid {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-    })
-}
-
-fn iface_code_scanning__alert_state__from_json(v: &Value) -> Option<iface_code_scanning::AlertState> {
-    let m = v.as_object()?;
-    Some(iface_code_scanning::AlertState {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-    })
-}
-
 fn iface_code_scanning__organization_alert_items__from_json(v: &Value) -> Option<iface_code_scanning::OrganizationAlertItems> {
     let m = v.as_object()?;
     Some(iface_code_scanning::OrganizationAlertItems {
-        created_at: match m.get("created_at").and_then(|v| iface_code_scanning__alert_created_at__from_json(v)) { Some(x) => x, None => return None },
-        dismissed_at: match m.get("dismissed_at").and_then(|v| iface_code_scanning__alert_dismissed_at__from_json(v)) { Some(x) => x, None => return None },
+        created_at: m.get("created_at").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        dismissed_at: m.get("dismissed_at").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         dismissed_by: match m.get("dismissed_by").and_then(|v| iface_code_scanning__nullable_simple_user__from_json(v)) { Some(x) => x, None => return None },
-        dismissed_comment: m.get("dismissed_comment").filter(|v| !v.is_null()).and_then(|v| iface_code_scanning__alert_dismissed_comment__from_json(v)),
-        dismissed_reason: match m.get("dismissed_reason").and_then(|v| iface_code_scanning__alert_dismissed_reason__from_json(v)) { Some(x) => x, None => return None },
-        fixed_at: m.get("fixed_at").filter(|v| !v.is_null()).and_then(|v| iface_code_scanning__alert_fixed_at__from_json(v)),
-        html_url: match m.get("html_url").and_then(|v| iface_code_scanning__alert_html_url__from_json(v)) { Some(x) => x, None => return None },
-        instances_url: match m.get("instances_url").and_then(|v| iface_code_scanning__alert_instances_url__from_json(v)) { Some(x) => x, None => return None },
+        dismissed_comment: m.get("dismissed_comment").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        dismissed_reason: match m.get("dismissed_reason").and_then(|v| (v).as_str().and_then(iface_code_scanning__alert_dismissed_reason__from_str)) { Some(x) => x, None => return None },
+        fixed_at: m.get("fixed_at").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        html_url: m.get("html_url").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        instances_url: m.get("instances_url").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         most_recent_instance: match m.get("most_recent_instance").and_then(|v| iface_code_scanning__alert_instance__from_json(v)) { Some(x) => x, None => return None },
-        number: match m.get("number").and_then(|v| iface_code_scanning__alert_number__from_json(v)) { Some(x) => x, None => return None },
+        number: m.get("number").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
         repository: match m.get("repository").and_then(|v| iface_code_scanning__simple_repository__from_json(v)) { Some(x) => x, None => return None },
         rule: match m.get("rule").and_then(|v| iface_code_scanning__alert_rule__from_json(v)) { Some(x) => x, None => return None },
-        state: match m.get("state").and_then(|v| iface_code_scanning__alert_state__from_json(v)) { Some(x) => x, None => return None },
+        state: match m.get("state").and_then(|v| (v).as_str().and_then(iface_code_scanning__alert_state__from_str)) { Some(x) => x, None => return None },
         tool: match m.get("tool").and_then(|v| iface_code_scanning__analysis_tool__from_json(v)) { Some(x) => x, None => return None },
-        updated_at: m.get("updated_at").filter(|v| !v.is_null()).and_then(|v| iface_code_scanning__alert_updated_at__from_json(v)),
-        url: match m.get("url").and_then(|v| iface_code_scanning__alert_url__from_json(v)) { Some(x) => x, None => return None },
-    })
-}
-
-fn iface_code_scanning__alert_created_at__from_json(v: &Value) -> Option<iface_code_scanning::AlertCreatedAt> {
-    let m = v.as_object()?;
-    Some(iface_code_scanning::AlertCreatedAt {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-    })
-}
-
-fn iface_code_scanning__alert_dismissed_at__from_json(v: &Value) -> Option<iface_code_scanning::AlertDismissedAt> {
-    let m = v.as_object()?;
-    Some(iface_code_scanning::AlertDismissedAt {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        updated_at: m.get("updated_at").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        url: m.get("url").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -889,82 +737,19 @@ fn iface_code_scanning__nullable_simple_user__from_json(v: &Value) -> Option<ifa
     })
 }
 
-fn iface_code_scanning__alert_dismissed_comment__from_json(v: &Value) -> Option<iface_code_scanning::AlertDismissedComment> {
-    let m = v.as_object()?;
-    Some(iface_code_scanning::AlertDismissedComment {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-    })
-}
-
-fn iface_code_scanning__alert_dismissed_reason__from_json(v: &Value) -> Option<iface_code_scanning::AlertDismissedReason> {
-    let m = v.as_object()?;
-    Some(iface_code_scanning::AlertDismissedReason {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-    })
-}
-
-fn iface_code_scanning__alert_fixed_at__from_json(v: &Value) -> Option<iface_code_scanning::AlertFixedAt> {
-    let m = v.as_object()?;
-    Some(iface_code_scanning::AlertFixedAt {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-    })
-}
-
-fn iface_code_scanning__alert_html_url__from_json(v: &Value) -> Option<iface_code_scanning::AlertHtmlUrl> {
-    let m = v.as_object()?;
-    Some(iface_code_scanning::AlertHtmlUrl {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-    })
-}
-
-fn iface_code_scanning__alert_instances_url__from_json(v: &Value) -> Option<iface_code_scanning::AlertInstancesUrl> {
-    let m = v.as_object()?;
-    Some(iface_code_scanning::AlertInstancesUrl {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-    })
-}
-
 fn iface_code_scanning__alert_instance__from_json(v: &Value) -> Option<iface_code_scanning::AlertInstance> {
     let m = v.as_object()?;
     Some(iface_code_scanning::AlertInstance {
-        analysis_key: m.get("analysis_key").filter(|v| !v.is_null()).and_then(|v| iface_code_scanning__analysis_analysis_key__from_json(v)),
-        category: m.get("category").filter(|v| !v.is_null()).and_then(|v| iface_code_scanning__analysis_category__from_json(v)),
-        classifications: m.get("classifications").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_code_scanning__alert_classification__from_json(x)).collect())),
+        analysis_key: m.get("analysis_key").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        category: m.get("category").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        classifications: m.get("classifications").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().and_then(iface_code_scanning__alert_classification__from_str)).collect())),
         commit_sha: m.get("commit_sha").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        environment: m.get("environment").filter(|v| !v.is_null()).and_then(|v| iface_code_scanning__alert_environment__from_json(v)),
+        environment: m.get("environment").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         html_url: m.get("html_url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         location: m.get("location").filter(|v| !v.is_null()).and_then(|v| iface_code_scanning__alert_location__from_json(v)),
         message: m.get("message").filter(|v| !v.is_null()).and_then(|v| iface_code_scanning__alert_instance_message__from_json(v)),
-        ref_: m.get("ref").filter(|v| !v.is_null()).and_then(|v| iface_code_scanning__ref__from_json(v)),
-        state: m.get("state").filter(|v| !v.is_null()).and_then(|v| iface_code_scanning__alert_state__from_json(v)),
-    })
-}
-
-fn iface_code_scanning__analysis_analysis_key__from_json(v: &Value) -> Option<iface_code_scanning::AnalysisAnalysisKey> {
-    let m = v.as_object()?;
-    Some(iface_code_scanning::AnalysisAnalysisKey {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-    })
-}
-
-fn iface_code_scanning__analysis_category__from_json(v: &Value) -> Option<iface_code_scanning::AnalysisCategory> {
-    let m = v.as_object()?;
-    Some(iface_code_scanning::AnalysisCategory {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-    })
-}
-
-fn iface_code_scanning__alert_classification__from_json(v: &Value) -> Option<iface_code_scanning::AlertClassification> {
-    let m = v.as_object()?;
-    Some(iface_code_scanning::AlertClassification {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-    })
-}
-
-fn iface_code_scanning__alert_environment__from_json(v: &Value) -> Option<iface_code_scanning::AlertEnvironment> {
-    let m = v.as_object()?;
-    Some(iface_code_scanning::AlertEnvironment {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        ref_: m.get("ref").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        state: m.get("state").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_code_scanning__alert_state__from_str)),
     })
 }
 
@@ -983,20 +768,6 @@ fn iface_code_scanning__alert_instance_message__from_json(v: &Value) -> Option<i
     let m = v.as_object()?;
     Some(iface_code_scanning::AlertInstanceMessage {
         text: m.get("text").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-    })
-}
-
-fn iface_code_scanning__ref__from_json(v: &Value) -> Option<iface_code_scanning::Ref> {
-    let m = v.as_object()?;
-    Some(iface_code_scanning::Ref {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-    })
-}
-
-fn iface_code_scanning__alert_number__from_json(v: &Value) -> Option<iface_code_scanning::AlertNumber> {
-    let m = v.as_object()?;
-    Some(iface_code_scanning::AlertNumber {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -1097,51 +868,30 @@ fn iface_code_scanning__alert_rule__from_json(v: &Value) -> Option<iface_code_sc
 fn iface_code_scanning__analysis_tool__from_json(v: &Value) -> Option<iface_code_scanning::AnalysisTool> {
     let m = v.as_object()?;
     Some(iface_code_scanning::AnalysisTool {
-        guid: m.get("guid").filter(|v| !v.is_null()).and_then(|v| iface_code_scanning__analysis_tool_guid__from_json(v)),
-        name: m.get("name").filter(|v| !v.is_null()).and_then(|v| iface_code_scanning__analysis_tool_name__from_json(v)),
-        version: m.get("version").filter(|v| !v.is_null()).and_then(|v| iface_code_scanning__analysis_tool_version__from_json(v)),
-    })
-}
-
-fn iface_code_scanning__analysis_tool_version__from_json(v: &Value) -> Option<iface_code_scanning::AnalysisToolVersion> {
-    let m = v.as_object()?;
-    Some(iface_code_scanning::AnalysisToolVersion {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-    })
-}
-
-fn iface_code_scanning__alert_updated_at__from_json(v: &Value) -> Option<iface_code_scanning::AlertUpdatedAt> {
-    let m = v.as_object()?;
-    Some(iface_code_scanning::AlertUpdatedAt {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-    })
-}
-
-fn iface_code_scanning__alert_url__from_json(v: &Value) -> Option<iface_code_scanning::AlertUrl> {
-    let m = v.as_object()?;
-    Some(iface_code_scanning::AlertUrl {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        guid: m.get("guid").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        version: m.get("version").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
     })
 }
 
 fn iface_code_scanning__alert_items__from_json(v: &Value) -> Option<iface_code_scanning::AlertItems> {
     let m = v.as_object()?;
     Some(iface_code_scanning::AlertItems {
-        created_at: match m.get("created_at").and_then(|v| iface_code_scanning__alert_created_at__from_json(v)) { Some(x) => x, None => return None },
-        dismissed_at: match m.get("dismissed_at").and_then(|v| iface_code_scanning__alert_dismissed_at__from_json(v)) { Some(x) => x, None => return None },
+        created_at: m.get("created_at").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        dismissed_at: m.get("dismissed_at").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         dismissed_by: match m.get("dismissed_by").and_then(|v| iface_code_scanning__nullable_simple_user__from_json(v)) { Some(x) => x, None => return None },
-        dismissed_comment: m.get("dismissed_comment").filter(|v| !v.is_null()).and_then(|v| iface_code_scanning__alert_dismissed_comment__from_json(v)),
-        dismissed_reason: match m.get("dismissed_reason").and_then(|v| iface_code_scanning__alert_dismissed_reason__from_json(v)) { Some(x) => x, None => return None },
-        fixed_at: m.get("fixed_at").filter(|v| !v.is_null()).and_then(|v| iface_code_scanning__alert_fixed_at__from_json(v)),
-        html_url: match m.get("html_url").and_then(|v| iface_code_scanning__alert_html_url__from_json(v)) { Some(x) => x, None => return None },
-        instances_url: match m.get("instances_url").and_then(|v| iface_code_scanning__alert_instances_url__from_json(v)) { Some(x) => x, None => return None },
+        dismissed_comment: m.get("dismissed_comment").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        dismissed_reason: match m.get("dismissed_reason").and_then(|v| (v).as_str().and_then(iface_code_scanning__alert_dismissed_reason__from_str)) { Some(x) => x, None => return None },
+        fixed_at: m.get("fixed_at").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        html_url: m.get("html_url").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        instances_url: m.get("instances_url").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         most_recent_instance: match m.get("most_recent_instance").and_then(|v| iface_code_scanning__alert_instance__from_json(v)) { Some(x) => x, None => return None },
-        number: match m.get("number").and_then(|v| iface_code_scanning__alert_number__from_json(v)) { Some(x) => x, None => return None },
+        number: m.get("number").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
         rule: match m.get("rule").and_then(|v| iface_code_scanning__alert_rule_summary__from_json(v)) { Some(x) => x, None => return None },
-        state: match m.get("state").and_then(|v| iface_code_scanning__alert_state__from_json(v)) { Some(x) => x, None => return None },
+        state: match m.get("state").and_then(|v| (v).as_str().and_then(iface_code_scanning__alert_state__from_str)) { Some(x) => x, None => return None },
         tool: match m.get("tool").and_then(|v| iface_code_scanning__analysis_tool__from_json(v)) { Some(x) => x, None => return None },
-        updated_at: m.get("updated_at").filter(|v| !v.is_null()).and_then(|v| iface_code_scanning__alert_updated_at__from_json(v)),
-        url: match m.get("url").and_then(|v| iface_code_scanning__alert_url__from_json(v)) { Some(x) => x, None => return None },
+        updated_at: m.get("updated_at").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        url: m.get("url").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -1159,77 +909,42 @@ fn iface_code_scanning__alert_rule_summary__from_json(v: &Value) -> Option<iface
 fn iface_code_scanning__alert__from_json(v: &Value) -> Option<iface_code_scanning::Alert> {
     let m = v.as_object()?;
     Some(iface_code_scanning::Alert {
-        created_at: match m.get("created_at").and_then(|v| iface_code_scanning__alert_created_at__from_json(v)) { Some(x) => x, None => return None },
-        dismissed_at: match m.get("dismissed_at").and_then(|v| iface_code_scanning__alert_dismissed_at__from_json(v)) { Some(x) => x, None => return None },
+        created_at: m.get("created_at").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        dismissed_at: m.get("dismissed_at").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         dismissed_by: match m.get("dismissed_by").and_then(|v| iface_code_scanning__nullable_simple_user__from_json(v)) { Some(x) => x, None => return None },
-        dismissed_comment: m.get("dismissed_comment").filter(|v| !v.is_null()).and_then(|v| iface_code_scanning__alert_dismissed_comment__from_json(v)),
-        dismissed_reason: match m.get("dismissed_reason").and_then(|v| iface_code_scanning__alert_dismissed_reason__from_json(v)) { Some(x) => x, None => return None },
-        fixed_at: m.get("fixed_at").filter(|v| !v.is_null()).and_then(|v| iface_code_scanning__alert_fixed_at__from_json(v)),
-        html_url: match m.get("html_url").and_then(|v| iface_code_scanning__alert_html_url__from_json(v)) { Some(x) => x, None => return None },
-        instances_url: match m.get("instances_url").and_then(|v| iface_code_scanning__alert_instances_url__from_json(v)) { Some(x) => x, None => return None },
+        dismissed_comment: m.get("dismissed_comment").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        dismissed_reason: match m.get("dismissed_reason").and_then(|v| (v).as_str().and_then(iface_code_scanning__alert_dismissed_reason__from_str)) { Some(x) => x, None => return None },
+        fixed_at: m.get("fixed_at").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        html_url: m.get("html_url").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        instances_url: m.get("instances_url").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         most_recent_instance: match m.get("most_recent_instance").and_then(|v| iface_code_scanning__alert_instance__from_json(v)) { Some(x) => x, None => return None },
-        number: match m.get("number").and_then(|v| iface_code_scanning__alert_number__from_json(v)) { Some(x) => x, None => return None },
+        number: m.get("number").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
         rule: match m.get("rule").and_then(|v| iface_code_scanning__alert_rule__from_json(v)) { Some(x) => x, None => return None },
-        state: match m.get("state").and_then(|v| iface_code_scanning__alert_state__from_json(v)) { Some(x) => x, None => return None },
+        state: match m.get("state").and_then(|v| (v).as_str().and_then(iface_code_scanning__alert_state__from_str)) { Some(x) => x, None => return None },
         tool: match m.get("tool").and_then(|v| iface_code_scanning__analysis_tool__from_json(v)) { Some(x) => x, None => return None },
-        updated_at: m.get("updated_at").filter(|v| !v.is_null()).and_then(|v| iface_code_scanning__alert_updated_at__from_json(v)),
-        url: match m.get("url").and_then(|v| iface_code_scanning__alert_url__from_json(v)) { Some(x) => x, None => return None },
-    })
-}
-
-fn iface_code_scanning__analysis_sarif_id__from_json(v: &Value) -> Option<iface_code_scanning::AnalysisSarifId> {
-    let m = v.as_object()?;
-    Some(iface_code_scanning::AnalysisSarifId {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        updated_at: m.get("updated_at").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        url: m.get("url").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
 fn iface_code_scanning__analysis__from_json(v: &Value) -> Option<iface_code_scanning::Analysis> {
     let m = v.as_object()?;
     Some(iface_code_scanning::Analysis {
-        analysis_key: match m.get("analysis_key").and_then(|v| iface_code_scanning__analysis_analysis_key__from_json(v)) { Some(x) => x, None => return None },
-        category: m.get("category").filter(|v| !v.is_null()).and_then(|v| iface_code_scanning__analysis_category__from_json(v)),
-        commit_sha: match m.get("commit_sha").and_then(|v| iface_code_scanning__analysis_commit_sha__from_json(v)) { Some(x) => x, None => return None },
-        created_at: match m.get("created_at").and_then(|v| iface_code_scanning__analysis_created_at__from_json(v)) { Some(x) => x, None => return None },
+        analysis_key: m.get("analysis_key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        category: m.get("category").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        commit_sha: m.get("commit_sha").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        created_at: m.get("created_at").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         deletable: m.get("deletable").and_then(|v| (v).as_bool()).unwrap_or_default(),
-        environment: match m.get("environment").and_then(|v| iface_code_scanning__analysis_environment__from_json(v)) { Some(x) => x, None => return None },
+        environment: m.get("environment").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         error: m.get("error").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         id: m.get("id").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
-        ref_: match m.get("ref").and_then(|v| iface_code_scanning__ref__from_json(v)) { Some(x) => x, None => return None },
+        ref_: m.get("ref").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         results_count: m.get("results_count").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
         rules_count: m.get("rules_count").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
-        sarif_id: match m.get("sarif_id").and_then(|v| iface_code_scanning__analysis_sarif_id__from_json(v)) { Some(x) => x, None => return None },
+        sarif_id: m.get("sarif_id").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         tool: match m.get("tool").and_then(|v| iface_code_scanning__analysis_tool__from_json(v)) { Some(x) => x, None => return None },
-        url: match m.get("url").and_then(|v| iface_code_scanning__analysis_url__from_json(v)) { Some(x) => x, None => return None },
+        url: m.get("url").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         warning: m.get("warning").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-    })
-}
-
-fn iface_code_scanning__analysis_commit_sha__from_json(v: &Value) -> Option<iface_code_scanning::AnalysisCommitSha> {
-    let m = v.as_object()?;
-    Some(iface_code_scanning::AnalysisCommitSha {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-    })
-}
-
-fn iface_code_scanning__analysis_created_at__from_json(v: &Value) -> Option<iface_code_scanning::AnalysisCreatedAt> {
-    let m = v.as_object()?;
-    Some(iface_code_scanning::AnalysisCreatedAt {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-    })
-}
-
-fn iface_code_scanning__analysis_environment__from_json(v: &Value) -> Option<iface_code_scanning::AnalysisEnvironment> {
-    let m = v.as_object()?;
-    Some(iface_code_scanning::AnalysisEnvironment {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-    })
-}
-
-fn iface_code_scanning__analysis_url__from_json(v: &Value) -> Option<iface_code_scanning::AnalysisUrl> {
-    let m = v.as_object()?;
-    Some(iface_code_scanning::AnalysisUrl {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -1259,7 +974,7 @@ fn iface_code_scanning__codeql_database__from_json(v: &Value) -> Option<iface_co
 fn iface_code_scanning__sarifs_receipt__from_json(v: &Value) -> Option<iface_code_scanning::SarifsReceipt> {
     let m = v.as_object()?;
     Some(iface_code_scanning::SarifsReceipt {
-        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| iface_code_scanning__analysis_sarif_id__from_json(v)),
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         url: m.get("url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
     })
 }
@@ -1271,6 +986,35 @@ fn iface_code_scanning__sarifs_status__from_json(v: &Value) -> Option<iface_code
         errors: m.get("errors").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
         processing_status: m.get("processing_status").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_code_scanning__sarifs_status_processing_status_enum__from_str)),
     })
+}
+
+fn iface_code_scanning__alert_state__from_str(s: &str) -> Option<iface_code_scanning::AlertState> {
+    match s {
+        "open" => Some(iface_code_scanning::AlertState::Open),
+        "closed" => Some(iface_code_scanning::AlertState::Closed),
+        "dismissed" => Some(iface_code_scanning::AlertState::Dismissed),
+        "fixed" => Some(iface_code_scanning::AlertState::Fixed),
+        _ => None,
+    }
+}
+
+fn iface_code_scanning__alert_dismissed_reason__from_str(s: &str) -> Option<iface_code_scanning::AlertDismissedReason> {
+    match s {
+        "false positive" => Some(iface_code_scanning::AlertDismissedReason::FalsePositive),
+        "won't fix" => Some(iface_code_scanning::AlertDismissedReason::WonTFix),
+        "used in tests" => Some(iface_code_scanning::AlertDismissedReason::UsedInTests),
+        _ => None,
+    }
+}
+
+fn iface_code_scanning__alert_classification__from_str(s: &str) -> Option<iface_code_scanning::AlertClassification> {
+    match s {
+        "source" => Some(iface_code_scanning::AlertClassification::Source),
+        "generated" => Some(iface_code_scanning::AlertClassification::Generated),
+        "test" => Some(iface_code_scanning::AlertClassification::Test),
+        "library" => Some(iface_code_scanning::AlertClassification::Library),
+        _ => None,
+    }
 }
 
 fn iface_code_scanning__alert_rule_security_severity_level_enum__from_str(s: &str) -> Option<iface_code_scanning::AlertRuleSecuritySeverityLevelEnum> {

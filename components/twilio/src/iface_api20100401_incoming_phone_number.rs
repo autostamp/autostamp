@@ -116,6 +116,33 @@ const OP_API20100401_INCOMING_PHONE_NUMBER_DELETE_INCOMING_PHONE_NUMBER: OpSpec 
     ],
 };
 
+fn iface_api20100401_incoming_phone_number__incoming_phone_number_enum_address_requirement__to_str(e: &iface_api20100401_incoming_phone_number::IncomingPhoneNumberEnumAddressRequirement) -> &'static str {
+    match e {
+        iface_api20100401_incoming_phone_number::IncomingPhoneNumberEnumAddressRequirement::None => "none",
+        iface_api20100401_incoming_phone_number::IncomingPhoneNumberEnumAddressRequirement::Any => "any",
+        iface_api20100401_incoming_phone_number::IncomingPhoneNumberEnumAddressRequirement::Local => "local",
+        iface_api20100401_incoming_phone_number::IncomingPhoneNumberEnumAddressRequirement::Foreign => "foreign",
+    }
+}
+
+fn iface_api20100401_incoming_phone_number__incoming_phone_number_enum_emergency_address_status__to_str(e: &iface_api20100401_incoming_phone_number::IncomingPhoneNumberEnumEmergencyAddressStatus) -> &'static str {
+    match e {
+        iface_api20100401_incoming_phone_number::IncomingPhoneNumberEnumEmergencyAddressStatus::Registered => "registered",
+        iface_api20100401_incoming_phone_number::IncomingPhoneNumberEnumEmergencyAddressStatus::Unregistered => "unregistered",
+        iface_api20100401_incoming_phone_number::IncomingPhoneNumberEnumEmergencyAddressStatus::PendingRegistration => "pending-registration",
+        iface_api20100401_incoming_phone_number::IncomingPhoneNumberEnumEmergencyAddressStatus::RegistrationFailure => "registration-failure",
+        iface_api20100401_incoming_phone_number::IncomingPhoneNumberEnumEmergencyAddressStatus::PendingUnregistration => "pending-unregistration",
+        iface_api20100401_incoming_phone_number::IncomingPhoneNumberEnumEmergencyAddressStatus::UnregistrationFailure => "unregistration-failure",
+    }
+}
+
+fn iface_api20100401_incoming_phone_number__incoming_phone_number_enum_emergency_status__to_str(e: &iface_api20100401_incoming_phone_number::IncomingPhoneNumberEnumEmergencyStatus) -> &'static str {
+    match e {
+        iface_api20100401_incoming_phone_number::IncomingPhoneNumberEnumEmergencyStatus::Active => "Active",
+        iface_api20100401_incoming_phone_number::IncomingPhoneNumberEnumEmergencyStatus::Inactive => "Inactive",
+    }
+}
+
 fn iface_api20100401_incoming_phone_number__api_v2010_account_incoming_phone_number_sms_fallback_method_enum__to_str(e: &iface_api20100401_incoming_phone_number::ApiV2010AccountIncomingPhoneNumberSmsFallbackMethodEnum) -> &'static str {
     match e {
         iface_api20100401_incoming_phone_number::ApiV2010AccountIncomingPhoneNumberSmsFallbackMethodEnum::Head => "HEAD",
@@ -124,6 +151,13 @@ fn iface_api20100401_incoming_phone_number__api_v2010_account_incoming_phone_num
         iface_api20100401_incoming_phone_number::ApiV2010AccountIncomingPhoneNumberSmsFallbackMethodEnum::Patch => "PATCH",
         iface_api20100401_incoming_phone_number::ApiV2010AccountIncomingPhoneNumberSmsFallbackMethodEnum::Put => "PUT",
         iface_api20100401_incoming_phone_number::ApiV2010AccountIncomingPhoneNumberSmsFallbackMethodEnum::Delete => "DELETE",
+    }
+}
+
+fn iface_api20100401_incoming_phone_number__incoming_phone_number_enum_voice_receive_mode__to_str(e: &iface_api20100401_incoming_phone_number::IncomingPhoneNumberEnumVoiceReceiveMode) -> &'static str {
+    match e {
+        iface_api20100401_incoming_phone_number::IncomingPhoneNumberEnumVoiceReceiveMode::Voice => "voice",
+        iface_api20100401_incoming_phone_number::IncomingPhoneNumberEnumVoiceReceiveMode::Fax => "fax",
     }
 }
 
@@ -144,7 +178,7 @@ fn iface_api20100401_incoming_phone_number__list_incoming_phone_number_response_
 fn iface_api20100401_incoming_phone_number__api_v2010_account_incoming_phone_number__to_json(p: &iface_api20100401_incoming_phone_number::ApiV2010AccountIncomingPhoneNumber) -> Value {
     let mut m = Map::new();
     m.insert("account_sid".into(), match (&p.account_sid) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("address_requirements".into(), match (&p.address_requirements) { Some(v) => iface_api20100401_incoming_phone_number__incoming_phone_number_enum_address_requirement__to_json(v), None => Value::Null });
+    m.insert("address_requirements".into(), match (&p.address_requirements) { Some(v) => Value::String(iface_api20100401_incoming_phone_number__incoming_phone_number_enum_address_requirement__to_str(v).into()), None => Value::Null });
     m.insert("address_sid".into(), match (&p.address_sid) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("api_version".into(), match (&p.api_version) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("beta".into(), match (&p.beta) { Some(v) => Value::Bool(*(v)), None => Value::Null });
@@ -153,8 +187,8 @@ fn iface_api20100401_incoming_phone_number__api_v2010_account_incoming_phone_num
     m.insert("date_created".into(), match (&p.date_created) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("date_updated".into(), match (&p.date_updated) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("emergency_address_sid".into(), match (&p.emergency_address_sid) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("emergency_address_status".into(), match (&p.emergency_address_status) { Some(v) => iface_api20100401_incoming_phone_number__incoming_phone_number_enum_emergency_address_status__to_json(v), None => Value::Null });
-    m.insert("emergency_status".into(), match (&p.emergency_status) { Some(v) => iface_api20100401_incoming_phone_number__incoming_phone_number_enum_emergency_status__to_json(v), None => Value::Null });
+    m.insert("emergency_address_status".into(), match (&p.emergency_address_status) { Some(v) => Value::String(iface_api20100401_incoming_phone_number__incoming_phone_number_enum_emergency_address_status__to_str(v).into()), None => Value::Null });
+    m.insert("emergency_status".into(), match (&p.emergency_status) { Some(v) => Value::String(iface_api20100401_incoming_phone_number__incoming_phone_number_enum_emergency_status__to_str(v).into()), None => Value::Null });
     m.insert("friendly_name".into(), match (&p.friendly_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("identity_sid".into(), match (&p.identity_sid) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("origin".into(), match (&p.origin) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -175,14 +209,8 @@ fn iface_api20100401_incoming_phone_number__api_v2010_account_incoming_phone_num
     m.insert("voice_fallback_method".into(), match (&p.voice_fallback_method) { Some(v) => Value::String(iface_api20100401_incoming_phone_number__api_v2010_account_incoming_phone_number_sms_fallback_method_enum__to_str(v).into()), None => Value::Null });
     m.insert("voice_fallback_url".into(), match (&p.voice_fallback_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("voice_method".into(), match (&p.voice_method) { Some(v) => Value::String(iface_api20100401_incoming_phone_number__api_v2010_account_incoming_phone_number_sms_fallback_method_enum__to_str(v).into()), None => Value::Null });
-    m.insert("voice_receive_mode".into(), match (&p.voice_receive_mode) { Some(v) => iface_api20100401_incoming_phone_number__incoming_phone_number_enum_voice_receive_mode__to_json(v), None => Value::Null });
+    m.insert("voice_receive_mode".into(), match (&p.voice_receive_mode) { Some(v) => Value::String(iface_api20100401_incoming_phone_number__incoming_phone_number_enum_voice_receive_mode__to_str(v).into()), None => Value::Null });
     m.insert("voice_url".into(), match (&p.voice_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_api20100401_incoming_phone_number__incoming_phone_number_enum_address_requirement__to_json(p: &iface_api20100401_incoming_phone_number::IncomingPhoneNumberEnumAddressRequirement) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -192,24 +220,6 @@ fn iface_api20100401_incoming_phone_number__api_v2010_account_incoming_phone_num
     m.insert("mms".into(), match (&p.mms) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     m.insert("sms".into(), match (&p.sms) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     m.insert("voice".into(), match (&p.voice) { Some(v) => Value::Bool(*(v)), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_api20100401_incoming_phone_number__incoming_phone_number_enum_emergency_address_status__to_json(p: &iface_api20100401_incoming_phone_number::IncomingPhoneNumberEnumEmergencyAddressStatus) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_api20100401_incoming_phone_number__incoming_phone_number_enum_emergency_status__to_json(p: &iface_api20100401_incoming_phone_number::IncomingPhoneNumberEnumEmergencyStatus) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_api20100401_incoming_phone_number__incoming_phone_number_enum_voice_receive_mode__to_json(p: &iface_api20100401_incoming_phone_number::IncomingPhoneNumberEnumVoiceReceiveMode) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -234,7 +244,7 @@ fn iface_api20100401_incoming_phone_number__create_incoming_phone_number_params_
     m.insert("area_code".into(), match (&p.area_code) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("bundle_sid".into(), match (&p.bundle_sid) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("emergency_address_sid".into(), match (&p.emergency_address_sid) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("emergency_status".into(), match (&p.emergency_status) { Some(v) => iface_api20100401_incoming_phone_number__incoming_phone_number_enum_emergency_status__to_json(v), None => Value::Null });
+    m.insert("emergency_status".into(), match (&p.emergency_status) { Some(v) => Value::String(iface_api20100401_incoming_phone_number__incoming_phone_number_enum_emergency_status__to_str(v).into()), None => Value::Null });
     m.insert("friendly_name".into(), match (&p.friendly_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("identity_sid".into(), match (&p.identity_sid) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("phone_number".into(), match (&p.phone_number) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -251,7 +261,7 @@ fn iface_api20100401_incoming_phone_number__create_incoming_phone_number_params_
     m.insert("voice_fallback_method".into(), match (&p.voice_fallback_method) { Some(v) => Value::String(iface_api20100401_incoming_phone_number__api_v2010_account_incoming_phone_number_sms_fallback_method_enum__to_str(v).into()), None => Value::Null });
     m.insert("voice_fallback_url".into(), match (&p.voice_fallback_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("voice_method".into(), match (&p.voice_method) { Some(v) => Value::String(iface_api20100401_incoming_phone_number__api_v2010_account_incoming_phone_number_sms_fallback_method_enum__to_str(v).into()), None => Value::Null });
-    m.insert("voice_receive_mode".into(), match (&p.voice_receive_mode) { Some(v) => iface_api20100401_incoming_phone_number__incoming_phone_number_enum_voice_receive_mode__to_json(v), None => Value::Null });
+    m.insert("voice_receive_mode".into(), match (&p.voice_receive_mode) { Some(v) => Value::String(iface_api20100401_incoming_phone_number__incoming_phone_number_enum_voice_receive_mode__to_str(v).into()), None => Value::Null });
     m.insert("voice_url".into(), match (&p.voice_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
@@ -272,7 +282,7 @@ fn iface_api20100401_incoming_phone_number__update_incoming_phone_number_params_
     m.insert("api_version".into(), match (&p.api_version) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("bundle_sid".into(), match (&p.bundle_sid) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("emergency_address_sid".into(), match (&p.emergency_address_sid) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("emergency_status".into(), match (&p.emergency_status) { Some(v) => iface_api20100401_incoming_phone_number__incoming_phone_number_enum_emergency_status__to_json(v), None => Value::Null });
+    m.insert("emergency_status".into(), match (&p.emergency_status) { Some(v) => Value::String(iface_api20100401_incoming_phone_number__incoming_phone_number_enum_emergency_status__to_str(v).into()), None => Value::Null });
     m.insert("friendly_name".into(), match (&p.friendly_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("identity_sid".into(), match (&p.identity_sid) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("sms_application_sid".into(), match (&p.sms_application_sid) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -288,7 +298,7 @@ fn iface_api20100401_incoming_phone_number__update_incoming_phone_number_params_
     m.insert("voice_fallback_method".into(), match (&p.voice_fallback_method) { Some(v) => Value::String(iface_api20100401_incoming_phone_number__api_v2010_account_incoming_phone_number_sms_fallback_method_enum__to_str(v).into()), None => Value::Null });
     m.insert("voice_fallback_url".into(), match (&p.voice_fallback_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("voice_method".into(), match (&p.voice_method) { Some(v) => Value::String(iface_api20100401_incoming_phone_number__api_v2010_account_incoming_phone_number_sms_fallback_method_enum__to_str(v).into()), None => Value::Null });
-    m.insert("voice_receive_mode".into(), match (&p.voice_receive_mode) { Some(v) => iface_api20100401_incoming_phone_number__incoming_phone_number_enum_voice_receive_mode__to_json(v), None => Value::Null });
+    m.insert("voice_receive_mode".into(), match (&p.voice_receive_mode) { Some(v) => Value::String(iface_api20100401_incoming_phone_number__incoming_phone_number_enum_voice_receive_mode__to_str(v).into()), None => Value::Null });
     m.insert("voice_url".into(), match (&p.voice_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
@@ -319,7 +329,7 @@ fn iface_api20100401_incoming_phone_number__api_v2010_account_incoming_phone_num
     let m = v.as_object()?;
     Some(iface_api20100401_incoming_phone_number::ApiV2010AccountIncomingPhoneNumber {
         account_sid: m.get("account_sid").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        address_requirements: m.get("address_requirements").filter(|v| !v.is_null()).and_then(|v| iface_api20100401_incoming_phone_number__incoming_phone_number_enum_address_requirement__from_json(v)),
+        address_requirements: m.get("address_requirements").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_api20100401_incoming_phone_number__incoming_phone_number_enum_address_requirement__from_str)),
         address_sid: m.get("address_sid").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         api_version: m.get("api_version").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         beta: m.get("beta").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
@@ -328,8 +338,8 @@ fn iface_api20100401_incoming_phone_number__api_v2010_account_incoming_phone_num
         date_created: m.get("date_created").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         date_updated: m.get("date_updated").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         emergency_address_sid: m.get("emergency_address_sid").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        emergency_address_status: m.get("emergency_address_status").filter(|v| !v.is_null()).and_then(|v| iface_api20100401_incoming_phone_number__incoming_phone_number_enum_emergency_address_status__from_json(v)),
-        emergency_status: m.get("emergency_status").filter(|v| !v.is_null()).and_then(|v| iface_api20100401_incoming_phone_number__incoming_phone_number_enum_emergency_status__from_json(v)),
+        emergency_address_status: m.get("emergency_address_status").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_api20100401_incoming_phone_number__incoming_phone_number_enum_emergency_address_status__from_str)),
+        emergency_status: m.get("emergency_status").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_api20100401_incoming_phone_number__incoming_phone_number_enum_emergency_status__from_str)),
         friendly_name: m.get("friendly_name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         identity_sid: m.get("identity_sid").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         origin: m.get("origin").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
@@ -350,15 +360,8 @@ fn iface_api20100401_incoming_phone_number__api_v2010_account_incoming_phone_num
         voice_fallback_method: m.get("voice_fallback_method").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_api20100401_incoming_phone_number__api_v2010_account_incoming_phone_number_sms_fallback_method_enum__from_str)),
         voice_fallback_url: m.get("voice_fallback_url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         voice_method: m.get("voice_method").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_api20100401_incoming_phone_number__api_v2010_account_incoming_phone_number_sms_fallback_method_enum__from_str)),
-        voice_receive_mode: m.get("voice_receive_mode").filter(|v| !v.is_null()).and_then(|v| iface_api20100401_incoming_phone_number__incoming_phone_number_enum_voice_receive_mode__from_json(v)),
+        voice_receive_mode: m.get("voice_receive_mode").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_api20100401_incoming_phone_number__incoming_phone_number_enum_voice_receive_mode__from_str)),
         voice_url: m.get("voice_url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-    })
-}
-
-fn iface_api20100401_incoming_phone_number__incoming_phone_number_enum_address_requirement__from_json(v: &Value) -> Option<iface_api20100401_incoming_phone_number::IncomingPhoneNumberEnumAddressRequirement> {
-    let m = v.as_object()?;
-    Some(iface_api20100401_incoming_phone_number::IncomingPhoneNumberEnumAddressRequirement {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -372,25 +375,34 @@ fn iface_api20100401_incoming_phone_number__api_v2010_account_incoming_phone_num
     })
 }
 
-fn iface_api20100401_incoming_phone_number__incoming_phone_number_enum_emergency_address_status__from_json(v: &Value) -> Option<iface_api20100401_incoming_phone_number::IncomingPhoneNumberEnumEmergencyAddressStatus> {
-    let m = v.as_object()?;
-    Some(iface_api20100401_incoming_phone_number::IncomingPhoneNumberEnumEmergencyAddressStatus {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-    })
+fn iface_api20100401_incoming_phone_number__incoming_phone_number_enum_address_requirement__from_str(s: &str) -> Option<iface_api20100401_incoming_phone_number::IncomingPhoneNumberEnumAddressRequirement> {
+    match s {
+        "none" => Some(iface_api20100401_incoming_phone_number::IncomingPhoneNumberEnumAddressRequirement::None),
+        "any" => Some(iface_api20100401_incoming_phone_number::IncomingPhoneNumberEnumAddressRequirement::Any),
+        "local" => Some(iface_api20100401_incoming_phone_number::IncomingPhoneNumberEnumAddressRequirement::Local),
+        "foreign" => Some(iface_api20100401_incoming_phone_number::IncomingPhoneNumberEnumAddressRequirement::Foreign),
+        _ => None,
+    }
 }
 
-fn iface_api20100401_incoming_phone_number__incoming_phone_number_enum_emergency_status__from_json(v: &Value) -> Option<iface_api20100401_incoming_phone_number::IncomingPhoneNumberEnumEmergencyStatus> {
-    let m = v.as_object()?;
-    Some(iface_api20100401_incoming_phone_number::IncomingPhoneNumberEnumEmergencyStatus {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-    })
+fn iface_api20100401_incoming_phone_number__incoming_phone_number_enum_emergency_address_status__from_str(s: &str) -> Option<iface_api20100401_incoming_phone_number::IncomingPhoneNumberEnumEmergencyAddressStatus> {
+    match s {
+        "registered" => Some(iface_api20100401_incoming_phone_number::IncomingPhoneNumberEnumEmergencyAddressStatus::Registered),
+        "unregistered" => Some(iface_api20100401_incoming_phone_number::IncomingPhoneNumberEnumEmergencyAddressStatus::Unregistered),
+        "pending-registration" => Some(iface_api20100401_incoming_phone_number::IncomingPhoneNumberEnumEmergencyAddressStatus::PendingRegistration),
+        "registration-failure" => Some(iface_api20100401_incoming_phone_number::IncomingPhoneNumberEnumEmergencyAddressStatus::RegistrationFailure),
+        "pending-unregistration" => Some(iface_api20100401_incoming_phone_number::IncomingPhoneNumberEnumEmergencyAddressStatus::PendingUnregistration),
+        "unregistration-failure" => Some(iface_api20100401_incoming_phone_number::IncomingPhoneNumberEnumEmergencyAddressStatus::UnregistrationFailure),
+        _ => None,
+    }
 }
 
-fn iface_api20100401_incoming_phone_number__incoming_phone_number_enum_voice_receive_mode__from_json(v: &Value) -> Option<iface_api20100401_incoming_phone_number::IncomingPhoneNumberEnumVoiceReceiveMode> {
-    let m = v.as_object()?;
-    Some(iface_api20100401_incoming_phone_number::IncomingPhoneNumberEnumVoiceReceiveMode {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-    })
+fn iface_api20100401_incoming_phone_number__incoming_phone_number_enum_emergency_status__from_str(s: &str) -> Option<iface_api20100401_incoming_phone_number::IncomingPhoneNumberEnumEmergencyStatus> {
+    match s {
+        "Active" => Some(iface_api20100401_incoming_phone_number::IncomingPhoneNumberEnumEmergencyStatus::Active),
+        "Inactive" => Some(iface_api20100401_incoming_phone_number::IncomingPhoneNumberEnumEmergencyStatus::Inactive),
+        _ => None,
+    }
 }
 
 fn iface_api20100401_incoming_phone_number__api_v2010_account_incoming_phone_number_sms_fallback_method_enum__from_str(s: &str) -> Option<iface_api20100401_incoming_phone_number::ApiV2010AccountIncomingPhoneNumberSmsFallbackMethodEnum> {
@@ -401,6 +413,14 @@ fn iface_api20100401_incoming_phone_number__api_v2010_account_incoming_phone_num
         "PATCH" => Some(iface_api20100401_incoming_phone_number::ApiV2010AccountIncomingPhoneNumberSmsFallbackMethodEnum::Patch),
         "PUT" => Some(iface_api20100401_incoming_phone_number::ApiV2010AccountIncomingPhoneNumberSmsFallbackMethodEnum::Put),
         "DELETE" => Some(iface_api20100401_incoming_phone_number::ApiV2010AccountIncomingPhoneNumberSmsFallbackMethodEnum::Delete),
+        _ => None,
+    }
+}
+
+fn iface_api20100401_incoming_phone_number__incoming_phone_number_enum_voice_receive_mode__from_str(s: &str) -> Option<iface_api20100401_incoming_phone_number::IncomingPhoneNumberEnumVoiceReceiveMode> {
+    match s {
+        "voice" => Some(iface_api20100401_incoming_phone_number::IncomingPhoneNumberEnumVoiceReceiveMode::Voice),
+        "fax" => Some(iface_api20100401_incoming_phone_number::IncomingPhoneNumberEnumVoiceReceiveMode::Fax),
         _ => None,
     }
 }

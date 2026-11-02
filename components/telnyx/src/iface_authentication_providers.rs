@@ -103,33 +103,15 @@ fn iface_authentication_providers__find_authentication_providers_response__to_js
 
 fn iface_authentication_providers__authentication_provider__to_json(p: &iface_authentication_providers::AuthenticationProvider) -> Value {
     let mut m = Map::new();
-    m.insert("active".into(), match (&p.active) { Some(v) => iface_authentication_providers__active__to_json(v), None => Value::Null });
+    m.insert("active".into(), match (&p.active) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     m.insert("created_at".into(), match (&p.created_at) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("name".into(), match (&p.name) { Some(v) => iface_authentication_providers__name__to_json(v), None => Value::Null });
-    m.insert("organization_id".into(), match (&p.organization_id) { Some(v) => iface_authentication_providers__organization_id__to_json(v), None => Value::Null });
+    m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("organization_id".into(), match (&p.organization_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("record_type".into(), match (&p.record_type) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("settings".into(), match (&p.settings) { Some(v) => iface_authentication_providers__authentication_provider_settings__to_json(v), None => Value::Null });
-    m.insert("short_name".into(), match (&p.short_name) { Some(v) => iface_authentication_providers__short_name__to_json(v), None => Value::Null });
+    m.insert("short_name".into(), match (&p.short_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("updated_at".into(), match (&p.updated_at) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_authentication_providers__active__to_json(p: &iface_authentication_providers::Active) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_authentication_providers__name__to_json(p: &iface_authentication_providers::Name) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_authentication_providers__organization_id__to_json(p: &iface_authentication_providers::OrganizationId) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -142,12 +124,6 @@ fn iface_authentication_providers__authentication_provider_settings__to_json(p: 
     m.insert("idp_sso_target_url".into(), match (&p.idp_sso_target_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("name_identifier_format".into(), match (&p.name_identifier_format) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("service_provider_entity_id".into(), match (&p.service_provider_entity_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_authentication_providers__short_name__to_json(p: &iface_authentication_providers::ShortName) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -166,12 +142,6 @@ fn iface_authentication_providers__settings__to_json(p: &iface_authentication_pr
     m.insert("idp_cert_fingerprint_algorithm".into(), match (&p.idp_cert_fingerprint_algorithm) { Some(v) => Value::String(iface_authentication_providers__authentication_provider_settings_idp_cert_fingerprint_algorithm_enum__to_str(v).into()), None => Value::Null });
     m.insert("idp_entity_id".into(), Value::String((&p.idp_entity_id).clone()));
     m.insert("idp_sso_target_url".into(), Value::String((&p.idp_sso_target_url).clone()));
-    Value::Object(m)
-}
-
-fn iface_authentication_providers__settings_url__to_json(p: &iface_authentication_providers::SettingsUrl) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -209,11 +179,11 @@ fn iface_authentication_providers__find_authentication_providers_params__to_json
 
 fn iface_authentication_providers__create_authentication_provider_params__to_json(p: &iface_authentication_providers::CreateAuthenticationProviderParams) -> Value {
     let mut m = Map::new();
-    m.insert("active".into(), match (&p.active) { Some(v) => iface_authentication_providers__active__to_json(v), None => Value::Null });
-    m.insert("name".into(), iface_authentication_providers__name__to_json(&p.name));
+    m.insert("active".into(), match (&p.active) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("name".into(), Value::String((&p.name).clone()));
     m.insert("settings".into(), iface_authentication_providers__settings__to_json(&p.settings));
-    m.insert("settings_url".into(), match (&p.settings_url) { Some(v) => iface_authentication_providers__settings_url__to_json(v), None => Value::Null });
-    m.insert("short_name".into(), iface_authentication_providers__short_name__to_json(&p.short_name));
+    m.insert("settings_url".into(), match (&p.settings_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("short_name".into(), Value::String((&p.short_name).clone()));
     Value::Object(m)
 }
 
@@ -226,11 +196,11 @@ fn iface_authentication_providers__get_authentication_provider_params__to_json(p
 fn iface_authentication_providers__update_authentication_provider_params__to_json(p: &iface_authentication_providers::UpdateAuthenticationProviderParams) -> Value {
     let mut m = Map::new();
     m.insert("id".into(), Value::String((&p.id).clone()));
-    m.insert("active".into(), match (&p.active) { Some(v) => iface_authentication_providers__active__to_json(v), None => Value::Null });
-    m.insert("name".into(), match (&p.name) { Some(v) => iface_authentication_providers__name__to_json(v), None => Value::Null });
+    m.insert("active".into(), match (&p.active) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("settings".into(), match (&p.settings) { Some(v) => iface_authentication_providers__settings__to_json(v), None => Value::Null });
-    m.insert("settings_url".into(), match (&p.settings_url) { Some(v) => iface_authentication_providers__settings_url__to_json(v), None => Value::Null });
-    m.insert("short_name".into(), match (&p.short_name) { Some(v) => iface_authentication_providers__short_name__to_json(v), None => Value::Null });
+    m.insert("settings_url".into(), match (&p.settings_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("short_name".into(), match (&p.short_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -251,36 +221,15 @@ fn iface_authentication_providers__find_authentication_providers_response__from_
 fn iface_authentication_providers__authentication_provider__from_json(v: &Value) -> Option<iface_authentication_providers::AuthenticationProvider> {
     let m = v.as_object()?;
     Some(iface_authentication_providers::AuthenticationProvider {
-        active: m.get("active").filter(|v| !v.is_null()).and_then(|v| iface_authentication_providers__active__from_json(v)),
+        active: m.get("active").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
         created_at: m.get("created_at").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        name: m.get("name").filter(|v| !v.is_null()).and_then(|v| iface_authentication_providers__name__from_json(v)),
-        organization_id: m.get("organization_id").filter(|v| !v.is_null()).and_then(|v| iface_authentication_providers__organization_id__from_json(v)),
+        name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        organization_id: m.get("organization_id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         record_type: m.get("record_type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         settings: m.get("settings").filter(|v| !v.is_null()).and_then(|v| iface_authentication_providers__authentication_provider_settings__from_json(v)),
-        short_name: m.get("short_name").filter(|v| !v.is_null()).and_then(|v| iface_authentication_providers__short_name__from_json(v)),
+        short_name: m.get("short_name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         updated_at: m.get("updated_at").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-    })
-}
-
-fn iface_authentication_providers__active__from_json(v: &Value) -> Option<iface_authentication_providers::Active> {
-    let m = v.as_object()?;
-    Some(iface_authentication_providers::Active {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-    })
-}
-
-fn iface_authentication_providers__name__from_json(v: &Value) -> Option<iface_authentication_providers::Name> {
-    let m = v.as_object()?;
-    Some(iface_authentication_providers::Name {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-    })
-}
-
-fn iface_authentication_providers__organization_id__from_json(v: &Value) -> Option<iface_authentication_providers::OrganizationId> {
-    let m = v.as_object()?;
-    Some(iface_authentication_providers::OrganizationId {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -294,13 +243,6 @@ fn iface_authentication_providers__authentication_provider_settings__from_json(v
         idp_sso_target_url: m.get("idp_sso_target_url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         name_identifier_format: m.get("name_identifier_format").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         service_provider_entity_id: m.get("service_provider_entity_id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-    })
-}
-
-fn iface_authentication_providers__short_name__from_json(v: &Value) -> Option<iface_authentication_providers::ShortName> {
-    let m = v.as_object()?;
-    Some(iface_authentication_providers::ShortName {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 

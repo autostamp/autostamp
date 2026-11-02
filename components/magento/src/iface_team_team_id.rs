@@ -39,7 +39,7 @@ fn iface_team_team_id__company_data_team_interface__to_json(p: &iface_team_team_
     let mut m = Map::new();
     m.insert("custom_attributes".into(), match (&p.custom_attributes) { Some(v) => Value::Array((v).iter().map(|v| iface_team_team_id__framework_attribute_interface__to_json(v)).collect()), None => Value::Null });
     m.insert("description".into(), match (&p.description) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("extension_attributes".into(), match (&p.extension_attributes) { Some(v) => iface_team_team_id__company_data_team_extension_interface__to_json(v), None => Value::Null });
+    m.insert("extension_attributes".into(), match (&p.extension_attributes) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("id".into(), match (&p.id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
@@ -52,9 +52,10 @@ fn iface_team_team_id__framework_attribute_interface__to_json(p: &iface_team_tea
     Value::Object(m)
 }
 
-fn iface_team_team_id__company_data_team_extension_interface__to_json(p: &iface_team_team_id::CompanyDataTeamExtensionInterface) -> Value {
+fn iface_team_team_id__company_data_team_extension_interface_entry__to_json(p: &iface_team_team_id::CompanyDataTeamExtensionInterfaceEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -82,7 +83,7 @@ fn iface_team_team_id__company_data_team_interface__from_json(v: &Value) -> Opti
     Some(iface_team_team_id::CompanyDataTeamInterface {
         custom_attributes: m.get("custom_attributes").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_team_team_id__framework_attribute_interface__from_json(x)).collect())),
         description: m.get("description").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        extension_attributes: m.get("extension_attributes").filter(|v| !v.is_null()).and_then(|v| iface_team_team_id__company_data_team_extension_interface__from_json(v)),
+        extension_attributes: m.get("extension_attributes").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_team_team_id::CompanyDataTeamExtensionInterfaceEntry { key: k.clone(), value: val })).collect())),
         id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
         name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
     })
@@ -96,10 +97,11 @@ fn iface_team_team_id__framework_attribute_interface__from_json(v: &Value) -> Op
     })
 }
 
-fn iface_team_team_id__company_data_team_extension_interface__from_json(v: &Value) -> Option<iface_team_team_id::CompanyDataTeamExtensionInterface> {
+fn iface_team_team_id__company_data_team_extension_interface_entry__from_json(v: &Value) -> Option<iface_team_team_id::CompanyDataTeamExtensionInterfaceEntry> {
     let m = v.as_object()?;
-    Some(iface_team_team_id::CompanyDataTeamExtensionInterface {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_team_team_id::CompanyDataTeamExtensionInterfaceEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 

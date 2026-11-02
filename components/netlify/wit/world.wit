@@ -1,4 +1,4 @@
-package autostamp:netlify@0.5.0;
+package autostamp:netlify@0.6.0;
 
 interface account-membership {
   enum account-setup-period-enum {
@@ -73,7 +73,7 @@ interface account-membership {
 
 interface account-type {
   record account-type {
-    capabilities: option<account-type-capabilities>,
+    capabilities: option<list<account-type-capabilities-entry>>,
     description: option<string>,
     id: option<string>,
     monthly-dollar-price: option<s32>,
@@ -83,9 +83,10 @@ interface account-type {
     yearly-seats-addon-dollar-price: option<s32>
   }
 
-  record account-type-capabilities {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record account-type-capabilities-entry {
+    key: string,
+    value: string
   }
 
   list-account-types-for-user: func() -> result<list<account-type>, string>;
@@ -441,19 +442,27 @@ interface deploy {
     large-media-enabled: option<bool>
   }
 
-  record files-files {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record files-files-entry {
+    key: string,
+    value: string
   }
 
-  record files-functions {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record files-functions-entry {
+    key: string,
+    value: string
   }
 
-  record files-functions-config {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  record function-config {
+    display-name: option<string>,
+    generator: option<string>
+  }
+
+  /// one entry of a string-keyed map (free-form object)
+  record files-functions-config-entry {
+    key: string,
+    value: function-config
   }
 
   record get-deploy-params {
@@ -504,11 +513,11 @@ interface deploy {
     async-op: option<bool>,
     branch-v2: option<string>,
     draft: option<bool>,
-    files: option<files-files>,
+    files: option<list<files-files-entry>>,
     framework: option<string>,
     function-schedules: option<list<function-schedule>>,
-    functions: option<files-functions>,
-    functions-config: option<files-functions-config>
+    functions: option<list<files-functions-entry>>,
+    functions-config: option<list<files-functions-config-entry>>
   }
   create-site-deploy: func(params: create-site-deploy-params) -> result<deploy, string>;
 
@@ -524,11 +533,11 @@ interface deploy {
     async-op: option<bool>,
     branch: option<string>,
     draft: option<bool>,
-    files: option<files-files>,
+    files: option<list<files-files-entry>>,
     framework: option<string>,
     function-schedules: option<list<function-schedule>>,
-    functions: option<files-functions>,
-    functions-config: option<files-functions-config>
+    functions: option<list<files-functions-entry>>,
+    functions-config: option<list<files-functions-config-entry>>
   }
   update-site-deploy: func(params: update-site-deploy-params) -> result<deploy, string>;
 
@@ -646,11 +655,6 @@ interface x-internal {
 }
 
 interface dns-zone {
-  record dns-zones {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
   record dns-zone {
     account-id: option<string>,
     account-name: option<string>,
@@ -684,15 +688,10 @@ interface dns-zone {
     value: option<string>
   }
 
-  record dns-records {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
   record get-dns-zones-params {
     account-slug: option<string>
   }
-  get-dns-zones: func(params: get-dns-zones-params) -> result<dns-zones, string>;
+  get-dns-zones: func(params: get-dns-zones-params) -> result<list<dns-zone>, string>;
 
   record create-dns-zone-params {
     account-slug: option<string>,
@@ -714,7 +713,7 @@ interface dns-zone {
   record get-dns-records-params {
     zone-id: string
   }
-  get-dns-records: func(params: get-dns-records-params) -> result<dns-records, string>;
+  get-dns-records: func(params: get-dns-records-params) -> result<list<dns-record>, string>;
 
   record create-dns-record-params {
     zone-id: string,
@@ -770,7 +769,7 @@ interface submission {
     body: option<string>,
     company: option<string>,
     created-at: option<string>,
-    data: option<submission-data>,
+    data: option<list<submission-data-entry>>,
     email: option<string>,
     first-name: option<string>,
     id: option<string>,
@@ -781,9 +780,10 @@ interface submission {
     summary: option<string>
   }
 
-  record submission-data {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record submission-data-entry {
+    key: string,
+    value: string
   }
 
   record list-form-submissions-params {
@@ -818,7 +818,7 @@ interface submission {
 interface hook {
   record hook {
     created-at: option<string>,
-    data: option<hook-data>,
+    data: option<list<hook-data-entry>>,
     disabled: option<bool>,
     event: option<string>,
     id: option<string>,
@@ -827,9 +827,10 @@ interface hook {
     updated-at: option<string>
   }
 
-  record hook-data {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record hook-data-entry {
+    key: string,
+    value: string
   }
 
   record list-hooks-by-site-id-params {
@@ -840,7 +841,7 @@ interface hook {
   record create-hook-by-site-id-params {
     site-id: string,
     created-at: option<string>,
-    data: option<hook-data>,
+    data: option<list<hook-data-entry>>,
     disabled: option<bool>,
     event: option<string>,
     id: option<string>,
@@ -858,7 +859,7 @@ interface hook {
   record update-hook-params {
     hook-id: string,
     created-at: option<string>,
-    data: option<hook-data>,
+    data: option<list<hook-data-entry>>,
     disabled: option<bool>,
     event: option<string>,
     id: option<string>,
@@ -883,13 +884,14 @@ interface hook {
 interface hook-type {
   record hook-type {
     events: option<list<string>>,
-    fields: option<list<hook-type-fields-item>>,
+    fields: option<list<list<hook-type-fields-item-entry>>>,
     name: option<string>
   }
 
-  record hook-type-fields-item {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record hook-type-fields-item-entry {
+    key: string,
+    value: string
   }
 
   list-hook-types: func() -> result<list<hook-type>, string>;
@@ -937,7 +939,7 @@ interface service {
     created-at: option<string>,
     description: option<string>,
     environments: option<list<string>>,
-    events: option<list<service-events-item>>,
+    events: option<list<list<service-events-item-entry>>>,
     icon: option<string>,
     id: option<string>,
     long-description: option<string>,
@@ -949,14 +951,16 @@ interface service {
     updated-at: option<string>
   }
 
-  record service-events-item {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record service-events-item-entry {
+    key: string,
+    value: string
   }
 
-  record show-service-manifest-response {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record show-service-manifest-response-entry {
+    key: string,
+    value: string
   }
 
   record get-services-params {
@@ -972,7 +976,7 @@ interface service {
   record show-service-manifest-params {
     addon-name: string
   }
-  show-service-manifest: func(params: show-service-manifest-params) -> result<show-service-manifest-response, string>;
+  show-service-manifest: func(params: show-service-manifest-params) -> result<list<show-service-manifest-response-entry>, string>;
 
 }
 
@@ -989,7 +993,7 @@ interface site {
     admin-url: option<string>,
     build-image: option<string>,
     build-settings: option<repo-info>,
-    capabilities: option<site-capabilities>,
+    capabilities: option<list<site-capabilities-entry>>,
     created-at: option<string>,
     custom-domain: option<string>,
     default-hooks-data: option<site-default-hooks-data>,
@@ -1023,7 +1027,7 @@ interface site {
     cmd: option<string>,
     deploy-key-id: option<string>,
     dir: option<string>,
-    env: option<repo-info-env>,
+    env: option<list<repo-info-env-entry>>,
     functions-dir: option<string>,
     id: option<s32>,
     installation-id: option<s32>,
@@ -1036,14 +1040,22 @@ interface site {
     stop-builds: option<bool>
   }
 
-  record repo-info-env {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record repo-info-env-entry {
+    key: string,
+    value: string
   }
 
-  record site-capabilities {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record site-capabilities-value-entry {
+    key: string,
+    value: string
+  }
+
+  /// one entry of a string-keyed map (free-form object)
+  record site-capabilities-entry {
+    key: string,
+    value: list<site-capabilities-value-entry>
   }
 
   record site-default-hooks-data {
@@ -1114,9 +1126,16 @@ interface site {
     large-media-enabled: option<bool>
   }
 
-  record setup-capabilities {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record setup-capabilities-value-entry {
+    key: string,
+    value: string
+  }
+
+  /// one entry of a string-keyed map (free-form object)
+  record setup-capabilities-entry {
+    key: string,
+    value: list<setup-capabilities-value-entry>
   }
 
   record setup-default-hooks-data {
@@ -1159,7 +1178,7 @@ interface site {
     admin-url: option<string>,
     build-image: option<string>,
     build-settings: option<repo-info>,
-    capabilities: option<setup-capabilities>,
+    capabilities: option<list<setup-capabilities-entry>>,
     created-at: option<string>,
     custom-domain: option<string>,
     default-hooks-data: option<setup-default-hooks-data>,
@@ -1202,7 +1221,7 @@ interface site {
     admin-url: option<string>,
     build-image: option<string>,
     build-settings: option<repo-info>,
-    capabilities: option<setup-capabilities>,
+    capabilities: option<list<setup-capabilities-entry>>,
     created-at: option<string>,
     custom-domain: option<string>,
     default-hooks-data: option<setup-default-hooks-data>,
@@ -1259,7 +1278,7 @@ interface site {
     admin-url: option<string>,
     build-image: option<string>,
     build-settings: option<repo-info>,
-    capabilities: option<setup-capabilities>,
+    capabilities: option<list<setup-capabilities-entry>>,
     created-at: option<string>,
     custom-domain: option<string>,
     default-hooks-data: option<setup-default-hooks-data>,
@@ -1314,13 +1333,14 @@ interface asset {
   }
 
   record form {
-    fields: option<form-fields>,
+    fields: option<list<form-fields-entry>>,
     url: option<string>
   }
 
-  record form-fields {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record form-fields-entry {
+    key: string,
+    value: string
   }
 
   record list-site-assets-params {
@@ -1435,7 +1455,7 @@ interface deployed-branch {
 interface form {
   record form {
     created-at: option<string>,
-    fields: option<list<form-fields-item>>,
+    fields: option<list<list<form-fields-item-entry>>>,
     id: option<string>,
     name: option<string>,
     paths: option<list<string>>,
@@ -1443,9 +1463,10 @@ interface form {
     submission-count: option<s32>
   }
 
-  record form-fields-item {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record form-fields-item-entry {
+    key: string,
+    value: string
   }
 
   record list-site-forms-params {
@@ -1462,20 +1483,26 @@ interface form {
 }
 
 interface metadata {
-  record metadata {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record metadata-entry {
+    key: string,
+    value: string
+  }
+
+  /// one entry of a string-keyed map (free-form object)
+  record metadata-entry-v2 {
+    key: string,
+    value: string
   }
 
   record get-site-metadata-params {
     site-id: string
   }
-  get-site-metadata: func(params: get-site-metadata-params) -> result<metadata, string>;
+  get-site-metadata: func(params: get-site-metadata-params) -> result<list<metadata-entry>, string>;
 
   record update-site-metadata-params {
     site-id: string,
-    /// JSON-encoded free-form object payload
-    data: option<string>
+    body: list<metadata-entry-v2>
   }
   update-site-metadata: func(params: update-site-metadata-params) -> result<string, string>;
 
@@ -1484,37 +1511,53 @@ interface metadata {
 interface service-instance {
   record service-instance {
     auth-url: option<string>,
-    config: option<service-instance-config>,
+    config: option<list<service-instance-config-entry>>,
     created-at: option<string>,
-    env: option<service-instance-env>,
-    external-attributes: option<service-instance-external-attributes>,
+    env: option<list<service-instance-env-entry>>,
+    external-attributes: option<list<service-instance-external-attributes-entry>>,
     id: option<string>,
     service-name: option<string>,
     service-path: option<string>,
     service-slug: option<string>,
-    snippets: option<list<service-instance-snippets-item>>,
+    snippets: option<list<list<service-instance-snippets-item-entry>>>,
     updated-at: option<string>,
     url: option<string>
   }
 
-  record service-instance-config {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record service-instance-config-entry {
+    key: string,
+    value: string
   }
 
-  record service-instance-env {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record service-instance-env-entry {
+    key: string,
+    value: string
   }
 
-  record service-instance-external-attributes {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record service-instance-external-attributes-entry {
+    key: string,
+    value: string
   }
 
-  record service-instance-snippets-item {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record service-instance-snippets-item-entry {
+    key: string,
+    value: string
+  }
+
+  /// one entry of a string-keyed map (free-form object)
+  record create-service-instance-body-entry {
+    key: string,
+    value: string
+  }
+
+  /// one entry of a string-keyed map (free-form object)
+  record update-service-instance-body-entry {
+    key: string,
+    value: string
   }
 
   record list-service-instances-for-site-params {
@@ -1525,8 +1568,7 @@ interface service-instance {
   record create-service-instance-params {
     site-id: string,
     addon: string,
-    /// JSON-encoded free-form object payload
-    data: option<string>
+    body: list<create-service-instance-body-entry>
   }
   create-service-instance: func(params: create-service-instance-params) -> result<service-instance, string>;
 
@@ -1541,8 +1583,7 @@ interface service-instance {
     site-id: string,
     addon: string,
     instance-id: string,
-    /// JSON-encoded free-form object payload
-    data: option<string>
+    body: list<update-service-instance-body-entry>
   }
   update-service-instance: func(params: update-service-instance-params) -> result<string, string>;
 
@@ -1635,19 +1676,9 @@ interface sni-certificate {
 }
 
 interface split-test {
-  record split-tests {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
-  record setup-branch-tests {
-    /// JSON-encoded free-form object payload
-    data: option<string>
-  }
-
   record split-test {
     active: option<bool>,
-    branches: option<list<split-test-branches-item>>,
+    branches: option<list<list<split-test-branches-item-entry>>>,
     created-at: option<string>,
     id: option<string>,
     name: option<string>,
@@ -1657,19 +1688,26 @@ interface split-test {
     updated-at: option<string>
   }
 
-  record split-test-branches-item {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record split-test-branches-item-entry {
+    key: string,
+    value: string
+  }
+
+  /// one entry of a string-keyed map (free-form object)
+  record setup-branch-tests-entry {
+    key: string,
+    value: string
   }
 
   record get-split-tests-params {
     site-id: string
   }
-  get-split-tests: func(params: get-split-tests-params) -> result<split-tests, string>;
+  get-split-tests: func(params: get-split-tests-params) -> result<list<split-test>, string>;
 
   record create-split-test-params {
     site-id: string,
-    branch-tests: option<setup-branch-tests>
+    branch-tests: option<list<setup-branch-tests-entry>>
   }
   create-split-test: func(params: create-split-test-params) -> result<split-test, string>;
 
@@ -1682,7 +1720,7 @@ interface split-test {
   record update-split-test-params {
     site-id: string,
     split-test-id: string,
-    branch-tests: option<setup-branch-tests>
+    branch-tests: option<list<setup-branch-tests-entry>>
   }
   update-split-test: func(params: update-split-test-params) -> result<split-test, string>;
 

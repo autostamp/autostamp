@@ -25,7 +25,7 @@ fn iface_products_media_types_attribute_set_name__catalog_data_product_attribute
     m.insert("default_frontend_label".into(), match (&p.default_frontend_label) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("default_value".into(), match (&p.default_value) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("entity_type_id".into(), Value::String((&p.entity_type_id).clone()));
-    m.insert("extension_attributes".into(), match (&p.extension_attributes) { Some(v) => iface_products_media_types_attribute_set_name__catalog_data_eav_attribute_extension_interface__to_json(v), None => Value::Null });
+    m.insert("extension_attributes".into(), match (&p.extension_attributes) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("frontend_class".into(), match (&p.frontend_class) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("frontend_input".into(), Value::String((&p.frontend_input).clone()));
     m.insert("frontend_labels".into(), Value::Array((&p.frontend_labels).iter().map(|v| iface_products_media_types_attribute_set_name__eav_data_attribute_frontend_label_interface__to_json(v)).collect()));
@@ -63,9 +63,10 @@ fn iface_products_media_types_attribute_set_name__framework_attribute_interface_
     Value::Object(m)
 }
 
-fn iface_products_media_types_attribute_set_name__catalog_data_eav_attribute_extension_interface__to_json(p: &iface_products_media_types_attribute_set_name::CatalogDataEavAttributeExtensionInterface) -> Value {
+fn iface_products_media_types_attribute_set_name__catalog_data_eav_attribute_extension_interface_entry__to_json(p: &iface_products_media_types_attribute_set_name::CatalogDataEavAttributeExtensionInterfaceEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -118,7 +119,7 @@ fn iface_products_media_types_attribute_set_name__catalog_data_product_attribute
         default_frontend_label: m.get("default_frontend_label").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         default_value: m.get("default_value").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         entity_type_id: m.get("entity_type_id").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-        extension_attributes: m.get("extension_attributes").filter(|v| !v.is_null()).and_then(|v| iface_products_media_types_attribute_set_name__catalog_data_eav_attribute_extension_interface__from_json(v)),
+        extension_attributes: m.get("extension_attributes").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_products_media_types_attribute_set_name::CatalogDataEavAttributeExtensionInterfaceEntry { key: k.clone(), value: val })).collect())),
         frontend_class: m.get("frontend_class").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         frontend_input: m.get("frontend_input").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         frontend_labels: m.get("frontend_labels").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_products_media_types_attribute_set_name__eav_data_attribute_frontend_label_interface__from_json(x)).collect())).unwrap_or_default(),
@@ -157,10 +158,11 @@ fn iface_products_media_types_attribute_set_name__framework_attribute_interface_
     })
 }
 
-fn iface_products_media_types_attribute_set_name__catalog_data_eav_attribute_extension_interface__from_json(v: &Value) -> Option<iface_products_media_types_attribute_set_name::CatalogDataEavAttributeExtensionInterface> {
+fn iface_products_media_types_attribute_set_name__catalog_data_eav_attribute_extension_interface_entry__from_json(v: &Value) -> Option<iface_products_media_types_attribute_set_name::CatalogDataEavAttributeExtensionInterfaceEntry> {
     let m = v.as_object()?;
-    Some(iface_products_media_types_attribute_set_name::CatalogDataEavAttributeExtensionInterface {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_products_media_types_attribute_set_name::CatalogDataEavAttributeExtensionInterfaceEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 

@@ -126,21 +126,27 @@ fn iface_inbound__route__to_json(p: &iface_inbound::Route) -> Value {
     Value::Object(m)
 }
 
-fn iface_inbound__domains_response__to_json(p: &iface_inbound::DomainsResponse) -> Value {
+fn iface_inbound__domains_response_item__to_json(p: &iface_inbound::DomainsResponseItem) -> Value {
     let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
+    m.insert("created_at".into(), match (&p.created_at) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("domain".into(), match (&p.domain) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("valid_mx".into(), match (&p.valid_mx) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_inbound__routes_response__to_json(p: &iface_inbound::RoutesResponse) -> Value {
+fn iface_inbound__routes_response_item__to_json(p: &iface_inbound::RoutesResponseItem) -> Value {
     let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("pattern".into(), match (&p.pattern) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("url".into(), match (&p.url) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_inbound__send_raw_response__to_json(p: &iface_inbound::SendRawResponse) -> Value {
+fn iface_inbound__send_raw_response_item__to_json(p: &iface_inbound::SendRawResponseItem) -> Value {
     let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
+    m.insert("email".into(), match (&p.email) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("pattern".into(), match (&p.pattern) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("url".into(), match (&p.url) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -232,24 +238,30 @@ fn iface_inbound__route__from_json(v: &Value) -> Option<iface_inbound::Route> {
     })
 }
 
-fn iface_inbound__domains_response__from_json(v: &Value) -> Option<iface_inbound::DomainsResponse> {
+fn iface_inbound__domains_response_item__from_json(v: &Value) -> Option<iface_inbound::DomainsResponseItem> {
     let m = v.as_object()?;
-    Some(iface_inbound::DomainsResponse {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    Some(iface_inbound::DomainsResponseItem {
+        created_at: m.get("created_at").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        domain: m.get("domain").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        valid_mx: m.get("valid_mx").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
     })
 }
 
-fn iface_inbound__routes_response__from_json(v: &Value) -> Option<iface_inbound::RoutesResponse> {
+fn iface_inbound__routes_response_item__from_json(v: &Value) -> Option<iface_inbound::RoutesResponseItem> {
     let m = v.as_object()?;
-    Some(iface_inbound::RoutesResponse {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    Some(iface_inbound::RoutesResponseItem {
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        pattern: m.get("pattern").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        url: m.get("url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
     })
 }
 
-fn iface_inbound__send_raw_response__from_json(v: &Value) -> Option<iface_inbound::SendRawResponse> {
+fn iface_inbound__send_raw_response_item__from_json(v: &Value) -> Option<iface_inbound::SendRawResponseItem> {
     let m = v.as_object()?;
-    Some(iface_inbound::SendRawResponse {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    Some(iface_inbound::SendRawResponseItem {
+        email: m.get("email").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        pattern: m.get("pattern").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        url: m.get("url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
     })
 }
 
@@ -343,12 +355,12 @@ fn iface_inbound__post_inbound_delete_route_json__err(e: crate::runtime::Dispatc
     }
 }
 
-fn iface_inbound__post_inbound_domains_json__ok(body: String) -> Result<iface_inbound::DomainsResponse, crate::runtime::DispatchError> {
+fn iface_inbound__post_inbound_domains_json__ok(body: String) -> Result<Vec<iface_inbound::DomainsResponseItem>, crate::runtime::DispatchError> {
     let v: Value = match serde_json::from_str(&body) {
         Ok(v) => v,
         Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
     };
-    match iface_inbound__domains_response__from_json(&v) {
+    match (&v).as_array().map(|a| a.iter().filter_map(|x| iface_inbound__domains_response_item__from_json(x)).collect()) {
         Some(x) => Ok(x),
         None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
@@ -361,12 +373,12 @@ fn iface_inbound__post_inbound_domains_json__err(e: crate::runtime::DispatchErro
     }
 }
 
-fn iface_inbound__post_inbound_routes_json__ok(body: String) -> Result<iface_inbound::RoutesResponse, crate::runtime::DispatchError> {
+fn iface_inbound__post_inbound_routes_json__ok(body: String) -> Result<Vec<iface_inbound::RoutesResponseItem>, crate::runtime::DispatchError> {
     let v: Value = match serde_json::from_str(&body) {
         Ok(v) => v,
         Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
     };
-    match iface_inbound__routes_response__from_json(&v) {
+    match (&v).as_array().map(|a| a.iter().filter_map(|x| iface_inbound__routes_response_item__from_json(x)).collect()) {
         Some(x) => Ok(x),
         None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
@@ -379,12 +391,12 @@ fn iface_inbound__post_inbound_routes_json__err(e: crate::runtime::DispatchError
     }
 }
 
-fn iface_inbound__post_inbound_send_raw_json__ok(body: String) -> Result<iface_inbound::SendRawResponse, crate::runtime::DispatchError> {
+fn iface_inbound__post_inbound_send_raw_json__ok(body: String) -> Result<Vec<iface_inbound::SendRawResponseItem>, crate::runtime::DispatchError> {
     let v: Value = match serde_json::from_str(&body) {
         Ok(v) => v,
         Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
     };
-    match iface_inbound__send_raw_response__from_json(&v) {
+    match (&v).as_array().map(|a| a.iter().filter_map(|x| iface_inbound__send_raw_response_item__from_json(x)).collect()) {
         Some(x) => Ok(x),
         None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
@@ -451,21 +463,21 @@ impl iface_inbound::Guest for crate::Component {
             Err(e) => Err(iface_inbound__post_inbound_delete_route_json__err(e)),
         }
     }
-    fn post_inbound_domains_json(params: iface_inbound::PostInboundDomainsJsonParams) -> Result<iface_inbound::DomainsResponse, String> {
+    fn post_inbound_domains_json(params: iface_inbound::PostInboundDomainsJsonParams) -> Result<Vec<iface_inbound::DomainsResponseItem>, String> {
         let json = iface_inbound__post_inbound_domains_json_params__to_json(&params);
         match dispatch(&OP_INBOUND_POST_INBOUND_DOMAINS_JSON, json).and_then(iface_inbound__post_inbound_domains_json__ok) {
             Ok(v) => Ok(v),
             Err(e) => Err(iface_inbound__post_inbound_domains_json__err(e)),
         }
     }
-    fn post_inbound_routes_json(params: iface_inbound::PostInboundRoutesJsonParams) -> Result<iface_inbound::RoutesResponse, String> {
+    fn post_inbound_routes_json(params: iface_inbound::PostInboundRoutesJsonParams) -> Result<Vec<iface_inbound::RoutesResponseItem>, String> {
         let json = iface_inbound__post_inbound_routes_json_params__to_json(&params);
         match dispatch(&OP_INBOUND_POST_INBOUND_ROUTES_JSON, json).and_then(iface_inbound__post_inbound_routes_json__ok) {
             Ok(v) => Ok(v),
             Err(e) => Err(iface_inbound__post_inbound_routes_json__err(e)),
         }
     }
-    fn post_inbound_send_raw_json(params: iface_inbound::PostInboundSendRawJsonParams) -> Result<iface_inbound::SendRawResponse, String> {
+    fn post_inbound_send_raw_json(params: iface_inbound::PostInboundSendRawJsonParams) -> Result<Vec<iface_inbound::SendRawResponseItem>, String> {
         let json = iface_inbound__post_inbound_send_raw_json_params__to_json(&params);
         match dispatch(&OP_INBOUND_POST_INBOUND_SEND_RAW_JSON, json).and_then(iface_inbound__post_inbound_send_raw_json__ok) {
             Ok(v) => Ok(v),

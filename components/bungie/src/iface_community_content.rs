@@ -22,15 +22,16 @@ fn iface_community_content__get_community_content_response__to_json(p: &iface_co
     m.insert("ErrorCode".into(), match (&p.error_code) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("ErrorStatus".into(), match (&p.error_status) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("Message".into(), match (&p.message) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("MessageData".into(), match (&p.message_data) { Some(v) => iface_community_content__get_community_content_response_message_data__to_json(v), None => Value::Null });
+    m.insert("MessageData".into(), match (&p.message_data) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("Response".into(), match (&p.response) { Some(v) => iface_community_content__forum_post_search_response__to_json(v), None => Value::Null });
     m.insert("ThrottleSeconds".into(), match (&p.throttle_seconds) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_community_content__get_community_content_response_message_data__to_json(p: &iface_community_content::GetCommunityContentResponseMessageData) -> Value {
+fn iface_community_content__get_community_content_response_message_data_entry__to_json(p: &iface_community_content::GetCommunityContentResponseMessageDataEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -112,98 +113,13 @@ fn iface_community_content__groups_v2_group_response__to_json(p: &iface_communit
     let mut m = Map::new();
     m.insert("allianceStatus".into(), match (&p.alliance_status) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("alliedIds".into(), match (&p.allied_ids) { Some(v) => Value::Array((v).iter().map(|v| Value::Number(serde_json::Number::from(*(v)))).collect()), None => Value::Null });
-    m.insert("currentUserMemberMap".into(), match (&p.current_user_member_map) { Some(v) => iface_community_content__groups_v2_group_response_current_user_member_map__to_json(v), None => Value::Null });
+    m.insert("currentUserMemberMap".into(), match (&p.current_user_member_map) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), iface_community_content__groups_v2_group_member__to_json(&e.value))).collect()), None => Value::Null });
     m.insert("currentUserMembershipsInactiveForDestiny".into(), match (&p.current_user_memberships_inactive_for_destiny) { Some(v) => Value::Bool(*(v)), None => Value::Null });
-    m.insert("currentUserPotentialMemberMap".into(), match (&p.current_user_potential_member_map) { Some(v) => iface_community_content__groups_v2_group_response_current_user_potential_member_map__to_json(v), None => Value::Null });
+    m.insert("currentUserPotentialMemberMap".into(), match (&p.current_user_potential_member_map) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), iface_community_content__groups_v2_group_potential_member__to_json(&e.value))).collect()), None => Value::Null });
     m.insert("detail".into(), match (&p.detail) { Some(v) => iface_community_content__groups_v2_group_v2__to_json(v), None => Value::Null });
     m.insert("founder".into(), match (&p.founder) { Some(v) => iface_community_content__groups_v2_group_member__to_json(v), None => Value::Null });
     m.insert("groupJoinInviteCount".into(), match (&p.group_join_invite_count) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("parentGroup".into(), match (&p.parent_group) { Some(v) => iface_community_content__groups_v2_group_v2__to_json(v), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_community_content__groups_v2_group_response_current_user_member_map__to_json(p: &iface_community_content::GroupsV2GroupResponseCurrentUserMemberMap) -> Value {
-    let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_community_content__groups_v2_group_response_current_user_potential_member_map__to_json(p: &iface_community_content::GroupsV2GroupResponseCurrentUserPotentialMemberMap) -> Value {
-    let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_community_content__groups_v2_group_v2__to_json(p: &iface_community_content::GroupsV2GroupV2) -> Value {
-    let mut m = Map::new();
-    m.insert("about".into(), match (&p.about) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("allowChat".into(), match (&p.allow_chat) { Some(v) => Value::Bool(*(v)), None => Value::Null });
-    m.insert("avatarImageIndex".into(), match (&p.avatar_image_index) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    m.insert("avatarPath".into(), match (&p.avatar_path) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("banExpireDate".into(), match (&p.ban_expire_date) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("bannerPath".into(), match (&p.banner_path) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("chatSecurity".into(), match (&p.chat_security) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    m.insert("clanInfo".into(), match (&p.clan_info) { Some(v) => iface_community_content__groups_v2_group_v2_clan_info_and_investment__to_json(v), None => Value::Null });
-    m.insert("conversationId".into(), match (&p.conversation_id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    m.insert("creationDate".into(), match (&p.creation_date) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("defaultPublicity".into(), match (&p.default_publicity) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    m.insert("enableInvitationMessagingForAdmins".into(), match (&p.enable_invitation_messaging_for_admins) { Some(v) => Value::Bool(*(v)), None => Value::Null });
-    m.insert("features".into(), match (&p.features) { Some(v) => iface_community_content__groups_v2_group_features__to_json(v), None => Value::Null });
-    m.insert("groupId".into(), match (&p.group_id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    m.insert("groupType".into(), match (&p.group_type) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    m.insert("homepage".into(), match (&p.homepage) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    m.insert("isDefaultPostPublic".into(), match (&p.is_default_post_public) { Some(v) => Value::Bool(*(v)), None => Value::Null });
-    m.insert("isPublic".into(), match (&p.is_public) { Some(v) => Value::Bool(*(v)), None => Value::Null });
-    m.insert("isPublicTopicAdminOnly".into(), match (&p.is_public_topic_admin_only) { Some(v) => Value::Bool(*(v)), None => Value::Null });
-    m.insert("locale".into(), match (&p.locale) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("memberCount".into(), match (&p.member_count) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    m.insert("membershipIdCreated".into(), match (&p.membership_id_created) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    m.insert("membershipOption".into(), match (&p.membership_option) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    m.insert("modificationDate".into(), match (&p.modification_date) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("motto".into(), match (&p.motto) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("tags".into(), match (&p.tags) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
-    m.insert("theme".into(), match (&p.theme) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_community_content__groups_v2_group_v2_clan_info_and_investment__to_json(p: &iface_community_content::GroupsV2GroupV2ClanInfoAndInvestment) -> Value {
-    let mut m = Map::new();
-    m.insert("clanBannerData".into(), match (&p.clan_banner_data) { Some(v) => iface_community_content__groups_v2_clan_banner__to_json(v), None => Value::Null });
-    m.insert("clanCallsign".into(), match (&p.clan_callsign) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("d2ClanProgressions".into(), match (&p.d2_clan_progressions) { Some(v) => iface_community_content__groups_v2_group_v2_clan_info_and_investment_d2_clan_progressions__to_json(v), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_community_content__groups_v2_clan_banner__to_json(p: &iface_community_content::GroupsV2ClanBanner) -> Value {
-    let mut m = Map::new();
-    m.insert("decalBackgroundColorId".into(), match (&p.decal_background_color_id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    m.insert("decalColorId".into(), match (&p.decal_color_id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    m.insert("decalId".into(), match (&p.decal_id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    m.insert("gonfalonColorId".into(), match (&p.gonfalon_color_id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    m.insert("gonfalonDetailColorId".into(), match (&p.gonfalon_detail_color_id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    m.insert("gonfalonDetailId".into(), match (&p.gonfalon_detail_id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    m.insert("gonfalonId".into(), match (&p.gonfalon_id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_community_content__groups_v2_group_v2_clan_info_and_investment_d2_clan_progressions__to_json(p: &iface_community_content::GroupsV2GroupV2ClanInfoAndInvestmentD2ClanProgressions) -> Value {
-    let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_community_content__groups_v2_group_features__to_json(p: &iface_community_content::GroupsV2GroupFeatures) -> Value {
-    let mut m = Map::new();
-    m.insert("capabilities".into(), match (&p.capabilities) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    m.insert("hostGuidedGamePermissionOverride".into(), match (&p.host_guided_game_permission_override) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    m.insert("invitePermissionOverride".into(), match (&p.invite_permission_override) { Some(v) => Value::Bool(*(v)), None => Value::Null });
-    m.insert("joinLevel".into(), match (&p.join_level) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    m.insert("maximumMembers".into(), match (&p.maximum_members) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    m.insert("maximumMembershipsOfGroupType".into(), match (&p.maximum_memberships_of_group_type) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    m.insert("membershipTypes".into(), match (&p.membership_types) { Some(v) => Value::Array((v).iter().map(|v| Value::Number(serde_json::Number::from(*(v)))).collect()), None => Value::Null });
-    m.insert("updateBannerPermissionOverride".into(), match (&p.update_banner_permission_override) { Some(v) => Value::Bool(*(v)), None => Value::Null });
-    m.insert("updateCulturePermissionOverride".into(), match (&p.update_culture_permission_override) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     Value::Object(m)
 }
 
@@ -248,6 +164,130 @@ fn iface_community_content__groups_v2_group_user_info_card__to_json(p: &iface_co
     m.insert("membershipId".into(), match (&p.membership_id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("membershipType".into(), match (&p.membership_type) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("supplementalDisplayName".into(), match (&p.supplemental_display_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_community_content__groups_v2_group_response_current_user_member_map_entry__to_json(p: &iface_community_content::GroupsV2GroupResponseCurrentUserMemberMapEntry) -> Value {
+    let mut m = Map::new();
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), iface_community_content__groups_v2_group_member__to_json(&p.value));
+    Value::Object(m)
+}
+
+fn iface_community_content__groups_v2_group_potential_member__to_json(p: &iface_community_content::GroupsV2GroupPotentialMember) -> Value {
+    let mut m = Map::new();
+    m.insert("bungieNetUserInfo".into(), match (&p.bungie_net_user_info) { Some(v) => iface_community_content__user_user_info_card__to_json(v), None => Value::Null });
+    m.insert("destinyUserInfo".into(), match (&p.destiny_user_info) { Some(v) => iface_community_content__groups_v2_group_user_info_card__to_json(v), None => Value::Null });
+    m.insert("groupId".into(), match (&p.group_id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("joinDate".into(), match (&p.join_date) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("potentialStatus".into(), match (&p.potential_status) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_community_content__groups_v2_group_response_current_user_potential_member_map_entry__to_json(p: &iface_community_content::GroupsV2GroupResponseCurrentUserPotentialMemberMapEntry) -> Value {
+    let mut m = Map::new();
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), iface_community_content__groups_v2_group_potential_member__to_json(&p.value));
+    Value::Object(m)
+}
+
+fn iface_community_content__groups_v2_group_v2__to_json(p: &iface_community_content::GroupsV2GroupV2) -> Value {
+    let mut m = Map::new();
+    m.insert("about".into(), match (&p.about) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("allowChat".into(), match (&p.allow_chat) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("avatarImageIndex".into(), match (&p.avatar_image_index) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("avatarPath".into(), match (&p.avatar_path) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("banExpireDate".into(), match (&p.ban_expire_date) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("bannerPath".into(), match (&p.banner_path) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("chatSecurity".into(), match (&p.chat_security) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("clanInfo".into(), match (&p.clan_info) { Some(v) => iface_community_content__groups_v2_group_v2_clan_info_and_investment__to_json(v), None => Value::Null });
+    m.insert("conversationId".into(), match (&p.conversation_id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("creationDate".into(), match (&p.creation_date) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("defaultPublicity".into(), match (&p.default_publicity) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("enableInvitationMessagingForAdmins".into(), match (&p.enable_invitation_messaging_for_admins) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("features".into(), match (&p.features) { Some(v) => iface_community_content__groups_v2_group_features__to_json(v), None => Value::Null });
+    m.insert("groupId".into(), match (&p.group_id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("groupType".into(), match (&p.group_type) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("homepage".into(), match (&p.homepage) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("isDefaultPostPublic".into(), match (&p.is_default_post_public) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("isPublic".into(), match (&p.is_public) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("isPublicTopicAdminOnly".into(), match (&p.is_public_topic_admin_only) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("locale".into(), match (&p.locale) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("memberCount".into(), match (&p.member_count) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("membershipIdCreated".into(), match (&p.membership_id_created) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("membershipOption".into(), match (&p.membership_option) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("modificationDate".into(), match (&p.modification_date) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("motto".into(), match (&p.motto) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("tags".into(), match (&p.tags) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("theme".into(), match (&p.theme) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_community_content__groups_v2_group_v2_clan_info_and_investment__to_json(p: &iface_community_content::GroupsV2GroupV2ClanInfoAndInvestment) -> Value {
+    let mut m = Map::new();
+    m.insert("clanBannerData".into(), match (&p.clan_banner_data) { Some(v) => iface_community_content__groups_v2_clan_banner__to_json(v), None => Value::Null });
+    m.insert("clanCallsign".into(), match (&p.clan_callsign) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("d2ClanProgressions".into(), match (&p.d2_clan_progressions) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), iface_community_content__destiny_destiny_progression__to_json(&e.value))).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_community_content__groups_v2_clan_banner__to_json(p: &iface_community_content::GroupsV2ClanBanner) -> Value {
+    let mut m = Map::new();
+    m.insert("decalBackgroundColorId".into(), match (&p.decal_background_color_id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("decalColorId".into(), match (&p.decal_color_id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("decalId".into(), match (&p.decal_id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("gonfalonColorId".into(), match (&p.gonfalon_color_id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("gonfalonDetailColorId".into(), match (&p.gonfalon_detail_color_id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("gonfalonDetailId".into(), match (&p.gonfalon_detail_id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("gonfalonId".into(), match (&p.gonfalon_id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_community_content__destiny_destiny_progression__to_json(p: &iface_community_content::DestinyDestinyProgression) -> Value {
+    let mut m = Map::new();
+    m.insert("currentProgress".into(), match (&p.current_progress) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("currentResetCount".into(), match (&p.current_reset_count) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("dailyLimit".into(), match (&p.daily_limit) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("dailyProgress".into(), match (&p.daily_progress) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("level".into(), match (&p.level) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("levelCap".into(), match (&p.level_cap) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("nextLevelAt".into(), match (&p.next_level_at) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("progressToNextLevel".into(), match (&p.progress_to_next_level) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("progressionHash".into(), match (&p.progression_hash) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("rewardItemStates".into(), match (&p.reward_item_states) { Some(v) => Value::Array((v).iter().map(|v| Value::Number(serde_json::Number::from(*(v)))).collect()), None => Value::Null });
+    m.insert("seasonResets".into(), match (&p.season_resets) { Some(v) => Value::Array((v).iter().map(|v| iface_community_content__destiny_destiny_progression_reset_entry__to_json(v)).collect()), None => Value::Null });
+    m.insert("stepIndex".into(), match (&p.step_index) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("weeklyLimit".into(), match (&p.weekly_limit) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("weeklyProgress".into(), match (&p.weekly_progress) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_community_content__destiny_destiny_progression_reset_entry__to_json(p: &iface_community_content::DestinyDestinyProgressionResetEntry) -> Value {
+    let mut m = Map::new();
+    m.insert("resets".into(), match (&p.resets) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("season".into(), match (&p.season) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_community_content__groups_v2_group_v2_clan_info_and_investment_d2_clan_progressions_entry__to_json(p: &iface_community_content::GroupsV2GroupV2ClanInfoAndInvestmentD2ClanProgressionsEntry) -> Value {
+    let mut m = Map::new();
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), iface_community_content__destiny_destiny_progression__to_json(&p.value));
+    Value::Object(m)
+}
+
+fn iface_community_content__groups_v2_group_features__to_json(p: &iface_community_content::GroupsV2GroupFeatures) -> Value {
+    let mut m = Map::new();
+    m.insert("capabilities".into(), match (&p.capabilities) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("hostGuidedGamePermissionOverride".into(), match (&p.host_guided_game_permission_override) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("invitePermissionOverride".into(), match (&p.invite_permission_override) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("joinLevel".into(), match (&p.join_level) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("maximumMembers".into(), match (&p.maximum_members) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("maximumMembershipsOfGroupType".into(), match (&p.maximum_memberships_of_group_type) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("membershipTypes".into(), match (&p.membership_types) { Some(v) => Value::Array((v).iter().map(|v| Value::Number(serde_json::Number::from(*(v)))).collect()), None => Value::Null });
+    m.insert("updateBannerPermissionOverride".into(), match (&p.update_banner_permission_override) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("updateCulturePermissionOverride".into(), match (&p.update_culture_permission_override) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     Value::Object(m)
 }
 
@@ -333,16 +373,17 @@ fn iface_community_content__get_community_content_response__from_json(v: &Value)
         error_code: m.get("ErrorCode").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
         error_status: m.get("ErrorStatus").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         message: m.get("Message").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        message_data: m.get("MessageData").filter(|v| !v.is_null()).and_then(|v| iface_community_content__get_community_content_response_message_data__from_json(v)),
+        message_data: m.get("MessageData").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_community_content::GetCommunityContentResponseMessageDataEntry { key: k.clone(), value: val })).collect())),
         response: m.get("Response").filter(|v| !v.is_null()).and_then(|v| iface_community_content__forum_post_search_response__from_json(v)),
         throttle_seconds: m.get("ThrottleSeconds").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
     })
 }
 
-fn iface_community_content__get_community_content_response_message_data__from_json(v: &Value) -> Option<iface_community_content::GetCommunityContentResponseMessageData> {
+fn iface_community_content__get_community_content_response_message_data_entry__from_json(v: &Value) -> Option<iface_community_content::GetCommunityContentResponseMessageDataEntry> {
     let m = v.as_object()?;
-    Some(iface_community_content::GetCommunityContentResponseMessageData {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_community_content::GetCommunityContentResponseMessageDataEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -429,105 +470,13 @@ fn iface_community_content__groups_v2_group_response__from_json(v: &Value) -> Op
     Some(iface_community_content::GroupsV2GroupResponse {
         alliance_status: m.get("allianceStatus").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
         allied_ids: m.get("alliedIds").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_i64()).collect())),
-        current_user_member_map: m.get("currentUserMemberMap").filter(|v| !v.is_null()).and_then(|v| iface_community_content__groups_v2_group_response_current_user_member_map__from_json(v)),
+        current_user_member_map: m.get("currentUserMemberMap").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| (iface_community_content__groups_v2_group_member__from_json(x)).map(|val| iface_community_content::GroupsV2GroupResponseCurrentUserMemberMapEntry { key: k.clone(), value: val })).collect())),
         current_user_memberships_inactive_for_destiny: m.get("currentUserMembershipsInactiveForDestiny").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
-        current_user_potential_member_map: m.get("currentUserPotentialMemberMap").filter(|v| !v.is_null()).and_then(|v| iface_community_content__groups_v2_group_response_current_user_potential_member_map__from_json(v)),
+        current_user_potential_member_map: m.get("currentUserPotentialMemberMap").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| (iface_community_content__groups_v2_group_potential_member__from_json(x)).map(|val| iface_community_content::GroupsV2GroupResponseCurrentUserPotentialMemberMapEntry { key: k.clone(), value: val })).collect())),
         detail: m.get("detail").filter(|v| !v.is_null()).and_then(|v| iface_community_content__groups_v2_group_v2__from_json(v)),
         founder: m.get("founder").filter(|v| !v.is_null()).and_then(|v| iface_community_content__groups_v2_group_member__from_json(v)),
         group_join_invite_count: m.get("groupJoinInviteCount").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
         parent_group: m.get("parentGroup").filter(|v| !v.is_null()).and_then(|v| iface_community_content__groups_v2_group_v2__from_json(v)),
-    })
-}
-
-fn iface_community_content__groups_v2_group_response_current_user_member_map__from_json(v: &Value) -> Option<iface_community_content::GroupsV2GroupResponseCurrentUserMemberMap> {
-    let m = v.as_object()?;
-    Some(iface_community_content::GroupsV2GroupResponseCurrentUserMemberMap {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-    })
-}
-
-fn iface_community_content__groups_v2_group_response_current_user_potential_member_map__from_json(v: &Value) -> Option<iface_community_content::GroupsV2GroupResponseCurrentUserPotentialMemberMap> {
-    let m = v.as_object()?;
-    Some(iface_community_content::GroupsV2GroupResponseCurrentUserPotentialMemberMap {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-    })
-}
-
-fn iface_community_content__groups_v2_group_v2__from_json(v: &Value) -> Option<iface_community_content::GroupsV2GroupV2> {
-    let m = v.as_object()?;
-    Some(iface_community_content::GroupsV2GroupV2 {
-        about: m.get("about").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        allow_chat: m.get("allowChat").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
-        avatar_image_index: m.get("avatarImageIndex").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
-        avatar_path: m.get("avatarPath").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        ban_expire_date: m.get("banExpireDate").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        banner_path: m.get("bannerPath").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        chat_security: m.get("chatSecurity").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
-        clan_info: m.get("clanInfo").filter(|v| !v.is_null()).and_then(|v| iface_community_content__groups_v2_group_v2_clan_info_and_investment__from_json(v)),
-        conversation_id: m.get("conversationId").filter(|v| !v.is_null()).and_then(|v| (v).as_i64()),
-        creation_date: m.get("creationDate").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        default_publicity: m.get("defaultPublicity").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
-        enable_invitation_messaging_for_admins: m.get("enableInvitationMessagingForAdmins").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
-        features: m.get("features").filter(|v| !v.is_null()).and_then(|v| iface_community_content__groups_v2_group_features__from_json(v)),
-        group_id: m.get("groupId").filter(|v| !v.is_null()).and_then(|v| (v).as_i64()),
-        group_type: m.get("groupType").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
-        homepage: m.get("homepage").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
-        is_default_post_public: m.get("isDefaultPostPublic").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
-        is_public: m.get("isPublic").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
-        is_public_topic_admin_only: m.get("isPublicTopicAdminOnly").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
-        locale: m.get("locale").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        member_count: m.get("memberCount").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
-        membership_id_created: m.get("membershipIdCreated").filter(|v| !v.is_null()).and_then(|v| (v).as_i64()),
-        membership_option: m.get("membershipOption").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
-        modification_date: m.get("modificationDate").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        motto: m.get("motto").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        tags: m.get("tags").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
-        theme: m.get("theme").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-    })
-}
-
-fn iface_community_content__groups_v2_group_v2_clan_info_and_investment__from_json(v: &Value) -> Option<iface_community_content::GroupsV2GroupV2ClanInfoAndInvestment> {
-    let m = v.as_object()?;
-    Some(iface_community_content::GroupsV2GroupV2ClanInfoAndInvestment {
-        clan_banner_data: m.get("clanBannerData").filter(|v| !v.is_null()).and_then(|v| iface_community_content__groups_v2_clan_banner__from_json(v)),
-        clan_callsign: m.get("clanCallsign").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        d2_clan_progressions: m.get("d2ClanProgressions").filter(|v| !v.is_null()).and_then(|v| iface_community_content__groups_v2_group_v2_clan_info_and_investment_d2_clan_progressions__from_json(v)),
-    })
-}
-
-fn iface_community_content__groups_v2_clan_banner__from_json(v: &Value) -> Option<iface_community_content::GroupsV2ClanBanner> {
-    let m = v.as_object()?;
-    Some(iface_community_content::GroupsV2ClanBanner {
-        decal_background_color_id: m.get("decalBackgroundColorId").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
-        decal_color_id: m.get("decalColorId").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
-        decal_id: m.get("decalId").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
-        gonfalon_color_id: m.get("gonfalonColorId").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
-        gonfalon_detail_color_id: m.get("gonfalonDetailColorId").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
-        gonfalon_detail_id: m.get("gonfalonDetailId").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
-        gonfalon_id: m.get("gonfalonId").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
-    })
-}
-
-fn iface_community_content__groups_v2_group_v2_clan_info_and_investment_d2_clan_progressions__from_json(v: &Value) -> Option<iface_community_content::GroupsV2GroupV2ClanInfoAndInvestmentD2ClanProgressions> {
-    let m = v.as_object()?;
-    Some(iface_community_content::GroupsV2GroupV2ClanInfoAndInvestmentD2ClanProgressions {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-    })
-}
-
-fn iface_community_content__groups_v2_group_features__from_json(v: &Value) -> Option<iface_community_content::GroupsV2GroupFeatures> {
-    let m = v.as_object()?;
-    Some(iface_community_content::GroupsV2GroupFeatures {
-        capabilities: m.get("capabilities").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
-        host_guided_game_permission_override: m.get("hostGuidedGamePermissionOverride").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
-        invite_permission_override: m.get("invitePermissionOverride").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
-        join_level: m.get("joinLevel").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
-        maximum_members: m.get("maximumMembers").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
-        maximum_memberships_of_group_type: m.get("maximumMembershipsOfGroupType").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
-        membership_types: m.get("membershipTypes").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_i64().map(|n| n as i32)).collect())),
-        update_banner_permission_override: m.get("updateBannerPermissionOverride").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
-        update_culture_permission_override: m.get("updateCulturePermissionOverride").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
     })
 }
 
@@ -575,6 +524,140 @@ fn iface_community_content__groups_v2_group_user_info_card__from_json(v: &Value)
         membership_id: m.get("membershipId").filter(|v| !v.is_null()).and_then(|v| (v).as_i64()),
         membership_type: m.get("membershipType").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
         supplemental_display_name: m.get("supplementalDisplayName").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_community_content__groups_v2_group_response_current_user_member_map_entry__from_json(v: &Value) -> Option<iface_community_content::GroupsV2GroupResponseCurrentUserMemberMapEntry> {
+    let m = v.as_object()?;
+    Some(iface_community_content::GroupsV2GroupResponseCurrentUserMemberMapEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: match m.get("value").and_then(|v| iface_community_content__groups_v2_group_member__from_json(v)) { Some(x) => x, None => return None },
+    })
+}
+
+fn iface_community_content__groups_v2_group_potential_member__from_json(v: &Value) -> Option<iface_community_content::GroupsV2GroupPotentialMember> {
+    let m = v.as_object()?;
+    Some(iface_community_content::GroupsV2GroupPotentialMember {
+        bungie_net_user_info: m.get("bungieNetUserInfo").filter(|v| !v.is_null()).and_then(|v| iface_community_content__user_user_info_card__from_json(v)),
+        destiny_user_info: m.get("destinyUserInfo").filter(|v| !v.is_null()).and_then(|v| iface_community_content__groups_v2_group_user_info_card__from_json(v)),
+        group_id: m.get("groupId").filter(|v| !v.is_null()).and_then(|v| (v).as_i64()),
+        join_date: m.get("joinDate").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        potential_status: m.get("potentialStatus").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+    })
+}
+
+fn iface_community_content__groups_v2_group_response_current_user_potential_member_map_entry__from_json(v: &Value) -> Option<iface_community_content::GroupsV2GroupResponseCurrentUserPotentialMemberMapEntry> {
+    let m = v.as_object()?;
+    Some(iface_community_content::GroupsV2GroupResponseCurrentUserPotentialMemberMapEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: match m.get("value").and_then(|v| iface_community_content__groups_v2_group_potential_member__from_json(v)) { Some(x) => x, None => return None },
+    })
+}
+
+fn iface_community_content__groups_v2_group_v2__from_json(v: &Value) -> Option<iface_community_content::GroupsV2GroupV2> {
+    let m = v.as_object()?;
+    Some(iface_community_content::GroupsV2GroupV2 {
+        about: m.get("about").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        allow_chat: m.get("allowChat").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        avatar_image_index: m.get("avatarImageIndex").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        avatar_path: m.get("avatarPath").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        ban_expire_date: m.get("banExpireDate").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        banner_path: m.get("bannerPath").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        chat_security: m.get("chatSecurity").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        clan_info: m.get("clanInfo").filter(|v| !v.is_null()).and_then(|v| iface_community_content__groups_v2_group_v2_clan_info_and_investment__from_json(v)),
+        conversation_id: m.get("conversationId").filter(|v| !v.is_null()).and_then(|v| (v).as_i64()),
+        creation_date: m.get("creationDate").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        default_publicity: m.get("defaultPublicity").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        enable_invitation_messaging_for_admins: m.get("enableInvitationMessagingForAdmins").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        features: m.get("features").filter(|v| !v.is_null()).and_then(|v| iface_community_content__groups_v2_group_features__from_json(v)),
+        group_id: m.get("groupId").filter(|v| !v.is_null()).and_then(|v| (v).as_i64()),
+        group_type: m.get("groupType").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        homepage: m.get("homepage").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        is_default_post_public: m.get("isDefaultPostPublic").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        is_public: m.get("isPublic").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        is_public_topic_admin_only: m.get("isPublicTopicAdminOnly").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        locale: m.get("locale").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        member_count: m.get("memberCount").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        membership_id_created: m.get("membershipIdCreated").filter(|v| !v.is_null()).and_then(|v| (v).as_i64()),
+        membership_option: m.get("membershipOption").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        modification_date: m.get("modificationDate").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        motto: m.get("motto").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        tags: m.get("tags").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        theme: m.get("theme").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_community_content__groups_v2_group_v2_clan_info_and_investment__from_json(v: &Value) -> Option<iface_community_content::GroupsV2GroupV2ClanInfoAndInvestment> {
+    let m = v.as_object()?;
+    Some(iface_community_content::GroupsV2GroupV2ClanInfoAndInvestment {
+        clan_banner_data: m.get("clanBannerData").filter(|v| !v.is_null()).and_then(|v| iface_community_content__groups_v2_clan_banner__from_json(v)),
+        clan_callsign: m.get("clanCallsign").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        d2_clan_progressions: m.get("d2ClanProgressions").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| (iface_community_content__destiny_destiny_progression__from_json(x)).map(|val| iface_community_content::GroupsV2GroupV2ClanInfoAndInvestmentD2ClanProgressionsEntry { key: k.clone(), value: val })).collect())),
+    })
+}
+
+fn iface_community_content__groups_v2_clan_banner__from_json(v: &Value) -> Option<iface_community_content::GroupsV2ClanBanner> {
+    let m = v.as_object()?;
+    Some(iface_community_content::GroupsV2ClanBanner {
+        decal_background_color_id: m.get("decalBackgroundColorId").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        decal_color_id: m.get("decalColorId").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        decal_id: m.get("decalId").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        gonfalon_color_id: m.get("gonfalonColorId").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        gonfalon_detail_color_id: m.get("gonfalonDetailColorId").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        gonfalon_detail_id: m.get("gonfalonDetailId").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        gonfalon_id: m.get("gonfalonId").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+    })
+}
+
+fn iface_community_content__destiny_destiny_progression__from_json(v: &Value) -> Option<iface_community_content::DestinyDestinyProgression> {
+    let m = v.as_object()?;
+    Some(iface_community_content::DestinyDestinyProgression {
+        current_progress: m.get("currentProgress").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        current_reset_count: m.get("currentResetCount").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        daily_limit: m.get("dailyLimit").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        daily_progress: m.get("dailyProgress").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        level: m.get("level").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        level_cap: m.get("levelCap").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        next_level_at: m.get("nextLevelAt").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        progress_to_next_level: m.get("progressToNextLevel").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        progression_hash: m.get("progressionHash").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        reward_item_states: m.get("rewardItemStates").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_i64().map(|n| n as i32)).collect())),
+        season_resets: m.get("seasonResets").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_community_content__destiny_destiny_progression_reset_entry__from_json(x)).collect())),
+        step_index: m.get("stepIndex").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        weekly_limit: m.get("weeklyLimit").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        weekly_progress: m.get("weeklyProgress").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+    })
+}
+
+fn iface_community_content__destiny_destiny_progression_reset_entry__from_json(v: &Value) -> Option<iface_community_content::DestinyDestinyProgressionResetEntry> {
+    let m = v.as_object()?;
+    Some(iface_community_content::DestinyDestinyProgressionResetEntry {
+        resets: m.get("resets").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        season: m.get("season").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+    })
+}
+
+fn iface_community_content__groups_v2_group_v2_clan_info_and_investment_d2_clan_progressions_entry__from_json(v: &Value) -> Option<iface_community_content::GroupsV2GroupV2ClanInfoAndInvestmentD2ClanProgressionsEntry> {
+    let m = v.as_object()?;
+    Some(iface_community_content::GroupsV2GroupV2ClanInfoAndInvestmentD2ClanProgressionsEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: match m.get("value").and_then(|v| iface_community_content__destiny_destiny_progression__from_json(v)) { Some(x) => x, None => return None },
+    })
+}
+
+fn iface_community_content__groups_v2_group_features__from_json(v: &Value) -> Option<iface_community_content::GroupsV2GroupFeatures> {
+    let m = v.as_object()?;
+    Some(iface_community_content::GroupsV2GroupFeatures {
+        capabilities: m.get("capabilities").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        host_guided_game_permission_override: m.get("hostGuidedGamePermissionOverride").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        invite_permission_override: m.get("invitePermissionOverride").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        join_level: m.get("joinLevel").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        maximum_members: m.get("maximumMembers").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        maximum_memberships_of_group_type: m.get("maximumMembershipsOfGroupType").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        membership_types: m.get("membershipTypes").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_i64().map(|n| n as i32)).collect())),
+        update_banner_permission_override: m.get("updateBannerPermissionOverride").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        update_culture_permission_override: m.get("updateCulturePermissionOverride").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
     })
 }
 

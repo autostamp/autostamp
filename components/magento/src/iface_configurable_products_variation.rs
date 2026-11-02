@@ -18,7 +18,7 @@ const OP_CONFIGURABLE_PRODUCTS_VARIATION_CONFIGURABLE_PRODUCT_CONFIGURABLE_PRODU
 fn iface_configurable_products_variation__configurable_product_data_option_interface__to_json(p: &iface_configurable_products_variation::ConfigurableProductDataOptionInterface) -> Value {
     let mut m = Map::new();
     m.insert("attribute_id".into(), match (&p.attribute_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("extension_attributes".into(), match (&p.extension_attributes) { Some(v) => iface_configurable_products_variation__configurable_product_data_option_extension_interface__to_json(v), None => Value::Null });
+    m.insert("extension_attributes".into(), match (&p.extension_attributes) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("id".into(), match (&p.id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("is_use_default".into(), match (&p.is_use_default) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     m.insert("label".into(), match (&p.label) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -28,22 +28,24 @@ fn iface_configurable_products_variation__configurable_product_data_option_inter
     Value::Object(m)
 }
 
-fn iface_configurable_products_variation__configurable_product_data_option_extension_interface__to_json(p: &iface_configurable_products_variation::ConfigurableProductDataOptionExtensionInterface) -> Value {
+fn iface_configurable_products_variation__configurable_product_data_option_extension_interface_entry__to_json(p: &iface_configurable_products_variation::ConfigurableProductDataOptionExtensionInterfaceEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
 fn iface_configurable_products_variation__configurable_product_data_option_value_interface__to_json(p: &iface_configurable_products_variation::ConfigurableProductDataOptionValueInterface) -> Value {
     let mut m = Map::new();
-    m.insert("extension_attributes".into(), match (&p.extension_attributes) { Some(v) => iface_configurable_products_variation__configurable_product_data_option_value_extension_interface__to_json(v), None => Value::Null });
+    m.insert("extension_attributes".into(), match (&p.extension_attributes) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("value_index".into(), Value::Number(serde_json::Number::from(*(&p.value_index))));
     Value::Object(m)
 }
 
-fn iface_configurable_products_variation__configurable_product_data_option_value_extension_interface__to_json(p: &iface_configurable_products_variation::ConfigurableProductDataOptionValueExtensionInterface) -> Value {
+fn iface_configurable_products_variation__configurable_product_data_option_value_extension_interface_entry__to_json(p: &iface_configurable_products_variation::ConfigurableProductDataOptionValueExtensionInterfaceEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -92,7 +94,7 @@ fn iface_configurable_products_variation__catalog_data_product_extension_interfa
 
 fn iface_configurable_products_variation__bundle_data_option_interface__to_json(p: &iface_configurable_products_variation::BundleDataOptionInterface) -> Value {
     let mut m = Map::new();
-    m.insert("extension_attributes".into(), match (&p.extension_attributes) { Some(v) => iface_configurable_products_variation__bundle_data_option_extension_interface__to_json(v), None => Value::Null });
+    m.insert("extension_attributes".into(), match (&p.extension_attributes) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("option_id".into(), match (&p.option_id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("position".into(), match (&p.position) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("product_links".into(), match (&p.product_links) { Some(v) => Value::Array((v).iter().map(|v| iface_configurable_products_variation__bundle_data_link_interface__to_json(v)).collect()), None => Value::Null });
@@ -103,16 +105,17 @@ fn iface_configurable_products_variation__bundle_data_option_interface__to_json(
     Value::Object(m)
 }
 
-fn iface_configurable_products_variation__bundle_data_option_extension_interface__to_json(p: &iface_configurable_products_variation::BundleDataOptionExtensionInterface) -> Value {
+fn iface_configurable_products_variation__bundle_data_option_extension_interface_entry__to_json(p: &iface_configurable_products_variation::BundleDataOptionExtensionInterfaceEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
 fn iface_configurable_products_variation__bundle_data_link_interface__to_json(p: &iface_configurable_products_variation::BundleDataLinkInterface) -> Value {
     let mut m = Map::new();
     m.insert("can_change_quantity".into(), match (&p.can_change_quantity) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    m.insert("extension_attributes".into(), match (&p.extension_attributes) { Some(v) => iface_configurable_products_variation__bundle_data_link_extension_interface__to_json(v), None => Value::Null });
+    m.insert("extension_attributes".into(), match (&p.extension_attributes) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("is_default".into(), Value::Bool(*(&p.is_default)));
     m.insert("option_id".into(), match (&p.option_id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
@@ -124,29 +127,31 @@ fn iface_configurable_products_variation__bundle_data_link_interface__to_json(p:
     Value::Object(m)
 }
 
-fn iface_configurable_products_variation__bundle_data_link_extension_interface__to_json(p: &iface_configurable_products_variation::BundleDataLinkExtensionInterface) -> Value {
+fn iface_configurable_products_variation__bundle_data_link_extension_interface_entry__to_json(p: &iface_configurable_products_variation::BundleDataLinkExtensionInterfaceEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
 fn iface_configurable_products_variation__catalog_data_category_link_interface__to_json(p: &iface_configurable_products_variation::CatalogDataCategoryLinkInterface) -> Value {
     let mut m = Map::new();
     m.insert("category_id".into(), Value::String((&p.category_id).clone()));
-    m.insert("extension_attributes".into(), match (&p.extension_attributes) { Some(v) => iface_configurable_products_variation__catalog_data_category_link_extension_interface__to_json(v), None => Value::Null });
+    m.insert("extension_attributes".into(), match (&p.extension_attributes) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("position".into(), match (&p.position) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_configurable_products_variation__catalog_data_category_link_extension_interface__to_json(p: &iface_configurable_products_variation::CatalogDataCategoryLinkExtensionInterface) -> Value {
+fn iface_configurable_products_variation__catalog_data_category_link_extension_interface_entry__to_json(p: &iface_configurable_products_variation::CatalogDataCategoryLinkExtensionInterfaceEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
 fn iface_configurable_products_variation__downloadable_data_link_interface__to_json(p: &iface_configurable_products_variation::DownloadableDataLinkInterface) -> Value {
     let mut m = Map::new();
-    m.insert("extension_attributes".into(), match (&p.extension_attributes) { Some(v) => iface_configurable_products_variation__downloadable_data_link_extension_interface__to_json(v), None => Value::Null });
+    m.insert("extension_attributes".into(), match (&p.extension_attributes) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("id".into(), match (&p.id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("is_shareable".into(), Value::Number(serde_json::Number::from(*(&p.is_shareable))));
     m.insert("link_file".into(), match (&p.link_file) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -164,29 +169,31 @@ fn iface_configurable_products_variation__downloadable_data_link_interface__to_j
     Value::Object(m)
 }
 
-fn iface_configurable_products_variation__downloadable_data_link_extension_interface__to_json(p: &iface_configurable_products_variation::DownloadableDataLinkExtensionInterface) -> Value {
+fn iface_configurable_products_variation__downloadable_data_link_extension_interface_entry__to_json(p: &iface_configurable_products_variation::DownloadableDataLinkExtensionInterfaceEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
 fn iface_configurable_products_variation__downloadable_data_file_content_interface__to_json(p: &iface_configurable_products_variation::DownloadableDataFileContentInterface) -> Value {
     let mut m = Map::new();
-    m.insert("extension_attributes".into(), match (&p.extension_attributes) { Some(v) => iface_configurable_products_variation__downloadable_data_file_content_extension_interface__to_json(v), None => Value::Null });
+    m.insert("extension_attributes".into(), match (&p.extension_attributes) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("file_data".into(), Value::String((&p.file_data).clone()));
     m.insert("name".into(), Value::String((&p.name).clone()));
     Value::Object(m)
 }
 
-fn iface_configurable_products_variation__downloadable_data_file_content_extension_interface__to_json(p: &iface_configurable_products_variation::DownloadableDataFileContentExtensionInterface) -> Value {
+fn iface_configurable_products_variation__downloadable_data_file_content_extension_interface_entry__to_json(p: &iface_configurable_products_variation::DownloadableDataFileContentExtensionInterfaceEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
 fn iface_configurable_products_variation__downloadable_data_sample_interface__to_json(p: &iface_configurable_products_variation::DownloadableDataSampleInterface) -> Value {
     let mut m = Map::new();
-    m.insert("extension_attributes".into(), match (&p.extension_attributes) { Some(v) => iface_configurable_products_variation__downloadable_data_sample_extension_interface__to_json(v), None => Value::Null });
+    m.insert("extension_attributes".into(), match (&p.extension_attributes) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("id".into(), match (&p.id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("sample_file".into(), match (&p.sample_file) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("sample_file_content".into(), match (&p.sample_file_content) { Some(v) => iface_configurable_products_variation__downloadable_data_file_content_interface__to_json(v), None => Value::Null });
@@ -197,25 +204,27 @@ fn iface_configurable_products_variation__downloadable_data_sample_interface__to
     Value::Object(m)
 }
 
-fn iface_configurable_products_variation__downloadable_data_sample_extension_interface__to_json(p: &iface_configurable_products_variation::DownloadableDataSampleExtensionInterface) -> Value {
+fn iface_configurable_products_variation__downloadable_data_sample_extension_interface_entry__to_json(p: &iface_configurable_products_variation::DownloadableDataSampleExtensionInterfaceEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
 fn iface_configurable_products_variation__gift_card_data_giftcard_amount_interface__to_json(p: &iface_configurable_products_variation::GiftCardDataGiftcardAmountInterface) -> Value {
     let mut m = Map::new();
     m.insert("attribute_id".into(), Value::Number(serde_json::Number::from(*(&p.attribute_id))));
-    m.insert("extension_attributes".into(), match (&p.extension_attributes) { Some(v) => iface_configurable_products_variation__gift_card_data_giftcard_amount_extension_interface__to_json(v), None => Value::Null });
+    m.insert("extension_attributes".into(), match (&p.extension_attributes) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("value".into(), serde_json::Number::from_f64(*(&p.value)).map(Value::Number).unwrap_or(Value::Null));
     m.insert("website_id".into(), Value::Number(serde_json::Number::from(*(&p.website_id))));
     m.insert("website_value".into(), serde_json::Number::from_f64(*(&p.website_value)).map(Value::Number).unwrap_or(Value::Null));
     Value::Object(m)
 }
 
-fn iface_configurable_products_variation__gift_card_data_giftcard_amount_extension_interface__to_json(p: &iface_configurable_products_variation::GiftCardDataGiftcardAmountExtensionInterface) -> Value {
+fn iface_configurable_products_variation__gift_card_data_giftcard_amount_extension_interface_entry__to_json(p: &iface_configurable_products_variation::GiftCardDataGiftcardAmountExtensionInterfaceEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -223,7 +232,7 @@ fn iface_configurable_products_variation__catalog_inventory_data_stock_item_inte
     let mut m = Map::new();
     m.insert("backorders".into(), Value::Number(serde_json::Number::from(*(&p.backorders))));
     m.insert("enable_qty_increments".into(), Value::Bool(*(&p.enable_qty_increments)));
-    m.insert("extension_attributes".into(), match (&p.extension_attributes) { Some(v) => iface_configurable_products_variation__catalog_inventory_data_stock_item_extension_interface__to_json(v), None => Value::Null });
+    m.insert("extension_attributes".into(), match (&p.extension_attributes) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("is_decimal_divided".into(), Value::Bool(*(&p.is_decimal_divided)));
     m.insert("is_in_stock".into(), Value::Bool(*(&p.is_in_stock)));
     m.insert("is_qty_decimal".into(), Value::Bool(*(&p.is_qty_decimal)));
@@ -251,9 +260,10 @@ fn iface_configurable_products_variation__catalog_inventory_data_stock_item_inte
     Value::Object(m)
 }
 
-fn iface_configurable_products_variation__catalog_inventory_data_stock_item_extension_interface__to_json(p: &iface_configurable_products_variation::CatalogInventoryDataStockItemExtensionInterface) -> Value {
+fn iface_configurable_products_variation__catalog_inventory_data_stock_item_extension_interface_entry__to_json(p: &iface_configurable_products_variation::CatalogInventoryDataStockItemExtensionInterfaceEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -377,7 +387,7 @@ fn iface_configurable_products_variation__configurable_product_data_option_inter
     let m = v.as_object()?;
     Some(iface_configurable_products_variation::ConfigurableProductDataOptionInterface {
         attribute_id: m.get("attribute_id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        extension_attributes: m.get("extension_attributes").filter(|v| !v.is_null()).and_then(|v| iface_configurable_products_variation__configurable_product_data_option_extension_interface__from_json(v)),
+        extension_attributes: m.get("extension_attributes").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_configurable_products_variation::ConfigurableProductDataOptionExtensionInterfaceEntry { key: k.clone(), value: val })).collect())),
         id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
         is_use_default: m.get("is_use_default").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
         label: m.get("label").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
@@ -387,25 +397,27 @@ fn iface_configurable_products_variation__configurable_product_data_option_inter
     })
 }
 
-fn iface_configurable_products_variation__configurable_product_data_option_extension_interface__from_json(v: &Value) -> Option<iface_configurable_products_variation::ConfigurableProductDataOptionExtensionInterface> {
+fn iface_configurable_products_variation__configurable_product_data_option_extension_interface_entry__from_json(v: &Value) -> Option<iface_configurable_products_variation::ConfigurableProductDataOptionExtensionInterfaceEntry> {
     let m = v.as_object()?;
-    Some(iface_configurable_products_variation::ConfigurableProductDataOptionExtensionInterface {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_configurable_products_variation::ConfigurableProductDataOptionExtensionInterfaceEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
 fn iface_configurable_products_variation__configurable_product_data_option_value_interface__from_json(v: &Value) -> Option<iface_configurable_products_variation::ConfigurableProductDataOptionValueInterface> {
     let m = v.as_object()?;
     Some(iface_configurable_products_variation::ConfigurableProductDataOptionValueInterface {
-        extension_attributes: m.get("extension_attributes").filter(|v| !v.is_null()).and_then(|v| iface_configurable_products_variation__configurable_product_data_option_value_extension_interface__from_json(v)),
+        extension_attributes: m.get("extension_attributes").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_configurable_products_variation::ConfigurableProductDataOptionValueExtensionInterfaceEntry { key: k.clone(), value: val })).collect())),
         value_index: m.get("value_index").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
     })
 }
 
-fn iface_configurable_products_variation__configurable_product_data_option_value_extension_interface__from_json(v: &Value) -> Option<iface_configurable_products_variation::ConfigurableProductDataOptionValueExtensionInterface> {
+fn iface_configurable_products_variation__configurable_product_data_option_value_extension_interface_entry__from_json(v: &Value) -> Option<iface_configurable_products_variation::ConfigurableProductDataOptionValueExtensionInterfaceEntry> {
     let m = v.as_object()?;
-    Some(iface_configurable_products_variation::ConfigurableProductDataOptionValueExtensionInterface {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_configurable_products_variation::ConfigurableProductDataOptionValueExtensionInterfaceEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -458,7 +470,7 @@ fn iface_configurable_products_variation__catalog_data_product_extension_interfa
 fn iface_configurable_products_variation__bundle_data_option_interface__from_json(v: &Value) -> Option<iface_configurable_products_variation::BundleDataOptionInterface> {
     let m = v.as_object()?;
     Some(iface_configurable_products_variation::BundleDataOptionInterface {
-        extension_attributes: m.get("extension_attributes").filter(|v| !v.is_null()).and_then(|v| iface_configurable_products_variation__bundle_data_option_extension_interface__from_json(v)),
+        extension_attributes: m.get("extension_attributes").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_configurable_products_variation::BundleDataOptionExtensionInterfaceEntry { key: k.clone(), value: val })).collect())),
         option_id: m.get("option_id").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
         position: m.get("position").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
         product_links: m.get("product_links").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_configurable_products_variation__bundle_data_link_interface__from_json(x)).collect())),
@@ -469,10 +481,11 @@ fn iface_configurable_products_variation__bundle_data_option_interface__from_jso
     })
 }
 
-fn iface_configurable_products_variation__bundle_data_option_extension_interface__from_json(v: &Value) -> Option<iface_configurable_products_variation::BundleDataOptionExtensionInterface> {
+fn iface_configurable_products_variation__bundle_data_option_extension_interface_entry__from_json(v: &Value) -> Option<iface_configurable_products_variation::BundleDataOptionExtensionInterfaceEntry> {
     let m = v.as_object()?;
-    Some(iface_configurable_products_variation::BundleDataOptionExtensionInterface {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_configurable_products_variation::BundleDataOptionExtensionInterfaceEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -480,7 +493,7 @@ fn iface_configurable_products_variation__bundle_data_link_interface__from_json(
     let m = v.as_object()?;
     Some(iface_configurable_products_variation::BundleDataLinkInterface {
         can_change_quantity: m.get("can_change_quantity").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
-        extension_attributes: m.get("extension_attributes").filter(|v| !v.is_null()).and_then(|v| iface_configurable_products_variation__bundle_data_link_extension_interface__from_json(v)),
+        extension_attributes: m.get("extension_attributes").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_configurable_products_variation::BundleDataLinkExtensionInterfaceEntry { key: k.clone(), value: val })).collect())),
         id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         is_default: m.get("is_default").and_then(|v| (v).as_bool()).unwrap_or_default(),
         option_id: m.get("option_id").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
@@ -492,10 +505,11 @@ fn iface_configurable_products_variation__bundle_data_link_interface__from_json(
     })
 }
 
-fn iface_configurable_products_variation__bundle_data_link_extension_interface__from_json(v: &Value) -> Option<iface_configurable_products_variation::BundleDataLinkExtensionInterface> {
+fn iface_configurable_products_variation__bundle_data_link_extension_interface_entry__from_json(v: &Value) -> Option<iface_configurable_products_variation::BundleDataLinkExtensionInterfaceEntry> {
     let m = v.as_object()?;
-    Some(iface_configurable_products_variation::BundleDataLinkExtensionInterface {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_configurable_products_variation::BundleDataLinkExtensionInterfaceEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -503,22 +517,23 @@ fn iface_configurable_products_variation__catalog_data_category_link_interface__
     let m = v.as_object()?;
     Some(iface_configurable_products_variation::CatalogDataCategoryLinkInterface {
         category_id: m.get("category_id").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-        extension_attributes: m.get("extension_attributes").filter(|v| !v.is_null()).and_then(|v| iface_configurable_products_variation__catalog_data_category_link_extension_interface__from_json(v)),
+        extension_attributes: m.get("extension_attributes").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_configurable_products_variation::CatalogDataCategoryLinkExtensionInterfaceEntry { key: k.clone(), value: val })).collect())),
         position: m.get("position").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
     })
 }
 
-fn iface_configurable_products_variation__catalog_data_category_link_extension_interface__from_json(v: &Value) -> Option<iface_configurable_products_variation::CatalogDataCategoryLinkExtensionInterface> {
+fn iface_configurable_products_variation__catalog_data_category_link_extension_interface_entry__from_json(v: &Value) -> Option<iface_configurable_products_variation::CatalogDataCategoryLinkExtensionInterfaceEntry> {
     let m = v.as_object()?;
-    Some(iface_configurable_products_variation::CatalogDataCategoryLinkExtensionInterface {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_configurable_products_variation::CatalogDataCategoryLinkExtensionInterfaceEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
 fn iface_configurable_products_variation__downloadable_data_link_interface__from_json(v: &Value) -> Option<iface_configurable_products_variation::DownloadableDataLinkInterface> {
     let m = v.as_object()?;
     Some(iface_configurable_products_variation::DownloadableDataLinkInterface {
-        extension_attributes: m.get("extension_attributes").filter(|v| !v.is_null()).and_then(|v| iface_configurable_products_variation__downloadable_data_link_extension_interface__from_json(v)),
+        extension_attributes: m.get("extension_attributes").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_configurable_products_variation::DownloadableDataLinkExtensionInterfaceEntry { key: k.clone(), value: val })).collect())),
         id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
         is_shareable: m.get("is_shareable").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
         link_file: m.get("link_file").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
@@ -536,33 +551,35 @@ fn iface_configurable_products_variation__downloadable_data_link_interface__from
     })
 }
 
-fn iface_configurable_products_variation__downloadable_data_link_extension_interface__from_json(v: &Value) -> Option<iface_configurable_products_variation::DownloadableDataLinkExtensionInterface> {
+fn iface_configurable_products_variation__downloadable_data_link_extension_interface_entry__from_json(v: &Value) -> Option<iface_configurable_products_variation::DownloadableDataLinkExtensionInterfaceEntry> {
     let m = v.as_object()?;
-    Some(iface_configurable_products_variation::DownloadableDataLinkExtensionInterface {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_configurable_products_variation::DownloadableDataLinkExtensionInterfaceEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
 fn iface_configurable_products_variation__downloadable_data_file_content_interface__from_json(v: &Value) -> Option<iface_configurable_products_variation::DownloadableDataFileContentInterface> {
     let m = v.as_object()?;
     Some(iface_configurable_products_variation::DownloadableDataFileContentInterface {
-        extension_attributes: m.get("extension_attributes").filter(|v| !v.is_null()).and_then(|v| iface_configurable_products_variation__downloadable_data_file_content_extension_interface__from_json(v)),
+        extension_attributes: m.get("extension_attributes").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_configurable_products_variation::DownloadableDataFileContentExtensionInterfaceEntry { key: k.clone(), value: val })).collect())),
         file_data: m.get("file_data").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         name: m.get("name").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
-fn iface_configurable_products_variation__downloadable_data_file_content_extension_interface__from_json(v: &Value) -> Option<iface_configurable_products_variation::DownloadableDataFileContentExtensionInterface> {
+fn iface_configurable_products_variation__downloadable_data_file_content_extension_interface_entry__from_json(v: &Value) -> Option<iface_configurable_products_variation::DownloadableDataFileContentExtensionInterfaceEntry> {
     let m = v.as_object()?;
-    Some(iface_configurable_products_variation::DownloadableDataFileContentExtensionInterface {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_configurable_products_variation::DownloadableDataFileContentExtensionInterfaceEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
 fn iface_configurable_products_variation__downloadable_data_sample_interface__from_json(v: &Value) -> Option<iface_configurable_products_variation::DownloadableDataSampleInterface> {
     let m = v.as_object()?;
     Some(iface_configurable_products_variation::DownloadableDataSampleInterface {
-        extension_attributes: m.get("extension_attributes").filter(|v| !v.is_null()).and_then(|v| iface_configurable_products_variation__downloadable_data_sample_extension_interface__from_json(v)),
+        extension_attributes: m.get("extension_attributes").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_configurable_products_variation::DownloadableDataSampleExtensionInterfaceEntry { key: k.clone(), value: val })).collect())),
         id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
         sample_file: m.get("sample_file").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         sample_file_content: m.get("sample_file_content").filter(|v| !v.is_null()).and_then(|v| iface_configurable_products_variation__downloadable_data_file_content_interface__from_json(v)),
@@ -573,10 +590,11 @@ fn iface_configurable_products_variation__downloadable_data_sample_interface__fr
     })
 }
 
-fn iface_configurable_products_variation__downloadable_data_sample_extension_interface__from_json(v: &Value) -> Option<iface_configurable_products_variation::DownloadableDataSampleExtensionInterface> {
+fn iface_configurable_products_variation__downloadable_data_sample_extension_interface_entry__from_json(v: &Value) -> Option<iface_configurable_products_variation::DownloadableDataSampleExtensionInterfaceEntry> {
     let m = v.as_object()?;
-    Some(iface_configurable_products_variation::DownloadableDataSampleExtensionInterface {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_configurable_products_variation::DownloadableDataSampleExtensionInterfaceEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -584,17 +602,18 @@ fn iface_configurable_products_variation__gift_card_data_giftcard_amount_interfa
     let m = v.as_object()?;
     Some(iface_configurable_products_variation::GiftCardDataGiftcardAmountInterface {
         attribute_id: m.get("attribute_id").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
-        extension_attributes: m.get("extension_attributes").filter(|v| !v.is_null()).and_then(|v| iface_configurable_products_variation__gift_card_data_giftcard_amount_extension_interface__from_json(v)),
+        extension_attributes: m.get("extension_attributes").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_configurable_products_variation::GiftCardDataGiftcardAmountExtensionInterfaceEntry { key: k.clone(), value: val })).collect())),
         value: m.get("value").and_then(|v| (v).as_f64()).unwrap_or_default(),
         website_id: m.get("website_id").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
         website_value: m.get("website_value").and_then(|v| (v).as_f64()).unwrap_or_default(),
     })
 }
 
-fn iface_configurable_products_variation__gift_card_data_giftcard_amount_extension_interface__from_json(v: &Value) -> Option<iface_configurable_products_variation::GiftCardDataGiftcardAmountExtensionInterface> {
+fn iface_configurable_products_variation__gift_card_data_giftcard_amount_extension_interface_entry__from_json(v: &Value) -> Option<iface_configurable_products_variation::GiftCardDataGiftcardAmountExtensionInterfaceEntry> {
     let m = v.as_object()?;
-    Some(iface_configurable_products_variation::GiftCardDataGiftcardAmountExtensionInterface {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_configurable_products_variation::GiftCardDataGiftcardAmountExtensionInterfaceEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -603,7 +622,7 @@ fn iface_configurable_products_variation__catalog_inventory_data_stock_item_inte
     Some(iface_configurable_products_variation::CatalogInventoryDataStockItemInterface {
         backorders: m.get("backorders").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
         enable_qty_increments: m.get("enable_qty_increments").and_then(|v| (v).as_bool()).unwrap_or_default(),
-        extension_attributes: m.get("extension_attributes").filter(|v| !v.is_null()).and_then(|v| iface_configurable_products_variation__catalog_inventory_data_stock_item_extension_interface__from_json(v)),
+        extension_attributes: m.get("extension_attributes").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_configurable_products_variation::CatalogInventoryDataStockItemExtensionInterfaceEntry { key: k.clone(), value: val })).collect())),
         is_decimal_divided: m.get("is_decimal_divided").and_then(|v| (v).as_bool()).unwrap_or_default(),
         is_in_stock: m.get("is_in_stock").and_then(|v| (v).as_bool()).unwrap_or_default(),
         is_qty_decimal: m.get("is_qty_decimal").and_then(|v| (v).as_bool()).unwrap_or_default(),
@@ -631,10 +650,11 @@ fn iface_configurable_products_variation__catalog_inventory_data_stock_item_inte
     })
 }
 
-fn iface_configurable_products_variation__catalog_inventory_data_stock_item_extension_interface__from_json(v: &Value) -> Option<iface_configurable_products_variation::CatalogInventoryDataStockItemExtensionInterface> {
+fn iface_configurable_products_variation__catalog_inventory_data_stock_item_extension_interface_entry__from_json(v: &Value) -> Option<iface_configurable_products_variation::CatalogInventoryDataStockItemExtensionInterfaceEntry> {
     let m = v.as_object()?;
-    Some(iface_configurable_products_variation::CatalogInventoryDataStockItemExtensionInterface {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_configurable_products_variation::CatalogInventoryDataStockItemExtensionInterfaceEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 

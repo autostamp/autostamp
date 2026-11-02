@@ -105,7 +105,7 @@ fn iface_carts_mine__quote_data_currency_interface__to_json(p: &iface_carts_mine
     m.insert("base_currency_code".into(), match (&p.base_currency_code) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("base_to_global_rate".into(), match (&p.base_to_global_rate) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
     m.insert("base_to_quote_rate".into(), match (&p.base_to_quote_rate) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
-    m.insert("extension_attributes".into(), match (&p.extension_attributes) { Some(v) => iface_carts_mine__quote_data_currency_extension_interface__to_json(v), None => Value::Null });
+    m.insert("extension_attributes".into(), match (&p.extension_attributes) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("global_currency_code".into(), match (&p.global_currency_code) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("quote_currency_code".into(), match (&p.quote_currency_code) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("store_currency_code".into(), match (&p.store_currency_code) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -114,9 +114,10 @@ fn iface_carts_mine__quote_data_currency_interface__to_json(p: &iface_carts_mine
     Value::Object(m)
 }
 
-fn iface_carts_mine__quote_data_currency_extension_interface__to_json(p: &iface_carts_mine::QuoteDataCurrencyExtensionInterface) -> Value {
+fn iface_carts_mine__quote_data_currency_extension_interface_entry__to_json(p: &iface_carts_mine::QuoteDataCurrencyExtensionInterfaceEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -157,7 +158,7 @@ fn iface_carts_mine__customer_data_address_interface__to_json(p: &iface_carts_mi
     m.insert("customer_id".into(), match (&p.customer_id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("default_billing".into(), match (&p.default_billing) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     m.insert("default_shipping".into(), match (&p.default_shipping) { Some(v) => Value::Bool(*(v)), None => Value::Null });
-    m.insert("extension_attributes".into(), match (&p.extension_attributes) { Some(v) => iface_carts_mine__customer_data_address_extension_interface__to_json(v), None => Value::Null });
+    m.insert("extension_attributes".into(), match (&p.extension_attributes) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("fax".into(), match (&p.fax) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("firstname".into(), match (&p.firstname) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("id".into(), match (&p.id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
@@ -174,24 +175,26 @@ fn iface_carts_mine__customer_data_address_interface__to_json(p: &iface_carts_mi
     Value::Object(m)
 }
 
-fn iface_carts_mine__customer_data_address_extension_interface__to_json(p: &iface_carts_mine::CustomerDataAddressExtensionInterface) -> Value {
+fn iface_carts_mine__customer_data_address_extension_interface_entry__to_json(p: &iface_carts_mine::CustomerDataAddressExtensionInterfaceEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
 fn iface_carts_mine__customer_data_region_interface__to_json(p: &iface_carts_mine::CustomerDataRegionInterface) -> Value {
     let mut m = Map::new();
-    m.insert("extension_attributes".into(), match (&p.extension_attributes) { Some(v) => iface_carts_mine__customer_data_region_extension_interface__to_json(v), None => Value::Null });
+    m.insert("extension_attributes".into(), match (&p.extension_attributes) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("region".into(), Value::String((&p.region).clone()));
     m.insert("region_code".into(), Value::String((&p.region_code).clone()));
     m.insert("region_id".into(), Value::Number(serde_json::Number::from(*(&p.region_id))));
     Value::Object(m)
 }
 
-fn iface_carts_mine__customer_data_region_extension_interface__to_json(p: &iface_carts_mine::CustomerDataRegionExtensionInterface) -> Value {
+fn iface_carts_mine__customer_data_region_extension_interface_entry__to_json(p: &iface_carts_mine::CustomerDataRegionExtensionInterfaceEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -208,16 +211,17 @@ fn iface_carts_mine__company_data_company_customer_interface__to_json(p: &iface_
     let mut m = Map::new();
     m.insert("company_id".into(), match (&p.company_id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("customer_id".into(), match (&p.customer_id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    m.insert("extension_attributes".into(), match (&p.extension_attributes) { Some(v) => iface_carts_mine__company_data_company_customer_extension_interface__to_json(v), None => Value::Null });
+    m.insert("extension_attributes".into(), match (&p.extension_attributes) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("job_title".into(), match (&p.job_title) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("status".into(), match (&p.status) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("telephone".into(), match (&p.telephone) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_carts_mine__company_data_company_customer_extension_interface__to_json(p: &iface_carts_mine::CompanyDataCompanyCustomerExtensionInterface) -> Value {
+fn iface_carts_mine__company_data_company_customer_extension_interface_entry__to_json(p: &iface_carts_mine::CompanyDataCompanyCustomerExtensionInterfaceEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -239,7 +243,7 @@ fn iface_carts_mine__negotiable_quote_data_negotiable_quote_interface__to_json(p
     m.insert("deleted_sku".into(), Value::String((&p.deleted_sku).clone()));
     m.insert("email_notification_status".into(), Value::Number(serde_json::Number::from(*(&p.email_notification_status))));
     m.insert("expiration_period".into(), Value::String((&p.expiration_period).clone()));
-    m.insert("extension_attributes".into(), match (&p.extension_attributes) { Some(v) => iface_carts_mine__negotiable_quote_data_negotiable_quote_extension_interface__to_json(v), None => Value::Null });
+    m.insert("extension_attributes".into(), match (&p.extension_attributes) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("has_unconfirmed_changes".into(), Value::Bool(*(&p.has_unconfirmed_changes)));
     m.insert("is_address_draft".into(), Value::Bool(*(&p.is_address_draft)));
     m.insert("is_customer_price_changed".into(), Value::Bool(*(&p.is_customer_price_changed)));
@@ -257,23 +261,25 @@ fn iface_carts_mine__negotiable_quote_data_negotiable_quote_interface__to_json(p
     Value::Object(m)
 }
 
-fn iface_carts_mine__negotiable_quote_data_negotiable_quote_extension_interface__to_json(p: &iface_carts_mine::NegotiableQuoteDataNegotiableQuoteExtensionInterface) -> Value {
+fn iface_carts_mine__negotiable_quote_data_negotiable_quote_extension_interface_entry__to_json(p: &iface_carts_mine::NegotiableQuoteDataNegotiableQuoteExtensionInterfaceEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
 fn iface_carts_mine__quote_data_shipping_assignment_interface__to_json(p: &iface_carts_mine::QuoteDataShippingAssignmentInterface) -> Value {
     let mut m = Map::new();
-    m.insert("extension_attributes".into(), match (&p.extension_attributes) { Some(v) => iface_carts_mine__quote_data_shipping_assignment_extension_interface__to_json(v), None => Value::Null });
+    m.insert("extension_attributes".into(), match (&p.extension_attributes) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("items".into(), Value::Array((&p.items).iter().map(|v| iface_carts_mine__quote_data_cart_item_interface__to_json(v)).collect()));
     m.insert("shipping".into(), iface_carts_mine__quote_data_shipping_interface__to_json(&p.shipping));
     Value::Object(m)
 }
 
-fn iface_carts_mine__quote_data_shipping_assignment_extension_interface__to_json(p: &iface_carts_mine::QuoteDataShippingAssignmentExtensionInterface) -> Value {
+fn iface_carts_mine__quote_data_shipping_assignment_extension_interface_entry__to_json(p: &iface_carts_mine::QuoteDataShippingAssignmentExtensionInterfaceEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -299,7 +305,7 @@ fn iface_carts_mine__quote_data_cart_item_extension_interface__to_json(p: &iface
 
 fn iface_carts_mine__negotiable_quote_data_negotiable_quote_item_interface__to_json(p: &iface_carts_mine::NegotiableQuoteDataNegotiableQuoteItemInterface) -> Value {
     let mut m = Map::new();
-    m.insert("extension_attributes".into(), match (&p.extension_attributes) { Some(v) => iface_carts_mine__negotiable_quote_data_negotiable_quote_item_extension_interface__to_json(v), None => Value::Null });
+    m.insert("extension_attributes".into(), match (&p.extension_attributes) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("item_id".into(), Value::Number(serde_json::Number::from(*(&p.item_id))));
     m.insert("original_discount_amount".into(), serde_json::Number::from_f64(*(&p.original_discount_amount)).map(Value::Number).unwrap_or(Value::Null));
     m.insert("original_price".into(), serde_json::Number::from_f64(*(&p.original_price)).map(Value::Number).unwrap_or(Value::Null));
@@ -307,9 +313,10 @@ fn iface_carts_mine__negotiable_quote_data_negotiable_quote_item_interface__to_j
     Value::Object(m)
 }
 
-fn iface_carts_mine__negotiable_quote_data_negotiable_quote_item_extension_interface__to_json(p: &iface_carts_mine::NegotiableQuoteDataNegotiableQuoteItemExtensionInterface) -> Value {
+fn iface_carts_mine__negotiable_quote_data_negotiable_quote_item_extension_interface_entry__to_json(p: &iface_carts_mine::NegotiableQuoteDataNegotiableQuoteItemExtensionInterfaceEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -331,30 +338,32 @@ fn iface_carts_mine__quote_data_product_option_extension_interface__to_json(p: &
 
 fn iface_carts_mine__bundle_data_bundle_option_interface__to_json(p: &iface_carts_mine::BundleDataBundleOptionInterface) -> Value {
     let mut m = Map::new();
-    m.insert("extension_attributes".into(), match (&p.extension_attributes) { Some(v) => iface_carts_mine__bundle_data_bundle_option_extension_interface__to_json(v), None => Value::Null });
+    m.insert("extension_attributes".into(), match (&p.extension_attributes) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("option_id".into(), Value::Number(serde_json::Number::from(*(&p.option_id))));
     m.insert("option_qty".into(), Value::Number(serde_json::Number::from(*(&p.option_qty))));
     m.insert("option_selections".into(), Value::Array((&p.option_selections).iter().map(|v| Value::Number(serde_json::Number::from(*(v)))).collect()));
     Value::Object(m)
 }
 
-fn iface_carts_mine__bundle_data_bundle_option_extension_interface__to_json(p: &iface_carts_mine::BundleDataBundleOptionExtensionInterface) -> Value {
+fn iface_carts_mine__bundle_data_bundle_option_extension_interface_entry__to_json(p: &iface_carts_mine::BundleDataBundleOptionExtensionInterfaceEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
 fn iface_carts_mine__configurable_product_data_configurable_item_option_value_interface__to_json(p: &iface_carts_mine::ConfigurableProductDataConfigurableItemOptionValueInterface) -> Value {
     let mut m = Map::new();
-    m.insert("extension_attributes".into(), match (&p.extension_attributes) { Some(v) => iface_carts_mine__configurable_product_data_configurable_item_option_value_extension_interface__to_json(v), None => Value::Null });
+    m.insert("extension_attributes".into(), match (&p.extension_attributes) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("option_id".into(), Value::String((&p.option_id).clone()));
     m.insert("option_value".into(), match (&p.option_value) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_carts_mine__configurable_product_data_configurable_item_option_value_extension_interface__to_json(p: &iface_carts_mine::ConfigurableProductDataConfigurableItemOptionValueExtensionInterface) -> Value {
+fn iface_carts_mine__configurable_product_data_configurable_item_option_value_extension_interface_entry__to_json(p: &iface_carts_mine::ConfigurableProductDataConfigurableItemOptionValueExtensionInterfaceEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -389,7 +398,7 @@ fn iface_carts_mine__downloadable_data_downloadable_option_interface__to_json(p:
 fn iface_carts_mine__gift_card_data_gift_card_option_interface__to_json(p: &iface_carts_mine::GiftCardDataGiftCardOptionInterface) -> Value {
     let mut m = Map::new();
     m.insert("custom_giftcard_amount".into(), match (&p.custom_giftcard_amount) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
-    m.insert("extension_attributes".into(), match (&p.extension_attributes) { Some(v) => iface_carts_mine__gift_card_data_gift_card_option_extension_interface__to_json(v), None => Value::Null });
+    m.insert("extension_attributes".into(), match (&p.extension_attributes) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("giftcard_amount".into(), Value::String((&p.giftcard_amount).clone()));
     m.insert("giftcard_message".into(), match (&p.giftcard_message) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("giftcard_recipient_email".into(), Value::String((&p.giftcard_recipient_email).clone()));
@@ -399,23 +408,25 @@ fn iface_carts_mine__gift_card_data_gift_card_option_interface__to_json(p: &ifac
     Value::Object(m)
 }
 
-fn iface_carts_mine__gift_card_data_gift_card_option_extension_interface__to_json(p: &iface_carts_mine::GiftCardDataGiftCardOptionExtensionInterface) -> Value {
+fn iface_carts_mine__gift_card_data_gift_card_option_extension_interface_entry__to_json(p: &iface_carts_mine::GiftCardDataGiftCardOptionExtensionInterfaceEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
 fn iface_carts_mine__quote_data_shipping_interface__to_json(p: &iface_carts_mine::QuoteDataShippingInterface) -> Value {
     let mut m = Map::new();
     m.insert("address".into(), iface_carts_mine__quote_data_address_interface__to_json(&p.address));
-    m.insert("extension_attributes".into(), match (&p.extension_attributes) { Some(v) => iface_carts_mine__quote_data_shipping_extension_interface__to_json(v), None => Value::Null });
+    m.insert("extension_attributes".into(), match (&p.extension_attributes) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("method".into(), Value::String((&p.method).clone()));
     Value::Object(m)
 }
 
-fn iface_carts_mine__quote_data_shipping_extension_interface__to_json(p: &iface_carts_mine::QuoteDataShippingExtensionInterface) -> Value {
+fn iface_carts_mine__quote_data_shipping_extension_interface_entry__to_json(p: &iface_carts_mine::QuoteDataShippingExtensionInterfaceEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -503,7 +514,7 @@ fn iface_carts_mine__quote_data_currency_interface__from_json(v: &Value) -> Opti
         base_currency_code: m.get("base_currency_code").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         base_to_global_rate: m.get("base_to_global_rate").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
         base_to_quote_rate: m.get("base_to_quote_rate").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
-        extension_attributes: m.get("extension_attributes").filter(|v| !v.is_null()).and_then(|v| iface_carts_mine__quote_data_currency_extension_interface__from_json(v)),
+        extension_attributes: m.get("extension_attributes").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_carts_mine::QuoteDataCurrencyExtensionInterfaceEntry { key: k.clone(), value: val })).collect())),
         global_currency_code: m.get("global_currency_code").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         quote_currency_code: m.get("quote_currency_code").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         store_currency_code: m.get("store_currency_code").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
@@ -512,10 +523,11 @@ fn iface_carts_mine__quote_data_currency_interface__from_json(v: &Value) -> Opti
     })
 }
 
-fn iface_carts_mine__quote_data_currency_extension_interface__from_json(v: &Value) -> Option<iface_carts_mine::QuoteDataCurrencyExtensionInterface> {
+fn iface_carts_mine__quote_data_currency_extension_interface_entry__from_json(v: &Value) -> Option<iface_carts_mine::QuoteDataCurrencyExtensionInterfaceEntry> {
     let m = v.as_object()?;
-    Some(iface_carts_mine::QuoteDataCurrencyExtensionInterface {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_carts_mine::QuoteDataCurrencyExtensionInterfaceEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -558,7 +570,7 @@ fn iface_carts_mine__customer_data_address_interface__from_json(v: &Value) -> Op
         customer_id: m.get("customer_id").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
         default_billing: m.get("default_billing").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
         default_shipping: m.get("default_shipping").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
-        extension_attributes: m.get("extension_attributes").filter(|v| !v.is_null()).and_then(|v| iface_carts_mine__customer_data_address_extension_interface__from_json(v)),
+        extension_attributes: m.get("extension_attributes").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_carts_mine::CustomerDataAddressExtensionInterfaceEntry { key: k.clone(), value: val })).collect())),
         fax: m.get("fax").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         firstname: m.get("firstname").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
@@ -575,27 +587,29 @@ fn iface_carts_mine__customer_data_address_interface__from_json(v: &Value) -> Op
     })
 }
 
-fn iface_carts_mine__customer_data_address_extension_interface__from_json(v: &Value) -> Option<iface_carts_mine::CustomerDataAddressExtensionInterface> {
+fn iface_carts_mine__customer_data_address_extension_interface_entry__from_json(v: &Value) -> Option<iface_carts_mine::CustomerDataAddressExtensionInterfaceEntry> {
     let m = v.as_object()?;
-    Some(iface_carts_mine::CustomerDataAddressExtensionInterface {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_carts_mine::CustomerDataAddressExtensionInterfaceEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
 fn iface_carts_mine__customer_data_region_interface__from_json(v: &Value) -> Option<iface_carts_mine::CustomerDataRegionInterface> {
     let m = v.as_object()?;
     Some(iface_carts_mine::CustomerDataRegionInterface {
-        extension_attributes: m.get("extension_attributes").filter(|v| !v.is_null()).and_then(|v| iface_carts_mine__customer_data_region_extension_interface__from_json(v)),
+        extension_attributes: m.get("extension_attributes").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_carts_mine::CustomerDataRegionExtensionInterfaceEntry { key: k.clone(), value: val })).collect())),
         region: m.get("region").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         region_code: m.get("region_code").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         region_id: m.get("region_id").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
     })
 }
 
-fn iface_carts_mine__customer_data_region_extension_interface__from_json(v: &Value) -> Option<iface_carts_mine::CustomerDataRegionExtensionInterface> {
+fn iface_carts_mine__customer_data_region_extension_interface_entry__from_json(v: &Value) -> Option<iface_carts_mine::CustomerDataRegionExtensionInterfaceEntry> {
     let m = v.as_object()?;
-    Some(iface_carts_mine::CustomerDataRegionExtensionInterface {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_carts_mine::CustomerDataRegionExtensionInterfaceEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -614,17 +628,18 @@ fn iface_carts_mine__company_data_company_customer_interface__from_json(v: &Valu
     Some(iface_carts_mine::CompanyDataCompanyCustomerInterface {
         company_id: m.get("company_id").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
         customer_id: m.get("customer_id").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
-        extension_attributes: m.get("extension_attributes").filter(|v| !v.is_null()).and_then(|v| iface_carts_mine__company_data_company_customer_extension_interface__from_json(v)),
+        extension_attributes: m.get("extension_attributes").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_carts_mine::CompanyDataCompanyCustomerExtensionInterfaceEntry { key: k.clone(), value: val })).collect())),
         job_title: m.get("job_title").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         status: m.get("status").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
         telephone: m.get("telephone").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
     })
 }
 
-fn iface_carts_mine__company_data_company_customer_extension_interface__from_json(v: &Value) -> Option<iface_carts_mine::CompanyDataCompanyCustomerExtensionInterface> {
+fn iface_carts_mine__company_data_company_customer_extension_interface_entry__from_json(v: &Value) -> Option<iface_carts_mine::CompanyDataCompanyCustomerExtensionInterfaceEntry> {
     let m = v.as_object()?;
-    Some(iface_carts_mine::CompanyDataCompanyCustomerExtensionInterface {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_carts_mine::CompanyDataCompanyCustomerExtensionInterfaceEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -648,7 +663,7 @@ fn iface_carts_mine__negotiable_quote_data_negotiable_quote_interface__from_json
         deleted_sku: m.get("deleted_sku").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         email_notification_status: m.get("email_notification_status").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
         expiration_period: m.get("expiration_period").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-        extension_attributes: m.get("extension_attributes").filter(|v| !v.is_null()).and_then(|v| iface_carts_mine__negotiable_quote_data_negotiable_quote_extension_interface__from_json(v)),
+        extension_attributes: m.get("extension_attributes").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_carts_mine::NegotiableQuoteDataNegotiableQuoteExtensionInterfaceEntry { key: k.clone(), value: val })).collect())),
         has_unconfirmed_changes: m.get("has_unconfirmed_changes").and_then(|v| (v).as_bool()).unwrap_or_default(),
         is_address_draft: m.get("is_address_draft").and_then(|v| (v).as_bool()).unwrap_or_default(),
         is_customer_price_changed: m.get("is_customer_price_changed").and_then(|v| (v).as_bool()).unwrap_or_default(),
@@ -666,26 +681,28 @@ fn iface_carts_mine__negotiable_quote_data_negotiable_quote_interface__from_json
     })
 }
 
-fn iface_carts_mine__negotiable_quote_data_negotiable_quote_extension_interface__from_json(v: &Value) -> Option<iface_carts_mine::NegotiableQuoteDataNegotiableQuoteExtensionInterface> {
+fn iface_carts_mine__negotiable_quote_data_negotiable_quote_extension_interface_entry__from_json(v: &Value) -> Option<iface_carts_mine::NegotiableQuoteDataNegotiableQuoteExtensionInterfaceEntry> {
     let m = v.as_object()?;
-    Some(iface_carts_mine::NegotiableQuoteDataNegotiableQuoteExtensionInterface {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_carts_mine::NegotiableQuoteDataNegotiableQuoteExtensionInterfaceEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
 fn iface_carts_mine__quote_data_shipping_assignment_interface__from_json(v: &Value) -> Option<iface_carts_mine::QuoteDataShippingAssignmentInterface> {
     let m = v.as_object()?;
     Some(iface_carts_mine::QuoteDataShippingAssignmentInterface {
-        extension_attributes: m.get("extension_attributes").filter(|v| !v.is_null()).and_then(|v| iface_carts_mine__quote_data_shipping_assignment_extension_interface__from_json(v)),
+        extension_attributes: m.get("extension_attributes").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_carts_mine::QuoteDataShippingAssignmentExtensionInterfaceEntry { key: k.clone(), value: val })).collect())),
         items: m.get("items").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_carts_mine__quote_data_cart_item_interface__from_json(x)).collect())).unwrap_or_default(),
         shipping: match m.get("shipping").and_then(|v| iface_carts_mine__quote_data_shipping_interface__from_json(v)) { Some(x) => x, None => return None },
     })
 }
 
-fn iface_carts_mine__quote_data_shipping_assignment_extension_interface__from_json(v: &Value) -> Option<iface_carts_mine::QuoteDataShippingAssignmentExtensionInterface> {
+fn iface_carts_mine__quote_data_shipping_assignment_extension_interface_entry__from_json(v: &Value) -> Option<iface_carts_mine::QuoteDataShippingAssignmentExtensionInterfaceEntry> {
     let m = v.as_object()?;
-    Some(iface_carts_mine::QuoteDataShippingAssignmentExtensionInterface {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_carts_mine::QuoteDataShippingAssignmentExtensionInterfaceEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -714,7 +731,7 @@ fn iface_carts_mine__quote_data_cart_item_extension_interface__from_json(v: &Val
 fn iface_carts_mine__negotiable_quote_data_negotiable_quote_item_interface__from_json(v: &Value) -> Option<iface_carts_mine::NegotiableQuoteDataNegotiableQuoteItemInterface> {
     let m = v.as_object()?;
     Some(iface_carts_mine::NegotiableQuoteDataNegotiableQuoteItemInterface {
-        extension_attributes: m.get("extension_attributes").filter(|v| !v.is_null()).and_then(|v| iface_carts_mine__negotiable_quote_data_negotiable_quote_item_extension_interface__from_json(v)),
+        extension_attributes: m.get("extension_attributes").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_carts_mine::NegotiableQuoteDataNegotiableQuoteItemExtensionInterfaceEntry { key: k.clone(), value: val })).collect())),
         item_id: m.get("item_id").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
         original_discount_amount: m.get("original_discount_amount").and_then(|v| (v).as_f64()).unwrap_or_default(),
         original_price: m.get("original_price").and_then(|v| (v).as_f64()).unwrap_or_default(),
@@ -722,10 +739,11 @@ fn iface_carts_mine__negotiable_quote_data_negotiable_quote_item_interface__from
     })
 }
 
-fn iface_carts_mine__negotiable_quote_data_negotiable_quote_item_extension_interface__from_json(v: &Value) -> Option<iface_carts_mine::NegotiableQuoteDataNegotiableQuoteItemExtensionInterface> {
+fn iface_carts_mine__negotiable_quote_data_negotiable_quote_item_extension_interface_entry__from_json(v: &Value) -> Option<iface_carts_mine::NegotiableQuoteDataNegotiableQuoteItemExtensionInterfaceEntry> {
     let m = v.as_object()?;
-    Some(iface_carts_mine::NegotiableQuoteDataNegotiableQuoteItemExtensionInterface {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_carts_mine::NegotiableQuoteDataNegotiableQuoteItemExtensionInterfaceEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -750,33 +768,35 @@ fn iface_carts_mine__quote_data_product_option_extension_interface__from_json(v:
 fn iface_carts_mine__bundle_data_bundle_option_interface__from_json(v: &Value) -> Option<iface_carts_mine::BundleDataBundleOptionInterface> {
     let m = v.as_object()?;
     Some(iface_carts_mine::BundleDataBundleOptionInterface {
-        extension_attributes: m.get("extension_attributes").filter(|v| !v.is_null()).and_then(|v| iface_carts_mine__bundle_data_bundle_option_extension_interface__from_json(v)),
+        extension_attributes: m.get("extension_attributes").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_carts_mine::BundleDataBundleOptionExtensionInterfaceEntry { key: k.clone(), value: val })).collect())),
         option_id: m.get("option_id").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
         option_qty: m.get("option_qty").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
         option_selections: m.get("option_selections").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_i64().map(|n| n as i32)).collect())).unwrap_or_default(),
     })
 }
 
-fn iface_carts_mine__bundle_data_bundle_option_extension_interface__from_json(v: &Value) -> Option<iface_carts_mine::BundleDataBundleOptionExtensionInterface> {
+fn iface_carts_mine__bundle_data_bundle_option_extension_interface_entry__from_json(v: &Value) -> Option<iface_carts_mine::BundleDataBundleOptionExtensionInterfaceEntry> {
     let m = v.as_object()?;
-    Some(iface_carts_mine::BundleDataBundleOptionExtensionInterface {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_carts_mine::BundleDataBundleOptionExtensionInterfaceEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
 fn iface_carts_mine__configurable_product_data_configurable_item_option_value_interface__from_json(v: &Value) -> Option<iface_carts_mine::ConfigurableProductDataConfigurableItemOptionValueInterface> {
     let m = v.as_object()?;
     Some(iface_carts_mine::ConfigurableProductDataConfigurableItemOptionValueInterface {
-        extension_attributes: m.get("extension_attributes").filter(|v| !v.is_null()).and_then(|v| iface_carts_mine__configurable_product_data_configurable_item_option_value_extension_interface__from_json(v)),
+        extension_attributes: m.get("extension_attributes").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_carts_mine::ConfigurableProductDataConfigurableItemOptionValueExtensionInterfaceEntry { key: k.clone(), value: val })).collect())),
         option_id: m.get("option_id").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         option_value: m.get("option_value").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
     })
 }
 
-fn iface_carts_mine__configurable_product_data_configurable_item_option_value_extension_interface__from_json(v: &Value) -> Option<iface_carts_mine::ConfigurableProductDataConfigurableItemOptionValueExtensionInterface> {
+fn iface_carts_mine__configurable_product_data_configurable_item_option_value_extension_interface_entry__from_json(v: &Value) -> Option<iface_carts_mine::ConfigurableProductDataConfigurableItemOptionValueExtensionInterfaceEntry> {
     let m = v.as_object()?;
-    Some(iface_carts_mine::ConfigurableProductDataConfigurableItemOptionValueExtensionInterface {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_carts_mine::ConfigurableProductDataConfigurableItemOptionValueExtensionInterfaceEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -816,7 +836,7 @@ fn iface_carts_mine__gift_card_data_gift_card_option_interface__from_json(v: &Va
     let m = v.as_object()?;
     Some(iface_carts_mine::GiftCardDataGiftCardOptionInterface {
         custom_giftcard_amount: m.get("custom_giftcard_amount").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
-        extension_attributes: m.get("extension_attributes").filter(|v| !v.is_null()).and_then(|v| iface_carts_mine__gift_card_data_gift_card_option_extension_interface__from_json(v)),
+        extension_attributes: m.get("extension_attributes").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_carts_mine::GiftCardDataGiftCardOptionExtensionInterfaceEntry { key: k.clone(), value: val })).collect())),
         giftcard_amount: m.get("giftcard_amount").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         giftcard_message: m.get("giftcard_message").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         giftcard_recipient_email: m.get("giftcard_recipient_email").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
@@ -826,10 +846,11 @@ fn iface_carts_mine__gift_card_data_gift_card_option_interface__from_json(v: &Va
     })
 }
 
-fn iface_carts_mine__gift_card_data_gift_card_option_extension_interface__from_json(v: &Value) -> Option<iface_carts_mine::GiftCardDataGiftCardOptionExtensionInterface> {
+fn iface_carts_mine__gift_card_data_gift_card_option_extension_interface_entry__from_json(v: &Value) -> Option<iface_carts_mine::GiftCardDataGiftCardOptionExtensionInterfaceEntry> {
     let m = v.as_object()?;
-    Some(iface_carts_mine::GiftCardDataGiftCardOptionExtensionInterface {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_carts_mine::GiftCardDataGiftCardOptionExtensionInterfaceEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -837,15 +858,16 @@ fn iface_carts_mine__quote_data_shipping_interface__from_json(v: &Value) -> Opti
     let m = v.as_object()?;
     Some(iface_carts_mine::QuoteDataShippingInterface {
         address: match m.get("address").and_then(|v| iface_carts_mine__quote_data_address_interface__from_json(v)) { Some(x) => x, None => return None },
-        extension_attributes: m.get("extension_attributes").filter(|v| !v.is_null()).and_then(|v| iface_carts_mine__quote_data_shipping_extension_interface__from_json(v)),
+        extension_attributes: m.get("extension_attributes").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_carts_mine::QuoteDataShippingExtensionInterfaceEntry { key: k.clone(), value: val })).collect())),
         method: m.get("method").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
-fn iface_carts_mine__quote_data_shipping_extension_interface__from_json(v: &Value) -> Option<iface_carts_mine::QuoteDataShippingExtensionInterface> {
+fn iface_carts_mine__quote_data_shipping_extension_interface_entry__from_json(v: &Value) -> Option<iface_carts_mine::QuoteDataShippingExtensionInterfaceEntry> {
     let m = v.as_object()?;
-    Some(iface_carts_mine::QuoteDataShippingExtensionInterface {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_carts_mine::QuoteDataShippingExtensionInterfaceEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 

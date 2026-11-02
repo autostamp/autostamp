@@ -30,13 +30,7 @@ const OP_BLOCKED_NUMBERS_POST_BLOCKED_NUMBERS: OpSpec = OpSpec {
 fn iface_blocked_numbers__blocked_number__to_json(p: &iface_blocked_numbers::BlockedNumber) -> Value {
     let mut m = Map::new();
     m.insert("id".into(), serde_json::Number::from_f64(*(&p.id)).map(Value::Number).unwrap_or(Value::Null));
-    m.insert("phoneNumber".into(), iface_blocked_numbers__phone_number__to_json(&p.phone_number));
-    Value::Object(m)
-}
-
-fn iface_blocked_numbers__phone_number__to_json(p: &iface_blocked_numbers::PhoneNumber) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
+    m.insert("phoneNumber".into(), Value::String((&p.phone_number).clone()));
     Value::Object(m)
 }
 
@@ -49,7 +43,7 @@ fn iface_blocked_numbers__get_blocked_numbers_params__to_json(p: &iface_blocked_
 
 fn iface_blocked_numbers__post_blocked_numbers_params__to_json(p: &iface_blocked_numbers::PostBlockedNumbersParams) -> Value {
     let mut m = Map::new();
-    m.insert("body".into(), Value::Array((&p.body).iter().map(|v| iface_blocked_numbers__phone_number__to_json(v)).collect()));
+    m.insert("body".into(), Value::Array((&p.body).iter().map(|v| Value::String((v).clone())).collect()));
     Value::Object(m)
 }
 
@@ -57,14 +51,7 @@ fn iface_blocked_numbers__blocked_number__from_json(v: &Value) -> Option<iface_b
     let m = v.as_object()?;
     Some(iface_blocked_numbers::BlockedNumber {
         id: m.get("id").and_then(|v| (v).as_f64()).unwrap_or_default(),
-        phone_number: match m.get("phoneNumber").and_then(|v| iface_blocked_numbers__phone_number__from_json(v)) { Some(x) => x, None => return None },
-    })
-}
-
-fn iface_blocked_numbers__phone_number__from_json(v: &Value) -> Option<iface_blocked_numbers::PhoneNumber> {
-    let m = v.as_object()?;
-    Some(iface_blocked_numbers::PhoneNumber {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        phone_number: m.get("phoneNumber").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 

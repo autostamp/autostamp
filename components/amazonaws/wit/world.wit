@@ -6,7 +6,7 @@
 /// | Secret name | Applied to each request as |
 /// | --- | --- |
 /// | `hmac` | header `Authorization` |
-package autostamp:amazonaws@0.5.0;
+package autostamp:amazonaws@0.6.0;
 
 interface aws-migration-hub {
   enum associate-created-artifact-x-amz-target-enum {
@@ -107,9 +107,10 @@ interface aws-migration-hub {
     data: option<string>
   }
 
-  record associate-created-artifact-result {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record associate-created-artifact-result-entry {
+    key: string,
+    value: string
   }
 
   record associate-discovered-resource-request-progress-update-stream {
@@ -142,9 +143,10 @@ interface aws-migration-hub {
     data: option<string>
   }
 
-  record associate-discovered-resource-result {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record associate-discovered-resource-result-entry {
+    key: string,
+    value: string
   }
 
   record create-progress-update-stream-request-progress-update-stream-name {
@@ -157,9 +159,10 @@ interface aws-migration-hub {
     data: option<string>
   }
 
-  record create-progress-update-stream-result {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record create-progress-update-stream-result-entry {
+    key: string,
+    value: string
   }
 
   record delete-progress-update-stream-request-progress-update-stream-name {
@@ -172,9 +175,10 @@ interface aws-migration-hub {
     data: option<string>
   }
 
-  record delete-progress-update-stream-result {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record delete-progress-update-stream-result-entry {
+    key: string,
+    value: string
   }
 
   record describe-application-state-request-application-id {
@@ -280,9 +284,10 @@ interface aws-migration-hub {
     data: option<string>
   }
 
-  record disassociate-created-artifact-result {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record disassociate-created-artifact-result-entry {
+    key: string,
+    value: string
   }
 
   record disassociate-discovered-resource-request-progress-update-stream {
@@ -305,9 +310,10 @@ interface aws-migration-hub {
     data: option<string>
   }
 
-  record disassociate-discovered-resource-result {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record disassociate-discovered-resource-result-entry {
+    key: string,
+    value: string
   }
 
   record import-migration-task-request-progress-update-stream {
@@ -325,9 +331,10 @@ interface aws-migration-hub {
     data: option<string>
   }
 
-  record import-migration-task-result {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record import-migration-task-result-entry {
+    key: string,
+    value: string
   }
 
   record list-application-states-request-application-ids {
@@ -505,9 +512,10 @@ interface aws-migration-hub {
     data: option<string>
   }
 
-  record notify-application-state-result {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record notify-application-state-result-entry {
+    key: string,
+    value: string
   }
 
   record notify-migration-task-state-request-progress-update-stream {
@@ -556,9 +564,10 @@ interface aws-migration-hub {
     data: option<string>
   }
 
-  record notify-migration-task-state-result {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record notify-migration-task-state-result-entry {
+    key: string,
+    value: string
   }
 
   record put-resource-attributes-request-progress-update-stream {
@@ -581,9 +590,10 @@ interface aws-migration-hub {
     data: option<string>
   }
 
-  record put-resource-attributes-result {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record put-resource-attributes-result-entry {
+    key: string,
+    value: string
   }
 
   variant associate-created-artifact-error {
@@ -808,7 +818,7 @@ interface aws-migration-hub {
     created-artifact: associate-created-artifact-request-created-artifact,
     dry-run: option<associate-created-artifact-request-dry-run>
   }
-  associate-created-artifact: func(params: associate-created-artifact-params) -> result<associate-created-artifact-result, associate-created-artifact-error>;
+  associate-created-artifact: func(params: associate-created-artifact-params) -> result<list<associate-created-artifact-result-entry>, associate-created-artifact-error>;
 
   record associate-discovered-resource-params {
     x-amz-content-sha256: option<string>,
@@ -824,7 +834,7 @@ interface aws-migration-hub {
     discovered-resource: associate-discovered-resource-request-discovered-resource,
     dry-run: option<associate-discovered-resource-request-dry-run>
   }
-  associate-discovered-resource: func(params: associate-discovered-resource-params) -> result<associate-discovered-resource-result, associate-discovered-resource-error>;
+  associate-discovered-resource: func(params: associate-discovered-resource-params) -> result<list<associate-discovered-resource-result-entry>, associate-discovered-resource-error>;
 
   record create-progress-update-stream-params {
     x-amz-content-sha256: option<string>,
@@ -838,7 +848,7 @@ interface aws-migration-hub {
     progress-update-stream-name: create-progress-update-stream-request-progress-update-stream-name,
     dry-run: option<create-progress-update-stream-request-dry-run>
   }
-  create-progress-update-stream: func(params: create-progress-update-stream-params) -> result<create-progress-update-stream-result, create-progress-update-stream-error>;
+  create-progress-update-stream: func(params: create-progress-update-stream-params) -> result<list<create-progress-update-stream-result-entry>, create-progress-update-stream-error>;
 
   record delete-progress-update-stream-params {
     x-amz-content-sha256: option<string>,
@@ -852,7 +862,7 @@ interface aws-migration-hub {
     progress-update-stream-name: delete-progress-update-stream-request-progress-update-stream-name,
     dry-run: option<delete-progress-update-stream-request-dry-run>
   }
-  delete-progress-update-stream: func(params: delete-progress-update-stream-params) -> result<delete-progress-update-stream-result, delete-progress-update-stream-error>;
+  delete-progress-update-stream: func(params: delete-progress-update-stream-params) -> result<list<delete-progress-update-stream-result-entry>, delete-progress-update-stream-error>;
 
   record describe-application-state-params {
     x-amz-content-sha256: option<string>,
@@ -895,7 +905,7 @@ interface aws-migration-hub {
     created-artifact-name: disassociate-created-artifact-request-created-artifact-name,
     dry-run: option<disassociate-created-artifact-request-dry-run>
   }
-  disassociate-created-artifact: func(params: disassociate-created-artifact-params) -> result<disassociate-created-artifact-result, disassociate-created-artifact-error>;
+  disassociate-created-artifact: func(params: disassociate-created-artifact-params) -> result<list<disassociate-created-artifact-result-entry>, disassociate-created-artifact-error>;
 
   record disassociate-discovered-resource-params {
     x-amz-content-sha256: option<string>,
@@ -911,7 +921,7 @@ interface aws-migration-hub {
     configuration-id: disassociate-discovered-resource-request-configuration-id,
     dry-run: option<disassociate-discovered-resource-request-dry-run>
   }
-  disassociate-discovered-resource: func(params: disassociate-discovered-resource-params) -> result<disassociate-discovered-resource-result, disassociate-discovered-resource-error>;
+  disassociate-discovered-resource: func(params: disassociate-discovered-resource-params) -> result<list<disassociate-discovered-resource-result-entry>, disassociate-discovered-resource-error>;
 
   record import-migration-task-params {
     x-amz-content-sha256: option<string>,
@@ -926,7 +936,7 @@ interface aws-migration-hub {
     migration-task-name: import-migration-task-request-migration-task-name,
     dry-run: option<import-migration-task-request-dry-run>
   }
-  import-migration-task: func(params: import-migration-task-params) -> result<import-migration-task-result, import-migration-task-error>;
+  import-migration-task: func(params: import-migration-task-params) -> result<list<import-migration-task-result-entry>, import-migration-task-error>;
 
   record list-application-states-params {
     x-amz-content-sha256: option<string>,
@@ -1038,7 +1048,7 @@ interface aws-migration-hub {
     update-date-time: option<notify-application-state-request-update-date-time>,
     dry-run: option<notify-application-state-request-dry-run>
   }
-  notify-application-state: func(params: notify-application-state-params) -> result<notify-application-state-result, notify-application-state-error>;
+  notify-application-state: func(params: notify-application-state-params) -> result<list<notify-application-state-result-entry>, notify-application-state-error>;
 
   record notify-migration-task-state-params {
     x-amz-content-sha256: option<string>,
@@ -1056,7 +1066,7 @@ interface aws-migration-hub {
     next-update-seconds: notify-migration-task-state-request-next-update-seconds,
     dry-run: option<notify-migration-task-state-request-dry-run>
   }
-  notify-migration-task-state: func(params: notify-migration-task-state-params) -> result<notify-migration-task-state-result, notify-migration-task-state-error>;
+  notify-migration-task-state: func(params: notify-migration-task-state-params) -> result<list<notify-migration-task-state-result-entry>, notify-migration-task-state-error>;
 
   record put-resource-attributes-params {
     x-amz-content-sha256: option<string>,
@@ -1072,7 +1082,7 @@ interface aws-migration-hub {
     resource-attribute-list: put-resource-attributes-request-resource-attribute-list,
     dry-run: option<put-resource-attributes-request-dry-run>
   }
-  put-resource-attributes: func(params: put-resource-attributes-params) -> result<put-resource-attributes-result, put-resource-attributes-error>;
+  put-resource-attributes: func(params: put-resource-attributes-params) -> result<list<put-resource-attributes-result-entry>, put-resource-attributes-error>;
 
 }
 

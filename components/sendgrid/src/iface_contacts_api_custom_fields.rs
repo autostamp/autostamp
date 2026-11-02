@@ -95,14 +95,15 @@ fn iface_contacts_api_custom_fields__global_error_response_schema__to_json(p: &i
 fn iface_contacts_api_custom_fields__global_error_response_schema_errors_item__to_json(p: &iface_contacts_api_custom_fields::GlobalErrorResponseSchemaErrorsItem) -> Value {
     let mut m = Map::new();
     m.insert("field".into(), match (&p.field) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("help".into(), match (&p.help) { Some(v) => iface_contacts_api_custom_fields__global_error_response_schema_errors_item_help__to_json(v), None => Value::Null });
+    m.insert("help".into(), match (&p.help) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("message".into(), Value::String((&p.message).clone()));
     Value::Object(m)
 }
 
-fn iface_contacts_api_custom_fields__global_error_response_schema_errors_item_help__to_json(p: &iface_contacts_api_custom_fields::GlobalErrorResponseSchemaErrorsItemHelp) -> Value {
+fn iface_contacts_api_custom_fields__global_error_response_schema_errors_item_help_entry__to_json(p: &iface_contacts_api_custom_fields::GlobalErrorResponseSchemaErrorsItemHelpEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -181,15 +182,16 @@ fn iface_contacts_api_custom_fields__global_error_response_schema_errors_item__f
     let m = v.as_object()?;
     Some(iface_contacts_api_custom_fields::GlobalErrorResponseSchemaErrorsItem {
         field: m.get("field").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        help: m.get("help").filter(|v| !v.is_null()).and_then(|v| iface_contacts_api_custom_fields__global_error_response_schema_errors_item_help__from_json(v)),
+        help: m.get("help").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_contacts_api_custom_fields::GlobalErrorResponseSchemaErrorsItemHelpEntry { key: k.clone(), value: val })).collect())),
         message: m.get("message").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
-fn iface_contacts_api_custom_fields__global_error_response_schema_errors_item_help__from_json(v: &Value) -> Option<iface_contacts_api_custom_fields::GlobalErrorResponseSchemaErrorsItemHelp> {
+fn iface_contacts_api_custom_fields__global_error_response_schema_errors_item_help_entry__from_json(v: &Value) -> Option<iface_contacts_api_custom_fields::GlobalErrorResponseSchemaErrorsItemHelpEntry> {
     let m = v.as_object()?;
-    Some(iface_contacts_api_custom_fields::GlobalErrorResponseSchemaErrorsItemHelp {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_contacts_api_custom_fields::GlobalErrorResponseSchemaErrorsItemHelpEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 

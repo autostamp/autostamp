@@ -95,6 +95,27 @@ fn iface_certificates__get_collection_fields_certificates_item_enum__to_str(e: &
     }
 }
 
+fn iface_certificates__certificate_type__to_str(e: &iface_certificates::CertificateType) -> &'static str {
+    match e {
+        iface_certificates::CertificateType::IosDevelopment => "IOS_DEVELOPMENT",
+        iface_certificates::CertificateType::IosDistribution => "IOS_DISTRIBUTION",
+        iface_certificates::CertificateType::MacAppDistribution => "MAC_APP_DISTRIBUTION",
+        iface_certificates::CertificateType::MacInstallerDistribution => "MAC_INSTALLER_DISTRIBUTION",
+        iface_certificates::CertificateType::MacAppDevelopment => "MAC_APP_DEVELOPMENT",
+        iface_certificates::CertificateType::DeveloperIdKext => "DEVELOPER_ID_KEXT",
+        iface_certificates::CertificateType::DeveloperIdApplication => "DEVELOPER_ID_APPLICATION",
+        iface_certificates::CertificateType::Development => "DEVELOPMENT",
+        iface_certificates::CertificateType::Distribution => "DISTRIBUTION",
+    }
+}
+
+fn iface_certificates__bundle_id_platform__to_str(e: &iface_certificates::BundleIdPlatform) -> &'static str {
+    match e {
+        iface_certificates::BundleIdPlatform::Ios => "IOS",
+        iface_certificates::BundleIdPlatform::MacOs => "MAC_OS",
+    }
+}
+
 fn iface_certificates__certificate_type_op_enum__to_str(e: &iface_certificates::CertificateTypeOpEnum) -> &'static str {
     match e {
         iface_certificates::CertificateTypeOpEnum::Certificates => "certificates",
@@ -121,24 +142,12 @@ fn iface_certificates__certificate__to_json(p: &iface_certificates::Certificate)
 fn iface_certificates__certificate_attributes__to_json(p: &iface_certificates::CertificateAttributes) -> Value {
     let mut m = Map::new();
     m.insert("certificateContent".into(), match (&p.certificate_content) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("certificateType".into(), match (&p.certificate_type) { Some(v) => iface_certificates__certificate_type__to_json(v), None => Value::Null });
+    m.insert("certificateType".into(), match (&p.certificate_type) { Some(v) => Value::String(iface_certificates__certificate_type__to_str(v).into()), None => Value::Null });
     m.insert("displayName".into(), match (&p.display_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("expirationDate".into(), match (&p.expiration_date) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("platform".into(), match (&p.platform) { Some(v) => iface_certificates__bundle_id_platform__to_json(v), None => Value::Null });
+    m.insert("platform".into(), match (&p.platform) { Some(v) => Value::String(iface_certificates__bundle_id_platform__to_str(v).into()), None => Value::Null });
     m.insert("serialNumber".into(), match (&p.serial_number) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_certificates__certificate_type__to_json(p: &iface_certificates::CertificateType) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_certificates__bundle_id_platform__to_json(p: &iface_certificates::BundleIdPlatform) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -178,7 +187,7 @@ fn iface_certificates__certificate_create_request_data__to_json(p: &iface_certif
 
 fn iface_certificates__certificate_create_request_data_attributes__to_json(p: &iface_certificates::CertificateCreateRequestDataAttributes) -> Value {
     let mut m = Map::new();
-    m.insert("certificateType".into(), iface_certificates__certificate_type__to_json(&p.certificate_type));
+    m.insert("certificateType".into(), Value::String(iface_certificates__certificate_type__to_str(&p.certificate_type).into()));
     m.insert("csrContent".into(), Value::String((&p.csr_content).clone()));
     Value::Object(m)
 }
@@ -250,26 +259,12 @@ fn iface_certificates__certificate_attributes__from_json(v: &Value) -> Option<if
     let m = v.as_object()?;
     Some(iface_certificates::CertificateAttributes {
         certificate_content: m.get("certificateContent").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        certificate_type: m.get("certificateType").filter(|v| !v.is_null()).and_then(|v| iface_certificates__certificate_type__from_json(v)),
+        certificate_type: m.get("certificateType").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_certificates__certificate_type__from_str)),
         display_name: m.get("displayName").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         expiration_date: m.get("expirationDate").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        platform: m.get("platform").filter(|v| !v.is_null()).and_then(|v| iface_certificates__bundle_id_platform__from_json(v)),
+        platform: m.get("platform").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_certificates__bundle_id_platform__from_str)),
         serial_number: m.get("serialNumber").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-    })
-}
-
-fn iface_certificates__certificate_type__from_json(v: &Value) -> Option<iface_certificates::CertificateType> {
-    let m = v.as_object()?;
-    Some(iface_certificates::CertificateType {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-    })
-}
-
-fn iface_certificates__bundle_id_platform__from_json(v: &Value) -> Option<iface_certificates::BundleIdPlatform> {
-    let m = v.as_object()?;
-    Some(iface_certificates::BundleIdPlatform {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -317,6 +312,29 @@ fn iface_certificates__document_links__from_json(v: &Value) -> Option<iface_cert
     Some(iface_certificates::DocumentLinks {
         self_: m.get("self").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
+}
+
+fn iface_certificates__certificate_type__from_str(s: &str) -> Option<iface_certificates::CertificateType> {
+    match s {
+        "IOS_DEVELOPMENT" => Some(iface_certificates::CertificateType::IosDevelopment),
+        "IOS_DISTRIBUTION" => Some(iface_certificates::CertificateType::IosDistribution),
+        "MAC_APP_DISTRIBUTION" => Some(iface_certificates::CertificateType::MacAppDistribution),
+        "MAC_INSTALLER_DISTRIBUTION" => Some(iface_certificates::CertificateType::MacInstallerDistribution),
+        "MAC_APP_DEVELOPMENT" => Some(iface_certificates::CertificateType::MacAppDevelopment),
+        "DEVELOPER_ID_KEXT" => Some(iface_certificates::CertificateType::DeveloperIdKext),
+        "DEVELOPER_ID_APPLICATION" => Some(iface_certificates::CertificateType::DeveloperIdApplication),
+        "DEVELOPMENT" => Some(iface_certificates::CertificateType::Development),
+        "DISTRIBUTION" => Some(iface_certificates::CertificateType::Distribution),
+        _ => None,
+    }
+}
+
+fn iface_certificates__bundle_id_platform__from_str(s: &str) -> Option<iface_certificates::BundleIdPlatform> {
+    match s {
+        "IOS" => Some(iface_certificates::BundleIdPlatform::Ios),
+        "MAC_OS" => Some(iface_certificates::BundleIdPlatform::MacOs),
+        _ => None,
+    }
 }
 
 fn iface_certificates__certificate_type_op_enum__from_str(s: &str) -> Option<iface_certificates::CertificateTypeOpEnum> {

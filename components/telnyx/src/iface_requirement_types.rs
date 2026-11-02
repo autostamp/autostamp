@@ -45,29 +45,8 @@ fn iface_requirement_types__doc_reqs_requirement_type_type_op_enum__to_str(e: &i
 
 fn iface_requirement_types__doc_reqs_list_requirement_types_response__to_json(p: &iface_requirement_types::DocReqsListRequirementTypesResponse) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => iface_requirement_types__doc_reqs_requirement_type_list__to_json(v), None => Value::Null });
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::Array((v).iter().map(|v| iface_requirement_types__doc_reqs_requirement_type__to_json(v)).collect()), None => Value::Null });
     m.insert("meta".into(), match (&p.meta) { Some(v) => iface_requirement_types__pagination_meta__to_json(v), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_requirement_types__doc_reqs_requirement_type_list__to_json(p: &iface_requirement_types::DocReqsRequirementTypeList) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_requirement_types__pagination_meta__to_json(p: &iface_requirement_types::PaginationMeta) -> Value {
-    let mut m = Map::new();
-    m.insert("page_number".into(), match (&p.page_number) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    m.insert("page_size".into(), match (&p.page_size) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    m.insert("total_pages".into(), match (&p.total_pages) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    m.insert("total_results".into(), match (&p.total_results) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_requirement_types__doc_reqs_retrieve_requirement_type_response__to_json(p: &iface_requirement_types::DocReqsRetrieveRequirementTypeResponse) -> Value {
-    let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => iface_requirement_types__doc_reqs_requirement_type__to_json(v), None => Value::Null });
     Value::Object(m)
 }
 
@@ -92,6 +71,21 @@ fn iface_requirement_types__doc_reqs_requirement_type_acceptance_criteria__to_js
     Value::Object(m)
 }
 
+fn iface_requirement_types__pagination_meta__to_json(p: &iface_requirement_types::PaginationMeta) -> Value {
+    let mut m = Map::new();
+    m.insert("page_number".into(), match (&p.page_number) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("page_size".into(), match (&p.page_size) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("total_pages".into(), match (&p.total_pages) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("total_results".into(), match (&p.total_results) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_requirement_types__doc_reqs_retrieve_requirement_type_response__to_json(p: &iface_requirement_types::DocReqsRetrieveRequirementTypeResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), match (&p.data) { Some(v) => iface_requirement_types__doc_reqs_requirement_type__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
 fn iface_requirement_types__doc_reqs_list_requirement_types_params__to_json(p: &iface_requirement_types::DocReqsListRequirementTypesParams) -> Value {
     let mut m = Map::new();
     m.insert("filter_name_contains".into(), match (&p.filter_name_contains) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -108,32 +102,8 @@ fn iface_requirement_types__doc_reqs_retrieve_requirement_type_params__to_json(p
 fn iface_requirement_types__doc_reqs_list_requirement_types_response__from_json(v: &Value) -> Option<iface_requirement_types::DocReqsListRequirementTypesResponse> {
     let m = v.as_object()?;
     Some(iface_requirement_types::DocReqsListRequirementTypesResponse {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| iface_requirement_types__doc_reqs_requirement_type_list__from_json(v)),
+        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_requirement_types__doc_reqs_requirement_type__from_json(x)).collect())),
         meta: m.get("meta").filter(|v| !v.is_null()).and_then(|v| iface_requirement_types__pagination_meta__from_json(v)),
-    })
-}
-
-fn iface_requirement_types__doc_reqs_requirement_type_list__from_json(v: &Value) -> Option<iface_requirement_types::DocReqsRequirementTypeList> {
-    let m = v.as_object()?;
-    Some(iface_requirement_types::DocReqsRequirementTypeList {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-    })
-}
-
-fn iface_requirement_types__pagination_meta__from_json(v: &Value) -> Option<iface_requirement_types::PaginationMeta> {
-    let m = v.as_object()?;
-    Some(iface_requirement_types::PaginationMeta {
-        page_number: m.get("page_number").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
-        page_size: m.get("page_size").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
-        total_pages: m.get("total_pages").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
-        total_results: m.get("total_results").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
-    })
-}
-
-fn iface_requirement_types__doc_reqs_retrieve_requirement_type_response__from_json(v: &Value) -> Option<iface_requirement_types::DocReqsRetrieveRequirementTypeResponse> {
-    let m = v.as_object()?;
-    Some(iface_requirement_types::DocReqsRetrieveRequirementTypeResponse {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| iface_requirement_types__doc_reqs_requirement_type__from_json(v)),
     })
 }
 
@@ -157,6 +127,23 @@ fn iface_requirement_types__doc_reqs_requirement_type_acceptance_criteria__from_
     Some(iface_requirement_types::DocReqsRequirementTypeAcceptanceCriteria {
         locality_limit: m.get("locality_limit").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         time_limit: m.get("time_limit").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_requirement_types__pagination_meta__from_json(v: &Value) -> Option<iface_requirement_types::PaginationMeta> {
+    let m = v.as_object()?;
+    Some(iface_requirement_types::PaginationMeta {
+        page_number: m.get("page_number").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        page_size: m.get("page_size").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        total_pages: m.get("total_pages").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        total_results: m.get("total_results").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+    })
+}
+
+fn iface_requirement_types__doc_reqs_retrieve_requirement_type_response__from_json(v: &Value) -> Option<iface_requirement_types::DocReqsRetrieveRequirementTypeResponse> {
+    let m = v.as_object()?;
+    Some(iface_requirement_types::DocReqsRetrieveRequirementTypeResponse {
+        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| iface_requirement_types__doc_reqs_requirement_type__from_json(v)),
     })
 }
 

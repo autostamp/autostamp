@@ -36,9 +36,9 @@ fn iface_linode_types__linode_type_class_enum__to_str(e: &iface_linode_types::Li
 fn iface_linode_types__get_linode_types_response__to_json(p: &iface_linode_types::GetLinodeTypesResponse) -> Value {
     let mut m = Map::new();
     m.insert("data".into(), match (&p.data) { Some(v) => Value::Array((v).iter().map(|v| iface_linode_types__linode_type__to_json(v)).collect()), None => Value::Null });
-    m.insert("page".into(), match (&p.page) { Some(v) => iface_linode_types__pagination_envelope_properties_page__to_json(v), None => Value::Null });
-    m.insert("pages".into(), match (&p.pages) { Some(v) => iface_linode_types__pagination_envelope_properties_pages__to_json(v), None => Value::Null });
-    m.insert("results".into(), match (&p.results) { Some(v) => iface_linode_types__pagination_envelope_properties_results__to_json(v), None => Value::Null });
+    m.insert("page".into(), match (&p.page) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("pages".into(), match (&p.pages) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("results".into(), match (&p.results) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
@@ -85,24 +85,6 @@ fn iface_linode_types__linode_type_price__to_json(p: &iface_linode_types::Linode
     Value::Object(m)
 }
 
-fn iface_linode_types__pagination_envelope_properties_page__to_json(p: &iface_linode_types::PaginationEnvelopePropertiesPage) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_linode_types__pagination_envelope_properties_pages__to_json(p: &iface_linode_types::PaginationEnvelopePropertiesPages) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_linode_types__pagination_envelope_properties_results__to_json(p: &iface_linode_types::PaginationEnvelopePropertiesResults) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
 fn iface_linode_types__get_linode_type_params__to_json(p: &iface_linode_types::GetLinodeTypeParams) -> Value {
     let mut m = Map::new();
     m.insert("type_id".into(), Value::String((&p.type_id).clone()));
@@ -113,9 +95,9 @@ fn iface_linode_types__get_linode_types_response__from_json(v: &Value) -> Option
     let m = v.as_object()?;
     Some(iface_linode_types::GetLinodeTypesResponse {
         data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_linode_types__linode_type__from_json(x)).collect())),
-        page: m.get("page").filter(|v| !v.is_null()).and_then(|v| iface_linode_types__pagination_envelope_properties_page__from_json(v)),
-        pages: m.get("pages").filter(|v| !v.is_null()).and_then(|v| iface_linode_types__pagination_envelope_properties_pages__from_json(v)),
-        results: m.get("results").filter(|v| !v.is_null()).and_then(|v| iface_linode_types__pagination_envelope_properties_results__from_json(v)),
+        page: m.get("page").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        pages: m.get("pages").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        results: m.get("results").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
     })
 }
 
@@ -164,27 +146,6 @@ fn iface_linode_types__linode_type_price__from_json(v: &Value) -> Option<iface_l
     Some(iface_linode_types::LinodeTypePrice {
         hourly: m.get("hourly").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
         monthly: m.get("monthly").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
-    })
-}
-
-fn iface_linode_types__pagination_envelope_properties_page__from_json(v: &Value) -> Option<iface_linode_types::PaginationEnvelopePropertiesPage> {
-    let m = v.as_object()?;
-    Some(iface_linode_types::PaginationEnvelopePropertiesPage {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-    })
-}
-
-fn iface_linode_types__pagination_envelope_properties_pages__from_json(v: &Value) -> Option<iface_linode_types::PaginationEnvelopePropertiesPages> {
-    let m = v.as_object()?;
-    Some(iface_linode_types::PaginationEnvelopePropertiesPages {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-    })
-}
-
-fn iface_linode_types__pagination_envelope_properties_results__from_json(v: &Value) -> Option<iface_linode_types::PaginationEnvelopePropertiesResults> {
-    let m = v.as_object()?;
-    Some(iface_linode_types::PaginationEnvelopePropertiesResults {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 

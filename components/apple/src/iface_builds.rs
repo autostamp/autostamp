@@ -653,6 +653,46 @@ fn iface_builds__app_relationships_prices_data_item_type_op_enum__to_str(e: &ifa
     }
 }
 
+fn iface_builds__app_encryption_declaration_state__to_str(e: &iface_builds::AppEncryptionDeclarationState) -> &'static str {
+    match e {
+        iface_builds::AppEncryptionDeclarationState::InReview => "IN_REVIEW",
+        iface_builds::AppEncryptionDeclarationState::Approved => "APPROVED",
+        iface_builds::AppEncryptionDeclarationState::Rejected => "REJECTED",
+        iface_builds::AppEncryptionDeclarationState::Invalid => "INVALID",
+        iface_builds::AppEncryptionDeclarationState::Expired => "EXPIRED",
+    }
+}
+
+fn iface_builds__platform__to_str(e: &iface_builds::Platform) -> &'static str {
+    match e {
+        iface_builds::Platform::Ios => "IOS",
+        iface_builds::Platform::MacOs => "MAC_OS",
+        iface_builds::Platform::TvOs => "TV_OS",
+    }
+}
+
+fn iface_builds__app_store_version_state__to_str(e: &iface_builds::AppStoreVersionState) -> &'static str {
+    match e {
+        iface_builds::AppStoreVersionState::DeveloperRemovedFromSale => "DEVELOPER_REMOVED_FROM_SALE",
+        iface_builds::AppStoreVersionState::DeveloperRejected => "DEVELOPER_REJECTED",
+        iface_builds::AppStoreVersionState::InReview => "IN_REVIEW",
+        iface_builds::AppStoreVersionState::InvalidBinary => "INVALID_BINARY",
+        iface_builds::AppStoreVersionState::MetadataRejected => "METADATA_REJECTED",
+        iface_builds::AppStoreVersionState::PendingAppleRelease => "PENDING_APPLE_RELEASE",
+        iface_builds::AppStoreVersionState::PendingContract => "PENDING_CONTRACT",
+        iface_builds::AppStoreVersionState::PendingDeveloperRelease => "PENDING_DEVELOPER_RELEASE",
+        iface_builds::AppStoreVersionState::PrepareForSubmission => "PREPARE_FOR_SUBMISSION",
+        iface_builds::AppStoreVersionState::PreorderReadyForSale => "PREORDER_READY_FOR_SALE",
+        iface_builds::AppStoreVersionState::ProcessingForAppStore => "PROCESSING_FOR_APP_STORE",
+        iface_builds::AppStoreVersionState::ReadyForSale => "READY_FOR_SALE",
+        iface_builds::AppStoreVersionState::Rejected => "REJECTED",
+        iface_builds::AppStoreVersionState::RemovedFromSale => "REMOVED_FROM_SALE",
+        iface_builds::AppStoreVersionState::WaitingForExportCompliance => "WAITING_FOR_EXPORT_COMPLIANCE",
+        iface_builds::AppStoreVersionState::WaitingForReview => "WAITING_FOR_REVIEW",
+        iface_builds::AppStoreVersionState::ReplacedWithNewVersion => "REPLACED_WITH_NEW_VERSION",
+    }
+}
+
 fn iface_builds__app_store_version_attributes_release_type_enum__to_str(e: &iface_builds::AppStoreVersionAttributesReleaseTypeEnum) -> &'static str {
     match e {
         iface_builds::AppStoreVersionAttributesReleaseTypeEnum::Manual => "MANUAL",
@@ -703,6 +743,44 @@ fn iface_builds__app_store_version_relationships_routing_app_coverage_data_type_
     }
 }
 
+fn iface_builds__beta_review_state__to_str(e: &iface_builds::BetaReviewState) -> &'static str {
+    match e {
+        iface_builds::BetaReviewState::WaitingForReview => "WAITING_FOR_REVIEW",
+        iface_builds::BetaReviewState::InReview => "IN_REVIEW",
+        iface_builds::BetaReviewState::Rejected => "REJECTED",
+        iface_builds::BetaReviewState::Approved => "APPROVED",
+    }
+}
+
+fn iface_builds__external_beta_state__to_str(e: &iface_builds::ExternalBetaState) -> &'static str {
+    match e {
+        iface_builds::ExternalBetaState::Processing => "PROCESSING",
+        iface_builds::ExternalBetaState::ProcessingException => "PROCESSING_EXCEPTION",
+        iface_builds::ExternalBetaState::MissingExportCompliance => "MISSING_EXPORT_COMPLIANCE",
+        iface_builds::ExternalBetaState::ReadyForBetaTesting => "READY_FOR_BETA_TESTING",
+        iface_builds::ExternalBetaState::InBetaTesting => "IN_BETA_TESTING",
+        iface_builds::ExternalBetaState::Expired => "EXPIRED",
+        iface_builds::ExternalBetaState::ReadyForBetaSubmission => "READY_FOR_BETA_SUBMISSION",
+        iface_builds::ExternalBetaState::InExportComplianceReview => "IN_EXPORT_COMPLIANCE_REVIEW",
+        iface_builds::ExternalBetaState::WaitingForBetaReview => "WAITING_FOR_BETA_REVIEW",
+        iface_builds::ExternalBetaState::InBetaReview => "IN_BETA_REVIEW",
+        iface_builds::ExternalBetaState::BetaRejected => "BETA_REJECTED",
+        iface_builds::ExternalBetaState::BetaApproved => "BETA_APPROVED",
+    }
+}
+
+fn iface_builds__internal_beta_state__to_str(e: &iface_builds::InternalBetaState) -> &'static str {
+    match e {
+        iface_builds::InternalBetaState::Processing => "PROCESSING",
+        iface_builds::InternalBetaState::ProcessingException => "PROCESSING_EXCEPTION",
+        iface_builds::InternalBetaState::MissingExportCompliance => "MISSING_EXPORT_COMPLIANCE",
+        iface_builds::InternalBetaState::ReadyForBetaTesting => "READY_FOR_BETA_TESTING",
+        iface_builds::InternalBetaState::InBetaTesting => "IN_BETA_TESTING",
+        iface_builds::InternalBetaState::Expired => "EXPIRED",
+        iface_builds::InternalBetaState::InExportComplianceReview => "IN_EXPORT_COMPLIANCE_REVIEW",
+    }
+}
+
 fn iface_builds__diagnostic_signatures_get_to_many_related_filter_diagnostic_type_item_enum__to_str(e: &iface_builds::DiagnosticSignaturesGetToManyRelatedFilterDiagnosticTypeItemEnum) -> &'static str {
     match e {
         iface_builds::DiagnosticSignaturesGetToManyRelatedFilterDiagnosticTypeItemEnum::DiskWrites => "DISK_WRITES",
@@ -718,6 +796,23 @@ fn iface_builds__diagnostic_signature_type_op_enum__to_str(e: &iface_builds::Dia
 fn iface_builds__diagnostic_log_type_op_enum__to_str(e: &iface_builds::DiagnosticLogTypeOpEnum) -> &'static str {
     match e {
         iface_builds::DiagnosticLogTypeOpEnum::DiagnosticLogs => "diagnosticLogs",
+    }
+}
+
+fn iface_builds__icon_asset_type__to_str(e: &iface_builds::IconAssetType) -> &'static str {
+    match e {
+        iface_builds::IconAssetType::AppStore => "APP_STORE",
+        iface_builds::IconAssetType::MessagesAppStore => "MESSAGES_APP_STORE",
+        iface_builds::IconAssetType::WatchAppStore => "WATCH_APP_STORE",
+        iface_builds::IconAssetType::TvOsHomeScreen => "TV_OS_HOME_SCREEN",
+        iface_builds::IconAssetType::TvOsTopShelf => "TV_OS_TOP_SHELF",
+    }
+}
+
+fn iface_builds__beta_invite_type__to_str(e: &iface_builds::BetaInviteType) -> &'static str {
+    match e {
+        iface_builds::BetaInviteType::Email => "EMAIL",
+        iface_builds::BetaInviteType::PublicLink => "PUBLIC_LINK",
     }
 }
 
@@ -1440,7 +1535,7 @@ fn iface_builds__app_encryption_declaration__to_json(p: &iface_builds::AppEncryp
 
 fn iface_builds__app_encryption_declaration_attributes__to_json(p: &iface_builds::AppEncryptionDeclarationAttributes) -> Value {
     let mut m = Map::new();
-    m.insert("appEncryptionDeclarationState".into(), match (&p.app_encryption_declaration_state) { Some(v) => iface_builds__app_encryption_declaration_state__to_json(v), None => Value::Null });
+    m.insert("appEncryptionDeclarationState".into(), match (&p.app_encryption_declaration_state) { Some(v) => Value::String(iface_builds__app_encryption_declaration_state__to_str(v).into()), None => Value::Null });
     m.insert("availableOnFrenchStore".into(), match (&p.available_on_french_store) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     m.insert("codeValue".into(), match (&p.code_value) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("containsProprietaryCryptography".into(), match (&p.contains_proprietary_cryptography) { Some(v) => Value::Bool(*(v)), None => Value::Null });
@@ -1449,21 +1544,9 @@ fn iface_builds__app_encryption_declaration_attributes__to_json(p: &iface_builds
     m.insert("documentType".into(), match (&p.document_type) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("documentUrl".into(), match (&p.document_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("exempt".into(), match (&p.exempt) { Some(v) => Value::Bool(*(v)), None => Value::Null });
-    m.insert("platform".into(), match (&p.platform) { Some(v) => iface_builds__platform__to_json(v), None => Value::Null });
+    m.insert("platform".into(), match (&p.platform) { Some(v) => Value::String(iface_builds__platform__to_str(v).into()), None => Value::Null });
     m.insert("uploadedDate".into(), match (&p.uploaded_date) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("usesEncryption".into(), match (&p.uses_encryption) { Some(v) => Value::Bool(*(v)), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_builds__app_encryption_declaration_state__to_json(p: &iface_builds::AppEncryptionDeclarationState) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_builds__platform__to_json(p: &iface_builds::Platform) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -1514,21 +1597,15 @@ fn iface_builds__app_store_version__to_json(p: &iface_builds::AppStoreVersion) -
 
 fn iface_builds__app_store_version_attributes__to_json(p: &iface_builds::AppStoreVersionAttributes) -> Value {
     let mut m = Map::new();
-    m.insert("appStoreState".into(), match (&p.app_store_state) { Some(v) => iface_builds__app_store_version_state__to_json(v), None => Value::Null });
+    m.insert("appStoreState".into(), match (&p.app_store_state) { Some(v) => Value::String(iface_builds__app_store_version_state__to_str(v).into()), None => Value::Null });
     m.insert("copyright".into(), match (&p.copyright) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("createdDate".into(), match (&p.created_date) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("downloadable".into(), match (&p.downloadable) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     m.insert("earliestReleaseDate".into(), match (&p.earliest_release_date) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("platform".into(), match (&p.platform) { Some(v) => iface_builds__platform__to_json(v), None => Value::Null });
+    m.insert("platform".into(), match (&p.platform) { Some(v) => Value::String(iface_builds__platform__to_str(v).into()), None => Value::Null });
     m.insert("releaseType".into(), match (&p.release_type) { Some(v) => Value::String(iface_builds__app_store_version_attributes_release_type_enum__to_str(v).into()), None => Value::Null });
     m.insert("usesIdfa".into(), match (&p.uses_idfa) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     m.insert("versionString".into(), match (&p.version_string) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_builds__app_store_version_state__to_json(p: &iface_builds::AppStoreVersionState) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -1756,13 +1833,7 @@ fn iface_builds__beta_app_review_submission__to_json(p: &iface_builds::BetaAppRe
 
 fn iface_builds__beta_app_review_submission_attributes__to_json(p: &iface_builds::BetaAppReviewSubmissionAttributes) -> Value {
     let mut m = Map::new();
-    m.insert("betaReviewState".into(), match (&p.beta_review_state) { Some(v) => iface_builds__beta_review_state__to_json(v), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_builds__beta_review_state__to_json(p: &iface_builds::BetaReviewState) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
+    m.insert("betaReviewState".into(), match (&p.beta_review_state) { Some(v) => Value::String(iface_builds__beta_review_state__to_str(v).into()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -1867,20 +1938,8 @@ fn iface_builds__build_beta_detail__to_json(p: &iface_builds::BuildBetaDetail) -
 fn iface_builds__build_beta_detail_attributes__to_json(p: &iface_builds::BuildBetaDetailAttributes) -> Value {
     let mut m = Map::new();
     m.insert("autoNotifyEnabled".into(), match (&p.auto_notify_enabled) { Some(v) => Value::Bool(*(v)), None => Value::Null });
-    m.insert("externalBuildState".into(), match (&p.external_build_state) { Some(v) => iface_builds__external_beta_state__to_json(v), None => Value::Null });
-    m.insert("internalBuildState".into(), match (&p.internal_build_state) { Some(v) => iface_builds__internal_beta_state__to_json(v), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_builds__external_beta_state__to_json(p: &iface_builds::ExternalBetaState) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_builds__internal_beta_state__to_json(p: &iface_builds::InternalBetaState) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
+    m.insert("externalBuildState".into(), match (&p.external_build_state) { Some(v) => Value::String(iface_builds__external_beta_state__to_str(v).into()), None => Value::Null });
+    m.insert("internalBuildState".into(), match (&p.internal_build_state) { Some(v) => Value::String(iface_builds__internal_beta_state__to_str(v).into()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -1965,13 +2024,7 @@ fn iface_builds__build_icon__to_json(p: &iface_builds::BuildIcon) -> Value {
 fn iface_builds__build_icon_attributes__to_json(p: &iface_builds::BuildIconAttributes) -> Value {
     let mut m = Map::new();
     m.insert("iconAsset".into(), match (&p.icon_asset) { Some(v) => iface_builds__image_asset__to_json(v), None => Value::Null });
-    m.insert("iconType".into(), match (&p.icon_type) { Some(v) => iface_builds__icon_asset_type__to_json(v), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_builds__icon_asset_type__to_json(p: &iface_builds::IconAssetType) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
+    m.insert("iconType".into(), match (&p.icon_type) { Some(v) => Value::String(iface_builds__icon_asset_type__to_str(v).into()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -1998,14 +2051,8 @@ fn iface_builds__beta_tester_attributes__to_json(p: &iface_builds::BetaTesterAtt
     let mut m = Map::new();
     m.insert("email".into(), match (&p.email) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("firstName".into(), match (&p.first_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("inviteType".into(), match (&p.invite_type) { Some(v) => iface_builds__beta_invite_type__to_json(v), None => Value::Null });
+    m.insert("inviteType".into(), match (&p.invite_type) { Some(v) => Value::String(iface_builds__beta_invite_type__to_str(v).into()), None => Value::Null });
     m.insert("lastName".into(), match (&p.last_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_builds__beta_invite_type__to_json(p: &iface_builds::BetaInviteType) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -2128,7 +2175,7 @@ fn iface_builds__prerelease_version__to_json(p: &iface_builds::PrereleaseVersion
 
 fn iface_builds__prerelease_version_attributes__to_json(p: &iface_builds::PrereleaseVersionAttributes) -> Value {
     let mut m = Map::new();
-    m.insert("platform".into(), match (&p.platform) { Some(v) => iface_builds__platform__to_json(v), None => Value::Null });
+    m.insert("platform".into(), match (&p.platform) { Some(v) => Value::String(iface_builds__platform__to_str(v).into()), None => Value::Null });
     m.insert("version".into(), match (&p.version) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
@@ -3176,7 +3223,7 @@ fn iface_builds__app_encryption_declaration__from_json(v: &Value) -> Option<ifac
 fn iface_builds__app_encryption_declaration_attributes__from_json(v: &Value) -> Option<iface_builds::AppEncryptionDeclarationAttributes> {
     let m = v.as_object()?;
     Some(iface_builds::AppEncryptionDeclarationAttributes {
-        app_encryption_declaration_state: m.get("appEncryptionDeclarationState").filter(|v| !v.is_null()).and_then(|v| iface_builds__app_encryption_declaration_state__from_json(v)),
+        app_encryption_declaration_state: m.get("appEncryptionDeclarationState").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_builds__app_encryption_declaration_state__from_str)),
         available_on_french_store: m.get("availableOnFrenchStore").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
         code_value: m.get("codeValue").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         contains_proprietary_cryptography: m.get("containsProprietaryCryptography").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
@@ -3185,23 +3232,9 @@ fn iface_builds__app_encryption_declaration_attributes__from_json(v: &Value) -> 
         document_type: m.get("documentType").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         document_url: m.get("documentUrl").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         exempt: m.get("exempt").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
-        platform: m.get("platform").filter(|v| !v.is_null()).and_then(|v| iface_builds__platform__from_json(v)),
+        platform: m.get("platform").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_builds__platform__from_str)),
         uploaded_date: m.get("uploadedDate").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         uses_encryption: m.get("usesEncryption").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
-    })
-}
-
-fn iface_builds__app_encryption_declaration_state__from_json(v: &Value) -> Option<iface_builds::AppEncryptionDeclarationState> {
-    let m = v.as_object()?;
-    Some(iface_builds::AppEncryptionDeclarationState {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-    })
-}
-
-fn iface_builds__platform__from_json(v: &Value) -> Option<iface_builds::Platform> {
-    let m = v.as_object()?;
-    Some(iface_builds::Platform {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -3259,22 +3292,15 @@ fn iface_builds__app_store_version__from_json(v: &Value) -> Option<iface_builds:
 fn iface_builds__app_store_version_attributes__from_json(v: &Value) -> Option<iface_builds::AppStoreVersionAttributes> {
     let m = v.as_object()?;
     Some(iface_builds::AppStoreVersionAttributes {
-        app_store_state: m.get("appStoreState").filter(|v| !v.is_null()).and_then(|v| iface_builds__app_store_version_state__from_json(v)),
+        app_store_state: m.get("appStoreState").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_builds__app_store_version_state__from_str)),
         copyright: m.get("copyright").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         created_date: m.get("createdDate").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         downloadable: m.get("downloadable").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
         earliest_release_date: m.get("earliestReleaseDate").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        platform: m.get("platform").filter(|v| !v.is_null()).and_then(|v| iface_builds__platform__from_json(v)),
+        platform: m.get("platform").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_builds__platform__from_str)),
         release_type: m.get("releaseType").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_builds__app_store_version_attributes_release_type_enum__from_str)),
         uses_idfa: m.get("usesIdfa").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
         version_string: m.get("versionString").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-    })
-}
-
-fn iface_builds__app_store_version_state__from_json(v: &Value) -> Option<iface_builds::AppStoreVersionState> {
-    let m = v.as_object()?;
-    Some(iface_builds::AppStoreVersionState {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -3533,14 +3559,7 @@ fn iface_builds__beta_app_review_submission__from_json(v: &Value) -> Option<ifac
 fn iface_builds__beta_app_review_submission_attributes__from_json(v: &Value) -> Option<iface_builds::BetaAppReviewSubmissionAttributes> {
     let m = v.as_object()?;
     Some(iface_builds::BetaAppReviewSubmissionAttributes {
-        beta_review_state: m.get("betaReviewState").filter(|v| !v.is_null()).and_then(|v| iface_builds__beta_review_state__from_json(v)),
-    })
-}
-
-fn iface_builds__beta_review_state__from_json(v: &Value) -> Option<iface_builds::BetaReviewState> {
-    let m = v.as_object()?;
-    Some(iface_builds::BetaReviewState {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        beta_review_state: m.get("betaReviewState").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_builds__beta_review_state__from_str)),
     })
 }
 
@@ -3659,22 +3678,8 @@ fn iface_builds__build_beta_detail_attributes__from_json(v: &Value) -> Option<if
     let m = v.as_object()?;
     Some(iface_builds::BuildBetaDetailAttributes {
         auto_notify_enabled: m.get("autoNotifyEnabled").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
-        external_build_state: m.get("externalBuildState").filter(|v| !v.is_null()).and_then(|v| iface_builds__external_beta_state__from_json(v)),
-        internal_build_state: m.get("internalBuildState").filter(|v| !v.is_null()).and_then(|v| iface_builds__internal_beta_state__from_json(v)),
-    })
-}
-
-fn iface_builds__external_beta_state__from_json(v: &Value) -> Option<iface_builds::ExternalBetaState> {
-    let m = v.as_object()?;
-    Some(iface_builds::ExternalBetaState {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-    })
-}
-
-fn iface_builds__internal_beta_state__from_json(v: &Value) -> Option<iface_builds::InternalBetaState> {
-    let m = v.as_object()?;
-    Some(iface_builds::InternalBetaState {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        external_build_state: m.get("externalBuildState").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_builds__external_beta_state__from_str)),
+        internal_build_state: m.get("internalBuildState").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_builds__internal_beta_state__from_str)),
     })
 }
 
@@ -3770,14 +3775,7 @@ fn iface_builds__build_icon_attributes__from_json(v: &Value) -> Option<iface_bui
     let m = v.as_object()?;
     Some(iface_builds::BuildIconAttributes {
         icon_asset: m.get("iconAsset").filter(|v| !v.is_null()).and_then(|v| iface_builds__image_asset__from_json(v)),
-        icon_type: m.get("iconType").filter(|v| !v.is_null()).and_then(|v| iface_builds__icon_asset_type__from_json(v)),
-    })
-}
-
-fn iface_builds__icon_asset_type__from_json(v: &Value) -> Option<iface_builds::IconAssetType> {
-    let m = v.as_object()?;
-    Some(iface_builds::IconAssetType {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        icon_type: m.get("iconType").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_builds__icon_asset_type__from_str)),
     })
 }
 
@@ -3807,15 +3805,8 @@ fn iface_builds__beta_tester_attributes__from_json(v: &Value) -> Option<iface_bu
     Some(iface_builds::BetaTesterAttributes {
         email: m.get("email").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         first_name: m.get("firstName").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        invite_type: m.get("inviteType").filter(|v| !v.is_null()).and_then(|v| iface_builds__beta_invite_type__from_json(v)),
+        invite_type: m.get("inviteType").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_builds__beta_invite_type__from_str)),
         last_name: m.get("lastName").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-    })
-}
-
-fn iface_builds__beta_invite_type__from_json(v: &Value) -> Option<iface_builds::BetaInviteType> {
-    let m = v.as_object()?;
-    Some(iface_builds::BetaInviteType {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -3954,7 +3945,7 @@ fn iface_builds__prerelease_version__from_json(v: &Value) -> Option<iface_builds
 fn iface_builds__prerelease_version_attributes__from_json(v: &Value) -> Option<iface_builds::PrereleaseVersionAttributes> {
     let m = v.as_object()?;
     Some(iface_builds::PrereleaseVersionAttributes {
-        platform: m.get("platform").filter(|v| !v.is_null()).and_then(|v| iface_builds__platform__from_json(v)),
+        platform: m.get("platform").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_builds__platform__from_str)),
         version: m.get("version").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
     })
 }
@@ -4214,6 +4205,49 @@ fn iface_builds__app_relationships_prices_data_item_type_op_enum__from_str(s: &s
     }
 }
 
+fn iface_builds__app_encryption_declaration_state__from_str(s: &str) -> Option<iface_builds::AppEncryptionDeclarationState> {
+    match s {
+        "IN_REVIEW" => Some(iface_builds::AppEncryptionDeclarationState::InReview),
+        "APPROVED" => Some(iface_builds::AppEncryptionDeclarationState::Approved),
+        "REJECTED" => Some(iface_builds::AppEncryptionDeclarationState::Rejected),
+        "INVALID" => Some(iface_builds::AppEncryptionDeclarationState::Invalid),
+        "EXPIRED" => Some(iface_builds::AppEncryptionDeclarationState::Expired),
+        _ => None,
+    }
+}
+
+fn iface_builds__platform__from_str(s: &str) -> Option<iface_builds::Platform> {
+    match s {
+        "IOS" => Some(iface_builds::Platform::Ios),
+        "MAC_OS" => Some(iface_builds::Platform::MacOs),
+        "TV_OS" => Some(iface_builds::Platform::TvOs),
+        _ => None,
+    }
+}
+
+fn iface_builds__app_store_version_state__from_str(s: &str) -> Option<iface_builds::AppStoreVersionState> {
+    match s {
+        "DEVELOPER_REMOVED_FROM_SALE" => Some(iface_builds::AppStoreVersionState::DeveloperRemovedFromSale),
+        "DEVELOPER_REJECTED" => Some(iface_builds::AppStoreVersionState::DeveloperRejected),
+        "IN_REVIEW" => Some(iface_builds::AppStoreVersionState::InReview),
+        "INVALID_BINARY" => Some(iface_builds::AppStoreVersionState::InvalidBinary),
+        "METADATA_REJECTED" => Some(iface_builds::AppStoreVersionState::MetadataRejected),
+        "PENDING_APPLE_RELEASE" => Some(iface_builds::AppStoreVersionState::PendingAppleRelease),
+        "PENDING_CONTRACT" => Some(iface_builds::AppStoreVersionState::PendingContract),
+        "PENDING_DEVELOPER_RELEASE" => Some(iface_builds::AppStoreVersionState::PendingDeveloperRelease),
+        "PREPARE_FOR_SUBMISSION" => Some(iface_builds::AppStoreVersionState::PrepareForSubmission),
+        "PREORDER_READY_FOR_SALE" => Some(iface_builds::AppStoreVersionState::PreorderReadyForSale),
+        "PROCESSING_FOR_APP_STORE" => Some(iface_builds::AppStoreVersionState::ProcessingForAppStore),
+        "READY_FOR_SALE" => Some(iface_builds::AppStoreVersionState::ReadyForSale),
+        "REJECTED" => Some(iface_builds::AppStoreVersionState::Rejected),
+        "REMOVED_FROM_SALE" => Some(iface_builds::AppStoreVersionState::RemovedFromSale),
+        "WAITING_FOR_EXPORT_COMPLIANCE" => Some(iface_builds::AppStoreVersionState::WaitingForExportCompliance),
+        "WAITING_FOR_REVIEW" => Some(iface_builds::AppStoreVersionState::WaitingForReview),
+        "REPLACED_WITH_NEW_VERSION" => Some(iface_builds::AppStoreVersionState::ReplacedWithNewVersion),
+        _ => None,
+    }
+}
+
 fn iface_builds__app_store_version_attributes_release_type_enum__from_str(s: &str) -> Option<iface_builds::AppStoreVersionAttributesReleaseTypeEnum> {
     match s {
         "MANUAL" => Some(iface_builds::AppStoreVersionAttributesReleaseTypeEnum::Manual),
@@ -4272,6 +4306,47 @@ fn iface_builds__app_store_version_relationships_routing_app_coverage_data_type_
     }
 }
 
+fn iface_builds__beta_review_state__from_str(s: &str) -> Option<iface_builds::BetaReviewState> {
+    match s {
+        "WAITING_FOR_REVIEW" => Some(iface_builds::BetaReviewState::WaitingForReview),
+        "IN_REVIEW" => Some(iface_builds::BetaReviewState::InReview),
+        "REJECTED" => Some(iface_builds::BetaReviewState::Rejected),
+        "APPROVED" => Some(iface_builds::BetaReviewState::Approved),
+        _ => None,
+    }
+}
+
+fn iface_builds__external_beta_state__from_str(s: &str) -> Option<iface_builds::ExternalBetaState> {
+    match s {
+        "PROCESSING" => Some(iface_builds::ExternalBetaState::Processing),
+        "PROCESSING_EXCEPTION" => Some(iface_builds::ExternalBetaState::ProcessingException),
+        "MISSING_EXPORT_COMPLIANCE" => Some(iface_builds::ExternalBetaState::MissingExportCompliance),
+        "READY_FOR_BETA_TESTING" => Some(iface_builds::ExternalBetaState::ReadyForBetaTesting),
+        "IN_BETA_TESTING" => Some(iface_builds::ExternalBetaState::InBetaTesting),
+        "EXPIRED" => Some(iface_builds::ExternalBetaState::Expired),
+        "READY_FOR_BETA_SUBMISSION" => Some(iface_builds::ExternalBetaState::ReadyForBetaSubmission),
+        "IN_EXPORT_COMPLIANCE_REVIEW" => Some(iface_builds::ExternalBetaState::InExportComplianceReview),
+        "WAITING_FOR_BETA_REVIEW" => Some(iface_builds::ExternalBetaState::WaitingForBetaReview),
+        "IN_BETA_REVIEW" => Some(iface_builds::ExternalBetaState::InBetaReview),
+        "BETA_REJECTED" => Some(iface_builds::ExternalBetaState::BetaRejected),
+        "BETA_APPROVED" => Some(iface_builds::ExternalBetaState::BetaApproved),
+        _ => None,
+    }
+}
+
+fn iface_builds__internal_beta_state__from_str(s: &str) -> Option<iface_builds::InternalBetaState> {
+    match s {
+        "PROCESSING" => Some(iface_builds::InternalBetaState::Processing),
+        "PROCESSING_EXCEPTION" => Some(iface_builds::InternalBetaState::ProcessingException),
+        "MISSING_EXPORT_COMPLIANCE" => Some(iface_builds::InternalBetaState::MissingExportCompliance),
+        "READY_FOR_BETA_TESTING" => Some(iface_builds::InternalBetaState::ReadyForBetaTesting),
+        "IN_BETA_TESTING" => Some(iface_builds::InternalBetaState::InBetaTesting),
+        "EXPIRED" => Some(iface_builds::InternalBetaState::Expired),
+        "IN_EXPORT_COMPLIANCE_REVIEW" => Some(iface_builds::InternalBetaState::InExportComplianceReview),
+        _ => None,
+    }
+}
+
 fn iface_builds__diagnostic_signatures_get_to_many_related_filter_diagnostic_type_item_enum__from_str(s: &str) -> Option<iface_builds::DiagnosticSignaturesGetToManyRelatedFilterDiagnosticTypeItemEnum> {
     match s {
         "DISK_WRITES" => Some(iface_builds::DiagnosticSignaturesGetToManyRelatedFilterDiagnosticTypeItemEnum::DiskWrites),
@@ -4289,6 +4364,25 @@ fn iface_builds__diagnostic_signature_type_op_enum__from_str(s: &str) -> Option<
 fn iface_builds__diagnostic_log_type_op_enum__from_str(s: &str) -> Option<iface_builds::DiagnosticLogTypeOpEnum> {
     match s {
         "diagnosticLogs" => Some(iface_builds::DiagnosticLogTypeOpEnum::DiagnosticLogs),
+        _ => None,
+    }
+}
+
+fn iface_builds__icon_asset_type__from_str(s: &str) -> Option<iface_builds::IconAssetType> {
+    match s {
+        "APP_STORE" => Some(iface_builds::IconAssetType::AppStore),
+        "MESSAGES_APP_STORE" => Some(iface_builds::IconAssetType::MessagesAppStore),
+        "WATCH_APP_STORE" => Some(iface_builds::IconAssetType::WatchAppStore),
+        "TV_OS_HOME_SCREEN" => Some(iface_builds::IconAssetType::TvOsHomeScreen),
+        "TV_OS_TOP_SHELF" => Some(iface_builds::IconAssetType::TvOsTopShelf),
+        _ => None,
+    }
+}
+
+fn iface_builds__beta_invite_type__from_str(s: &str) -> Option<iface_builds::BetaInviteType> {
+    match s {
+        "EMAIL" => Some(iface_builds::BetaInviteType::Email),
+        "PUBLIC_LINK" => Some(iface_builds::BetaInviteType::PublicLink),
         _ => None,
     }
 }

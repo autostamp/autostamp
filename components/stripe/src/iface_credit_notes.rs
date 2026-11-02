@@ -240,7 +240,7 @@ fn iface_credit_notes__credit_note__to_json(p: &iface_credit_notes::CreditNote) 
     m.insert("lines".into(), iface_credit_notes__credit_note_lines__to_json(&p.lines));
     m.insert("livemode".into(), Value::Bool(*(&p.livemode)));
     m.insert("memo".into(), match (&p.memo) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("metadata".into(), match (&p.metadata) { Some(v) => iface_credit_notes__credit_note_metadata__to_json(v), None => Value::Null });
+    m.insert("metadata".into(), match (&p.metadata) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("number".into(), Value::String((&p.number).clone()));
     m.insert("object".into(), Value::String(iface_credit_notes__credit_note_object_enum__to_str(&p.object).into()));
     m.insert("out_of_band_amount".into(), match (&p.out_of_band_amount) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
@@ -315,7 +315,7 @@ fn iface_credit_notes__tax_rate__to_json(p: &iface_credit_notes::TaxRate) -> Val
     m.insert("inclusive".into(), Value::Bool(*(&p.inclusive)));
     m.insert("jurisdiction".into(), match (&p.jurisdiction) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("livemode".into(), Value::Bool(*(&p.livemode)));
-    m.insert("metadata".into(), match (&p.metadata) { Some(v) => iface_credit_notes__tax_rate_metadata__to_json(v), None => Value::Null });
+    m.insert("metadata".into(), match (&p.metadata) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("object".into(), Value::String(iface_credit_notes__tax_rate_object_enum__to_str(&p.object).into()));
     m.insert("percentage".into(), serde_json::Number::from_f64(*(&p.percentage)).map(Value::Number).unwrap_or(Value::Null));
     m.insert("state".into(), match (&p.state) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -323,15 +323,17 @@ fn iface_credit_notes__tax_rate__to_json(p: &iface_credit_notes::TaxRate) -> Val
     Value::Object(m)
 }
 
-fn iface_credit_notes__tax_rate_metadata__to_json(p: &iface_credit_notes::TaxRateMetadata) -> Value {
+fn iface_credit_notes__tax_rate_metadata_entry__to_json(p: &iface_credit_notes::TaxRateMetadataEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
-fn iface_credit_notes__credit_note_metadata__to_json(p: &iface_credit_notes::CreditNoteMetadata) -> Value {
+fn iface_credit_notes__credit_note_metadata_entry__to_json(p: &iface_credit_notes::CreditNoteMetadataEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -348,9 +350,10 @@ fn iface_credit_notes__post_credit_notes_body_lines_item__to_json(p: &iface_cred
     Value::Object(m)
 }
 
-fn iface_credit_notes__post_credit_notes_body_metadata__to_json(p: &iface_credit_notes::PostCreditNotesBodyMetadata) -> Value {
+fn iface_credit_notes__post_credit_notes_body_metadata_entry__to_json(p: &iface_credit_notes::PostCreditNotesBodyMetadataEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -404,9 +407,10 @@ fn iface_credit_notes__get_credit_notes_credit_note_lines_response__to_json(p: &
     Value::Object(m)
 }
 
-fn iface_credit_notes__post_credit_notes_id_body_metadata__to_json(p: &iface_credit_notes::PostCreditNotesIdBodyMetadata) -> Value {
+fn iface_credit_notes__post_credit_notes_id_body_metadata_entry__to_json(p: &iface_credit_notes::PostCreditNotesIdBodyMetadataEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -430,7 +434,7 @@ fn iface_credit_notes__post_credit_notes_params__to_json(p: &iface_credit_notes:
     m.insert("invoice".into(), Value::String((&p.invoice).clone()));
     m.insert("lines".into(), match (&p.lines) { Some(v) => Value::Array((v).iter().map(|v| iface_credit_notes__post_credit_notes_body_lines_item__to_json(v)).collect()), None => Value::Null });
     m.insert("memo".into(), match (&p.memo) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("metadata".into(), match (&p.metadata) { Some(v) => iface_credit_notes__post_credit_notes_body_metadata__to_json(v), None => Value::Null });
+    m.insert("metadata".into(), match (&p.metadata) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("out_of_band_amount".into(), match (&p.out_of_band_amount) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("reason".into(), match (&p.reason) { Some(v) => Value::String(iface_credit_notes__credit_note_reason_enum__to_str(v).into()), None => Value::Null });
     m.insert("refund".into(), match (&p.refund) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -502,7 +506,7 @@ fn iface_credit_notes__post_credit_notes_id_params__to_json(p: &iface_credit_not
     m.insert("id".into(), Value::String((&p.id).clone()));
     m.insert("expand".into(), match (&p.expand) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
     m.insert("memo".into(), match (&p.memo) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("metadata".into(), match (&p.metadata) { Some(v) => iface_credit_notes__post_credit_notes_id_body_metadata__to_json(v), None => Value::Null });
+    m.insert("metadata".into(), match (&p.metadata) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -539,7 +543,7 @@ fn iface_credit_notes__credit_note__from_json(v: &Value) -> Option<iface_credit_
         lines: match m.get("lines").and_then(|v| iface_credit_notes__credit_note_lines__from_json(v)) { Some(x) => x, None => return None },
         livemode: m.get("livemode").and_then(|v| (v).as_bool()).unwrap_or_default(),
         memo: m.get("memo").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        metadata: m.get("metadata").filter(|v| !v.is_null()).and_then(|v| iface_credit_notes__credit_note_metadata__from_json(v)),
+        metadata: m.get("metadata").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_credit_notes::CreditNoteMetadataEntry { key: k.clone(), value: val })).collect())),
         number: m.get("number").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         object: match m.get("object").and_then(|v| (v).as_str().and_then(iface_credit_notes__credit_note_object_enum__from_str)) { Some(x) => x, None => return None },
         out_of_band_amount: m.get("out_of_band_amount").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
@@ -619,7 +623,7 @@ fn iface_credit_notes__tax_rate__from_json(v: &Value) -> Option<iface_credit_not
         inclusive: m.get("inclusive").and_then(|v| (v).as_bool()).unwrap_or_default(),
         jurisdiction: m.get("jurisdiction").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         livemode: m.get("livemode").and_then(|v| (v).as_bool()).unwrap_or_default(),
-        metadata: m.get("metadata").filter(|v| !v.is_null()).and_then(|v| iface_credit_notes__tax_rate_metadata__from_json(v)),
+        metadata: m.get("metadata").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_credit_notes::TaxRateMetadataEntry { key: k.clone(), value: val })).collect())),
         object: match m.get("object").and_then(|v| (v).as_str().and_then(iface_credit_notes__tax_rate_object_enum__from_str)) { Some(x) => x, None => return None },
         percentage: m.get("percentage").and_then(|v| (v).as_f64()).unwrap_or_default(),
         state: m.get("state").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
@@ -627,17 +631,19 @@ fn iface_credit_notes__tax_rate__from_json(v: &Value) -> Option<iface_credit_not
     })
 }
 
-fn iface_credit_notes__tax_rate_metadata__from_json(v: &Value) -> Option<iface_credit_notes::TaxRateMetadata> {
+fn iface_credit_notes__tax_rate_metadata_entry__from_json(v: &Value) -> Option<iface_credit_notes::TaxRateMetadataEntry> {
     let m = v.as_object()?;
-    Some(iface_credit_notes::TaxRateMetadata {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_credit_notes::TaxRateMetadataEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
-fn iface_credit_notes__credit_note_metadata__from_json(v: &Value) -> Option<iface_credit_notes::CreditNoteMetadata> {
+fn iface_credit_notes__credit_note_metadata_entry__from_json(v: &Value) -> Option<iface_credit_notes::CreditNoteMetadataEntry> {
     let m = v.as_object()?;
-    Some(iface_credit_notes::CreditNoteMetadata {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_credit_notes::CreditNoteMetadataEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 

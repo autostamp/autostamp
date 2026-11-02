@@ -803,14 +803,15 @@ fn iface_repositories__object__to_json(p: &iface_repositories::Object) -> Value 
 
 fn iface_repositories__repository_inheritance_state__to_json(p: &iface_repositories::RepositoryInheritanceState) -> Value {
     let mut m = Map::new();
-    m.insert("override_settings".into(), match (&p.override_settings) { Some(v) => iface_repositories__repository_inheritance_state_override_settings__to_json(v), None => Value::Null });
+    m.insert("override_settings".into(), match (&p.override_settings) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("type".into(), Value::String((&p.type_op).clone()));
     Value::Object(m)
 }
 
-fn iface_repositories__repository_inheritance_state_override_settings__to_json(p: &iface_repositories::RepositoryInheritanceStateOverrideSettings) -> Value {
+fn iface_repositories__repository_inheritance_state_override_settings_entry__to_json(p: &iface_repositories::RepositoryInheritanceStateOverrideSettingsEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -1656,15 +1657,16 @@ fn iface_repositories__object__from_json(v: &Value) -> Option<iface_repositories
 fn iface_repositories__repository_inheritance_state__from_json(v: &Value) -> Option<iface_repositories::RepositoryInheritanceState> {
     let m = v.as_object()?;
     Some(iface_repositories::RepositoryInheritanceState {
-        override_settings: m.get("override_settings").filter(|v| !v.is_null()).and_then(|v| iface_repositories__repository_inheritance_state_override_settings__from_json(v)),
+        override_settings: m.get("override_settings").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_repositories::RepositoryInheritanceStateOverrideSettingsEntry { key: k.clone(), value: val })).collect())),
         type_op: m.get("type").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
-fn iface_repositories__repository_inheritance_state_override_settings__from_json(v: &Value) -> Option<iface_repositories::RepositoryInheritanceStateOverrideSettings> {
+fn iface_repositories__repository_inheritance_state_override_settings_entry__from_json(v: &Value) -> Option<iface_repositories::RepositoryInheritanceStateOverrideSettingsEntry> {
     let m = v.as_object()?;
-    Some(iface_repositories::RepositoryInheritanceStateOverrideSettings {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_repositories::RepositoryInheritanceStateOverrideSettingsEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 

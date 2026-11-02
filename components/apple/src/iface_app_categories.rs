@@ -82,6 +82,14 @@ fn iface_app_categories__get_collection_include_op_item_enum__to_str(e: &iface_a
     }
 }
 
+fn iface_app_categories__platform__to_str(e: &iface_app_categories::Platform) -> &'static str {
+    match e {
+        iface_app_categories::Platform::Ios => "IOS",
+        iface_app_categories::Platform::MacOs => "MAC_OS",
+        iface_app_categories::Platform::TvOs => "TV_OS",
+    }
+}
+
 fn iface_app_categories__app_category_relationships_parent_data_type_op_enum__to_str(e: &iface_app_categories::AppCategoryRelationshipsParentDataTypeOpEnum) -> &'static str {
     match e {
         iface_app_categories::AppCategoryRelationshipsParentDataTypeOpEnum::AppCategories => "appCategories",
@@ -109,13 +117,7 @@ fn iface_app_categories__app_category__to_json(p: &iface_app_categories::AppCate
 
 fn iface_app_categories__app_category_attributes__to_json(p: &iface_app_categories::AppCategoryAttributes) -> Value {
     let mut m = Map::new();
-    m.insert("platforms".into(), match (&p.platforms) { Some(v) => Value::Array((v).iter().map(|v| iface_app_categories__platform__to_json(v)).collect()), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_app_categories__platform__to_json(p: &iface_app_categories::Platform) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
+    m.insert("platforms".into(), match (&p.platforms) { Some(v) => Value::Array((v).iter().map(|v| Value::String(iface_app_categories__platform__to_str(v).into())).collect()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -269,14 +271,7 @@ fn iface_app_categories__app_category__from_json(v: &Value) -> Option<iface_app_
 fn iface_app_categories__app_category_attributes__from_json(v: &Value) -> Option<iface_app_categories::AppCategoryAttributes> {
     let m = v.as_object()?;
     Some(iface_app_categories::AppCategoryAttributes {
-        platforms: m.get("platforms").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_app_categories__platform__from_json(x)).collect())),
-    })
-}
-
-fn iface_app_categories__platform__from_json(v: &Value) -> Option<iface_app_categories::Platform> {
-    let m = v.as_object()?;
-    Some(iface_app_categories::Platform {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        platforms: m.get("platforms").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().and_then(iface_app_categories__platform__from_str)).collect())),
     })
 }
 
@@ -382,6 +377,15 @@ fn iface_app_categories__document_links__from_json(v: &Value) -> Option<iface_ap
     Some(iface_app_categories::DocumentLinks {
         self_: m.get("self").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
+}
+
+fn iface_app_categories__platform__from_str(s: &str) -> Option<iface_app_categories::Platform> {
+    match s {
+        "IOS" => Some(iface_app_categories::Platform::Ios),
+        "MAC_OS" => Some(iface_app_categories::Platform::MacOs),
+        "TV_OS" => Some(iface_app_categories::Platform::TvOs),
+        _ => None,
+    }
 }
 
 fn iface_app_categories__app_category_relationships_parent_data_type_op_enum__from_str(s: &str) -> Option<iface_app_categories::AppCategoryRelationshipsParentDataTypeOpEnum> {

@@ -18,7 +18,7 @@ const OP_CONFIGURABLE_PRODUCTS_SKU_OPTIONS_CONFIGURABLE_PRODUCT_OPTION_REPOSITOR
 fn iface_configurable_products_sku_options__configurable_product_data_option_interface__to_json(p: &iface_configurable_products_sku_options::ConfigurableProductDataOptionInterface) -> Value {
     let mut m = Map::new();
     m.insert("attribute_id".into(), match (&p.attribute_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("extension_attributes".into(), match (&p.extension_attributes) { Some(v) => iface_configurable_products_sku_options__configurable_product_data_option_extension_interface__to_json(v), None => Value::Null });
+    m.insert("extension_attributes".into(), match (&p.extension_attributes) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("id".into(), match (&p.id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("is_use_default".into(), match (&p.is_use_default) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     m.insert("label".into(), match (&p.label) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -28,22 +28,24 @@ fn iface_configurable_products_sku_options__configurable_product_data_option_int
     Value::Object(m)
 }
 
-fn iface_configurable_products_sku_options__configurable_product_data_option_extension_interface__to_json(p: &iface_configurable_products_sku_options::ConfigurableProductDataOptionExtensionInterface) -> Value {
+fn iface_configurable_products_sku_options__configurable_product_data_option_extension_interface_entry__to_json(p: &iface_configurable_products_sku_options::ConfigurableProductDataOptionExtensionInterfaceEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
 fn iface_configurable_products_sku_options__configurable_product_data_option_value_interface__to_json(p: &iface_configurable_products_sku_options::ConfigurableProductDataOptionValueInterface) -> Value {
     let mut m = Map::new();
-    m.insert("extension_attributes".into(), match (&p.extension_attributes) { Some(v) => iface_configurable_products_sku_options__configurable_product_data_option_value_extension_interface__to_json(v), None => Value::Null });
+    m.insert("extension_attributes".into(), match (&p.extension_attributes) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("value_index".into(), Value::Number(serde_json::Number::from(*(&p.value_index))));
     Value::Object(m)
 }
 
-fn iface_configurable_products_sku_options__configurable_product_data_option_value_extension_interface__to_json(p: &iface_configurable_products_sku_options::ConfigurableProductDataOptionValueExtensionInterface) -> Value {
+fn iface_configurable_products_sku_options__configurable_product_data_option_value_extension_interface_entry__to_json(p: &iface_configurable_products_sku_options::ConfigurableProductDataOptionValueExtensionInterfaceEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 

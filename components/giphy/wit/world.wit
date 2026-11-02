@@ -6,7 +6,7 @@
 /// | Secret name | Applied to each request as |
 /// | --- | --- |
 /// | `api_key` | query `api_key` |
-package autostamp:giphy@0.5.0;
+package autostamp:giphy@0.6.0;
 
 interface gifs {
   enum gif-type-op-enum {

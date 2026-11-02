@@ -22,41 +22,44 @@ const OP_ORDER_ORDER_ID_INVOICE_SALES_INVOICE_ORDER_V1_EXECUTE_POST: OpSpec = Op
 
 fn iface_order_order_id_invoice__sales_data_invoice_creation_arguments_interface__to_json(p: &iface_order_order_id_invoice::SalesDataInvoiceCreationArgumentsInterface) -> Value {
     let mut m = Map::new();
-    m.insert("extension_attributes".into(), match (&p.extension_attributes) { Some(v) => iface_order_order_id_invoice__sales_data_invoice_creation_arguments_extension_interface__to_json(v), None => Value::Null });
+    m.insert("extension_attributes".into(), match (&p.extension_attributes) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_order_order_id_invoice__sales_data_invoice_creation_arguments_extension_interface__to_json(p: &iface_order_order_id_invoice::SalesDataInvoiceCreationArgumentsExtensionInterface) -> Value {
+fn iface_order_order_id_invoice__sales_data_invoice_creation_arguments_extension_interface_entry__to_json(p: &iface_order_order_id_invoice::SalesDataInvoiceCreationArgumentsExtensionInterfaceEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
 fn iface_order_order_id_invoice__sales_data_invoice_comment_creation_interface__to_json(p: &iface_order_order_id_invoice::SalesDataInvoiceCommentCreationInterface) -> Value {
     let mut m = Map::new();
     m.insert("comment".into(), Value::String((&p.comment).clone()));
-    m.insert("extension_attributes".into(), match (&p.extension_attributes) { Some(v) => iface_order_order_id_invoice__sales_data_invoice_comment_creation_extension_interface__to_json(v), None => Value::Null });
+    m.insert("extension_attributes".into(), match (&p.extension_attributes) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("is_visible_on_front".into(), Value::Number(serde_json::Number::from(*(&p.is_visible_on_front))));
     Value::Object(m)
 }
 
-fn iface_order_order_id_invoice__sales_data_invoice_comment_creation_extension_interface__to_json(p: &iface_order_order_id_invoice::SalesDataInvoiceCommentCreationExtensionInterface) -> Value {
+fn iface_order_order_id_invoice__sales_data_invoice_comment_creation_extension_interface_entry__to_json(p: &iface_order_order_id_invoice::SalesDataInvoiceCommentCreationExtensionInterfaceEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
 fn iface_order_order_id_invoice__sales_data_invoice_item_creation_interface__to_json(p: &iface_order_order_id_invoice::SalesDataInvoiceItemCreationInterface) -> Value {
     let mut m = Map::new();
-    m.insert("extension_attributes".into(), match (&p.extension_attributes) { Some(v) => iface_order_order_id_invoice__sales_data_invoice_item_creation_extension_interface__to_json(v), None => Value::Null });
+    m.insert("extension_attributes".into(), match (&p.extension_attributes) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("order_item_id".into(), Value::Number(serde_json::Number::from(*(&p.order_item_id))));
     m.insert("qty".into(), serde_json::Number::from_f64(*(&p.qty)).map(Value::Number).unwrap_or(Value::Null));
     Value::Object(m)
 }
 
-fn iface_order_order_id_invoice__sales_data_invoice_item_creation_extension_interface__to_json(p: &iface_order_order_id_invoice::SalesDataInvoiceItemCreationExtensionInterface) -> Value {
+fn iface_order_order_id_invoice__sales_data_invoice_item_creation_extension_interface_entry__to_json(p: &iface_order_order_id_invoice::SalesDataInvoiceItemCreationExtensionInterfaceEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 

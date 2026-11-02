@@ -21,8 +21,8 @@ triggered.
 
 | Setting | Value |
 | --- | --- |
-| Package | `autostamp:zoom@0.5.0` |
-| Published version | `0.5.0+zoom-2.0.0` |
+| Package | `autostamp:zoom@0.6.0` |
+| Published version | `0.6.0+zoom-2.0.0` |
 | Tag filter | all tags |
 | Operations generated | 373 |
 | Infer API-key credentials | enabled — not triggered |

@@ -167,13 +167,14 @@ fn iface_user_segments__clause__to_json(p: &iface_user_segments::Clause) -> Valu
     m.insert("attribute".into(), match (&p.attribute) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("negate".into(), match (&p.negate) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     m.insert("op".into(), match (&p.op) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("values".into(), match (&p.values) { Some(v) => Value::Array((v).iter().map(|v| iface_user_segments__clause_values_item__to_json(v)).collect()), None => Value::Null });
+    m.insert("values".into(), match (&p.values) { Some(v) => Value::Array((v).iter().map(|v| Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect())).collect()), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_user_segments__clause_values_item__to_json(p: &iface_user_segments::ClauseValuesItem) -> Value {
+fn iface_user_segments__clause_values_item_entry__to_json(p: &iface_user_segments::ClauseValuesItemEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -338,14 +339,15 @@ fn iface_user_segments__clause__from_json(v: &Value) -> Option<iface_user_segmen
         attribute: m.get("attribute").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         negate: m.get("negate").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
         op: m.get("op").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        values: m.get("values").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_user_segments__clause_values_item__from_json(x)).collect())),
+        values: m.get("values").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_user_segments::ClauseValuesItemEntry { key: k.clone(), value: val })).collect())).collect())),
     })
 }
 
-fn iface_user_segments__clause_values_item__from_json(v: &Value) -> Option<iface_user_segments::ClauseValuesItem> {
+fn iface_user_segments__clause_values_item_entry__from_json(v: &Value) -> Option<iface_user_segments::ClauseValuesItemEntry> {
     let m = v.as_object()?;
-    Some(iface_user_segments::ClauseValuesItem {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_user_segments::ClauseValuesItemEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 

@@ -28,6 +28,15 @@ const OP_AUDIT_LOG_GET_AUDIT_LOG_ENTRY: OpSpec = OpSpec {
     ],
 };
 
+fn iface_audit_log__role__to_str(e: &iface_audit_log::Role) -> &'static str {
+    match e {
+        iface_audit_log::Role::Writer => "writer",
+        iface_audit_log::Role::Reader => "reader",
+        iface_audit_log::Role::Admin => "admin",
+        iface_audit_log::Role::Owner => "owner",
+    }
+}
+
 fn iface_audit_log__entries__to_json(p: &iface_audit_log::Entries) -> Value {
     let mut m = Map::new();
     m.insert("_links".into(), match (&p.links) { Some(v) => iface_audit_log__links__to_json(v), None => Value::Null });
@@ -51,7 +60,7 @@ fn iface_audit_log__link__to_json(p: &iface_audit_log::Link) -> Value {
 
 fn iface_audit_log__entry__to_json(p: &iface_audit_log::Entry) -> Value {
     let mut m = Map::new();
-    m.insert("_id".into(), match (&p.id) { Some(v) => iface_audit_log__id__to_json(v), None => Value::Null });
+    m.insert("_id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("_links".into(), match (&p.links) { Some(v) => iface_audit_log__links__to_json(v), None => Value::Null });
     m.insert("comment".into(), match (&p.comment) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("date".into(), match (&p.date) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
@@ -66,38 +75,26 @@ fn iface_audit_log__entry__to_json(p: &iface_audit_log::Entry) -> Value {
     Value::Object(m)
 }
 
-fn iface_audit_log__id__to_json(p: &iface_audit_log::Id) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
 fn iface_audit_log__member__to_json(p: &iface_audit_log::Member) -> Value {
     let mut m = Map::new();
-    m.insert("_id".into(), match (&p.id) { Some(v) => iface_audit_log__id__to_json(v), None => Value::Null });
+    m.insert("_id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("_lastSeen".into(), match (&p.last_seen) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("_lastSeenMetadata".into(), match (&p.last_seen_metadata) { Some(v) => iface_audit_log__member_last_seen_metadata__to_json(v), None => Value::Null });
     m.insert("_links".into(), match (&p.links) { Some(v) => iface_audit_log__links__to_json(v), None => Value::Null });
     m.insert("_pendingInvite".into(), match (&p.pending_invite) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     m.insert("_verified".into(), match (&p.verified) { Some(v) => Value::Bool(*(v)), None => Value::Null });
-    m.insert("customRoles".into(), match (&p.custom_roles) { Some(v) => Value::Array((v).iter().map(|v| iface_audit_log__id__to_json(v)).collect()), None => Value::Null });
+    m.insert("customRoles".into(), match (&p.custom_roles) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
     m.insert("email".into(), match (&p.email) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("firstName".into(), match (&p.first_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("isBeta".into(), match (&p.is_beta) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     m.insert("lastName".into(), match (&p.last_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("role".into(), match (&p.role) { Some(v) => iface_audit_log__role__to_json(v), None => Value::Null });
+    m.insert("role".into(), match (&p.role) { Some(v) => Value::String(iface_audit_log__role__to_str(v).into()), None => Value::Null });
     Value::Object(m)
 }
 
 fn iface_audit_log__member_last_seen_metadata__to_json(p: &iface_audit_log::MemberLastSeenMetadata) -> Value {
     let mut m = Map::new();
     m.insert("tokenId".into(), match (&p.token_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_audit_log__role__to_json(p: &iface_audit_log::Role) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -152,7 +149,7 @@ fn iface_audit_log__link__from_json(v: &Value) -> Option<iface_audit_log::Link> 
 fn iface_audit_log__entry__from_json(v: &Value) -> Option<iface_audit_log::Entry> {
     let m = v.as_object()?;
     Some(iface_audit_log::Entry {
-        id: m.get("_id").filter(|v| !v.is_null()).and_then(|v| iface_audit_log__id__from_json(v)),
+        id: m.get("_id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         links: m.get("_links").filter(|v| !v.is_null()).and_then(|v| iface_audit_log__links__from_json(v)),
         comment: m.get("comment").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         date: m.get("date").filter(|v| !v.is_null()).and_then(|v| (v).as_i64()),
@@ -167,28 +164,21 @@ fn iface_audit_log__entry__from_json(v: &Value) -> Option<iface_audit_log::Entry
     })
 }
 
-fn iface_audit_log__id__from_json(v: &Value) -> Option<iface_audit_log::Id> {
-    let m = v.as_object()?;
-    Some(iface_audit_log::Id {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-    })
-}
-
 fn iface_audit_log__member__from_json(v: &Value) -> Option<iface_audit_log::Member> {
     let m = v.as_object()?;
     Some(iface_audit_log::Member {
-        id: m.get("_id").filter(|v| !v.is_null()).and_then(|v| iface_audit_log__id__from_json(v)),
+        id: m.get("_id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         last_seen: m.get("_lastSeen").filter(|v| !v.is_null()).and_then(|v| (v).as_i64()),
         last_seen_metadata: m.get("_lastSeenMetadata").filter(|v| !v.is_null()).and_then(|v| iface_audit_log__member_last_seen_metadata__from_json(v)),
         links: m.get("_links").filter(|v| !v.is_null()).and_then(|v| iface_audit_log__links__from_json(v)),
         pending_invite: m.get("_pendingInvite").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
         verified: m.get("_verified").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
-        custom_roles: m.get("customRoles").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_audit_log__id__from_json(x)).collect())),
+        custom_roles: m.get("customRoles").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
         email: m.get("email").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         first_name: m.get("firstName").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         is_beta: m.get("isBeta").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
         last_name: m.get("lastName").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        role: m.get("role").filter(|v| !v.is_null()).and_then(|v| iface_audit_log__role__from_json(v)),
+        role: m.get("role").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_audit_log__role__from_str)),
     })
 }
 
@@ -199,13 +189,6 @@ fn iface_audit_log__member_last_seen_metadata__from_json(v: &Value) -> Option<if
     })
 }
 
-fn iface_audit_log__role__from_json(v: &Value) -> Option<iface_audit_log::Role> {
-    let m = v.as_object()?;
-    Some(iface_audit_log::Role {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-    })
-}
-
 fn iface_audit_log__entry_target__from_json(v: &Value) -> Option<iface_audit_log::EntryTarget> {
     let m = v.as_object()?;
     Some(iface_audit_log::EntryTarget {
@@ -213,6 +196,16 @@ fn iface_audit_log__entry_target__from_json(v: &Value) -> Option<iface_audit_log
         name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         resources: m.get("resources").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
     })
+}
+
+fn iface_audit_log__role__from_str(s: &str) -> Option<iface_audit_log::Role> {
+    match s {
+        "writer" => Some(iface_audit_log::Role::Writer),
+        "reader" => Some(iface_audit_log::Role::Reader),
+        "admin" => Some(iface_audit_log::Role::Admin),
+        "owner" => Some(iface_audit_log::Role::Owner),
+        _ => None,
+    }
 }
 
 fn iface_audit_log__get_audit_log_entries__ok(body: String) -> Result<iface_audit_log::Entries, crate::runtime::DispatchError> {

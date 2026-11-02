@@ -17,15 +17,16 @@ const OP_NEGOTIABLE_QUOTE_ATTACHMENT_CONTENT_MANAGEMENT_V1_GET_GET: OpSpec = OpS
 fn iface_negotiable_quote_attachment_content__negotiable_quote_data_attachment_content_interface__to_json(p: &iface_negotiable_quote_attachment_content::NegotiableQuoteDataAttachmentContentInterface) -> Value {
     let mut m = Map::new();
     m.insert("base64_encoded_data".into(), Value::String((&p.base64_encoded_data).clone()));
-    m.insert("extension_attributes".into(), match (&p.extension_attributes) { Some(v) => iface_negotiable_quote_attachment_content__negotiable_quote_data_attachment_content_extension_interface__to_json(v), None => Value::Null });
+    m.insert("extension_attributes".into(), match (&p.extension_attributes) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("name".into(), Value::String((&p.name).clone()));
     m.insert("type".into(), Value::String((&p.type_op).clone()));
     Value::Object(m)
 }
 
-fn iface_negotiable_quote_attachment_content__negotiable_quote_data_attachment_content_extension_interface__to_json(p: &iface_negotiable_quote_attachment_content::NegotiableQuoteDataAttachmentContentExtensionInterface) -> Value {
+fn iface_negotiable_quote_attachment_content__negotiable_quote_data_attachment_content_extension_interface_entry__to_json(p: &iface_negotiable_quote_attachment_content::NegotiableQuoteDataAttachmentContentExtensionInterfaceEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -39,16 +40,17 @@ fn iface_negotiable_quote_attachment_content__negotiable_quote_data_attachment_c
     let m = v.as_object()?;
     Some(iface_negotiable_quote_attachment_content::NegotiableQuoteDataAttachmentContentInterface {
         base64_encoded_data: m.get("base64_encoded_data").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-        extension_attributes: m.get("extension_attributes").filter(|v| !v.is_null()).and_then(|v| iface_negotiable_quote_attachment_content__negotiable_quote_data_attachment_content_extension_interface__from_json(v)),
+        extension_attributes: m.get("extension_attributes").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_negotiable_quote_attachment_content::NegotiableQuoteDataAttachmentContentExtensionInterfaceEntry { key: k.clone(), value: val })).collect())),
         name: m.get("name").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         type_op: m.get("type").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
-fn iface_negotiable_quote_attachment_content__negotiable_quote_data_attachment_content_extension_interface__from_json(v: &Value) -> Option<iface_negotiable_quote_attachment_content::NegotiableQuoteDataAttachmentContentExtensionInterface> {
+fn iface_negotiable_quote_attachment_content__negotiable_quote_data_attachment_content_extension_interface_entry__from_json(v: &Value) -> Option<iface_negotiable_quote_attachment_content::NegotiableQuoteDataAttachmentContentExtensionInterfaceEntry> {
     let m = v.as_object()?;
-    Some(iface_negotiable_quote_attachment_content::NegotiableQuoteDataAttachmentContentExtensionInterface {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_negotiable_quote_attachment_content::NegotiableQuoteDataAttachmentContentExtensionInterfaceEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 

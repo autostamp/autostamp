@@ -410,7 +410,7 @@ fn iface_verification__account_holder_details__to_json(p: &iface_verification::A
     m.insert("individualDetails".into(), match (&p.individual_details) { Some(v) => iface_verification__individual_details__to_json(v), None => Value::Null });
     m.insert("lastReviewDate".into(), match (&p.last_review_date) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("merchantCategoryCode".into(), match (&p.merchant_category_code) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("metadata".into(), match (&p.metadata) { Some(v) => iface_verification__account_holder_details_metadata__to_json(v), None => Value::Null });
+    m.insert("metadata".into(), match (&p.metadata) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("principalBusinessAddress".into(), match (&p.principal_business_address) { Some(v) => iface_verification__vias_address__to_json(v), None => Value::Null });
     m.insert("webAddress".into(), match (&p.web_address) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
@@ -589,9 +589,10 @@ fn iface_verification__individual_details__to_json(p: &iface_verification::Indiv
     Value::Object(m)
 }
 
-fn iface_verification__account_holder_details_metadata__to_json(p: &iface_verification::AccountHolderDetailsMetadata) -> Value {
+fn iface_verification__account_holder_details_metadata_entry__to_json(p: &iface_verification::AccountHolderDetailsMetadataEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -837,7 +838,7 @@ fn iface_verification__account_holder_details__from_json(v: &Value) -> Option<if
         individual_details: m.get("individualDetails").filter(|v| !v.is_null()).and_then(|v| iface_verification__individual_details__from_json(v)),
         last_review_date: m.get("lastReviewDate").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         merchant_category_code: m.get("merchantCategoryCode").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        metadata: m.get("metadata").filter(|v| !v.is_null()).and_then(|v| iface_verification__account_holder_details_metadata__from_json(v)),
+        metadata: m.get("metadata").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_verification::AccountHolderDetailsMetadataEntry { key: k.clone(), value: val })).collect())),
         principal_business_address: m.get("principalBusinessAddress").filter(|v| !v.is_null()).and_then(|v| iface_verification__vias_address__from_json(v)),
         web_address: m.get("webAddress").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
     })
@@ -1033,10 +1034,11 @@ fn iface_verification__individual_details__from_json(v: &Value) -> Option<iface_
     })
 }
 
-fn iface_verification__account_holder_details_metadata__from_json(v: &Value) -> Option<iface_verification::AccountHolderDetailsMetadata> {
+fn iface_verification__account_holder_details_metadata_entry__from_json(v: &Value) -> Option<iface_verification::AccountHolderDetailsMetadataEntry> {
     let m = v.as_object()?;
-    Some(iface_verification::AccountHolderDetailsMetadata {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_verification::AccountHolderDetailsMetadataEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 

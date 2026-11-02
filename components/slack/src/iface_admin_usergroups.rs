@@ -61,31 +61,25 @@ const OP_ADMIN_USERGROUPS_REMOVE_CHANNELS: OpSpec = OpSpec {
 
 fn iface_admin_usergroups__add_channels_response__to_json(p: &iface_admin_usergroups::AddChannelsResponse) -> Value {
     let mut m = Map::new();
-    m.insert("ok".into(), iface_admin_usergroups__defs_ok_true__to_json(&p.ok));
-    Value::Object(m)
-}
-
-fn iface_admin_usergroups__defs_ok_true__to_json(p: &iface_admin_usergroups::DefsOkTrue) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
+    m.insert("ok".into(), Value::Bool(*(&p.ok)));
     Value::Object(m)
 }
 
 fn iface_admin_usergroups__add_teams_response__to_json(p: &iface_admin_usergroups::AddTeamsResponse) -> Value {
     let mut m = Map::new();
-    m.insert("ok".into(), iface_admin_usergroups__defs_ok_true__to_json(&p.ok));
+    m.insert("ok".into(), Value::Bool(*(&p.ok)));
     Value::Object(m)
 }
 
 fn iface_admin_usergroups__list_channels_response__to_json(p: &iface_admin_usergroups::ListChannelsResponse) -> Value {
     let mut m = Map::new();
-    m.insert("ok".into(), iface_admin_usergroups__defs_ok_true__to_json(&p.ok));
+    m.insert("ok".into(), Value::Bool(*(&p.ok)));
     Value::Object(m)
 }
 
 fn iface_admin_usergroups__remove_channels_response__to_json(p: &iface_admin_usergroups::RemoveChannelsResponse) -> Value {
     let mut m = Map::new();
-    m.insert("ok".into(), iface_admin_usergroups__defs_ok_true__to_json(&p.ok));
+    m.insert("ok".into(), Value::Bool(*(&p.ok)));
     Value::Object(m)
 }
 
@@ -127,35 +121,28 @@ fn iface_admin_usergroups__remove_channels_params__to_json(p: &iface_admin_userg
 fn iface_admin_usergroups__add_channels_response__from_json(v: &Value) -> Option<iface_admin_usergroups::AddChannelsResponse> {
     let m = v.as_object()?;
     Some(iface_admin_usergroups::AddChannelsResponse {
-        ok: match m.get("ok").and_then(|v| iface_admin_usergroups__defs_ok_true__from_json(v)) { Some(x) => x, None => return None },
-    })
-}
-
-fn iface_admin_usergroups__defs_ok_true__from_json(v: &Value) -> Option<iface_admin_usergroups::DefsOkTrue> {
-    let m = v.as_object()?;
-    Some(iface_admin_usergroups::DefsOkTrue {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        ok: m.get("ok").and_then(|v| (v).as_bool()).unwrap_or_default(),
     })
 }
 
 fn iface_admin_usergroups__add_teams_response__from_json(v: &Value) -> Option<iface_admin_usergroups::AddTeamsResponse> {
     let m = v.as_object()?;
     Some(iface_admin_usergroups::AddTeamsResponse {
-        ok: match m.get("ok").and_then(|v| iface_admin_usergroups__defs_ok_true__from_json(v)) { Some(x) => x, None => return None },
+        ok: m.get("ok").and_then(|v| (v).as_bool()).unwrap_or_default(),
     })
 }
 
 fn iface_admin_usergroups__list_channels_response__from_json(v: &Value) -> Option<iface_admin_usergroups::ListChannelsResponse> {
     let m = v.as_object()?;
     Some(iface_admin_usergroups::ListChannelsResponse {
-        ok: match m.get("ok").and_then(|v| iface_admin_usergroups__defs_ok_true__from_json(v)) { Some(x) => x, None => return None },
+        ok: m.get("ok").and_then(|v| (v).as_bool()).unwrap_or_default(),
     })
 }
 
 fn iface_admin_usergroups__remove_channels_response__from_json(v: &Value) -> Option<iface_admin_usergroups::RemoveChannelsResponse> {
     let m = v.as_object()?;
     Some(iface_admin_usergroups::RemoveChannelsResponse {
-        ok: match m.get("ok").and_then(|v| iface_admin_usergroups__defs_ok_true__from_json(v)) { Some(x) => x, None => return None },
+        ok: m.get("ok").and_then(|v| (v).as_bool()).unwrap_or_default(),
     })
 }
 

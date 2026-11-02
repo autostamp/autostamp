@@ -20,12 +20,6 @@ const OP_ANSWER_INLINE_QUERY_POST_ANSWER_INLINE_QUERY: OpSpec = OpSpec {
     ],
 };
 
-fn iface_answer_inline_query__inline_query_result__to_json(p: &iface_answer_inline_query::InlineQueryResult) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
 fn iface_answer_inline_query__post_answer_inline_query_response__to_json(p: &iface_answer_inline_query::PostAnswerInlineQueryResponse) -> Value {
     let mut m = Map::new();
     m.insert("ok".into(), Value::Bool(*(&p.ok)));
@@ -39,7 +33,7 @@ fn iface_answer_inline_query__post_answer_inline_query_params__to_json(p: &iface
     m.insert("inline_query_id".into(), Value::String((&p.inline_query_id).clone()));
     m.insert("is_personal".into(), match (&p.is_personal) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     m.insert("next_offset".into(), match (&p.next_offset) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("results".into(), Value::Array((&p.results).iter().map(|v| iface_answer_inline_query__inline_query_result__to_json(v)).collect()));
+    m.insert("results".into(), Value::Array((&p.results).iter().map(|v| Value::String((v).clone())).collect()));
     m.insert("switch_pm_parameter".into(), match (&p.switch_pm_parameter) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("switch_pm_text".into(), match (&p.switch_pm_text) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)

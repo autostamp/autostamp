@@ -6,13 +6,13 @@
 /// | Secret name | Applied to each request as |
 /// | --- | --- |
 /// | `private_apps_legacy` | header `private-app-legacy` |
-package autostamp:hubapi@0.5.0;
+package autostamp:hubapi@0.6.0;
 
 interface custom-event-data {
-  /// Map of properties for the event in the format property internal name - property value
-  record behavioral-event-http-completion-request-properties {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record behavioral-event-http-completion-request-properties-entry {
+    key: string,
+    value: string
   }
 
   /// Send custom event completion
@@ -26,7 +26,7 @@ interface custom-event-data {
     /// The time when this event occurred (if any). If this isn't set, the current time will be used
     occurred-at: option<string>,
     /// Map of properties for the event in the format property internal name - property value
-    properties: option<behavioral-event-http-completion-request-properties>,
+    properties: option<list<behavioral-event-http-completion-request-properties-entry>>,
     /// User token
     utk: option<string>,
     uuid: option<string>

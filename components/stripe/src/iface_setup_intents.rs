@@ -473,7 +473,7 @@ fn iface_setup_intents__setup_intent__to_json(p: &iface_setup_intents::SetupInte
     m.insert("latest_attempt".into(), match (&p.latest_attempt) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("livemode".into(), Value::Bool(*(&p.livemode)));
     m.insert("mandate".into(), match (&p.mandate) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("metadata".into(), match (&p.metadata) { Some(v) => iface_setup_intents__setup_intent_metadata__to_json(v), None => Value::Null });
+    m.insert("metadata".into(), match (&p.metadata) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("next_action".into(), match (&p.next_action) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("object".into(), Value::String(iface_setup_intents__setup_intent_object_enum__to_str(&p.object).into()));
     m.insert("on_behalf_of".into(), match (&p.on_behalf_of) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -486,9 +486,10 @@ fn iface_setup_intents__setup_intent__to_json(p: &iface_setup_intents::SetupInte
     Value::Object(m)
 }
 
-fn iface_setup_intents__setup_intent_metadata__to_json(p: &iface_setup_intents::SetupIntentMetadata) -> Value {
+fn iface_setup_intents__setup_intent_metadata_entry__to_json(p: &iface_setup_intents::SetupIntentMetadataEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -507,15 +508,16 @@ fn iface_setup_intents__post_setup_intents_body_mandate_data__to_json(p: &iface_
 fn iface_setup_intents__post_setup_intents_body_mandate_data_customer_acceptance__to_json(p: &iface_setup_intents::PostSetupIntentsBodyMandateDataCustomerAcceptance) -> Value {
     let mut m = Map::new();
     m.insert("accepted_at".into(), match (&p.accepted_at) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    m.insert("offline".into(), match (&p.offline) { Some(v) => iface_setup_intents__post_setup_intents_body_mandate_data_customer_acceptance_offline__to_json(v), None => Value::Null });
+    m.insert("offline".into(), match (&p.offline) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("online".into(), match (&p.online) { Some(v) => iface_setup_intents__post_setup_intents_body_mandate_data_customer_acceptance_online__to_json(v), None => Value::Null });
     m.insert("type".into(), Value::String(iface_setup_intents__post_setup_intents_body_mandate_data_customer_acceptance_type_op_enum__to_str(&p.type_op).into()));
     Value::Object(m)
 }
 
-fn iface_setup_intents__post_setup_intents_body_mandate_data_customer_acceptance_offline__to_json(p: &iface_setup_intents::PostSetupIntentsBodyMandateDataCustomerAcceptanceOffline) -> Value {
+fn iface_setup_intents__post_setup_intents_body_mandate_data_customer_acceptance_offline_entry__to_json(p: &iface_setup_intents::PostSetupIntentsBodyMandateDataCustomerAcceptanceOfflineEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -526,47 +528,48 @@ fn iface_setup_intents__post_setup_intents_body_mandate_data_customer_acceptance
     Value::Object(m)
 }
 
-fn iface_setup_intents__post_setup_intents_body_metadata__to_json(p: &iface_setup_intents::PostSetupIntentsBodyMetadata) -> Value {
+fn iface_setup_intents__post_setup_intents_body_metadata_entry__to_json(p: &iface_setup_intents::PostSetupIntentsBodyMetadataEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
 fn iface_setup_intents__post_setup_intents_body_payment_method_data__to_json(p: &iface_setup_intents::PostSetupIntentsBodyPaymentMethodData) -> Value {
     let mut m = Map::new();
     m.insert("acss_debit".into(), match (&p.acss_debit) { Some(v) => iface_setup_intents__post_setup_intents_body_payment_method_data_acss_debit__to_json(v), None => Value::Null });
-    m.insert("affirm".into(), match (&p.affirm) { Some(v) => iface_setup_intents__post_setup_intents_body_payment_method_data_affirm__to_json(v), None => Value::Null });
-    m.insert("afterpay_clearpay".into(), match (&p.afterpay_clearpay) { Some(v) => iface_setup_intents__post_setup_intents_body_payment_method_data_afterpay_clearpay__to_json(v), None => Value::Null });
-    m.insert("alipay".into(), match (&p.alipay) { Some(v) => iface_setup_intents__post_setup_intents_body_payment_method_data_alipay__to_json(v), None => Value::Null });
+    m.insert("affirm".into(), match (&p.affirm) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
+    m.insert("afterpay_clearpay".into(), match (&p.afterpay_clearpay) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
+    m.insert("alipay".into(), match (&p.alipay) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("au_becs_debit".into(), match (&p.au_becs_debit) { Some(v) => iface_setup_intents__post_setup_intents_body_payment_method_data_au_becs_debit__to_json(v), None => Value::Null });
     m.insert("bacs_debit".into(), match (&p.bacs_debit) { Some(v) => iface_setup_intents__post_setup_intents_body_payment_method_data_bacs_debit__to_json(v), None => Value::Null });
-    m.insert("bancontact".into(), match (&p.bancontact) { Some(v) => iface_setup_intents__post_setup_intents_body_payment_method_data_bancontact__to_json(v), None => Value::Null });
+    m.insert("bancontact".into(), match (&p.bancontact) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("billing_details".into(), match (&p.billing_details) { Some(v) => iface_setup_intents__post_setup_intents_body_payment_method_data_billing_details__to_json(v), None => Value::Null });
-    m.insert("blik".into(), match (&p.blik) { Some(v) => iface_setup_intents__post_setup_intents_body_payment_method_data_blik__to_json(v), None => Value::Null });
+    m.insert("blik".into(), match (&p.blik) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("boleto".into(), match (&p.boleto) { Some(v) => iface_setup_intents__post_setup_intents_body_payment_method_data_boleto__to_json(v), None => Value::Null });
-    m.insert("cashapp".into(), match (&p.cashapp) { Some(v) => iface_setup_intents__post_setup_intents_body_payment_method_data_cashapp__to_json(v), None => Value::Null });
-    m.insert("customer_balance".into(), match (&p.customer_balance) { Some(v) => iface_setup_intents__post_setup_intents_body_payment_method_data_customer_balance__to_json(v), None => Value::Null });
+    m.insert("cashapp".into(), match (&p.cashapp) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
+    m.insert("customer_balance".into(), match (&p.customer_balance) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("eps".into(), match (&p.eps) { Some(v) => iface_setup_intents__post_setup_intents_body_payment_method_data_eps__to_json(v), None => Value::Null });
     m.insert("fpx".into(), match (&p.fpx) { Some(v) => iface_setup_intents__post_setup_intents_body_payment_method_data_fpx__to_json(v), None => Value::Null });
-    m.insert("giropay".into(), match (&p.giropay) { Some(v) => iface_setup_intents__post_setup_intents_body_payment_method_data_giropay__to_json(v), None => Value::Null });
-    m.insert("grabpay".into(), match (&p.grabpay) { Some(v) => iface_setup_intents__post_setup_intents_body_payment_method_data_grabpay__to_json(v), None => Value::Null });
+    m.insert("giropay".into(), match (&p.giropay) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
+    m.insert("grabpay".into(), match (&p.grabpay) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("ideal".into(), match (&p.ideal) { Some(v) => iface_setup_intents__post_setup_intents_body_payment_method_data_ideal__to_json(v), None => Value::Null });
-    m.insert("interac_present".into(), match (&p.interac_present) { Some(v) => iface_setup_intents__post_setup_intents_body_payment_method_data_interac_present__to_json(v), None => Value::Null });
+    m.insert("interac_present".into(), match (&p.interac_present) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("klarna".into(), match (&p.klarna) { Some(v) => iface_setup_intents__post_setup_intents_body_payment_method_data_klarna__to_json(v), None => Value::Null });
-    m.insert("konbini".into(), match (&p.konbini) { Some(v) => iface_setup_intents__post_setup_intents_body_payment_method_data_konbini__to_json(v), None => Value::Null });
-    m.insert("link".into(), match (&p.link) { Some(v) => iface_setup_intents__post_setup_intents_body_payment_method_data_link__to_json(v), None => Value::Null });
-    m.insert("metadata".into(), match (&p.metadata) { Some(v) => iface_setup_intents__post_setup_intents_body_payment_method_data_metadata__to_json(v), None => Value::Null });
-    m.insert("oxxo".into(), match (&p.oxxo) { Some(v) => iface_setup_intents__post_setup_intents_body_payment_method_data_oxxo__to_json(v), None => Value::Null });
+    m.insert("konbini".into(), match (&p.konbini) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
+    m.insert("link".into(), match (&p.link) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
+    m.insert("metadata".into(), match (&p.metadata) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
+    m.insert("oxxo".into(), match (&p.oxxo) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("p24".into(), match (&p.p24) { Some(v) => iface_setup_intents__post_setup_intents_body_payment_method_data_p24__to_json(v), None => Value::Null });
-    m.insert("paynow".into(), match (&p.paynow) { Some(v) => iface_setup_intents__post_setup_intents_body_payment_method_data_paynow__to_json(v), None => Value::Null });
-    m.insert("pix".into(), match (&p.pix) { Some(v) => iface_setup_intents__post_setup_intents_body_payment_method_data_pix__to_json(v), None => Value::Null });
-    m.insert("promptpay".into(), match (&p.promptpay) { Some(v) => iface_setup_intents__post_setup_intents_body_payment_method_data_promptpay__to_json(v), None => Value::Null });
+    m.insert("paynow".into(), match (&p.paynow) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
+    m.insert("pix".into(), match (&p.pix) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
+    m.insert("promptpay".into(), match (&p.promptpay) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("radar_options".into(), match (&p.radar_options) { Some(v) => iface_setup_intents__post_setup_intents_body_payment_method_data_radar_options__to_json(v), None => Value::Null });
     m.insert("sepa_debit".into(), match (&p.sepa_debit) { Some(v) => iface_setup_intents__post_setup_intents_body_payment_method_data_sepa_debit__to_json(v), None => Value::Null });
     m.insert("sofort".into(), match (&p.sofort) { Some(v) => iface_setup_intents__post_setup_intents_body_payment_method_data_sofort__to_json(v), None => Value::Null });
     m.insert("type".into(), Value::String(iface_setup_intents__post_setup_intents_body_payment_method_data_type_op_enum__to_str(&p.type_op).into()));
     m.insert("us_bank_account".into(), match (&p.us_bank_account) { Some(v) => iface_setup_intents__post_setup_intents_body_payment_method_data_us_bank_account__to_json(v), None => Value::Null });
-    m.insert("wechat_pay".into(), match (&p.wechat_pay) { Some(v) => iface_setup_intents__post_setup_intents_body_payment_method_data_wechat_pay__to_json(v), None => Value::Null });
+    m.insert("wechat_pay".into(), match (&p.wechat_pay) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -578,21 +581,24 @@ fn iface_setup_intents__post_setup_intents_body_payment_method_data_acss_debit__
     Value::Object(m)
 }
 
-fn iface_setup_intents__post_setup_intents_body_payment_method_data_affirm__to_json(p: &iface_setup_intents::PostSetupIntentsBodyPaymentMethodDataAffirm) -> Value {
+fn iface_setup_intents__post_setup_intents_body_payment_method_data_affirm_entry__to_json(p: &iface_setup_intents::PostSetupIntentsBodyPaymentMethodDataAffirmEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
-fn iface_setup_intents__post_setup_intents_body_payment_method_data_afterpay_clearpay__to_json(p: &iface_setup_intents::PostSetupIntentsBodyPaymentMethodDataAfterpayClearpay) -> Value {
+fn iface_setup_intents__post_setup_intents_body_payment_method_data_afterpay_clearpay_entry__to_json(p: &iface_setup_intents::PostSetupIntentsBodyPaymentMethodDataAfterpayClearpayEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
-fn iface_setup_intents__post_setup_intents_body_payment_method_data_alipay__to_json(p: &iface_setup_intents::PostSetupIntentsBodyPaymentMethodDataAlipay) -> Value {
+fn iface_setup_intents__post_setup_intents_body_payment_method_data_alipay_entry__to_json(p: &iface_setup_intents::PostSetupIntentsBodyPaymentMethodDataAlipayEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -610,9 +616,10 @@ fn iface_setup_intents__post_setup_intents_body_payment_method_data_bacs_debit__
     Value::Object(m)
 }
 
-fn iface_setup_intents__post_setup_intents_body_payment_method_data_bancontact__to_json(p: &iface_setup_intents::PostSetupIntentsBodyPaymentMethodDataBancontact) -> Value {
+fn iface_setup_intents__post_setup_intents_body_payment_method_data_bancontact_entry__to_json(p: &iface_setup_intents::PostSetupIntentsBodyPaymentMethodDataBancontactEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -625,9 +632,10 @@ fn iface_setup_intents__post_setup_intents_body_payment_method_data_billing_deta
     Value::Object(m)
 }
 
-fn iface_setup_intents__post_setup_intents_body_payment_method_data_blik__to_json(p: &iface_setup_intents::PostSetupIntentsBodyPaymentMethodDataBlik) -> Value {
+fn iface_setup_intents__post_setup_intents_body_payment_method_data_blik_entry__to_json(p: &iface_setup_intents::PostSetupIntentsBodyPaymentMethodDataBlikEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -637,15 +645,17 @@ fn iface_setup_intents__post_setup_intents_body_payment_method_data_boleto__to_j
     Value::Object(m)
 }
 
-fn iface_setup_intents__post_setup_intents_body_payment_method_data_cashapp__to_json(p: &iface_setup_intents::PostSetupIntentsBodyPaymentMethodDataCashapp) -> Value {
+fn iface_setup_intents__post_setup_intents_body_payment_method_data_cashapp_entry__to_json(p: &iface_setup_intents::PostSetupIntentsBodyPaymentMethodDataCashappEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
-fn iface_setup_intents__post_setup_intents_body_payment_method_data_customer_balance__to_json(p: &iface_setup_intents::PostSetupIntentsBodyPaymentMethodDataCustomerBalance) -> Value {
+fn iface_setup_intents__post_setup_intents_body_payment_method_data_customer_balance_entry__to_json(p: &iface_setup_intents::PostSetupIntentsBodyPaymentMethodDataCustomerBalanceEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -661,15 +671,17 @@ fn iface_setup_intents__post_setup_intents_body_payment_method_data_fpx__to_json
     Value::Object(m)
 }
 
-fn iface_setup_intents__post_setup_intents_body_payment_method_data_giropay__to_json(p: &iface_setup_intents::PostSetupIntentsBodyPaymentMethodDataGiropay) -> Value {
+fn iface_setup_intents__post_setup_intents_body_payment_method_data_giropay_entry__to_json(p: &iface_setup_intents::PostSetupIntentsBodyPaymentMethodDataGiropayEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
-fn iface_setup_intents__post_setup_intents_body_payment_method_data_grabpay__to_json(p: &iface_setup_intents::PostSetupIntentsBodyPaymentMethodDataGrabpay) -> Value {
+fn iface_setup_intents__post_setup_intents_body_payment_method_data_grabpay_entry__to_json(p: &iface_setup_intents::PostSetupIntentsBodyPaymentMethodDataGrabpayEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -679,9 +691,10 @@ fn iface_setup_intents__post_setup_intents_body_payment_method_data_ideal__to_js
     Value::Object(m)
 }
 
-fn iface_setup_intents__post_setup_intents_body_payment_method_data_interac_present__to_json(p: &iface_setup_intents::PostSetupIntentsBodyPaymentMethodDataInteracPresent) -> Value {
+fn iface_setup_intents__post_setup_intents_body_payment_method_data_interac_present_entry__to_json(p: &iface_setup_intents::PostSetupIntentsBodyPaymentMethodDataInteracPresentEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -699,27 +712,31 @@ fn iface_setup_intents__post_setup_intents_body_payment_method_data_klarna_dob__
     Value::Object(m)
 }
 
-fn iface_setup_intents__post_setup_intents_body_payment_method_data_konbini__to_json(p: &iface_setup_intents::PostSetupIntentsBodyPaymentMethodDataKonbini) -> Value {
+fn iface_setup_intents__post_setup_intents_body_payment_method_data_konbini_entry__to_json(p: &iface_setup_intents::PostSetupIntentsBodyPaymentMethodDataKonbiniEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
-fn iface_setup_intents__post_setup_intents_body_payment_method_data_link__to_json(p: &iface_setup_intents::PostSetupIntentsBodyPaymentMethodDataLink) -> Value {
+fn iface_setup_intents__post_setup_intents_body_payment_method_data_link_entry__to_json(p: &iface_setup_intents::PostSetupIntentsBodyPaymentMethodDataLinkEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
-fn iface_setup_intents__post_setup_intents_body_payment_method_data_metadata__to_json(p: &iface_setup_intents::PostSetupIntentsBodyPaymentMethodDataMetadata) -> Value {
+fn iface_setup_intents__post_setup_intents_body_payment_method_data_metadata_entry__to_json(p: &iface_setup_intents::PostSetupIntentsBodyPaymentMethodDataMetadataEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
-fn iface_setup_intents__post_setup_intents_body_payment_method_data_oxxo__to_json(p: &iface_setup_intents::PostSetupIntentsBodyPaymentMethodDataOxxo) -> Value {
+fn iface_setup_intents__post_setup_intents_body_payment_method_data_oxxo_entry__to_json(p: &iface_setup_intents::PostSetupIntentsBodyPaymentMethodDataOxxoEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -729,21 +746,24 @@ fn iface_setup_intents__post_setup_intents_body_payment_method_data_p24__to_json
     Value::Object(m)
 }
 
-fn iface_setup_intents__post_setup_intents_body_payment_method_data_paynow__to_json(p: &iface_setup_intents::PostSetupIntentsBodyPaymentMethodDataPaynow) -> Value {
+fn iface_setup_intents__post_setup_intents_body_payment_method_data_paynow_entry__to_json(p: &iface_setup_intents::PostSetupIntentsBodyPaymentMethodDataPaynowEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
-fn iface_setup_intents__post_setup_intents_body_payment_method_data_pix__to_json(p: &iface_setup_intents::PostSetupIntentsBodyPaymentMethodDataPix) -> Value {
+fn iface_setup_intents__post_setup_intents_body_payment_method_data_pix_entry__to_json(p: &iface_setup_intents::PostSetupIntentsBodyPaymentMethodDataPixEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
-fn iface_setup_intents__post_setup_intents_body_payment_method_data_promptpay__to_json(p: &iface_setup_intents::PostSetupIntentsBodyPaymentMethodDataPromptpay) -> Value {
+fn iface_setup_intents__post_setup_intents_body_payment_method_data_promptpay_entry__to_json(p: &iface_setup_intents::PostSetupIntentsBodyPaymentMethodDataPromptpayEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -775,9 +795,10 @@ fn iface_setup_intents__post_setup_intents_body_payment_method_data_us_bank_acco
     Value::Object(m)
 }
 
-fn iface_setup_intents__post_setup_intents_body_payment_method_data_wechat_pay__to_json(p: &iface_setup_intents::PostSetupIntentsBodyPaymentMethodDataWechatPay) -> Value {
+fn iface_setup_intents__post_setup_intents_body_payment_method_data_wechat_pay_entry__to_json(p: &iface_setup_intents::PostSetupIntentsBodyPaymentMethodDataWechatPayEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -847,13 +868,14 @@ fn iface_setup_intents__post_setup_intents_body_payment_method_options_link__to_
 
 fn iface_setup_intents__post_setup_intents_body_payment_method_options_sepa_debit__to_json(p: &iface_setup_intents::PostSetupIntentsBodyPaymentMethodOptionsSepaDebit) -> Value {
     let mut m = Map::new();
-    m.insert("mandate_options".into(), match (&p.mandate_options) { Some(v) => iface_setup_intents__post_setup_intents_body_payment_method_options_sepa_debit_mandate_options__to_json(v), None => Value::Null });
+    m.insert("mandate_options".into(), match (&p.mandate_options) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_setup_intents__post_setup_intents_body_payment_method_options_sepa_debit_mandate_options__to_json(p: &iface_setup_intents::PostSetupIntentsBodyPaymentMethodOptionsSepaDebitMandateOptions) -> Value {
+fn iface_setup_intents__post_setup_intents_body_payment_method_options_sepa_debit_mandate_options_entry__to_json(p: &iface_setup_intents::PostSetupIntentsBodyPaymentMethodOptionsSepaDebitMandateOptionsEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -888,38 +910,38 @@ fn iface_setup_intents__post_setup_intents_body_single_use__to_json(p: &iface_se
 fn iface_setup_intents__post_setup_intents_intent_body_payment_method_data__to_json(p: &iface_setup_intents::PostSetupIntentsIntentBodyPaymentMethodData) -> Value {
     let mut m = Map::new();
     m.insert("acss_debit".into(), match (&p.acss_debit) { Some(v) => iface_setup_intents__post_setup_intents_intent_body_payment_method_data_acss_debit__to_json(v), None => Value::Null });
-    m.insert("affirm".into(), match (&p.affirm) { Some(v) => iface_setup_intents__post_setup_intents_intent_body_payment_method_data_affirm__to_json(v), None => Value::Null });
-    m.insert("afterpay_clearpay".into(), match (&p.afterpay_clearpay) { Some(v) => iface_setup_intents__post_setup_intents_intent_body_payment_method_data_afterpay_clearpay__to_json(v), None => Value::Null });
-    m.insert("alipay".into(), match (&p.alipay) { Some(v) => iface_setup_intents__post_setup_intents_intent_body_payment_method_data_alipay__to_json(v), None => Value::Null });
+    m.insert("affirm".into(), match (&p.affirm) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
+    m.insert("afterpay_clearpay".into(), match (&p.afterpay_clearpay) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
+    m.insert("alipay".into(), match (&p.alipay) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("au_becs_debit".into(), match (&p.au_becs_debit) { Some(v) => iface_setup_intents__post_setup_intents_intent_body_payment_method_data_au_becs_debit__to_json(v), None => Value::Null });
     m.insert("bacs_debit".into(), match (&p.bacs_debit) { Some(v) => iface_setup_intents__post_setup_intents_intent_body_payment_method_data_bacs_debit__to_json(v), None => Value::Null });
-    m.insert("bancontact".into(), match (&p.bancontact) { Some(v) => iface_setup_intents__post_setup_intents_intent_body_payment_method_data_bancontact__to_json(v), None => Value::Null });
+    m.insert("bancontact".into(), match (&p.bancontact) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("billing_details".into(), match (&p.billing_details) { Some(v) => iface_setup_intents__post_setup_intents_intent_body_payment_method_data_billing_details__to_json(v), None => Value::Null });
-    m.insert("blik".into(), match (&p.blik) { Some(v) => iface_setup_intents__post_setup_intents_intent_body_payment_method_data_blik__to_json(v), None => Value::Null });
+    m.insert("blik".into(), match (&p.blik) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("boleto".into(), match (&p.boleto) { Some(v) => iface_setup_intents__post_setup_intents_intent_body_payment_method_data_boleto__to_json(v), None => Value::Null });
-    m.insert("cashapp".into(), match (&p.cashapp) { Some(v) => iface_setup_intents__post_setup_intents_intent_body_payment_method_data_cashapp__to_json(v), None => Value::Null });
-    m.insert("customer_balance".into(), match (&p.customer_balance) { Some(v) => iface_setup_intents__post_setup_intents_intent_body_payment_method_data_customer_balance__to_json(v), None => Value::Null });
+    m.insert("cashapp".into(), match (&p.cashapp) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
+    m.insert("customer_balance".into(), match (&p.customer_balance) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("eps".into(), match (&p.eps) { Some(v) => iface_setup_intents__post_setup_intents_intent_body_payment_method_data_eps__to_json(v), None => Value::Null });
     m.insert("fpx".into(), match (&p.fpx) { Some(v) => iface_setup_intents__post_setup_intents_intent_body_payment_method_data_fpx__to_json(v), None => Value::Null });
-    m.insert("giropay".into(), match (&p.giropay) { Some(v) => iface_setup_intents__post_setup_intents_intent_body_payment_method_data_giropay__to_json(v), None => Value::Null });
-    m.insert("grabpay".into(), match (&p.grabpay) { Some(v) => iface_setup_intents__post_setup_intents_intent_body_payment_method_data_grabpay__to_json(v), None => Value::Null });
+    m.insert("giropay".into(), match (&p.giropay) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
+    m.insert("grabpay".into(), match (&p.grabpay) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("ideal".into(), match (&p.ideal) { Some(v) => iface_setup_intents__post_setup_intents_intent_body_payment_method_data_ideal__to_json(v), None => Value::Null });
-    m.insert("interac_present".into(), match (&p.interac_present) { Some(v) => iface_setup_intents__post_setup_intents_intent_body_payment_method_data_interac_present__to_json(v), None => Value::Null });
+    m.insert("interac_present".into(), match (&p.interac_present) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("klarna".into(), match (&p.klarna) { Some(v) => iface_setup_intents__post_setup_intents_intent_body_payment_method_data_klarna__to_json(v), None => Value::Null });
-    m.insert("konbini".into(), match (&p.konbini) { Some(v) => iface_setup_intents__post_setup_intents_intent_body_payment_method_data_konbini__to_json(v), None => Value::Null });
-    m.insert("link".into(), match (&p.link) { Some(v) => iface_setup_intents__post_setup_intents_intent_body_payment_method_data_link__to_json(v), None => Value::Null });
-    m.insert("metadata".into(), match (&p.metadata) { Some(v) => iface_setup_intents__post_setup_intents_intent_body_payment_method_data_metadata__to_json(v), None => Value::Null });
-    m.insert("oxxo".into(), match (&p.oxxo) { Some(v) => iface_setup_intents__post_setup_intents_intent_body_payment_method_data_oxxo__to_json(v), None => Value::Null });
+    m.insert("konbini".into(), match (&p.konbini) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
+    m.insert("link".into(), match (&p.link) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
+    m.insert("metadata".into(), match (&p.metadata) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
+    m.insert("oxxo".into(), match (&p.oxxo) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("p24".into(), match (&p.p24) { Some(v) => iface_setup_intents__post_setup_intents_intent_body_payment_method_data_p24__to_json(v), None => Value::Null });
-    m.insert("paynow".into(), match (&p.paynow) { Some(v) => iface_setup_intents__post_setup_intents_intent_body_payment_method_data_paynow__to_json(v), None => Value::Null });
-    m.insert("pix".into(), match (&p.pix) { Some(v) => iface_setup_intents__post_setup_intents_intent_body_payment_method_data_pix__to_json(v), None => Value::Null });
-    m.insert("promptpay".into(), match (&p.promptpay) { Some(v) => iface_setup_intents__post_setup_intents_intent_body_payment_method_data_promptpay__to_json(v), None => Value::Null });
+    m.insert("paynow".into(), match (&p.paynow) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
+    m.insert("pix".into(), match (&p.pix) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
+    m.insert("promptpay".into(), match (&p.promptpay) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("radar_options".into(), match (&p.radar_options) { Some(v) => iface_setup_intents__post_setup_intents_intent_body_payment_method_data_radar_options__to_json(v), None => Value::Null });
     m.insert("sepa_debit".into(), match (&p.sepa_debit) { Some(v) => iface_setup_intents__post_setup_intents_intent_body_payment_method_data_sepa_debit__to_json(v), None => Value::Null });
     m.insert("sofort".into(), match (&p.sofort) { Some(v) => iface_setup_intents__post_setup_intents_intent_body_payment_method_data_sofort__to_json(v), None => Value::Null });
     m.insert("type".into(), Value::String(iface_setup_intents__post_setup_intents_body_payment_method_data_type_op_enum__to_str(&p.type_op).into()));
     m.insert("us_bank_account".into(), match (&p.us_bank_account) { Some(v) => iface_setup_intents__post_setup_intents_intent_body_payment_method_data_us_bank_account__to_json(v), None => Value::Null });
-    m.insert("wechat_pay".into(), match (&p.wechat_pay) { Some(v) => iface_setup_intents__post_setup_intents_intent_body_payment_method_data_wechat_pay__to_json(v), None => Value::Null });
+    m.insert("wechat_pay".into(), match (&p.wechat_pay) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -931,21 +953,24 @@ fn iface_setup_intents__post_setup_intents_intent_body_payment_method_data_acss_
     Value::Object(m)
 }
 
-fn iface_setup_intents__post_setup_intents_intent_body_payment_method_data_affirm__to_json(p: &iface_setup_intents::PostSetupIntentsIntentBodyPaymentMethodDataAffirm) -> Value {
+fn iface_setup_intents__post_setup_intents_intent_body_payment_method_data_affirm_entry__to_json(p: &iface_setup_intents::PostSetupIntentsIntentBodyPaymentMethodDataAffirmEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
-fn iface_setup_intents__post_setup_intents_intent_body_payment_method_data_afterpay_clearpay__to_json(p: &iface_setup_intents::PostSetupIntentsIntentBodyPaymentMethodDataAfterpayClearpay) -> Value {
+fn iface_setup_intents__post_setup_intents_intent_body_payment_method_data_afterpay_clearpay_entry__to_json(p: &iface_setup_intents::PostSetupIntentsIntentBodyPaymentMethodDataAfterpayClearpayEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
-fn iface_setup_intents__post_setup_intents_intent_body_payment_method_data_alipay__to_json(p: &iface_setup_intents::PostSetupIntentsIntentBodyPaymentMethodDataAlipay) -> Value {
+fn iface_setup_intents__post_setup_intents_intent_body_payment_method_data_alipay_entry__to_json(p: &iface_setup_intents::PostSetupIntentsIntentBodyPaymentMethodDataAlipayEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -963,9 +988,10 @@ fn iface_setup_intents__post_setup_intents_intent_body_payment_method_data_bacs_
     Value::Object(m)
 }
 
-fn iface_setup_intents__post_setup_intents_intent_body_payment_method_data_bancontact__to_json(p: &iface_setup_intents::PostSetupIntentsIntentBodyPaymentMethodDataBancontact) -> Value {
+fn iface_setup_intents__post_setup_intents_intent_body_payment_method_data_bancontact_entry__to_json(p: &iface_setup_intents::PostSetupIntentsIntentBodyPaymentMethodDataBancontactEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -978,9 +1004,10 @@ fn iface_setup_intents__post_setup_intents_intent_body_payment_method_data_billi
     Value::Object(m)
 }
 
-fn iface_setup_intents__post_setup_intents_intent_body_payment_method_data_blik__to_json(p: &iface_setup_intents::PostSetupIntentsIntentBodyPaymentMethodDataBlik) -> Value {
+fn iface_setup_intents__post_setup_intents_intent_body_payment_method_data_blik_entry__to_json(p: &iface_setup_intents::PostSetupIntentsIntentBodyPaymentMethodDataBlikEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -990,15 +1017,17 @@ fn iface_setup_intents__post_setup_intents_intent_body_payment_method_data_bolet
     Value::Object(m)
 }
 
-fn iface_setup_intents__post_setup_intents_intent_body_payment_method_data_cashapp__to_json(p: &iface_setup_intents::PostSetupIntentsIntentBodyPaymentMethodDataCashapp) -> Value {
+fn iface_setup_intents__post_setup_intents_intent_body_payment_method_data_cashapp_entry__to_json(p: &iface_setup_intents::PostSetupIntentsIntentBodyPaymentMethodDataCashappEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
-fn iface_setup_intents__post_setup_intents_intent_body_payment_method_data_customer_balance__to_json(p: &iface_setup_intents::PostSetupIntentsIntentBodyPaymentMethodDataCustomerBalance) -> Value {
+fn iface_setup_intents__post_setup_intents_intent_body_payment_method_data_customer_balance_entry__to_json(p: &iface_setup_intents::PostSetupIntentsIntentBodyPaymentMethodDataCustomerBalanceEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -1014,15 +1043,17 @@ fn iface_setup_intents__post_setup_intents_intent_body_payment_method_data_fpx__
     Value::Object(m)
 }
 
-fn iface_setup_intents__post_setup_intents_intent_body_payment_method_data_giropay__to_json(p: &iface_setup_intents::PostSetupIntentsIntentBodyPaymentMethodDataGiropay) -> Value {
+fn iface_setup_intents__post_setup_intents_intent_body_payment_method_data_giropay_entry__to_json(p: &iface_setup_intents::PostSetupIntentsIntentBodyPaymentMethodDataGiropayEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
-fn iface_setup_intents__post_setup_intents_intent_body_payment_method_data_grabpay__to_json(p: &iface_setup_intents::PostSetupIntentsIntentBodyPaymentMethodDataGrabpay) -> Value {
+fn iface_setup_intents__post_setup_intents_intent_body_payment_method_data_grabpay_entry__to_json(p: &iface_setup_intents::PostSetupIntentsIntentBodyPaymentMethodDataGrabpayEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -1032,9 +1063,10 @@ fn iface_setup_intents__post_setup_intents_intent_body_payment_method_data_ideal
     Value::Object(m)
 }
 
-fn iface_setup_intents__post_setup_intents_intent_body_payment_method_data_interac_present__to_json(p: &iface_setup_intents::PostSetupIntentsIntentBodyPaymentMethodDataInteracPresent) -> Value {
+fn iface_setup_intents__post_setup_intents_intent_body_payment_method_data_interac_present_entry__to_json(p: &iface_setup_intents::PostSetupIntentsIntentBodyPaymentMethodDataInteracPresentEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -1052,27 +1084,31 @@ fn iface_setup_intents__post_setup_intents_intent_body_payment_method_data_klarn
     Value::Object(m)
 }
 
-fn iface_setup_intents__post_setup_intents_intent_body_payment_method_data_konbini__to_json(p: &iface_setup_intents::PostSetupIntentsIntentBodyPaymentMethodDataKonbini) -> Value {
+fn iface_setup_intents__post_setup_intents_intent_body_payment_method_data_konbini_entry__to_json(p: &iface_setup_intents::PostSetupIntentsIntentBodyPaymentMethodDataKonbiniEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
-fn iface_setup_intents__post_setup_intents_intent_body_payment_method_data_link__to_json(p: &iface_setup_intents::PostSetupIntentsIntentBodyPaymentMethodDataLink) -> Value {
+fn iface_setup_intents__post_setup_intents_intent_body_payment_method_data_link_entry__to_json(p: &iface_setup_intents::PostSetupIntentsIntentBodyPaymentMethodDataLinkEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
-fn iface_setup_intents__post_setup_intents_intent_body_payment_method_data_metadata__to_json(p: &iface_setup_intents::PostSetupIntentsIntentBodyPaymentMethodDataMetadata) -> Value {
+fn iface_setup_intents__post_setup_intents_intent_body_payment_method_data_metadata_entry__to_json(p: &iface_setup_intents::PostSetupIntentsIntentBodyPaymentMethodDataMetadataEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
-fn iface_setup_intents__post_setup_intents_intent_body_payment_method_data_oxxo__to_json(p: &iface_setup_intents::PostSetupIntentsIntentBodyPaymentMethodDataOxxo) -> Value {
+fn iface_setup_intents__post_setup_intents_intent_body_payment_method_data_oxxo_entry__to_json(p: &iface_setup_intents::PostSetupIntentsIntentBodyPaymentMethodDataOxxoEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -1082,21 +1118,24 @@ fn iface_setup_intents__post_setup_intents_intent_body_payment_method_data_p24__
     Value::Object(m)
 }
 
-fn iface_setup_intents__post_setup_intents_intent_body_payment_method_data_paynow__to_json(p: &iface_setup_intents::PostSetupIntentsIntentBodyPaymentMethodDataPaynow) -> Value {
+fn iface_setup_intents__post_setup_intents_intent_body_payment_method_data_paynow_entry__to_json(p: &iface_setup_intents::PostSetupIntentsIntentBodyPaymentMethodDataPaynowEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
-fn iface_setup_intents__post_setup_intents_intent_body_payment_method_data_pix__to_json(p: &iface_setup_intents::PostSetupIntentsIntentBodyPaymentMethodDataPix) -> Value {
+fn iface_setup_intents__post_setup_intents_intent_body_payment_method_data_pix_entry__to_json(p: &iface_setup_intents::PostSetupIntentsIntentBodyPaymentMethodDataPixEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
-fn iface_setup_intents__post_setup_intents_intent_body_payment_method_data_promptpay__to_json(p: &iface_setup_intents::PostSetupIntentsIntentBodyPaymentMethodDataPromptpay) -> Value {
+fn iface_setup_intents__post_setup_intents_intent_body_payment_method_data_promptpay_entry__to_json(p: &iface_setup_intents::PostSetupIntentsIntentBodyPaymentMethodDataPromptpayEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -1128,9 +1167,10 @@ fn iface_setup_intents__post_setup_intents_intent_body_payment_method_data_us_ba
     Value::Object(m)
 }
 
-fn iface_setup_intents__post_setup_intents_intent_body_payment_method_data_wechat_pay__to_json(p: &iface_setup_intents::PostSetupIntentsIntentBodyPaymentMethodDataWechatPay) -> Value {
+fn iface_setup_intents__post_setup_intents_intent_body_payment_method_data_wechat_pay_entry__to_json(p: &iface_setup_intents::PostSetupIntentsIntentBodyPaymentMethodDataWechatPayEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -1200,13 +1240,14 @@ fn iface_setup_intents__post_setup_intents_intent_body_payment_method_options_li
 
 fn iface_setup_intents__post_setup_intents_intent_body_payment_method_options_sepa_debit__to_json(p: &iface_setup_intents::PostSetupIntentsIntentBodyPaymentMethodOptionsSepaDebit) -> Value {
     let mut m = Map::new();
-    m.insert("mandate_options".into(), match (&p.mandate_options) { Some(v) => iface_setup_intents__post_setup_intents_intent_body_payment_method_options_sepa_debit_mandate_options__to_json(v), None => Value::Null });
+    m.insert("mandate_options".into(), match (&p.mandate_options) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_setup_intents__post_setup_intents_intent_body_payment_method_options_sepa_debit_mandate_options__to_json(p: &iface_setup_intents::PostSetupIntentsIntentBodyPaymentMethodOptionsSepaDebitMandateOptions) -> Value {
+fn iface_setup_intents__post_setup_intents_intent_body_payment_method_options_sepa_debit_mandate_options_entry__to_json(p: &iface_setup_intents::PostSetupIntentsIntentBodyPaymentMethodOptionsSepaDebitMandateOptionsEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -1234,38 +1275,38 @@ fn iface_setup_intents__post_setup_intents_intent_body_payment_method_options_us
 fn iface_setup_intents__post_setup_intents_intent_confirm_body_payment_method_data__to_json(p: &iface_setup_intents::PostSetupIntentsIntentConfirmBodyPaymentMethodData) -> Value {
     let mut m = Map::new();
     m.insert("acss_debit".into(), match (&p.acss_debit) { Some(v) => iface_setup_intents__post_setup_intents_intent_confirm_body_payment_method_data_acss_debit__to_json(v), None => Value::Null });
-    m.insert("affirm".into(), match (&p.affirm) { Some(v) => iface_setup_intents__post_setup_intents_intent_confirm_body_payment_method_data_affirm__to_json(v), None => Value::Null });
-    m.insert("afterpay_clearpay".into(), match (&p.afterpay_clearpay) { Some(v) => iface_setup_intents__post_setup_intents_intent_confirm_body_payment_method_data_afterpay_clearpay__to_json(v), None => Value::Null });
-    m.insert("alipay".into(), match (&p.alipay) { Some(v) => iface_setup_intents__post_setup_intents_intent_confirm_body_payment_method_data_alipay__to_json(v), None => Value::Null });
+    m.insert("affirm".into(), match (&p.affirm) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
+    m.insert("afterpay_clearpay".into(), match (&p.afterpay_clearpay) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
+    m.insert("alipay".into(), match (&p.alipay) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("au_becs_debit".into(), match (&p.au_becs_debit) { Some(v) => iface_setup_intents__post_setup_intents_intent_confirm_body_payment_method_data_au_becs_debit__to_json(v), None => Value::Null });
     m.insert("bacs_debit".into(), match (&p.bacs_debit) { Some(v) => iface_setup_intents__post_setup_intents_intent_confirm_body_payment_method_data_bacs_debit__to_json(v), None => Value::Null });
-    m.insert("bancontact".into(), match (&p.bancontact) { Some(v) => iface_setup_intents__post_setup_intents_intent_confirm_body_payment_method_data_bancontact__to_json(v), None => Value::Null });
+    m.insert("bancontact".into(), match (&p.bancontact) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("billing_details".into(), match (&p.billing_details) { Some(v) => iface_setup_intents__post_setup_intents_intent_confirm_body_payment_method_data_billing_details__to_json(v), None => Value::Null });
-    m.insert("blik".into(), match (&p.blik) { Some(v) => iface_setup_intents__post_setup_intents_intent_confirm_body_payment_method_data_blik__to_json(v), None => Value::Null });
+    m.insert("blik".into(), match (&p.blik) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("boleto".into(), match (&p.boleto) { Some(v) => iface_setup_intents__post_setup_intents_intent_confirm_body_payment_method_data_boleto__to_json(v), None => Value::Null });
-    m.insert("cashapp".into(), match (&p.cashapp) { Some(v) => iface_setup_intents__post_setup_intents_intent_confirm_body_payment_method_data_cashapp__to_json(v), None => Value::Null });
-    m.insert("customer_balance".into(), match (&p.customer_balance) { Some(v) => iface_setup_intents__post_setup_intents_intent_confirm_body_payment_method_data_customer_balance__to_json(v), None => Value::Null });
+    m.insert("cashapp".into(), match (&p.cashapp) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
+    m.insert("customer_balance".into(), match (&p.customer_balance) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("eps".into(), match (&p.eps) { Some(v) => iface_setup_intents__post_setup_intents_intent_confirm_body_payment_method_data_eps__to_json(v), None => Value::Null });
     m.insert("fpx".into(), match (&p.fpx) { Some(v) => iface_setup_intents__post_setup_intents_intent_confirm_body_payment_method_data_fpx__to_json(v), None => Value::Null });
-    m.insert("giropay".into(), match (&p.giropay) { Some(v) => iface_setup_intents__post_setup_intents_intent_confirm_body_payment_method_data_giropay__to_json(v), None => Value::Null });
-    m.insert("grabpay".into(), match (&p.grabpay) { Some(v) => iface_setup_intents__post_setup_intents_intent_confirm_body_payment_method_data_grabpay__to_json(v), None => Value::Null });
+    m.insert("giropay".into(), match (&p.giropay) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
+    m.insert("grabpay".into(), match (&p.grabpay) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("ideal".into(), match (&p.ideal) { Some(v) => iface_setup_intents__post_setup_intents_intent_confirm_body_payment_method_data_ideal__to_json(v), None => Value::Null });
-    m.insert("interac_present".into(), match (&p.interac_present) { Some(v) => iface_setup_intents__post_setup_intents_intent_confirm_body_payment_method_data_interac_present__to_json(v), None => Value::Null });
+    m.insert("interac_present".into(), match (&p.interac_present) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("klarna".into(), match (&p.klarna) { Some(v) => iface_setup_intents__post_setup_intents_intent_confirm_body_payment_method_data_klarna__to_json(v), None => Value::Null });
-    m.insert("konbini".into(), match (&p.konbini) { Some(v) => iface_setup_intents__post_setup_intents_intent_confirm_body_payment_method_data_konbini__to_json(v), None => Value::Null });
-    m.insert("link".into(), match (&p.link) { Some(v) => iface_setup_intents__post_setup_intents_intent_confirm_body_payment_method_data_link__to_json(v), None => Value::Null });
-    m.insert("metadata".into(), match (&p.metadata) { Some(v) => iface_setup_intents__post_setup_intents_intent_confirm_body_payment_method_data_metadata__to_json(v), None => Value::Null });
-    m.insert("oxxo".into(), match (&p.oxxo) { Some(v) => iface_setup_intents__post_setup_intents_intent_confirm_body_payment_method_data_oxxo__to_json(v), None => Value::Null });
+    m.insert("konbini".into(), match (&p.konbini) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
+    m.insert("link".into(), match (&p.link) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
+    m.insert("metadata".into(), match (&p.metadata) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
+    m.insert("oxxo".into(), match (&p.oxxo) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("p24".into(), match (&p.p24) { Some(v) => iface_setup_intents__post_setup_intents_intent_confirm_body_payment_method_data_p24__to_json(v), None => Value::Null });
-    m.insert("paynow".into(), match (&p.paynow) { Some(v) => iface_setup_intents__post_setup_intents_intent_confirm_body_payment_method_data_paynow__to_json(v), None => Value::Null });
-    m.insert("pix".into(), match (&p.pix) { Some(v) => iface_setup_intents__post_setup_intents_intent_confirm_body_payment_method_data_pix__to_json(v), None => Value::Null });
-    m.insert("promptpay".into(), match (&p.promptpay) { Some(v) => iface_setup_intents__post_setup_intents_intent_confirm_body_payment_method_data_promptpay__to_json(v), None => Value::Null });
+    m.insert("paynow".into(), match (&p.paynow) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
+    m.insert("pix".into(), match (&p.pix) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
+    m.insert("promptpay".into(), match (&p.promptpay) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("radar_options".into(), match (&p.radar_options) { Some(v) => iface_setup_intents__post_setup_intents_intent_confirm_body_payment_method_data_radar_options__to_json(v), None => Value::Null });
     m.insert("sepa_debit".into(), match (&p.sepa_debit) { Some(v) => iface_setup_intents__post_setup_intents_intent_confirm_body_payment_method_data_sepa_debit__to_json(v), None => Value::Null });
     m.insert("sofort".into(), match (&p.sofort) { Some(v) => iface_setup_intents__post_setup_intents_intent_confirm_body_payment_method_data_sofort__to_json(v), None => Value::Null });
     m.insert("type".into(), Value::String(iface_setup_intents__post_setup_intents_body_payment_method_data_type_op_enum__to_str(&p.type_op).into()));
     m.insert("us_bank_account".into(), match (&p.us_bank_account) { Some(v) => iface_setup_intents__post_setup_intents_intent_confirm_body_payment_method_data_us_bank_account__to_json(v), None => Value::Null });
-    m.insert("wechat_pay".into(), match (&p.wechat_pay) { Some(v) => iface_setup_intents__post_setup_intents_intent_confirm_body_payment_method_data_wechat_pay__to_json(v), None => Value::Null });
+    m.insert("wechat_pay".into(), match (&p.wechat_pay) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -1277,21 +1318,24 @@ fn iface_setup_intents__post_setup_intents_intent_confirm_body_payment_method_da
     Value::Object(m)
 }
 
-fn iface_setup_intents__post_setup_intents_intent_confirm_body_payment_method_data_affirm__to_json(p: &iface_setup_intents::PostSetupIntentsIntentConfirmBodyPaymentMethodDataAffirm) -> Value {
+fn iface_setup_intents__post_setup_intents_intent_confirm_body_payment_method_data_affirm_entry__to_json(p: &iface_setup_intents::PostSetupIntentsIntentConfirmBodyPaymentMethodDataAffirmEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
-fn iface_setup_intents__post_setup_intents_intent_confirm_body_payment_method_data_afterpay_clearpay__to_json(p: &iface_setup_intents::PostSetupIntentsIntentConfirmBodyPaymentMethodDataAfterpayClearpay) -> Value {
+fn iface_setup_intents__post_setup_intents_intent_confirm_body_payment_method_data_afterpay_clearpay_entry__to_json(p: &iface_setup_intents::PostSetupIntentsIntentConfirmBodyPaymentMethodDataAfterpayClearpayEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
-fn iface_setup_intents__post_setup_intents_intent_confirm_body_payment_method_data_alipay__to_json(p: &iface_setup_intents::PostSetupIntentsIntentConfirmBodyPaymentMethodDataAlipay) -> Value {
+fn iface_setup_intents__post_setup_intents_intent_confirm_body_payment_method_data_alipay_entry__to_json(p: &iface_setup_intents::PostSetupIntentsIntentConfirmBodyPaymentMethodDataAlipayEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -1309,9 +1353,10 @@ fn iface_setup_intents__post_setup_intents_intent_confirm_body_payment_method_da
     Value::Object(m)
 }
 
-fn iface_setup_intents__post_setup_intents_intent_confirm_body_payment_method_data_bancontact__to_json(p: &iface_setup_intents::PostSetupIntentsIntentConfirmBodyPaymentMethodDataBancontact) -> Value {
+fn iface_setup_intents__post_setup_intents_intent_confirm_body_payment_method_data_bancontact_entry__to_json(p: &iface_setup_intents::PostSetupIntentsIntentConfirmBodyPaymentMethodDataBancontactEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -1324,9 +1369,10 @@ fn iface_setup_intents__post_setup_intents_intent_confirm_body_payment_method_da
     Value::Object(m)
 }
 
-fn iface_setup_intents__post_setup_intents_intent_confirm_body_payment_method_data_blik__to_json(p: &iface_setup_intents::PostSetupIntentsIntentConfirmBodyPaymentMethodDataBlik) -> Value {
+fn iface_setup_intents__post_setup_intents_intent_confirm_body_payment_method_data_blik_entry__to_json(p: &iface_setup_intents::PostSetupIntentsIntentConfirmBodyPaymentMethodDataBlikEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -1336,15 +1382,17 @@ fn iface_setup_intents__post_setup_intents_intent_confirm_body_payment_method_da
     Value::Object(m)
 }
 
-fn iface_setup_intents__post_setup_intents_intent_confirm_body_payment_method_data_cashapp__to_json(p: &iface_setup_intents::PostSetupIntentsIntentConfirmBodyPaymentMethodDataCashapp) -> Value {
+fn iface_setup_intents__post_setup_intents_intent_confirm_body_payment_method_data_cashapp_entry__to_json(p: &iface_setup_intents::PostSetupIntentsIntentConfirmBodyPaymentMethodDataCashappEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
-fn iface_setup_intents__post_setup_intents_intent_confirm_body_payment_method_data_customer_balance__to_json(p: &iface_setup_intents::PostSetupIntentsIntentConfirmBodyPaymentMethodDataCustomerBalance) -> Value {
+fn iface_setup_intents__post_setup_intents_intent_confirm_body_payment_method_data_customer_balance_entry__to_json(p: &iface_setup_intents::PostSetupIntentsIntentConfirmBodyPaymentMethodDataCustomerBalanceEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -1360,15 +1408,17 @@ fn iface_setup_intents__post_setup_intents_intent_confirm_body_payment_method_da
     Value::Object(m)
 }
 
-fn iface_setup_intents__post_setup_intents_intent_confirm_body_payment_method_data_giropay__to_json(p: &iface_setup_intents::PostSetupIntentsIntentConfirmBodyPaymentMethodDataGiropay) -> Value {
+fn iface_setup_intents__post_setup_intents_intent_confirm_body_payment_method_data_giropay_entry__to_json(p: &iface_setup_intents::PostSetupIntentsIntentConfirmBodyPaymentMethodDataGiropayEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
-fn iface_setup_intents__post_setup_intents_intent_confirm_body_payment_method_data_grabpay__to_json(p: &iface_setup_intents::PostSetupIntentsIntentConfirmBodyPaymentMethodDataGrabpay) -> Value {
+fn iface_setup_intents__post_setup_intents_intent_confirm_body_payment_method_data_grabpay_entry__to_json(p: &iface_setup_intents::PostSetupIntentsIntentConfirmBodyPaymentMethodDataGrabpayEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -1378,9 +1428,10 @@ fn iface_setup_intents__post_setup_intents_intent_confirm_body_payment_method_da
     Value::Object(m)
 }
 
-fn iface_setup_intents__post_setup_intents_intent_confirm_body_payment_method_data_interac_present__to_json(p: &iface_setup_intents::PostSetupIntentsIntentConfirmBodyPaymentMethodDataInteracPresent) -> Value {
+fn iface_setup_intents__post_setup_intents_intent_confirm_body_payment_method_data_interac_present_entry__to_json(p: &iface_setup_intents::PostSetupIntentsIntentConfirmBodyPaymentMethodDataInteracPresentEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -1398,27 +1449,31 @@ fn iface_setup_intents__post_setup_intents_intent_confirm_body_payment_method_da
     Value::Object(m)
 }
 
-fn iface_setup_intents__post_setup_intents_intent_confirm_body_payment_method_data_konbini__to_json(p: &iface_setup_intents::PostSetupIntentsIntentConfirmBodyPaymentMethodDataKonbini) -> Value {
+fn iface_setup_intents__post_setup_intents_intent_confirm_body_payment_method_data_konbini_entry__to_json(p: &iface_setup_intents::PostSetupIntentsIntentConfirmBodyPaymentMethodDataKonbiniEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
-fn iface_setup_intents__post_setup_intents_intent_confirm_body_payment_method_data_link__to_json(p: &iface_setup_intents::PostSetupIntentsIntentConfirmBodyPaymentMethodDataLink) -> Value {
+fn iface_setup_intents__post_setup_intents_intent_confirm_body_payment_method_data_link_entry__to_json(p: &iface_setup_intents::PostSetupIntentsIntentConfirmBodyPaymentMethodDataLinkEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
-fn iface_setup_intents__post_setup_intents_intent_confirm_body_payment_method_data_metadata__to_json(p: &iface_setup_intents::PostSetupIntentsIntentConfirmBodyPaymentMethodDataMetadata) -> Value {
+fn iface_setup_intents__post_setup_intents_intent_confirm_body_payment_method_data_metadata_entry__to_json(p: &iface_setup_intents::PostSetupIntentsIntentConfirmBodyPaymentMethodDataMetadataEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
-fn iface_setup_intents__post_setup_intents_intent_confirm_body_payment_method_data_oxxo__to_json(p: &iface_setup_intents::PostSetupIntentsIntentConfirmBodyPaymentMethodDataOxxo) -> Value {
+fn iface_setup_intents__post_setup_intents_intent_confirm_body_payment_method_data_oxxo_entry__to_json(p: &iface_setup_intents::PostSetupIntentsIntentConfirmBodyPaymentMethodDataOxxoEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -1428,21 +1483,24 @@ fn iface_setup_intents__post_setup_intents_intent_confirm_body_payment_method_da
     Value::Object(m)
 }
 
-fn iface_setup_intents__post_setup_intents_intent_confirm_body_payment_method_data_paynow__to_json(p: &iface_setup_intents::PostSetupIntentsIntentConfirmBodyPaymentMethodDataPaynow) -> Value {
+fn iface_setup_intents__post_setup_intents_intent_confirm_body_payment_method_data_paynow_entry__to_json(p: &iface_setup_intents::PostSetupIntentsIntentConfirmBodyPaymentMethodDataPaynowEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
-fn iface_setup_intents__post_setup_intents_intent_confirm_body_payment_method_data_pix__to_json(p: &iface_setup_intents::PostSetupIntentsIntentConfirmBodyPaymentMethodDataPix) -> Value {
+fn iface_setup_intents__post_setup_intents_intent_confirm_body_payment_method_data_pix_entry__to_json(p: &iface_setup_intents::PostSetupIntentsIntentConfirmBodyPaymentMethodDataPixEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
-fn iface_setup_intents__post_setup_intents_intent_confirm_body_payment_method_data_promptpay__to_json(p: &iface_setup_intents::PostSetupIntentsIntentConfirmBodyPaymentMethodDataPromptpay) -> Value {
+fn iface_setup_intents__post_setup_intents_intent_confirm_body_payment_method_data_promptpay_entry__to_json(p: &iface_setup_intents::PostSetupIntentsIntentConfirmBodyPaymentMethodDataPromptpayEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -1474,9 +1532,10 @@ fn iface_setup_intents__post_setup_intents_intent_confirm_body_payment_method_da
     Value::Object(m)
 }
 
-fn iface_setup_intents__post_setup_intents_intent_confirm_body_payment_method_data_wechat_pay__to_json(p: &iface_setup_intents::PostSetupIntentsIntentConfirmBodyPaymentMethodDataWechatPay) -> Value {
+fn iface_setup_intents__post_setup_intents_intent_confirm_body_payment_method_data_wechat_pay_entry__to_json(p: &iface_setup_intents::PostSetupIntentsIntentConfirmBodyPaymentMethodDataWechatPayEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -1546,13 +1605,14 @@ fn iface_setup_intents__post_setup_intents_intent_confirm_body_payment_method_op
 
 fn iface_setup_intents__post_setup_intents_intent_confirm_body_payment_method_options_sepa_debit__to_json(p: &iface_setup_intents::PostSetupIntentsIntentConfirmBodyPaymentMethodOptionsSepaDebit) -> Value {
     let mut m = Map::new();
-    m.insert("mandate_options".into(), match (&p.mandate_options) { Some(v) => iface_setup_intents__post_setup_intents_intent_confirm_body_payment_method_options_sepa_debit_mandate_options__to_json(v), None => Value::Null });
+    m.insert("mandate_options".into(), match (&p.mandate_options) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_setup_intents__post_setup_intents_intent_confirm_body_payment_method_options_sepa_debit_mandate_options__to_json(p: &iface_setup_intents::PostSetupIntentsIntentConfirmBodyPaymentMethodOptionsSepaDebitMandateOptions) -> Value {
+fn iface_setup_intents__post_setup_intents_intent_confirm_body_payment_method_options_sepa_debit_mandate_options_entry__to_json(p: &iface_setup_intents::PostSetupIntentsIntentConfirmBodyPaymentMethodOptionsSepaDebitMandateOptionsEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -1601,7 +1661,7 @@ fn iface_setup_intents__post_setup_intents_params__to_json(p: &iface_setup_inten
     m.insert("expand".into(), match (&p.expand) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
     m.insert("flow_directions".into(), match (&p.flow_directions) { Some(v) => Value::Array((v).iter().map(|v| Value::String(iface_setup_intents__setup_intent_flow_directions_item_enum__to_str(v).into())).collect()), None => Value::Null });
     m.insert("mandate_data".into(), match (&p.mandate_data) { Some(v) => iface_setup_intents__post_setup_intents_body_mandate_data__to_json(v), None => Value::Null });
-    m.insert("metadata".into(), match (&p.metadata) { Some(v) => iface_setup_intents__post_setup_intents_body_metadata__to_json(v), None => Value::Null });
+    m.insert("metadata".into(), match (&p.metadata) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("on_behalf_of".into(), match (&p.on_behalf_of) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("payment_method".into(), match (&p.payment_method) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("payment_method_data".into(), match (&p.payment_method_data) { Some(v) => iface_setup_intents__post_setup_intents_body_payment_method_data__to_json(v), None => Value::Null });
@@ -1696,7 +1756,7 @@ fn iface_setup_intents__setup_intent__from_json(v: &Value) -> Option<iface_setup
         latest_attempt: m.get("latest_attempt").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         livemode: m.get("livemode").and_then(|v| (v).as_bool()).unwrap_or_default(),
         mandate: m.get("mandate").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        metadata: m.get("metadata").filter(|v| !v.is_null()).and_then(|v| iface_setup_intents__setup_intent_metadata__from_json(v)),
+        metadata: m.get("metadata").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_setup_intents::SetupIntentMetadataEntry { key: k.clone(), value: val })).collect())),
         next_action: m.get("next_action").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         object: match m.get("object").and_then(|v| (v).as_str().and_then(iface_setup_intents__setup_intent_object_enum__from_str)) { Some(x) => x, None => return None },
         on_behalf_of: m.get("on_behalf_of").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
@@ -1709,10 +1769,11 @@ fn iface_setup_intents__setup_intent__from_json(v: &Value) -> Option<iface_setup
     })
 }
 
-fn iface_setup_intents__setup_intent_metadata__from_json(v: &Value) -> Option<iface_setup_intents::SetupIntentMetadata> {
+fn iface_setup_intents__setup_intent_metadata_entry__from_json(v: &Value) -> Option<iface_setup_intents::SetupIntentMetadataEntry> {
     let m = v.as_object()?;
-    Some(iface_setup_intents::SetupIntentMetadata {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_setup_intents::SetupIntentMetadataEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 

@@ -952,9 +952,10 @@ fn iface_codespaces__get_codespaces_for_user_in_org_response__to_json(p: &iface_
     Value::Object(m)
 }
 
-fn iface_codespaces__delete_from_organization_response__to_json(p: &iface_codespaces::DeleteFromOrganizationResponse) -> Value {
+fn iface_codespaces__delete_from_organization_response_entry__to_json(p: &iface_codespaces::DeleteFromOrganizationResponseEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -1065,9 +1066,10 @@ fn iface_codespaces__list_repositories_for_secret_for_authenticated_user_respons
     Value::Object(m)
 }
 
-fn iface_codespaces__delete_for_authenticated_user_response__to_json(p: &iface_codespaces::DeleteForAuthenticatedUserResponse) -> Value {
+fn iface_codespaces__delete_for_authenticated_user_response_entry__to_json(p: &iface_codespaces::DeleteForAuthenticatedUserResponseEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -2465,10 +2467,11 @@ fn iface_codespaces__get_codespaces_for_user_in_org_response__from_json(v: &Valu
     })
 }
 
-fn iface_codespaces__delete_from_organization_response__from_json(v: &Value) -> Option<iface_codespaces::DeleteFromOrganizationResponse> {
+fn iface_codespaces__delete_from_organization_response_entry__from_json(v: &Value) -> Option<iface_codespaces::DeleteFromOrganizationResponseEntry> {
     let m = v.as_object()?;
-    Some(iface_codespaces::DeleteFromOrganizationResponse {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_codespaces::DeleteFromOrganizationResponseEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -2593,10 +2596,11 @@ fn iface_codespaces__list_repositories_for_secret_for_authenticated_user_respons
     })
 }
 
-fn iface_codespaces__delete_for_authenticated_user_response__from_json(v: &Value) -> Option<iface_codespaces::DeleteForAuthenticatedUserResponse> {
+fn iface_codespaces__delete_for_authenticated_user_response_entry__from_json(v: &Value) -> Option<iface_codespaces::DeleteForAuthenticatedUserResponseEntry> {
     let m = v.as_object()?;
-    Some(iface_codespaces::DeleteForAuthenticatedUserResponse {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_codespaces::DeleteForAuthenticatedUserResponseEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -3687,12 +3691,12 @@ fn iface_codespaces__get_codespaces_for_user_in_org__err(e: crate::runtime::Disp
     }
 }
 
-fn iface_codespaces__delete_from_organization__ok(body: String) -> Result<iface_codespaces::DeleteFromOrganizationResponse, crate::runtime::DispatchError> {
+fn iface_codespaces__delete_from_organization__ok(body: String) -> Result<Vec<iface_codespaces::DeleteFromOrganizationResponseEntry>, crate::runtime::DispatchError> {
     let v: Value = match serde_json::from_str(&body) {
         Ok(v) => v,
         Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
     };
-    match iface_codespaces__delete_from_organization_response__from_json(&v) {
+    match (&v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_codespaces::DeleteFromOrganizationResponseEntry { key: k.clone(), value: val })).collect()) {
         Some(x) => Ok(x),
         None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
@@ -4225,12 +4229,12 @@ fn iface_codespaces__update_for_authenticated_user__err(e: crate::runtime::Dispa
     }
 }
 
-fn iface_codespaces__delete_for_authenticated_user__ok(body: String) -> Result<iface_codespaces::DeleteForAuthenticatedUserResponse, crate::runtime::DispatchError> {
+fn iface_codespaces__delete_for_authenticated_user__ok(body: String) -> Result<Vec<iface_codespaces::DeleteForAuthenticatedUserResponseEntry>, crate::runtime::DispatchError> {
     let v: Value = match serde_json::from_str(&body) {
         Ok(v) => v,
         Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
     };
-    match iface_codespaces__delete_for_authenticated_user_response__from_json(&v) {
+    match (&v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_codespaces::DeleteForAuthenticatedUserResponseEntry { key: k.clone(), value: val })).collect()) {
         Some(x) => Ok(x),
         None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
@@ -4496,7 +4500,7 @@ impl iface_codespaces::Guest for crate::Component {
             Err(e) => Err(iface_codespaces__get_codespaces_for_user_in_org__err(e)),
         }
     }
-    fn delete_from_organization(params: iface_codespaces::DeleteFromOrganizationParams) -> Result<iface_codespaces::DeleteFromOrganizationResponse, iface_codespaces::DeleteFromOrganizationError> {
+    fn delete_from_organization(params: iface_codespaces::DeleteFromOrganizationParams) -> Result<Vec<iface_codespaces::DeleteFromOrganizationResponseEntry>, iface_codespaces::DeleteFromOrganizationError> {
         let json = iface_codespaces__delete_from_organization_params__to_json(&params);
         match dispatch(&OP_CODESPACES_DELETE_FROM_ORGANIZATION, json).and_then(iface_codespaces__delete_from_organization__ok) {
             Ok(v) => Ok(v),
@@ -4677,7 +4681,7 @@ impl iface_codespaces::Guest for crate::Component {
             Err(e) => Err(iface_codespaces__update_for_authenticated_user__err(e)),
         }
     }
-    fn delete_for_authenticated_user(params: iface_codespaces::DeleteForAuthenticatedUserParams) -> Result<iface_codespaces::DeleteForAuthenticatedUserResponse, iface_codespaces::DeleteForAuthenticatedUserError> {
+    fn delete_for_authenticated_user(params: iface_codespaces::DeleteForAuthenticatedUserParams) -> Result<Vec<iface_codespaces::DeleteForAuthenticatedUserResponseEntry>, iface_codespaces::DeleteForAuthenticatedUserError> {
         let json = iface_codespaces__delete_for_authenticated_user_params__to_json(&params);
         match dispatch(&OP_CODESPACES_DELETE_FOR_AUTHENTICATED_USER, json).and_then(iface_codespaces__delete_for_authenticated_user__ok) {
             Ok(v) => Ok(v),

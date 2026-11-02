@@ -107,6 +107,53 @@ fn iface_sound_effects__get_sfx_list_details_view_enum__to_str(e: &iface_sound_e
     }
 }
 
+fn iface_sound_effects__language__to_str(e: &iface_sound_effects::Language) -> &'static str {
+    match e {
+        iface_sound_effects::Language::Ar => "ar",
+        iface_sound_effects::Language::Bg => "bg",
+        iface_sound_effects::Language::Bn => "bn",
+        iface_sound_effects::Language::Cs => "cs",
+        iface_sound_effects::Language::Da => "da",
+        iface_sound_effects::Language::De => "de",
+        iface_sound_effects::Language::El => "el",
+        iface_sound_effects::Language::En => "en",
+        iface_sound_effects::Language::Es => "es",
+        iface_sound_effects::Language::Fi => "fi",
+        iface_sound_effects::Language::Fr => "fr",
+        iface_sound_effects::Language::Gu => "gu",
+        iface_sound_effects::Language::He => "he",
+        iface_sound_effects::Language::Hi => "hi",
+        iface_sound_effects::Language::Hr => "hr",
+        iface_sound_effects::Language::Hu => "hu",
+        iface_sound_effects::Language::Id => "id",
+        iface_sound_effects::Language::It => "it",
+        iface_sound_effects::Language::Ja => "ja",
+        iface_sound_effects::Language::Kn => "kn",
+        iface_sound_effects::Language::Ko => "ko",
+        iface_sound_effects::Language::Ml => "ml",
+        iface_sound_effects::Language::Mr => "mr",
+        iface_sound_effects::Language::Nb => "nb",
+        iface_sound_effects::Language::Nl => "nl",
+        iface_sound_effects::Language::Or => "or",
+        iface_sound_effects::Language::Pl => "pl",
+        iface_sound_effects::Language::Pt => "pt",
+        iface_sound_effects::Language::Ro => "ro",
+        iface_sound_effects::Language::Ru => "ru",
+        iface_sound_effects::Language::Sk => "sk",
+        iface_sound_effects::Language::Sl => "sl",
+        iface_sound_effects::Language::Sv => "sv",
+        iface_sound_effects::Language::Ta => "ta",
+        iface_sound_effects::Language::Te => "te",
+        iface_sound_effects::Language::Th => "th",
+        iface_sound_effects::Language::Tr => "tr",
+        iface_sound_effects::Language::Uk => "uk",
+        iface_sound_effects::Language::Ur => "ur",
+        iface_sound_effects::Language::Vi => "vi",
+        iface_sound_effects::Language::Zh => "zh",
+        iface_sound_effects::Language::ZhHant => "zh-Hant",
+    }
+}
+
 fn iface_sound_effects__get_sfx_list_details_library_enum__to_str(e: &iface_sound_effects::GetSfxListDetailsLibraryEnum) -> &'static str {
     match e {
         iface_sound_effects::GetSfxListDetailsLibraryEnum::Shutterstock => "shutterstock",
@@ -143,12 +190,6 @@ fn iface_sound_effects__license_sfx_format_enum__to_str(e: &iface_sound_effects:
         iface_sound_effects::LicenseSfxFormatEnum::Wav => "wav",
         iface_sound_effects::LicenseSfxFormatEnum::Mp3 => "mp3",
     }
-}
-
-fn iface_sound_effects__language__to_json(p: &iface_sound_effects::Language) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
 }
 
 fn iface_sound_effects__sfx_data_list__to_json(p: &iface_sound_effects::SfxDataList) -> Value {
@@ -215,7 +256,7 @@ fn iface_sound_effects__download_history__to_json(p: &iface_sound_effects::Downl
     m.insert("image".into(), match (&p.image) { Some(v) => iface_sound_effects__download_history_media_details__to_json(v), None => Value::Null });
     m.insert("is_downloadable".into(), match (&p.is_downloadable) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     m.insert("license".into(), Value::String((&p.license).clone()));
-    m.insert("metadata".into(), match (&p.metadata) { Some(v) => iface_sound_effects__download_history_metadata__to_json(v), None => Value::Null });
+    m.insert("metadata".into(), match (&p.metadata) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("revshare".into(), match (&p.revshare) { Some(v) => iface_sound_effects__download_history_revshare_details__to_json(v), None => Value::Null });
     m.insert("subscription_id".into(), match (&p.subscription_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("user".into(), match (&p.user) { Some(v) => iface_sound_effects__download_history_user_details__to_json(v), None => Value::Null });
@@ -237,9 +278,10 @@ fn iface_sound_effects__download_history_format_details__to_json(p: &iface_sound
     Value::Object(m)
 }
 
-fn iface_sound_effects__download_history_metadata__to_json(p: &iface_sound_effects::DownloadHistoryMetadata) -> Value {
+fn iface_sound_effects__download_history_metadata_entry__to_json(p: &iface_sound_effects::DownloadHistoryMetadataEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -260,15 +302,16 @@ fn iface_sound_effects__error__to_json(p: &iface_sound_effects::Error) -> Value 
     let mut m = Map::new();
     m.insert("code".into(), match (&p.code) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("items".into(), match (&p.items) { Some(v) => Value::Array((v).iter().map(|v| iface_sound_effects__error_items_item__to_json(v)).collect()), None => Value::Null });
+    m.insert("items".into(), match (&p.items) { Some(v) => Value::Array((v).iter().map(|v| Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect())).collect()), None => Value::Null });
     m.insert("message".into(), Value::String((&p.message).clone()));
     m.insert("path".into(), match (&p.path) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_sound_effects__error_items_item__to_json(p: &iface_sound_effects::ErrorItemsItem) -> Value {
+fn iface_sound_effects__error_items_item_entry__to_json(p: &iface_sound_effects::ErrorItemsItemEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -327,7 +370,7 @@ fn iface_sound_effects__get_sfx_list_details_params__to_json(p: &iface_sound_eff
     let mut m = Map::new();
     m.insert("id".into(), Value::Array((&p.id).iter().map(|v| Value::String((v).clone())).collect()));
     m.insert("view".into(), match (&p.view) { Some(v) => Value::String(iface_sound_effects__get_sfx_list_details_view_enum__to_str(v).into()), None => Value::Null });
-    m.insert("language".into(), match (&p.language) { Some(v) => iface_sound_effects__language__to_json(v), None => Value::Null });
+    m.insert("language".into(), match (&p.language) { Some(v) => Value::String(iface_sound_effects__language__to_str(v).into()), None => Value::Null });
     m.insert("library".into(), match (&p.library) { Some(v) => Value::String(iface_sound_effects__get_sfx_list_details_library_enum__to_str(v).into()), None => Value::Null });
     m.insert("search_id".into(), match (&p.search_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
@@ -375,14 +418,14 @@ fn iface_sound_effects__search_sfx_params__to_json(p: &iface_sound_effects::Sear
     m.insert("safe".into(), match (&p.safe) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     m.insert("sort".into(), match (&p.sort) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("view".into(), match (&p.view) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("language".into(), match (&p.language) { Some(v) => iface_sound_effects__language__to_json(v), None => Value::Null });
+    m.insert("language".into(), match (&p.language) { Some(v) => Value::String(iface_sound_effects__language__to_str(v).into()), None => Value::Null });
     Value::Object(m)
 }
 
 fn iface_sound_effects__get_sfx_details_params__to_json(p: &iface_sound_effects::GetSfxDetailsParams) -> Value {
     let mut m = Map::new();
     m.insert("id".into(), Value::String((&p.id).clone()));
-    m.insert("language".into(), match (&p.language) { Some(v) => iface_sound_effects__language__to_json(v), None => Value::Null });
+    m.insert("language".into(), match (&p.language) { Some(v) => Value::String(iface_sound_effects__language__to_str(v).into()), None => Value::Null });
     m.insert("view".into(), match (&p.view) { Some(v) => Value::String(iface_sound_effects__get_sfx_list_details_view_enum__to_str(v).into()), None => Value::Null });
     m.insert("library".into(), match (&p.library) { Some(v) => Value::String(iface_sound_effects__get_sfx_list_details_library_enum__to_str(v).into()), None => Value::Null });
     m.insert("search_id".into(), match (&p.search_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -460,7 +503,7 @@ fn iface_sound_effects__download_history__from_json(v: &Value) -> Option<iface_s
         image: m.get("image").filter(|v| !v.is_null()).and_then(|v| iface_sound_effects__download_history_media_details__from_json(v)),
         is_downloadable: m.get("is_downloadable").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
         license: m.get("license").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-        metadata: m.get("metadata").filter(|v| !v.is_null()).and_then(|v| iface_sound_effects__download_history_metadata__from_json(v)),
+        metadata: m.get("metadata").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_sound_effects::DownloadHistoryMetadataEntry { key: k.clone(), value: val })).collect())),
         revshare: m.get("revshare").filter(|v| !v.is_null()).and_then(|v| iface_sound_effects__download_history_revshare_details__from_json(v)),
         subscription_id: m.get("subscription_id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         user: m.get("user").filter(|v| !v.is_null()).and_then(|v| iface_sound_effects__download_history_user_details__from_json(v)),
@@ -484,10 +527,11 @@ fn iface_sound_effects__download_history_format_details__from_json(v: &Value) ->
     })
 }
 
-fn iface_sound_effects__download_history_metadata__from_json(v: &Value) -> Option<iface_sound_effects::DownloadHistoryMetadata> {
+fn iface_sound_effects__download_history_metadata_entry__from_json(v: &Value) -> Option<iface_sound_effects::DownloadHistoryMetadataEntry> {
     let m = v.as_object()?;
-    Some(iface_sound_effects::DownloadHistoryMetadata {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_sound_effects::DownloadHistoryMetadataEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -511,16 +555,17 @@ fn iface_sound_effects__error__from_json(v: &Value) -> Option<iface_sound_effect
     Some(iface_sound_effects::Error {
         code: m.get("code").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        items: m.get("items").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_sound_effects__error_items_item__from_json(x)).collect())),
+        items: m.get("items").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_sound_effects::ErrorItemsItemEntry { key: k.clone(), value: val })).collect())).collect())),
         message: m.get("message").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         path: m.get("path").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
     })
 }
 
-fn iface_sound_effects__error_items_item__from_json(v: &Value) -> Option<iface_sound_effects::ErrorItemsItem> {
+fn iface_sound_effects__error_items_item_entry__from_json(v: &Value) -> Option<iface_sound_effects::ErrorItemsItemEntry> {
     let m = v.as_object()?;
-    Some(iface_sound_effects::ErrorItemsItem {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_sound_effects::ErrorItemsItemEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 

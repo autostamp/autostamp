@@ -254,7 +254,7 @@ fn iface_blocks__retrieve_block_children_response_results_item__to_json(p: &ifac
     m.insert("object".into(), match (&p.object) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("paragraph".into(), match (&p.paragraph) { Some(v) => iface_blocks__retrieve_block_children_response_results_item_paragraph__to_json(v), None => Value::Null });
     m.insert("type".into(), match (&p.type_op) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("unsupported".into(), match (&p.unsupported) { Some(v) => iface_blocks__retrieve_block_children_response_results_item_unsupported__to_json(v), None => Value::Null });
+    m.insert("unsupported".into(), match (&p.unsupported) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -292,9 +292,10 @@ fn iface_blocks__retrieve_block_children_response_results_item_paragraph_text_it
     Value::Object(m)
 }
 
-fn iface_blocks__retrieve_block_children_response_results_item_unsupported__to_json(p: &iface_blocks::RetrieveBlockChildrenResponseResultsItemUnsupported) -> Value {
+fn iface_blocks__retrieve_block_children_response_results_item_unsupported_entry__to_json(p: &iface_blocks::RetrieveBlockChildrenResponseResultsItemUnsupportedEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -600,7 +601,7 @@ fn iface_blocks__retrieve_block_children_response_results_item__from_json(v: &Va
         object: m.get("object").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         paragraph: m.get("paragraph").filter(|v| !v.is_null()).and_then(|v| iface_blocks__retrieve_block_children_response_results_item_paragraph__from_json(v)),
         type_op: m.get("type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        unsupported: m.get("unsupported").filter(|v| !v.is_null()).and_then(|v| iface_blocks__retrieve_block_children_response_results_item_unsupported__from_json(v)),
+        unsupported: m.get("unsupported").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_blocks::RetrieveBlockChildrenResponseResultsItemUnsupportedEntry { key: k.clone(), value: val })).collect())),
     })
 }
 
@@ -642,10 +643,11 @@ fn iface_blocks__retrieve_block_children_response_results_item_paragraph_text_it
     })
 }
 
-fn iface_blocks__retrieve_block_children_response_results_item_unsupported__from_json(v: &Value) -> Option<iface_blocks::RetrieveBlockChildrenResponseResultsItemUnsupported> {
+fn iface_blocks__retrieve_block_children_response_results_item_unsupported_entry__from_json(v: &Value) -> Option<iface_blocks::RetrieveBlockChildrenResponseResultsItemUnsupportedEntry> {
     let m = v.as_object()?;
-    Some(iface_blocks::RetrieveBlockChildrenResponseResultsItemUnsupported {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_blocks::RetrieveBlockChildrenResponseResultsItemUnsupportedEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 

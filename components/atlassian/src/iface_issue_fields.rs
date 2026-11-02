@@ -223,7 +223,7 @@ fn iface_issue_fields__field_details__to_json(p: &iface_issue_fields::FieldDetai
 
 fn iface_issue_fields__json_type_bean__to_json(p: &iface_issue_fields::JsonTypeBean) -> Value {
     let mut m = Map::new();
-    m.insert("configuration".into(), match (&p.configuration) { Some(v) => iface_issue_fields__json_type_bean_configuration__to_json(v), None => Value::Null });
+    m.insert("configuration".into(), match (&p.configuration) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("custom".into(), match (&p.custom) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("customId".into(), match (&p.custom_id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("items".into(), match (&p.items) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -232,9 +232,10 @@ fn iface_issue_fields__json_type_bean__to_json(p: &iface_issue_fields::JsonTypeB
     Value::Object(m)
 }
 
-fn iface_issue_fields__json_type_bean_configuration__to_json(p: &iface_issue_fields::JsonTypeBeanConfiguration) -> Value {
+fn iface_issue_fields__json_type_bean_configuration_entry__to_json(p: &iface_issue_fields::JsonTypeBeanConfigurationEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -418,7 +419,7 @@ fn iface_issue_fields__field_details__from_json(v: &Value) -> Option<iface_issue
 fn iface_issue_fields__json_type_bean__from_json(v: &Value) -> Option<iface_issue_fields::JsonTypeBean> {
     let m = v.as_object()?;
     Some(iface_issue_fields::JsonTypeBean {
-        configuration: m.get("configuration").filter(|v| !v.is_null()).and_then(|v| iface_issue_fields__json_type_bean_configuration__from_json(v)),
+        configuration: m.get("configuration").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_issue_fields::JsonTypeBeanConfigurationEntry { key: k.clone(), value: val })).collect())),
         custom: m.get("custom").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         custom_id: m.get("customId").filter(|v| !v.is_null()).and_then(|v| (v).as_i64()),
         items: m.get("items").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
@@ -427,10 +428,11 @@ fn iface_issue_fields__json_type_bean__from_json(v: &Value) -> Option<iface_issu
     })
 }
 
-fn iface_issue_fields__json_type_bean_configuration__from_json(v: &Value) -> Option<iface_issue_fields::JsonTypeBeanConfiguration> {
+fn iface_issue_fields__json_type_bean_configuration_entry__from_json(v: &Value) -> Option<iface_issue_fields::JsonTypeBeanConfigurationEntry> {
     let m = v.as_object()?;
-    Some(iface_issue_fields::JsonTypeBeanConfiguration {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_issue_fields::JsonTypeBeanConfigurationEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 

@@ -51,15 +51,17 @@ const OP_CHATBOT_MESSAGES_DELETE_A_CHATBOT_MESSAGE: OpSpec = OpSpec {
     ],
 };
 
-fn iface_chatbot_messages__sendchatbot_body_content__to_json(p: &iface_chatbot_messages::SendchatbotBodyContent) -> Value {
+fn iface_chatbot_messages__sendchatbot_body_content_entry__to_json(p: &iface_chatbot_messages::SendchatbotBodyContentEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
-fn iface_chatbot_messages__edit_chatbot_message_body_content__to_json(p: &iface_chatbot_messages::EditChatbotMessageBodyContent) -> Value {
+fn iface_chatbot_messages__edit_chatbot_message_body_content_entry__to_json(p: &iface_chatbot_messages::EditChatbotMessageBodyContentEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -86,7 +88,7 @@ fn iface_chatbot_messages__delete_a_chatbot_message_response__to_json(p: &iface_
 fn iface_chatbot_messages__sendchatbot_params__to_json(p: &iface_chatbot_messages::SendchatbotParams) -> Value {
     let mut m = Map::new();
     m.insert("account_id".into(), Value::String((&p.account_id).clone()));
-    m.insert("content".into(), iface_chatbot_messages__sendchatbot_body_content__to_json(&p.content));
+    m.insert("content".into(), Value::Object((&p.content).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()));
     m.insert("is_markdown_support".into(), match (&p.is_markdown_support) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     m.insert("robot_jid".into(), Value::String((&p.robot_jid).clone()));
     m.insert("to_jid".into(), Value::String((&p.to_jid).clone()));
@@ -99,7 +101,7 @@ fn iface_chatbot_messages__edit_chatbot_message_params__to_json(p: &iface_chatbo
     let mut m = Map::new();
     m.insert("message_id".into(), Value::String((&p.message_id).clone()));
     m.insert("account_id".into(), Value::String((&p.account_id).clone()));
-    m.insert("content".into(), iface_chatbot_messages__edit_chatbot_message_body_content__to_json(&p.content));
+    m.insert("content".into(), Value::Object((&p.content).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()));
     m.insert("is_markdown_support".into(), match (&p.is_markdown_support) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     m.insert("robot_jid".into(), Value::String((&p.robot_jid).clone()));
     m.insert("user_jid".into(), match (&p.user_jid) { Some(v) => Value::String((v).clone()), None => Value::Null });

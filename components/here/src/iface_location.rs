@@ -49,82 +49,31 @@ fn iface_location__post_locate_desired_item_enum__to_str(e: &iface_location::Pos
 
 fn iface_location__cdma__to_json(p: &iface_location::Cdma) -> Value {
     let mut m = Map::new();
-    m.insert("baseLat".into(), match (&p.base_lat) { Some(v) => iface_location__base_lat__to_json(v), None => Value::Null });
-    m.insert("baseLng".into(), match (&p.base_lng) { Some(v) => iface_location__base_lng__to_json(v), None => Value::Null });
-    m.insert("bsid".into(), iface_location__bsid__to_json(&p.bsid));
+    m.insert("baseLat".into(), match (&p.base_lat) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("baseLng".into(), match (&p.base_lng) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("bsid".into(), Value::Number(serde_json::Number::from(*(&p.bsid))));
     m.insert("localId".into(), match (&p.local_id) { Some(v) => iface_location__cdma_local_id__to_json(v), None => Value::Null });
-    m.insert("nid".into(), iface_location__nid__to_json(&p.nid));
-    m.insert("nmr".into(), match (&p.nmr) { Some(v) => iface_location__cdma_nmr_array__to_json(v), None => Value::Null });
-    m.insert("pilotPower".into(), match (&p.pilot_power) { Some(v) => iface_location__pilot_power__to_json(v), None => Value::Null });
-    m.insert("rz".into(), match (&p.rz) { Some(v) => iface_location__registration_zone__to_json(v), None => Value::Null });
-    m.insert("sid".into(), iface_location__sid__to_json(&p.sid));
-    Value::Object(m)
-}
-
-fn iface_location__base_lat__to_json(p: &iface_location::BaseLat) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_location__base_lng__to_json(p: &iface_location::BaseLng) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_location__bsid__to_json(p: &iface_location::Bsid) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
+    m.insert("nid".into(), Value::Number(serde_json::Number::from(*(&p.nid))));
+    m.insert("nmr".into(), match (&p.nmr) { Some(v) => Value::Array((v).iter().map(|v| iface_location__cdma_nmr__to_json(v)).collect()), None => Value::Null });
+    m.insert("pilotPower".into(), match (&p.pilot_power) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("rz".into(), match (&p.rz) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("sid".into(), Value::Number(serde_json::Number::from(*(&p.sid))));
     Value::Object(m)
 }
 
 fn iface_location__cdma_local_id__to_json(p: &iface_location::CdmaLocalId) -> Value {
     let mut m = Map::new();
-    m.insert("channel".into(), iface_location__channel__to_json(&p.channel));
-    m.insert("pnOffset".into(), iface_location__pn_offset__to_json(&p.pn_offset));
+    m.insert("channel".into(), Value::Number(serde_json::Number::from(*(&p.channel))));
+    m.insert("pnOffset".into(), Value::Number(serde_json::Number::from(*(&p.pn_offset))));
     Value::Object(m)
 }
 
-fn iface_location__channel__to_json(p: &iface_location::Channel) -> Value {
+fn iface_location__cdma_nmr__to_json(p: &iface_location::CdmaNmr) -> Value {
     let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_location__pn_offset__to_json(p: &iface_location::PnOffset) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_location__nid__to_json(p: &iface_location::Nid) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_location__cdma_nmr_array__to_json(p: &iface_location::CdmaNmrArray) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_location__pilot_power__to_json(p: &iface_location::PilotPower) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_location__registration_zone__to_json(p: &iface_location::RegistrationZone) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_location__sid__to_json(p: &iface_location::Sid) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
+    m.insert("bsid".into(), match (&p.bsid) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("channel".into(), Value::Number(serde_json::Number::from(*(&p.channel))));
+    m.insert("pilotPower".into(), match (&p.pilot_power) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("pnOffset".into(), Value::Number(serde_json::Number::from(*(&p.pn_offset))));
     Value::Object(m)
 }
 
@@ -141,20 +90,14 @@ fn iface_location__client_info__to_json(p: &iface_location::ClientInfo) -> Value
 
 fn iface_location__gsm__to_json(p: &iface_location::Gsm) -> Value {
     let mut m = Map::new();
-    m.insert("cid".into(), iface_location__geran_cid__to_json(&p.cid));
+    m.insert("cid".into(), Value::Number(serde_json::Number::from(*(&p.cid))));
     m.insert("lac".into(), iface_location__lac__to_json(&p.lac));
     m.insert("localId".into(), match (&p.local_id) { Some(v) => iface_location__gsm_local_id__to_json(v), None => Value::Null });
     m.insert("mcc".into(), iface_location__mcc__to_json(&p.mcc));
-    m.insert("mnc".into(), iface_location__mnc__to_json(&p.mnc));
-    m.insert("nmr".into(), match (&p.nmr) { Some(v) => iface_location__gsm_nmr_array__to_json(v), None => Value::Null });
-    m.insert("rxLevel".into(), match (&p.rx_level) { Some(v) => iface_location__rx_level__to_json(v), None => Value::Null });
-    m.insert("ta".into(), match (&p.ta) { Some(v) => iface_location__gsm_timing_advance__to_json(v), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_location__geran_cid__to_json(p: &iface_location::GeranCid) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
+    m.insert("mnc".into(), Value::Number(serde_json::Number::from(*(&p.mnc))));
+    m.insert("nmr".into(), match (&p.nmr) { Some(v) => Value::Array((v).iter().map(|v| iface_location__gsm_nmr__to_json(v)).collect()), None => Value::Null });
+    m.insert("rxLevel".into(), match (&p.rx_level) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("ta".into(), match (&p.ta) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
@@ -166,20 +109,8 @@ fn iface_location__lac__to_json(p: &iface_location::Lac) -> Value {
 
 fn iface_location__gsm_local_id__to_json(p: &iface_location::GsmLocalId) -> Value {
     let mut m = Map::new();
-    m.insert("bcch".into(), iface_location__bcch__to_json(&p.bcch));
-    m.insert("bsic".into(), iface_location__bsic__to_json(&p.bsic));
-    Value::Object(m)
-}
-
-fn iface_location__bcch__to_json(p: &iface_location::Bcch) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_location__bsic__to_json(p: &iface_location::Bsic) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
+    m.insert("bcch".into(), Value::Number(serde_json::Number::from(*(&p.bcch))));
+    m.insert("bsic".into(), Value::Number(serde_json::Number::from(*(&p.bsic))));
     Value::Object(m)
 }
 
@@ -189,210 +120,118 @@ fn iface_location__mcc__to_json(p: &iface_location::Mcc) -> Value {
     Value::Object(m)
 }
 
-fn iface_location__mnc__to_json(p: &iface_location::Mnc) -> Value {
+fn iface_location__gsm_nmr__to_json(p: &iface_location::GsmNmr) -> Value {
     let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
+    m.insert("bcch".into(), Value::Number(serde_json::Number::from(*(&p.bcch))));
+    m.insert("bsic".into(), Value::Number(serde_json::Number::from(*(&p.bsic))));
+    m.insert("globalIdentity".into(), match (&p.global_identity) { Some(v) => iface_location__gsm_nmr_global_id__to_json(v), None => Value::Null });
+    m.insert("rxLevel".into(), match (&p.rx_level) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_location__gsm_nmr_array__to_json(p: &iface_location::GsmNmrArray) -> Value {
+fn iface_location__gsm_nmr_global_id__to_json(p: &iface_location::GsmNmrGlobalId) -> Value {
     let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_location__rx_level__to_json(p: &iface_location::RxLevel) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_location__gsm_timing_advance__to_json(p: &iface_location::GsmTimingAdvance) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
+    m.insert("cid".into(), Value::Number(serde_json::Number::from(*(&p.cid))));
+    m.insert("lac".into(), iface_location__lac__to_json(&p.lac));
     Value::Object(m)
 }
 
 fn iface_location__lte__to_json(p: &iface_location::Lte) -> Value {
     let mut m = Map::new();
-    m.insert("cid".into(), iface_location__eutran_cid__to_json(&p.cid));
+    m.insert("cid".into(), Value::Number(serde_json::Number::from(*(&p.cid))));
     m.insert("localId".into(), match (&p.local_id) { Some(v) => iface_location__lte_local_id__to_json(v), None => Value::Null });
     m.insert("mcc".into(), iface_location__mcc__to_json(&p.mcc));
-    m.insert("mnc".into(), iface_location__mnc__to_json(&p.mnc));
-    m.insert("nmr".into(), match (&p.nmr) { Some(v) => iface_location__lte_nmr_array__to_json(v), None => Value::Null });
-    m.insert("rsrp".into(), match (&p.rsrp) { Some(v) => iface_location__rsrp__to_json(v), None => Value::Null });
-    m.insert("rsrq".into(), match (&p.rsrq) { Some(v) => iface_location__rsrq__to_json(v), None => Value::Null });
-    m.insert("ta".into(), match (&p.ta) { Some(v) => iface_location__lte_timing_advance__to_json(v), None => Value::Null });
-    m.insert("tac".into(), match (&p.tac) { Some(v) => iface_location__tac__to_json(v), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_location__eutran_cid__to_json(p: &iface_location::EutranCid) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
+    m.insert("mnc".into(), Value::Number(serde_json::Number::from(*(&p.mnc))));
+    m.insert("nmr".into(), match (&p.nmr) { Some(v) => Value::Array((v).iter().map(|v| iface_location__lte_nmr__to_json(v)).collect()), None => Value::Null });
+    m.insert("rsrp".into(), match (&p.rsrp) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("rsrq".into(), match (&p.rsrq) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("ta".into(), match (&p.ta) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("tac".into(), match (&p.tac) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
 fn iface_location__lte_local_id__to_json(p: &iface_location::LteLocalId) -> Value {
     let mut m = Map::new();
-    m.insert("earfcn".into(), iface_location__earfcn__to_json(&p.earfcn));
-    m.insert("pci".into(), iface_location__pci__to_json(&p.pci));
+    m.insert("earfcn".into(), Value::Number(serde_json::Number::from(*(&p.earfcn))));
+    m.insert("pci".into(), Value::Number(serde_json::Number::from(*(&p.pci))));
     Value::Object(m)
 }
 
-fn iface_location__earfcn__to_json(p: &iface_location::Earfcn) -> Value {
+fn iface_location__lte_nmr__to_json(p: &iface_location::LteNmr) -> Value {
     let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_location__pci__to_json(p: &iface_location::Pci) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_location__lte_nmr_array__to_json(p: &iface_location::LteNmrArray) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_location__rsrp__to_json(p: &iface_location::Rsrp) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_location__rsrq__to_json(p: &iface_location::Rsrq) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_location__lte_timing_advance__to_json(p: &iface_location::LteTimingAdvance) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_location__tac__to_json(p: &iface_location::Tac) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
+    m.insert("cid".into(), match (&p.cid) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("earfcn".into(), Value::Number(serde_json::Number::from(*(&p.earfcn))));
+    m.insert("pci".into(), Value::Number(serde_json::Number::from(*(&p.pci))));
+    m.insert("rsrp".into(), match (&p.rsrp) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("rsrq".into(), match (&p.rsrq) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
     Value::Object(m)
 }
 
 fn iface_location__tdscdma__to_json(p: &iface_location::Tdscdma) -> Value {
     let mut m = Map::new();
-    m.insert("cid".into(), iface_location__utran_cid__to_json(&p.cid));
+    m.insert("cid".into(), Value::Number(serde_json::Number::from(*(&p.cid))));
     m.insert("lac".into(), match (&p.lac) { Some(v) => iface_location__lac__to_json(v), None => Value::Null });
     m.insert("localId".into(), match (&p.local_id) { Some(v) => iface_location__tdscdma_local_id__to_json(v), None => Value::Null });
     m.insert("mcc".into(), iface_location__mcc__to_json(&p.mcc));
-    m.insert("mnc".into(), iface_location__mnc__to_json(&p.mnc));
-    m.insert("nmr".into(), match (&p.nmr) { Some(v) => iface_location__tdscdma_nmr_array__to_json(v), None => Value::Null });
-    m.insert("pathloss".into(), match (&p.pathloss) { Some(v) => iface_location__pathloss__to_json(v), None => Value::Null });
-    m.insert("rscp".into(), match (&p.rscp) { Some(v) => iface_location__rscp__to_json(v), None => Value::Null });
-    m.insert("ta".into(), match (&p.ta) { Some(v) => iface_location__tdscdma_timing_advance__to_json(v), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_location__utran_cid__to_json(p: &iface_location::UtranCid) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
+    m.insert("mnc".into(), Value::Number(serde_json::Number::from(*(&p.mnc))));
+    m.insert("nmr".into(), match (&p.nmr) { Some(v) => Value::Array((v).iter().map(|v| iface_location__tdscdma_nmr__to_json(v)).collect()), None => Value::Null });
+    m.insert("pathloss".into(), match (&p.pathloss) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("rscp".into(), match (&p.rscp) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("ta".into(), match (&p.ta) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
 fn iface_location__tdscdma_local_id__to_json(p: &iface_location::TdscdmaLocalId) -> Value {
     let mut m = Map::new();
-    m.insert("cellParams".into(), iface_location__cell_params__to_json(&p.cell_params));
-    m.insert("uarfcn".into(), iface_location__uarfcn__to_json(&p.uarfcn));
+    m.insert("cellParams".into(), Value::Number(serde_json::Number::from(*(&p.cell_params))));
+    m.insert("uarfcn".into(), Value::Number(serde_json::Number::from(*(&p.uarfcn))));
     Value::Object(m)
 }
 
-fn iface_location__cell_params__to_json(p: &iface_location::CellParams) -> Value {
+fn iface_location__tdscdma_nmr__to_json(p: &iface_location::TdscdmaNmr) -> Value {
     let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_location__uarfcn__to_json(p: &iface_location::Uarfcn) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_location__tdscdma_nmr_array__to_json(p: &iface_location::TdscdmaNmrArray) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_location__pathloss__to_json(p: &iface_location::Pathloss) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_location__rscp__to_json(p: &iface_location::Rscp) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_location__tdscdma_timing_advance__to_json(p: &iface_location::TdscdmaTimingAdvance) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
+    m.insert("cellParams".into(), Value::Number(serde_json::Number::from(*(&p.cell_params))));
+    m.insert("cid".into(), match (&p.cid) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("pathloss".into(), match (&p.pathloss) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("rscp".into(), match (&p.rscp) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("uarfcn".into(), Value::Number(serde_json::Number::from(*(&p.uarfcn))));
     Value::Object(m)
 }
 
 fn iface_location__wcdma__to_json(p: &iface_location::Wcdma) -> Value {
     let mut m = Map::new();
-    m.insert("cid".into(), iface_location__utran_cid__to_json(&p.cid));
+    m.insert("cid".into(), Value::Number(serde_json::Number::from(*(&p.cid))));
     m.insert("lac".into(), match (&p.lac) { Some(v) => iface_location__lac__to_json(v), None => Value::Null });
     m.insert("localId".into(), match (&p.local_id) { Some(v) => iface_location__wcdma_local_id__to_json(v), None => Value::Null });
     m.insert("mcc".into(), iface_location__mcc__to_json(&p.mcc));
-    m.insert("mnc".into(), iface_location__mnc__to_json(&p.mnc));
-    m.insert("nmr".into(), match (&p.nmr) { Some(v) => iface_location__wcdma_nmr_array__to_json(v), None => Value::Null });
-    m.insert("pathloss".into(), match (&p.pathloss) { Some(v) => iface_location__pathloss__to_json(v), None => Value::Null });
-    m.insert("rscp".into(), match (&p.rscp) { Some(v) => iface_location__rscp__to_json(v), None => Value::Null });
+    m.insert("mnc".into(), Value::Number(serde_json::Number::from(*(&p.mnc))));
+    m.insert("nmr".into(), match (&p.nmr) { Some(v) => Value::Array((v).iter().map(|v| iface_location__wcdma_nmr__to_json(v)).collect()), None => Value::Null });
+    m.insert("pathloss".into(), match (&p.pathloss) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("rscp".into(), match (&p.rscp) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
 fn iface_location__wcdma_local_id__to_json(p: &iface_location::WcdmaLocalId) -> Value {
     let mut m = Map::new();
-    m.insert("psc".into(), iface_location__psc__to_json(&p.psc));
-    m.insert("uarfcndl".into(), iface_location__uarfcndl__to_json(&p.uarfcndl));
+    m.insert("psc".into(), Value::Number(serde_json::Number::from(*(&p.psc))));
+    m.insert("uarfcndl".into(), Value::Number(serde_json::Number::from(*(&p.uarfcndl))));
     Value::Object(m)
 }
 
-fn iface_location__psc__to_json(p: &iface_location::Psc) -> Value {
+fn iface_location__wcdma_nmr__to_json(p: &iface_location::WcdmaNmr) -> Value {
     let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_location__uarfcndl__to_json(p: &iface_location::Uarfcndl) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_location__wcdma_nmr_array__to_json(p: &iface_location::WcdmaNmrArray) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
+    m.insert("cid".into(), match (&p.cid) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("pathloss".into(), match (&p.pathloss) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("psc".into(), Value::Number(serde_json::Number::from(*(&p.psc))));
+    m.insert("rscp".into(), match (&p.rscp) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("uarfcndl".into(), Value::Number(serde_json::Number::from(*(&p.uarfcndl))));
     Value::Object(m)
 }
 
 fn iface_location__wlan_locate__to_json(p: &iface_location::WlanLocate) -> Value {
     let mut m = Map::new();
     m.insert("mac".into(), Value::String((&p.mac).clone()));
-    m.insert("rss".into(), match (&p.rss) { Some(v) => iface_location__rss__to_json(v), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_location__rss__to_json(p: &iface_location::Rss) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
+    m.insert("rss".into(), match (&p.rss) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
@@ -407,20 +246,8 @@ fn iface_location__position_locate__to_json(p: &iface_location::PositionLocate) 
     m.insert("accuracy".into(), serde_json::Number::from_f64(*(&p.accuracy)).map(Value::Number).unwrap_or(Value::Null));
     m.insert("alt".into(), match (&p.alt) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
     m.insert("altAccuracy".into(), match (&p.alt_accuracy) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
-    m.insert("lat".into(), iface_location__latitude__to_json(&p.lat));
-    m.insert("lng".into(), iface_location__longitude__to_json(&p.lng));
-    Value::Object(m)
-}
-
-fn iface_location__latitude__to_json(p: &iface_location::Latitude) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_location__longitude__to_json(p: &iface_location::Longitude) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
+    m.insert("lat".into(), serde_json::Number::from_f64(*(&p.lat)).map(Value::Number).unwrap_or(Value::Null));
+    m.insert("lng".into(), serde_json::Number::from_f64(*(&p.lng)).map(Value::Number).unwrap_or(Value::Null));
     Value::Object(m)
 }
 
@@ -455,22 +282,8 @@ fn iface_location__position_locate__from_json(v: &Value) -> Option<iface_locatio
         accuracy: m.get("accuracy").and_then(|v| (v).as_f64()).unwrap_or_default(),
         alt: m.get("alt").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
         alt_accuracy: m.get("altAccuracy").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
-        lat: match m.get("lat").and_then(|v| iface_location__latitude__from_json(v)) { Some(x) => x, None => return None },
-        lng: match m.get("lng").and_then(|v| iface_location__longitude__from_json(v)) { Some(x) => x, None => return None },
-    })
-}
-
-fn iface_location__latitude__from_json(v: &Value) -> Option<iface_location::Latitude> {
-    let m = v.as_object()?;
-    Some(iface_location::Latitude {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-    })
-}
-
-fn iface_location__longitude__from_json(v: &Value) -> Option<iface_location::Longitude> {
-    let m = v.as_object()?;
-    Some(iface_location::Longitude {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        lat: m.get("lat").and_then(|v| (v).as_f64()).unwrap_or_default(),
+        lng: m.get("lng").and_then(|v| (v).as_f64()).unwrap_or_default(),
     })
 }
 

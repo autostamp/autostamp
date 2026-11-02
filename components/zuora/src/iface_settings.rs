@@ -54,7 +54,7 @@ fn iface_settings__setting_item_with_operations_information_context_enum__to_str
 
 fn iface_settings__setting_value_request__to_json(p: &iface_settings::SettingValueRequest) -> Value {
     let mut m = Map::new();
-    m.insert("body".into(), match (&p.body) { Some(v) => iface_settings__body_in_setting_value_request__to_json(v), None => Value::Null });
+    m.insert("body".into(), match (&p.body) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("children".into(), match (&p.children) { Some(v) => Value::Array((v).iter().map(|v| iface_settings__children_setting_value_request__to_json(v)).collect()), None => Value::Null });
     m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("method".into(), match (&p.method) { Some(v) => Value::String(iface_settings__children_setting_value_request_method_enum__to_str(v).into()), None => Value::Null });
@@ -62,18 +62,26 @@ fn iface_settings__setting_value_request__to_json(p: &iface_settings::SettingVal
     Value::Object(m)
 }
 
-fn iface_settings__body_in_setting_value_request__to_json(p: &iface_settings::BodyInSettingValueRequest) -> Value {
+fn iface_settings__body_in_setting_value_request_entry__to_json(p: &iface_settings::BodyInSettingValueRequestEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
 fn iface_settings__children_setting_value_request__to_json(p: &iface_settings::ChildrenSettingValueRequest) -> Value {
     let mut m = Map::new();
-    m.insert("body".into(), match (&p.body) { Some(v) => iface_settings__body_in_setting_value_request__to_json(v), None => Value::Null });
+    m.insert("body".into(), match (&p.body) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("method".into(), match (&p.method) { Some(v) => Value::String(iface_settings__children_setting_value_request_method_enum__to_str(v).into()), None => Value::Null });
     m.insert("url".into(), match (&p.url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_settings__body_in_setting_value_request_entry_v2__to_json(p: &iface_settings::BodyInSettingValueRequestEntryV2) -> Value {
+    let mut m = Map::new();
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -94,15 +102,16 @@ fn iface_settings__setting_value_response_wrapper__to_json(p: &iface_settings::S
 
 fn iface_settings__setting_value_response__to_json(p: &iface_settings::SettingValueResponse) -> Value {
     let mut m = Map::new();
-    m.insert("body".into(), match (&p.body) { Some(v) => iface_settings__body_in_setting_value_reponse__to_json(v), None => Value::Null });
+    m.insert("body".into(), match (&p.body) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("errorMessages".into(), match (&p.error_messages) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
     m.insert("status".into(), match (&p.status) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_settings__body_in_setting_value_reponse__to_json(p: &iface_settings::BodyInSettingValueReponse) -> Value {
+fn iface_settings__body_in_setting_value_reponse_entry__to_json(p: &iface_settings::BodyInSettingValueReponseEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -126,8 +135,8 @@ fn iface_settings__setting_item_http_operation__to_json(p: &iface_settings::Sett
     let mut m = Map::new();
     m.insert("method".into(), match (&p.method) { Some(v) => Value::String(iface_settings__children_setting_value_request_method_enum__to_str(v).into()), None => Value::Null });
     m.insert("parameters".into(), match (&p.parameters) { Some(v) => Value::Array((v).iter().map(|v| iface_settings__setting_item_http_request_parameter__to_json(v)).collect()), None => Value::Null });
-    m.insert("requestType".into(), match (&p.request_type) { Some(v) => iface_settings__setting_item_http_operation_request_type__to_json(v), None => Value::Null });
-    m.insert("responseType".into(), match (&p.response_type) { Some(v) => iface_settings__setting_item_http_operation_response_type__to_json(v), None => Value::Null });
+    m.insert("requestType".into(), match (&p.request_type) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
+    m.insert("responseType".into(), match (&p.response_type) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("url".into(), match (&p.url) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
@@ -139,15 +148,17 @@ fn iface_settings__setting_item_http_request_parameter__to_json(p: &iface_settin
     Value::Object(m)
 }
 
-fn iface_settings__setting_item_http_operation_request_type__to_json(p: &iface_settings::SettingItemHttpOperationRequestType) -> Value {
+fn iface_settings__setting_item_http_operation_request_type_entry__to_json(p: &iface_settings::SettingItemHttpOperationRequestTypeEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
-fn iface_settings__setting_item_http_operation_response_type__to_json(p: &iface_settings::SettingItemHttpOperationResponseType) -> Value {
+fn iface_settings__setting_item_http_operation_response_type_entry__to_json(p: &iface_settings::SettingItemHttpOperationResponseTypeEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -189,16 +200,17 @@ fn iface_settings__setting_value_response_wrapper__from_json(v: &Value) -> Optio
 fn iface_settings__setting_value_response__from_json(v: &Value) -> Option<iface_settings::SettingValueResponse> {
     let m = v.as_object()?;
     Some(iface_settings::SettingValueResponse {
-        body: m.get("body").filter(|v| !v.is_null()).and_then(|v| iface_settings__body_in_setting_value_reponse__from_json(v)),
+        body: m.get("body").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_settings::BodyInSettingValueReponseEntry { key: k.clone(), value: val })).collect())),
         error_messages: m.get("errorMessages").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
         status: m.get("status").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
     })
 }
 
-fn iface_settings__body_in_setting_value_reponse__from_json(v: &Value) -> Option<iface_settings::BodyInSettingValueReponse> {
+fn iface_settings__body_in_setting_value_reponse_entry__from_json(v: &Value) -> Option<iface_settings::BodyInSettingValueReponseEntry> {
     let m = v.as_object()?;
-    Some(iface_settings::BodyInSettingValueReponse {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_settings::BodyInSettingValueReponseEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -225,8 +237,8 @@ fn iface_settings__setting_item_http_operation__from_json(v: &Value) -> Option<i
     Some(iface_settings::SettingItemHttpOperation {
         method: m.get("method").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_settings__children_setting_value_request_method_enum__from_str)),
         parameters: m.get("parameters").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_settings__setting_item_http_request_parameter__from_json(x)).collect())),
-        request_type: m.get("requestType").filter(|v| !v.is_null()).and_then(|v| iface_settings__setting_item_http_operation_request_type__from_json(v)),
-        response_type: m.get("responseType").filter(|v| !v.is_null()).and_then(|v| iface_settings__setting_item_http_operation_response_type__from_json(v)),
+        request_type: m.get("requestType").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_settings::SettingItemHttpOperationRequestTypeEntry { key: k.clone(), value: val })).collect())),
+        response_type: m.get("responseType").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_settings::SettingItemHttpOperationResponseTypeEntry { key: k.clone(), value: val })).collect())),
         url: m.get("url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
     })
 }
@@ -239,17 +251,19 @@ fn iface_settings__setting_item_http_request_parameter__from_json(v: &Value) -> 
     })
 }
 
-fn iface_settings__setting_item_http_operation_request_type__from_json(v: &Value) -> Option<iface_settings::SettingItemHttpOperationRequestType> {
+fn iface_settings__setting_item_http_operation_request_type_entry__from_json(v: &Value) -> Option<iface_settings::SettingItemHttpOperationRequestTypeEntry> {
     let m = v.as_object()?;
-    Some(iface_settings::SettingItemHttpOperationRequestType {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_settings::SettingItemHttpOperationRequestTypeEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
-fn iface_settings__setting_item_http_operation_response_type__from_json(v: &Value) -> Option<iface_settings::SettingItemHttpOperationResponseType> {
+fn iface_settings__setting_item_http_operation_response_type_entry__from_json(v: &Value) -> Option<iface_settings::SettingItemHttpOperationResponseTypeEntry> {
     let m = v.as_object()?;
-    Some(iface_settings::SettingItemHttpOperationResponseType {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_settings::SettingItemHttpOperationResponseTypeEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 

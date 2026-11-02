@@ -57,13 +57,14 @@ fn iface_exchange_rates__exchange_rate__to_json(p: &iface_exchange_rates::Exchan
     let mut m = Map::new();
     m.insert("id".into(), Value::String((&p.id).clone()));
     m.insert("object".into(), Value::String(iface_exchange_rates__exchange_rate_object_enum__to_str(&p.object).into()));
-    m.insert("rates".into(), iface_exchange_rates__exchange_rate_rates__to_json(&p.rates));
+    m.insert("rates".into(), Value::Object((&p.rates).iter().map(|e| (e.key.clone(), serde_json::Number::from_f64(*(&e.value)).map(Value::Number).unwrap_or(Value::Null))).collect()));
     Value::Object(m)
 }
 
-fn iface_exchange_rates__exchange_rate_rates__to_json(p: &iface_exchange_rates::ExchangeRateRates) -> Value {
+fn iface_exchange_rates__exchange_rate_rates_entry__to_json(p: &iface_exchange_rates::ExchangeRateRatesEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), serde_json::Number::from_f64(*(&p.value)).map(Value::Number).unwrap_or(Value::Null));
     Value::Object(m)
 }
 
@@ -100,14 +101,15 @@ fn iface_exchange_rates__exchange_rate__from_json(v: &Value) -> Option<iface_exc
     Some(iface_exchange_rates::ExchangeRate {
         id: m.get("id").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         object: match m.get("object").and_then(|v| (v).as_str().and_then(iface_exchange_rates__exchange_rate_object_enum__from_str)) { Some(x) => x, None => return None },
-        rates: match m.get("rates").and_then(|v| iface_exchange_rates__exchange_rate_rates__from_json(v)) { Some(x) => x, None => return None },
+        rates: m.get("rates").and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_f64()).map(|val| iface_exchange_rates::ExchangeRateRatesEntry { key: k.clone(), value: val })).collect())).unwrap_or_default(),
     })
 }
 
-fn iface_exchange_rates__exchange_rate_rates__from_json(v: &Value) -> Option<iface_exchange_rates::ExchangeRateRates> {
+fn iface_exchange_rates__exchange_rate_rates_entry__from_json(v: &Value) -> Option<iface_exchange_rates::ExchangeRateRatesEntry> {
     let m = v.as_object()?;
-    Some(iface_exchange_rates::ExchangeRateRates {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_exchange_rates::ExchangeRateRatesEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_f64()).unwrap_or_default(),
     })
 }
 

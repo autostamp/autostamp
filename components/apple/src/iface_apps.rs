@@ -759,6 +759,56 @@ fn iface_apps__app_infos_get_to_many_related_include_op_item_enum__to_str(e: &if
     }
 }
 
+fn iface_apps__app_store_age_rating__to_str(e: &iface_apps::AppStoreAgeRating) -> &'static str {
+    match e {
+        iface_apps::AppStoreAgeRating::FourPlus => "FOUR_PLUS",
+        iface_apps::AppStoreAgeRating::NinePlus => "NINE_PLUS",
+        iface_apps::AppStoreAgeRating::TwelvePlus => "TWELVE_PLUS",
+        iface_apps::AppStoreAgeRating::SeventeenPlus => "SEVENTEEN_PLUS",
+    }
+}
+
+fn iface_apps__app_store_version_state__to_str(e: &iface_apps::AppStoreVersionState) -> &'static str {
+    match e {
+        iface_apps::AppStoreVersionState::DeveloperRemovedFromSale => "DEVELOPER_REMOVED_FROM_SALE",
+        iface_apps::AppStoreVersionState::DeveloperRejected => "DEVELOPER_REJECTED",
+        iface_apps::AppStoreVersionState::InReview => "IN_REVIEW",
+        iface_apps::AppStoreVersionState::InvalidBinary => "INVALID_BINARY",
+        iface_apps::AppStoreVersionState::MetadataRejected => "METADATA_REJECTED",
+        iface_apps::AppStoreVersionState::PendingAppleRelease => "PENDING_APPLE_RELEASE",
+        iface_apps::AppStoreVersionState::PendingContract => "PENDING_CONTRACT",
+        iface_apps::AppStoreVersionState::PendingDeveloperRelease => "PENDING_DEVELOPER_RELEASE",
+        iface_apps::AppStoreVersionState::PrepareForSubmission => "PREPARE_FOR_SUBMISSION",
+        iface_apps::AppStoreVersionState::PreorderReadyForSale => "PREORDER_READY_FOR_SALE",
+        iface_apps::AppStoreVersionState::ProcessingForAppStore => "PROCESSING_FOR_APP_STORE",
+        iface_apps::AppStoreVersionState::ReadyForSale => "READY_FOR_SALE",
+        iface_apps::AppStoreVersionState::Rejected => "REJECTED",
+        iface_apps::AppStoreVersionState::RemovedFromSale => "REMOVED_FROM_SALE",
+        iface_apps::AppStoreVersionState::WaitingForExportCompliance => "WAITING_FOR_EXPORT_COMPLIANCE",
+        iface_apps::AppStoreVersionState::WaitingForReview => "WAITING_FOR_REVIEW",
+        iface_apps::AppStoreVersionState::ReplacedWithNewVersion => "REPLACED_WITH_NEW_VERSION",
+    }
+}
+
+fn iface_apps__brazil_age_rating__to_str(e: &iface_apps::BrazilAgeRating) -> &'static str {
+    match e {
+        iface_apps::BrazilAgeRating::L => "L",
+        iface_apps::BrazilAgeRating::Ten => "TEN",
+        iface_apps::BrazilAgeRating::Twelve => "TWELVE",
+        iface_apps::BrazilAgeRating::Fourteen => "FOURTEEN",
+        iface_apps::BrazilAgeRating::Sixteen => "SIXTEEN",
+        iface_apps::BrazilAgeRating::Eighteen => "EIGHTEEN",
+    }
+}
+
+fn iface_apps__kids_age_band__to_str(e: &iface_apps::KidsAgeBand) -> &'static str {
+    match e {
+        iface_apps::KidsAgeBand::FiveAndUnder => "FIVE_AND_UNDER",
+        iface_apps::KidsAgeBand::SixToEight => "SIX_TO_EIGHT",
+        iface_apps::KidsAgeBand::NineToEleven => "NINE_TO_ELEVEN",
+    }
+}
+
 fn iface_apps__app_info_relationships_age_rating_declaration_data_type_op_enum__to_str(e: &iface_apps::AppInfoRelationshipsAgeRatingDeclarationDataTypeOpEnum) -> &'static str {
     match e {
         iface_apps::AppInfoRelationshipsAgeRatingDeclarationDataTypeOpEnum::AgeRatingDeclarations => "ageRatingDeclarations",
@@ -875,6 +925,14 @@ fn iface_apps__app_store_versions_get_to_many_related_include_op_item_enum__to_s
         iface_apps::AppStoreVersionsGetToManyRelatedIncludeOpItemEnum::Build => "build",
         iface_apps::AppStoreVersionsGetToManyRelatedIncludeOpItemEnum::IdfaDeclaration => "idfaDeclaration",
         iface_apps::AppStoreVersionsGetToManyRelatedIncludeOpItemEnum::RoutingAppCoverage => "routingAppCoverage",
+    }
+}
+
+fn iface_apps__platform__to_str(e: &iface_apps::Platform) -> &'static str {
+    match e {
+        iface_apps::Platform::Ios => "IOS",
+        iface_apps::Platform::MacOs => "MAC_OS",
+        iface_apps::Platform::TvOs => "TV_OS",
     }
 }
 
@@ -1529,34 +1587,10 @@ fn iface_apps__app_info__to_json(p: &iface_apps::AppInfo) -> Value {
 
 fn iface_apps__app_info_attributes__to_json(p: &iface_apps::AppInfoAttributes) -> Value {
     let mut m = Map::new();
-    m.insert("appStoreAgeRating".into(), match (&p.app_store_age_rating) { Some(v) => iface_apps__app_store_age_rating__to_json(v), None => Value::Null });
-    m.insert("appStoreState".into(), match (&p.app_store_state) { Some(v) => iface_apps__app_store_version_state__to_json(v), None => Value::Null });
-    m.insert("brazilAgeRating".into(), match (&p.brazil_age_rating) { Some(v) => iface_apps__brazil_age_rating__to_json(v), None => Value::Null });
-    m.insert("kidsAgeBand".into(), match (&p.kids_age_band) { Some(v) => iface_apps__kids_age_band__to_json(v), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_apps__app_store_age_rating__to_json(p: &iface_apps::AppStoreAgeRating) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_apps__app_store_version_state__to_json(p: &iface_apps::AppStoreVersionState) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_apps__brazil_age_rating__to_json(p: &iface_apps::BrazilAgeRating) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_apps__kids_age_band__to_json(p: &iface_apps::KidsAgeBand) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
+    m.insert("appStoreAgeRating".into(), match (&p.app_store_age_rating) { Some(v) => Value::String(iface_apps__app_store_age_rating__to_str(v).into()), None => Value::Null });
+    m.insert("appStoreState".into(), match (&p.app_store_state) { Some(v) => Value::String(iface_apps__app_store_version_state__to_str(v).into()), None => Value::Null });
+    m.insert("brazilAgeRating".into(), match (&p.brazil_age_rating) { Some(v) => Value::String(iface_apps__brazil_age_rating__to_str(v).into()), None => Value::Null });
+    m.insert("kidsAgeBand".into(), match (&p.kids_age_band) { Some(v) => Value::String(iface_apps__kids_age_band__to_str(v).into()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -1785,21 +1819,15 @@ fn iface_apps__app_store_version__to_json(p: &iface_apps::AppStoreVersion) -> Va
 
 fn iface_apps__app_store_version_attributes__to_json(p: &iface_apps::AppStoreVersionAttributes) -> Value {
     let mut m = Map::new();
-    m.insert("appStoreState".into(), match (&p.app_store_state) { Some(v) => iface_apps__app_store_version_state__to_json(v), None => Value::Null });
+    m.insert("appStoreState".into(), match (&p.app_store_state) { Some(v) => Value::String(iface_apps__app_store_version_state__to_str(v).into()), None => Value::Null });
     m.insert("copyright".into(), match (&p.copyright) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("createdDate".into(), match (&p.created_date) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("downloadable".into(), match (&p.downloadable) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     m.insert("earliestReleaseDate".into(), match (&p.earliest_release_date) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("platform".into(), match (&p.platform) { Some(v) => iface_apps__platform__to_json(v), None => Value::Null });
+    m.insert("platform".into(), match (&p.platform) { Some(v) => Value::String(iface_apps__platform__to_str(v).into()), None => Value::Null });
     m.insert("releaseType".into(), match (&p.release_type) { Some(v) => Value::String(iface_apps__app_store_version_attributes_release_type_enum__to_str(v).into()), None => Value::Null });
     m.insert("usesIdfa".into(), match (&p.uses_idfa) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     m.insert("versionString".into(), match (&p.version_string) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_apps__platform__to_json(p: &iface_apps::Platform) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -2644,7 +2672,7 @@ fn iface_apps__game_center_enabled_version__to_json(p: &iface_apps::GameCenterEn
 fn iface_apps__game_center_enabled_version_attributes__to_json(p: &iface_apps::GameCenterEnabledVersionAttributes) -> Value {
     let mut m = Map::new();
     m.insert("iconAsset".into(), match (&p.icon_asset) { Some(v) => iface_apps__image_asset__to_json(v), None => Value::Null });
-    m.insert("platform".into(), match (&p.platform) { Some(v) => iface_apps__platform__to_json(v), None => Value::Null });
+    m.insert("platform".into(), match (&p.platform) { Some(v) => Value::String(iface_apps__platform__to_str(v).into()), None => Value::Null });
     m.insert("versionString".into(), match (&p.version_string) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
@@ -2851,7 +2879,7 @@ fn iface_apps__prerelease_version__to_json(p: &iface_apps::PrereleaseVersion) ->
 
 fn iface_apps__prerelease_version_attributes__to_json(p: &iface_apps::PrereleaseVersionAttributes) -> Value {
     let mut m = Map::new();
-    m.insert("platform".into(), match (&p.platform) { Some(v) => iface_apps__platform__to_json(v), None => Value::Null });
+    m.insert("platform".into(), match (&p.platform) { Some(v) => Value::String(iface_apps__platform__to_str(v).into()), None => Value::Null });
     m.insert("version".into(), match (&p.version) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
@@ -3689,38 +3717,10 @@ fn iface_apps__app_info__from_json(v: &Value) -> Option<iface_apps::AppInfo> {
 fn iface_apps__app_info_attributes__from_json(v: &Value) -> Option<iface_apps::AppInfoAttributes> {
     let m = v.as_object()?;
     Some(iface_apps::AppInfoAttributes {
-        app_store_age_rating: m.get("appStoreAgeRating").filter(|v| !v.is_null()).and_then(|v| iface_apps__app_store_age_rating__from_json(v)),
-        app_store_state: m.get("appStoreState").filter(|v| !v.is_null()).and_then(|v| iface_apps__app_store_version_state__from_json(v)),
-        brazil_age_rating: m.get("brazilAgeRating").filter(|v| !v.is_null()).and_then(|v| iface_apps__brazil_age_rating__from_json(v)),
-        kids_age_band: m.get("kidsAgeBand").filter(|v| !v.is_null()).and_then(|v| iface_apps__kids_age_band__from_json(v)),
-    })
-}
-
-fn iface_apps__app_store_age_rating__from_json(v: &Value) -> Option<iface_apps::AppStoreAgeRating> {
-    let m = v.as_object()?;
-    Some(iface_apps::AppStoreAgeRating {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-    })
-}
-
-fn iface_apps__app_store_version_state__from_json(v: &Value) -> Option<iface_apps::AppStoreVersionState> {
-    let m = v.as_object()?;
-    Some(iface_apps::AppStoreVersionState {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-    })
-}
-
-fn iface_apps__brazil_age_rating__from_json(v: &Value) -> Option<iface_apps::BrazilAgeRating> {
-    let m = v.as_object()?;
-    Some(iface_apps::BrazilAgeRating {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-    })
-}
-
-fn iface_apps__kids_age_band__from_json(v: &Value) -> Option<iface_apps::KidsAgeBand> {
-    let m = v.as_object()?;
-    Some(iface_apps::KidsAgeBand {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        app_store_age_rating: m.get("appStoreAgeRating").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_apps__app_store_age_rating__from_str)),
+        app_store_state: m.get("appStoreState").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_apps__app_store_version_state__from_str)),
+        brazil_age_rating: m.get("brazilAgeRating").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_apps__brazil_age_rating__from_str)),
+        kids_age_band: m.get("kidsAgeBand").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_apps__kids_age_band__from_str)),
     })
 }
 
@@ -3980,22 +3980,15 @@ fn iface_apps__app_store_version__from_json(v: &Value) -> Option<iface_apps::App
 fn iface_apps__app_store_version_attributes__from_json(v: &Value) -> Option<iface_apps::AppStoreVersionAttributes> {
     let m = v.as_object()?;
     Some(iface_apps::AppStoreVersionAttributes {
-        app_store_state: m.get("appStoreState").filter(|v| !v.is_null()).and_then(|v| iface_apps__app_store_version_state__from_json(v)),
+        app_store_state: m.get("appStoreState").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_apps__app_store_version_state__from_str)),
         copyright: m.get("copyright").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         created_date: m.get("createdDate").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         downloadable: m.get("downloadable").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
         earliest_release_date: m.get("earliestReleaseDate").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        platform: m.get("platform").filter(|v| !v.is_null()).and_then(|v| iface_apps__platform__from_json(v)),
+        platform: m.get("platform").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_apps__platform__from_str)),
         release_type: m.get("releaseType").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_apps__app_store_version_attributes_release_type_enum__from_str)),
         uses_idfa: m.get("usesIdfa").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
         version_string: m.get("versionString").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-    })
-}
-
-fn iface_apps__platform__from_json(v: &Value) -> Option<iface_apps::Platform> {
-    let m = v.as_object()?;
-    Some(iface_apps::Platform {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -4950,7 +4943,7 @@ fn iface_apps__game_center_enabled_version_attributes__from_json(v: &Value) -> O
     let m = v.as_object()?;
     Some(iface_apps::GameCenterEnabledVersionAttributes {
         icon_asset: m.get("iconAsset").filter(|v| !v.is_null()).and_then(|v| iface_apps__image_asset__from_json(v)),
-        platform: m.get("platform").filter(|v| !v.is_null()).and_then(|v| iface_apps__platform__from_json(v)),
+        platform: m.get("platform").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_apps__platform__from_str)),
         version_string: m.get("versionString").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
     })
 }
@@ -5184,7 +5177,7 @@ fn iface_apps__prerelease_version__from_json(v: &Value) -> Option<iface_apps::Pr
 fn iface_apps__prerelease_version_attributes__from_json(v: &Value) -> Option<iface_apps::PrereleaseVersionAttributes> {
     let m = v.as_object()?;
     Some(iface_apps::PrereleaseVersionAttributes {
-        platform: m.get("platform").filter(|v| !v.is_null()).and_then(|v| iface_apps__platform__from_json(v)),
+        platform: m.get("platform").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_apps__platform__from_str)),
         version: m.get("version").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
     })
 }
@@ -5434,6 +5427,60 @@ fn iface_apps__app_type_op_enum__from_str(s: &str) -> Option<iface_apps::AppType
     }
 }
 
+fn iface_apps__app_store_age_rating__from_str(s: &str) -> Option<iface_apps::AppStoreAgeRating> {
+    match s {
+        "FOUR_PLUS" => Some(iface_apps::AppStoreAgeRating::FourPlus),
+        "NINE_PLUS" => Some(iface_apps::AppStoreAgeRating::NinePlus),
+        "TWELVE_PLUS" => Some(iface_apps::AppStoreAgeRating::TwelvePlus),
+        "SEVENTEEN_PLUS" => Some(iface_apps::AppStoreAgeRating::SeventeenPlus),
+        _ => None,
+    }
+}
+
+fn iface_apps__app_store_version_state__from_str(s: &str) -> Option<iface_apps::AppStoreVersionState> {
+    match s {
+        "DEVELOPER_REMOVED_FROM_SALE" => Some(iface_apps::AppStoreVersionState::DeveloperRemovedFromSale),
+        "DEVELOPER_REJECTED" => Some(iface_apps::AppStoreVersionState::DeveloperRejected),
+        "IN_REVIEW" => Some(iface_apps::AppStoreVersionState::InReview),
+        "INVALID_BINARY" => Some(iface_apps::AppStoreVersionState::InvalidBinary),
+        "METADATA_REJECTED" => Some(iface_apps::AppStoreVersionState::MetadataRejected),
+        "PENDING_APPLE_RELEASE" => Some(iface_apps::AppStoreVersionState::PendingAppleRelease),
+        "PENDING_CONTRACT" => Some(iface_apps::AppStoreVersionState::PendingContract),
+        "PENDING_DEVELOPER_RELEASE" => Some(iface_apps::AppStoreVersionState::PendingDeveloperRelease),
+        "PREPARE_FOR_SUBMISSION" => Some(iface_apps::AppStoreVersionState::PrepareForSubmission),
+        "PREORDER_READY_FOR_SALE" => Some(iface_apps::AppStoreVersionState::PreorderReadyForSale),
+        "PROCESSING_FOR_APP_STORE" => Some(iface_apps::AppStoreVersionState::ProcessingForAppStore),
+        "READY_FOR_SALE" => Some(iface_apps::AppStoreVersionState::ReadyForSale),
+        "REJECTED" => Some(iface_apps::AppStoreVersionState::Rejected),
+        "REMOVED_FROM_SALE" => Some(iface_apps::AppStoreVersionState::RemovedFromSale),
+        "WAITING_FOR_EXPORT_COMPLIANCE" => Some(iface_apps::AppStoreVersionState::WaitingForExportCompliance),
+        "WAITING_FOR_REVIEW" => Some(iface_apps::AppStoreVersionState::WaitingForReview),
+        "REPLACED_WITH_NEW_VERSION" => Some(iface_apps::AppStoreVersionState::ReplacedWithNewVersion),
+        _ => None,
+    }
+}
+
+fn iface_apps__brazil_age_rating__from_str(s: &str) -> Option<iface_apps::BrazilAgeRating> {
+    match s {
+        "L" => Some(iface_apps::BrazilAgeRating::L),
+        "TEN" => Some(iface_apps::BrazilAgeRating::Ten),
+        "TWELVE" => Some(iface_apps::BrazilAgeRating::Twelve),
+        "FOURTEEN" => Some(iface_apps::BrazilAgeRating::Fourteen),
+        "SIXTEEN" => Some(iface_apps::BrazilAgeRating::Sixteen),
+        "EIGHTEEN" => Some(iface_apps::BrazilAgeRating::Eighteen),
+        _ => None,
+    }
+}
+
+fn iface_apps__kids_age_band__from_str(s: &str) -> Option<iface_apps::KidsAgeBand> {
+    match s {
+        "FIVE_AND_UNDER" => Some(iface_apps::KidsAgeBand::FiveAndUnder),
+        "SIX_TO_EIGHT" => Some(iface_apps::KidsAgeBand::SixToEight),
+        "NINE_TO_ELEVEN" => Some(iface_apps::KidsAgeBand::NineToEleven),
+        _ => None,
+    }
+}
+
 fn iface_apps__app_info_relationships_age_rating_declaration_data_type_op_enum__from_str(s: &str) -> Option<iface_apps::AppInfoRelationshipsAgeRatingDeclarationDataTypeOpEnum> {
     match s {
         "ageRatingDeclarations" => Some(iface_apps::AppInfoRelationshipsAgeRatingDeclarationDataTypeOpEnum::AgeRatingDeclarations),
@@ -5451,6 +5498,15 @@ fn iface_apps__app_info_relationships_app_info_localizations_data_item_type_op_e
 fn iface_apps__app_info_relationships_primary_category_data_type_op_enum__from_str(s: &str) -> Option<iface_apps::AppInfoRelationshipsPrimaryCategoryDataTypeOpEnum> {
     match s {
         "appCategories" => Some(iface_apps::AppInfoRelationshipsPrimaryCategoryDataTypeOpEnum::AppCategories),
+        _ => None,
+    }
+}
+
+fn iface_apps__platform__from_str(s: &str) -> Option<iface_apps::Platform> {
+    match s {
+        "IOS" => Some(iface_apps::Platform::Ios),
+        "MAC_OS" => Some(iface_apps::Platform::MacOs),
+        "TV_OS" => Some(iface_apps::Platform::TvOs),
         _ => None,
     }
 }

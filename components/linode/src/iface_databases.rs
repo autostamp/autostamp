@@ -601,6 +601,21 @@ fn iface_databases__database_mongo_db_compression_type_enum__to_str(e: &iface_da
     }
 }
 
+fn iface_databases__database_properties_status__to_str(e: &iface_databases::DatabasePropertiesStatus) -> &'static str {
+    match e {
+        iface_databases::DatabasePropertiesStatus::Provisioning => "provisioning",
+        iface_databases::DatabasePropertiesStatus::Active => "active",
+        iface_databases::DatabasePropertiesStatus::Suspending => "suspending",
+        iface_databases::DatabasePropertiesStatus::Suspended => "suspended",
+        iface_databases::DatabasePropertiesStatus::Resuming => "resuming",
+        iface_databases::DatabasePropertiesStatus::Restoring => "restoring",
+        iface_databases::DatabasePropertiesStatus::Failed => "failed",
+        iface_databases::DatabasePropertiesStatus::Degraded => "degraded",
+        iface_databases::DatabasePropertiesStatus::Updating => "updating",
+        iface_databases::DatabasePropertiesStatus::BackingUp => "backing_up",
+    }
+}
+
 fn iface_databases__database_mongo_db_storage_engine_enum__to_str(e: &iface_databases::DatabaseMongoDbStorageEngineEnum) -> &'static str {
     match e {
         iface_databases::DatabaseMongoDbStorageEngineEnum::Mmapv1 => "mmapv1",
@@ -630,6 +645,14 @@ fn iface_databases__database_my_sql_replication_type_enum__to_str(e: &iface_data
     }
 }
 
+fn iface_databases__database_my_sql_properties_replication_type__to_str(e: &iface_databases::DatabaseMySqlPropertiesReplicationType) -> &'static str {
+    match e {
+        iface_databases::DatabaseMySqlPropertiesReplicationType::None => "none",
+        iface_databases::DatabaseMySqlPropertiesReplicationType::Asynch => "asynch",
+        iface_databases::DatabaseMySqlPropertiesReplicationType::SemiSynch => "semi_synch",
+    }
+}
+
 fn iface_databases__database_postgre_sql_replication_commit_type_enum__to_str(e: &iface_databases::DatabasePostgreSqlReplicationCommitTypeEnum) -> &'static str {
     match e {
         iface_databases::DatabasePostgreSqlReplicationCommitTypeEnum::On => "on",
@@ -637,6 +660,24 @@ fn iface_databases__database_postgre_sql_replication_commit_type_enum__to_str(e:
         iface_databases::DatabasePostgreSqlReplicationCommitTypeEnum::RemoteWrite => "remote_write",
         iface_databases::DatabasePostgreSqlReplicationCommitTypeEnum::RemoteApply => "remote_apply",
         iface_databases::DatabasePostgreSqlReplicationCommitTypeEnum::Off => "off",
+    }
+}
+
+fn iface_databases__database_postgre_sql_properties_replication_commit_type__to_str(e: &iface_databases::DatabasePostgreSqlPropertiesReplicationCommitType) -> &'static str {
+    match e {
+        iface_databases::DatabasePostgreSqlPropertiesReplicationCommitType::On => "on",
+        iface_databases::DatabasePostgreSqlPropertiesReplicationCommitType::Local => "local",
+        iface_databases::DatabasePostgreSqlPropertiesReplicationCommitType::RemoteWrite => "remote_write",
+        iface_databases::DatabasePostgreSqlPropertiesReplicationCommitType::RemoteApply => "remote_apply",
+        iface_databases::DatabasePostgreSqlPropertiesReplicationCommitType::Off => "off",
+    }
+}
+
+fn iface_databases__database_postgre_sql_properties_replication_type__to_str(e: &iface_databases::DatabasePostgreSqlPropertiesReplicationType) -> &'static str {
+    match e {
+        iface_databases::DatabasePostgreSqlPropertiesReplicationType::None => "none",
+        iface_databases::DatabasePostgreSqlPropertiesReplicationType::Asynch => "asynch",
+        iface_databases::DatabasePostgreSqlPropertiesReplicationType::SemiSynch => "semi_synch",
     }
 }
 
@@ -714,50 +755,26 @@ fn iface_databases__get_databases_mongo_db_instances_response__to_json(p: &iface
 
 fn iface_databases__database_mongo_db__to_json(p: &iface_databases::DatabaseMongoDb) -> Value {
     let mut m = Map::new();
-    m.insert("allow_list".into(), match (&p.allow_list) { Some(v) => iface_databases__database_properties_allow_list__to_json(v), None => Value::Null });
-    m.insert("cluster_size".into(), match (&p.cluster_size) { Some(v) => iface_databases__database_properties_cluster_size__to_json(v), None => Value::Null });
+    m.insert("allow_list".into(), match (&p.allow_list) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("cluster_size".into(), match (&p.cluster_size) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("compression_type".into(), match (&p.compression_type) { Some(v) => Value::String(iface_databases__database_mongo_db_compression_type_enum__to_str(v).into()), None => Value::Null });
-    m.insert("created".into(), match (&p.created) { Some(v) => iface_databases__database_properties_created__to_json(v), None => Value::Null });
-    m.insert("encrypted".into(), match (&p.encrypted) { Some(v) => iface_databases__database_properties_encrypted__to_json(v), None => Value::Null });
+    m.insert("created".into(), match (&p.created) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("encrypted".into(), match (&p.encrypted) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     m.insert("engine".into(), match (&p.engine) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("hosts".into(), match (&p.hosts) { Some(v) => iface_databases__database_mongo_db_hosts__to_json(v), None => Value::Null });
-    m.insert("id".into(), match (&p.id) { Some(v) => iface_databases__database_properties_id__to_json(v), None => Value::Null });
-    m.insert("label".into(), match (&p.label) { Some(v) => iface_databases__database_properties_label__to_json(v), None => Value::Null });
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("label".into(), match (&p.label) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("peers".into(), match (&p.peers) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
     m.insert("port".into(), match (&p.port) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    m.insert("region".into(), match (&p.region) { Some(v) => iface_databases__database_properties_region__to_json(v), None => Value::Null });
+    m.insert("region".into(), match (&p.region) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("replica_set".into(), match (&p.replica_set) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("ssl_connection".into(), match (&p.ssl_connection) { Some(v) => Value::Bool(*(v)), None => Value::Null });
-    m.insert("status".into(), match (&p.status) { Some(v) => iface_databases__database_properties_status__to_json(v), None => Value::Null });
+    m.insert("status".into(), match (&p.status) { Some(v) => Value::String(iface_databases__database_properties_status__to_str(v).into()), None => Value::Null });
     m.insert("storage_engine".into(), match (&p.storage_engine) { Some(v) => Value::String(iface_databases__database_mongo_db_storage_engine_enum__to_str(v).into()), None => Value::Null });
-    m.insert("type".into(), match (&p.type_op) { Some(v) => iface_databases__database_properties_type__to_json(v), None => Value::Null });
-    m.insert("updated".into(), match (&p.updated) { Some(v) => iface_databases__database_properties_updated__to_json(v), None => Value::Null });
+    m.insert("type".into(), match (&p.type_op) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("updated".into(), match (&p.updated) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("updates".into(), match (&p.updates) { Some(v) => iface_databases__database_properties_updates__to_json(v), None => Value::Null });
     m.insert("version".into(), match (&p.version) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_databases__database_properties_allow_list__to_json(p: &iface_databases::DatabasePropertiesAllowList) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_databases__database_properties_cluster_size__to_json(p: &iface_databases::DatabasePropertiesClusterSize) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_databases__database_properties_created__to_json(p: &iface_databases::DatabasePropertiesCreated) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_databases__database_properties_encrypted__to_json(p: &iface_databases::DatabasePropertiesEncrypted) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -765,42 +782,6 @@ fn iface_databases__database_mongo_db_hosts__to_json(p: &iface_databases::Databa
     let mut m = Map::new();
     m.insert("primary".into(), match (&p.primary) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("secondary".into(), match (&p.secondary) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_databases__database_properties_id__to_json(p: &iface_databases::DatabasePropertiesId) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_databases__database_properties_label__to_json(p: &iface_databases::DatabasePropertiesLabel) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_databases__database_properties_region__to_json(p: &iface_databases::DatabasePropertiesRegion) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_databases__database_properties_status__to_json(p: &iface_databases::DatabasePropertiesStatus) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_databases__database_properties_type__to_json(p: &iface_databases::DatabasePropertiesType) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_databases__database_properties_updated__to_json(p: &iface_databases::DatabasePropertiesUpdated) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -814,18 +795,6 @@ fn iface_databases__database_properties_updates__to_json(p: &iface_databases::Da
     Value::Object(m)
 }
 
-fn iface_databases__database_mongo_db_request_properties_allow_list__to_json(p: &iface_databases::DatabaseMongoDbRequestPropertiesAllowList) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_databases__database_mongo_db_request_properties_label__to_json(p: &iface_databases::DatabaseMongoDbRequestPropertiesLabel) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
 fn iface_databases__database_mongo_db_properties_updates__to_json(p: &iface_databases::DatabaseMongoDbPropertiesUpdates) -> Value {
     let mut m = Map::new();
     m.insert("day_of_week".into(), match (&p.day_of_week) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
@@ -836,9 +805,10 @@ fn iface_databases__database_mongo_db_properties_updates__to_json(p: &iface_data
     Value::Object(m)
 }
 
-fn iface_databases__delete_databases_mongo_db_instance_response__to_json(p: &iface_databases::DeleteDatabasesMongoDbInstanceResponse) -> Value {
+fn iface_databases__delete_databases_mongo_db_instance_response_entry__to_json(p: &iface_databases::DeleteDatabasesMongoDbInstanceResponseEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -860,21 +830,24 @@ fn iface_databases__database_backup__to_json(p: &iface_databases::DatabaseBackup
     Value::Object(m)
 }
 
-fn iface_databases__post_databases_mongo_db_instance_backup_response__to_json(p: &iface_databases::PostDatabasesMongoDbInstanceBackupResponse) -> Value {
+fn iface_databases__post_databases_mongo_db_instance_backup_response_entry__to_json(p: &iface_databases::PostDatabasesMongoDbInstanceBackupResponseEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
-fn iface_databases__delete_database_mongo_db_instance_backup_response__to_json(p: &iface_databases::DeleteDatabaseMongoDbInstanceBackupResponse) -> Value {
+fn iface_databases__delete_database_mongo_db_instance_backup_response_entry__to_json(p: &iface_databases::DeleteDatabaseMongoDbInstanceBackupResponseEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
-fn iface_databases__post_databases_mongo_db_instance_backup_restore_response__to_json(p: &iface_databases::PostDatabasesMongoDbInstanceBackupRestoreResponse) -> Value {
+fn iface_databases__post_databases_mongo_db_instance_backup_restore_response_entry__to_json(p: &iface_databases::PostDatabasesMongoDbInstanceBackupRestoreResponseEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -885,15 +858,17 @@ fn iface_databases__database_credentials__to_json(p: &iface_databases::DatabaseC
     Value::Object(m)
 }
 
-fn iface_databases__post_databases_mongo_db_instance_credentials_reset_response__to_json(p: &iface_databases::PostDatabasesMongoDbInstanceCredentialsResetResponse) -> Value {
+fn iface_databases__post_databases_mongo_db_instance_credentials_reset_response_entry__to_json(p: &iface_databases::PostDatabasesMongoDbInstanceCredentialsResetResponseEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
-fn iface_databases__post_databases_mongo_db_instance_patch_response__to_json(p: &iface_databases::PostDatabasesMongoDbInstancePatchResponse) -> Value {
+fn iface_databases__post_databases_mongo_db_instance_patch_response_entry__to_json(p: &iface_databases::PostDatabasesMongoDbInstancePatchResponseEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -914,21 +889,21 @@ fn iface_databases__get_databases_my_sql_instances_response__to_json(p: &iface_d
 
 fn iface_databases__database_my_sql__to_json(p: &iface_databases::DatabaseMySql) -> Value {
     let mut m = Map::new();
-    m.insert("allow_list".into(), match (&p.allow_list) { Some(v) => iface_databases__database_properties_allow_list__to_json(v), None => Value::Null });
-    m.insert("cluster_size".into(), match (&p.cluster_size) { Some(v) => iface_databases__database_properties_cluster_size__to_json(v), None => Value::Null });
-    m.insert("created".into(), match (&p.created) { Some(v) => iface_databases__database_properties_created__to_json(v), None => Value::Null });
-    m.insert("encrypted".into(), match (&p.encrypted) { Some(v) => iface_databases__database_properties_encrypted__to_json(v), None => Value::Null });
+    m.insert("allow_list".into(), match (&p.allow_list) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("cluster_size".into(), match (&p.cluster_size) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("created".into(), match (&p.created) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("encrypted".into(), match (&p.encrypted) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     m.insert("engine".into(), match (&p.engine) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("hosts".into(), match (&p.hosts) { Some(v) => iface_databases__database_properties_hosts__to_json(v), None => Value::Null });
-    m.insert("id".into(), match (&p.id) { Some(v) => iface_databases__database_properties_id__to_json(v), None => Value::Null });
-    m.insert("label".into(), match (&p.label) { Some(v) => iface_databases__database_properties_label__to_json(v), None => Value::Null });
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("label".into(), match (&p.label) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("port".into(), match (&p.port) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    m.insert("region".into(), match (&p.region) { Some(v) => iface_databases__database_properties_region__to_json(v), None => Value::Null });
+    m.insert("region".into(), match (&p.region) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("replication_type".into(), match (&p.replication_type) { Some(v) => Value::String(iface_databases__database_my_sql_replication_type_enum__to_str(v).into()), None => Value::Null });
     m.insert("ssl_connection".into(), match (&p.ssl_connection) { Some(v) => Value::Bool(*(v)), None => Value::Null });
-    m.insert("status".into(), match (&p.status) { Some(v) => iface_databases__database_properties_status__to_json(v), None => Value::Null });
-    m.insert("type".into(), match (&p.type_op) { Some(v) => iface_databases__database_properties_type__to_json(v), None => Value::Null });
-    m.insert("updated".into(), match (&p.updated) { Some(v) => iface_databases__database_properties_updated__to_json(v), None => Value::Null });
+    m.insert("status".into(), match (&p.status) { Some(v) => Value::String(iface_databases__database_properties_status__to_str(v).into()), None => Value::Null });
+    m.insert("type".into(), match (&p.type_op) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("updated".into(), match (&p.updated) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("updates".into(), match (&p.updates) { Some(v) => iface_databases__database_properties_updates__to_json(v), None => Value::Null });
     m.insert("version".into(), match (&p.version) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
@@ -938,66 +913,6 @@ fn iface_databases__database_properties_hosts__to_json(p: &iface_databases::Data
     let mut m = Map::new();
     m.insert("primary".into(), match (&p.primary) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("secondary".into(), match (&p.secondary) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_databases__database_my_sql_properties_allow_list__to_json(p: &iface_databases::DatabaseMySqlPropertiesAllowList) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_databases__database_my_sql_properties_cluster_size__to_json(p: &iface_databases::DatabaseMySqlPropertiesClusterSize) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_databases__database_my_sql_properties_encrypted__to_json(p: &iface_databases::DatabaseMySqlPropertiesEncrypted) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_databases__database_my_sql_properties_label__to_json(p: &iface_databases::DatabaseMySqlPropertiesLabel) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_databases__database_my_sql_properties_region__to_json(p: &iface_databases::DatabaseMySqlPropertiesRegion) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_databases__database_my_sql_properties_replication_type__to_json(p: &iface_databases::DatabaseMySqlPropertiesReplicationType) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_databases__database_my_sql_properties_ssl_connection__to_json(p: &iface_databases::DatabaseMySqlPropertiesSslConnection) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_databases__database_my_sql_properties_type__to_json(p: &iface_databases::DatabaseMySqlPropertiesType) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_databases__database_my_sql_request_properties_allow_list__to_json(p: &iface_databases::DatabaseMySqlRequestPropertiesAllowList) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_databases__database_my_sql_request_properties_label__to_json(p: &iface_databases::DatabaseMySqlRequestPropertiesLabel) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -1011,9 +926,10 @@ fn iface_databases__database_my_sql_properties_updates__to_json(p: &iface_databa
     Value::Object(m)
 }
 
-fn iface_databases__delete_databases_my_sql_instance_response__to_json(p: &iface_databases::DeleteDatabasesMySqlInstanceResponse) -> Value {
+fn iface_databases__delete_databases_my_sql_instance_response_entry__to_json(p: &iface_databases::DeleteDatabasesMySqlInstanceResponseEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -1026,33 +942,38 @@ fn iface_databases__get_databases_my_sql_instance_backups_response__to_json(p: &
     Value::Object(m)
 }
 
-fn iface_databases__post_databases_my_sql_instance_backup_response__to_json(p: &iface_databases::PostDatabasesMySqlInstanceBackupResponse) -> Value {
+fn iface_databases__post_databases_my_sql_instance_backup_response_entry__to_json(p: &iface_databases::PostDatabasesMySqlInstanceBackupResponseEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
-fn iface_databases__delete_database_my_sql_instance_backup_response__to_json(p: &iface_databases::DeleteDatabaseMySqlInstanceBackupResponse) -> Value {
+fn iface_databases__delete_database_my_sql_instance_backup_response_entry__to_json(p: &iface_databases::DeleteDatabaseMySqlInstanceBackupResponseEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
-fn iface_databases__post_databases_my_sql_instance_backup_restore_response__to_json(p: &iface_databases::PostDatabasesMySqlInstanceBackupRestoreResponse) -> Value {
+fn iface_databases__post_databases_my_sql_instance_backup_restore_response_entry__to_json(p: &iface_databases::PostDatabasesMySqlInstanceBackupRestoreResponseEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
-fn iface_databases__post_databases_my_sql_instance_credentials_reset_response__to_json(p: &iface_databases::PostDatabasesMySqlInstanceCredentialsResetResponse) -> Value {
+fn iface_databases__post_databases_my_sql_instance_credentials_reset_response_entry__to_json(p: &iface_databases::PostDatabasesMySqlInstanceCredentialsResetResponseEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
-fn iface_databases__post_databases_my_sql_instance_patch_response__to_json(p: &iface_databases::PostDatabasesMySqlInstancePatchResponse) -> Value {
+fn iface_databases__post_databases_my_sql_instance_patch_response_entry__to_json(p: &iface_databases::PostDatabasesMySqlInstancePatchResponseEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -1067,22 +988,22 @@ fn iface_databases__get_databases_postgre_sql_instances_response__to_json(p: &if
 
 fn iface_databases__database_postgre_sql__to_json(p: &iface_databases::DatabasePostgreSql) -> Value {
     let mut m = Map::new();
-    m.insert("allow_list".into(), match (&p.allow_list) { Some(v) => iface_databases__database_properties_allow_list__to_json(v), None => Value::Null });
-    m.insert("cluster_size".into(), match (&p.cluster_size) { Some(v) => iface_databases__database_properties_cluster_size__to_json(v), None => Value::Null });
-    m.insert("created".into(), match (&p.created) { Some(v) => iface_databases__database_properties_created__to_json(v), None => Value::Null });
-    m.insert("encrypted".into(), match (&p.encrypted) { Some(v) => iface_databases__database_properties_encrypted__to_json(v), None => Value::Null });
+    m.insert("allow_list".into(), match (&p.allow_list) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("cluster_size".into(), match (&p.cluster_size) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("created".into(), match (&p.created) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("encrypted".into(), match (&p.encrypted) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     m.insert("engine".into(), match (&p.engine) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("hosts".into(), match (&p.hosts) { Some(v) => iface_databases__database_postgre_sql_hosts__to_json(v), None => Value::Null });
-    m.insert("id".into(), match (&p.id) { Some(v) => iface_databases__database_properties_id__to_json(v), None => Value::Null });
-    m.insert("label".into(), match (&p.label) { Some(v) => iface_databases__database_properties_label__to_json(v), None => Value::Null });
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("label".into(), match (&p.label) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("port".into(), match (&p.port) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    m.insert("region".into(), match (&p.region) { Some(v) => iface_databases__database_properties_region__to_json(v), None => Value::Null });
+    m.insert("region".into(), match (&p.region) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("replication_commit_type".into(), match (&p.replication_commit_type) { Some(v) => Value::String(iface_databases__database_postgre_sql_replication_commit_type_enum__to_str(v).into()), None => Value::Null });
     m.insert("replication_type".into(), match (&p.replication_type) { Some(v) => Value::String(iface_databases__database_my_sql_replication_type_enum__to_str(v).into()), None => Value::Null });
     m.insert("ssl_connection".into(), match (&p.ssl_connection) { Some(v) => Value::Bool(*(v)), None => Value::Null });
-    m.insert("status".into(), match (&p.status) { Some(v) => iface_databases__database_properties_status__to_json(v), None => Value::Null });
-    m.insert("type".into(), match (&p.type_op) { Some(v) => iface_databases__database_properties_type__to_json(v), None => Value::Null });
-    m.insert("updated".into(), match (&p.updated) { Some(v) => iface_databases__database_properties_updated__to_json(v), None => Value::Null });
+    m.insert("status".into(), match (&p.status) { Some(v) => Value::String(iface_databases__database_properties_status__to_str(v).into()), None => Value::Null });
+    m.insert("type".into(), match (&p.type_op) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("updated".into(), match (&p.updated) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("updates".into(), match (&p.updates) { Some(v) => iface_databases__database_properties_updates__to_json(v), None => Value::Null });
     m.insert("version".into(), match (&p.version) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
@@ -1092,72 +1013,6 @@ fn iface_databases__database_postgre_sql_hosts__to_json(p: &iface_databases::Dat
     let mut m = Map::new();
     m.insert("primary".into(), match (&p.primary) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("secondary".into(), match (&p.secondary) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_databases__database_postgre_sql_properties_allow_list__to_json(p: &iface_databases::DatabasePostgreSqlPropertiesAllowList) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_databases__database_postgre_sql_properties_cluster_size__to_json(p: &iface_databases::DatabasePostgreSqlPropertiesClusterSize) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_databases__database_postgre_sql_properties_encrypted__to_json(p: &iface_databases::DatabasePostgreSqlPropertiesEncrypted) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_databases__database_postgre_sql_properties_label__to_json(p: &iface_databases::DatabasePostgreSqlPropertiesLabel) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_databases__database_postgre_sql_properties_region__to_json(p: &iface_databases::DatabasePostgreSqlPropertiesRegion) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_databases__database_postgre_sql_properties_replication_commit_type__to_json(p: &iface_databases::DatabasePostgreSqlPropertiesReplicationCommitType) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_databases__database_postgre_sql_properties_replication_type__to_json(p: &iface_databases::DatabasePostgreSqlPropertiesReplicationType) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_databases__database_postgre_sql_properties_ssl_connection__to_json(p: &iface_databases::DatabasePostgreSqlPropertiesSslConnection) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_databases__database_postgre_sql_properties_type__to_json(p: &iface_databases::DatabasePostgreSqlPropertiesType) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_databases__database_postgre_sql_request_properties_allow_list__to_json(p: &iface_databases::DatabasePostgreSqlRequestPropertiesAllowList) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_databases__database_postgre_sql_request_properties_label__to_json(p: &iface_databases::DatabasePostgreSqlRequestPropertiesLabel) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -1171,9 +1026,10 @@ fn iface_databases__database_postgre_sql_properties_updates__to_json(p: &iface_d
     Value::Object(m)
 }
 
-fn iface_databases__delete_databases_postgre_sql_instance_response__to_json(p: &iface_databases::DeleteDatabasesPostgreSqlInstanceResponse) -> Value {
+fn iface_databases__delete_databases_postgre_sql_instance_response_entry__to_json(p: &iface_databases::DeleteDatabasesPostgreSqlInstanceResponseEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -1186,33 +1042,38 @@ fn iface_databases__get_databases_postgre_sql_instance_backups_response__to_json
     Value::Object(m)
 }
 
-fn iface_databases__post_databases_postgre_sql_instance_backup_response__to_json(p: &iface_databases::PostDatabasesPostgreSqlInstanceBackupResponse) -> Value {
+fn iface_databases__post_databases_postgre_sql_instance_backup_response_entry__to_json(p: &iface_databases::PostDatabasesPostgreSqlInstanceBackupResponseEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
-fn iface_databases__delete_database_postgre_sql_instance_backup_response__to_json(p: &iface_databases::DeleteDatabasePostgreSqlInstanceBackupResponse) -> Value {
+fn iface_databases__delete_database_postgre_sql_instance_backup_response_entry__to_json(p: &iface_databases::DeleteDatabasePostgreSqlInstanceBackupResponseEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
-fn iface_databases__post_databases_postgre_sql_instance_backup_restore_response__to_json(p: &iface_databases::PostDatabasesPostgreSqlInstanceBackupRestoreResponse) -> Value {
+fn iface_databases__post_databases_postgre_sql_instance_backup_restore_response_entry__to_json(p: &iface_databases::PostDatabasesPostgreSqlInstanceBackupRestoreResponseEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
-fn iface_databases__post_databases_postgre_sql_instance_credentials_reset_response__to_json(p: &iface_databases::PostDatabasesPostgreSqlInstanceCredentialsResetResponse) -> Value {
+fn iface_databases__post_databases_postgre_sql_instance_credentials_reset_response_entry__to_json(p: &iface_databases::PostDatabasesPostgreSqlInstanceCredentialsResetResponseEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
-fn iface_databases__post_databases_postgre_sql_instance_patch_response__to_json(p: &iface_databases::PostDatabasesPostgreSqlInstancePatchResponse) -> Value {
+fn iface_databases__post_databases_postgre_sql_instance_patch_response_entry__to_json(p: &iface_databases::PostDatabasesPostgreSqlInstancePatchResponseEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -1298,8 +1159,8 @@ fn iface_databases__get_databases_mongo_db_instance_params__to_json(p: &iface_da
 fn iface_databases__put_databases_mongo_db_instance_params__to_json(p: &iface_databases::PutDatabasesMongoDbInstanceParams) -> Value {
     let mut m = Map::new();
     m.insert("instance_id".into(), Value::String((&p.instance_id).clone()));
-    m.insert("allow_list".into(), match (&p.allow_list) { Some(v) => iface_databases__database_mongo_db_request_properties_allow_list__to_json(v), None => Value::Null });
-    m.insert("label".into(), match (&p.label) { Some(v) => iface_databases__database_mongo_db_request_properties_label__to_json(v), None => Value::Null });
+    m.insert("allow_list".into(), match (&p.allow_list) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("label".into(), match (&p.label) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("updates".into(), match (&p.updates) { Some(v) => iface_databases__database_mongo_db_properties_updates__to_json(v), None => Value::Null });
     Value::Object(m)
 }
@@ -1380,15 +1241,15 @@ fn iface_databases__get_databases_my_sql_instances_params__to_json(p: &iface_dat
 
 fn iface_databases__post_databases_my_sql_instances_params__to_json(p: &iface_databases::PostDatabasesMySqlInstancesParams) -> Value {
     let mut m = Map::new();
-    m.insert("allow_list".into(), match (&p.allow_list) { Some(v) => iface_databases__database_my_sql_properties_allow_list__to_json(v), None => Value::Null });
-    m.insert("cluster_size".into(), match (&p.cluster_size) { Some(v) => iface_databases__database_my_sql_properties_cluster_size__to_json(v), None => Value::Null });
-    m.insert("encrypted".into(), match (&p.encrypted) { Some(v) => iface_databases__database_my_sql_properties_encrypted__to_json(v), None => Value::Null });
+    m.insert("allow_list".into(), match (&p.allow_list) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("cluster_size".into(), match (&p.cluster_size) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("encrypted".into(), match (&p.encrypted) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     m.insert("engine".into(), Value::String((&p.engine).clone()));
-    m.insert("label".into(), iface_databases__database_my_sql_properties_label__to_json(&p.label));
-    m.insert("region".into(), iface_databases__database_my_sql_properties_region__to_json(&p.region));
-    m.insert("replication_type".into(), match (&p.replication_type) { Some(v) => iface_databases__database_my_sql_properties_replication_type__to_json(v), None => Value::Null });
-    m.insert("ssl_connection".into(), match (&p.ssl_connection) { Some(v) => iface_databases__database_my_sql_properties_ssl_connection__to_json(v), None => Value::Null });
-    m.insert("type".into(), iface_databases__database_my_sql_properties_type__to_json(&p.type_op));
+    m.insert("label".into(), Value::String((&p.label).clone()));
+    m.insert("region".into(), Value::String((&p.region).clone()));
+    m.insert("replication_type".into(), match (&p.replication_type) { Some(v) => Value::String(iface_databases__database_my_sql_properties_replication_type__to_str(v).into()), None => Value::Null });
+    m.insert("ssl_connection".into(), match (&p.ssl_connection) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("type".into(), Value::String((&p.type_op).clone()));
     Value::Object(m)
 }
 
@@ -1401,8 +1262,8 @@ fn iface_databases__get_databases_my_sql_instance_params__to_json(p: &iface_data
 fn iface_databases__put_databases_my_sql_instance_params__to_json(p: &iface_databases::PutDatabasesMySqlInstanceParams) -> Value {
     let mut m = Map::new();
     m.insert("instance_id".into(), Value::String((&p.instance_id).clone()));
-    m.insert("allow_list".into(), match (&p.allow_list) { Some(v) => iface_databases__database_my_sql_request_properties_allow_list__to_json(v), None => Value::Null });
-    m.insert("label".into(), match (&p.label) { Some(v) => iface_databases__database_my_sql_request_properties_label__to_json(v), None => Value::Null });
+    m.insert("allow_list".into(), match (&p.allow_list) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("label".into(), match (&p.label) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("updates".into(), match (&p.updates) { Some(v) => iface_databases__database_my_sql_properties_updates__to_json(v), None => Value::Null });
     Value::Object(m)
 }
@@ -1483,16 +1344,16 @@ fn iface_databases__get_databases_postgre_sql_instances_params__to_json(p: &ifac
 
 fn iface_databases__post_databases_postgre_sql_instances_params__to_json(p: &iface_databases::PostDatabasesPostgreSqlInstancesParams) -> Value {
     let mut m = Map::new();
-    m.insert("allow_list".into(), match (&p.allow_list) { Some(v) => iface_databases__database_postgre_sql_properties_allow_list__to_json(v), None => Value::Null });
-    m.insert("cluster_size".into(), match (&p.cluster_size) { Some(v) => iface_databases__database_postgre_sql_properties_cluster_size__to_json(v), None => Value::Null });
-    m.insert("encrypted".into(), match (&p.encrypted) { Some(v) => iface_databases__database_postgre_sql_properties_encrypted__to_json(v), None => Value::Null });
+    m.insert("allow_list".into(), match (&p.allow_list) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("cluster_size".into(), match (&p.cluster_size) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("encrypted".into(), match (&p.encrypted) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     m.insert("engine".into(), Value::String((&p.engine).clone()));
-    m.insert("label".into(), iface_databases__database_postgre_sql_properties_label__to_json(&p.label));
-    m.insert("region".into(), iface_databases__database_postgre_sql_properties_region__to_json(&p.region));
-    m.insert("replication_commit_type".into(), match (&p.replication_commit_type) { Some(v) => iface_databases__database_postgre_sql_properties_replication_commit_type__to_json(v), None => Value::Null });
-    m.insert("replication_type".into(), match (&p.replication_type) { Some(v) => iface_databases__database_postgre_sql_properties_replication_type__to_json(v), None => Value::Null });
-    m.insert("ssl_connection".into(), match (&p.ssl_connection) { Some(v) => iface_databases__database_postgre_sql_properties_ssl_connection__to_json(v), None => Value::Null });
-    m.insert("type".into(), iface_databases__database_postgre_sql_properties_type__to_json(&p.type_op));
+    m.insert("label".into(), Value::String((&p.label).clone()));
+    m.insert("region".into(), Value::String((&p.region).clone()));
+    m.insert("replication_commit_type".into(), match (&p.replication_commit_type) { Some(v) => Value::String(iface_databases__database_postgre_sql_properties_replication_commit_type__to_str(v).into()), None => Value::Null });
+    m.insert("replication_type".into(), match (&p.replication_type) { Some(v) => Value::String(iface_databases__database_postgre_sql_properties_replication_type__to_str(v).into()), None => Value::Null });
+    m.insert("ssl_connection".into(), match (&p.ssl_connection) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("type".into(), Value::String((&p.type_op).clone()));
     Value::Object(m)
 }
 
@@ -1505,8 +1366,8 @@ fn iface_databases__get_databases_postgre_sql_instance_params__to_json(p: &iface
 fn iface_databases__put_databases_postgre_sql_instance_params__to_json(p: &iface_databases::PutDatabasesPostgreSqlInstanceParams) -> Value {
     let mut m = Map::new();
     m.insert("instance_id".into(), Value::String((&p.instance_id).clone()));
-    m.insert("allow_list".into(), match (&p.allow_list) { Some(v) => iface_databases__database_postgre_sql_request_properties_allow_list__to_json(v), None => Value::Null });
-    m.insert("label".into(), match (&p.label) { Some(v) => iface_databases__database_postgre_sql_request_properties_label__to_json(v), None => Value::Null });
+    m.insert("allow_list".into(), match (&p.allow_list) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("label".into(), match (&p.label) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("updates".into(), match (&p.updates) { Some(v) => iface_databases__database_postgre_sql_properties_updates__to_json(v), None => Value::Null });
     Value::Object(m)
 }
@@ -1675,54 +1536,26 @@ fn iface_databases__get_databases_mongo_db_instances_response__from_json(v: &Val
 fn iface_databases__database_mongo_db__from_json(v: &Value) -> Option<iface_databases::DatabaseMongoDb> {
     let m = v.as_object()?;
     Some(iface_databases::DatabaseMongoDb {
-        allow_list: m.get("allow_list").filter(|v| !v.is_null()).and_then(|v| iface_databases__database_properties_allow_list__from_json(v)),
-        cluster_size: m.get("cluster_size").filter(|v| !v.is_null()).and_then(|v| iface_databases__database_properties_cluster_size__from_json(v)),
+        allow_list: m.get("allow_list").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        cluster_size: m.get("cluster_size").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
         compression_type: m.get("compression_type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_databases__database_mongo_db_compression_type_enum__from_str)),
-        created: m.get("created").filter(|v| !v.is_null()).and_then(|v| iface_databases__database_properties_created__from_json(v)),
-        encrypted: m.get("encrypted").filter(|v| !v.is_null()).and_then(|v| iface_databases__database_properties_encrypted__from_json(v)),
+        created: m.get("created").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        encrypted: m.get("encrypted").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
         engine: m.get("engine").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         hosts: m.get("hosts").filter(|v| !v.is_null()).and_then(|v| iface_databases__database_mongo_db_hosts__from_json(v)),
-        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| iface_databases__database_properties_id__from_json(v)),
-        label: m.get("label").filter(|v| !v.is_null()).and_then(|v| iface_databases__database_properties_label__from_json(v)),
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        label: m.get("label").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         peers: m.get("peers").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
         port: m.get("port").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
-        region: m.get("region").filter(|v| !v.is_null()).and_then(|v| iface_databases__database_properties_region__from_json(v)),
+        region: m.get("region").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         replica_set: m.get("replica_set").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         ssl_connection: m.get("ssl_connection").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
-        status: m.get("status").filter(|v| !v.is_null()).and_then(|v| iface_databases__database_properties_status__from_json(v)),
+        status: m.get("status").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_databases__database_properties_status__from_str)),
         storage_engine: m.get("storage_engine").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_databases__database_mongo_db_storage_engine_enum__from_str)),
-        type_op: m.get("type").filter(|v| !v.is_null()).and_then(|v| iface_databases__database_properties_type__from_json(v)),
-        updated: m.get("updated").filter(|v| !v.is_null()).and_then(|v| iface_databases__database_properties_updated__from_json(v)),
+        type_op: m.get("type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        updated: m.get("updated").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         updates: m.get("updates").filter(|v| !v.is_null()).and_then(|v| iface_databases__database_properties_updates__from_json(v)),
         version: m.get("version").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-    })
-}
-
-fn iface_databases__database_properties_allow_list__from_json(v: &Value) -> Option<iface_databases::DatabasePropertiesAllowList> {
-    let m = v.as_object()?;
-    Some(iface_databases::DatabasePropertiesAllowList {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-    })
-}
-
-fn iface_databases__database_properties_cluster_size__from_json(v: &Value) -> Option<iface_databases::DatabasePropertiesClusterSize> {
-    let m = v.as_object()?;
-    Some(iface_databases::DatabasePropertiesClusterSize {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-    })
-}
-
-fn iface_databases__database_properties_created__from_json(v: &Value) -> Option<iface_databases::DatabasePropertiesCreated> {
-    let m = v.as_object()?;
-    Some(iface_databases::DatabasePropertiesCreated {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-    })
-}
-
-fn iface_databases__database_properties_encrypted__from_json(v: &Value) -> Option<iface_databases::DatabasePropertiesEncrypted> {
-    let m = v.as_object()?;
-    Some(iface_databases::DatabasePropertiesEncrypted {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -1731,48 +1564,6 @@ fn iface_databases__database_mongo_db_hosts__from_json(v: &Value) -> Option<ifac
     Some(iface_databases::DatabaseMongoDbHosts {
         primary: m.get("primary").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         secondary: m.get("secondary").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-    })
-}
-
-fn iface_databases__database_properties_id__from_json(v: &Value) -> Option<iface_databases::DatabasePropertiesId> {
-    let m = v.as_object()?;
-    Some(iface_databases::DatabasePropertiesId {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-    })
-}
-
-fn iface_databases__database_properties_label__from_json(v: &Value) -> Option<iface_databases::DatabasePropertiesLabel> {
-    let m = v.as_object()?;
-    Some(iface_databases::DatabasePropertiesLabel {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-    })
-}
-
-fn iface_databases__database_properties_region__from_json(v: &Value) -> Option<iface_databases::DatabasePropertiesRegion> {
-    let m = v.as_object()?;
-    Some(iface_databases::DatabasePropertiesRegion {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-    })
-}
-
-fn iface_databases__database_properties_status__from_json(v: &Value) -> Option<iface_databases::DatabasePropertiesStatus> {
-    let m = v.as_object()?;
-    Some(iface_databases::DatabasePropertiesStatus {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-    })
-}
-
-fn iface_databases__database_properties_type__from_json(v: &Value) -> Option<iface_databases::DatabasePropertiesType> {
-    let m = v.as_object()?;
-    Some(iface_databases::DatabasePropertiesType {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-    })
-}
-
-fn iface_databases__database_properties_updated__from_json(v: &Value) -> Option<iface_databases::DatabasePropertiesUpdated> {
-    let m = v.as_object()?;
-    Some(iface_databases::DatabasePropertiesUpdated {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -1787,10 +1578,11 @@ fn iface_databases__database_properties_updates__from_json(v: &Value) -> Option<
     })
 }
 
-fn iface_databases__delete_databases_mongo_db_instance_response__from_json(v: &Value) -> Option<iface_databases::DeleteDatabasesMongoDbInstanceResponse> {
+fn iface_databases__delete_databases_mongo_db_instance_response_entry__from_json(v: &Value) -> Option<iface_databases::DeleteDatabasesMongoDbInstanceResponseEntry> {
     let m = v.as_object()?;
-    Some(iface_databases::DeleteDatabasesMongoDbInstanceResponse {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_databases::DeleteDatabasesMongoDbInstanceResponseEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -1814,24 +1606,27 @@ fn iface_databases__database_backup__from_json(v: &Value) -> Option<iface_databa
     })
 }
 
-fn iface_databases__post_databases_mongo_db_instance_backup_response__from_json(v: &Value) -> Option<iface_databases::PostDatabasesMongoDbInstanceBackupResponse> {
+fn iface_databases__post_databases_mongo_db_instance_backup_response_entry__from_json(v: &Value) -> Option<iface_databases::PostDatabasesMongoDbInstanceBackupResponseEntry> {
     let m = v.as_object()?;
-    Some(iface_databases::PostDatabasesMongoDbInstanceBackupResponse {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_databases::PostDatabasesMongoDbInstanceBackupResponseEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
-fn iface_databases__delete_database_mongo_db_instance_backup_response__from_json(v: &Value) -> Option<iface_databases::DeleteDatabaseMongoDbInstanceBackupResponse> {
+fn iface_databases__delete_database_mongo_db_instance_backup_response_entry__from_json(v: &Value) -> Option<iface_databases::DeleteDatabaseMongoDbInstanceBackupResponseEntry> {
     let m = v.as_object()?;
-    Some(iface_databases::DeleteDatabaseMongoDbInstanceBackupResponse {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_databases::DeleteDatabaseMongoDbInstanceBackupResponseEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
-fn iface_databases__post_databases_mongo_db_instance_backup_restore_response__from_json(v: &Value) -> Option<iface_databases::PostDatabasesMongoDbInstanceBackupRestoreResponse> {
+fn iface_databases__post_databases_mongo_db_instance_backup_restore_response_entry__from_json(v: &Value) -> Option<iface_databases::PostDatabasesMongoDbInstanceBackupRestoreResponseEntry> {
     let m = v.as_object()?;
-    Some(iface_databases::PostDatabasesMongoDbInstanceBackupRestoreResponse {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_databases::PostDatabasesMongoDbInstanceBackupRestoreResponseEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -1843,17 +1638,19 @@ fn iface_databases__database_credentials__from_json(v: &Value) -> Option<iface_d
     })
 }
 
-fn iface_databases__post_databases_mongo_db_instance_credentials_reset_response__from_json(v: &Value) -> Option<iface_databases::PostDatabasesMongoDbInstanceCredentialsResetResponse> {
+fn iface_databases__post_databases_mongo_db_instance_credentials_reset_response_entry__from_json(v: &Value) -> Option<iface_databases::PostDatabasesMongoDbInstanceCredentialsResetResponseEntry> {
     let m = v.as_object()?;
-    Some(iface_databases::PostDatabasesMongoDbInstanceCredentialsResetResponse {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_databases::PostDatabasesMongoDbInstanceCredentialsResetResponseEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
-fn iface_databases__post_databases_mongo_db_instance_patch_response__from_json(v: &Value) -> Option<iface_databases::PostDatabasesMongoDbInstancePatchResponse> {
+fn iface_databases__post_databases_mongo_db_instance_patch_response_entry__from_json(v: &Value) -> Option<iface_databases::PostDatabasesMongoDbInstancePatchResponseEntry> {
     let m = v.as_object()?;
-    Some(iface_databases::PostDatabasesMongoDbInstancePatchResponse {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_databases::PostDatabasesMongoDbInstancePatchResponseEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -1877,21 +1674,21 @@ fn iface_databases__get_databases_my_sql_instances_response__from_json(v: &Value
 fn iface_databases__database_my_sql__from_json(v: &Value) -> Option<iface_databases::DatabaseMySql> {
     let m = v.as_object()?;
     Some(iface_databases::DatabaseMySql {
-        allow_list: m.get("allow_list").filter(|v| !v.is_null()).and_then(|v| iface_databases__database_properties_allow_list__from_json(v)),
-        cluster_size: m.get("cluster_size").filter(|v| !v.is_null()).and_then(|v| iface_databases__database_properties_cluster_size__from_json(v)),
-        created: m.get("created").filter(|v| !v.is_null()).and_then(|v| iface_databases__database_properties_created__from_json(v)),
-        encrypted: m.get("encrypted").filter(|v| !v.is_null()).and_then(|v| iface_databases__database_properties_encrypted__from_json(v)),
+        allow_list: m.get("allow_list").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        cluster_size: m.get("cluster_size").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        created: m.get("created").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        encrypted: m.get("encrypted").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
         engine: m.get("engine").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         hosts: m.get("hosts").filter(|v| !v.is_null()).and_then(|v| iface_databases__database_properties_hosts__from_json(v)),
-        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| iface_databases__database_properties_id__from_json(v)),
-        label: m.get("label").filter(|v| !v.is_null()).and_then(|v| iface_databases__database_properties_label__from_json(v)),
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        label: m.get("label").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         port: m.get("port").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
-        region: m.get("region").filter(|v| !v.is_null()).and_then(|v| iface_databases__database_properties_region__from_json(v)),
+        region: m.get("region").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         replication_type: m.get("replication_type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_databases__database_my_sql_replication_type_enum__from_str)),
         ssl_connection: m.get("ssl_connection").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
-        status: m.get("status").filter(|v| !v.is_null()).and_then(|v| iface_databases__database_properties_status__from_json(v)),
-        type_op: m.get("type").filter(|v| !v.is_null()).and_then(|v| iface_databases__database_properties_type__from_json(v)),
-        updated: m.get("updated").filter(|v| !v.is_null()).and_then(|v| iface_databases__database_properties_updated__from_json(v)),
+        status: m.get("status").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_databases__database_properties_status__from_str)),
+        type_op: m.get("type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        updated: m.get("updated").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         updates: m.get("updates").filter(|v| !v.is_null()).and_then(|v| iface_databases__database_properties_updates__from_json(v)),
         version: m.get("version").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
     })
@@ -1905,10 +1702,11 @@ fn iface_databases__database_properties_hosts__from_json(v: &Value) -> Option<if
     })
 }
 
-fn iface_databases__delete_databases_my_sql_instance_response__from_json(v: &Value) -> Option<iface_databases::DeleteDatabasesMySqlInstanceResponse> {
+fn iface_databases__delete_databases_my_sql_instance_response_entry__from_json(v: &Value) -> Option<iface_databases::DeleteDatabasesMySqlInstanceResponseEntry> {
     let m = v.as_object()?;
-    Some(iface_databases::DeleteDatabasesMySqlInstanceResponse {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_databases::DeleteDatabasesMySqlInstanceResponseEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -1922,38 +1720,43 @@ fn iface_databases__get_databases_my_sql_instance_backups_response__from_json(v:
     })
 }
 
-fn iface_databases__post_databases_my_sql_instance_backup_response__from_json(v: &Value) -> Option<iface_databases::PostDatabasesMySqlInstanceBackupResponse> {
+fn iface_databases__post_databases_my_sql_instance_backup_response_entry__from_json(v: &Value) -> Option<iface_databases::PostDatabasesMySqlInstanceBackupResponseEntry> {
     let m = v.as_object()?;
-    Some(iface_databases::PostDatabasesMySqlInstanceBackupResponse {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_databases::PostDatabasesMySqlInstanceBackupResponseEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
-fn iface_databases__delete_database_my_sql_instance_backup_response__from_json(v: &Value) -> Option<iface_databases::DeleteDatabaseMySqlInstanceBackupResponse> {
+fn iface_databases__delete_database_my_sql_instance_backup_response_entry__from_json(v: &Value) -> Option<iface_databases::DeleteDatabaseMySqlInstanceBackupResponseEntry> {
     let m = v.as_object()?;
-    Some(iface_databases::DeleteDatabaseMySqlInstanceBackupResponse {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_databases::DeleteDatabaseMySqlInstanceBackupResponseEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
-fn iface_databases__post_databases_my_sql_instance_backup_restore_response__from_json(v: &Value) -> Option<iface_databases::PostDatabasesMySqlInstanceBackupRestoreResponse> {
+fn iface_databases__post_databases_my_sql_instance_backup_restore_response_entry__from_json(v: &Value) -> Option<iface_databases::PostDatabasesMySqlInstanceBackupRestoreResponseEntry> {
     let m = v.as_object()?;
-    Some(iface_databases::PostDatabasesMySqlInstanceBackupRestoreResponse {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_databases::PostDatabasesMySqlInstanceBackupRestoreResponseEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
-fn iface_databases__post_databases_my_sql_instance_credentials_reset_response__from_json(v: &Value) -> Option<iface_databases::PostDatabasesMySqlInstanceCredentialsResetResponse> {
+fn iface_databases__post_databases_my_sql_instance_credentials_reset_response_entry__from_json(v: &Value) -> Option<iface_databases::PostDatabasesMySqlInstanceCredentialsResetResponseEntry> {
     let m = v.as_object()?;
-    Some(iface_databases::PostDatabasesMySqlInstanceCredentialsResetResponse {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_databases::PostDatabasesMySqlInstanceCredentialsResetResponseEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
-fn iface_databases__post_databases_my_sql_instance_patch_response__from_json(v: &Value) -> Option<iface_databases::PostDatabasesMySqlInstancePatchResponse> {
+fn iface_databases__post_databases_my_sql_instance_patch_response_entry__from_json(v: &Value) -> Option<iface_databases::PostDatabasesMySqlInstancePatchResponseEntry> {
     let m = v.as_object()?;
-    Some(iface_databases::PostDatabasesMySqlInstancePatchResponse {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_databases::PostDatabasesMySqlInstancePatchResponseEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -1970,22 +1773,22 @@ fn iface_databases__get_databases_postgre_sql_instances_response__from_json(v: &
 fn iface_databases__database_postgre_sql__from_json(v: &Value) -> Option<iface_databases::DatabasePostgreSql> {
     let m = v.as_object()?;
     Some(iface_databases::DatabasePostgreSql {
-        allow_list: m.get("allow_list").filter(|v| !v.is_null()).and_then(|v| iface_databases__database_properties_allow_list__from_json(v)),
-        cluster_size: m.get("cluster_size").filter(|v| !v.is_null()).and_then(|v| iface_databases__database_properties_cluster_size__from_json(v)),
-        created: m.get("created").filter(|v| !v.is_null()).and_then(|v| iface_databases__database_properties_created__from_json(v)),
-        encrypted: m.get("encrypted").filter(|v| !v.is_null()).and_then(|v| iface_databases__database_properties_encrypted__from_json(v)),
+        allow_list: m.get("allow_list").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        cluster_size: m.get("cluster_size").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        created: m.get("created").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        encrypted: m.get("encrypted").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
         engine: m.get("engine").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         hosts: m.get("hosts").filter(|v| !v.is_null()).and_then(|v| iface_databases__database_postgre_sql_hosts__from_json(v)),
-        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| iface_databases__database_properties_id__from_json(v)),
-        label: m.get("label").filter(|v| !v.is_null()).and_then(|v| iface_databases__database_properties_label__from_json(v)),
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        label: m.get("label").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         port: m.get("port").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
-        region: m.get("region").filter(|v| !v.is_null()).and_then(|v| iface_databases__database_properties_region__from_json(v)),
+        region: m.get("region").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         replication_commit_type: m.get("replication_commit_type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_databases__database_postgre_sql_replication_commit_type_enum__from_str)),
         replication_type: m.get("replication_type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_databases__database_my_sql_replication_type_enum__from_str)),
         ssl_connection: m.get("ssl_connection").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
-        status: m.get("status").filter(|v| !v.is_null()).and_then(|v| iface_databases__database_properties_status__from_json(v)),
-        type_op: m.get("type").filter(|v| !v.is_null()).and_then(|v| iface_databases__database_properties_type__from_json(v)),
-        updated: m.get("updated").filter(|v| !v.is_null()).and_then(|v| iface_databases__database_properties_updated__from_json(v)),
+        status: m.get("status").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_databases__database_properties_status__from_str)),
+        type_op: m.get("type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        updated: m.get("updated").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         updates: m.get("updates").filter(|v| !v.is_null()).and_then(|v| iface_databases__database_properties_updates__from_json(v)),
         version: m.get("version").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
     })
@@ -1999,10 +1802,11 @@ fn iface_databases__database_postgre_sql_hosts__from_json(v: &Value) -> Option<i
     })
 }
 
-fn iface_databases__delete_databases_postgre_sql_instance_response__from_json(v: &Value) -> Option<iface_databases::DeleteDatabasesPostgreSqlInstanceResponse> {
+fn iface_databases__delete_databases_postgre_sql_instance_response_entry__from_json(v: &Value) -> Option<iface_databases::DeleteDatabasesPostgreSqlInstanceResponseEntry> {
     let m = v.as_object()?;
-    Some(iface_databases::DeleteDatabasesPostgreSqlInstanceResponse {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_databases::DeleteDatabasesPostgreSqlInstanceResponseEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -2016,38 +1820,43 @@ fn iface_databases__get_databases_postgre_sql_instance_backups_response__from_js
     })
 }
 
-fn iface_databases__post_databases_postgre_sql_instance_backup_response__from_json(v: &Value) -> Option<iface_databases::PostDatabasesPostgreSqlInstanceBackupResponse> {
+fn iface_databases__post_databases_postgre_sql_instance_backup_response_entry__from_json(v: &Value) -> Option<iface_databases::PostDatabasesPostgreSqlInstanceBackupResponseEntry> {
     let m = v.as_object()?;
-    Some(iface_databases::PostDatabasesPostgreSqlInstanceBackupResponse {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_databases::PostDatabasesPostgreSqlInstanceBackupResponseEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
-fn iface_databases__delete_database_postgre_sql_instance_backup_response__from_json(v: &Value) -> Option<iface_databases::DeleteDatabasePostgreSqlInstanceBackupResponse> {
+fn iface_databases__delete_database_postgre_sql_instance_backup_response_entry__from_json(v: &Value) -> Option<iface_databases::DeleteDatabasePostgreSqlInstanceBackupResponseEntry> {
     let m = v.as_object()?;
-    Some(iface_databases::DeleteDatabasePostgreSqlInstanceBackupResponse {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_databases::DeleteDatabasePostgreSqlInstanceBackupResponseEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
-fn iface_databases__post_databases_postgre_sql_instance_backup_restore_response__from_json(v: &Value) -> Option<iface_databases::PostDatabasesPostgreSqlInstanceBackupRestoreResponse> {
+fn iface_databases__post_databases_postgre_sql_instance_backup_restore_response_entry__from_json(v: &Value) -> Option<iface_databases::PostDatabasesPostgreSqlInstanceBackupRestoreResponseEntry> {
     let m = v.as_object()?;
-    Some(iface_databases::PostDatabasesPostgreSqlInstanceBackupRestoreResponse {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_databases::PostDatabasesPostgreSqlInstanceBackupRestoreResponseEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
-fn iface_databases__post_databases_postgre_sql_instance_credentials_reset_response__from_json(v: &Value) -> Option<iface_databases::PostDatabasesPostgreSqlInstanceCredentialsResetResponse> {
+fn iface_databases__post_databases_postgre_sql_instance_credentials_reset_response_entry__from_json(v: &Value) -> Option<iface_databases::PostDatabasesPostgreSqlInstanceCredentialsResetResponseEntry> {
     let m = v.as_object()?;
-    Some(iface_databases::PostDatabasesPostgreSqlInstanceCredentialsResetResponse {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_databases::PostDatabasesPostgreSqlInstanceCredentialsResetResponseEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
-fn iface_databases__post_databases_postgre_sql_instance_patch_response__from_json(v: &Value) -> Option<iface_databases::PostDatabasesPostgreSqlInstancePatchResponse> {
+fn iface_databases__post_databases_postgre_sql_instance_patch_response_entry__from_json(v: &Value) -> Option<iface_databases::PostDatabasesPostgreSqlInstancePatchResponseEntry> {
     let m = v.as_object()?;
-    Some(iface_databases::PostDatabasesPostgreSqlInstancePatchResponse {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_databases::PostDatabasesPostgreSqlInstancePatchResponseEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -2138,6 +1947,22 @@ fn iface_databases__database_mongo_db_compression_type_enum__from_str(s: &str) -
         "none" => Some(iface_databases::DatabaseMongoDbCompressionTypeEnum::None),
         "snappy" => Some(iface_databases::DatabaseMongoDbCompressionTypeEnum::Snappy),
         "zlip" => Some(iface_databases::DatabaseMongoDbCompressionTypeEnum::Zlip),
+        _ => None,
+    }
+}
+
+fn iface_databases__database_properties_status__from_str(s: &str) -> Option<iface_databases::DatabasePropertiesStatus> {
+    match s {
+        "provisioning" => Some(iface_databases::DatabasePropertiesStatus::Provisioning),
+        "active" => Some(iface_databases::DatabasePropertiesStatus::Active),
+        "suspending" => Some(iface_databases::DatabasePropertiesStatus::Suspending),
+        "suspended" => Some(iface_databases::DatabasePropertiesStatus::Suspended),
+        "resuming" => Some(iface_databases::DatabasePropertiesStatus::Resuming),
+        "restoring" => Some(iface_databases::DatabasePropertiesStatus::Restoring),
+        "failed" => Some(iface_databases::DatabasePropertiesStatus::Failed),
+        "degraded" => Some(iface_databases::DatabasePropertiesStatus::Degraded),
+        "updating" => Some(iface_databases::DatabasePropertiesStatus::Updating),
+        "backing_up" => Some(iface_databases::DatabasePropertiesStatus::BackingUp),
         _ => None,
     }
 }
@@ -2286,12 +2111,12 @@ fn iface_databases__put_databases_mongo_db_instance__err(e: crate::runtime::Disp
     }
 }
 
-fn iface_databases__delete_databases_mongo_db_instance__ok(body: String) -> Result<iface_databases::DeleteDatabasesMongoDbInstanceResponse, crate::runtime::DispatchError> {
+fn iface_databases__delete_databases_mongo_db_instance__ok(body: String) -> Result<Vec<iface_databases::DeleteDatabasesMongoDbInstanceResponseEntry>, crate::runtime::DispatchError> {
     let v: Value = match serde_json::from_str(&body) {
         Ok(v) => v,
         Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
     };
-    match iface_databases__delete_databases_mongo_db_instance_response__from_json(&v) {
+    match (&v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_databases::DeleteDatabasesMongoDbInstanceResponseEntry { key: k.clone(), value: val })).collect()) {
         Some(x) => Ok(x),
         None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
@@ -2322,12 +2147,12 @@ fn iface_databases__get_databases_mongo_db_instance_backups__err(e: crate::runti
     }
 }
 
-fn iface_databases__post_databases_mongo_db_instance_backup__ok(body: String) -> Result<iface_databases::PostDatabasesMongoDbInstanceBackupResponse, crate::runtime::DispatchError> {
+fn iface_databases__post_databases_mongo_db_instance_backup__ok(body: String) -> Result<Vec<iface_databases::PostDatabasesMongoDbInstanceBackupResponseEntry>, crate::runtime::DispatchError> {
     let v: Value = match serde_json::from_str(&body) {
         Ok(v) => v,
         Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
     };
-    match iface_databases__post_databases_mongo_db_instance_backup_response__from_json(&v) {
+    match (&v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_databases::PostDatabasesMongoDbInstanceBackupResponseEntry { key: k.clone(), value: val })).collect()) {
         Some(x) => Ok(x),
         None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
@@ -2358,12 +2183,12 @@ fn iface_databases__get_databases_mongo_db_instance_backup__err(e: crate::runtim
     }
 }
 
-fn iface_databases__delete_database_mongo_db_instance_backup__ok(body: String) -> Result<iface_databases::DeleteDatabaseMongoDbInstanceBackupResponse, crate::runtime::DispatchError> {
+fn iface_databases__delete_database_mongo_db_instance_backup__ok(body: String) -> Result<Vec<iface_databases::DeleteDatabaseMongoDbInstanceBackupResponseEntry>, crate::runtime::DispatchError> {
     let v: Value = match serde_json::from_str(&body) {
         Ok(v) => v,
         Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
     };
-    match iface_databases__delete_database_mongo_db_instance_backup_response__from_json(&v) {
+    match (&v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_databases::DeleteDatabaseMongoDbInstanceBackupResponseEntry { key: k.clone(), value: val })).collect()) {
         Some(x) => Ok(x),
         None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
@@ -2376,12 +2201,12 @@ fn iface_databases__delete_database_mongo_db_instance_backup__err(e: crate::runt
     }
 }
 
-fn iface_databases__post_databases_mongo_db_instance_backup_restore__ok(body: String) -> Result<iface_databases::PostDatabasesMongoDbInstanceBackupRestoreResponse, crate::runtime::DispatchError> {
+fn iface_databases__post_databases_mongo_db_instance_backup_restore__ok(body: String) -> Result<Vec<iface_databases::PostDatabasesMongoDbInstanceBackupRestoreResponseEntry>, crate::runtime::DispatchError> {
     let v: Value = match serde_json::from_str(&body) {
         Ok(v) => v,
         Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
     };
-    match iface_databases__post_databases_mongo_db_instance_backup_restore_response__from_json(&v) {
+    match (&v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_databases::PostDatabasesMongoDbInstanceBackupRestoreResponseEntry { key: k.clone(), value: val })).collect()) {
         Some(x) => Ok(x),
         None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
@@ -2412,12 +2237,12 @@ fn iface_databases__get_databases_mongo_db_instance_credentials__err(e: crate::r
     }
 }
 
-fn iface_databases__post_databases_mongo_db_instance_credentials_reset__ok(body: String) -> Result<iface_databases::PostDatabasesMongoDbInstanceCredentialsResetResponse, crate::runtime::DispatchError> {
+fn iface_databases__post_databases_mongo_db_instance_credentials_reset__ok(body: String) -> Result<Vec<iface_databases::PostDatabasesMongoDbInstanceCredentialsResetResponseEntry>, crate::runtime::DispatchError> {
     let v: Value = match serde_json::from_str(&body) {
         Ok(v) => v,
         Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
     };
-    match iface_databases__post_databases_mongo_db_instance_credentials_reset_response__from_json(&v) {
+    match (&v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_databases::PostDatabasesMongoDbInstanceCredentialsResetResponseEntry { key: k.clone(), value: val })).collect()) {
         Some(x) => Ok(x),
         None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
@@ -2430,12 +2255,12 @@ fn iface_databases__post_databases_mongo_db_instance_credentials_reset__err(e: c
     }
 }
 
-fn iface_databases__post_databases_mongo_db_instance_patch__ok(body: String) -> Result<iface_databases::PostDatabasesMongoDbInstancePatchResponse, crate::runtime::DispatchError> {
+fn iface_databases__post_databases_mongo_db_instance_patch__ok(body: String) -> Result<Vec<iface_databases::PostDatabasesMongoDbInstancePatchResponseEntry>, crate::runtime::DispatchError> {
     let v: Value = match serde_json::from_str(&body) {
         Ok(v) => v,
         Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
     };
-    match iface_databases__post_databases_mongo_db_instance_patch_response__from_json(&v) {
+    match (&v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_databases::PostDatabasesMongoDbInstancePatchResponseEntry { key: k.clone(), value: val })).collect()) {
         Some(x) => Ok(x),
         None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
@@ -2538,12 +2363,12 @@ fn iface_databases__put_databases_my_sql_instance__err(e: crate::runtime::Dispat
     }
 }
 
-fn iface_databases__delete_databases_my_sql_instance__ok(body: String) -> Result<iface_databases::DeleteDatabasesMySqlInstanceResponse, crate::runtime::DispatchError> {
+fn iface_databases__delete_databases_my_sql_instance__ok(body: String) -> Result<Vec<iface_databases::DeleteDatabasesMySqlInstanceResponseEntry>, crate::runtime::DispatchError> {
     let v: Value = match serde_json::from_str(&body) {
         Ok(v) => v,
         Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
     };
-    match iface_databases__delete_databases_my_sql_instance_response__from_json(&v) {
+    match (&v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_databases::DeleteDatabasesMySqlInstanceResponseEntry { key: k.clone(), value: val })).collect()) {
         Some(x) => Ok(x),
         None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
@@ -2574,12 +2399,12 @@ fn iface_databases__get_databases_my_sql_instance_backups__err(e: crate::runtime
     }
 }
 
-fn iface_databases__post_databases_my_sql_instance_backup__ok(body: String) -> Result<iface_databases::PostDatabasesMySqlInstanceBackupResponse, crate::runtime::DispatchError> {
+fn iface_databases__post_databases_my_sql_instance_backup__ok(body: String) -> Result<Vec<iface_databases::PostDatabasesMySqlInstanceBackupResponseEntry>, crate::runtime::DispatchError> {
     let v: Value = match serde_json::from_str(&body) {
         Ok(v) => v,
         Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
     };
-    match iface_databases__post_databases_my_sql_instance_backup_response__from_json(&v) {
+    match (&v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_databases::PostDatabasesMySqlInstanceBackupResponseEntry { key: k.clone(), value: val })).collect()) {
         Some(x) => Ok(x),
         None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
@@ -2610,12 +2435,12 @@ fn iface_databases__get_databases_my_sql_instance_backup__err(e: crate::runtime:
     }
 }
 
-fn iface_databases__delete_database_my_sql_instance_backup__ok(body: String) -> Result<iface_databases::DeleteDatabaseMySqlInstanceBackupResponse, crate::runtime::DispatchError> {
+fn iface_databases__delete_database_my_sql_instance_backup__ok(body: String) -> Result<Vec<iface_databases::DeleteDatabaseMySqlInstanceBackupResponseEntry>, crate::runtime::DispatchError> {
     let v: Value = match serde_json::from_str(&body) {
         Ok(v) => v,
         Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
     };
-    match iface_databases__delete_database_my_sql_instance_backup_response__from_json(&v) {
+    match (&v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_databases::DeleteDatabaseMySqlInstanceBackupResponseEntry { key: k.clone(), value: val })).collect()) {
         Some(x) => Ok(x),
         None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
@@ -2628,12 +2453,12 @@ fn iface_databases__delete_database_my_sql_instance_backup__err(e: crate::runtim
     }
 }
 
-fn iface_databases__post_databases_my_sql_instance_backup_restore__ok(body: String) -> Result<iface_databases::PostDatabasesMySqlInstanceBackupRestoreResponse, crate::runtime::DispatchError> {
+fn iface_databases__post_databases_my_sql_instance_backup_restore__ok(body: String) -> Result<Vec<iface_databases::PostDatabasesMySqlInstanceBackupRestoreResponseEntry>, crate::runtime::DispatchError> {
     let v: Value = match serde_json::from_str(&body) {
         Ok(v) => v,
         Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
     };
-    match iface_databases__post_databases_my_sql_instance_backup_restore_response__from_json(&v) {
+    match (&v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_databases::PostDatabasesMySqlInstanceBackupRestoreResponseEntry { key: k.clone(), value: val })).collect()) {
         Some(x) => Ok(x),
         None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
@@ -2664,12 +2489,12 @@ fn iface_databases__get_databases_my_sql_instance_credentials__err(e: crate::run
     }
 }
 
-fn iface_databases__post_databases_my_sql_instance_credentials_reset__ok(body: String) -> Result<iface_databases::PostDatabasesMySqlInstanceCredentialsResetResponse, crate::runtime::DispatchError> {
+fn iface_databases__post_databases_my_sql_instance_credentials_reset__ok(body: String) -> Result<Vec<iface_databases::PostDatabasesMySqlInstanceCredentialsResetResponseEntry>, crate::runtime::DispatchError> {
     let v: Value = match serde_json::from_str(&body) {
         Ok(v) => v,
         Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
     };
-    match iface_databases__post_databases_my_sql_instance_credentials_reset_response__from_json(&v) {
+    match (&v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_databases::PostDatabasesMySqlInstanceCredentialsResetResponseEntry { key: k.clone(), value: val })).collect()) {
         Some(x) => Ok(x),
         None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
@@ -2682,12 +2507,12 @@ fn iface_databases__post_databases_my_sql_instance_credentials_reset__err(e: cra
     }
 }
 
-fn iface_databases__post_databases_my_sql_instance_patch__ok(body: String) -> Result<iface_databases::PostDatabasesMySqlInstancePatchResponse, crate::runtime::DispatchError> {
+fn iface_databases__post_databases_my_sql_instance_patch__ok(body: String) -> Result<Vec<iface_databases::PostDatabasesMySqlInstancePatchResponseEntry>, crate::runtime::DispatchError> {
     let v: Value = match serde_json::from_str(&body) {
         Ok(v) => v,
         Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
     };
-    match iface_databases__post_databases_my_sql_instance_patch_response__from_json(&v) {
+    match (&v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_databases::PostDatabasesMySqlInstancePatchResponseEntry { key: k.clone(), value: val })).collect()) {
         Some(x) => Ok(x),
         None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
@@ -2790,12 +2615,12 @@ fn iface_databases__put_databases_postgre_sql_instance__err(e: crate::runtime::D
     }
 }
 
-fn iface_databases__delete_databases_postgre_sql_instance__ok(body: String) -> Result<iface_databases::DeleteDatabasesPostgreSqlInstanceResponse, crate::runtime::DispatchError> {
+fn iface_databases__delete_databases_postgre_sql_instance__ok(body: String) -> Result<Vec<iface_databases::DeleteDatabasesPostgreSqlInstanceResponseEntry>, crate::runtime::DispatchError> {
     let v: Value = match serde_json::from_str(&body) {
         Ok(v) => v,
         Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
     };
-    match iface_databases__delete_databases_postgre_sql_instance_response__from_json(&v) {
+    match (&v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_databases::DeleteDatabasesPostgreSqlInstanceResponseEntry { key: k.clone(), value: val })).collect()) {
         Some(x) => Ok(x),
         None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
@@ -2826,12 +2651,12 @@ fn iface_databases__get_databases_postgre_sql_instance_backups__err(e: crate::ru
     }
 }
 
-fn iface_databases__post_databases_postgre_sql_instance_backup__ok(body: String) -> Result<iface_databases::PostDatabasesPostgreSqlInstanceBackupResponse, crate::runtime::DispatchError> {
+fn iface_databases__post_databases_postgre_sql_instance_backup__ok(body: String) -> Result<Vec<iface_databases::PostDatabasesPostgreSqlInstanceBackupResponseEntry>, crate::runtime::DispatchError> {
     let v: Value = match serde_json::from_str(&body) {
         Ok(v) => v,
         Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
     };
-    match iface_databases__post_databases_postgre_sql_instance_backup_response__from_json(&v) {
+    match (&v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_databases::PostDatabasesPostgreSqlInstanceBackupResponseEntry { key: k.clone(), value: val })).collect()) {
         Some(x) => Ok(x),
         None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
@@ -2862,12 +2687,12 @@ fn iface_databases__get_databases_postgre_sql_instance_backup__err(e: crate::run
     }
 }
 
-fn iface_databases__delete_database_postgre_sql_instance_backup__ok(body: String) -> Result<iface_databases::DeleteDatabasePostgreSqlInstanceBackupResponse, crate::runtime::DispatchError> {
+fn iface_databases__delete_database_postgre_sql_instance_backup__ok(body: String) -> Result<Vec<iface_databases::DeleteDatabasePostgreSqlInstanceBackupResponseEntry>, crate::runtime::DispatchError> {
     let v: Value = match serde_json::from_str(&body) {
         Ok(v) => v,
         Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
     };
-    match iface_databases__delete_database_postgre_sql_instance_backup_response__from_json(&v) {
+    match (&v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_databases::DeleteDatabasePostgreSqlInstanceBackupResponseEntry { key: k.clone(), value: val })).collect()) {
         Some(x) => Ok(x),
         None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
@@ -2880,12 +2705,12 @@ fn iface_databases__delete_database_postgre_sql_instance_backup__err(e: crate::r
     }
 }
 
-fn iface_databases__post_databases_postgre_sql_instance_backup_restore__ok(body: String) -> Result<iface_databases::PostDatabasesPostgreSqlInstanceBackupRestoreResponse, crate::runtime::DispatchError> {
+fn iface_databases__post_databases_postgre_sql_instance_backup_restore__ok(body: String) -> Result<Vec<iface_databases::PostDatabasesPostgreSqlInstanceBackupRestoreResponseEntry>, crate::runtime::DispatchError> {
     let v: Value = match serde_json::from_str(&body) {
         Ok(v) => v,
         Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
     };
-    match iface_databases__post_databases_postgre_sql_instance_backup_restore_response__from_json(&v) {
+    match (&v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_databases::PostDatabasesPostgreSqlInstanceBackupRestoreResponseEntry { key: k.clone(), value: val })).collect()) {
         Some(x) => Ok(x),
         None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
@@ -2916,12 +2741,12 @@ fn iface_databases__get_databases_postgre_sql_instance_credentials__err(e: crate
     }
 }
 
-fn iface_databases__post_databases_postgre_sql_instance_credentials_reset__ok(body: String) -> Result<iface_databases::PostDatabasesPostgreSqlInstanceCredentialsResetResponse, crate::runtime::DispatchError> {
+fn iface_databases__post_databases_postgre_sql_instance_credentials_reset__ok(body: String) -> Result<Vec<iface_databases::PostDatabasesPostgreSqlInstanceCredentialsResetResponseEntry>, crate::runtime::DispatchError> {
     let v: Value = match serde_json::from_str(&body) {
         Ok(v) => v,
         Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
     };
-    match iface_databases__post_databases_postgre_sql_instance_credentials_reset_response__from_json(&v) {
+    match (&v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_databases::PostDatabasesPostgreSqlInstanceCredentialsResetResponseEntry { key: k.clone(), value: val })).collect()) {
         Some(x) => Ok(x),
         None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
@@ -2934,12 +2759,12 @@ fn iface_databases__post_databases_postgre_sql_instance_credentials_reset__err(e
     }
 }
 
-fn iface_databases__post_databases_postgre_sql_instance_patch__ok(body: String) -> Result<iface_databases::PostDatabasesPostgreSqlInstancePatchResponse, crate::runtime::DispatchError> {
+fn iface_databases__post_databases_postgre_sql_instance_patch__ok(body: String) -> Result<Vec<iface_databases::PostDatabasesPostgreSqlInstancePatchResponseEntry>, crate::runtime::DispatchError> {
     let v: Value = match serde_json::from_str(&body) {
         Ok(v) => v,
         Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
     };
-    match iface_databases__post_databases_postgre_sql_instance_patch_response__from_json(&v) {
+    match (&v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_databases::PostDatabasesPostgreSqlInstancePatchResponseEntry { key: k.clone(), value: val })).collect()) {
         Some(x) => Ok(x),
         None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
@@ -3049,7 +2874,7 @@ impl iface_databases::Guest for crate::Component {
             Err(e) => Err(iface_databases__put_databases_mongo_db_instance__err(e)),
         }
     }
-    fn delete_databases_mongo_db_instance(params: iface_databases::DeleteDatabasesMongoDbInstanceParams) -> Result<iface_databases::DeleteDatabasesMongoDbInstanceResponse, String> {
+    fn delete_databases_mongo_db_instance(params: iface_databases::DeleteDatabasesMongoDbInstanceParams) -> Result<Vec<iface_databases::DeleteDatabasesMongoDbInstanceResponseEntry>, String> {
         let json = iface_databases__delete_databases_mongo_db_instance_params__to_json(&params);
         match dispatch(&OP_DATABASES_DELETE_DATABASES_MONGO_DB_INSTANCE, json).and_then(iface_databases__delete_databases_mongo_db_instance__ok) {
             Ok(v) => Ok(v),
@@ -3063,7 +2888,7 @@ impl iface_databases::Guest for crate::Component {
             Err(e) => Err(iface_databases__get_databases_mongo_db_instance_backups__err(e)),
         }
     }
-    fn post_databases_mongo_db_instance_backup(params: iface_databases::PostDatabasesMongoDbInstanceBackupParams) -> Result<iface_databases::PostDatabasesMongoDbInstanceBackupResponse, String> {
+    fn post_databases_mongo_db_instance_backup(params: iface_databases::PostDatabasesMongoDbInstanceBackupParams) -> Result<Vec<iface_databases::PostDatabasesMongoDbInstanceBackupResponseEntry>, String> {
         let json = iface_databases__post_databases_mongo_db_instance_backup_params__to_json(&params);
         match dispatch(&OP_DATABASES_POST_DATABASES_MONGO_DB_INSTANCE_BACKUP, json).and_then(iface_databases__post_databases_mongo_db_instance_backup__ok) {
             Ok(v) => Ok(v),
@@ -3077,14 +2902,14 @@ impl iface_databases::Guest for crate::Component {
             Err(e) => Err(iface_databases__get_databases_mongo_db_instance_backup__err(e)),
         }
     }
-    fn delete_database_mongo_db_instance_backup(params: iface_databases::DeleteDatabaseMongoDbInstanceBackupParams) -> Result<iface_databases::DeleteDatabaseMongoDbInstanceBackupResponse, String> {
+    fn delete_database_mongo_db_instance_backup(params: iface_databases::DeleteDatabaseMongoDbInstanceBackupParams) -> Result<Vec<iface_databases::DeleteDatabaseMongoDbInstanceBackupResponseEntry>, String> {
         let json = iface_databases__delete_database_mongo_db_instance_backup_params__to_json(&params);
         match dispatch(&OP_DATABASES_DELETE_DATABASE_MONGO_DB_INSTANCE_BACKUP, json).and_then(iface_databases__delete_database_mongo_db_instance_backup__ok) {
             Ok(v) => Ok(v),
             Err(e) => Err(iface_databases__delete_database_mongo_db_instance_backup__err(e)),
         }
     }
-    fn post_databases_mongo_db_instance_backup_restore(params: iface_databases::PostDatabasesMongoDbInstanceBackupRestoreParams) -> Result<iface_databases::PostDatabasesMongoDbInstanceBackupRestoreResponse, String> {
+    fn post_databases_mongo_db_instance_backup_restore(params: iface_databases::PostDatabasesMongoDbInstanceBackupRestoreParams) -> Result<Vec<iface_databases::PostDatabasesMongoDbInstanceBackupRestoreResponseEntry>, String> {
         let json = iface_databases__post_databases_mongo_db_instance_backup_restore_params__to_json(&params);
         match dispatch(&OP_DATABASES_POST_DATABASES_MONGO_DB_INSTANCE_BACKUP_RESTORE, json).and_then(iface_databases__post_databases_mongo_db_instance_backup_restore__ok) {
             Ok(v) => Ok(v),
@@ -3098,14 +2923,14 @@ impl iface_databases::Guest for crate::Component {
             Err(e) => Err(iface_databases__get_databases_mongo_db_instance_credentials__err(e)),
         }
     }
-    fn post_databases_mongo_db_instance_credentials_reset(params: iface_databases::PostDatabasesMongoDbInstanceCredentialsResetParams) -> Result<iface_databases::PostDatabasesMongoDbInstanceCredentialsResetResponse, String> {
+    fn post_databases_mongo_db_instance_credentials_reset(params: iface_databases::PostDatabasesMongoDbInstanceCredentialsResetParams) -> Result<Vec<iface_databases::PostDatabasesMongoDbInstanceCredentialsResetResponseEntry>, String> {
         let json = iface_databases__post_databases_mongo_db_instance_credentials_reset_params__to_json(&params);
         match dispatch(&OP_DATABASES_POST_DATABASES_MONGO_DB_INSTANCE_CREDENTIALS_RESET, json).and_then(iface_databases__post_databases_mongo_db_instance_credentials_reset__ok) {
             Ok(v) => Ok(v),
             Err(e) => Err(iface_databases__post_databases_mongo_db_instance_credentials_reset__err(e)),
         }
     }
-    fn post_databases_mongo_db_instance_patch(params: iface_databases::PostDatabasesMongoDbInstancePatchParams) -> Result<iface_databases::PostDatabasesMongoDbInstancePatchResponse, String> {
+    fn post_databases_mongo_db_instance_patch(params: iface_databases::PostDatabasesMongoDbInstancePatchParams) -> Result<Vec<iface_databases::PostDatabasesMongoDbInstancePatchResponseEntry>, String> {
         let json = iface_databases__post_databases_mongo_db_instance_patch_params__to_json(&params);
         match dispatch(&OP_DATABASES_POST_DATABASES_MONGO_DB_INSTANCE_PATCH, json).and_then(iface_databases__post_databases_mongo_db_instance_patch__ok) {
             Ok(v) => Ok(v),
@@ -3147,7 +2972,7 @@ impl iface_databases::Guest for crate::Component {
             Err(e) => Err(iface_databases__put_databases_my_sql_instance__err(e)),
         }
     }
-    fn delete_databases_my_sql_instance(params: iface_databases::DeleteDatabasesMySqlInstanceParams) -> Result<iface_databases::DeleteDatabasesMySqlInstanceResponse, String> {
+    fn delete_databases_my_sql_instance(params: iface_databases::DeleteDatabasesMySqlInstanceParams) -> Result<Vec<iface_databases::DeleteDatabasesMySqlInstanceResponseEntry>, String> {
         let json = iface_databases__delete_databases_my_sql_instance_params__to_json(&params);
         match dispatch(&OP_DATABASES_DELETE_DATABASES_MY_SQL_INSTANCE, json).and_then(iface_databases__delete_databases_my_sql_instance__ok) {
             Ok(v) => Ok(v),
@@ -3161,7 +2986,7 @@ impl iface_databases::Guest for crate::Component {
             Err(e) => Err(iface_databases__get_databases_my_sql_instance_backups__err(e)),
         }
     }
-    fn post_databases_my_sql_instance_backup(params: iface_databases::PostDatabasesMySqlInstanceBackupParams) -> Result<iface_databases::PostDatabasesMySqlInstanceBackupResponse, String> {
+    fn post_databases_my_sql_instance_backup(params: iface_databases::PostDatabasesMySqlInstanceBackupParams) -> Result<Vec<iface_databases::PostDatabasesMySqlInstanceBackupResponseEntry>, String> {
         let json = iface_databases__post_databases_my_sql_instance_backup_params__to_json(&params);
         match dispatch(&OP_DATABASES_POST_DATABASES_MY_SQL_INSTANCE_BACKUP, json).and_then(iface_databases__post_databases_my_sql_instance_backup__ok) {
             Ok(v) => Ok(v),
@@ -3175,14 +3000,14 @@ impl iface_databases::Guest for crate::Component {
             Err(e) => Err(iface_databases__get_databases_my_sql_instance_backup__err(e)),
         }
     }
-    fn delete_database_my_sql_instance_backup(params: iface_databases::DeleteDatabaseMySqlInstanceBackupParams) -> Result<iface_databases::DeleteDatabaseMySqlInstanceBackupResponse, String> {
+    fn delete_database_my_sql_instance_backup(params: iface_databases::DeleteDatabaseMySqlInstanceBackupParams) -> Result<Vec<iface_databases::DeleteDatabaseMySqlInstanceBackupResponseEntry>, String> {
         let json = iface_databases__delete_database_my_sql_instance_backup_params__to_json(&params);
         match dispatch(&OP_DATABASES_DELETE_DATABASE_MY_SQL_INSTANCE_BACKUP, json).and_then(iface_databases__delete_database_my_sql_instance_backup__ok) {
             Ok(v) => Ok(v),
             Err(e) => Err(iface_databases__delete_database_my_sql_instance_backup__err(e)),
         }
     }
-    fn post_databases_my_sql_instance_backup_restore(params: iface_databases::PostDatabasesMySqlInstanceBackupRestoreParams) -> Result<iface_databases::PostDatabasesMySqlInstanceBackupRestoreResponse, String> {
+    fn post_databases_my_sql_instance_backup_restore(params: iface_databases::PostDatabasesMySqlInstanceBackupRestoreParams) -> Result<Vec<iface_databases::PostDatabasesMySqlInstanceBackupRestoreResponseEntry>, String> {
         let json = iface_databases__post_databases_my_sql_instance_backup_restore_params__to_json(&params);
         match dispatch(&OP_DATABASES_POST_DATABASES_MY_SQL_INSTANCE_BACKUP_RESTORE, json).and_then(iface_databases__post_databases_my_sql_instance_backup_restore__ok) {
             Ok(v) => Ok(v),
@@ -3196,14 +3021,14 @@ impl iface_databases::Guest for crate::Component {
             Err(e) => Err(iface_databases__get_databases_my_sql_instance_credentials__err(e)),
         }
     }
-    fn post_databases_my_sql_instance_credentials_reset(params: iface_databases::PostDatabasesMySqlInstanceCredentialsResetParams) -> Result<iface_databases::PostDatabasesMySqlInstanceCredentialsResetResponse, String> {
+    fn post_databases_my_sql_instance_credentials_reset(params: iface_databases::PostDatabasesMySqlInstanceCredentialsResetParams) -> Result<Vec<iface_databases::PostDatabasesMySqlInstanceCredentialsResetResponseEntry>, String> {
         let json = iface_databases__post_databases_my_sql_instance_credentials_reset_params__to_json(&params);
         match dispatch(&OP_DATABASES_POST_DATABASES_MY_SQL_INSTANCE_CREDENTIALS_RESET, json).and_then(iface_databases__post_databases_my_sql_instance_credentials_reset__ok) {
             Ok(v) => Ok(v),
             Err(e) => Err(iface_databases__post_databases_my_sql_instance_credentials_reset__err(e)),
         }
     }
-    fn post_databases_my_sql_instance_patch(params: iface_databases::PostDatabasesMySqlInstancePatchParams) -> Result<iface_databases::PostDatabasesMySqlInstancePatchResponse, String> {
+    fn post_databases_my_sql_instance_patch(params: iface_databases::PostDatabasesMySqlInstancePatchParams) -> Result<Vec<iface_databases::PostDatabasesMySqlInstancePatchResponseEntry>, String> {
         let json = iface_databases__post_databases_my_sql_instance_patch_params__to_json(&params);
         match dispatch(&OP_DATABASES_POST_DATABASES_MY_SQL_INSTANCE_PATCH, json).and_then(iface_databases__post_databases_my_sql_instance_patch__ok) {
             Ok(v) => Ok(v),
@@ -3245,7 +3070,7 @@ impl iface_databases::Guest for crate::Component {
             Err(e) => Err(iface_databases__put_databases_postgre_sql_instance__err(e)),
         }
     }
-    fn delete_databases_postgre_sql_instance(params: iface_databases::DeleteDatabasesPostgreSqlInstanceParams) -> Result<iface_databases::DeleteDatabasesPostgreSqlInstanceResponse, String> {
+    fn delete_databases_postgre_sql_instance(params: iface_databases::DeleteDatabasesPostgreSqlInstanceParams) -> Result<Vec<iface_databases::DeleteDatabasesPostgreSqlInstanceResponseEntry>, String> {
         let json = iface_databases__delete_databases_postgre_sql_instance_params__to_json(&params);
         match dispatch(&OP_DATABASES_DELETE_DATABASES_POSTGRE_SQL_INSTANCE, json).and_then(iface_databases__delete_databases_postgre_sql_instance__ok) {
             Ok(v) => Ok(v),
@@ -3259,7 +3084,7 @@ impl iface_databases::Guest for crate::Component {
             Err(e) => Err(iface_databases__get_databases_postgre_sql_instance_backups__err(e)),
         }
     }
-    fn post_databases_postgre_sql_instance_backup(params: iface_databases::PostDatabasesPostgreSqlInstanceBackupParams) -> Result<iface_databases::PostDatabasesPostgreSqlInstanceBackupResponse, String> {
+    fn post_databases_postgre_sql_instance_backup(params: iface_databases::PostDatabasesPostgreSqlInstanceBackupParams) -> Result<Vec<iface_databases::PostDatabasesPostgreSqlInstanceBackupResponseEntry>, String> {
         let json = iface_databases__post_databases_postgre_sql_instance_backup_params__to_json(&params);
         match dispatch(&OP_DATABASES_POST_DATABASES_POSTGRE_SQL_INSTANCE_BACKUP, json).and_then(iface_databases__post_databases_postgre_sql_instance_backup__ok) {
             Ok(v) => Ok(v),
@@ -3273,14 +3098,14 @@ impl iface_databases::Guest for crate::Component {
             Err(e) => Err(iface_databases__get_databases_postgre_sql_instance_backup__err(e)),
         }
     }
-    fn delete_database_postgre_sql_instance_backup(params: iface_databases::DeleteDatabasePostgreSqlInstanceBackupParams) -> Result<iface_databases::DeleteDatabasePostgreSqlInstanceBackupResponse, String> {
+    fn delete_database_postgre_sql_instance_backup(params: iface_databases::DeleteDatabasePostgreSqlInstanceBackupParams) -> Result<Vec<iface_databases::DeleteDatabasePostgreSqlInstanceBackupResponseEntry>, String> {
         let json = iface_databases__delete_database_postgre_sql_instance_backup_params__to_json(&params);
         match dispatch(&OP_DATABASES_DELETE_DATABASE_POSTGRE_SQL_INSTANCE_BACKUP, json).and_then(iface_databases__delete_database_postgre_sql_instance_backup__ok) {
             Ok(v) => Ok(v),
             Err(e) => Err(iface_databases__delete_database_postgre_sql_instance_backup__err(e)),
         }
     }
-    fn post_databases_postgre_sql_instance_backup_restore(params: iface_databases::PostDatabasesPostgreSqlInstanceBackupRestoreParams) -> Result<iface_databases::PostDatabasesPostgreSqlInstanceBackupRestoreResponse, String> {
+    fn post_databases_postgre_sql_instance_backup_restore(params: iface_databases::PostDatabasesPostgreSqlInstanceBackupRestoreParams) -> Result<Vec<iface_databases::PostDatabasesPostgreSqlInstanceBackupRestoreResponseEntry>, String> {
         let json = iface_databases__post_databases_postgre_sql_instance_backup_restore_params__to_json(&params);
         match dispatch(&OP_DATABASES_POST_DATABASES_POSTGRE_SQL_INSTANCE_BACKUP_RESTORE, json).and_then(iface_databases__post_databases_postgre_sql_instance_backup_restore__ok) {
             Ok(v) => Ok(v),
@@ -3294,14 +3119,14 @@ impl iface_databases::Guest for crate::Component {
             Err(e) => Err(iface_databases__get_databases_postgre_sql_instance_credentials__err(e)),
         }
     }
-    fn post_databases_postgre_sql_instance_credentials_reset(params: iface_databases::PostDatabasesPostgreSqlInstanceCredentialsResetParams) -> Result<iface_databases::PostDatabasesPostgreSqlInstanceCredentialsResetResponse, String> {
+    fn post_databases_postgre_sql_instance_credentials_reset(params: iface_databases::PostDatabasesPostgreSqlInstanceCredentialsResetParams) -> Result<Vec<iface_databases::PostDatabasesPostgreSqlInstanceCredentialsResetResponseEntry>, String> {
         let json = iface_databases__post_databases_postgre_sql_instance_credentials_reset_params__to_json(&params);
         match dispatch(&OP_DATABASES_POST_DATABASES_POSTGRE_SQL_INSTANCE_CREDENTIALS_RESET, json).and_then(iface_databases__post_databases_postgre_sql_instance_credentials_reset__ok) {
             Ok(v) => Ok(v),
             Err(e) => Err(iface_databases__post_databases_postgre_sql_instance_credentials_reset__err(e)),
         }
     }
-    fn post_databases_postgre_sql_instance_patch(params: iface_databases::PostDatabasesPostgreSqlInstancePatchParams) -> Result<iface_databases::PostDatabasesPostgreSqlInstancePatchResponse, String> {
+    fn post_databases_postgre_sql_instance_patch(params: iface_databases::PostDatabasesPostgreSqlInstancePatchParams) -> Result<Vec<iface_databases::PostDatabasesPostgreSqlInstancePatchResponseEntry>, String> {
         let json = iface_databases__post_databases_postgre_sql_instance_patch_params__to_json(&params);
         match dispatch(&OP_DATABASES_POST_DATABASES_POSTGRE_SQL_INSTANCE_PATCH, json).and_then(iface_databases__post_databases_postgre_sql_instance_patch__ok) {
             Ok(v) => Ok(v),

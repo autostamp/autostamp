@@ -1634,6 +1634,22 @@ const OP_ACTIONS_DELETE_ENVIRONMENT_VARIABLE: OpSpec = OpSpec {
     ],
 };
 
+fn iface_actions__allowed_actions__to_str(e: &iface_actions::AllowedActions) -> &'static str {
+    match e {
+        iface_actions::AllowedActions::All => "all",
+        iface_actions::AllowedActions::LocalOnly => "local_only",
+        iface_actions::AllowedActions::Selected => "selected",
+    }
+}
+
+fn iface_actions__enabled_repositories__to_str(e: &iface_actions::EnabledRepositories) -> &'static str {
+    match e {
+        iface_actions::EnabledRepositories::All => "all",
+        iface_actions::EnabledRepositories::None => "none",
+        iface_actions::EnabledRepositories::Selected => "selected",
+    }
+}
+
 fn iface_actions__repository_merge_commit_message_enum__to_str(e: &iface_actions::RepositoryMergeCommitMessageEnum) -> &'static str {
     match e {
         iface_actions::RepositoryMergeCommitMessageEnum::PrBody => "PR_BODY",
@@ -1661,6 +1677,13 @@ fn iface_actions__repository_squash_merge_commit_title_enum__to_str(e: &iface_ac
     match e {
         iface_actions::RepositorySquashMergeCommitTitleEnum::PrTitle => "PR_TITLE",
         iface_actions::RepositorySquashMergeCommitTitleEnum::CommitOrPrTitle => "COMMIT_OR_PR_TITLE",
+    }
+}
+
+fn iface_actions__default_workflow_permissions__to_str(e: &iface_actions::DefaultWorkflowPermissions) -> &'static str {
+    match e {
+        iface_actions::DefaultWorkflowPermissions::Read => "read",
+        iface_actions::DefaultWorkflowPermissions::Write => "write",
     }
 }
 
@@ -1784,6 +1807,13 @@ fn iface_actions__list_jobs_for_workflow_run_filter_enum__to_str(e: &iface_actio
     }
 }
 
+fn iface_actions__deployment_reviewer_type__to_str(e: &iface_actions::DeploymentReviewerType) -> &'static str {
+    match e {
+        iface_actions::DeploymentReviewerType::User => "User",
+        iface_actions::DeploymentReviewerType::Team => "Team",
+    }
+}
+
 fn iface_actions__review_pending_deployments_for_run_body_state_enum__to_str(e: &iface_actions::ReviewPendingDeploymentsForRunBodyStateEnum) -> &'static str {
     match e {
         iface_actions::ReviewPendingDeploymentsForRunBodyStateEnum::Approved => "approved",
@@ -1825,28 +1855,10 @@ fn iface_actions__cache_usage_by_repository__to_json(p: &iface_actions::CacheUsa
 
 fn iface_actions__organization_permissions__to_json(p: &iface_actions::OrganizationPermissions) -> Value {
     let mut m = Map::new();
-    m.insert("allowed_actions".into(), match (&p.allowed_actions) { Some(v) => iface_actions__allowed_actions__to_json(v), None => Value::Null });
-    m.insert("enabled_repositories".into(), iface_actions__enabled_repositories__to_json(&p.enabled_repositories));
-    m.insert("selected_actions_url".into(), match (&p.selected_actions_url) { Some(v) => iface_actions__selected_actions_url__to_json(v), None => Value::Null });
+    m.insert("allowed_actions".into(), match (&p.allowed_actions) { Some(v) => Value::String(iface_actions__allowed_actions__to_str(v).into()), None => Value::Null });
+    m.insert("enabled_repositories".into(), Value::String(iface_actions__enabled_repositories__to_str(&p.enabled_repositories).into()));
+    m.insert("selected_actions_url".into(), match (&p.selected_actions_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("selected_repositories_url".into(), match (&p.selected_repositories_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_actions__allowed_actions__to_json(p: &iface_actions::AllowedActions) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_actions__enabled_repositories__to_json(p: &iface_actions::EnabledRepositories) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_actions__selected_actions_url__to_json(p: &iface_actions::SelectedActionsUrl) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -2169,20 +2181,8 @@ fn iface_actions__selected_actions__to_json(p: &iface_actions::SelectedActions) 
 
 fn iface_actions__get_default_workflow_permissions__to_json(p: &iface_actions::GetDefaultWorkflowPermissions) -> Value {
     let mut m = Map::new();
-    m.insert("can_approve_pull_request_reviews".into(), iface_actions__can_approve_pull_request_reviews__to_json(&p.can_approve_pull_request_reviews));
-    m.insert("default_workflow_permissions".into(), iface_actions__default_workflow_permissions__to_json(&p.default_workflow_permissions));
-    Value::Object(m)
-}
-
-fn iface_actions__can_approve_pull_request_reviews__to_json(p: &iface_actions::CanApprovePullRequestReviews) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_actions__default_workflow_permissions__to_json(p: &iface_actions::DefaultWorkflowPermissions) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
+    m.insert("can_approve_pull_request_reviews".into(), Value::Bool(*(&p.can_approve_pull_request_reviews)));
+    m.insert("default_workflow_permissions".into(), Value::String(iface_actions__default_workflow_permissions__to_str(&p.default_workflow_permissions).into()));
     Value::Object(m)
 }
 
@@ -2403,7 +2403,7 @@ fn iface_actions__runner_application__to_json(p: &iface_actions::RunnerApplicati
 fn iface_actions__authentication_token__to_json(p: &iface_actions::AuthenticationToken) -> Value {
     let mut m = Map::new();
     m.insert("expires_at".into(), Value::String((&p.expires_at).clone()));
-    m.insert("permissions".into(), match (&p.permissions) { Some(v) => iface_actions__authentication_token_permissions__to_json(v), None => Value::Null });
+    m.insert("permissions".into(), match (&p.permissions) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("repositories".into(), match (&p.repositories) { Some(v) => Value::Array((v).iter().map(|v| iface_actions__repository__to_json(v)).collect()), None => Value::Null });
     m.insert("repository_selection".into(), match (&p.repository_selection) { Some(v) => Value::String(iface_actions__required_workflow_scope_enum__to_str(v).into()), None => Value::Null });
     m.insert("single_file".into(), match (&p.single_file) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -2411,9 +2411,10 @@ fn iface_actions__authentication_token__to_json(p: &iface_actions::Authenticatio
     Value::Object(m)
 }
 
-fn iface_actions__authentication_token_permissions__to_json(p: &iface_actions::AuthenticationTokenPermissions) -> Value {
+fn iface_actions__authentication_token_permissions_entry__to_json(p: &iface_actions::AuthenticationTokenPermissionsEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -2606,12 +2607,6 @@ fn iface_actions__artifact_workflow_run__to_json(p: &iface_actions::ArtifactWork
     Value::Object(m)
 }
 
-fn iface_actions__code_scanning_ref__to_json(p: &iface_actions::CodeScanningRef) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
 fn iface_actions__cache_list__to_json(p: &iface_actions::CacheList) -> Value {
     let mut m = Map::new();
     m.insert("actions_caches".into(), Value::Array((&p.actions_caches).iter().map(|v| iface_actions__cache_list_actions_caches_item__to_json(v)).collect()));
@@ -2678,15 +2673,9 @@ fn iface_actions__oidc_custom_sub_repo__to_json(p: &iface_actions::OidcCustomSub
 
 fn iface_actions__repository_permissions_v2__to_json(p: &iface_actions::RepositoryPermissionsV2) -> Value {
     let mut m = Map::new();
-    m.insert("allowed_actions".into(), match (&p.allowed_actions) { Some(v) => iface_actions__allowed_actions__to_json(v), None => Value::Null });
-    m.insert("enabled".into(), iface_actions__enabled__to_json(&p.enabled));
-    m.insert("selected_actions_url".into(), match (&p.selected_actions_url) { Some(v) => iface_actions__selected_actions_url__to_json(v), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_actions__enabled__to_json(p: &iface_actions::Enabled) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
+    m.insert("allowed_actions".into(), match (&p.allowed_actions) { Some(v) => Value::String(iface_actions__allowed_actions__to_str(v).into()), None => Value::Null });
+    m.insert("enabled".into(), Value::Bool(*(&p.enabled)));
+    m.insert("selected_actions_url".into(), match (&p.selected_actions_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -2933,13 +2922,7 @@ fn iface_actions__pending_deployment_environment__to_json(p: &iface_actions::Pen
 fn iface_actions__pending_deployment_reviewers_item__to_json(p: &iface_actions::PendingDeploymentReviewersItem) -> Value {
     let mut m = Map::new();
     m.insert("reviewer".into(), match (&p.reviewer) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("type".into(), match (&p.type_op) { Some(v) => iface_actions__deployment_reviewer_type__to_json(v), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_actions__deployment_reviewer_type__to_json(p: &iface_actions::DeploymentReviewerType) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
+    m.insert("type".into(), match (&p.type_op) { Some(v) => Value::String(iface_actions__deployment_reviewer_type__to_str(v).into()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -3112,9 +3095,10 @@ fn iface_actions__workflow__to_json(p: &iface_actions::Workflow) -> Value {
     Value::Object(m)
 }
 
-fn iface_actions__create_workflow_dispatch_body_inputs__to_json(p: &iface_actions::CreateWorkflowDispatchBodyInputs) -> Value {
+fn iface_actions__create_workflow_dispatch_body_inputs_entry__to_json(p: &iface_actions::CreateWorkflowDispatchBodyInputsEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -3162,8 +3146,8 @@ fn iface_actions__get_github_actions_permissions_organization_params__to_json(p:
 fn iface_actions__set_github_actions_permissions_organization_params__to_json(p: &iface_actions::SetGithubActionsPermissionsOrganizationParams) -> Value {
     let mut m = Map::new();
     m.insert("org".into(), Value::String((&p.org).clone()));
-    m.insert("allowed_actions".into(), match (&p.allowed_actions) { Some(v) => iface_actions__allowed_actions__to_json(v), None => Value::Null });
-    m.insert("enabled_repositories".into(), iface_actions__enabled_repositories__to_json(&p.enabled_repositories));
+    m.insert("allowed_actions".into(), match (&p.allowed_actions) { Some(v) => Value::String(iface_actions__allowed_actions__to_str(v).into()), None => Value::Null });
+    m.insert("enabled_repositories".into(), Value::String(iface_actions__enabled_repositories__to_str(&p.enabled_repositories).into()));
     Value::Object(m)
 }
 
@@ -3220,8 +3204,8 @@ fn iface_actions__get_github_actions_default_workflow_permissions_organization_p
 fn iface_actions__set_github_actions_default_workflow_permissions_organization_params__to_json(p: &iface_actions::SetGithubActionsDefaultWorkflowPermissionsOrganizationParams) -> Value {
     let mut m = Map::new();
     m.insert("org".into(), Value::String((&p.org).clone()));
-    m.insert("can_approve_pull_request_reviews".into(), match (&p.can_approve_pull_request_reviews) { Some(v) => iface_actions__can_approve_pull_request_reviews__to_json(v), None => Value::Null });
-    m.insert("default_workflow_permissions".into(), match (&p.default_workflow_permissions) { Some(v) => iface_actions__default_workflow_permissions__to_json(v), None => Value::Null });
+    m.insert("can_approve_pull_request_reviews".into(), match (&p.can_approve_pull_request_reviews) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("default_workflow_permissions".into(), match (&p.default_workflow_permissions) { Some(v) => Value::String(iface_actions__default_workflow_permissions__to_str(v).into()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -3598,7 +3582,7 @@ fn iface_actions__get_actions_cache_list_params__to_json(p: &iface_actions::GetA
     m.insert("repo".into(), Value::String((&p.repo).clone()));
     m.insert("per_page".into(), match (&p.per_page) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("page".into(), match (&p.page) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    m.insert("ref".into(), match (&p.ref_) { Some(v) => iface_actions__code_scanning_ref__to_json(v), None => Value::Null });
+    m.insert("ref".into(), match (&p.ref_) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("key".into(), match (&p.key) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("sort".into(), match (&p.sort) { Some(v) => Value::String(iface_actions__get_actions_cache_list_sort_enum__to_str(v).into()), None => Value::Null });
     m.insert("direction".into(), match (&p.direction) { Some(v) => Value::String(iface_actions__get_actions_cache_list_direction_enum__to_str(v).into()), None => Value::Null });
@@ -3610,7 +3594,7 @@ fn iface_actions__delete_actions_cache_by_key_params__to_json(p: &iface_actions:
     m.insert("owner".into(), Value::String((&p.owner).clone()));
     m.insert("repo".into(), Value::String((&p.repo).clone()));
     m.insert("key".into(), Value::String((&p.key).clone()));
-    m.insert("ref".into(), match (&p.ref_) { Some(v) => iface_actions__code_scanning_ref__to_json(v), None => Value::Null });
+    m.insert("ref".into(), match (&p.ref_) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -3674,8 +3658,8 @@ fn iface_actions__set_github_actions_permissions_repository_params__to_json(p: &
     let mut m = Map::new();
     m.insert("owner".into(), Value::String((&p.owner).clone()));
     m.insert("repo".into(), Value::String((&p.repo).clone()));
-    m.insert("allowed_actions".into(), match (&p.allowed_actions) { Some(v) => iface_actions__allowed_actions__to_json(v), None => Value::Null });
-    m.insert("enabled".into(), iface_actions__enabled__to_json(&p.enabled));
+    m.insert("allowed_actions".into(), match (&p.allowed_actions) { Some(v) => Value::String(iface_actions__allowed_actions__to_str(v).into()), None => Value::Null });
+    m.insert("enabled".into(), Value::Bool(*(&p.enabled)));
     Value::Object(m)
 }
 
@@ -3722,8 +3706,8 @@ fn iface_actions__set_github_actions_default_workflow_permissions_repository_par
     let mut m = Map::new();
     m.insert("owner".into(), Value::String((&p.owner).clone()));
     m.insert("repo".into(), Value::String((&p.repo).clone()));
-    m.insert("can_approve_pull_request_reviews".into(), match (&p.can_approve_pull_request_reviews) { Some(v) => iface_actions__can_approve_pull_request_reviews__to_json(v), None => Value::Null });
-    m.insert("default_workflow_permissions".into(), match (&p.default_workflow_permissions) { Some(v) => iface_actions__default_workflow_permissions__to_json(v), None => Value::Null });
+    m.insert("can_approve_pull_request_reviews".into(), match (&p.can_approve_pull_request_reviews) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("default_workflow_permissions".into(), match (&p.default_workflow_permissions) { Some(v) => Value::String(iface_actions__default_workflow_permissions__to_str(v).into()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -4120,7 +4104,7 @@ fn iface_actions__create_workflow_dispatch_params__to_json(p: &iface_actions::Cr
     m.insert("owner".into(), Value::String((&p.owner).clone()));
     m.insert("repo".into(), Value::String((&p.repo).clone()));
     m.insert("workflow_id".into(), Value::String((&p.workflow_id).clone()));
-    m.insert("inputs".into(), match (&p.inputs) { Some(v) => iface_actions__create_workflow_dispatch_body_inputs__to_json(v), None => Value::Null });
+    m.insert("inputs".into(), match (&p.inputs) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("ref".into(), Value::String((&p.ref_).clone()));
     Value::Object(m)
 }
@@ -4273,31 +4257,10 @@ fn iface_actions__cache_usage_by_repository__from_json(v: &Value) -> Option<ifac
 fn iface_actions__organization_permissions__from_json(v: &Value) -> Option<iface_actions::OrganizationPermissions> {
     let m = v.as_object()?;
     Some(iface_actions::OrganizationPermissions {
-        allowed_actions: m.get("allowed_actions").filter(|v| !v.is_null()).and_then(|v| iface_actions__allowed_actions__from_json(v)),
-        enabled_repositories: match m.get("enabled_repositories").and_then(|v| iface_actions__enabled_repositories__from_json(v)) { Some(x) => x, None => return None },
-        selected_actions_url: m.get("selected_actions_url").filter(|v| !v.is_null()).and_then(|v| iface_actions__selected_actions_url__from_json(v)),
+        allowed_actions: m.get("allowed_actions").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_actions__allowed_actions__from_str)),
+        enabled_repositories: match m.get("enabled_repositories").and_then(|v| (v).as_str().and_then(iface_actions__enabled_repositories__from_str)) { Some(x) => x, None => return None },
+        selected_actions_url: m.get("selected_actions_url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         selected_repositories_url: m.get("selected_repositories_url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-    })
-}
-
-fn iface_actions__allowed_actions__from_json(v: &Value) -> Option<iface_actions::AllowedActions> {
-    let m = v.as_object()?;
-    Some(iface_actions::AllowedActions {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-    })
-}
-
-fn iface_actions__enabled_repositories__from_json(v: &Value) -> Option<iface_actions::EnabledRepositories> {
-    let m = v.as_object()?;
-    Some(iface_actions::EnabledRepositories {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-    })
-}
-
-fn iface_actions__selected_actions_url__from_json(v: &Value) -> Option<iface_actions::SelectedActionsUrl> {
-    let m = v.as_object()?;
-    Some(iface_actions::SelectedActionsUrl {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -4631,22 +4594,8 @@ fn iface_actions__selected_actions__from_json(v: &Value) -> Option<iface_actions
 fn iface_actions__get_default_workflow_permissions__from_json(v: &Value) -> Option<iface_actions::GetDefaultWorkflowPermissions> {
     let m = v.as_object()?;
     Some(iface_actions::GetDefaultWorkflowPermissions {
-        can_approve_pull_request_reviews: match m.get("can_approve_pull_request_reviews").and_then(|v| iface_actions__can_approve_pull_request_reviews__from_json(v)) { Some(x) => x, None => return None },
-        default_workflow_permissions: match m.get("default_workflow_permissions").and_then(|v| iface_actions__default_workflow_permissions__from_json(v)) { Some(x) => x, None => return None },
-    })
-}
-
-fn iface_actions__can_approve_pull_request_reviews__from_json(v: &Value) -> Option<iface_actions::CanApprovePullRequestReviews> {
-    let m = v.as_object()?;
-    Some(iface_actions::CanApprovePullRequestReviews {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-    })
-}
-
-fn iface_actions__default_workflow_permissions__from_json(v: &Value) -> Option<iface_actions::DefaultWorkflowPermissions> {
-    let m = v.as_object()?;
-    Some(iface_actions::DefaultWorkflowPermissions {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        can_approve_pull_request_reviews: m.get("can_approve_pull_request_reviews").and_then(|v| (v).as_bool()).unwrap_or_default(),
+        default_workflow_permissions: match m.get("default_workflow_permissions").and_then(|v| (v).as_str().and_then(iface_actions__default_workflow_permissions__from_str)) { Some(x) => x, None => return None },
     })
 }
 
@@ -4883,7 +4832,7 @@ fn iface_actions__authentication_token__from_json(v: &Value) -> Option<iface_act
     let m = v.as_object()?;
     Some(iface_actions::AuthenticationToken {
         expires_at: m.get("expires_at").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-        permissions: m.get("permissions").filter(|v| !v.is_null()).and_then(|v| iface_actions__authentication_token_permissions__from_json(v)),
+        permissions: m.get("permissions").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_actions::AuthenticationTokenPermissionsEntry { key: k.clone(), value: val })).collect())),
         repositories: m.get("repositories").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_actions__repository__from_json(x)).collect())),
         repository_selection: m.get("repository_selection").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_actions__required_workflow_scope_enum__from_str)),
         single_file: m.get("single_file").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
@@ -4891,10 +4840,11 @@ fn iface_actions__authentication_token__from_json(v: &Value) -> Option<iface_act
     })
 }
 
-fn iface_actions__authentication_token_permissions__from_json(v: &Value) -> Option<iface_actions::AuthenticationTokenPermissions> {
+fn iface_actions__authentication_token_permissions_entry__from_json(v: &Value) -> Option<iface_actions::AuthenticationTokenPermissionsEntry> {
     let m = v.as_object()?;
-    Some(iface_actions::AuthenticationTokenPermissions {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_actions::AuthenticationTokenPermissionsEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -5182,16 +5132,9 @@ fn iface_actions__oidc_custom_sub_repo__from_json(v: &Value) -> Option<iface_act
 fn iface_actions__repository_permissions_v2__from_json(v: &Value) -> Option<iface_actions::RepositoryPermissionsV2> {
     let m = v.as_object()?;
     Some(iface_actions::RepositoryPermissionsV2 {
-        allowed_actions: m.get("allowed_actions").filter(|v| !v.is_null()).and_then(|v| iface_actions__allowed_actions__from_json(v)),
-        enabled: match m.get("enabled").and_then(|v| iface_actions__enabled__from_json(v)) { Some(x) => x, None => return None },
-        selected_actions_url: m.get("selected_actions_url").filter(|v| !v.is_null()).and_then(|v| iface_actions__selected_actions_url__from_json(v)),
-    })
-}
-
-fn iface_actions__enabled__from_json(v: &Value) -> Option<iface_actions::Enabled> {
-    let m = v.as_object()?;
-    Some(iface_actions::Enabled {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        allowed_actions: m.get("allowed_actions").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_actions__allowed_actions__from_str)),
+        enabled: m.get("enabled").and_then(|v| (v).as_bool()).unwrap_or_default(),
+        selected_actions_url: m.get("selected_actions_url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
     })
 }
 
@@ -5465,14 +5408,7 @@ fn iface_actions__pending_deployment_reviewers_item__from_json(v: &Value) -> Opt
     let m = v.as_object()?;
     Some(iface_actions::PendingDeploymentReviewersItem {
         reviewer: m.get("reviewer").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        type_op: m.get("type").filter(|v| !v.is_null()).and_then(|v| iface_actions__deployment_reviewer_type__from_json(v)),
-    })
-}
-
-fn iface_actions__deployment_reviewer_type__from_json(v: &Value) -> Option<iface_actions::DeploymentReviewerType> {
-    let m = v.as_object()?;
-    Some(iface_actions::DeploymentReviewerType {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        type_op: m.get("type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_actions__deployment_reviewer_type__from_str)),
     })
 }
 
@@ -5686,6 +5622,24 @@ fn iface_actions__list_environment_variables_response__from_json(v: &Value) -> O
     })
 }
 
+fn iface_actions__allowed_actions__from_str(s: &str) -> Option<iface_actions::AllowedActions> {
+    match s {
+        "all" => Some(iface_actions::AllowedActions::All),
+        "local_only" => Some(iface_actions::AllowedActions::LocalOnly),
+        "selected" => Some(iface_actions::AllowedActions::Selected),
+        _ => None,
+    }
+}
+
+fn iface_actions__enabled_repositories__from_str(s: &str) -> Option<iface_actions::EnabledRepositories> {
+    match s {
+        "all" => Some(iface_actions::EnabledRepositories::All),
+        "none" => Some(iface_actions::EnabledRepositories::None),
+        "selected" => Some(iface_actions::EnabledRepositories::Selected),
+        _ => None,
+    }
+}
+
 fn iface_actions__repository_merge_commit_message_enum__from_str(s: &str) -> Option<iface_actions::RepositoryMergeCommitMessageEnum> {
     match s {
         "PR_BODY" => Some(iface_actions::RepositoryMergeCommitMessageEnum::PrBody),
@@ -5716,6 +5670,14 @@ fn iface_actions__repository_squash_merge_commit_title_enum__from_str(s: &str) -
     match s {
         "PR_TITLE" => Some(iface_actions::RepositorySquashMergeCommitTitleEnum::PrTitle),
         "COMMIT_OR_PR_TITLE" => Some(iface_actions::RepositorySquashMergeCommitTitleEnum::CommitOrPrTitle),
+        _ => None,
+    }
+}
+
+fn iface_actions__default_workflow_permissions__from_str(s: &str) -> Option<iface_actions::DefaultWorkflowPermissions> {
+    match s {
+        "read" => Some(iface_actions::DefaultWorkflowPermissions::Read),
+        "write" => Some(iface_actions::DefaultWorkflowPermissions::Write),
         _ => None,
     }
 }
@@ -5797,6 +5759,14 @@ fn iface_actions__environment_approvals_state_enum__from_str(s: &str) -> Option<
         "approved" => Some(iface_actions::EnvironmentApprovalsStateEnum::Approved),
         "rejected" => Some(iface_actions::EnvironmentApprovalsStateEnum::Rejected),
         "pending" => Some(iface_actions::EnvironmentApprovalsStateEnum::Pending),
+        _ => None,
+    }
+}
+
+fn iface_actions__deployment_reviewer_type__from_str(s: &str) -> Option<iface_actions::DeploymentReviewerType> {
+    match s {
+        "User" => Some(iface_actions::DeploymentReviewerType::User),
+        "Team" => Some(iface_actions::DeploymentReviewerType::Team),
         _ => None,
     }
 }

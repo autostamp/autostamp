@@ -51,7 +51,7 @@ fn iface_customers_validate__customer_data_address_interface__to_json(p: &iface_
     m.insert("customer_id".into(), match (&p.customer_id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("default_billing".into(), match (&p.default_billing) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     m.insert("default_shipping".into(), match (&p.default_shipping) { Some(v) => Value::Bool(*(v)), None => Value::Null });
-    m.insert("extension_attributes".into(), match (&p.extension_attributes) { Some(v) => iface_customers_validate__customer_data_address_extension_interface__to_json(v), None => Value::Null });
+    m.insert("extension_attributes".into(), match (&p.extension_attributes) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("fax".into(), match (&p.fax) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("firstname".into(), match (&p.firstname) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("id".into(), match (&p.id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
@@ -75,24 +75,26 @@ fn iface_customers_validate__framework_attribute_interface__to_json(p: &iface_cu
     Value::Object(m)
 }
 
-fn iface_customers_validate__customer_data_address_extension_interface__to_json(p: &iface_customers_validate::CustomerDataAddressExtensionInterface) -> Value {
+fn iface_customers_validate__customer_data_address_extension_interface_entry__to_json(p: &iface_customers_validate::CustomerDataAddressExtensionInterfaceEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
 fn iface_customers_validate__customer_data_region_interface__to_json(p: &iface_customers_validate::CustomerDataRegionInterface) -> Value {
     let mut m = Map::new();
-    m.insert("extension_attributes".into(), match (&p.extension_attributes) { Some(v) => iface_customers_validate__customer_data_region_extension_interface__to_json(v), None => Value::Null });
+    m.insert("extension_attributes".into(), match (&p.extension_attributes) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("region".into(), Value::String((&p.region).clone()));
     m.insert("region_code".into(), Value::String((&p.region_code).clone()));
     m.insert("region_id".into(), Value::Number(serde_json::Number::from(*(&p.region_id))));
     Value::Object(m)
 }
 
-fn iface_customers_validate__customer_data_region_extension_interface__to_json(p: &iface_customers_validate::CustomerDataRegionExtensionInterface) -> Value {
+fn iface_customers_validate__customer_data_region_extension_interface_entry__to_json(p: &iface_customers_validate::CustomerDataRegionExtensionInterfaceEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -109,16 +111,17 @@ fn iface_customers_validate__company_data_company_customer_interface__to_json(p:
     let mut m = Map::new();
     m.insert("company_id".into(), match (&p.company_id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("customer_id".into(), match (&p.customer_id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    m.insert("extension_attributes".into(), match (&p.extension_attributes) { Some(v) => iface_customers_validate__company_data_company_customer_extension_interface__to_json(v), None => Value::Null });
+    m.insert("extension_attributes".into(), match (&p.extension_attributes) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("job_title".into(), match (&p.job_title) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("status".into(), match (&p.status) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("telephone".into(), match (&p.telephone) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_customers_validate__company_data_company_customer_extension_interface__to_json(p: &iface_customers_validate::CompanyDataCompanyCustomerExtensionInterface) -> Value {
+fn iface_customers_validate__company_data_company_customer_extension_interface_entry__to_json(p: &iface_customers_validate::CompanyDataCompanyCustomerExtensionInterfaceEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 

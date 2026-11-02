@@ -76,7 +76,7 @@ fn iface_search_members__get_search_members_response_exact_matches_members_item_
     m.insert("email_type".into(), match (&p.email_type) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("full_name".into(), match (&p.full_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("interests".into(), match (&p.interests) { Some(v) => iface_search_members__get_search_members_response_exact_matches_members_item_interests__to_json(v), None => Value::Null });
+    m.insert("interests".into(), match (&p.interests) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::Bool(*(&e.value)))).collect()), None => Value::Null });
     m.insert("ip_opt".into(), match (&p.ip_opt) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("ip_signup".into(), match (&p.ip_signup) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("language".into(), match (&p.language) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -86,7 +86,7 @@ fn iface_search_members__get_search_members_response_exact_matches_members_item_
     m.insert("location".into(), match (&p.location) { Some(v) => iface_search_members__get_search_members_response_exact_matches_members_item_location__to_json(v), None => Value::Null });
     m.insert("marketing_permissions".into(), match (&p.marketing_permissions) { Some(v) => Value::Array((v).iter().map(|v| iface_search_members__get_search_members_response_exact_matches_members_item_marketing_permissions_item__to_json(v)).collect()), None => Value::Null });
     m.insert("member_rating".into(), match (&p.member_rating) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    m.insert("merge_fields".into(), match (&p.merge_fields) { Some(v) => iface_search_members__get_search_members_response_exact_matches_members_item_merge_fields__to_json(v), None => Value::Null });
+    m.insert("merge_fields".into(), match (&p.merge_fields) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("source".into(), match (&p.source) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("stats".into(), match (&p.stats) { Some(v) => iface_search_members__get_search_members_response_exact_matches_members_item_stats__to_json(v), None => Value::Null });
     m.insert("status".into(), match (&p.status) { Some(v) => Value::String(iface_search_members__get_search_members_response_exact_matches_members_item_status_enum__to_str(v).into()), None => Value::Null });
@@ -111,9 +111,10 @@ fn iface_search_members__get_search_members_response_exact_matches_members_item_
     Value::Object(m)
 }
 
-fn iface_search_members__get_search_members_response_exact_matches_members_item_interests__to_json(p: &iface_search_members::GetSearchMembersResponseExactMatchesMembersItemInterests) -> Value {
+fn iface_search_members__get_search_members_response_exact_matches_members_item_interests_entry__to_json(p: &iface_search_members::GetSearchMembersResponseExactMatchesMembersItemInterestsEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::Bool(*(&p.value)));
     Value::Object(m)
 }
 
@@ -146,9 +147,10 @@ fn iface_search_members__get_search_members_response_exact_matches_members_item_
     Value::Object(m)
 }
 
-fn iface_search_members__get_search_members_response_exact_matches_members_item_merge_fields__to_json(p: &iface_search_members::GetSearchMembersResponseExactMatchesMembersItemMergeFields) -> Value {
+fn iface_search_members__get_search_members_response_exact_matches_members_item_merge_fields_entry__to_json(p: &iface_search_members::GetSearchMembersResponseExactMatchesMembersItemMergeFieldsEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -192,7 +194,7 @@ fn iface_search_members__get_search_members_response_full_search_members_item__t
     m.insert("email_type".into(), match (&p.email_type) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("full_name".into(), match (&p.full_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("interests".into(), match (&p.interests) { Some(v) => iface_search_members__get_search_members_response_full_search_members_item_interests__to_json(v), None => Value::Null });
+    m.insert("interests".into(), match (&p.interests) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::Bool(*(&e.value)))).collect()), None => Value::Null });
     m.insert("ip_opt".into(), match (&p.ip_opt) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("ip_signup".into(), match (&p.ip_signup) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("language".into(), match (&p.language) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -202,7 +204,7 @@ fn iface_search_members__get_search_members_response_full_search_members_item__t
     m.insert("location".into(), match (&p.location) { Some(v) => iface_search_members__get_search_members_response_full_search_members_item_location__to_json(v), None => Value::Null });
     m.insert("marketing_permissions".into(), match (&p.marketing_permissions) { Some(v) => Value::Array((v).iter().map(|v| iface_search_members__get_search_members_response_full_search_members_item_marketing_permissions_item__to_json(v)).collect()), None => Value::Null });
     m.insert("member_rating".into(), match (&p.member_rating) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    m.insert("merge_fields".into(), match (&p.merge_fields) { Some(v) => iface_search_members__get_search_members_response_full_search_members_item_merge_fields__to_json(v), None => Value::Null });
+    m.insert("merge_fields".into(), match (&p.merge_fields) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("source".into(), match (&p.source) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("stats".into(), match (&p.stats) { Some(v) => iface_search_members__get_search_members_response_full_search_members_item_stats__to_json(v), None => Value::Null });
     m.insert("status".into(), match (&p.status) { Some(v) => Value::String(iface_search_members__get_search_members_response_exact_matches_members_item_status_enum__to_str(v).into()), None => Value::Null });
@@ -227,9 +229,10 @@ fn iface_search_members__get_search_members_response_full_search_members_item_li
     Value::Object(m)
 }
 
-fn iface_search_members__get_search_members_response_full_search_members_item_interests__to_json(p: &iface_search_members::GetSearchMembersResponseFullSearchMembersItemInterests) -> Value {
+fn iface_search_members__get_search_members_response_full_search_members_item_interests_entry__to_json(p: &iface_search_members::GetSearchMembersResponseFullSearchMembersItemInterestsEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::Bool(*(&p.value)));
     Value::Object(m)
 }
 
@@ -262,9 +265,10 @@ fn iface_search_members__get_search_members_response_full_search_members_item_ma
     Value::Object(m)
 }
 
-fn iface_search_members__get_search_members_response_full_search_members_item_merge_fields__to_json(p: &iface_search_members::GetSearchMembersResponseFullSearchMembersItemMergeFields) -> Value {
+fn iface_search_members__get_search_members_response_full_search_members_item_merge_fields_entry__to_json(p: &iface_search_members::GetSearchMembersResponseFullSearchMembersItemMergeFieldsEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -339,7 +343,7 @@ fn iface_search_members__get_search_members_response_exact_matches_members_item_
         email_type: m.get("email_type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         full_name: m.get("full_name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        interests: m.get("interests").filter(|v| !v.is_null()).and_then(|v| iface_search_members__get_search_members_response_exact_matches_members_item_interests__from_json(v)),
+        interests: m.get("interests").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_bool()).map(|val| iface_search_members::GetSearchMembersResponseExactMatchesMembersItemInterestsEntry { key: k.clone(), value: val })).collect())),
         ip_opt: m.get("ip_opt").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         ip_signup: m.get("ip_signup").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         language: m.get("language").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
@@ -349,7 +353,7 @@ fn iface_search_members__get_search_members_response_exact_matches_members_item_
         location: m.get("location").filter(|v| !v.is_null()).and_then(|v| iface_search_members__get_search_members_response_exact_matches_members_item_location__from_json(v)),
         marketing_permissions: m.get("marketing_permissions").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_search_members__get_search_members_response_exact_matches_members_item_marketing_permissions_item__from_json(x)).collect())),
         member_rating: m.get("member_rating").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
-        merge_fields: m.get("merge_fields").filter(|v| !v.is_null()).and_then(|v| iface_search_members__get_search_members_response_exact_matches_members_item_merge_fields__from_json(v)),
+        merge_fields: m.get("merge_fields").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_search_members::GetSearchMembersResponseExactMatchesMembersItemMergeFieldsEntry { key: k.clone(), value: val })).collect())),
         source: m.get("source").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         stats: m.get("stats").filter(|v| !v.is_null()).and_then(|v| iface_search_members__get_search_members_response_exact_matches_members_item_stats__from_json(v)),
         status: m.get("status").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_search_members__get_search_members_response_exact_matches_members_item_status_enum__from_str)),
@@ -375,10 +379,11 @@ fn iface_search_members__get_search_members_response_exact_matches_members_item_
     })
 }
 
-fn iface_search_members__get_search_members_response_exact_matches_members_item_interests__from_json(v: &Value) -> Option<iface_search_members::GetSearchMembersResponseExactMatchesMembersItemInterests> {
+fn iface_search_members__get_search_members_response_exact_matches_members_item_interests_entry__from_json(v: &Value) -> Option<iface_search_members::GetSearchMembersResponseExactMatchesMembersItemInterestsEntry> {
     let m = v.as_object()?;
-    Some(iface_search_members::GetSearchMembersResponseExactMatchesMembersItemInterests {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_search_members::GetSearchMembersResponseExactMatchesMembersItemInterestsEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_bool()).unwrap_or_default(),
     })
 }
 
@@ -414,10 +419,11 @@ fn iface_search_members__get_search_members_response_exact_matches_members_item_
     })
 }
 
-fn iface_search_members__get_search_members_response_exact_matches_members_item_merge_fields__from_json(v: &Value) -> Option<iface_search_members::GetSearchMembersResponseExactMatchesMembersItemMergeFields> {
+fn iface_search_members__get_search_members_response_exact_matches_members_item_merge_fields_entry__from_json(v: &Value) -> Option<iface_search_members::GetSearchMembersResponseExactMatchesMembersItemMergeFieldsEntry> {
     let m = v.as_object()?;
-    Some(iface_search_members::GetSearchMembersResponseExactMatchesMembersItemMergeFields {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_search_members::GetSearchMembersResponseExactMatchesMembersItemMergeFieldsEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -466,7 +472,7 @@ fn iface_search_members__get_search_members_response_full_search_members_item__f
         email_type: m.get("email_type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         full_name: m.get("full_name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        interests: m.get("interests").filter(|v| !v.is_null()).and_then(|v| iface_search_members__get_search_members_response_full_search_members_item_interests__from_json(v)),
+        interests: m.get("interests").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_bool()).map(|val| iface_search_members::GetSearchMembersResponseFullSearchMembersItemInterestsEntry { key: k.clone(), value: val })).collect())),
         ip_opt: m.get("ip_opt").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         ip_signup: m.get("ip_signup").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         language: m.get("language").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
@@ -476,7 +482,7 @@ fn iface_search_members__get_search_members_response_full_search_members_item__f
         location: m.get("location").filter(|v| !v.is_null()).and_then(|v| iface_search_members__get_search_members_response_full_search_members_item_location__from_json(v)),
         marketing_permissions: m.get("marketing_permissions").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_search_members__get_search_members_response_full_search_members_item_marketing_permissions_item__from_json(x)).collect())),
         member_rating: m.get("member_rating").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
-        merge_fields: m.get("merge_fields").filter(|v| !v.is_null()).and_then(|v| iface_search_members__get_search_members_response_full_search_members_item_merge_fields__from_json(v)),
+        merge_fields: m.get("merge_fields").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_search_members::GetSearchMembersResponseFullSearchMembersItemMergeFieldsEntry { key: k.clone(), value: val })).collect())),
         source: m.get("source").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         stats: m.get("stats").filter(|v| !v.is_null()).and_then(|v| iface_search_members__get_search_members_response_full_search_members_item_stats__from_json(v)),
         status: m.get("status").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_search_members__get_search_members_response_exact_matches_members_item_status_enum__from_str)),
@@ -502,10 +508,11 @@ fn iface_search_members__get_search_members_response_full_search_members_item_li
     })
 }
 
-fn iface_search_members__get_search_members_response_full_search_members_item_interests__from_json(v: &Value) -> Option<iface_search_members::GetSearchMembersResponseFullSearchMembersItemInterests> {
+fn iface_search_members__get_search_members_response_full_search_members_item_interests_entry__from_json(v: &Value) -> Option<iface_search_members::GetSearchMembersResponseFullSearchMembersItemInterestsEntry> {
     let m = v.as_object()?;
-    Some(iface_search_members::GetSearchMembersResponseFullSearchMembersItemInterests {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_search_members::GetSearchMembersResponseFullSearchMembersItemInterestsEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_bool()).unwrap_or_default(),
     })
 }
 
@@ -541,10 +548,11 @@ fn iface_search_members__get_search_members_response_full_search_members_item_ma
     })
 }
 
-fn iface_search_members__get_search_members_response_full_search_members_item_merge_fields__from_json(v: &Value) -> Option<iface_search_members::GetSearchMembersResponseFullSearchMembersItemMergeFields> {
+fn iface_search_members__get_search_members_response_full_search_members_item_merge_fields_entry__from_json(v: &Value) -> Option<iface_search_members::GetSearchMembersResponseFullSearchMembersItemMergeFieldsEntry> {
     let m = v.as_object()?;
-    Some(iface_search_members::GetSearchMembersResponseFullSearchMembersItemMergeFields {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_search_members::GetSearchMembersResponseFullSearchMembersItemMergeFieldsEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 

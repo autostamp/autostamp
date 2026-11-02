@@ -56,21 +56,35 @@ const OP_BLOCKS_API_DELETE_SUPPRESSION_BLOCKS_EMAIL: OpSpec = OpSpec {
     ],
 };
 
-fn iface_blocks_api__blocks_response__to_json(p: &iface_blocks_api::BlocksResponse) -> Value {
+fn iface_blocks_api__blocks_response_item__to_json(p: &iface_blocks_api::BlocksResponseItem) -> Value {
     let mut m = Map::new();
+    m.insert("created".into(), Value::Number(serde_json::Number::from(*(&p.created))));
+    m.insert("email".into(), Value::String((&p.email).clone()));
+    m.insert("reason".into(), Value::String((&p.reason).clone()));
+    m.insert("status".into(), Value::String((&p.status).clone()));
+    Value::Object(m)
+}
+
+fn iface_blocks_api__delete_suppression_blocks_response_entry__to_json(p: &iface_blocks_api::DeleteSuppressionBlocksResponseEntry) -> Value {
+    let mut m = Map::new();
+    m.insert("key".into(), Value::String((&p.key).clone()));
     m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
-fn iface_blocks_api__delete_suppression_blocks_response__to_json(p: &iface_blocks_api::DeleteSuppressionBlocksResponse) -> Value {
+fn iface_blocks_api__blocks_response_item_v2__to_json(p: &iface_blocks_api::BlocksResponseItemV2) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("created".into(), Value::Number(serde_json::Number::from(*(&p.created))));
+    m.insert("email".into(), Value::String((&p.email).clone()));
+    m.insert("reason".into(), Value::String((&p.reason).clone()));
+    m.insert("status".into(), Value::String((&p.status).clone()));
     Value::Object(m)
 }
 
-fn iface_blocks_api__delete_suppression_blocks_email_response__to_json(p: &iface_blocks_api::DeleteSuppressionBlocksEmailResponse) -> Value {
+fn iface_blocks_api__delete_suppression_blocks_email_response_entry__to_json(p: &iface_blocks_api::DeleteSuppressionBlocksEmailResponseEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -106,33 +120,48 @@ fn iface_blocks_api__delete_suppression_blocks_email_params__to_json(p: &iface_b
     Value::Object(m)
 }
 
-fn iface_blocks_api__blocks_response__from_json(v: &Value) -> Option<iface_blocks_api::BlocksResponse> {
+fn iface_blocks_api__blocks_response_item__from_json(v: &Value) -> Option<iface_blocks_api::BlocksResponseItem> {
     let m = v.as_object()?;
-    Some(iface_blocks_api::BlocksResponse {
+    Some(iface_blocks_api::BlocksResponseItem {
+        created: m.get("created").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
+        email: m.get("email").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        reason: m.get("reason").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        status: m.get("status").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_blocks_api__delete_suppression_blocks_response_entry__from_json(v: &Value) -> Option<iface_blocks_api::DeleteSuppressionBlocksResponseEntry> {
+    let m = v.as_object()?;
+    Some(iface_blocks_api::DeleteSuppressionBlocksResponseEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
-fn iface_blocks_api__delete_suppression_blocks_response__from_json(v: &Value) -> Option<iface_blocks_api::DeleteSuppressionBlocksResponse> {
+fn iface_blocks_api__blocks_response_item_v2__from_json(v: &Value) -> Option<iface_blocks_api::BlocksResponseItemV2> {
     let m = v.as_object()?;
-    Some(iface_blocks_api::DeleteSuppressionBlocksResponse {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_blocks_api::BlocksResponseItemV2 {
+        created: m.get("created").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
+        email: m.get("email").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        reason: m.get("reason").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        status: m.get("status").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
-fn iface_blocks_api__delete_suppression_blocks_email_response__from_json(v: &Value) -> Option<iface_blocks_api::DeleteSuppressionBlocksEmailResponse> {
+fn iface_blocks_api__delete_suppression_blocks_email_response_entry__from_json(v: &Value) -> Option<iface_blocks_api::DeleteSuppressionBlocksEmailResponseEntry> {
     let m = v.as_object()?;
-    Some(iface_blocks_api::DeleteSuppressionBlocksEmailResponse {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_blocks_api::DeleteSuppressionBlocksEmailResponseEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
-fn iface_blocks_api__get_suppression_blocks__ok(body: String) -> Result<iface_blocks_api::BlocksResponse, crate::runtime::DispatchError> {
+fn iface_blocks_api__get_suppression_blocks__ok(body: String) -> Result<Vec<iface_blocks_api::BlocksResponseItem>, crate::runtime::DispatchError> {
     let v: Value = match serde_json::from_str(&body) {
         Ok(v) => v,
         Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
     };
-    match iface_blocks_api__blocks_response__from_json(&v) {
+    match (&v).as_array().map(|a| a.iter().filter_map(|x| iface_blocks_api__blocks_response_item__from_json(x)).collect()) {
         Some(x) => Ok(x),
         None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
@@ -145,12 +174,12 @@ fn iface_blocks_api__get_suppression_blocks__err(e: crate::runtime::DispatchErro
     }
 }
 
-fn iface_blocks_api__delete_suppression_blocks__ok(body: String) -> Result<iface_blocks_api::DeleteSuppressionBlocksResponse, crate::runtime::DispatchError> {
+fn iface_blocks_api__delete_suppression_blocks__ok(body: String) -> Result<Vec<iface_blocks_api::DeleteSuppressionBlocksResponseEntry>, crate::runtime::DispatchError> {
     let v: Value = match serde_json::from_str(&body) {
         Ok(v) => v,
         Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
     };
-    match iface_blocks_api__delete_suppression_blocks_response__from_json(&v) {
+    match (&v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_blocks_api::DeleteSuppressionBlocksResponseEntry { key: k.clone(), value: val })).collect()) {
         Some(x) => Ok(x),
         None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
@@ -163,12 +192,12 @@ fn iface_blocks_api__delete_suppression_blocks__err(e: crate::runtime::DispatchE
     }
 }
 
-fn iface_blocks_api__get_suppression_blocks_email__ok(body: String) -> Result<iface_blocks_api::BlocksResponse, crate::runtime::DispatchError> {
+fn iface_blocks_api__get_suppression_blocks_email__ok(body: String) -> Result<Vec<iface_blocks_api::BlocksResponseItemV2>, crate::runtime::DispatchError> {
     let v: Value = match serde_json::from_str(&body) {
         Ok(v) => v,
         Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
     };
-    match iface_blocks_api__blocks_response__from_json(&v) {
+    match (&v).as_array().map(|a| a.iter().filter_map(|x| iface_blocks_api__blocks_response_item_v2__from_json(x)).collect()) {
         Some(x) => Ok(x),
         None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
@@ -181,12 +210,12 @@ fn iface_blocks_api__get_suppression_blocks_email__err(e: crate::runtime::Dispat
     }
 }
 
-fn iface_blocks_api__delete_suppression_blocks_email__ok(body: String) -> Result<iface_blocks_api::DeleteSuppressionBlocksEmailResponse, crate::runtime::DispatchError> {
+fn iface_blocks_api__delete_suppression_blocks_email__ok(body: String) -> Result<Vec<iface_blocks_api::DeleteSuppressionBlocksEmailResponseEntry>, crate::runtime::DispatchError> {
     let v: Value = match serde_json::from_str(&body) {
         Ok(v) => v,
         Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
     };
-    match iface_blocks_api__delete_suppression_blocks_email_response__from_json(&v) {
+    match (&v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_blocks_api::DeleteSuppressionBlocksEmailResponseEntry { key: k.clone(), value: val })).collect()) {
         Some(x) => Ok(x),
         None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
@@ -200,28 +229,28 @@ fn iface_blocks_api__delete_suppression_blocks_email__err(e: crate::runtime::Dis
 }
 
 impl iface_blocks_api::Guest for crate::Component {
-    fn get_suppression_blocks(params: iface_blocks_api::GetSuppressionBlocksParams) -> Result<iface_blocks_api::BlocksResponse, String> {
+    fn get_suppression_blocks(params: iface_blocks_api::GetSuppressionBlocksParams) -> Result<Vec<iface_blocks_api::BlocksResponseItem>, String> {
         let json = iface_blocks_api__get_suppression_blocks_params__to_json(&params);
         match dispatch(&OP_BLOCKS_API_GET_SUPPRESSION_BLOCKS, json).and_then(iface_blocks_api__get_suppression_blocks__ok) {
             Ok(v) => Ok(v),
             Err(e) => Err(iface_blocks_api__get_suppression_blocks__err(e)),
         }
     }
-    fn delete_suppression_blocks(params: iface_blocks_api::DeleteSuppressionBlocksParams) -> Result<iface_blocks_api::DeleteSuppressionBlocksResponse, String> {
+    fn delete_suppression_blocks(params: iface_blocks_api::DeleteSuppressionBlocksParams) -> Result<Vec<iface_blocks_api::DeleteSuppressionBlocksResponseEntry>, String> {
         let json = iface_blocks_api__delete_suppression_blocks_params__to_json(&params);
         match dispatch(&OP_BLOCKS_API_DELETE_SUPPRESSION_BLOCKS, json).and_then(iface_blocks_api__delete_suppression_blocks__ok) {
             Ok(v) => Ok(v),
             Err(e) => Err(iface_blocks_api__delete_suppression_blocks__err(e)),
         }
     }
-    fn get_suppression_blocks_email(params: iface_blocks_api::GetSuppressionBlocksEmailParams) -> Result<iface_blocks_api::BlocksResponse, String> {
+    fn get_suppression_blocks_email(params: iface_blocks_api::GetSuppressionBlocksEmailParams) -> Result<Vec<iface_blocks_api::BlocksResponseItemV2>, String> {
         let json = iface_blocks_api__get_suppression_blocks_email_params__to_json(&params);
         match dispatch(&OP_BLOCKS_API_GET_SUPPRESSION_BLOCKS_EMAIL, json).and_then(iface_blocks_api__get_suppression_blocks_email__ok) {
             Ok(v) => Ok(v),
             Err(e) => Err(iface_blocks_api__get_suppression_blocks_email__err(e)),
         }
     }
-    fn delete_suppression_blocks_email(params: iface_blocks_api::DeleteSuppressionBlocksEmailParams) -> Result<iface_blocks_api::DeleteSuppressionBlocksEmailResponse, String> {
+    fn delete_suppression_blocks_email(params: iface_blocks_api::DeleteSuppressionBlocksEmailParams) -> Result<Vec<iface_blocks_api::DeleteSuppressionBlocksEmailResponseEntry>, String> {
         let json = iface_blocks_api__delete_suppression_blocks_email_params__to_json(&params);
         match dispatch(&OP_BLOCKS_API_DELETE_SUPPRESSION_BLOCKS_EMAIL, json).and_then(iface_blocks_api__delete_suppression_blocks_email__ok) {
             Ok(v) => Ok(v),

@@ -6,13 +6,13 @@
 /// | Secret name | Applied to each request as |
 /// | --- | --- |
 /// | `jwtAuth` | `Authorization: Bearer <secret>` |
-package autostamp:nordigen@0.5.0;
+package autostamp:nordigen@0.6.0;
 
 interface premium {
-  /// Unspecified response body
-  record retrieve-account-transactions-v2-response {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record retrieve-account-transactions-v2-response-entry {
+    key: string,
+    value: string
   }
 
   variant retrieve-account-transactions-v2-error {
@@ -34,12 +34,20 @@ interface premium {
     date-to: option<string>,
     id: string
   }
-  retrieve-account-transactions-v2: func(params: retrieve-account-transactions-v2-params) -> result<retrieve-account-transactions-v2-response, retrieve-account-transactions-v2-error>;
+  retrieve-account-transactions-v2: func(params: retrieve-account-transactions-v2-params) -> result<list<retrieve-account-transactions-v2-response-entry>, retrieve-account-transactions-v2-error>;
 
 }
 
 
 interface accounts {
+  enum account-status-enum {
+    discovered,
+    processing,
+    ready,
+    error,
+    suspended,
+  }
+
   /// The representation of a bank account.
   record account {
     /// The date & time at which the account object was created.
@@ -58,27 +66,22 @@ interface accounts {
     status: option<account-status-enum>
   }
 
-  record account-status-enum {
-    /// opaque schema; raw JSON
+  /// one entry of a string-keyed map (free-form object)
+  record retrieve-account-balances-v2-response-entry {
+    key: string,
     value: string
   }
 
-  /// Unspecified response body
-  record retrieve-account-balances-v2-response {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record retrieve-account-details-v2-response-entry {
+    key: string,
+    value: string
   }
 
-  /// Unspecified response body
-  record retrieve-account-details-v2-response {
-    /// JSON-encoded free-form object payload
-    data: option<string>
-  }
-
-  /// Unspecified response body
-  record retrieve-account-transactions-v2-v2-response {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record retrieve-account-transactions-v2-v2-response-entry {
+    key: string,
+    value: string
   }
 
   variant retrieve-account-metadata-error {
@@ -133,19 +136,19 @@ interface accounts {
   record retrieve-account-balances-v2-params {
     id: string
   }
-  retrieve-account-balances-v2: func(params: retrieve-account-balances-v2-params) -> result<retrieve-account-balances-v2-response, retrieve-account-balances-v2-error>;
+  retrieve-account-balances-v2: func(params: retrieve-account-balances-v2-params) -> result<list<retrieve-account-balances-v2-response-entry>, retrieve-account-balances-v2-error>;
 
   record retrieve-account-details-v2-params {
     id: string
   }
-  retrieve-account-details-v2: func(params: retrieve-account-details-v2-params) -> result<retrieve-account-details-v2-response, retrieve-account-details-v2-error>;
+  retrieve-account-details-v2: func(params: retrieve-account-details-v2-params) -> result<list<retrieve-account-details-v2-response-entry>, retrieve-account-details-v2-error>;
 
   record retrieve-account-transactions-v2-v2-params {
     date-from: option<string>,
     date-to: option<string>,
     id: string
   }
-  retrieve-account-transactions-v2-v2: func(params: retrieve-account-transactions-v2-v2-params) -> result<retrieve-account-transactions-v2-v2-response, retrieve-account-transactions-v2-v2-error>;
+  retrieve-account-transactions-v2-v2: func(params: retrieve-account-transactions-v2-v2-params) -> result<list<retrieve-account-transactions-v2-v2-response-entry>, retrieve-account-transactions-v2-v2-error>;
 
 }
 
@@ -280,13 +283,14 @@ interface institutions {
     logo: string,
     name: string,
     supported-features: list<string>,
-    supported-payments: integration-retrieve-supported-payments,
+    supported-payments: list<integration-retrieve-supported-payments-entry>,
     transaction-total-days: option<string>
   }
 
-  record integration-retrieve-supported-payments {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record integration-retrieve-supported-payments-entry {
+    key: string,
+    value: string
   }
 
   variant retrieve-all-supported-institutions-in-a-given-country-error {
@@ -322,6 +326,102 @@ interface institutions {
 }
 
 interface payments {
+  enum address-country-enum {
+    at,
+    be,
+    bg,
+    hr,
+    cy,
+    cz,
+    dk,
+    ee,
+    fi,
+    fr,
+    de,
+    gr,
+    hu,
+    is,
+    ie,
+    it,
+    lv,
+    li,
+    lt,
+    lu,
+    mt,
+    nl,
+    no,
+    pl,
+    pt,
+    ro,
+    sk,
+    si,
+    es,
+    se,
+    gb,
+    us,
+  }
+
+  enum type-enum {
+    iban,
+    scan,
+  }
+
+  enum payment-product-enum {
+    t2p,
+    sct,
+    isct,
+    cbct,
+    bacs,
+    chaps,
+    fps,
+    swift,
+    bt,
+    mt,
+  }
+
+  enum payment-status-enum {
+    init,
+    erre,
+    errs,
+    accc,
+    accp,
+    acsc,
+    acsp,
+    actc,
+    acwc,
+    acwp,
+    rcvd,
+    pdng,
+    rjct,
+    canc,
+    acfc,
+    patc,
+    part,
+  }
+
+  enum payment-type-enum {
+    single-payment,
+    bulk-payment,
+    periodic-payment,
+  }
+
+  enum execution-rule-enum {
+    following,
+    preceding,
+  }
+
+  enum frequency-enum {
+    daily,
+    weekly,
+    every-two-weeks,
+    monthly,
+    every-two-months,
+    quarterly,
+    semi-annual,
+    annual,
+    monthly-variable,
+  }
+
   record paginated-payment-read-list {
     count: option<s32>,
     next: option<string>,
@@ -383,50 +483,6 @@ interface payments {
     type-op: option<type-enum>
   }
 
-  /// * `AT` - Austria
-  /// * `BE` - Belgium
-  /// * `BG` - Bulgaria
-  /// * `HR` - Croatia
-  /// * `CY` - Cyprus
-  /// * `CZ` - Czechia
-  /// * `DK` - Denmark
-  /// * `EE` - Estonia
-  /// * `FI` - Finland
-  /// * `FR` - France
-  /// * `DE` - Germany
-  /// * `GR` - Greece
-  /// * `HU` - Hungary
-  /// * `IS` - Iceland
-  /// * `IE` - Ireland
-  /// * `IT` - Italy
-  /// * `LV` - Latvia
-  /// * `LI` - Liechtenstein
-  /// * `LT` - Lithuania
-  /// * `LU` - Luxembourg
-  /// * `MT` - Malta
-  /// * `NL` - Netherlands
-  /// * `NO` - Norway
-  /// * `PL` - Poland
-  /// * `PT` - Portugal
-  /// * `RO` - Romania
-  /// * `SK` - Slovakia
-  /// * `SI` - Slovenia
-  /// * `ES` - Spain
-  /// * `SE` - Sweden
-  /// * `GB` - United Kingdom
-  /// * `US` - United States of America
-  record address-country-enum {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
-  /// * `IBAN` - IBAN
-  /// * `SCAN` - SortCodeAccountNumber
-  record type-enum {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
   /// Debtor account write serializer.
   record debtor-account-write {
     /// Debtor account type identifier
@@ -454,51 +510,6 @@ interface payments {
     amount: string,
     /// Instructed amount currency
     currency: string
-  }
-
-  /// * `T2P` - target-2-payments
-  /// * `SCT` - sepa-credit-transfers
-  /// * `ISCT` - instant-sepa-credit-transfer
-  /// * `CBCT` - cross-border-credit-transfers
-  /// * `BACS` - Back Payment Scheme
-  /// * `CHAPS` - CHAPS Payment Scheme
-  /// * `FPS` - Faster Payment Scheme
-  /// * `SWIFT` - Swift Payment Service
-  /// * `BT` - Balance Transfer
-  /// * `MT` - Money Transfer
-  record payment-product-enum {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
-  /// * `INIT` - Initiated. Payment has been initiated.
-  /// * `ERRE` - ExecutionError. We experienced error on payment execution.
-  /// * `ERRS` - StatusError. We experienced error retrieving payment status. Try again.
-  /// * `ACCC` - AcceptedSettlementCompleted. Settlement on the creditor's account has been completed
-  /// * `ACCP` - AcceptedCustomerProfile. Preceding check of technical validation was successful. Customer profile check was successful
-  /// * `ACSC` - AcceptedSettlementCompleted. Settlement on the debtor’s account has been completed
-  /// * `ACSP` - AcceptedSettlementInProcess. All preceding checks such as technical validation and customer profile were successful and therefore the payment initiation has been accepted for execution
-  /// * `ACTC` - AcceptedTechnicalValidation. Authentication and syntactical and semantical validation are successful
-  /// * `ACWC` - AcceptedWithChange. Instruction is accepted but a change will be made, such as date or remittance not sent
-  /// * `ACWP` - AcceptedWithoutPosting. Payment instruction included in the credit transfer is accepted without being posted to the creditor customer’s account
-  /// * `RCVD` - Received. Payment initiation has been received by the receiving agent
-  /// * `PDNG` - Pending. Payment initiation or individual transaction included in the payment initiation is pending. Further checks and status update will be performed
-  /// * `RJCT` - Rejected. Payment initiation or individual transaction included in the payment initiation has been rejected.
-  /// * `CANC` - Cancelled. Payment initiation has been cancelled before execution
-  /// * `ACFC` - AcceptedFundsChecked. Pre-ceeding check of technical validation and customer profile was successful and an automatic funds check was positive
-  /// * `PATC` - PartiallyAcceptedTechnicalCorrect. The payment initiation needs multiple authentications, where some but not yet all have been performed
-  /// * `PART` - PartiallyAccepted. A number of transactions have been accepted, whereas another number of transactions have not yet achieved 'accepted' status
-  record payment-status-enum {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
-  /// * `single-payment` - payment
-  /// * `bulk-payment` - bulk-payments
-  /// * `periodic-payment` - periodic-payments
-  record payment-type-enum {
-    /// opaque schema; raw JSON
-    value: string
   }
 
   /// Creditor account write serializer.
@@ -563,27 +574,6 @@ interface payments {
     execution-rule: option<execution-rule-enum>,
     frequency: option<frequency-enum>,
     start-date: string
-  }
-
-  /// * `following` - following
-  /// * `preceding` - preceding
-  record execution-rule-enum {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
-  /// * `Daily` - Daily
-  /// * `Weekly` - Weekly
-  /// * `EveryTwoWeeks` - EveryTwoWeeks
-  /// * `Monthly` - Monthly
-  /// * `EveryTwoMonths` - EveryTwoMonths
-  /// * `Quarterly` - Quarterly
-  /// * `SemiAnnual` - SemiAnnual
-  /// * `Annual` - Annual
-  /// * `MonthlyVariable` - MonthlyVariable
-  record frequency-enum {
-    /// opaque schema; raw JSON
-    value: string
   }
 
   /// PaymentWriteSerializer.
@@ -655,16 +645,16 @@ interface payments {
     results: option<list<creditor-account>>
   }
 
-  /// Unspecified response body
-  record list-minimum-required-fields-for-institution-response {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record list-minimum-required-fields-for-institution-response-entry {
+    key: string,
+    value: string
   }
 
-  /// Unspecified response body
-  record delete-periodic-payment-response {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record delete-periodic-payment-response-entry {
+    key: string,
+    value: string
   }
 
   variant list-payments-error {
@@ -801,7 +791,7 @@ interface payments {
   record list-minimum-required-fields-for-institution-params {
     institution-id: string
   }
-  list-minimum-required-fields-for-institution: func(params: list-minimum-required-fields-for-institution-params) -> result<list-minimum-required-fields-for-institution-response, list-minimum-required-fields-for-institution-error>;
+  list-minimum-required-fields-for-institution: func(params: list-minimum-required-fields-for-institution-params) -> result<list<list-minimum-required-fields-for-institution-response-entry>, list-minimum-required-fields-for-institution-error>;
 
   record retrieve-payment-params {
     id: string
@@ -811,7 +801,7 @@ interface payments {
   record delete-periodic-payment-params {
     id: string
   }
-  delete-periodic-payment: func(params: delete-periodic-payment-params) -> result<delete-periodic-payment-response, delete-periodic-payment-error>;
+  delete-periodic-payment: func(params: delete-periodic-payment-params) -> result<list<delete-periodic-payment-response-entry>, delete-periodic-payment-error>;
 
   record submit-create-params {
     id: string,
@@ -839,6 +829,20 @@ interface payments {
 }
 
 interface requisitions {
+  enum status1c5-enum {
+    cr,
+    id,
+    ln,
+    rj,
+    er,
+    su,
+    ex,
+    gc,
+    ua,
+    ga,
+    sa,
+  }
+
   record paginated-requisition-list {
     count: option<s32>,
     next: option<string>,
@@ -873,11 +877,6 @@ interface requisitions {
     status: option<status1c5-enum>,
     /// A two-letter country code (ISO 639-1)
     user-language: option<string>
-  }
-
-  record status1c5-enum {
-    /// opaque schema; raw JSON
-    value: string
   }
 
   /// Create requisition.

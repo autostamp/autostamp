@@ -159,13 +159,14 @@ fn iface_sections__project_section_insert_request__to_json(p: &iface_sections::P
 
 fn iface_sections__insert_section_for_project_response__to_json(p: &iface_sections::InsertSectionForProjectResponse) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => iface_sections__empty_response__to_json(v), None => Value::Null });
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_sections__empty_response__to_json(p: &iface_sections::EmptyResponse) -> Value {
+fn iface_sections__empty_response_entry__to_json(p: &iface_sections::EmptyResponseEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -183,7 +184,14 @@ fn iface_sections__update_section_response__to_json(p: &iface_sections::UpdateSe
 
 fn iface_sections__delete_section_response__to_json(p: &iface_sections::DeleteSectionResponse) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => iface_sections__empty_response__to_json(v), None => Value::Null });
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_sections__empty_response_entry_v2__to_json(p: &iface_sections::EmptyResponseEntryV2) -> Value {
+    let mut m = Map::new();
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -197,7 +205,14 @@ fn iface_sections__section_task_insert_request__to_json(p: &iface_sections::Sect
 
 fn iface_sections__add_task_for_section_response__to_json(p: &iface_sections::AddTaskForSectionResponse) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => iface_sections__empty_response__to_json(v), None => Value::Null });
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_sections__empty_response_entry_v3__to_json(p: &iface_sections::EmptyResponseEntryV3) -> Value {
+    let mut m = Map::new();
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -310,14 +325,15 @@ fn iface_sections__project_compact__from_json(v: &Value) -> Option<iface_section
 fn iface_sections__insert_section_for_project_response__from_json(v: &Value) -> Option<iface_sections::InsertSectionForProjectResponse> {
     let m = v.as_object()?;
     Some(iface_sections::InsertSectionForProjectResponse {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| iface_sections__empty_response__from_json(v)),
+        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_sections::EmptyResponseEntry { key: k.clone(), value: val })).collect())),
     })
 }
 
-fn iface_sections__empty_response__from_json(v: &Value) -> Option<iface_sections::EmptyResponse> {
+fn iface_sections__empty_response_entry__from_json(v: &Value) -> Option<iface_sections::EmptyResponseEntry> {
     let m = v.as_object()?;
-    Some(iface_sections::EmptyResponse {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_sections::EmptyResponseEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -338,14 +354,30 @@ fn iface_sections__update_section_response__from_json(v: &Value) -> Option<iface
 fn iface_sections__delete_section_response__from_json(v: &Value) -> Option<iface_sections::DeleteSectionResponse> {
     let m = v.as_object()?;
     Some(iface_sections::DeleteSectionResponse {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| iface_sections__empty_response__from_json(v)),
+        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_sections::EmptyResponseEntryV2 { key: k.clone(), value: val })).collect())),
+    })
+}
+
+fn iface_sections__empty_response_entry_v2__from_json(v: &Value) -> Option<iface_sections::EmptyResponseEntryV2> {
+    let m = v.as_object()?;
+    Some(iface_sections::EmptyResponseEntryV2 {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
 fn iface_sections__add_task_for_section_response__from_json(v: &Value) -> Option<iface_sections::AddTaskForSectionResponse> {
     let m = v.as_object()?;
     Some(iface_sections::AddTaskForSectionResponse {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| iface_sections__empty_response__from_json(v)),
+        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_sections::EmptyResponseEntryV3 { key: k.clone(), value: val })).collect())),
+    })
+}
+
+fn iface_sections__empty_response_entry_v3__from_json(v: &Value) -> Option<iface_sections::EmptyResponseEntryV3> {
+    let m = v.as_object()?;
+    Some(iface_sections::EmptyResponseEntryV3 {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 

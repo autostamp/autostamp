@@ -20,8 +20,8 @@ triggered.
 
 | Setting | Value |
 | --- | --- |
-| Package | `autostamp:apple@0.5.0` |
-| Published version | `0.5.0+apple-1.4.1` |
+| Package | `autostamp:apple@0.6.0` |
+| Published version | `0.6.0+apple-1.4.1` |
 | Tag filter | all tags |
 | Operations generated | 252 |
 | Infer API-key credentials | enabled — not triggered |

@@ -1,4 +1,4 @@
-package autostamp:elevenlabs@0.5.0;
+package autostamp:elevenlabs@0.6.0;
 
 interface history {
   enum item-response-model-state-enum {
@@ -19,7 +19,7 @@ interface history {
     feedback: feedback-response-model,
     history-item-id: string,
     request-id: string,
-    settings: item-response-model-settings,
+    settings: list<item-response-model-settings-entry>,
     state: item-response-model-state-enum,
     text: string,
     voice-id: string,
@@ -37,9 +37,10 @@ interface history {
     thumbs-up: bool
   }
 
-  record item-response-model-settings {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record item-response-model-settings-entry {
+    key: string,
+    value: string
   }
 
   variant get-generated-items-v1-history-get-error {
@@ -275,7 +276,7 @@ interface voices {
     category: string,
     description: string,
     fine-tuning: fine-tuning-response-model,
-    labels: voice-response-model-labels,
+    labels: list<voice-response-model-labels-entry>,
     name: string,
     preview-url: string,
     samples: list<sample-response-model>,
@@ -311,9 +312,10 @@ interface voices {
     upload-date-unix: s32
   }
 
-  record voice-response-model-labels {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record voice-response-model-labels-entry {
+    key: string,
+    value: string
   }
 
   record sample-response-model {

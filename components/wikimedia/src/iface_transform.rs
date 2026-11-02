@@ -126,9 +126,24 @@ fn iface_transform__cx_list_tools__to_json(p: &iface_transform::CxListTools) -> 
     Value::Object(m)
 }
 
-fn iface_transform__cx_list_pairs_for_tool__to_json(p: &iface_transform::CxListPairsForTool) -> Value {
+fn iface_transform__cx_list_pairs_for_tool_entry__to_json(p: &iface_transform::CxListPairsForToolEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
+}
+
+fn iface_transform__cx_list_pairs_for_tool_entry_v2__to_json(p: &iface_transform::CxListPairsForToolEntryV2) -> Value {
+    let mut m = Map::new();
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
+}
+
+fn iface_transform__cx_list_pairs_for_tool_entry_v3__to_json(p: &iface_transform::CxListPairsForToolEntryV3) -> Value {
+    let mut m = Map::new();
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -231,10 +246,27 @@ fn iface_transform__cx_list_tools__from_json(v: &Value) -> Option<iface_transfor
     })
 }
 
-fn iface_transform__cx_list_pairs_for_tool__from_json(v: &Value) -> Option<iface_transform::CxListPairsForTool> {
+fn iface_transform__cx_list_pairs_for_tool_entry__from_json(v: &Value) -> Option<iface_transform::CxListPairsForToolEntry> {
     let m = v.as_object()?;
-    Some(iface_transform::CxListPairsForTool {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_transform::CxListPairsForToolEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_transform__cx_list_pairs_for_tool_entry_v2__from_json(v: &Value) -> Option<iface_transform::CxListPairsForToolEntryV2> {
+    let m = v.as_object()?;
+    Some(iface_transform::CxListPairsForToolEntryV2 {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_transform__cx_list_pairs_for_tool_entry_v3__from_json(v: &Value) -> Option<iface_transform::CxListPairsForToolEntryV3> {
+    let m = v.as_object()?;
+    Some(iface_transform::CxListPairsForToolEntryV3 {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -327,12 +359,12 @@ fn iface_transform__get_transform_list_pair_from_to__err(e: crate::runtime::Disp
     }
 }
 
-fn iface_transform__get_transform_list_tool_tool__ok(body: String) -> Result<iface_transform::CxListPairsForTool, crate::runtime::DispatchError> {
+fn iface_transform__get_transform_list_tool_tool__ok(body: String) -> Result<Vec<iface_transform::CxListPairsForToolEntry>, crate::runtime::DispatchError> {
     let v: Value = match serde_json::from_str(&body) {
         Ok(v) => v,
         Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
     };
-    match iface_transform__cx_list_pairs_for_tool__from_json(&v) {
+    match (&v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_transform::CxListPairsForToolEntry { key: k.clone(), value: val })).collect()) {
         Some(x) => Ok(x),
         None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
@@ -345,12 +377,12 @@ fn iface_transform__get_transform_list_tool_tool__err(e: crate::runtime::Dispatc
     }
 }
 
-fn iface_transform__get_transform_list_tool_tool_from__ok(body: String) -> Result<iface_transform::CxListPairsForTool, crate::runtime::DispatchError> {
+fn iface_transform__get_transform_list_tool_tool_from__ok(body: String) -> Result<Vec<iface_transform::CxListPairsForToolEntryV2>, crate::runtime::DispatchError> {
     let v: Value = match serde_json::from_str(&body) {
         Ok(v) => v,
         Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
     };
-    match iface_transform__cx_list_pairs_for_tool__from_json(&v) {
+    match (&v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_transform::CxListPairsForToolEntryV2 { key: k.clone(), value: val })).collect()) {
         Some(x) => Ok(x),
         None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
@@ -363,12 +395,12 @@ fn iface_transform__get_transform_list_tool_tool_from__err(e: crate::runtime::Di
     }
 }
 
-fn iface_transform__get_transform_list_tool_tool_from_to__ok(body: String) -> Result<iface_transform::CxListPairsForTool, crate::runtime::DispatchError> {
+fn iface_transform__get_transform_list_tool_tool_from_to__ok(body: String) -> Result<Vec<iface_transform::CxListPairsForToolEntryV3>, crate::runtime::DispatchError> {
     let v: Value = match serde_json::from_str(&body) {
         Ok(v) => v,
         Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
     };
-    match iface_transform__cx_list_pairs_for_tool__from_json(&v) {
+    match (&v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_transform::CxListPairsForToolEntryV3 { key: k.clone(), value: val })).collect()) {
         Some(x) => Ok(x),
         None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
@@ -445,21 +477,21 @@ impl iface_transform::Guest for crate::Component {
             Err(e) => Err(iface_transform__get_transform_list_pair_from_to__err(e)),
         }
     }
-    fn get_transform_list_tool_tool(params: iface_transform::GetTransformListToolToolParams) -> Result<iface_transform::CxListPairsForTool, String> {
+    fn get_transform_list_tool_tool(params: iface_transform::GetTransformListToolToolParams) -> Result<Vec<iface_transform::CxListPairsForToolEntry>, String> {
         let json = iface_transform__get_transform_list_tool_tool_params__to_json(&params);
         match dispatch(&OP_TRANSFORM_GET_TRANSFORM_LIST_TOOL_TOOL, json).and_then(iface_transform__get_transform_list_tool_tool__ok) {
             Ok(v) => Ok(v),
             Err(e) => Err(iface_transform__get_transform_list_tool_tool__err(e)),
         }
     }
-    fn get_transform_list_tool_tool_from(params: iface_transform::GetTransformListToolToolFromParams) -> Result<iface_transform::CxListPairsForTool, String> {
+    fn get_transform_list_tool_tool_from(params: iface_transform::GetTransformListToolToolFromParams) -> Result<Vec<iface_transform::CxListPairsForToolEntryV2>, String> {
         let json = iface_transform__get_transform_list_tool_tool_from_params__to_json(&params);
         match dispatch(&OP_TRANSFORM_GET_TRANSFORM_LIST_TOOL_TOOL_FROM, json).and_then(iface_transform__get_transform_list_tool_tool_from__ok) {
             Ok(v) => Ok(v),
             Err(e) => Err(iface_transform__get_transform_list_tool_tool_from__err(e)),
         }
     }
-    fn get_transform_list_tool_tool_from_to(params: iface_transform::GetTransformListToolToolFromToParams) -> Result<iface_transform::CxListPairsForTool, String> {
+    fn get_transform_list_tool_tool_from_to(params: iface_transform::GetTransformListToolToolFromToParams) -> Result<Vec<iface_transform::CxListPairsForToolEntryV3>, String> {
         let json = iface_transform__get_transform_list_tool_tool_from_to_params__to_json(&params);
         match dispatch(&OP_TRANSFORM_GET_TRANSFORM_LIST_TOOL_TOOL_FROM_TO, json).and_then(iface_transform__get_transform_list_tool_tool_from_to__ok) {
             Ok(v) => Ok(v),

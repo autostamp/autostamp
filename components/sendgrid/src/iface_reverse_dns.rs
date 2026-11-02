@@ -99,9 +99,10 @@ fn iface_reverse_dns__reverse_dns_users_item__to_json(p: &iface_reverse_dns::Rev
     Value::Object(m)
 }
 
-fn iface_reverse_dns__delete_whitelabel_ips_id_response__to_json(p: &iface_reverse_dns::DeleteWhitelabelIpsIdResponse) -> Value {
+fn iface_reverse_dns__delete_whitelabel_ips_id_response_entry__to_json(p: &iface_reverse_dns::DeleteWhitelabelIpsIdResponseEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -199,10 +200,11 @@ fn iface_reverse_dns__reverse_dns_users_item__from_json(v: &Value) -> Option<ifa
     })
 }
 
-fn iface_reverse_dns__delete_whitelabel_ips_id_response__from_json(v: &Value) -> Option<iface_reverse_dns::DeleteWhitelabelIpsIdResponse> {
+fn iface_reverse_dns__delete_whitelabel_ips_id_response_entry__from_json(v: &Value) -> Option<iface_reverse_dns::DeleteWhitelabelIpsIdResponseEntry> {
     let m = v.as_object()?;
-    Some(iface_reverse_dns::DeleteWhitelabelIpsIdResponse {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_reverse_dns::DeleteWhitelabelIpsIdResponseEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -284,12 +286,12 @@ fn iface_reverse_dns__get_whitelabel_ips_id__err(e: crate::runtime::DispatchErro
     }
 }
 
-fn iface_reverse_dns__delete_whitelabel_ips_id__ok(body: String) -> Result<iface_reverse_dns::DeleteWhitelabelIpsIdResponse, crate::runtime::DispatchError> {
+fn iface_reverse_dns__delete_whitelabel_ips_id__ok(body: String) -> Result<Vec<iface_reverse_dns::DeleteWhitelabelIpsIdResponseEntry>, crate::runtime::DispatchError> {
     let v: Value = match serde_json::from_str(&body) {
         Ok(v) => v,
         Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
     };
-    match iface_reverse_dns__delete_whitelabel_ips_id_response__from_json(&v) {
+    match (&v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_reverse_dns::DeleteWhitelabelIpsIdResponseEntry { key: k.clone(), value: val })).collect()) {
         Some(x) => Ok(x),
         None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
@@ -346,7 +348,7 @@ impl iface_reverse_dns::Guest for crate::Component {
             Err(e) => Err(iface_reverse_dns__get_whitelabel_ips_id__err(e)),
         }
     }
-    fn delete_whitelabel_ips_id(params: iface_reverse_dns::DeleteWhitelabelIpsIdParams) -> Result<iface_reverse_dns::DeleteWhitelabelIpsIdResponse, String> {
+    fn delete_whitelabel_ips_id(params: iface_reverse_dns::DeleteWhitelabelIpsIdParams) -> Result<Vec<iface_reverse_dns::DeleteWhitelabelIpsIdResponseEntry>, String> {
         let json = iface_reverse_dns__delete_whitelabel_ips_id_params__to_json(&params);
         match dispatch(&OP_REVERSE_DNS_DELETE_WHITELABEL_IPS_ID, json).and_then(iface_reverse_dns__delete_whitelabel_ips_id__ok) {
             Ok(v) => Ok(v),

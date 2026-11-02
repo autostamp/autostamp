@@ -15,7 +15,7 @@ const OP_ACCOUNT_TYPE_LIST_ACCOUNT_TYPES_FOR_USER: OpSpec = OpSpec {
 
 fn iface_account_type__account_type__to_json(p: &iface_account_type::AccountType) -> Value {
     let mut m = Map::new();
-    m.insert("capabilities".into(), match (&p.capabilities) { Some(v) => iface_account_type__account_type_capabilities__to_json(v), None => Value::Null });
+    m.insert("capabilities".into(), match (&p.capabilities) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("description".into(), match (&p.description) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("monthly_dollar_price".into(), match (&p.monthly_dollar_price) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
@@ -26,16 +26,17 @@ fn iface_account_type__account_type__to_json(p: &iface_account_type::AccountType
     Value::Object(m)
 }
 
-fn iface_account_type__account_type_capabilities__to_json(p: &iface_account_type::AccountTypeCapabilities) -> Value {
+fn iface_account_type__account_type_capabilities_entry__to_json(p: &iface_account_type::AccountTypeCapabilitiesEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
 fn iface_account_type__account_type__from_json(v: &Value) -> Option<iface_account_type::AccountType> {
     let m = v.as_object()?;
     Some(iface_account_type::AccountType {
-        capabilities: m.get("capabilities").filter(|v| !v.is_null()).and_then(|v| iface_account_type__account_type_capabilities__from_json(v)),
+        capabilities: m.get("capabilities").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_account_type::AccountTypeCapabilitiesEntry { key: k.clone(), value: val })).collect())),
         description: m.get("description").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         monthly_dollar_price: m.get("monthly_dollar_price").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
@@ -46,10 +47,11 @@ fn iface_account_type__account_type__from_json(v: &Value) -> Option<iface_accoun
     })
 }
 
-fn iface_account_type__account_type_capabilities__from_json(v: &Value) -> Option<iface_account_type::AccountTypeCapabilities> {
+fn iface_account_type__account_type_capabilities_entry__from_json(v: &Value) -> Option<iface_account_type::AccountTypeCapabilitiesEntry> {
     let m = v.as_object()?;
-    Some(iface_account_type::AccountTypeCapabilities {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_account_type::AccountTypeCapabilitiesEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 

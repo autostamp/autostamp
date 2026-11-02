@@ -131,7 +131,7 @@ fn iface_topups__topup__to_json(p: &iface_topups::Topup) -> Value {
     m.insert("failure_message".into(), match (&p.failure_message) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("id".into(), Value::String((&p.id).clone()));
     m.insert("livemode".into(), Value::Bool(*(&p.livemode)));
-    m.insert("metadata".into(), iface_topups__topup_metadata__to_json(&p.metadata));
+    m.insert("metadata".into(), Value::Object((&p.metadata).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()));
     m.insert("object".into(), Value::String(iface_topups__topup_object_enum__to_str(&p.object).into()));
     m.insert("source".into(), match (&p.source) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("statement_descriptor".into(), match (&p.statement_descriptor) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -140,9 +140,10 @@ fn iface_topups__topup__to_json(p: &iface_topups::Topup) -> Value {
     Value::Object(m)
 }
 
-fn iface_topups__topup_metadata__to_json(p: &iface_topups::TopupMetadata) -> Value {
+fn iface_topups__topup_metadata_entry__to_json(p: &iface_topups::TopupMetadataEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -219,7 +220,7 @@ fn iface_topups__topup__from_json(v: &Value) -> Option<iface_topups::Topup> {
         failure_message: m.get("failure_message").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         id: m.get("id").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         livemode: m.get("livemode").and_then(|v| (v).as_bool()).unwrap_or_default(),
-        metadata: match m.get("metadata").and_then(|v| iface_topups__topup_metadata__from_json(v)) { Some(x) => x, None => return None },
+        metadata: m.get("metadata").and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_topups::TopupMetadataEntry { key: k.clone(), value: val })).collect())).unwrap_or_default(),
         object: match m.get("object").and_then(|v| (v).as_str().and_then(iface_topups__topup_object_enum__from_str)) { Some(x) => x, None => return None },
         source: m.get("source").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         statement_descriptor: m.get("statement_descriptor").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
@@ -228,10 +229,11 @@ fn iface_topups__topup__from_json(v: &Value) -> Option<iface_topups::Topup> {
     })
 }
 
-fn iface_topups__topup_metadata__from_json(v: &Value) -> Option<iface_topups::TopupMetadata> {
+fn iface_topups__topup_metadata_entry__from_json(v: &Value) -> Option<iface_topups::TopupMetadataEntry> {
     let m = v.as_object()?;
-    Some(iface_topups::TopupMetadata {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_topups::TopupMetadataEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 

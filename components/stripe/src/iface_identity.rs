@@ -232,7 +232,7 @@ fn iface_identity__gelato_id_number_report__to_json(p: &iface_identity::GelatoId
 fn iface_identity__gelato_verification_report_options__to_json(p: &iface_identity::GelatoVerificationReportOptions) -> Value {
     let mut m = Map::new();
     m.insert("document".into(), match (&p.document) { Some(v) => iface_identity__gelato_report_document_options__to_json(v), None => Value::Null });
-    m.insert("id_number".into(), match (&p.id_number) { Some(v) => iface_identity__gelato_report_id_number_options__to_json(v), None => Value::Null });
+    m.insert("id_number".into(), match (&p.id_number) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -245,9 +245,10 @@ fn iface_identity__gelato_report_document_options__to_json(p: &iface_identity::G
     Value::Object(m)
 }
 
-fn iface_identity__gelato_report_id_number_options__to_json(p: &iface_identity::GelatoReportIdNumberOptions) -> Value {
+fn iface_identity__gelato_report_id_number_options_entry__to_json(p: &iface_identity::GelatoReportIdNumberOptionsEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -277,7 +278,7 @@ fn iface_identity__verification_session__to_json(p: &iface_identity::Verificatio
     m.insert("last_error".into(), match (&p.last_error) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("last_verification_report".into(), match (&p.last_verification_report) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("livemode".into(), Value::Bool(*(&p.livemode)));
-    m.insert("metadata".into(), iface_identity__verification_session_metadata__to_json(&p.metadata));
+    m.insert("metadata".into(), Value::Object((&p.metadata).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()));
     m.insert("object".into(), Value::String(iface_identity__verification_session_object_enum__to_str(&p.object).into()));
     m.insert("options".into(), match (&p.options) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("redaction".into(), match (&p.redaction) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -288,15 +289,17 @@ fn iface_identity__verification_session__to_json(p: &iface_identity::Verificatio
     Value::Object(m)
 }
 
-fn iface_identity__verification_session_metadata__to_json(p: &iface_identity::VerificationSessionMetadata) -> Value {
+fn iface_identity__verification_session_metadata_entry__to_json(p: &iface_identity::VerificationSessionMetadataEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
-fn iface_identity__post_identity_verification_sessions_body_metadata__to_json(p: &iface_identity::PostIdentityVerificationSessionsBodyMetadata) -> Value {
+fn iface_identity__post_identity_verification_sessions_body_metadata_entry__to_json(p: &iface_identity::PostIdentityVerificationSessionsBodyMetadataEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -306,9 +309,10 @@ fn iface_identity__post_identity_verification_sessions_body_options__to_json(p: 
     Value::Object(m)
 }
 
-fn iface_identity__post_identity_verification_sessions_session_body_metadata__to_json(p: &iface_identity::PostIdentityVerificationSessionsSessionBodyMetadata) -> Value {
+fn iface_identity__post_identity_verification_sessions_session_body_metadata_entry__to_json(p: &iface_identity::PostIdentityVerificationSessionsSessionBodyMetadataEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -354,7 +358,7 @@ fn iface_identity__get_identity_verification_sessions_params__to_json(p: &iface_
 fn iface_identity__post_identity_verification_sessions_params__to_json(p: &iface_identity::PostIdentityVerificationSessionsParams) -> Value {
     let mut m = Map::new();
     m.insert("expand".into(), match (&p.expand) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
-    m.insert("metadata".into(), match (&p.metadata) { Some(v) => iface_identity__post_identity_verification_sessions_body_metadata__to_json(v), None => Value::Null });
+    m.insert("metadata".into(), match (&p.metadata) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("options".into(), match (&p.options) { Some(v) => iface_identity__post_identity_verification_sessions_body_options__to_json(v), None => Value::Null });
     m.insert("return_url".into(), match (&p.return_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("type".into(), Value::String(iface_identity__get_identity_verification_reports_type_op_enum__to_str(&p.type_op).into()));
@@ -373,7 +377,7 @@ fn iface_identity__post_identity_verification_sessions_session_params__to_json(p
     let mut m = Map::new();
     m.insert("session".into(), Value::String((&p.session).clone()));
     m.insert("expand".into(), match (&p.expand) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
-    m.insert("metadata".into(), match (&p.metadata) { Some(v) => iface_identity__post_identity_verification_sessions_session_body_metadata__to_json(v), None => Value::Null });
+    m.insert("metadata".into(), match (&p.metadata) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("options".into(), match (&p.options) { Some(v) => iface_identity__post_identity_verification_sessions_session_body_options__to_json(v), None => Value::Null });
     m.insert("type".into(), match (&p.type_op) { Some(v) => Value::String(iface_identity__get_identity_verification_reports_type_op_enum__to_str(v).into()), None => Value::Null });
     Value::Object(m)
@@ -454,7 +458,7 @@ fn iface_identity__gelato_verification_report_options__from_json(v: &Value) -> O
     let m = v.as_object()?;
     Some(iface_identity::GelatoVerificationReportOptions {
         document: m.get("document").filter(|v| !v.is_null()).and_then(|v| iface_identity__gelato_report_document_options__from_json(v)),
-        id_number: m.get("id_number").filter(|v| !v.is_null()).and_then(|v| iface_identity__gelato_report_id_number_options__from_json(v)),
+        id_number: m.get("id_number").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_identity::GelatoReportIdNumberOptionsEntry { key: k.clone(), value: val })).collect())),
     })
 }
 
@@ -468,10 +472,11 @@ fn iface_identity__gelato_report_document_options__from_json(v: &Value) -> Optio
     })
 }
 
-fn iface_identity__gelato_report_id_number_options__from_json(v: &Value) -> Option<iface_identity::GelatoReportIdNumberOptions> {
+fn iface_identity__gelato_report_id_number_options_entry__from_json(v: &Value) -> Option<iface_identity::GelatoReportIdNumberOptionsEntry> {
     let m = v.as_object()?;
-    Some(iface_identity::GelatoReportIdNumberOptions {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_identity::GelatoReportIdNumberOptionsEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -504,7 +509,7 @@ fn iface_identity__verification_session__from_json(v: &Value) -> Option<iface_id
         last_error: m.get("last_error").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         last_verification_report: m.get("last_verification_report").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         livemode: m.get("livemode").and_then(|v| (v).as_bool()).unwrap_or_default(),
-        metadata: match m.get("metadata").and_then(|v| iface_identity__verification_session_metadata__from_json(v)) { Some(x) => x, None => return None },
+        metadata: m.get("metadata").and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_identity::VerificationSessionMetadataEntry { key: k.clone(), value: val })).collect())).unwrap_or_default(),
         object: match m.get("object").and_then(|v| (v).as_str().and_then(iface_identity__verification_session_object_enum__from_str)) { Some(x) => x, None => return None },
         options: m.get("options").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         redaction: m.get("redaction").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
@@ -515,10 +520,11 @@ fn iface_identity__verification_session__from_json(v: &Value) -> Option<iface_id
     })
 }
 
-fn iface_identity__verification_session_metadata__from_json(v: &Value) -> Option<iface_identity::VerificationSessionMetadata> {
+fn iface_identity__verification_session_metadata_entry__from_json(v: &Value) -> Option<iface_identity::VerificationSessionMetadataEntry> {
     let m = v.as_object()?;
-    Some(iface_identity::VerificationSessionMetadata {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_identity::VerificationSessionMetadataEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 

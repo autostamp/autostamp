@@ -29,14 +29,8 @@ fn iface_team_profile__objs_team_profile_field_type_op_enum__to_str(e: &iface_te
 
 fn iface_team_profile__get_response__to_json(p: &iface_team_profile::GetResponse) -> Value {
     let mut m = Map::new();
-    m.insert("ok".into(), iface_team_profile__defs_ok_true__to_json(&p.ok));
+    m.insert("ok".into(), Value::Bool(*(&p.ok)));
     m.insert("profile".into(), iface_team_profile__get_response_profile__to_json(&p.profile));
-    Value::Object(m)
-}
-
-fn iface_team_profile__defs_ok_true__to_json(p: &iface_team_profile::DefsOkTrue) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -70,15 +64,8 @@ fn iface_team_profile__get_params__to_json(p: &iface_team_profile::GetParams) ->
 fn iface_team_profile__get_response__from_json(v: &Value) -> Option<iface_team_profile::GetResponse> {
     let m = v.as_object()?;
     Some(iface_team_profile::GetResponse {
-        ok: match m.get("ok").and_then(|v| iface_team_profile__defs_ok_true__from_json(v)) { Some(x) => x, None => return None },
+        ok: m.get("ok").and_then(|v| (v).as_bool()).unwrap_or_default(),
         profile: match m.get("profile").and_then(|v| iface_team_profile__get_response_profile__from_json(v)) { Some(x) => x, None => return None },
-    })
-}
-
-fn iface_team_profile__defs_ok_true__from_json(v: &Value) -> Option<iface_team_profile::DefsOkTrue> {
-    let m = v.as_object()?;
-    Some(iface_team_profile::DefsOkTrue {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 

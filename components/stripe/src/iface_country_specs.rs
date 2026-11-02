@@ -58,7 +58,7 @@ fn iface_country_specs__country_spec__to_json(p: &iface_country_specs::CountrySp
     m.insert("default_currency".into(), Value::String((&p.default_currency).clone()));
     m.insert("id".into(), Value::String((&p.id).clone()));
     m.insert("object".into(), Value::String(iface_country_specs__country_spec_object_enum__to_str(&p.object).into()));
-    m.insert("supported_bank_account_currencies".into(), iface_country_specs__country_spec_supported_bank_account_currencies__to_json(&p.supported_bank_account_currencies));
+    m.insert("supported_bank_account_currencies".into(), Value::Object((&p.supported_bank_account_currencies).iter().map(|e| (e.key.clone(), Value::Array((&e.value).iter().map(|v| Value::String((v).clone())).collect()))).collect()));
     m.insert("supported_payment_currencies".into(), Value::Array((&p.supported_payment_currencies).iter().map(|v| Value::String((v).clone())).collect()));
     m.insert("supported_payment_methods".into(), Value::Array((&p.supported_payment_methods).iter().map(|v| Value::String((v).clone())).collect()));
     m.insert("supported_transfer_countries".into(), Value::Array((&p.supported_transfer_countries).iter().map(|v| Value::String((v).clone())).collect()));
@@ -66,9 +66,10 @@ fn iface_country_specs__country_spec__to_json(p: &iface_country_specs::CountrySp
     Value::Object(m)
 }
 
-fn iface_country_specs__country_spec_supported_bank_account_currencies__to_json(p: &iface_country_specs::CountrySpecSupportedBankAccountCurrencies) -> Value {
+fn iface_country_specs__country_spec_supported_bank_account_currencies_entry__to_json(p: &iface_country_specs::CountrySpecSupportedBankAccountCurrenciesEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::Array((&p.value).iter().map(|v| Value::String((v).clone())).collect()));
     Value::Object(m)
 }
 
@@ -120,7 +121,7 @@ fn iface_country_specs__country_spec__from_json(v: &Value) -> Option<iface_count
         default_currency: m.get("default_currency").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         id: m.get("id").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         object: match m.get("object").and_then(|v| (v).as_str().and_then(iface_country_specs__country_spec_object_enum__from_str)) { Some(x) => x, None => return None },
-        supported_bank_account_currencies: match m.get("supported_bank_account_currencies").and_then(|v| iface_country_specs__country_spec_supported_bank_account_currencies__from_json(v)) { Some(x) => x, None => return None },
+        supported_bank_account_currencies: m.get("supported_bank_account_currencies").and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())).map(|val| iface_country_specs::CountrySpecSupportedBankAccountCurrenciesEntry { key: k.clone(), value: val })).collect())).unwrap_or_default(),
         supported_payment_currencies: m.get("supported_payment_currencies").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())).unwrap_or_default(),
         supported_payment_methods: m.get("supported_payment_methods").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())).unwrap_or_default(),
         supported_transfer_countries: m.get("supported_transfer_countries").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())).unwrap_or_default(),
@@ -128,10 +129,11 @@ fn iface_country_specs__country_spec__from_json(v: &Value) -> Option<iface_count
     })
 }
 
-fn iface_country_specs__country_spec_supported_bank_account_currencies__from_json(v: &Value) -> Option<iface_country_specs::CountrySpecSupportedBankAccountCurrencies> {
+fn iface_country_specs__country_spec_supported_bank_account_currencies_entry__from_json(v: &Value) -> Option<iface_country_specs::CountrySpecSupportedBankAccountCurrenciesEntry> {
     let m = v.as_object()?;
-    Some(iface_country_specs::CountrySpecSupportedBankAccountCurrencies {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_country_specs::CountrySpecSupportedBankAccountCurrenciesEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())).unwrap_or_default(),
     })
 }
 
