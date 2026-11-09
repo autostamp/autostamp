@@ -150,9 +150,10 @@ fn iface_search__metadata_query_order_by_item__to_json(p: &iface_search::Metadat
     Value::Object(m)
 }
 
-fn iface_search__metadata_query_query_params__to_json(p: &iface_search::MetadataQueryQueryParams) -> Value {
+fn iface_search__metadata_query_query_params_entry__to_json(p: &iface_search::MetadataQueryQueryParamsEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -204,7 +205,7 @@ fn iface_search__post_metadata_queries_execute_read_params__to_json(p: &iface_se
     m.insert("marker".into(), match (&p.marker) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("order_by".into(), match (&p.order_by) { Some(v) => Value::Array((v).iter().map(|v| iface_search__metadata_query_order_by_item__to_json(v)).collect()), None => Value::Null });
     m.insert("query".into(), match (&p.query) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("query_params".into(), match (&p.query_params) { Some(v) => iface_search__metadata_query_query_params__to_json(v), None => Value::Null });
+    m.insert("query_params".into(), match (&p.query_params) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     Value::Object(m)
 }
 

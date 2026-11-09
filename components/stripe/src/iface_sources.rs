@@ -289,9 +289,10 @@ fn iface_sources__post_sources_body_mandate_acceptance_online__to_json(p: &iface
     Value::Object(m)
 }
 
-fn iface_sources__post_sources_body_metadata__to_json(p: &iface_sources::PostSourcesBodyMetadata) -> Value {
+fn iface_sources__post_sources_body_metadata_entry__to_json(p: &iface_sources::PostSourcesBodyMetadataEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -389,7 +390,7 @@ fn iface_sources__source__to_json(p: &iface_sources::Source) -> Value {
     m.insert("ideal".into(), match (&p.ideal) { Some(v) => iface_sources__source_type_ideal__to_json(v), None => Value::Null });
     m.insert("klarna".into(), match (&p.klarna) { Some(v) => iface_sources__source_type_klarna__to_json(v), None => Value::Null });
     m.insert("livemode".into(), Value::Bool(*(&p.livemode)));
-    m.insert("metadata".into(), match (&p.metadata) { Some(v) => iface_sources__source_metadata__to_json(v), None => Value::Null });
+    m.insert("metadata".into(), match (&p.metadata) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("multibanco".into(), match (&p.multibanco) { Some(v) => iface_sources__source_type_multibanco__to_json(v), None => Value::Null });
     m.insert("object".into(), Value::String(iface_sources__source_object_enum__to_str(&p.object).into()));
     m.insert("owner".into(), match (&p.owner) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -584,9 +585,10 @@ fn iface_sources__source_type_klarna__to_json(p: &iface_sources::SourceTypeKlarn
     Value::Object(m)
 }
 
-fn iface_sources__source_metadata__to_json(p: &iface_sources::SourceMetadata) -> Value {
+fn iface_sources__source_metadata_entry__to_json(p: &iface_sources::SourceMetadataEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -941,7 +943,7 @@ fn iface_sources__post_sources_params__to_json(p: &iface_sources::PostSourcesPar
     m.insert("expand".into(), match (&p.expand) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
     m.insert("flow".into(), match (&p.flow) { Some(v) => Value::String(iface_sources__post_sources_body_flow_enum__to_str(v).into()), None => Value::Null });
     m.insert("mandate".into(), match (&p.mandate) { Some(v) => iface_sources__post_sources_body_mandate__to_json(v), None => Value::Null });
-    m.insert("metadata".into(), match (&p.metadata) { Some(v) => iface_sources__post_sources_body_metadata__to_json(v), None => Value::Null });
+    m.insert("metadata".into(), match (&p.metadata) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("original_source".into(), match (&p.original_source) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("owner".into(), match (&p.owner) { Some(v) => iface_sources__post_sources_body_owner__to_json(v), None => Value::Null });
     m.insert("receiver".into(), match (&p.receiver) { Some(v) => iface_sources__post_sources_body_receiver__to_json(v), None => Value::Null });
@@ -1036,7 +1038,7 @@ fn iface_sources__source__from_json(v: &Value) -> Option<iface_sources::Source> 
         ideal: m.get("ideal").filter(|v| !v.is_null()).and_then(|v| iface_sources__source_type_ideal__from_json(v)),
         klarna: m.get("klarna").filter(|v| !v.is_null()).and_then(|v| iface_sources__source_type_klarna__from_json(v)),
         livemode: m.get("livemode").and_then(|v| (v).as_bool()).unwrap_or_default(),
-        metadata: m.get("metadata").filter(|v| !v.is_null()).and_then(|v| iface_sources__source_metadata__from_json(v)),
+        metadata: m.get("metadata").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_sources::SourceMetadataEntry { key: k.clone(), value: val })).collect())),
         multibanco: m.get("multibanco").filter(|v| !v.is_null()).and_then(|v| iface_sources__source_type_multibanco__from_json(v)),
         object: match m.get("object").and_then(|v| (v).as_str().and_then(iface_sources__source_object_enum__from_str)) { Some(x) => x, None => return None },
         owner: m.get("owner").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
@@ -1244,10 +1246,11 @@ fn iface_sources__source_type_klarna__from_json(v: &Value) -> Option<iface_sourc
     })
 }
 
-fn iface_sources__source_metadata__from_json(v: &Value) -> Option<iface_sources::SourceMetadata> {
+fn iface_sources__source_metadata_entry__from_json(v: &Value) -> Option<iface_sources::SourceMetadataEntry> {
     let m = v.as_object()?;
-    Some(iface_sources::SourceMetadata {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_sources::SourceMetadataEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 

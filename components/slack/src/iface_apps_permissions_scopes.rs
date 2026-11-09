@@ -17,32 +17,20 @@ const OP_APPS_PERMISSIONS_SCOPES_LIST_OP: OpSpec = OpSpec {
 
 fn iface_apps_permissions_scopes__list_op_response__to_json(p: &iface_apps_permissions_scopes::ListOpResponse) -> Value {
     let mut m = Map::new();
-    m.insert("ok".into(), iface_apps_permissions_scopes__defs_ok_true__to_json(&p.ok));
+    m.insert("ok".into(), Value::Bool(*(&p.ok)));
     m.insert("scopes".into(), iface_apps_permissions_scopes__list_op_response_scopes__to_json(&p.scopes));
-    Value::Object(m)
-}
-
-fn iface_apps_permissions_scopes__defs_ok_true__to_json(p: &iface_apps_permissions_scopes::DefsOkTrue) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
 fn iface_apps_permissions_scopes__list_op_response_scopes__to_json(p: &iface_apps_permissions_scopes::ListOpResponseScopes) -> Value {
     let mut m = Map::new();
-    m.insert("app_home".into(), match (&p.app_home) { Some(v) => iface_apps_permissions_scopes__objs_scopes__to_json(v), None => Value::Null });
-    m.insert("channel".into(), match (&p.channel) { Some(v) => iface_apps_permissions_scopes__objs_scopes__to_json(v), None => Value::Null });
-    m.insert("group".into(), match (&p.group) { Some(v) => iface_apps_permissions_scopes__objs_scopes__to_json(v), None => Value::Null });
-    m.insert("im".into(), match (&p.im) { Some(v) => iface_apps_permissions_scopes__objs_scopes__to_json(v), None => Value::Null });
-    m.insert("mpim".into(), match (&p.mpim) { Some(v) => iface_apps_permissions_scopes__objs_scopes__to_json(v), None => Value::Null });
-    m.insert("team".into(), match (&p.team) { Some(v) => iface_apps_permissions_scopes__objs_scopes__to_json(v), None => Value::Null });
-    m.insert("user".into(), match (&p.user) { Some(v) => iface_apps_permissions_scopes__objs_scopes__to_json(v), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_apps_permissions_scopes__objs_scopes__to_json(p: &iface_apps_permissions_scopes::ObjsScopes) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
+    m.insert("app_home".into(), match (&p.app_home) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("channel".into(), match (&p.channel) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("group".into(), match (&p.group) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("im".into(), match (&p.im) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("mpim".into(), match (&p.mpim) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("team".into(), match (&p.team) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("user".into(), match (&p.user) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -55,35 +43,21 @@ fn iface_apps_permissions_scopes__list_op_params__to_json(p: &iface_apps_permiss
 fn iface_apps_permissions_scopes__list_op_response__from_json(v: &Value) -> Option<iface_apps_permissions_scopes::ListOpResponse> {
     let m = v.as_object()?;
     Some(iface_apps_permissions_scopes::ListOpResponse {
-        ok: match m.get("ok").and_then(|v| iface_apps_permissions_scopes__defs_ok_true__from_json(v)) { Some(x) => x, None => return None },
+        ok: m.get("ok").and_then(|v| (v).as_bool()).unwrap_or_default(),
         scopes: match m.get("scopes").and_then(|v| iface_apps_permissions_scopes__list_op_response_scopes__from_json(v)) { Some(x) => x, None => return None },
-    })
-}
-
-fn iface_apps_permissions_scopes__defs_ok_true__from_json(v: &Value) -> Option<iface_apps_permissions_scopes::DefsOkTrue> {
-    let m = v.as_object()?;
-    Some(iface_apps_permissions_scopes::DefsOkTrue {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
 fn iface_apps_permissions_scopes__list_op_response_scopes__from_json(v: &Value) -> Option<iface_apps_permissions_scopes::ListOpResponseScopes> {
     let m = v.as_object()?;
     Some(iface_apps_permissions_scopes::ListOpResponseScopes {
-        app_home: m.get("app_home").filter(|v| !v.is_null()).and_then(|v| iface_apps_permissions_scopes__objs_scopes__from_json(v)),
-        channel: m.get("channel").filter(|v| !v.is_null()).and_then(|v| iface_apps_permissions_scopes__objs_scopes__from_json(v)),
-        group: m.get("group").filter(|v| !v.is_null()).and_then(|v| iface_apps_permissions_scopes__objs_scopes__from_json(v)),
-        im: m.get("im").filter(|v| !v.is_null()).and_then(|v| iface_apps_permissions_scopes__objs_scopes__from_json(v)),
-        mpim: m.get("mpim").filter(|v| !v.is_null()).and_then(|v| iface_apps_permissions_scopes__objs_scopes__from_json(v)),
-        team: m.get("team").filter(|v| !v.is_null()).and_then(|v| iface_apps_permissions_scopes__objs_scopes__from_json(v)),
-        user: m.get("user").filter(|v| !v.is_null()).and_then(|v| iface_apps_permissions_scopes__objs_scopes__from_json(v)),
-    })
-}
-
-fn iface_apps_permissions_scopes__objs_scopes__from_json(v: &Value) -> Option<iface_apps_permissions_scopes::ObjsScopes> {
-    let m = v.as_object()?;
-    Some(iface_apps_permissions_scopes::ObjsScopes {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        app_home: m.get("app_home").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        channel: m.get("channel").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        group: m.get("group").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        im: m.get("im").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        mpim: m.get("mpim").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        team: m.get("team").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        user: m.get("user").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
     })
 }
 

@@ -14,25 +14,185 @@ const OP_PROJECTS_GET_PROJECTS: OpSpec = OpSpec {
     ],
 };
 
-fn iface_projects__projects__to_json(p: &iface_projects::Projects) -> Value {
+fn iface_projects__scope__to_str(e: &iface_projects::Scope) -> &'static str {
+    match e {
+        iface_projects::Scope::WriteSettings => "write-settings",
+        iface_projects::Scope::ViewBuilds => "view-builds",
+        iface_projects::Scope::ReadSettings => "read-settings",
+        iface_projects::Scope::TriggerBuilds => "trigger-builds",
+        iface_projects::Scope::All => "all",
+        iface_projects::Scope::Status => "status",
+        iface_projects::Scope::None => "none",
+    }
+}
+
+fn iface_projects__project__to_json(p: &iface_projects::Project) -> Value {
     let mut m = Map::new();
+    m.insert("aws".into(), match (&p.aws) { Some(v) => iface_projects__aws__to_json(v), None => Value::Null });
+    m.insert("branches".into(), match (&p.branches) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
+    m.insert("campfire_notify_prefs".into(), match (&p.campfire_notify_prefs) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("campfire_room".into(), match (&p.campfire_room) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("campfire_subdomain".into(), match (&p.campfire_subdomain) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("campfire_token".into(), match (&p.campfire_token) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("compile".into(), match (&p.compile) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("default_branch".into(), match (&p.default_branch) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("dependencies".into(), match (&p.dependencies) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("extra".into(), match (&p.extra) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("feature_flags".into(), match (&p.feature_flags) { Some(v) => iface_projects__project_feature_flags__to_json(v), None => Value::Null });
+    m.insert("flowdock_api_token".into(), match (&p.flowdock_api_token) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("followed".into(), match (&p.followed) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("has_usable_key".into(), match (&p.has_usable_key) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("heroku_deploy_user".into(), match (&p.heroku_deploy_user) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("hipchat_api_token".into(), match (&p.hipchat_api_token) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("hipchat_notify".into(), match (&p.hipchat_notify) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("hipchat_notify_prefs".into(), match (&p.hipchat_notify_prefs) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("hipchat_room".into(), match (&p.hipchat_room) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("irc_channel".into(), match (&p.irc_channel) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("irc_keyword".into(), match (&p.irc_keyword) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("irc_notify_prefs".into(), match (&p.irc_notify_prefs) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("irc_password".into(), match (&p.irc_password) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("irc_server".into(), match (&p.irc_server) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("irc_username".into(), match (&p.irc_username) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("language".into(), match (&p.language) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("oss".into(), match (&p.oss) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("parallel".into(), match (&p.parallel) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("reponame".into(), match (&p.reponame) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("scopes".into(), match (&p.scopes) { Some(v) => Value::Array((v).iter().map(|v| Value::String(iface_projects__scope__to_str(v).into())).collect()), None => Value::Null });
+    m.insert("setup".into(), match (&p.setup) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("slack_api_token".into(), match (&p.slack_api_token) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("slack_channel".into(), match (&p.slack_channel) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("slack_channel_override".into(), match (&p.slack_channel_override) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("slack_notify_prefs".into(), match (&p.slack_notify_prefs) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("slack_subdomain".into(), match (&p.slack_subdomain) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("slack_webhook_url".into(), match (&p.slack_webhook_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("ssh_keys".into(), match (&p.ssh_keys) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("test".into(), match (&p.test) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("username".into(), match (&p.username) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("vcs_type".into(), match (&p.vcs_type) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("vcs_url".into(), match (&p.vcs_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_projects__aws__to_json(p: &iface_projects::Aws) -> Value {
+    let mut m = Map::new();
+    m.insert("keypair".into(), match (&p.keypair) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_projects__project_branches_entry__to_json(p: &iface_projects::ProjectBranchesEntry) -> Value {
+    let mut m = Map::new();
+    m.insert("key".into(), Value::String((&p.key).clone()));
     m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
-fn iface_projects__projects__from_json(v: &Value) -> Option<iface_projects::Projects> {
+fn iface_projects__project_feature_flags__to_json(p: &iface_projects::ProjectFeatureFlags) -> Value {
+    let mut m = Map::new();
+    m.insert("build-fork-prs".into(), match (&p.build_fork_prs) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("fleet".into(), match (&p.fleet) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("junit".into(), match (&p.junit) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("oss".into(), match (&p.oss) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("osx".into(), match (&p.osx) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("set-github-status".into(), match (&p.set_github_status) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("trusty-beta".into(), match (&p.trusty_beta) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_projects__project__from_json(v: &Value) -> Option<iface_projects::Project> {
     let m = v.as_object()?;
-    Some(iface_projects::Projects {
+    Some(iface_projects::Project {
+        aws: m.get("aws").filter(|v| !v.is_null()).and_then(|v| iface_projects__aws__from_json(v)),
+        branches: m.get("branches").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_projects::ProjectBranchesEntry { key: k.clone(), value: val })).collect())),
+        campfire_notify_prefs: m.get("campfire_notify_prefs").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        campfire_room: m.get("campfire_room").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        campfire_subdomain: m.get("campfire_subdomain").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        campfire_token: m.get("campfire_token").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        compile: m.get("compile").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        default_branch: m.get("default_branch").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        dependencies: m.get("dependencies").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        extra: m.get("extra").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        feature_flags: m.get("feature_flags").filter(|v| !v.is_null()).and_then(|v| iface_projects__project_feature_flags__from_json(v)),
+        flowdock_api_token: m.get("flowdock_api_token").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        followed: m.get("followed").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        has_usable_key: m.get("has_usable_key").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        heroku_deploy_user: m.get("heroku_deploy_user").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        hipchat_api_token: m.get("hipchat_api_token").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        hipchat_notify: m.get("hipchat_notify").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        hipchat_notify_prefs: m.get("hipchat_notify_prefs").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        hipchat_room: m.get("hipchat_room").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        irc_channel: m.get("irc_channel").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        irc_keyword: m.get("irc_keyword").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        irc_notify_prefs: m.get("irc_notify_prefs").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        irc_password: m.get("irc_password").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        irc_server: m.get("irc_server").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        irc_username: m.get("irc_username").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        language: m.get("language").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        oss: m.get("oss").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        parallel: m.get("parallel").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        reponame: m.get("reponame").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        scopes: m.get("scopes").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().and_then(iface_projects__scope__from_str)).collect())),
+        setup: m.get("setup").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        slack_api_token: m.get("slack_api_token").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        slack_channel: m.get("slack_channel").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        slack_channel_override: m.get("slack_channel_override").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        slack_notify_prefs: m.get("slack_notify_prefs").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        slack_subdomain: m.get("slack_subdomain").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        slack_webhook_url: m.get("slack_webhook_url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        ssh_keys: m.get("ssh_keys").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        test: m.get("test").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        username: m.get("username").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        vcs_type: m.get("vcs_type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        vcs_url: m.get("vcs_url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_projects__aws__from_json(v: &Value) -> Option<iface_projects::Aws> {
+    let m = v.as_object()?;
+    Some(iface_projects::Aws {
+        keypair: m.get("keypair").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_projects__project_branches_entry__from_json(v: &Value) -> Option<iface_projects::ProjectBranchesEntry> {
+    let m = v.as_object()?;
+    Some(iface_projects::ProjectBranchesEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
-fn iface_projects__get_projects__ok(body: String) -> Result<iface_projects::Projects, crate::runtime::DispatchError> {
+fn iface_projects__project_feature_flags__from_json(v: &Value) -> Option<iface_projects::ProjectFeatureFlags> {
+    let m = v.as_object()?;
+    Some(iface_projects::ProjectFeatureFlags {
+        build_fork_prs: m.get("build-fork-prs").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        fleet: m.get("fleet").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        junit: m.get("junit").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        oss: m.get("oss").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        osx: m.get("osx").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        set_github_status: m.get("set-github-status").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        trusty_beta: m.get("trusty-beta").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+    })
+}
+
+fn iface_projects__scope__from_str(s: &str) -> Option<iface_projects::Scope> {
+    match s {
+        "write-settings" => Some(iface_projects::Scope::WriteSettings),
+        "view-builds" => Some(iface_projects::Scope::ViewBuilds),
+        "read-settings" => Some(iface_projects::Scope::ReadSettings),
+        "trigger-builds" => Some(iface_projects::Scope::TriggerBuilds),
+        "all" => Some(iface_projects::Scope::All),
+        "status" => Some(iface_projects::Scope::Status),
+        "none" => Some(iface_projects::Scope::None),
+        _ => None,
+    }
+}
+
+fn iface_projects__get_projects__ok(body: String) -> Result<Vec<iface_projects::Project>, crate::runtime::DispatchError> {
     let v: Value = match serde_json::from_str(&body) {
         Ok(v) => v,
         Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
     };
-    match iface_projects__projects__from_json(&v) {
+    match (&v).as_array().map(|a| a.iter().filter_map(|x| iface_projects__project__from_json(x)).collect()) {
         Some(x) => Ok(x),
         None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
@@ -46,7 +206,7 @@ fn iface_projects__get_projects__err(e: crate::runtime::DispatchError) -> String
 }
 
 impl iface_projects::Guest for crate::Component {
-    fn get_projects() -> Result<iface_projects::Projects, String> {
+    fn get_projects() -> Result<Vec<iface_projects::Project>, String> {
         match dispatch(&OP_PROJECTS_GET_PROJECTS, Value::Object(Map::new())).and_then(iface_projects__get_projects__ok) {
             Ok(v) => Ok(v),
             Err(e) => Err(iface_projects__get_projects__err(e)),

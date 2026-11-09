@@ -292,30 +292,33 @@ fn iface_products__get_comparable_products_response__to_json(p: &iface_products:
 
 fn iface_products__get_comparable_products_response_comparable_products__to_json(p: &iface_products::GetComparableProductsResponseComparableProducts) -> Value {
     let mut m = Map::new();
-    m.insert("calories".into(), Value::Array((&p.calories).iter().map(|v| iface_products__get_comparable_products_response_comparable_products_calories_item__to_json(v)).collect()));
-    m.insert("likes".into(), Value::Array((&p.likes).iter().map(|v| iface_products__get_comparable_products_response_comparable_products_likes_item__to_json(v)).collect()));
-    m.insert("price".into(), Value::Array((&p.price).iter().map(|v| iface_products__get_comparable_products_response_comparable_products_price_item__to_json(v)).collect()));
+    m.insert("calories".into(), Value::Array((&p.calories).iter().map(|v| Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect())).collect()));
+    m.insert("likes".into(), Value::Array((&p.likes).iter().map(|v| Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect())).collect()));
+    m.insert("price".into(), Value::Array((&p.price).iter().map(|v| Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect())).collect()));
     m.insert("protein".into(), Value::Array((&p.protein).iter().map(|v| iface_products__get_comparable_products_response_comparable_products_protein_item__to_json(v)).collect()));
     m.insert("spoonacularScore".into(), Value::Array((&p.spoonacular_score).iter().map(|v| iface_products__get_comparable_products_response_comparable_products_spoonacular_score_item__to_json(v)).collect()));
-    m.insert("sugar".into(), Value::Array((&p.sugar).iter().map(|v| iface_products__get_comparable_products_response_comparable_products_sugar_item__to_json(v)).collect()));
+    m.insert("sugar".into(), Value::Array((&p.sugar).iter().map(|v| Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect())).collect()));
     Value::Object(m)
 }
 
-fn iface_products__get_comparable_products_response_comparable_products_calories_item__to_json(p: &iface_products::GetComparableProductsResponseComparableProductsCaloriesItem) -> Value {
+fn iface_products__get_comparable_products_response_comparable_products_calories_item_entry__to_json(p: &iface_products::GetComparableProductsResponseComparableProductsCaloriesItemEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
-fn iface_products__get_comparable_products_response_comparable_products_likes_item__to_json(p: &iface_products::GetComparableProductsResponseComparableProductsLikesItem) -> Value {
+fn iface_products__get_comparable_products_response_comparable_products_likes_item_entry__to_json(p: &iface_products::GetComparableProductsResponseComparableProductsLikesItemEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
-fn iface_products__get_comparable_products_response_comparable_products_price_item__to_json(p: &iface_products::GetComparableProductsResponseComparableProductsPriceItem) -> Value {
+fn iface_products__get_comparable_products_response_comparable_products_price_item_entry__to_json(p: &iface_products::GetComparableProductsResponseComparableProductsPriceItemEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -337,9 +340,10 @@ fn iface_products__get_comparable_products_response_comparable_products_spoonacu
     Value::Object(m)
 }
 
-fn iface_products__get_comparable_products_response_comparable_products_sugar_item__to_json(p: &iface_products::GetComparableProductsResponseComparableProductsSugarItem) -> Value {
+fn iface_products__get_comparable_products_response_comparable_products_sugar_item_entry__to_json(p: &iface_products::GetComparableProductsResponseComparableProductsSugarItemEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -404,15 +408,17 @@ fn iface_products__get_product_information_response_servings__to_json(p: &iface_
     Value::Object(m)
 }
 
-fn iface_products__product_nutrition_label_image_response__to_json(p: &iface_products::ProductNutritionLabelImageResponse) -> Value {
+fn iface_products__product_nutrition_label_image_response_entry__to_json(p: &iface_products::ProductNutritionLabelImageResponseEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
-fn iface_products__product_nutrition_by_id_image_response__to_json(p: &iface_products::ProductNutritionByIdImageResponse) -> Value {
+fn iface_products__product_nutrition_by_id_image_response_entry__to_json(p: &iface_products::ProductNutritionByIdImageResponseEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -640,33 +646,36 @@ fn iface_products__get_comparable_products_response__from_json(v: &Value) -> Opt
 fn iface_products__get_comparable_products_response_comparable_products__from_json(v: &Value) -> Option<iface_products::GetComparableProductsResponseComparableProducts> {
     let m = v.as_object()?;
     Some(iface_products::GetComparableProductsResponseComparableProducts {
-        calories: m.get("calories").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_products__get_comparable_products_response_comparable_products_calories_item__from_json(x)).collect())).unwrap_or_default(),
-        likes: m.get("likes").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_products__get_comparable_products_response_comparable_products_likes_item__from_json(x)).collect())).unwrap_or_default(),
-        price: m.get("price").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_products__get_comparable_products_response_comparable_products_price_item__from_json(x)).collect())).unwrap_or_default(),
+        calories: m.get("calories").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_products::GetComparableProductsResponseComparableProductsCaloriesItemEntry { key: k.clone(), value: val })).collect())).collect())).unwrap_or_default(),
+        likes: m.get("likes").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_products::GetComparableProductsResponseComparableProductsLikesItemEntry { key: k.clone(), value: val })).collect())).collect())).unwrap_or_default(),
+        price: m.get("price").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_products::GetComparableProductsResponseComparableProductsPriceItemEntry { key: k.clone(), value: val })).collect())).collect())).unwrap_or_default(),
         protein: m.get("protein").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_products__get_comparable_products_response_comparable_products_protein_item__from_json(x)).collect())).unwrap_or_default(),
         spoonacular_score: m.get("spoonacularScore").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_products__get_comparable_products_response_comparable_products_spoonacular_score_item__from_json(x)).collect())).unwrap_or_default(),
-        sugar: m.get("sugar").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_products__get_comparable_products_response_comparable_products_sugar_item__from_json(x)).collect())).unwrap_or_default(),
+        sugar: m.get("sugar").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_products::GetComparableProductsResponseComparableProductsSugarItemEntry { key: k.clone(), value: val })).collect())).collect())).unwrap_or_default(),
     })
 }
 
-fn iface_products__get_comparable_products_response_comparable_products_calories_item__from_json(v: &Value) -> Option<iface_products::GetComparableProductsResponseComparableProductsCaloriesItem> {
+fn iface_products__get_comparable_products_response_comparable_products_calories_item_entry__from_json(v: &Value) -> Option<iface_products::GetComparableProductsResponseComparableProductsCaloriesItemEntry> {
     let m = v.as_object()?;
-    Some(iface_products::GetComparableProductsResponseComparableProductsCaloriesItem {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_products::GetComparableProductsResponseComparableProductsCaloriesItemEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
-fn iface_products__get_comparable_products_response_comparable_products_likes_item__from_json(v: &Value) -> Option<iface_products::GetComparableProductsResponseComparableProductsLikesItem> {
+fn iface_products__get_comparable_products_response_comparable_products_likes_item_entry__from_json(v: &Value) -> Option<iface_products::GetComparableProductsResponseComparableProductsLikesItemEntry> {
     let m = v.as_object()?;
-    Some(iface_products::GetComparableProductsResponseComparableProductsLikesItem {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_products::GetComparableProductsResponseComparableProductsLikesItemEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
-fn iface_products__get_comparable_products_response_comparable_products_price_item__from_json(v: &Value) -> Option<iface_products::GetComparableProductsResponseComparableProductsPriceItem> {
+fn iface_products__get_comparable_products_response_comparable_products_price_item_entry__from_json(v: &Value) -> Option<iface_products::GetComparableProductsResponseComparableProductsPriceItemEntry> {
     let m = v.as_object()?;
-    Some(iface_products::GetComparableProductsResponseComparableProductsPriceItem {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_products::GetComparableProductsResponseComparableProductsPriceItemEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -690,10 +699,11 @@ fn iface_products__get_comparable_products_response_comparable_products_spoonacu
     })
 }
 
-fn iface_products__get_comparable_products_response_comparable_products_sugar_item__from_json(v: &Value) -> Option<iface_products::GetComparableProductsResponseComparableProductsSugarItem> {
+fn iface_products__get_comparable_products_response_comparable_products_sugar_item_entry__from_json(v: &Value) -> Option<iface_products::GetComparableProductsResponseComparableProductsSugarItemEntry> {
     let m = v.as_object()?;
-    Some(iface_products::GetComparableProductsResponseComparableProductsSugarItem {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_products::GetComparableProductsResponseComparableProductsSugarItemEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -764,17 +774,19 @@ fn iface_products__get_product_information_response_servings__from_json(v: &Valu
     })
 }
 
-fn iface_products__product_nutrition_label_image_response__from_json(v: &Value) -> Option<iface_products::ProductNutritionLabelImageResponse> {
+fn iface_products__product_nutrition_label_image_response_entry__from_json(v: &Value) -> Option<iface_products::ProductNutritionLabelImageResponseEntry> {
     let m = v.as_object()?;
-    Some(iface_products::ProductNutritionLabelImageResponse {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_products::ProductNutritionLabelImageResponseEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
-fn iface_products__product_nutrition_by_id_image_response__from_json(v: &Value) -> Option<iface_products::ProductNutritionByIdImageResponse> {
+fn iface_products__product_nutrition_by_id_image_response_entry__from_json(v: &Value) -> Option<iface_products::ProductNutritionByIdImageResponseEntry> {
     let m = v.as_object()?;
-    Some(iface_products::ProductNutritionByIdImageResponse {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_products::ProductNutritionByIdImageResponseEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -955,12 +967,12 @@ fn iface_products__product_nutrition_label_widget__err(e: crate::runtime::Dispat
     }
 }
 
-fn iface_products__product_nutrition_label_image__ok(body: String) -> Result<iface_products::ProductNutritionLabelImageResponse, crate::runtime::DispatchError> {
+fn iface_products__product_nutrition_label_image__ok(body: String) -> Result<Vec<iface_products::ProductNutritionLabelImageResponseEntry>, crate::runtime::DispatchError> {
     let v: Value = match serde_json::from_str(&body) {
         Ok(v) => v,
         Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
     };
-    match iface_products__product_nutrition_label_image_response__from_json(&v) {
+    match (&v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_products::ProductNutritionLabelImageResponseEntry { key: k.clone(), value: val })).collect()) {
         Some(x) => Ok(x),
         None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
@@ -994,12 +1006,12 @@ fn iface_products__visualize_product_nutrition_by_id__err(e: crate::runtime::Dis
     }
 }
 
-fn iface_products__product_nutrition_by_id_image__ok(body: String) -> Result<iface_products::ProductNutritionByIdImageResponse, crate::runtime::DispatchError> {
+fn iface_products__product_nutrition_by_id_image__ok(body: String) -> Result<Vec<iface_products::ProductNutritionByIdImageResponseEntry>, crate::runtime::DispatchError> {
     let v: Value = match serde_json::from_str(&body) {
         Ok(v) => v,
         Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
     };
-    match iface_products__product_nutrition_by_id_image_response__from_json(&v) {
+    match (&v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_products::ProductNutritionByIdImageResponseEntry { key: k.clone(), value: val })).collect()) {
         Some(x) => Ok(x),
         None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
@@ -1074,7 +1086,7 @@ impl iface_products::Guest for crate::Component {
             Err(e) => Err(iface_products__product_nutrition_label_widget__err(e)),
         }
     }
-    fn product_nutrition_label_image(params: iface_products::ProductNutritionLabelImageParams) -> Result<iface_products::ProductNutritionLabelImageResponse, iface_products::ProductNutritionLabelImageError> {
+    fn product_nutrition_label_image(params: iface_products::ProductNutritionLabelImageParams) -> Result<Vec<iface_products::ProductNutritionLabelImageResponseEntry>, iface_products::ProductNutritionLabelImageError> {
         let json = iface_products__product_nutrition_label_image_params__to_json(&params);
         match dispatch(&OP_PRODUCTS_PRODUCT_NUTRITION_LABEL_IMAGE, json).and_then(iface_products__product_nutrition_label_image__ok) {
             Ok(v) => Ok(v),
@@ -1088,7 +1100,7 @@ impl iface_products::Guest for crate::Component {
             Err(e) => Err(iface_products__visualize_product_nutrition_by_id__err(e)),
         }
     }
-    fn product_nutrition_by_id_image(params: iface_products::ProductNutritionByIdImageParams) -> Result<iface_products::ProductNutritionByIdImageResponse, iface_products::ProductNutritionByIdImageError> {
+    fn product_nutrition_by_id_image(params: iface_products::ProductNutritionByIdImageParams) -> Result<Vec<iface_products::ProductNutritionByIdImageResponseEntry>, iface_products::ProductNutritionByIdImageError> {
         let json = iface_products__product_nutrition_by_id_image_params__to_json(&params);
         match dispatch(&OP_PRODUCTS_PRODUCT_NUTRITION_BY_ID_IMAGE, json).and_then(iface_products__product_nutrition_by_id_image__ok) {
             Ok(v) => Ok(v),

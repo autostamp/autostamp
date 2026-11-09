@@ -139,12 +139,6 @@ fn iface_messages__outbound_message_payload_to_item_status_enum__to_str(e: &ifac
     }
 }
 
-fn iface_messages__to_number__to_json(p: &iface_messages::ToNumber) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
 fn iface_messages__create_message_response__to_json(p: &iface_messages::CreateMessageResponse) -> Value {
     let mut m = Map::new();
     m.insert("data".into(), match (&p.data) { Some(v) => iface_messages__outbound_message_payload__to_json(v), None => Value::Null });
@@ -189,15 +183,16 @@ fn iface_messages__error__to_json(p: &iface_messages::Error) -> Value {
     let mut m = Map::new();
     m.insert("code".into(), Value::String((&p.code).clone()));
     m.insert("detail".into(), match (&p.detail) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("meta".into(), match (&p.meta) { Some(v) => iface_messages__error_meta__to_json(v), None => Value::Null });
+    m.insert("meta".into(), match (&p.meta) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("source".into(), match (&p.source) { Some(v) => iface_messages__error_source__to_json(v), None => Value::Null });
     m.insert("title".into(), Value::String((&p.title).clone()));
     Value::Object(m)
 }
 
-fn iface_messages__error_meta__to_json(p: &iface_messages::ErrorMeta) -> Value {
+fn iface_messages__error_meta_entry__to_json(p: &iface_messages::ErrorMetaEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -266,7 +261,7 @@ fn iface_messages__create_message_params__to_json(p: &iface_messages::CreateMess
     m.insert("messaging_profile_id".into(), match (&p.messaging_profile_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("subject".into(), match (&p.subject) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("text".into(), match (&p.text) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("to".into(), iface_messages__to_number__to_json(&p.to));
+    m.insert("to".into(), Value::String((&p.to).clone()));
     m.insert("type".into(), match (&p.type_op) { Some(v) => Value::String(iface_messages__create_message_request_type_op_enum__to_str(v).into()), None => Value::Null });
     m.insert("use_profile_webhooks".into(), match (&p.use_profile_webhooks) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     m.insert("webhook_failover_url".into(), match (&p.webhook_failover_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -281,7 +276,7 @@ fn iface_messages__create_long_code_message_params__to_json(p: &iface_messages::
     m.insert("media_urls".into(), match (&p.media_urls) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
     m.insert("subject".into(), match (&p.subject) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("text".into(), match (&p.text) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("to".into(), iface_messages__to_number__to_json(&p.to));
+    m.insert("to".into(), Value::String((&p.to).clone()));
     m.insert("type".into(), match (&p.type_op) { Some(v) => Value::String(iface_messages__create_message_request_type_op_enum__to_str(v).into()), None => Value::Null });
     m.insert("use_profile_webhooks".into(), match (&p.use_profile_webhooks) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     m.insert("webhook_failover_url".into(), match (&p.webhook_failover_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -296,7 +291,7 @@ fn iface_messages__create_number_pool_message_params__to_json(p: &iface_messages
     m.insert("messaging_profile_id".into(), Value::String((&p.messaging_profile_id).clone()));
     m.insert("subject".into(), match (&p.subject) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("text".into(), match (&p.text) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("to".into(), iface_messages__to_number__to_json(&p.to));
+    m.insert("to".into(), Value::String((&p.to).clone()));
     m.insert("type".into(), match (&p.type_op) { Some(v) => Value::String(iface_messages__create_message_request_type_op_enum__to_str(v).into()), None => Value::Null });
     m.insert("use_profile_webhooks".into(), match (&p.use_profile_webhooks) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     m.insert("webhook_failover_url".into(), match (&p.webhook_failover_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -311,7 +306,7 @@ fn iface_messages__create_short_code_message_params__to_json(p: &iface_messages:
     m.insert("media_urls".into(), match (&p.media_urls) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
     m.insert("subject".into(), match (&p.subject) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("text".into(), match (&p.text) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("to".into(), iface_messages__to_number__to_json(&p.to));
+    m.insert("to".into(), Value::String((&p.to).clone()));
     m.insert("type".into(), match (&p.type_op) { Some(v) => Value::String(iface_messages__create_message_request_type_op_enum__to_str(v).into()), None => Value::Null });
     m.insert("use_profile_webhooks".into(), match (&p.use_profile_webhooks) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     m.insert("webhook_failover_url".into(), match (&p.webhook_failover_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -373,16 +368,17 @@ fn iface_messages__error__from_json(v: &Value) -> Option<iface_messages::Error> 
     Some(iface_messages::Error {
         code: m.get("code").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         detail: m.get("detail").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        meta: m.get("meta").filter(|v| !v.is_null()).and_then(|v| iface_messages__error_meta__from_json(v)),
+        meta: m.get("meta").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_messages::ErrorMetaEntry { key: k.clone(), value: val })).collect())),
         source: m.get("source").filter(|v| !v.is_null()).and_then(|v| iface_messages__error_source__from_json(v)),
         title: m.get("title").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
-fn iface_messages__error_meta__from_json(v: &Value) -> Option<iface_messages::ErrorMeta> {
+fn iface_messages__error_meta_entry__from_json(v: &Value) -> Option<iface_messages::ErrorMetaEntry> {
     let m = v.as_object()?;
-    Some(iface_messages::ErrorMeta {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_messages::ErrorMetaEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 

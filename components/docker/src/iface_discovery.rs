@@ -25,6 +25,27 @@ const OP_DISCOVERY_GET_NAMESPACE: OpSpec = OpSpec {
     ],
 };
 
+fn iface_discovery__dataset_type__to_str(e: &iface_discovery::DatasetType) -> &'static str {
+    match e {
+        iface_discovery::DatasetType::Pulls => "pulls",
+    }
+}
+
+fn iface_discovery__timespan_type__to_str(e: &iface_discovery::TimespanType) -> &'static str {
+    match e {
+        iface_discovery::TimespanType::Months => "months",
+        iface_discovery::TimespanType::Weeks => "weeks",
+    }
+}
+
+fn iface_discovery__dataview_type__to_str(e: &iface_discovery::DataviewType) -> &'static str {
+    match e {
+        iface_discovery::DataviewType::Raw => "raw",
+        iface_discovery::DataviewType::Summary => "summary",
+        iface_discovery::DataviewType::RepoSummary => "repo-summary",
+    }
+}
+
 fn iface_discovery__namespace_data__to_json(p: &iface_discovery::NamespaceData) -> Value {
     let mut m = Map::new();
     m.insert("namespaces".into(), match (&p.namespaces) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
@@ -41,27 +62,9 @@ fn iface_discovery__namespace_metadata__to_json(p: &iface_discovery::NamespaceMe
 
 fn iface_discovery__dataset_model__to_json(p: &iface_discovery::DatasetModel) -> Value {
     let mut m = Map::new();
-    m.insert("name".into(), match (&p.name) { Some(v) => iface_discovery__dataset_type__to_json(v), None => Value::Null });
-    m.insert("timespans".into(), match (&p.timespans) { Some(v) => Value::Array((v).iter().map(|v| iface_discovery__timespan_type__to_json(v)).collect()), None => Value::Null });
-    m.insert("views".into(), match (&p.views) { Some(v) => Value::Array((v).iter().map(|v| iface_discovery__dataview_type__to_json(v)).collect()), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_discovery__dataset_type__to_json(p: &iface_discovery::DatasetType) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_discovery__timespan_type__to_json(p: &iface_discovery::TimespanType) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_discovery__dataview_type__to_json(p: &iface_discovery::DataviewType) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
+    m.insert("name".into(), match (&p.name) { Some(v) => Value::String(iface_discovery__dataset_type__to_str(v).into()), None => Value::Null });
+    m.insert("timespans".into(), match (&p.timespans) { Some(v) => Value::Array((v).iter().map(|v| Value::String(iface_discovery__timespan_type__to_str(v).into())).collect()), None => Value::Null });
+    m.insert("views".into(), match (&p.views) { Some(v) => Value::Array((v).iter().map(|v| Value::String(iface_discovery__dataview_type__to_str(v).into())).collect()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -90,31 +93,34 @@ fn iface_discovery__namespace_metadata__from_json(v: &Value) -> Option<iface_dis
 fn iface_discovery__dataset_model__from_json(v: &Value) -> Option<iface_discovery::DatasetModel> {
     let m = v.as_object()?;
     Some(iface_discovery::DatasetModel {
-        name: m.get("name").filter(|v| !v.is_null()).and_then(|v| iface_discovery__dataset_type__from_json(v)),
-        timespans: m.get("timespans").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_discovery__timespan_type__from_json(x)).collect())),
-        views: m.get("views").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_discovery__dataview_type__from_json(x)).collect())),
+        name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_discovery__dataset_type__from_str)),
+        timespans: m.get("timespans").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().and_then(iface_discovery__timespan_type__from_str)).collect())),
+        views: m.get("views").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().and_then(iface_discovery__dataview_type__from_str)).collect())),
     })
 }
 
-fn iface_discovery__dataset_type__from_json(v: &Value) -> Option<iface_discovery::DatasetType> {
-    let m = v.as_object()?;
-    Some(iface_discovery::DatasetType {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-    })
+fn iface_discovery__dataset_type__from_str(s: &str) -> Option<iface_discovery::DatasetType> {
+    match s {
+        "pulls" => Some(iface_discovery::DatasetType::Pulls),
+        _ => None,
+    }
 }
 
-fn iface_discovery__timespan_type__from_json(v: &Value) -> Option<iface_discovery::TimespanType> {
-    let m = v.as_object()?;
-    Some(iface_discovery::TimespanType {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-    })
+fn iface_discovery__timespan_type__from_str(s: &str) -> Option<iface_discovery::TimespanType> {
+    match s {
+        "months" => Some(iface_discovery::TimespanType::Months),
+        "weeks" => Some(iface_discovery::TimespanType::Weeks),
+        _ => None,
+    }
 }
 
-fn iface_discovery__dataview_type__from_json(v: &Value) -> Option<iface_discovery::DataviewType> {
-    let m = v.as_object()?;
-    Some(iface_discovery::DataviewType {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-    })
+fn iface_discovery__dataview_type__from_str(s: &str) -> Option<iface_discovery::DataviewType> {
+    match s {
+        "raw" => Some(iface_discovery::DataviewType::Raw),
+        "summary" => Some(iface_discovery::DataviewType::Summary),
+        "repo-summary" => Some(iface_discovery::DataviewType::RepoSummary),
+        _ => None,
+    }
 }
 
 fn iface_discovery__get_namespaces__ok(body: String) -> Result<iface_discovery::NamespaceData, crate::runtime::DispatchError> {

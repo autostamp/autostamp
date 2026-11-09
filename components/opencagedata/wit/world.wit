@@ -1,4 +1,4 @@
-package autostamp:opencagedata@0.5.0;
+package autostamp:opencagedata@0.6.0;
 
 interface v-version {
   record response {
@@ -25,17 +25,18 @@ interface v-version {
   }
 
   record response-results-item {
-    annotations: option<response-results-item-annotations>,
+    annotations: option<list<response-results-item-annotations-entry>>,
     bounds: option<response-results-item-bounds>,
-    components: option<response-results-item-components>,
+    components: option<list<response-results-item-components-entry>>,
     confidence: option<s32>,
     formatted: option<string>,
     geometry: option<lat-lng>
   }
 
-  record response-results-item-annotations {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record response-results-item-annotations-entry {
+    key: string,
+    value: string
   }
 
   record response-results-item-bounds {
@@ -48,9 +49,10 @@ interface v-version {
     lng: option<f64>
   }
 
-  record response-results-item-components {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record response-results-item-components-entry {
+    key: string,
+    value: string
   }
 
   record response-status {

@@ -108,7 +108,7 @@ fn iface_segmenting_contacts__full_segment__to_json(p: &iface_segmenting_contact
     m.insert("sample_updated_at".into(), Value::String((&p.sample_updated_at).clone()));
     m.insert("updated_at".into(), Value::String((&p.updated_at).clone()));
     m.insert("contacts_sample".into(), Value::Array((&p.contacts_sample).iter().map(|v| iface_segmenting_contacts__contact_response__to_json(v)).collect()));
-    m.insert("query_json".into(), match (&p.query_json) { Some(v) => iface_segmenting_contacts__full_segment_query_json__to_json(v), None => Value::Null });
+    m.insert("query_json".into(), match (&p.query_json) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("parent_list_ids".into(), match (&p.parent_list_ids) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
     m.insert("query_dsl".into(), Value::String((&p.query_dsl).clone()));
     Value::Object(m)
@@ -141,9 +141,10 @@ fn iface_segmenting_contacts__contact_response_custom_fields__to_json(p: &iface_
     Value::Object(m)
 }
 
-fn iface_segmenting_contacts__full_segment_query_json__to_json(p: &iface_segmenting_contacts::FullSegmentQueryJson) -> Value {
+fn iface_segmenting_contacts__full_segment_query_json_entry__to_json(p: &iface_segmenting_contacts::FullSegmentQueryJsonEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -168,9 +169,10 @@ fn iface_segmenting_contacts__post_marketing_segments_delete_response_errors_ite
     Value::Object(m)
 }
 
-fn iface_segmenting_contacts__delete_marketing_segments_segment_id_response__to_json(p: &iface_segmenting_contacts::DeleteMarketingSegmentsSegmentIdResponse) -> Value {
+fn iface_segmenting_contacts__delete_marketing_segments_segment_id_response_entry__to_json(p: &iface_segmenting_contacts::DeleteMarketingSegmentsSegmentIdResponseEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -251,7 +253,7 @@ fn iface_segmenting_contacts__full_segment__from_json(v: &Value) -> Option<iface
         sample_updated_at: m.get("sample_updated_at").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         updated_at: m.get("updated_at").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         contacts_sample: m.get("contacts_sample").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_segmenting_contacts__contact_response__from_json(x)).collect())).unwrap_or_default(),
-        query_json: m.get("query_json").filter(|v| !v.is_null()).and_then(|v| iface_segmenting_contacts__full_segment_query_json__from_json(v)),
+        query_json: m.get("query_json").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_segmenting_contacts::FullSegmentQueryJsonEntry { key: k.clone(), value: val })).collect())),
         parent_list_ids: m.get("parent_list_ids").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
         query_dsl: m.get("query_dsl").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
@@ -286,10 +288,11 @@ fn iface_segmenting_contacts__contact_response_custom_fields__from_json(v: &Valu
     })
 }
 
-fn iface_segmenting_contacts__full_segment_query_json__from_json(v: &Value) -> Option<iface_segmenting_contacts::FullSegmentQueryJson> {
+fn iface_segmenting_contacts__full_segment_query_json_entry__from_json(v: &Value) -> Option<iface_segmenting_contacts::FullSegmentQueryJsonEntry> {
     let m = v.as_object()?;
-    Some(iface_segmenting_contacts::FullSegmentQueryJson {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_segmenting_contacts::FullSegmentQueryJsonEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -317,10 +320,11 @@ fn iface_segmenting_contacts__post_marketing_segments_delete_response_errors_ite
     })
 }
 
-fn iface_segmenting_contacts__delete_marketing_segments_segment_id_response__from_json(v: &Value) -> Option<iface_segmenting_contacts::DeleteMarketingSegmentsSegmentIdResponse> {
+fn iface_segmenting_contacts__delete_marketing_segments_segment_id_response_entry__from_json(v: &Value) -> Option<iface_segmenting_contacts::DeleteMarketingSegmentsSegmentIdResponseEntry> {
     let m = v.as_object()?;
-    Some(iface_segmenting_contacts::DeleteMarketingSegmentsSegmentIdResponse {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_segmenting_contacts::DeleteMarketingSegmentsSegmentIdResponseEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -445,12 +449,12 @@ fn iface_segmenting_contacts__patch_marketing_segments_segment_id__err(e: crate:
     }
 }
 
-fn iface_segmenting_contacts__delete_marketing_segments_segment_id__ok(body: String) -> Result<iface_segmenting_contacts::DeleteMarketingSegmentsSegmentIdResponse, crate::runtime::DispatchError> {
+fn iface_segmenting_contacts__delete_marketing_segments_segment_id__ok(body: String) -> Result<Vec<iface_segmenting_contacts::DeleteMarketingSegmentsSegmentIdResponseEntry>, crate::runtime::DispatchError> {
     let v: Value = match serde_json::from_str(&body) {
         Ok(v) => v,
         Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
     };
-    match iface_segmenting_contacts__delete_marketing_segments_segment_id_response__from_json(&v) {
+    match (&v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_segmenting_contacts::DeleteMarketingSegmentsSegmentIdResponseEntry { key: k.clone(), value: val })).collect()) {
         Some(x) => Ok(x),
         None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
@@ -506,7 +510,7 @@ impl iface_segmenting_contacts::Guest for crate::Component {
             Err(e) => Err(iface_segmenting_contacts__patch_marketing_segments_segment_id__err(e)),
         }
     }
-    fn delete_marketing_segments_segment_id(params: iface_segmenting_contacts::DeleteMarketingSegmentsSegmentIdParams) -> Result<iface_segmenting_contacts::DeleteMarketingSegmentsSegmentIdResponse, iface_segmenting_contacts::DeleteMarketingSegmentsSegmentIdError> {
+    fn delete_marketing_segments_segment_id(params: iface_segmenting_contacts::DeleteMarketingSegmentsSegmentIdParams) -> Result<Vec<iface_segmenting_contacts::DeleteMarketingSegmentsSegmentIdResponseEntry>, iface_segmenting_contacts::DeleteMarketingSegmentsSegmentIdError> {
         let json = iface_segmenting_contacts__delete_marketing_segments_segment_id_params__to_json(&params);
         match dispatch(&OP_SEGMENTING_CONTACTS_DELETE_MARKETING_SEGMENTS_SEGMENT_ID, json).and_then(iface_segmenting_contacts__delete_marketing_segments_segment_id__ok) {
             Ok(v) => Ok(v),

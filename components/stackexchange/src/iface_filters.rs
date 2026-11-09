@@ -35,9 +35,11 @@ fn iface_filters__single_filter__to_json(p: &iface_filters::SingleFilter) -> Val
     Value::Object(m)
 }
 
-fn iface_filters__filters__to_json(p: &iface_filters::Filters) -> Value {
+fn iface_filters__filters_item__to_json(p: &iface_filters::FiltersItem) -> Value {
     let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
+    m.insert("filter".into(), match (&p.filter) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("filter_type".into(), match (&p.filter_type) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("included_fields".into(), match (&p.included_fields) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -65,10 +67,12 @@ fn iface_filters__single_filter__from_json(v: &Value) -> Option<iface_filters::S
     })
 }
 
-fn iface_filters__filters__from_json(v: &Value) -> Option<iface_filters::Filters> {
+fn iface_filters__filters_item__from_json(v: &Value) -> Option<iface_filters::FiltersItem> {
     let m = v.as_object()?;
-    Some(iface_filters::Filters {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    Some(iface_filters::FiltersItem {
+        filter: m.get("filter").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        filter_type: m.get("filter_type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        included_fields: m.get("included_fields").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
     })
 }
 
@@ -102,12 +106,12 @@ fn iface_filters__get_filters_create__err(e: crate::runtime::DispatchError) -> i
     }
 }
 
-fn iface_filters__get_filters_filters__ok(body: String) -> Result<iface_filters::Filters, crate::runtime::DispatchError> {
+fn iface_filters__get_filters_filters__ok(body: String) -> Result<Vec<iface_filters::FiltersItem>, crate::runtime::DispatchError> {
     let v: Value = match serde_json::from_str(&body) {
         Ok(v) => v,
         Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
     };
-    match iface_filters__filters__from_json(&v) {
+    match (&v).as_array().map(|a| a.iter().filter_map(|x| iface_filters__filters_item__from_json(x)).collect()) {
         Some(x) => Ok(x),
         None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
@@ -140,7 +144,7 @@ impl iface_filters::Guest for crate::Component {
             Err(e) => Err(iface_filters__get_filters_create__err(e)),
         }
     }
-    fn get_filters_filters(params: iface_filters::GetFiltersFiltersParams) -> Result<iface_filters::Filters, iface_filters::GetFiltersFiltersError> {
+    fn get_filters_filters(params: iface_filters::GetFiltersFiltersParams) -> Result<Vec<iface_filters::FiltersItem>, iface_filters::GetFiltersFiltersError> {
         let json = iface_filters__get_filters_filters_params__to_json(&params);
         match dispatch(&OP_FILTERS_GET_FILTERS_FILTERS, json).and_then(iface_filters__get_filters_filters__ok) {
             Ok(v) => Ok(v),

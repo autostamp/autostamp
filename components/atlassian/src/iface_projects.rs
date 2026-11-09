@@ -385,9 +385,9 @@ fn iface_projects__project__to_json(p: &iface_projects::Project) -> Value {
     m.insert("permissions".into(), match (&p.permissions) { Some(v) => iface_projects__project_permissions__to_json(v), None => Value::Null });
     m.insert("projectCategory".into(), match (&p.project_category) { Some(v) => iface_projects__project_category__to_json(v), None => Value::Null });
     m.insert("projectTypeKey".into(), match (&p.project_type_key) { Some(v) => Value::String(iface_projects__project_details_project_type_key_enum__to_str(v).into()), None => Value::Null });
-    m.insert("properties".into(), match (&p.properties) { Some(v) => iface_projects__project_properties__to_json(v), None => Value::Null });
+    m.insert("properties".into(), match (&p.properties) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("retentionTillDate".into(), match (&p.retention_till_date) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("roles".into(), match (&p.roles) { Some(v) => iface_projects__project_roles__to_json(v), None => Value::Null });
+    m.insert("roles".into(), match (&p.roles) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("self".into(), match (&p.self_) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("simplified".into(), match (&p.simplified) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     m.insert("style".into(), match (&p.style) { Some(v) => Value::String(iface_projects__project_style_enum__to_str(v).into()), None => Value::Null });
@@ -577,7 +577,7 @@ fn iface_projects__updated_project_category__to_json(p: &iface_projects::Updated
 
 fn iface_projects__project_landing_page_info__to_json(p: &iface_projects::ProjectLandingPageInfo) -> Value {
     let mut m = Map::new();
-    m.insert("attributes".into(), match (&p.attributes) { Some(v) => iface_projects__project_landing_page_info_attributes__to_json(v), None => Value::Null });
+    m.insert("attributes".into(), match (&p.attributes) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("boardId".into(), match (&p.board_id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("boardName".into(), match (&p.board_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("projectKey".into(), match (&p.project_key) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -591,9 +591,10 @@ fn iface_projects__project_landing_page_info__to_json(p: &iface_projects::Projec
     Value::Object(m)
 }
 
-fn iface_projects__project_landing_page_info_attributes__to_json(p: &iface_projects::ProjectLandingPageInfoAttributes) -> Value {
+fn iface_projects__project_landing_page_info_attributes_entry__to_json(p: &iface_projects::ProjectLandingPageInfoAttributesEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -612,15 +613,17 @@ fn iface_projects__project_category__to_json(p: &iface_projects::ProjectCategory
     Value::Object(m)
 }
 
-fn iface_projects__project_properties__to_json(p: &iface_projects::ProjectProperties) -> Value {
+fn iface_projects__project_properties_entry__to_json(p: &iface_projects::ProjectPropertiesEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
-fn iface_projects__project_roles__to_json(p: &iface_projects::ProjectRoles) -> Value {
+fn iface_projects__project_roles_entry__to_json(p: &iface_projects::ProjectRolesEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -809,7 +812,7 @@ fn iface_projects__field_details__to_json(p: &iface_projects::FieldDetails) -> V
 
 fn iface_projects__json_type_bean__to_json(p: &iface_projects::JsonTypeBean) -> Value {
     let mut m = Map::new();
-    m.insert("configuration".into(), match (&p.configuration) { Some(v) => iface_projects__json_type_bean_configuration__to_json(v), None => Value::Null });
+    m.insert("configuration".into(), match (&p.configuration) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("custom".into(), match (&p.custom) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("customId".into(), match (&p.custom_id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("items".into(), match (&p.items) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -818,9 +821,10 @@ fn iface_projects__json_type_bean__to_json(p: &iface_projects::JsonTypeBean) -> 
     Value::Object(m)
 }
 
-fn iface_projects__json_type_bean_configuration__to_json(p: &iface_projects::JsonTypeBeanConfiguration) -> Value {
+fn iface_projects__json_type_bean_configuration_entry__to_json(p: &iface_projects::JsonTypeBeanConfigurationEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -1043,9 +1047,9 @@ fn iface_projects__project__from_json(v: &Value) -> Option<iface_projects::Proje
         permissions: m.get("permissions").filter(|v| !v.is_null()).and_then(|v| iface_projects__project_permissions__from_json(v)),
         project_category: m.get("projectCategory").filter(|v| !v.is_null()).and_then(|v| iface_projects__project_category__from_json(v)),
         project_type_key: m.get("projectTypeKey").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_projects__project_details_project_type_key_enum__from_str)),
-        properties: m.get("properties").filter(|v| !v.is_null()).and_then(|v| iface_projects__project_properties__from_json(v)),
+        properties: m.get("properties").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_projects::ProjectPropertiesEntry { key: k.clone(), value: val })).collect())),
         retention_till_date: m.get("retentionTillDate").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        roles: m.get("roles").filter(|v| !v.is_null()).and_then(|v| iface_projects__project_roles__from_json(v)),
+        roles: m.get("roles").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_projects::ProjectRolesEntry { key: k.clone(), value: val })).collect())),
         self_: m.get("self").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         simplified: m.get("simplified").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
         style: m.get("style").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_projects__project_style_enum__from_str)),
@@ -1252,7 +1256,7 @@ fn iface_projects__updated_project_category__from_json(v: &Value) -> Option<ifac
 fn iface_projects__project_landing_page_info__from_json(v: &Value) -> Option<iface_projects::ProjectLandingPageInfo> {
     let m = v.as_object()?;
     Some(iface_projects::ProjectLandingPageInfo {
-        attributes: m.get("attributes").filter(|v| !v.is_null()).and_then(|v| iface_projects__project_landing_page_info_attributes__from_json(v)),
+        attributes: m.get("attributes").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_projects::ProjectLandingPageInfoAttributesEntry { key: k.clone(), value: val })).collect())),
         board_id: m.get("boardId").filter(|v| !v.is_null()).and_then(|v| (v).as_i64()),
         board_name: m.get("boardName").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         project_key: m.get("projectKey").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
@@ -1266,10 +1270,11 @@ fn iface_projects__project_landing_page_info__from_json(v: &Value) -> Option<ifa
     })
 }
 
-fn iface_projects__project_landing_page_info_attributes__from_json(v: &Value) -> Option<iface_projects::ProjectLandingPageInfoAttributes> {
+fn iface_projects__project_landing_page_info_attributes_entry__from_json(v: &Value) -> Option<iface_projects::ProjectLandingPageInfoAttributesEntry> {
     let m = v.as_object()?;
-    Some(iface_projects::ProjectLandingPageInfoAttributes {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_projects::ProjectLandingPageInfoAttributesEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -1290,17 +1295,19 @@ fn iface_projects__project_category__from_json(v: &Value) -> Option<iface_projec
     })
 }
 
-fn iface_projects__project_properties__from_json(v: &Value) -> Option<iface_projects::ProjectProperties> {
+fn iface_projects__project_properties_entry__from_json(v: &Value) -> Option<iface_projects::ProjectPropertiesEntry> {
     let m = v.as_object()?;
-    Some(iface_projects::ProjectProperties {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_projects::ProjectPropertiesEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
-fn iface_projects__project_roles__from_json(v: &Value) -> Option<iface_projects::ProjectRoles> {
+fn iface_projects__project_roles_entry__from_json(v: &Value) -> Option<iface_projects::ProjectRolesEntry> {
     let m = v.as_object()?;
-    Some(iface_projects::ProjectRoles {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_projects::ProjectRolesEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -1500,7 +1507,7 @@ fn iface_projects__field_details__from_json(v: &Value) -> Option<iface_projects:
 fn iface_projects__json_type_bean__from_json(v: &Value) -> Option<iface_projects::JsonTypeBean> {
     let m = v.as_object()?;
     Some(iface_projects::JsonTypeBean {
-        configuration: m.get("configuration").filter(|v| !v.is_null()).and_then(|v| iface_projects__json_type_bean_configuration__from_json(v)),
+        configuration: m.get("configuration").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_projects::JsonTypeBeanConfigurationEntry { key: k.clone(), value: val })).collect())),
         custom: m.get("custom").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         custom_id: m.get("customId").filter(|v| !v.is_null()).and_then(|v| (v).as_i64()),
         items: m.get("items").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
@@ -1509,10 +1516,11 @@ fn iface_projects__json_type_bean__from_json(v: &Value) -> Option<iface_projects
     })
 }
 
-fn iface_projects__json_type_bean_configuration__from_json(v: &Value) -> Option<iface_projects::JsonTypeBeanConfiguration> {
+fn iface_projects__json_type_bean_configuration_entry__from_json(v: &Value) -> Option<iface_projects::JsonTypeBeanConfigurationEntry> {
     let m = v.as_object()?;
-    Some(iface_projects::JsonTypeBeanConfiguration {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_projects::JsonTypeBeanConfigurationEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 

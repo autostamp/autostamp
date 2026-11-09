@@ -92,7 +92,7 @@ fn iface_order_line_items__post_order_line_item_update_type__to_json(p: &iface_o
     m.insert("accountingCode".into(), match (&p.accounting_code) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("amountPerUnit".into(), match (&p.amount_per_unit) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
     m.insert("billTargetDate".into(), match (&p.bill_target_date) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("customFields".into(), match (&p.custom_fields) { Some(v) => iface_order_line_items__order_line_item_custom_fields__to_json(v), None => Value::Null });
+    m.insert("customFields".into(), match (&p.custom_fields) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("deferredRevenueAccountingCode".into(), match (&p.deferred_revenue_accounting_code) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("description".into(), match (&p.description) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("itemName".into(), match (&p.item_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -111,9 +111,10 @@ fn iface_order_line_items__post_order_line_item_update_type__to_json(p: &iface_o
     Value::Object(m)
 }
 
-fn iface_order_line_items__order_line_item_custom_fields__to_json(p: &iface_order_line_items::OrderLineItemCustomFields) -> Value {
+fn iface_order_line_items__order_line_item_custom_fields_entry__to_json(p: &iface_order_line_items::OrderLineItemCustomFieldsEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -166,7 +167,7 @@ fn iface_order_line_items__order_line_item__to_json(p: &iface_order_line_items::
     m.insert("accountingCode".into(), match (&p.accounting_code) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("amountPerUnit".into(), match (&p.amount_per_unit) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
     m.insert("billTargetDate".into(), match (&p.bill_target_date) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("customFields".into(), match (&p.custom_fields) { Some(v) => iface_order_line_items__order_line_item_custom_fields_retrieve_order_line_item__to_json(v), None => Value::Null });
+    m.insert("customFields".into(), match (&p.custom_fields) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("deferredRevenueAccountingCode".into(), match (&p.deferred_revenue_accounting_code) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("description".into(), match (&p.description) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("itemName".into(), match (&p.item_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -188,9 +189,10 @@ fn iface_order_line_items__order_line_item__to_json(p: &iface_order_line_items::
     Value::Object(m)
 }
 
-fn iface_order_line_items__order_line_item_custom_fields_retrieve_order_line_item__to_json(p: &iface_order_line_items::OrderLineItemCustomFieldsRetrieveOrderLineItem) -> Value {
+fn iface_order_line_items__order_line_item_custom_fields_retrieve_order_line_item_entry__to_json(p: &iface_order_line_items::OrderLineItemCustomFieldsRetrieveOrderLineItemEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -205,6 +207,13 @@ fn iface_order_line_items__order_contact_retrieve_order_line_item__to_json(p: &i
     m.insert("lastName".into(), match (&p.last_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("postalCode".into(), match (&p.postal_code) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("state".into(), match (&p.state) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_order_line_items__order_line_item_custom_fields_entry_v2__to_json(p: &iface_order_line_items::OrderLineItemCustomFieldsEntryV2) -> Value {
+    let mut m = Map::new();
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -234,7 +243,7 @@ fn iface_order_line_items__put_order_line_item_params__to_json(p: &iface_order_l
     m.insert("accounting_code".into(), match (&p.accounting_code) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("amount_per_unit".into(), match (&p.amount_per_unit) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
     m.insert("bill_target_date".into(), match (&p.bill_target_date) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("custom_fields".into(), match (&p.custom_fields) { Some(v) => iface_order_line_items__order_line_item_custom_fields__to_json(v), None => Value::Null });
+    m.insert("custom_fields".into(), match (&p.custom_fields) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("deferred_revenue_accounting_code".into(), match (&p.deferred_revenue_accounting_code) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("description".into(), match (&p.description) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("item_name".into(), match (&p.item_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -280,7 +289,7 @@ fn iface_order_line_items__order_line_item__from_json(v: &Value) -> Option<iface
         accounting_code: m.get("accountingCode").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         amount_per_unit: m.get("amountPerUnit").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
         bill_target_date: m.get("billTargetDate").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        custom_fields: m.get("customFields").filter(|v| !v.is_null()).and_then(|v| iface_order_line_items__order_line_item_custom_fields_retrieve_order_line_item__from_json(v)),
+        custom_fields: m.get("customFields").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_order_line_items::OrderLineItemCustomFieldsRetrieveOrderLineItemEntry { key: k.clone(), value: val })).collect())),
         deferred_revenue_accounting_code: m.get("deferredRevenueAccountingCode").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         description: m.get("description").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         item_name: m.get("itemName").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
@@ -302,10 +311,11 @@ fn iface_order_line_items__order_line_item__from_json(v: &Value) -> Option<iface
     })
 }
 
-fn iface_order_line_items__order_line_item_custom_fields_retrieve_order_line_item__from_json(v: &Value) -> Option<iface_order_line_items::OrderLineItemCustomFieldsRetrieveOrderLineItem> {
+fn iface_order_line_items__order_line_item_custom_fields_retrieve_order_line_item_entry__from_json(v: &Value) -> Option<iface_order_line_items::OrderLineItemCustomFieldsRetrieveOrderLineItemEntry> {
     let m = v.as_object()?;
-    Some(iface_order_line_items::OrderLineItemCustomFieldsRetrieveOrderLineItem {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_order_line_items::OrderLineItemCustomFieldsRetrieveOrderLineItemEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 

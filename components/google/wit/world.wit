@@ -1,4 +1,4 @@
-package autostamp:google@0.5.0;
+package autostamp:google@0.6.0;
 
 interface accounts {
   enum travelpartner-accounts-hotels-set-live-on-google-xgafv-enum {
@@ -295,10 +295,10 @@ interface accounts {
     language-code: option<string>
   }
 
-  /// A generic empty message that you can re-use to avoid defining duplicated empty messages in your APIs. A typical example is to use it as the request or the response type of an API method. For instance: service Foo { rpc Bar(google.protobuf.Empty) returns (google.protobuf.Empty); }
-  record empty {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record empty-entry {
+    key: string,
+    value: string
   }
 
   /// **DEPRECATED:** Use `QueryPropertyPerformanceReportResponse` with `PropertyPerformanceReportService` instead. Response message for FreeBookingLinksReportService.QueryFreeBookingLinksReport.
@@ -656,7 +656,7 @@ interface accounts {
     /// Reviews associated with this listing. Each review proto has a single language attached to it.
     review: option<list<review>>,
     /// VR List attribute.
-    unit-attributes: option<parsed-listing-unit-attributes>
+    unit-attributes: option<list<parsed-listing-unit-attributes-entry>>
   }
 
   /// A single image in a VR Listing. Title and gallery URL are stored per locale. NEXT ID: 4
@@ -709,10 +709,10 @@ interface accounts {
     type-op: option<rating-type-op-enum>
   }
 
-  /// VR List attribute.
-  record parsed-listing-unit-attributes {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record parsed-listing-unit-attributes-entry {
+    key: string,
+    value: string
   }
 
   /// Response message for PriceAccuracyViewService.ListPriceAccuracyViews.
@@ -1012,7 +1012,7 @@ interface accounts {
     /// Required. The resource name of the account link being deleted. The format is `accounts/{account_id}/accountLinks/{account_link_id}`.
     name: string
   }
-  travelpartner-accounts-account-links-delete: func(params: travelpartner-accounts-account-links-delete-params) -> result<empty, string>;
+  travelpartner-accounts-account-links-delete: func(params: travelpartner-accounts-account-links-delete-params) -> result<list<empty-entry>, string>;
 
   record travelpartner-accounts-free-booking-links-report-views-query-params {
     /// V1 error format.

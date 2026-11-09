@@ -157,7 +157,7 @@ fn iface_editorial_video__download_history__to_json(p: &iface_editorial_video::D
     m.insert("image".into(), match (&p.image) { Some(v) => iface_editorial_video__download_history_media_details__to_json(v), None => Value::Null });
     m.insert("is_downloadable".into(), match (&p.is_downloadable) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     m.insert("license".into(), Value::String((&p.license).clone()));
-    m.insert("metadata".into(), match (&p.metadata) { Some(v) => iface_editorial_video__download_history_metadata__to_json(v), None => Value::Null });
+    m.insert("metadata".into(), match (&p.metadata) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("revshare".into(), match (&p.revshare) { Some(v) => iface_editorial_video__download_history_revshare_details__to_json(v), None => Value::Null });
     m.insert("subscription_id".into(), match (&p.subscription_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("user".into(), match (&p.user) { Some(v) => iface_editorial_video__download_history_user_details__to_json(v), None => Value::Null });
@@ -179,9 +179,10 @@ fn iface_editorial_video__download_history_format_details__to_json(p: &iface_edi
     Value::Object(m)
 }
 
-fn iface_editorial_video__download_history_metadata__to_json(p: &iface_editorial_video::DownloadHistoryMetadata) -> Value {
+fn iface_editorial_video__download_history_metadata_entry__to_json(p: &iface_editorial_video::DownloadHistoryMetadataEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -202,20 +203,15 @@ fn iface_editorial_video__error__to_json(p: &iface_editorial_video::Error) -> Va
     let mut m = Map::new();
     m.insert("code".into(), match (&p.code) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("items".into(), match (&p.items) { Some(v) => Value::Array((v).iter().map(|v| iface_editorial_video__error_items_item__to_json(v)).collect()), None => Value::Null });
+    m.insert("items".into(), match (&p.items) { Some(v) => Value::Array((v).iter().map(|v| Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect())).collect()), None => Value::Null });
     m.insert("message".into(), Value::String((&p.message).clone()));
     m.insert("path".into(), match (&p.path) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_editorial_video__error_items_item__to_json(p: &iface_editorial_video::ErrorItemsItem) -> Value {
+fn iface_editorial_video__error_items_item_entry__to_json(p: &iface_editorial_video::ErrorItemsItemEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_editorial_video__iso_country_code__to_json(p: &iface_editorial_video::IsoCountryCode) -> Value {
-    let mut m = Map::new();
+    m.insert("key".into(), Value::String((&p.key).clone()));
     m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
@@ -224,14 +220,15 @@ fn iface_editorial_video__license_editorial_video_content__to_json(p: &iface_edi
     let mut m = Map::new();
     m.insert("editorial_id".into(), Value::String((&p.editorial_id).clone()));
     m.insert("license".into(), Value::String(iface_editorial_video__license_editorial_video_content_license_enum__to_str(&p.license).into()));
-    m.insert("metadata".into(), match (&p.metadata) { Some(v) => iface_editorial_video__license_request_metadata__to_json(v), None => Value::Null });
+    m.insert("metadata".into(), match (&p.metadata) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("size".into(), match (&p.size) { Some(v) => Value::String(iface_editorial_video__license_editorial_video_content_size_enum__to_str(v).into()), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_editorial_video__license_request_metadata__to_json(p: &iface_editorial_video::LicenseRequestMetadata) -> Value {
+fn iface_editorial_video__license_request_metadata_entry__to_json(p: &iface_editorial_video::LicenseRequestMetadataEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -333,7 +330,7 @@ fn iface_editorial_video__get_editorial_video_license_list_params__to_json(p: &i
 
 fn iface_editorial_video__license_editorial_video_params__to_json(p: &iface_editorial_video::LicenseEditorialVideoParams) -> Value {
     let mut m = Map::new();
-    m.insert("country".into(), iface_editorial_video__iso_country_code__to_json(&p.country));
+    m.insert("country".into(), Value::String((&p.country).clone()));
     m.insert("editorial".into(), Value::Array((&p.editorial).iter().map(|v| iface_editorial_video__license_editorial_video_content__to_json(v)).collect()));
     Value::Object(m)
 }
@@ -397,7 +394,7 @@ fn iface_editorial_video__download_history__from_json(v: &Value) -> Option<iface
         image: m.get("image").filter(|v| !v.is_null()).and_then(|v| iface_editorial_video__download_history_media_details__from_json(v)),
         is_downloadable: m.get("is_downloadable").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
         license: m.get("license").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-        metadata: m.get("metadata").filter(|v| !v.is_null()).and_then(|v| iface_editorial_video__download_history_metadata__from_json(v)),
+        metadata: m.get("metadata").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_editorial_video::DownloadHistoryMetadataEntry { key: k.clone(), value: val })).collect())),
         revshare: m.get("revshare").filter(|v| !v.is_null()).and_then(|v| iface_editorial_video__download_history_revshare_details__from_json(v)),
         subscription_id: m.get("subscription_id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         user: m.get("user").filter(|v| !v.is_null()).and_then(|v| iface_editorial_video__download_history_user_details__from_json(v)),
@@ -421,10 +418,11 @@ fn iface_editorial_video__download_history_format_details__from_json(v: &Value) 
     })
 }
 
-fn iface_editorial_video__download_history_metadata__from_json(v: &Value) -> Option<iface_editorial_video::DownloadHistoryMetadata> {
+fn iface_editorial_video__download_history_metadata_entry__from_json(v: &Value) -> Option<iface_editorial_video::DownloadHistoryMetadataEntry> {
     let m = v.as_object()?;
-    Some(iface_editorial_video::DownloadHistoryMetadata {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_editorial_video::DownloadHistoryMetadataEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -448,16 +446,17 @@ fn iface_editorial_video__error__from_json(v: &Value) -> Option<iface_editorial_
     Some(iface_editorial_video::Error {
         code: m.get("code").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        items: m.get("items").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_editorial_video__error_items_item__from_json(x)).collect())),
+        items: m.get("items").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_editorial_video::ErrorItemsItemEntry { key: k.clone(), value: val })).collect())).collect())),
         message: m.get("message").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         path: m.get("path").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
     })
 }
 
-fn iface_editorial_video__error_items_item__from_json(v: &Value) -> Option<iface_editorial_video::ErrorItemsItem> {
+fn iface_editorial_video__error_items_item_entry__from_json(v: &Value) -> Option<iface_editorial_video::ErrorItemsItemEntry> {
     let m = v.as_object()?;
-    Some(iface_editorial_video::ErrorItemsItem {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_editorial_video::ErrorItemsItemEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 

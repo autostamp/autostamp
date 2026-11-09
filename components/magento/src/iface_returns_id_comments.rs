@@ -41,7 +41,7 @@ fn iface_returns_id_comments__rma_data_comment_interface__to_json(p: &iface_retu
     m.insert("custom_attributes".into(), match (&p.custom_attributes) { Some(v) => Value::Array((v).iter().map(|v| iface_returns_id_comments__framework_attribute_interface__to_json(v)).collect()), None => Value::Null });
     m.insert("customer_notified".into(), Value::Bool(*(&p.customer_notified)));
     m.insert("entity_id".into(), Value::Number(serde_json::Number::from(*(&p.entity_id))));
-    m.insert("extension_attributes".into(), match (&p.extension_attributes) { Some(v) => iface_returns_id_comments__rma_data_comment_extension_interface__to_json(v), None => Value::Null });
+    m.insert("extension_attributes".into(), match (&p.extension_attributes) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("rma_entity_id".into(), Value::Number(serde_json::Number::from(*(&p.rma_entity_id))));
     m.insert("status".into(), Value::String((&p.status).clone()));
     m.insert("visible_on_front".into(), Value::Bool(*(&p.visible_on_front)));
@@ -55,9 +55,10 @@ fn iface_returns_id_comments__framework_attribute_interface__to_json(p: &iface_r
     Value::Object(m)
 }
 
-fn iface_returns_id_comments__rma_data_comment_extension_interface__to_json(p: &iface_returns_id_comments::RmaDataCommentExtensionInterface) -> Value {
+fn iface_returns_id_comments__rma_data_comment_extension_interface_entry__to_json(p: &iface_returns_id_comments::RmaDataCommentExtensionInterfaceEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -122,7 +123,7 @@ fn iface_returns_id_comments__rma_data_comment_interface__from_json(v: &Value) -
         custom_attributes: m.get("custom_attributes").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_returns_id_comments__framework_attribute_interface__from_json(x)).collect())),
         customer_notified: m.get("customer_notified").and_then(|v| (v).as_bool()).unwrap_or_default(),
         entity_id: m.get("entity_id").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
-        extension_attributes: m.get("extension_attributes").filter(|v| !v.is_null()).and_then(|v| iface_returns_id_comments__rma_data_comment_extension_interface__from_json(v)),
+        extension_attributes: m.get("extension_attributes").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_returns_id_comments::RmaDataCommentExtensionInterfaceEntry { key: k.clone(), value: val })).collect())),
         rma_entity_id: m.get("rma_entity_id").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
         status: m.get("status").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         visible_on_front: m.get("visible_on_front").and_then(|v| (v).as_bool()).unwrap_or_default(),
@@ -137,10 +138,11 @@ fn iface_returns_id_comments__framework_attribute_interface__from_json(v: &Value
     })
 }
 
-fn iface_returns_id_comments__rma_data_comment_extension_interface__from_json(v: &Value) -> Option<iface_returns_id_comments::RmaDataCommentExtensionInterface> {
+fn iface_returns_id_comments__rma_data_comment_extension_interface_entry__from_json(v: &Value) -> Option<iface_returns_id_comments::RmaDataCommentExtensionInterfaceEntry> {
     let m = v.as_object()?;
-    Some(iface_returns_id_comments::RmaDataCommentExtensionInterface {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_returns_id_comments::RmaDataCommentExtensionInterfaceEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 

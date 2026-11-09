@@ -43,16 +43,17 @@ fn iface_shipment__sales_data_shipment_comment_interface__to_json(p: &iface_ship
     m.insert("comment".into(), Value::String((&p.comment).clone()));
     m.insert("created_at".into(), match (&p.created_at) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("entity_id".into(), match (&p.entity_id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    m.insert("extension_attributes".into(), match (&p.extension_attributes) { Some(v) => iface_shipment__sales_data_shipment_comment_extension_interface__to_json(v), None => Value::Null });
+    m.insert("extension_attributes".into(), match (&p.extension_attributes) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("is_customer_notified".into(), Value::Number(serde_json::Number::from(*(&p.is_customer_notified))));
     m.insert("is_visible_on_front".into(), Value::Number(serde_json::Number::from(*(&p.is_visible_on_front))));
     m.insert("parent_id".into(), Value::Number(serde_json::Number::from(*(&p.parent_id))));
     Value::Object(m)
 }
 
-fn iface_shipment__sales_data_shipment_comment_extension_interface__to_json(p: &iface_shipment::SalesDataShipmentCommentExtensionInterface) -> Value {
+fn iface_shipment__sales_data_shipment_comment_extension_interface_entry__to_json(p: &iface_shipment::SalesDataShipmentCommentExtensionInterfaceEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -71,7 +72,7 @@ fn iface_shipment__sales_data_shipment_item_interface__to_json(p: &iface_shipmen
     m.insert("additional_data".into(), match (&p.additional_data) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("description".into(), match (&p.description) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("entity_id".into(), match (&p.entity_id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    m.insert("extension_attributes".into(), match (&p.extension_attributes) { Some(v) => iface_shipment__sales_data_shipment_item_extension_interface__to_json(v), None => Value::Null });
+    m.insert("extension_attributes".into(), match (&p.extension_attributes) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("order_item_id".into(), Value::Number(serde_json::Number::from(*(&p.order_item_id))));
     m.insert("parent_id".into(), match (&p.parent_id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
@@ -84,21 +85,23 @@ fn iface_shipment__sales_data_shipment_item_interface__to_json(p: &iface_shipmen
     Value::Object(m)
 }
 
-fn iface_shipment__sales_data_shipment_item_extension_interface__to_json(p: &iface_shipment::SalesDataShipmentItemExtensionInterface) -> Value {
+fn iface_shipment__sales_data_shipment_item_extension_interface_entry__to_json(p: &iface_shipment::SalesDataShipmentItemExtensionInterfaceEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
 fn iface_shipment__sales_data_shipment_package_interface__to_json(p: &iface_shipment::SalesDataShipmentPackageInterface) -> Value {
     let mut m = Map::new();
-    m.insert("extension_attributes".into(), match (&p.extension_attributes) { Some(v) => iface_shipment__sales_data_shipment_package_extension_interface__to_json(v), None => Value::Null });
+    m.insert("extension_attributes".into(), match (&p.extension_attributes) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_shipment__sales_data_shipment_package_extension_interface__to_json(p: &iface_shipment::SalesDataShipmentPackageExtensionInterface) -> Value {
+fn iface_shipment__sales_data_shipment_package_extension_interface_entry__to_json(p: &iface_shipment::SalesDataShipmentPackageExtensionInterfaceEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -108,7 +111,7 @@ fn iface_shipment__sales_data_shipment_track_interface__to_json(p: &iface_shipme
     m.insert("created_at".into(), match (&p.created_at) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("description".into(), Value::String((&p.description).clone()));
     m.insert("entity_id".into(), match (&p.entity_id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    m.insert("extension_attributes".into(), match (&p.extension_attributes) { Some(v) => iface_shipment__sales_data_shipment_track_extension_interface__to_json(v), None => Value::Null });
+    m.insert("extension_attributes".into(), match (&p.extension_attributes) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("order_id".into(), Value::Number(serde_json::Number::from(*(&p.order_id))));
     m.insert("parent_id".into(), Value::Number(serde_json::Number::from(*(&p.parent_id))));
     m.insert("qty".into(), serde_json::Number::from_f64(*(&p.qty)).map(Value::Number).unwrap_or(Value::Null));
@@ -119,9 +122,10 @@ fn iface_shipment__sales_data_shipment_track_interface__to_json(p: &iface_shipme
     Value::Object(m)
 }
 
-fn iface_shipment__sales_data_shipment_track_extension_interface__to_json(p: &iface_shipment::SalesDataShipmentTrackExtensionInterface) -> Value {
+fn iface_shipment__sales_data_shipment_track_extension_interface_entry__to_json(p: &iface_shipment::SalesDataShipmentTrackExtensionInterfaceEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -162,17 +166,18 @@ fn iface_shipment__sales_data_shipment_comment_interface__from_json(v: &Value) -
         comment: m.get("comment").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         created_at: m.get("created_at").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         entity_id: m.get("entity_id").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
-        extension_attributes: m.get("extension_attributes").filter(|v| !v.is_null()).and_then(|v| iface_shipment__sales_data_shipment_comment_extension_interface__from_json(v)),
+        extension_attributes: m.get("extension_attributes").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_shipment::SalesDataShipmentCommentExtensionInterfaceEntry { key: k.clone(), value: val })).collect())),
         is_customer_notified: m.get("is_customer_notified").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
         is_visible_on_front: m.get("is_visible_on_front").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
         parent_id: m.get("parent_id").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
     })
 }
 
-fn iface_shipment__sales_data_shipment_comment_extension_interface__from_json(v: &Value) -> Option<iface_shipment::SalesDataShipmentCommentExtensionInterface> {
+fn iface_shipment__sales_data_shipment_comment_extension_interface_entry__from_json(v: &Value) -> Option<iface_shipment::SalesDataShipmentCommentExtensionInterfaceEntry> {
     let m = v.as_object()?;
-    Some(iface_shipment::SalesDataShipmentCommentExtensionInterface {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_shipment::SalesDataShipmentCommentExtensionInterfaceEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -193,7 +198,7 @@ fn iface_shipment__sales_data_shipment_item_interface__from_json(v: &Value) -> O
         additional_data: m.get("additional_data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         description: m.get("description").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         entity_id: m.get("entity_id").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
-        extension_attributes: m.get("extension_attributes").filter(|v| !v.is_null()).and_then(|v| iface_shipment__sales_data_shipment_item_extension_interface__from_json(v)),
+        extension_attributes: m.get("extension_attributes").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_shipment::SalesDataShipmentItemExtensionInterfaceEntry { key: k.clone(), value: val })).collect())),
         name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         order_item_id: m.get("order_item_id").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
         parent_id: m.get("parent_id").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
@@ -206,24 +211,26 @@ fn iface_shipment__sales_data_shipment_item_interface__from_json(v: &Value) -> O
     })
 }
 
-fn iface_shipment__sales_data_shipment_item_extension_interface__from_json(v: &Value) -> Option<iface_shipment::SalesDataShipmentItemExtensionInterface> {
+fn iface_shipment__sales_data_shipment_item_extension_interface_entry__from_json(v: &Value) -> Option<iface_shipment::SalesDataShipmentItemExtensionInterfaceEntry> {
     let m = v.as_object()?;
-    Some(iface_shipment::SalesDataShipmentItemExtensionInterface {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_shipment::SalesDataShipmentItemExtensionInterfaceEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
 fn iface_shipment__sales_data_shipment_package_interface__from_json(v: &Value) -> Option<iface_shipment::SalesDataShipmentPackageInterface> {
     let m = v.as_object()?;
     Some(iface_shipment::SalesDataShipmentPackageInterface {
-        extension_attributes: m.get("extension_attributes").filter(|v| !v.is_null()).and_then(|v| iface_shipment__sales_data_shipment_package_extension_interface__from_json(v)),
+        extension_attributes: m.get("extension_attributes").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_shipment::SalesDataShipmentPackageExtensionInterfaceEntry { key: k.clone(), value: val })).collect())),
     })
 }
 
-fn iface_shipment__sales_data_shipment_package_extension_interface__from_json(v: &Value) -> Option<iface_shipment::SalesDataShipmentPackageExtensionInterface> {
+fn iface_shipment__sales_data_shipment_package_extension_interface_entry__from_json(v: &Value) -> Option<iface_shipment::SalesDataShipmentPackageExtensionInterfaceEntry> {
     let m = v.as_object()?;
-    Some(iface_shipment::SalesDataShipmentPackageExtensionInterface {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_shipment::SalesDataShipmentPackageExtensionInterfaceEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -234,7 +241,7 @@ fn iface_shipment__sales_data_shipment_track_interface__from_json(v: &Value) -> 
         created_at: m.get("created_at").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         description: m.get("description").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         entity_id: m.get("entity_id").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
-        extension_attributes: m.get("extension_attributes").filter(|v| !v.is_null()).and_then(|v| iface_shipment__sales_data_shipment_track_extension_interface__from_json(v)),
+        extension_attributes: m.get("extension_attributes").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_shipment::SalesDataShipmentTrackExtensionInterfaceEntry { key: k.clone(), value: val })).collect())),
         order_id: m.get("order_id").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
         parent_id: m.get("parent_id").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
         qty: m.get("qty").and_then(|v| (v).as_f64()).unwrap_or_default(),
@@ -245,10 +252,11 @@ fn iface_shipment__sales_data_shipment_track_interface__from_json(v: &Value) -> 
     })
 }
 
-fn iface_shipment__sales_data_shipment_track_extension_interface__from_json(v: &Value) -> Option<iface_shipment::SalesDataShipmentTrackExtensionInterface> {
+fn iface_shipment__sales_data_shipment_track_extension_interface_entry__from_json(v: &Value) -> Option<iface_shipment::SalesDataShipmentTrackExtensionInterfaceEntry> {
     let m = v.as_object()?;
-    Some(iface_shipment::SalesDataShipmentTrackExtensionInterface {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_shipment::SalesDataShipmentTrackExtensionInterfaceEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 

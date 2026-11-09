@@ -515,9 +515,10 @@ fn iface_aws_migration_hub__associate_created_artifact_request_dry_run__to_json(
     Value::Object(m)
 }
 
-fn iface_aws_migration_hub__associate_created_artifact_result__to_json(p: &iface_aws_migration_hub::AssociateCreatedArtifactResult) -> Value {
+fn iface_aws_migration_hub__associate_created_artifact_result_entry__to_json(p: &iface_aws_migration_hub::AssociateCreatedArtifactResultEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -558,9 +559,10 @@ fn iface_aws_migration_hub__associate_discovered_resource_request_dry_run__to_js
     Value::Object(m)
 }
 
-fn iface_aws_migration_hub__associate_discovered_resource_result__to_json(p: &iface_aws_migration_hub::AssociateDiscoveredResourceResult) -> Value {
+fn iface_aws_migration_hub__associate_discovered_resource_result_entry__to_json(p: &iface_aws_migration_hub::AssociateDiscoveredResourceResultEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -576,9 +578,10 @@ fn iface_aws_migration_hub__create_progress_update_stream_request_dry_run__to_js
     Value::Object(m)
 }
 
-fn iface_aws_migration_hub__create_progress_update_stream_result__to_json(p: &iface_aws_migration_hub::CreateProgressUpdateStreamResult) -> Value {
+fn iface_aws_migration_hub__create_progress_update_stream_result_entry__to_json(p: &iface_aws_migration_hub::CreateProgressUpdateStreamResultEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -594,9 +597,10 @@ fn iface_aws_migration_hub__delete_progress_update_stream_request_dry_run__to_js
     Value::Object(m)
 }
 
-fn iface_aws_migration_hub__delete_progress_update_stream_result__to_json(p: &iface_aws_migration_hub::DeleteProgressUpdateStreamResult) -> Value {
+fn iface_aws_migration_hub__delete_progress_update_stream_result_entry__to_json(p: &iface_aws_migration_hub::DeleteProgressUpdateStreamResultEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -727,9 +731,10 @@ fn iface_aws_migration_hub__disassociate_created_artifact_request_dry_run__to_js
     Value::Object(m)
 }
 
-fn iface_aws_migration_hub__disassociate_created_artifact_result__to_json(p: &iface_aws_migration_hub::DisassociateCreatedArtifactResult) -> Value {
+fn iface_aws_migration_hub__disassociate_created_artifact_result_entry__to_json(p: &iface_aws_migration_hub::DisassociateCreatedArtifactResultEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -757,9 +762,10 @@ fn iface_aws_migration_hub__disassociate_discovered_resource_request_dry_run__to
     Value::Object(m)
 }
 
-fn iface_aws_migration_hub__disassociate_discovered_resource_result__to_json(p: &iface_aws_migration_hub::DisassociateDiscoveredResourceResult) -> Value {
+fn iface_aws_migration_hub__disassociate_discovered_resource_result_entry__to_json(p: &iface_aws_migration_hub::DisassociateDiscoveredResourceResultEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -781,9 +787,10 @@ fn iface_aws_migration_hub__import_migration_task_request_dry_run__to_json(p: &i
     Value::Object(m)
 }
 
-fn iface_aws_migration_hub__import_migration_task_result__to_json(p: &iface_aws_migration_hub::ImportMigrationTaskResult) -> Value {
+fn iface_aws_migration_hub__import_migration_task_result_entry__to_json(p: &iface_aws_migration_hub::ImportMigrationTaskResultEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -1002,9 +1009,10 @@ fn iface_aws_migration_hub__notify_application_state_request_dry_run__to_json(p:
     Value::Object(m)
 }
 
-fn iface_aws_migration_hub__notify_application_state_result__to_json(p: &iface_aws_migration_hub::NotifyApplicationStateResult) -> Value {
+fn iface_aws_migration_hub__notify_application_state_result_entry__to_json(p: &iface_aws_migration_hub::NotifyApplicationStateResultEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -1064,9 +1072,10 @@ fn iface_aws_migration_hub__notify_migration_task_state_request_dry_run__to_json
     Value::Object(m)
 }
 
-fn iface_aws_migration_hub__notify_migration_task_state_result__to_json(p: &iface_aws_migration_hub::NotifyMigrationTaskStateResult) -> Value {
+fn iface_aws_migration_hub__notify_migration_task_state_result_entry__to_json(p: &iface_aws_migration_hub::NotifyMigrationTaskStateResultEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -1094,9 +1103,10 @@ fn iface_aws_migration_hub__put_resource_attributes_request_dry_run__to_json(p: 
     Value::Object(m)
 }
 
-fn iface_aws_migration_hub__put_resource_attributes_result__to_json(p: &iface_aws_migration_hub::PutResourceAttributesResult) -> Value {
+fn iface_aws_migration_hub__put_resource_attributes_result_entry__to_json(p: &iface_aws_migration_hub::PutResourceAttributesResultEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -1387,31 +1397,35 @@ fn iface_aws_migration_hub__put_resource_attributes_params__to_json(p: &iface_aw
     Value::Object(m)
 }
 
-fn iface_aws_migration_hub__associate_created_artifact_result__from_json(v: &Value) -> Option<iface_aws_migration_hub::AssociateCreatedArtifactResult> {
+fn iface_aws_migration_hub__associate_created_artifact_result_entry__from_json(v: &Value) -> Option<iface_aws_migration_hub::AssociateCreatedArtifactResultEntry> {
     let m = v.as_object()?;
-    Some(iface_aws_migration_hub::AssociateCreatedArtifactResult {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_aws_migration_hub::AssociateCreatedArtifactResultEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
-fn iface_aws_migration_hub__associate_discovered_resource_result__from_json(v: &Value) -> Option<iface_aws_migration_hub::AssociateDiscoveredResourceResult> {
+fn iface_aws_migration_hub__associate_discovered_resource_result_entry__from_json(v: &Value) -> Option<iface_aws_migration_hub::AssociateDiscoveredResourceResultEntry> {
     let m = v.as_object()?;
-    Some(iface_aws_migration_hub::AssociateDiscoveredResourceResult {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_aws_migration_hub::AssociateDiscoveredResourceResultEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
-fn iface_aws_migration_hub__create_progress_update_stream_result__from_json(v: &Value) -> Option<iface_aws_migration_hub::CreateProgressUpdateStreamResult> {
+fn iface_aws_migration_hub__create_progress_update_stream_result_entry__from_json(v: &Value) -> Option<iface_aws_migration_hub::CreateProgressUpdateStreamResultEntry> {
     let m = v.as_object()?;
-    Some(iface_aws_migration_hub::CreateProgressUpdateStreamResult {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_aws_migration_hub::CreateProgressUpdateStreamResultEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
-fn iface_aws_migration_hub__delete_progress_update_stream_result__from_json(v: &Value) -> Option<iface_aws_migration_hub::DeleteProgressUpdateStreamResult> {
+fn iface_aws_migration_hub__delete_progress_update_stream_result_entry__from_json(v: &Value) -> Option<iface_aws_migration_hub::DeleteProgressUpdateStreamResultEntry> {
     let m = v.as_object()?;
-    Some(iface_aws_migration_hub::DeleteProgressUpdateStreamResult {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_aws_migration_hub::DeleteProgressUpdateStreamResultEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -1513,24 +1527,27 @@ fn iface_aws_migration_hub__describe_migration_task_result_migration_task_resour
     })
 }
 
-fn iface_aws_migration_hub__disassociate_created_artifact_result__from_json(v: &Value) -> Option<iface_aws_migration_hub::DisassociateCreatedArtifactResult> {
+fn iface_aws_migration_hub__disassociate_created_artifact_result_entry__from_json(v: &Value) -> Option<iface_aws_migration_hub::DisassociateCreatedArtifactResultEntry> {
     let m = v.as_object()?;
-    Some(iface_aws_migration_hub::DisassociateCreatedArtifactResult {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_aws_migration_hub::DisassociateCreatedArtifactResultEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
-fn iface_aws_migration_hub__disassociate_discovered_resource_result__from_json(v: &Value) -> Option<iface_aws_migration_hub::DisassociateDiscoveredResourceResult> {
+fn iface_aws_migration_hub__disassociate_discovered_resource_result_entry__from_json(v: &Value) -> Option<iface_aws_migration_hub::DisassociateDiscoveredResourceResultEntry> {
     let m = v.as_object()?;
-    Some(iface_aws_migration_hub::DisassociateDiscoveredResourceResult {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_aws_migration_hub::DisassociateDiscoveredResourceResultEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
-fn iface_aws_migration_hub__import_migration_task_result__from_json(v: &Value) -> Option<iface_aws_migration_hub::ImportMigrationTaskResult> {
+fn iface_aws_migration_hub__import_migration_task_result_entry__from_json(v: &Value) -> Option<iface_aws_migration_hub::ImportMigrationTaskResultEntry> {
     let m = v.as_object()?;
-    Some(iface_aws_migration_hub::ImportMigrationTaskResult {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_aws_migration_hub::ImportMigrationTaskResultEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -1644,33 +1661,36 @@ fn iface_aws_migration_hub__list_progress_update_streams_result_next_token__from
     })
 }
 
-fn iface_aws_migration_hub__notify_application_state_result__from_json(v: &Value) -> Option<iface_aws_migration_hub::NotifyApplicationStateResult> {
+fn iface_aws_migration_hub__notify_application_state_result_entry__from_json(v: &Value) -> Option<iface_aws_migration_hub::NotifyApplicationStateResultEntry> {
     let m = v.as_object()?;
-    Some(iface_aws_migration_hub::NotifyApplicationStateResult {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_aws_migration_hub::NotifyApplicationStateResultEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
-fn iface_aws_migration_hub__notify_migration_task_state_result__from_json(v: &Value) -> Option<iface_aws_migration_hub::NotifyMigrationTaskStateResult> {
+fn iface_aws_migration_hub__notify_migration_task_state_result_entry__from_json(v: &Value) -> Option<iface_aws_migration_hub::NotifyMigrationTaskStateResultEntry> {
     let m = v.as_object()?;
-    Some(iface_aws_migration_hub::NotifyMigrationTaskStateResult {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_aws_migration_hub::NotifyMigrationTaskStateResultEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
-fn iface_aws_migration_hub__put_resource_attributes_result__from_json(v: &Value) -> Option<iface_aws_migration_hub::PutResourceAttributesResult> {
+fn iface_aws_migration_hub__put_resource_attributes_result_entry__from_json(v: &Value) -> Option<iface_aws_migration_hub::PutResourceAttributesResultEntry> {
     let m = v.as_object()?;
-    Some(iface_aws_migration_hub::PutResourceAttributesResult {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_aws_migration_hub::PutResourceAttributesResultEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
-fn iface_aws_migration_hub__associate_created_artifact__ok(body: String) -> Result<iface_aws_migration_hub::AssociateCreatedArtifactResult, crate::runtime::DispatchError> {
+fn iface_aws_migration_hub__associate_created_artifact__ok(body: String) -> Result<Vec<iface_aws_migration_hub::AssociateCreatedArtifactResultEntry>, crate::runtime::DispatchError> {
     let v: Value = match serde_json::from_str(&body) {
         Ok(v) => v,
         Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
     };
-    match iface_aws_migration_hub__associate_created_artifact_result__from_json(&v) {
+    match (&v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_aws_migration_hub::AssociateCreatedArtifactResultEntry { key: k.clone(), value: val })).collect()) {
         Some(x) => Ok(x),
         None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
@@ -1694,12 +1714,12 @@ fn iface_aws_migration_hub__associate_created_artifact__err(e: crate::runtime::D
     }
 }
 
-fn iface_aws_migration_hub__associate_discovered_resource__ok(body: String) -> Result<iface_aws_migration_hub::AssociateDiscoveredResourceResult, crate::runtime::DispatchError> {
+fn iface_aws_migration_hub__associate_discovered_resource__ok(body: String) -> Result<Vec<iface_aws_migration_hub::AssociateDiscoveredResourceResultEntry>, crate::runtime::DispatchError> {
     let v: Value = match serde_json::from_str(&body) {
         Ok(v) => v,
         Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
     };
-    match iface_aws_migration_hub__associate_discovered_resource_result__from_json(&v) {
+    match (&v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_aws_migration_hub::AssociateDiscoveredResourceResultEntry { key: k.clone(), value: val })).collect()) {
         Some(x) => Ok(x),
         None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
@@ -1724,12 +1744,12 @@ fn iface_aws_migration_hub__associate_discovered_resource__err(e: crate::runtime
     }
 }
 
-fn iface_aws_migration_hub__create_progress_update_stream__ok(body: String) -> Result<iface_aws_migration_hub::CreateProgressUpdateStreamResult, crate::runtime::DispatchError> {
+fn iface_aws_migration_hub__create_progress_update_stream__ok(body: String) -> Result<Vec<iface_aws_migration_hub::CreateProgressUpdateStreamResultEntry>, crate::runtime::DispatchError> {
     let v: Value = match serde_json::from_str(&body) {
         Ok(v) => v,
         Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
     };
-    match iface_aws_migration_hub__create_progress_update_stream_result__from_json(&v) {
+    match (&v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_aws_migration_hub::CreateProgressUpdateStreamResultEntry { key: k.clone(), value: val })).collect()) {
         Some(x) => Ok(x),
         None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
@@ -1752,12 +1772,12 @@ fn iface_aws_migration_hub__create_progress_update_stream__err(e: crate::runtime
     }
 }
 
-fn iface_aws_migration_hub__delete_progress_update_stream__ok(body: String) -> Result<iface_aws_migration_hub::DeleteProgressUpdateStreamResult, crate::runtime::DispatchError> {
+fn iface_aws_migration_hub__delete_progress_update_stream__ok(body: String) -> Result<Vec<iface_aws_migration_hub::DeleteProgressUpdateStreamResultEntry>, crate::runtime::DispatchError> {
     let v: Value = match serde_json::from_str(&body) {
         Ok(v) => v,
         Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
     };
-    match iface_aws_migration_hub__delete_progress_update_stream_result__from_json(&v) {
+    match (&v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_aws_migration_hub::DeleteProgressUpdateStreamResultEntry { key: k.clone(), value: val })).collect()) {
         Some(x) => Ok(x),
         None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
@@ -1836,12 +1856,12 @@ fn iface_aws_migration_hub__describe_migration_task__err(e: crate::runtime::Disp
     }
 }
 
-fn iface_aws_migration_hub__disassociate_created_artifact__ok(body: String) -> Result<iface_aws_migration_hub::DisassociateCreatedArtifactResult, crate::runtime::DispatchError> {
+fn iface_aws_migration_hub__disassociate_created_artifact__ok(body: String) -> Result<Vec<iface_aws_migration_hub::DisassociateCreatedArtifactResultEntry>, crate::runtime::DispatchError> {
     let v: Value = match serde_json::from_str(&body) {
         Ok(v) => v,
         Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
     };
-    match iface_aws_migration_hub__disassociate_created_artifact_result__from_json(&v) {
+    match (&v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_aws_migration_hub::DisassociateCreatedArtifactResultEntry { key: k.clone(), value: val })).collect()) {
         Some(x) => Ok(x),
         None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
@@ -1865,12 +1885,12 @@ fn iface_aws_migration_hub__disassociate_created_artifact__err(e: crate::runtime
     }
 }
 
-fn iface_aws_migration_hub__disassociate_discovered_resource__ok(body: String) -> Result<iface_aws_migration_hub::DisassociateDiscoveredResourceResult, crate::runtime::DispatchError> {
+fn iface_aws_migration_hub__disassociate_discovered_resource__ok(body: String) -> Result<Vec<iface_aws_migration_hub::DisassociateDiscoveredResourceResultEntry>, crate::runtime::DispatchError> {
     let v: Value = match serde_json::from_str(&body) {
         Ok(v) => v,
         Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
     };
-    match iface_aws_migration_hub__disassociate_discovered_resource_result__from_json(&v) {
+    match (&v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_aws_migration_hub::DisassociateDiscoveredResourceResultEntry { key: k.clone(), value: val })).collect()) {
         Some(x) => Ok(x),
         None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
@@ -1894,12 +1914,12 @@ fn iface_aws_migration_hub__disassociate_discovered_resource__err(e: crate::runt
     }
 }
 
-fn iface_aws_migration_hub__import_migration_task__ok(body: String) -> Result<iface_aws_migration_hub::ImportMigrationTaskResult, crate::runtime::DispatchError> {
+fn iface_aws_migration_hub__import_migration_task__ok(body: String) -> Result<Vec<iface_aws_migration_hub::ImportMigrationTaskResultEntry>, crate::runtime::DispatchError> {
     let v: Value = match serde_json::from_str(&body) {
         Ok(v) => v,
         Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
     };
-    match iface_aws_migration_hub__import_migration_task_result__from_json(&v) {
+    match (&v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_aws_migration_hub::ImportMigrationTaskResultEntry { key: k.clone(), value: val })).collect()) {
         Some(x) => Ok(x),
         None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
@@ -2057,12 +2077,12 @@ fn iface_aws_migration_hub__list_progress_update_streams__err(e: crate::runtime:
     }
 }
 
-fn iface_aws_migration_hub__notify_application_state__ok(body: String) -> Result<iface_aws_migration_hub::NotifyApplicationStateResult, crate::runtime::DispatchError> {
+fn iface_aws_migration_hub__notify_application_state__ok(body: String) -> Result<Vec<iface_aws_migration_hub::NotifyApplicationStateResultEntry>, crate::runtime::DispatchError> {
     let v: Value = match serde_json::from_str(&body) {
         Ok(v) => v,
         Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
     };
-    match iface_aws_migration_hub__notify_application_state_result__from_json(&v) {
+    match (&v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_aws_migration_hub::NotifyApplicationStateResultEntry { key: k.clone(), value: val })).collect()) {
         Some(x) => Ok(x),
         None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
@@ -2087,12 +2107,12 @@ fn iface_aws_migration_hub__notify_application_state__err(e: crate::runtime::Dis
     }
 }
 
-fn iface_aws_migration_hub__notify_migration_task_state__ok(body: String) -> Result<iface_aws_migration_hub::NotifyMigrationTaskStateResult, crate::runtime::DispatchError> {
+fn iface_aws_migration_hub__notify_migration_task_state__ok(body: String) -> Result<Vec<iface_aws_migration_hub::NotifyMigrationTaskStateResultEntry>, crate::runtime::DispatchError> {
     let v: Value = match serde_json::from_str(&body) {
         Ok(v) => v,
         Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
     };
-    match iface_aws_migration_hub__notify_migration_task_state_result__from_json(&v) {
+    match (&v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_aws_migration_hub::NotifyMigrationTaskStateResultEntry { key: k.clone(), value: val })).collect()) {
         Some(x) => Ok(x),
         None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
@@ -2116,12 +2136,12 @@ fn iface_aws_migration_hub__notify_migration_task_state__err(e: crate::runtime::
     }
 }
 
-fn iface_aws_migration_hub__put_resource_attributes__ok(body: String) -> Result<iface_aws_migration_hub::PutResourceAttributesResult, crate::runtime::DispatchError> {
+fn iface_aws_migration_hub__put_resource_attributes__ok(body: String) -> Result<Vec<iface_aws_migration_hub::PutResourceAttributesResultEntry>, crate::runtime::DispatchError> {
     let v: Value = match serde_json::from_str(&body) {
         Ok(v) => v,
         Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
     };
-    match iface_aws_migration_hub__put_resource_attributes_result__from_json(&v) {
+    match (&v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_aws_migration_hub::PutResourceAttributesResultEntry { key: k.clone(), value: val })).collect()) {
         Some(x) => Ok(x),
         None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
@@ -2146,28 +2166,28 @@ fn iface_aws_migration_hub__put_resource_attributes__err(e: crate::runtime::Disp
 }
 
 impl iface_aws_migration_hub::Guest for crate::Component {
-    fn associate_created_artifact(params: iface_aws_migration_hub::AssociateCreatedArtifactParams) -> Result<iface_aws_migration_hub::AssociateCreatedArtifactResult, iface_aws_migration_hub::AssociateCreatedArtifactError> {
+    fn associate_created_artifact(params: iface_aws_migration_hub::AssociateCreatedArtifactParams) -> Result<Vec<iface_aws_migration_hub::AssociateCreatedArtifactResultEntry>, iface_aws_migration_hub::AssociateCreatedArtifactError> {
         let json = iface_aws_migration_hub__associate_created_artifact_params__to_json(&params);
         match dispatch(&OP_AWS_MIGRATION_HUB_ASSOCIATE_CREATED_ARTIFACT, json).and_then(iface_aws_migration_hub__associate_created_artifact__ok) {
             Ok(v) => Ok(v),
             Err(e) => Err(iface_aws_migration_hub__associate_created_artifact__err(e)),
         }
     }
-    fn associate_discovered_resource(params: iface_aws_migration_hub::AssociateDiscoveredResourceParams) -> Result<iface_aws_migration_hub::AssociateDiscoveredResourceResult, iface_aws_migration_hub::AssociateDiscoveredResourceError> {
+    fn associate_discovered_resource(params: iface_aws_migration_hub::AssociateDiscoveredResourceParams) -> Result<Vec<iface_aws_migration_hub::AssociateDiscoveredResourceResultEntry>, iface_aws_migration_hub::AssociateDiscoveredResourceError> {
         let json = iface_aws_migration_hub__associate_discovered_resource_params__to_json(&params);
         match dispatch(&OP_AWS_MIGRATION_HUB_ASSOCIATE_DISCOVERED_RESOURCE, json).and_then(iface_aws_migration_hub__associate_discovered_resource__ok) {
             Ok(v) => Ok(v),
             Err(e) => Err(iface_aws_migration_hub__associate_discovered_resource__err(e)),
         }
     }
-    fn create_progress_update_stream(params: iface_aws_migration_hub::CreateProgressUpdateStreamParams) -> Result<iface_aws_migration_hub::CreateProgressUpdateStreamResult, iface_aws_migration_hub::CreateProgressUpdateStreamError> {
+    fn create_progress_update_stream(params: iface_aws_migration_hub::CreateProgressUpdateStreamParams) -> Result<Vec<iface_aws_migration_hub::CreateProgressUpdateStreamResultEntry>, iface_aws_migration_hub::CreateProgressUpdateStreamError> {
         let json = iface_aws_migration_hub__create_progress_update_stream_params__to_json(&params);
         match dispatch(&OP_AWS_MIGRATION_HUB_CREATE_PROGRESS_UPDATE_STREAM, json).and_then(iface_aws_migration_hub__create_progress_update_stream__ok) {
             Ok(v) => Ok(v),
             Err(e) => Err(iface_aws_migration_hub__create_progress_update_stream__err(e)),
         }
     }
-    fn delete_progress_update_stream(params: iface_aws_migration_hub::DeleteProgressUpdateStreamParams) -> Result<iface_aws_migration_hub::DeleteProgressUpdateStreamResult, iface_aws_migration_hub::DeleteProgressUpdateStreamError> {
+    fn delete_progress_update_stream(params: iface_aws_migration_hub::DeleteProgressUpdateStreamParams) -> Result<Vec<iface_aws_migration_hub::DeleteProgressUpdateStreamResultEntry>, iface_aws_migration_hub::DeleteProgressUpdateStreamError> {
         let json = iface_aws_migration_hub__delete_progress_update_stream_params__to_json(&params);
         match dispatch(&OP_AWS_MIGRATION_HUB_DELETE_PROGRESS_UPDATE_STREAM, json).and_then(iface_aws_migration_hub__delete_progress_update_stream__ok) {
             Ok(v) => Ok(v),
@@ -2188,21 +2208,21 @@ impl iface_aws_migration_hub::Guest for crate::Component {
             Err(e) => Err(iface_aws_migration_hub__describe_migration_task__err(e)),
         }
     }
-    fn disassociate_created_artifact(params: iface_aws_migration_hub::DisassociateCreatedArtifactParams) -> Result<iface_aws_migration_hub::DisassociateCreatedArtifactResult, iface_aws_migration_hub::DisassociateCreatedArtifactError> {
+    fn disassociate_created_artifact(params: iface_aws_migration_hub::DisassociateCreatedArtifactParams) -> Result<Vec<iface_aws_migration_hub::DisassociateCreatedArtifactResultEntry>, iface_aws_migration_hub::DisassociateCreatedArtifactError> {
         let json = iface_aws_migration_hub__disassociate_created_artifact_params__to_json(&params);
         match dispatch(&OP_AWS_MIGRATION_HUB_DISASSOCIATE_CREATED_ARTIFACT, json).and_then(iface_aws_migration_hub__disassociate_created_artifact__ok) {
             Ok(v) => Ok(v),
             Err(e) => Err(iface_aws_migration_hub__disassociate_created_artifact__err(e)),
         }
     }
-    fn disassociate_discovered_resource(params: iface_aws_migration_hub::DisassociateDiscoveredResourceParams) -> Result<iface_aws_migration_hub::DisassociateDiscoveredResourceResult, iface_aws_migration_hub::DisassociateDiscoveredResourceError> {
+    fn disassociate_discovered_resource(params: iface_aws_migration_hub::DisassociateDiscoveredResourceParams) -> Result<Vec<iface_aws_migration_hub::DisassociateDiscoveredResourceResultEntry>, iface_aws_migration_hub::DisassociateDiscoveredResourceError> {
         let json = iface_aws_migration_hub__disassociate_discovered_resource_params__to_json(&params);
         match dispatch(&OP_AWS_MIGRATION_HUB_DISASSOCIATE_DISCOVERED_RESOURCE, json).and_then(iface_aws_migration_hub__disassociate_discovered_resource__ok) {
             Ok(v) => Ok(v),
             Err(e) => Err(iface_aws_migration_hub__disassociate_discovered_resource__err(e)),
         }
     }
-    fn import_migration_task(params: iface_aws_migration_hub::ImportMigrationTaskParams) -> Result<iface_aws_migration_hub::ImportMigrationTaskResult, iface_aws_migration_hub::ImportMigrationTaskError> {
+    fn import_migration_task(params: iface_aws_migration_hub::ImportMigrationTaskParams) -> Result<Vec<iface_aws_migration_hub::ImportMigrationTaskResultEntry>, iface_aws_migration_hub::ImportMigrationTaskError> {
         let json = iface_aws_migration_hub__import_migration_task_params__to_json(&params);
         match dispatch(&OP_AWS_MIGRATION_HUB_IMPORT_MIGRATION_TASK, json).and_then(iface_aws_migration_hub__import_migration_task__ok) {
             Ok(v) => Ok(v),
@@ -2244,21 +2264,21 @@ impl iface_aws_migration_hub::Guest for crate::Component {
             Err(e) => Err(iface_aws_migration_hub__list_progress_update_streams__err(e)),
         }
     }
-    fn notify_application_state(params: iface_aws_migration_hub::NotifyApplicationStateParams) -> Result<iface_aws_migration_hub::NotifyApplicationStateResult, iface_aws_migration_hub::NotifyApplicationStateError> {
+    fn notify_application_state(params: iface_aws_migration_hub::NotifyApplicationStateParams) -> Result<Vec<iface_aws_migration_hub::NotifyApplicationStateResultEntry>, iface_aws_migration_hub::NotifyApplicationStateError> {
         let json = iface_aws_migration_hub__notify_application_state_params__to_json(&params);
         match dispatch(&OP_AWS_MIGRATION_HUB_NOTIFY_APPLICATION_STATE, json).and_then(iface_aws_migration_hub__notify_application_state__ok) {
             Ok(v) => Ok(v),
             Err(e) => Err(iface_aws_migration_hub__notify_application_state__err(e)),
         }
     }
-    fn notify_migration_task_state(params: iface_aws_migration_hub::NotifyMigrationTaskStateParams) -> Result<iface_aws_migration_hub::NotifyMigrationTaskStateResult, iface_aws_migration_hub::NotifyMigrationTaskStateError> {
+    fn notify_migration_task_state(params: iface_aws_migration_hub::NotifyMigrationTaskStateParams) -> Result<Vec<iface_aws_migration_hub::NotifyMigrationTaskStateResultEntry>, iface_aws_migration_hub::NotifyMigrationTaskStateError> {
         let json = iface_aws_migration_hub__notify_migration_task_state_params__to_json(&params);
         match dispatch(&OP_AWS_MIGRATION_HUB_NOTIFY_MIGRATION_TASK_STATE, json).and_then(iface_aws_migration_hub__notify_migration_task_state__ok) {
             Ok(v) => Ok(v),
             Err(e) => Err(iface_aws_migration_hub__notify_migration_task_state__err(e)),
         }
     }
-    fn put_resource_attributes(params: iface_aws_migration_hub::PutResourceAttributesParams) -> Result<iface_aws_migration_hub::PutResourceAttributesResult, iface_aws_migration_hub::PutResourceAttributesError> {
+    fn put_resource_attributes(params: iface_aws_migration_hub::PutResourceAttributesParams) -> Result<Vec<iface_aws_migration_hub::PutResourceAttributesResultEntry>, iface_aws_migration_hub::PutResourceAttributesError> {
         let json = iface_aws_migration_hub__put_resource_attributes_params__to_json(&params);
         match dispatch(&OP_AWS_MIGRATION_HUB_PUT_RESOURCE_ATTRIBUTES, json).and_then(iface_aws_migration_hub__put_resource_attributes__ok) {
             Ok(v) => Ok(v),

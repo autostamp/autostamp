@@ -41,7 +41,7 @@ const OP_DIRECT_MESSAGES_DM_CONVERSATION_WITH_USER_EVENT_ID_CREATE: OpSpec = OpS
     path_template: "/2/dm_conversations/with/{participant_id}/messages",
     fields: &[
         FieldSpec { snake: "participant_id", wire: "participant_id", location: FieldLocation::Path },
-        FieldSpec { snake: "value", wire: "value", location: FieldLocation::Body },
+        FieldSpec { snake: "body", wire: "body", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "OAuth2UserToken", kind: AuthKind::Bearer },
@@ -53,7 +53,7 @@ const OP_DIRECT_MESSAGES_DM_CONVERSATION_BY_ID_EVENT_ID_CREATE: OpSpec = OpSpec 
     path_template: "/2/dm_conversations/{dm_conversation_id}/messages",
     fields: &[
         FieldSpec { snake: "dm_conversation_id", wire: "dm_conversation_id", location: FieldLocation::Path },
-        FieldSpec { snake: "value", wire: "value", location: FieldLocation::Body },
+        FieldSpec { snake: "body", wire: "body", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "OAuth2UserToken", kind: AuthKind::Bearer },
@@ -211,6 +211,17 @@ fn iface_direct_messages__geo_type_op_enum__to_str(e: &iface_direct_messages::Ge
     }
 }
 
+fn iface_direct_messages__place_type__to_str(e: &iface_direct_messages::PlaceType) -> &'static str {
+    match e {
+        iface_direct_messages::PlaceType::Poi => "poi",
+        iface_direct_messages::PlaceType::Neighborhood => "neighborhood",
+        iface_direct_messages::PlaceType::City => "city",
+        iface_direct_messages::PlaceType::Admin => "admin",
+        iface_direct_messages::PlaceType::Country => "country",
+        iface_direct_messages::PlaceType::Unknown => "unknown",
+    }
+}
+
 fn iface_direct_messages__poll_voting_status_enum__to_str(e: &iface_direct_messages::PollVotingStatusEnum) -> &'static str {
     match e {
         iface_direct_messages::PollVotingStatusEnum::Open => "open",
@@ -223,6 +234,15 @@ fn iface_direct_messages__tweet_referenced_tweets_item_type_op_enum__to_str(e: &
         iface_direct_messages::TweetReferencedTweetsItemTypeOpEnum::Retweeted => "retweeted",
         iface_direct_messages::TweetReferencedTweetsItemTypeOpEnum::Quoted => "quoted",
         iface_direct_messages::TweetReferencedTweetsItemTypeOpEnum::RepliedTo => "replied_to",
+    }
+}
+
+fn iface_direct_messages__reply_settings__to_str(e: &iface_direct_messages::ReplySettings) -> &'static str {
+    match e {
+        iface_direct_messages::ReplySettings::Everyone => "everyone",
+        iface_direct_messages::ReplySettings::MentionedUsers => "mentionedUsers",
+        iface_direct_messages::ReplySettings::Following => "following",
+        iface_direct_messages::ReplySettings::Other => "other",
     }
 }
 
@@ -239,18 +259,6 @@ fn iface_direct_messages__user_withheld_scope_enum__to_str(e: &iface_direct_mess
     }
 }
 
-fn iface_direct_messages__create_message_request__to_json(p: &iface_direct_messages::CreateMessageRequest) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_direct_messages__dm_participants__to_json(p: &iface_direct_messages::DmParticipants) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
 fn iface_direct_messages__create_dm_event_response__to_json(p: &iface_direct_messages::CreateDmEventResponse) -> Value {
     let mut m = Map::new();
     m.insert("data".into(), match (&p.data) { Some(v) => iface_direct_messages__create_dm_event_response_data__to_json(v), None => Value::Null });
@@ -260,20 +268,8 @@ fn iface_direct_messages__create_dm_event_response__to_json(p: &iface_direct_mes
 
 fn iface_direct_messages__create_dm_event_response_data__to_json(p: &iface_direct_messages::CreateDmEventResponseData) -> Value {
     let mut m = Map::new();
-    m.insert("dm_conversation_id".into(), iface_direct_messages__dm_conversation_id__to_json(&p.dm_conversation_id));
-    m.insert("dm_event_id".into(), iface_direct_messages__dm_event_id__to_json(&p.dm_event_id));
-    Value::Object(m)
-}
-
-fn iface_direct_messages__dm_conversation_id__to_json(p: &iface_direct_messages::DmConversationId) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_direct_messages__dm_event_id__to_json(p: &iface_direct_messages::DmEventId) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
+    m.insert("dm_conversation_id".into(), Value::String((&p.dm_conversation_id).clone()));
+    m.insert("dm_event_id".into(), Value::String((&p.dm_event_id).clone()));
     Value::Object(m)
 }
 
@@ -283,12 +279,6 @@ fn iface_direct_messages__problem__to_json(p: &iface_direct_messages::Problem) -
     m.insert("status".into(), match (&p.status) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("title".into(), Value::String((&p.title).clone()));
     m.insert("type".into(), Value::String((&p.type_op).clone()));
-    Value::Object(m)
-}
-
-fn iface_direct_messages__pagination_token32__to_json(p: &iface_direct_messages::PaginationToken32) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -305,12 +295,12 @@ fn iface_direct_messages__dm_event__to_json(p: &iface_direct_messages::DmEvent) 
     let mut m = Map::new();
     m.insert("attachments".into(), match (&p.attachments) { Some(v) => iface_direct_messages__dm_event_attachments__to_json(v), None => Value::Null });
     m.insert("created_at".into(), match (&p.created_at) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("dm_conversation_id".into(), match (&p.dm_conversation_id) { Some(v) => iface_direct_messages__dm_conversation_id__to_json(v), None => Value::Null });
+    m.insert("dm_conversation_id".into(), match (&p.dm_conversation_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("event_type".into(), Value::String((&p.event_type).clone()));
-    m.insert("id".into(), iface_direct_messages__dm_event_id__to_json(&p.id));
-    m.insert("participant_ids".into(), match (&p.participant_ids) { Some(v) => Value::Array((v).iter().map(|v| iface_direct_messages__user_id__to_json(v)).collect()), None => Value::Null });
+    m.insert("id".into(), Value::String((&p.id).clone()));
+    m.insert("participant_ids".into(), match (&p.participant_ids) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
     m.insert("referenced_tweets".into(), match (&p.referenced_tweets) { Some(v) => Value::Array((v).iter().map(|v| iface_direct_messages__dm_event_referenced_tweets_item__to_json(v)).collect()), None => Value::Null });
-    m.insert("sender_id".into(), match (&p.sender_id) { Some(v) => iface_direct_messages__user_id__to_json(v), None => Value::Null });
+    m.insert("sender_id".into(), match (&p.sender_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("text".into(), match (&p.text) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
@@ -318,31 +308,13 @@ fn iface_direct_messages__dm_event__to_json(p: &iface_direct_messages::DmEvent) 
 fn iface_direct_messages__dm_event_attachments__to_json(p: &iface_direct_messages::DmEventAttachments) -> Value {
     let mut m = Map::new();
     m.insert("card_ids".into(), match (&p.card_ids) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
-    m.insert("media_keys".into(), match (&p.media_keys) { Some(v) => Value::Array((v).iter().map(|v| iface_direct_messages__media_key__to_json(v)).collect()), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_direct_messages__media_key__to_json(p: &iface_direct_messages::MediaKey) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_direct_messages__user_id__to_json(p: &iface_direct_messages::UserId) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
+    m.insert("media_keys".into(), match (&p.media_keys) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
     Value::Object(m)
 }
 
 fn iface_direct_messages__dm_event_referenced_tweets_item__to_json(p: &iface_direct_messages::DmEventReferencedTweetsItem) -> Value {
     let mut m = Map::new();
-    m.insert("id".into(), iface_direct_messages__tweet_id__to_json(&p.id));
-    Value::Object(m)
-}
-
-fn iface_direct_messages__tweet_id__to_json(p: &iface_direct_messages::TweetId) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
+    m.insert("id".into(), Value::String((&p.id).clone()));
     Value::Object(m)
 }
 
@@ -359,47 +331,23 @@ fn iface_direct_messages__expansions__to_json(p: &iface_direct_messages::Expansi
 
 fn iface_direct_messages__media__to_json(p: &iface_direct_messages::Media) -> Value {
     let mut m = Map::new();
-    m.insert("height".into(), match (&p.height) { Some(v) => iface_direct_messages__media_height__to_json(v), None => Value::Null });
-    m.insert("media_key".into(), match (&p.media_key) { Some(v) => iface_direct_messages__media_key__to_json(v), None => Value::Null });
+    m.insert("height".into(), match (&p.height) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("media_key".into(), match (&p.media_key) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("type".into(), Value::String((&p.type_op).clone()));
-    m.insert("width".into(), match (&p.width) { Some(v) => iface_direct_messages__media_width__to_json(v), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_direct_messages__media_height__to_json(p: &iface_direct_messages::MediaHeight) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_direct_messages__media_width__to_json(p: &iface_direct_messages::MediaWidth) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
+    m.insert("width".into(), match (&p.width) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
 fn iface_direct_messages__place__to_json(p: &iface_direct_messages::Place) -> Value {
     let mut m = Map::new();
-    m.insert("contained_within".into(), match (&p.contained_within) { Some(v) => Value::Array((v).iter().map(|v| iface_direct_messages__place_id__to_json(v)).collect()), None => Value::Null });
+    m.insert("contained_within".into(), match (&p.contained_within) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
     m.insert("country".into(), match (&p.country) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("country_code".into(), match (&p.country_code) { Some(v) => iface_direct_messages__country_code__to_json(v), None => Value::Null });
+    m.insert("country_code".into(), match (&p.country_code) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("full_name".into(), Value::String((&p.full_name).clone()));
     m.insert("geo".into(), match (&p.geo) { Some(v) => iface_direct_messages__geo__to_json(v), None => Value::Null });
-    m.insert("id".into(), iface_direct_messages__place_id__to_json(&p.id));
+    m.insert("id".into(), Value::String((&p.id).clone()));
     m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("place_type".into(), match (&p.place_type) { Some(v) => iface_direct_messages__place_type__to_json(v), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_direct_messages__place_id__to_json(p: &iface_direct_messages::PlaceId) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_direct_messages__country_code__to_json(p: &iface_direct_messages::CountryCode) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
+    m.insert("place_type".into(), match (&p.place_type) { Some(v) => Value::String(iface_direct_messages__place_type__to_str(v).into()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -407,32 +355,21 @@ fn iface_direct_messages__geo__to_json(p: &iface_direct_messages::Geo) -> Value 
     let mut m = Map::new();
     m.insert("bbox".into(), Value::Array((&p.bbox).iter().map(|v| serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null)).collect()));
     m.insert("geometry".into(), match (&p.geometry) { Some(v) => iface_direct_messages__point__to_json(v), None => Value::Null });
-    m.insert("properties".into(), iface_direct_messages__geo_properties__to_json(&p.properties));
+    m.insert("properties".into(), Value::Object((&p.properties).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()));
     m.insert("type".into(), Value::String(iface_direct_messages__geo_type_op_enum__to_str(&p.type_op).into()));
     Value::Object(m)
 }
 
 fn iface_direct_messages__point__to_json(p: &iface_direct_messages::Point) -> Value {
     let mut m = Map::new();
-    m.insert("coordinates".into(), iface_direct_messages__position__to_json(&p.coordinates));
+    m.insert("coordinates".into(), Value::Array((&p.coordinates).iter().map(|v| serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null)).collect()));
     m.insert("type".into(), Value::String(iface_direct_messages__point_type_op_enum__to_str(&p.type_op).into()));
     Value::Object(m)
 }
 
-fn iface_direct_messages__position__to_json(p: &iface_direct_messages::Position) -> Value {
+fn iface_direct_messages__geo_properties_entry__to_json(p: &iface_direct_messages::GeoPropertiesEntry) -> Value {
     let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_direct_messages__geo_properties__to_json(p: &iface_direct_messages::GeoProperties) -> Value {
-    let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_direct_messages__place_type__to_json(p: &iface_direct_messages::PlaceType) -> Value {
-    let mut m = Map::new();
+    m.insert("key".into(), Value::String((&p.key).clone()));
     m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
@@ -441,59 +378,41 @@ fn iface_direct_messages__poll__to_json(p: &iface_direct_messages::Poll) -> Valu
     let mut m = Map::new();
     m.insert("duration_minutes".into(), match (&p.duration_minutes) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("end_datetime".into(), match (&p.end_datetime) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("id".into(), iface_direct_messages__poll_id__to_json(&p.id));
+    m.insert("id".into(), Value::String((&p.id).clone()));
     m.insert("options".into(), Value::Array((&p.options).iter().map(|v| iface_direct_messages__poll_option__to_json(v)).collect()));
     m.insert("voting_status".into(), match (&p.voting_status) { Some(v) => Value::String(iface_direct_messages__poll_voting_status_enum__to_str(v).into()), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_direct_messages__poll_id__to_json(p: &iface_direct_messages::PollId) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
 fn iface_direct_messages__poll_option__to_json(p: &iface_direct_messages::PollOption) -> Value {
     let mut m = Map::new();
-    m.insert("label".into(), iface_direct_messages__poll_option_label__to_json(&p.label));
+    m.insert("label".into(), Value::String((&p.label).clone()));
     m.insert("position".into(), Value::Number(serde_json::Number::from(*(&p.position))));
     m.insert("votes".into(), Value::Number(serde_json::Number::from(*(&p.votes))));
-    Value::Object(m)
-}
-
-fn iface_direct_messages__poll_option_label__to_json(p: &iface_direct_messages::PollOptionLabel) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
 fn iface_direct_messages__topic__to_json(p: &iface_direct_messages::Topic) -> Value {
     let mut m = Map::new();
     m.insert("description".into(), match (&p.description) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("id".into(), iface_direct_messages__topic_id__to_json(&p.id));
+    m.insert("id".into(), Value::String((&p.id).clone()));
     m.insert("name".into(), Value::String((&p.name).clone()));
-    Value::Object(m)
-}
-
-fn iface_direct_messages__topic_id__to_json(p: &iface_direct_messages::TopicId) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
 fn iface_direct_messages__tweet__to_json(p: &iface_direct_messages::Tweet) -> Value {
     let mut m = Map::new();
     m.insert("attachments".into(), match (&p.attachments) { Some(v) => iface_direct_messages__tweet_attachments__to_json(v), None => Value::Null });
-    m.insert("author_id".into(), match (&p.author_id) { Some(v) => iface_direct_messages__user_id__to_json(v), None => Value::Null });
+    m.insert("author_id".into(), match (&p.author_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("context_annotations".into(), match (&p.context_annotations) { Some(v) => Value::Array((v).iter().map(|v| iface_direct_messages__context_annotation__to_json(v)).collect()), None => Value::Null });
-    m.insert("conversation_id".into(), match (&p.conversation_id) { Some(v) => iface_direct_messages__tweet_id__to_json(v), None => Value::Null });
+    m.insert("conversation_id".into(), match (&p.conversation_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("created_at".into(), match (&p.created_at) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("edit_controls".into(), match (&p.edit_controls) { Some(v) => iface_direct_messages__tweet_edit_controls__to_json(v), None => Value::Null });
-    m.insert("edit_history_tweet_ids".into(), Value::Array((&p.edit_history_tweet_ids).iter().map(|v| iface_direct_messages__tweet_id__to_json(v)).collect()));
+    m.insert("edit_history_tweet_ids".into(), Value::Array((&p.edit_history_tweet_ids).iter().map(|v| Value::String((v).clone())).collect()));
     m.insert("entities".into(), match (&p.entities) { Some(v) => iface_direct_messages__full_text_entities__to_json(v), None => Value::Null });
     m.insert("geo".into(), match (&p.geo) { Some(v) => iface_direct_messages__tweet_geo__to_json(v), None => Value::Null });
-    m.insert("id".into(), iface_direct_messages__tweet_id__to_json(&p.id));
-    m.insert("in_reply_to_user_id".into(), match (&p.in_reply_to_user_id) { Some(v) => iface_direct_messages__user_id__to_json(v), None => Value::Null });
+    m.insert("id".into(), Value::String((&p.id).clone()));
+    m.insert("in_reply_to_user_id".into(), match (&p.in_reply_to_user_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("lang".into(), match (&p.lang) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("non_public_metrics".into(), match (&p.non_public_metrics) { Some(v) => iface_direct_messages__tweet_non_public_metrics__to_json(v), None => Value::Null });
     m.insert("organic_metrics".into(), match (&p.organic_metrics) { Some(v) => iface_direct_messages__tweet_organic_metrics__to_json(v), None => Value::Null });
@@ -501,17 +420,17 @@ fn iface_direct_messages__tweet__to_json(p: &iface_direct_messages::Tweet) -> Va
     m.insert("promoted_metrics".into(), match (&p.promoted_metrics) { Some(v) => iface_direct_messages__tweet_promoted_metrics__to_json(v), None => Value::Null });
     m.insert("public_metrics".into(), match (&p.public_metrics) { Some(v) => iface_direct_messages__tweet_public_metrics__to_json(v), None => Value::Null });
     m.insert("referenced_tweets".into(), match (&p.referenced_tweets) { Some(v) => Value::Array((v).iter().map(|v| iface_direct_messages__tweet_referenced_tweets_item__to_json(v)).collect()), None => Value::Null });
-    m.insert("reply_settings".into(), match (&p.reply_settings) { Some(v) => iface_direct_messages__reply_settings__to_json(v), None => Value::Null });
+    m.insert("reply_settings".into(), match (&p.reply_settings) { Some(v) => Value::String(iface_direct_messages__reply_settings__to_str(v).into()), None => Value::Null });
     m.insert("source".into(), match (&p.source) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("text".into(), iface_direct_messages__tweet_text__to_json(&p.text));
+    m.insert("text".into(), Value::String((&p.text).clone()));
     m.insert("withheld".into(), match (&p.withheld) { Some(v) => iface_direct_messages__tweet_withheld__to_json(v), None => Value::Null });
     Value::Object(m)
 }
 
 fn iface_direct_messages__tweet_attachments__to_json(p: &iface_direct_messages::TweetAttachments) -> Value {
     let mut m = Map::new();
-    m.insert("media_keys".into(), match (&p.media_keys) { Some(v) => Value::Array((v).iter().map(|v| iface_direct_messages__media_key__to_json(v)).collect()), None => Value::Null });
-    m.insert("poll_ids".into(), match (&p.poll_ids) { Some(v) => Value::Array((v).iter().map(|v| iface_direct_messages__poll_id__to_json(v)).collect()), None => Value::Null });
+    m.insert("media_keys".into(), match (&p.media_keys) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("poll_ids".into(), match (&p.poll_ids) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -586,14 +505,8 @@ fn iface_direct_messages__mention_entity__to_json(p: &iface_direct_messages::Men
     let mut m = Map::new();
     m.insert("end".into(), Value::Number(serde_json::Number::from(*(&p.end))));
     m.insert("start".into(), Value::Number(serde_json::Number::from(*(&p.start))));
-    m.insert("id".into(), match (&p.id) { Some(v) => iface_direct_messages__user_id__to_json(v), None => Value::Null });
-    m.insert("username".into(), iface_direct_messages__user_name__to_json(&p.username));
-    Value::Object(m)
-}
-
-fn iface_direct_messages__user_name__to_json(p: &iface_direct_messages::UserName) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("username".into(), Value::String((&p.username).clone()));
     Value::Object(m)
 }
 
@@ -603,40 +516,28 @@ fn iface_direct_messages__url_entity__to_json(p: &iface_direct_messages::UrlEnti
     m.insert("start".into(), Value::Number(serde_json::Number::from(*(&p.start))));
     m.insert("description".into(), match (&p.description) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("display_url".into(), match (&p.display_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("expanded_url".into(), match (&p.expanded_url) { Some(v) => iface_direct_messages__url__to_json(v), None => Value::Null });
+    m.insert("expanded_url".into(), match (&p.expanded_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("images".into(), match (&p.images) { Some(v) => Value::Array((v).iter().map(|v| iface_direct_messages__url_image__to_json(v)).collect()), None => Value::Null });
-    m.insert("media_key".into(), match (&p.media_key) { Some(v) => iface_direct_messages__media_key__to_json(v), None => Value::Null });
-    m.insert("status".into(), match (&p.status) { Some(v) => iface_direct_messages__http_status_code__to_json(v), None => Value::Null });
+    m.insert("media_key".into(), match (&p.media_key) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("status".into(), match (&p.status) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("title".into(), match (&p.title) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("unwound_url".into(), match (&p.unwound_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("url".into(), iface_direct_messages__url__to_json(&p.url));
-    Value::Object(m)
-}
-
-fn iface_direct_messages__url__to_json(p: &iface_direct_messages::Url) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
+    m.insert("url".into(), Value::String((&p.url).clone()));
     Value::Object(m)
 }
 
 fn iface_direct_messages__url_image__to_json(p: &iface_direct_messages::UrlImage) -> Value {
     let mut m = Map::new();
-    m.insert("height".into(), match (&p.height) { Some(v) => iface_direct_messages__media_height__to_json(v), None => Value::Null });
-    m.insert("url".into(), match (&p.url) { Some(v) => iface_direct_messages__url__to_json(v), None => Value::Null });
-    m.insert("width".into(), match (&p.width) { Some(v) => iface_direct_messages__media_width__to_json(v), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_direct_messages__http_status_code__to_json(p: &iface_direct_messages::HttpStatusCode) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
+    m.insert("height".into(), match (&p.height) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("url".into(), match (&p.url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("width".into(), match (&p.width) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
 fn iface_direct_messages__tweet_geo__to_json(p: &iface_direct_messages::TweetGeo) -> Value {
     let mut m = Map::new();
     m.insert("coordinates".into(), match (&p.coordinates) { Some(v) => iface_direct_messages__point__to_json(v), None => Value::Null });
-    m.insert("place_id".into(), match (&p.place_id) { Some(v) => iface_direct_messages__place_id__to_json(v), None => Value::Null });
+    m.insert("place_id".into(), match (&p.place_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -676,27 +577,15 @@ fn iface_direct_messages__tweet_public_metrics__to_json(p: &iface_direct_message
 
 fn iface_direct_messages__tweet_referenced_tweets_item__to_json(p: &iface_direct_messages::TweetReferencedTweetsItem) -> Value {
     let mut m = Map::new();
-    m.insert("id".into(), iface_direct_messages__tweet_id__to_json(&p.id));
+    m.insert("id".into(), Value::String((&p.id).clone()));
     m.insert("type".into(), Value::String(iface_direct_messages__tweet_referenced_tweets_item_type_op_enum__to_str(&p.type_op).into()));
-    Value::Object(m)
-}
-
-fn iface_direct_messages__reply_settings__to_json(p: &iface_direct_messages::ReplySettings) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_direct_messages__tweet_text__to_json(p: &iface_direct_messages::TweetText) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
 fn iface_direct_messages__tweet_withheld__to_json(p: &iface_direct_messages::TweetWithheld) -> Value {
     let mut m = Map::new();
     m.insert("copyright".into(), Value::Bool(*(&p.copyright)));
-    m.insert("country_codes".into(), Value::Array((&p.country_codes).iter().map(|v| iface_direct_messages__country_code__to_json(v)).collect()));
+    m.insert("country_codes".into(), Value::Array((&p.country_codes).iter().map(|v| Value::String((v).clone())).collect()));
     m.insert("scope".into(), match (&p.scope) { Some(v) => Value::String(iface_direct_messages__tweet_withheld_scope_enum__to_str(v).into()), None => Value::Null });
     Value::Object(m)
 }
@@ -706,15 +595,15 @@ fn iface_direct_messages__user__to_json(p: &iface_direct_messages::User) -> Valu
     m.insert("created_at".into(), match (&p.created_at) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("description".into(), match (&p.description) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("entities".into(), match (&p.entities) { Some(v) => iface_direct_messages__user_entities__to_json(v), None => Value::Null });
-    m.insert("id".into(), iface_direct_messages__user_id__to_json(&p.id));
+    m.insert("id".into(), Value::String((&p.id).clone()));
     m.insert("location".into(), match (&p.location) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("name".into(), Value::String((&p.name).clone()));
-    m.insert("pinned_tweet_id".into(), match (&p.pinned_tweet_id) { Some(v) => iface_direct_messages__tweet_id__to_json(v), None => Value::Null });
+    m.insert("pinned_tweet_id".into(), match (&p.pinned_tweet_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("profile_image_url".into(), match (&p.profile_image_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("protected".into(), match (&p.protected) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     m.insert("public_metrics".into(), match (&p.public_metrics) { Some(v) => iface_direct_messages__user_public_metrics__to_json(v), None => Value::Null });
     m.insert("url".into(), match (&p.url) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("username".into(), iface_direct_messages__user_name__to_json(&p.username));
+    m.insert("username".into(), Value::String((&p.username).clone()));
     m.insert("verified".into(), match (&p.verified) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     m.insert("verified_type".into(), match (&p.verified_type) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("withheld".into(), match (&p.withheld) { Some(v) => iface_direct_messages__user_withheld__to_json(v), None => Value::Null });
@@ -745,34 +634,16 @@ fn iface_direct_messages__user_public_metrics__to_json(p: &iface_direct_messages
 
 fn iface_direct_messages__user_withheld__to_json(p: &iface_direct_messages::UserWithheld) -> Value {
     let mut m = Map::new();
-    m.insert("country_codes".into(), Value::Array((&p.country_codes).iter().map(|v| iface_direct_messages__country_code__to_json(v)).collect()));
+    m.insert("country_codes".into(), Value::Array((&p.country_codes).iter().map(|v| Value::String((v).clone())).collect()));
     m.insert("scope".into(), match (&p.scope) { Some(v) => Value::String(iface_direct_messages__user_withheld_scope_enum__to_str(v).into()), None => Value::Null });
     Value::Object(m)
 }
 
 fn iface_direct_messages__get2_dm_conversations_with_participant_id_dm_events_response_meta__to_json(p: &iface_direct_messages::Get2DmConversationsWithParticipantIdDmEventsResponseMeta) -> Value {
     let mut m = Map::new();
-    m.insert("next_token".into(), match (&p.next_token) { Some(v) => iface_direct_messages__next_token__to_json(v), None => Value::Null });
-    m.insert("previous_token".into(), match (&p.previous_token) { Some(v) => iface_direct_messages__previous_token__to_json(v), None => Value::Null });
-    m.insert("result_count".into(), match (&p.result_count) { Some(v) => iface_direct_messages__result_count__to_json(v), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_direct_messages__next_token__to_json(p: &iface_direct_messages::NextToken) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_direct_messages__previous_token__to_json(p: &iface_direct_messages::PreviousToken) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_direct_messages__result_count__to_json(p: &iface_direct_messages::ResultCount) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
+    m.insert("next_token".into(), match (&p.next_token) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("previous_token".into(), match (&p.previous_token) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("result_count".into(), match (&p.result_count) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
@@ -787,9 +658,9 @@ fn iface_direct_messages__get2_dm_conversations_id_dm_events_response__to_json(p
 
 fn iface_direct_messages__get2_dm_conversations_id_dm_events_response_meta__to_json(p: &iface_direct_messages::Get2DmConversationsIdDmEventsResponseMeta) -> Value {
     let mut m = Map::new();
-    m.insert("next_token".into(), match (&p.next_token) { Some(v) => iface_direct_messages__next_token__to_json(v), None => Value::Null });
-    m.insert("previous_token".into(), match (&p.previous_token) { Some(v) => iface_direct_messages__previous_token__to_json(v), None => Value::Null });
-    m.insert("result_count".into(), match (&p.result_count) { Some(v) => iface_direct_messages__result_count__to_json(v), None => Value::Null });
+    m.insert("next_token".into(), match (&p.next_token) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("previous_token".into(), match (&p.previous_token) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("result_count".into(), match (&p.result_count) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
@@ -804,17 +675,17 @@ fn iface_direct_messages__get2_dm_events_response__to_json(p: &iface_direct_mess
 
 fn iface_direct_messages__get2_dm_events_response_meta__to_json(p: &iface_direct_messages::Get2DmEventsResponseMeta) -> Value {
     let mut m = Map::new();
-    m.insert("next_token".into(), match (&p.next_token) { Some(v) => iface_direct_messages__next_token__to_json(v), None => Value::Null });
-    m.insert("previous_token".into(), match (&p.previous_token) { Some(v) => iface_direct_messages__previous_token__to_json(v), None => Value::Null });
-    m.insert("result_count".into(), match (&p.result_count) { Some(v) => iface_direct_messages__result_count__to_json(v), None => Value::Null });
+    m.insert("next_token".into(), match (&p.next_token) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("previous_token".into(), match (&p.previous_token) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("result_count".into(), match (&p.result_count) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
 fn iface_direct_messages__dm_conversation_id_create_params__to_json(p: &iface_direct_messages::DmConversationIdCreateParams) -> Value {
     let mut m = Map::new();
     m.insert("conversation_type".into(), Value::String(iface_direct_messages__create_dm_conversation_request_conversation_type_enum__to_str(&p.conversation_type).into()));
-    m.insert("message".into(), iface_direct_messages__create_message_request__to_json(&p.message));
-    m.insert("participant_ids".into(), iface_direct_messages__dm_participants__to_json(&p.participant_ids));
+    m.insert("message".into(), Value::String((&p.message).clone()));
+    m.insert("participant_ids".into(), Value::Array((&p.participant_ids).iter().map(|v| Value::String((v).clone())).collect()));
     Value::Object(m)
 }
 
@@ -822,7 +693,7 @@ fn iface_direct_messages__get_dm_conversations_with_participant_id_dm_events_par
     let mut m = Map::new();
     m.insert("participant_id".into(), Value::String((&p.participant_id).clone()));
     m.insert("max_results".into(), match (&p.max_results) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    m.insert("pagination_token".into(), match (&p.pagination_token) { Some(v) => iface_direct_messages__pagination_token32__to_json(v), None => Value::Null });
+    m.insert("pagination_token".into(), match (&p.pagination_token) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("event_types".into(), match (&p.event_types) { Some(v) => Value::Array((v).iter().map(|v| Value::String(iface_direct_messages__get_dm_conversations_with_participant_id_dm_events_event_types_item_enum__to_str(v).into())).collect()), None => Value::Null });
     m.insert("dm_event_fields".into(), match (&p.dm_event_fields) { Some(v) => Value::Array((v).iter().map(|v| Value::String(iface_direct_messages__get_dm_conversations_with_participant_id_dm_events_dm_event_fields_item_enum__to_str(v).into())).collect()), None => Value::Null });
     m.insert("expansions".into(), match (&p.expansions) { Some(v) => Value::Array((v).iter().map(|v| Value::String(iface_direct_messages__get_dm_conversations_with_participant_id_dm_events_expansions_item_enum__to_str(v).into())).collect()), None => Value::Null });
@@ -835,14 +706,14 @@ fn iface_direct_messages__get_dm_conversations_with_participant_id_dm_events_par
 fn iface_direct_messages__dm_conversation_with_user_event_id_create_params__to_json(p: &iface_direct_messages::DmConversationWithUserEventIdCreateParams) -> Value {
     let mut m = Map::new();
     m.insert("participant_id".into(), Value::String((&p.participant_id).clone()));
-    m.insert("value".into(), Value::String((&p.value).clone()));
+    m.insert("body".into(), match (&p.body) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
 fn iface_direct_messages__dm_conversation_by_id_event_id_create_params__to_json(p: &iface_direct_messages::DmConversationByIdEventIdCreateParams) -> Value {
     let mut m = Map::new();
     m.insert("dm_conversation_id".into(), Value::String((&p.dm_conversation_id).clone()));
-    m.insert("value".into(), Value::String((&p.value).clone()));
+    m.insert("body".into(), match (&p.body) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -850,7 +721,7 @@ fn iface_direct_messages__get_dm_conversations_id_dm_events_params__to_json(p: &
     let mut m = Map::new();
     m.insert("id".into(), Value::String((&p.id).clone()));
     m.insert("max_results".into(), match (&p.max_results) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    m.insert("pagination_token".into(), match (&p.pagination_token) { Some(v) => iface_direct_messages__pagination_token32__to_json(v), None => Value::Null });
+    m.insert("pagination_token".into(), match (&p.pagination_token) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("event_types".into(), match (&p.event_types) { Some(v) => Value::Array((v).iter().map(|v| Value::String(iface_direct_messages__get_dm_conversations_with_participant_id_dm_events_event_types_item_enum__to_str(v).into())).collect()), None => Value::Null });
     m.insert("dm_event_fields".into(), match (&p.dm_event_fields) { Some(v) => Value::Array((v).iter().map(|v| Value::String(iface_direct_messages__get_dm_conversations_with_participant_id_dm_events_dm_event_fields_item_enum__to_str(v).into())).collect()), None => Value::Null });
     m.insert("expansions".into(), match (&p.expansions) { Some(v) => Value::Array((v).iter().map(|v| Value::String(iface_direct_messages__get_dm_conversations_with_participant_id_dm_events_expansions_item_enum__to_str(v).into())).collect()), None => Value::Null });
@@ -863,7 +734,7 @@ fn iface_direct_messages__get_dm_conversations_id_dm_events_params__to_json(p: &
 fn iface_direct_messages__get_dm_events_params__to_json(p: &iface_direct_messages::GetDmEventsParams) -> Value {
     let mut m = Map::new();
     m.insert("max_results".into(), match (&p.max_results) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    m.insert("pagination_token".into(), match (&p.pagination_token) { Some(v) => iface_direct_messages__pagination_token32__to_json(v), None => Value::Null });
+    m.insert("pagination_token".into(), match (&p.pagination_token) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("event_types".into(), match (&p.event_types) { Some(v) => Value::Array((v).iter().map(|v| Value::String(iface_direct_messages__get_dm_conversations_with_participant_id_dm_events_event_types_item_enum__to_str(v).into())).collect()), None => Value::Null });
     m.insert("dm_event_fields".into(), match (&p.dm_event_fields) { Some(v) => Value::Array((v).iter().map(|v| Value::String(iface_direct_messages__get_dm_conversations_with_participant_id_dm_events_dm_event_fields_item_enum__to_str(v).into())).collect()), None => Value::Null });
     m.insert("expansions".into(), match (&p.expansions) { Some(v) => Value::Array((v).iter().map(|v| Value::String(iface_direct_messages__get_dm_conversations_with_participant_id_dm_events_expansions_item_enum__to_str(v).into())).collect()), None => Value::Null });
@@ -884,22 +755,8 @@ fn iface_direct_messages__create_dm_event_response__from_json(v: &Value) -> Opti
 fn iface_direct_messages__create_dm_event_response_data__from_json(v: &Value) -> Option<iface_direct_messages::CreateDmEventResponseData> {
     let m = v.as_object()?;
     Some(iface_direct_messages::CreateDmEventResponseData {
-        dm_conversation_id: match m.get("dm_conversation_id").and_then(|v| iface_direct_messages__dm_conversation_id__from_json(v)) { Some(x) => x, None => return None },
-        dm_event_id: match m.get("dm_event_id").and_then(|v| iface_direct_messages__dm_event_id__from_json(v)) { Some(x) => x, None => return None },
-    })
-}
-
-fn iface_direct_messages__dm_conversation_id__from_json(v: &Value) -> Option<iface_direct_messages::DmConversationId> {
-    let m = v.as_object()?;
-    Some(iface_direct_messages::DmConversationId {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-    })
-}
-
-fn iface_direct_messages__dm_event_id__from_json(v: &Value) -> Option<iface_direct_messages::DmEventId> {
-    let m = v.as_object()?;
-    Some(iface_direct_messages::DmEventId {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        dm_conversation_id: m.get("dm_conversation_id").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        dm_event_id: m.get("dm_event_id").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -928,12 +785,12 @@ fn iface_direct_messages__dm_event__from_json(v: &Value) -> Option<iface_direct_
     Some(iface_direct_messages::DmEvent {
         attachments: m.get("attachments").filter(|v| !v.is_null()).and_then(|v| iface_direct_messages__dm_event_attachments__from_json(v)),
         created_at: m.get("created_at").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        dm_conversation_id: m.get("dm_conversation_id").filter(|v| !v.is_null()).and_then(|v| iface_direct_messages__dm_conversation_id__from_json(v)),
+        dm_conversation_id: m.get("dm_conversation_id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         event_type: m.get("event_type").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-        id: match m.get("id").and_then(|v| iface_direct_messages__dm_event_id__from_json(v)) { Some(x) => x, None => return None },
-        participant_ids: m.get("participant_ids").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_direct_messages__user_id__from_json(x)).collect())),
+        id: m.get("id").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        participant_ids: m.get("participant_ids").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
         referenced_tweets: m.get("referenced_tweets").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_direct_messages__dm_event_referenced_tweets_item__from_json(x)).collect())),
-        sender_id: m.get("sender_id").filter(|v| !v.is_null()).and_then(|v| iface_direct_messages__user_id__from_json(v)),
+        sender_id: m.get("sender_id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         text: m.get("text").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
     })
 }
@@ -942,35 +799,14 @@ fn iface_direct_messages__dm_event_attachments__from_json(v: &Value) -> Option<i
     let m = v.as_object()?;
     Some(iface_direct_messages::DmEventAttachments {
         card_ids: m.get("card_ids").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
-        media_keys: m.get("media_keys").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_direct_messages__media_key__from_json(x)).collect())),
-    })
-}
-
-fn iface_direct_messages__media_key__from_json(v: &Value) -> Option<iface_direct_messages::MediaKey> {
-    let m = v.as_object()?;
-    Some(iface_direct_messages::MediaKey {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-    })
-}
-
-fn iface_direct_messages__user_id__from_json(v: &Value) -> Option<iface_direct_messages::UserId> {
-    let m = v.as_object()?;
-    Some(iface_direct_messages::UserId {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        media_keys: m.get("media_keys").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
     })
 }
 
 fn iface_direct_messages__dm_event_referenced_tweets_item__from_json(v: &Value) -> Option<iface_direct_messages::DmEventReferencedTweetsItem> {
     let m = v.as_object()?;
     Some(iface_direct_messages::DmEventReferencedTweetsItem {
-        id: match m.get("id").and_then(|v| iface_direct_messages__tweet_id__from_json(v)) { Some(x) => x, None => return None },
-    })
-}
-
-fn iface_direct_messages__tweet_id__from_json(v: &Value) -> Option<iface_direct_messages::TweetId> {
-    let m = v.as_object()?;
-    Some(iface_direct_messages::TweetId {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        id: m.get("id").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -989,52 +825,24 @@ fn iface_direct_messages__expansions__from_json(v: &Value) -> Option<iface_direc
 fn iface_direct_messages__media__from_json(v: &Value) -> Option<iface_direct_messages::Media> {
     let m = v.as_object()?;
     Some(iface_direct_messages::Media {
-        height: m.get("height").filter(|v| !v.is_null()).and_then(|v| iface_direct_messages__media_height__from_json(v)),
-        media_key: m.get("media_key").filter(|v| !v.is_null()).and_then(|v| iface_direct_messages__media_key__from_json(v)),
+        height: m.get("height").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        media_key: m.get("media_key").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         type_op: m.get("type").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-        width: m.get("width").filter(|v| !v.is_null()).and_then(|v| iface_direct_messages__media_width__from_json(v)),
-    })
-}
-
-fn iface_direct_messages__media_height__from_json(v: &Value) -> Option<iface_direct_messages::MediaHeight> {
-    let m = v.as_object()?;
-    Some(iface_direct_messages::MediaHeight {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-    })
-}
-
-fn iface_direct_messages__media_width__from_json(v: &Value) -> Option<iface_direct_messages::MediaWidth> {
-    let m = v.as_object()?;
-    Some(iface_direct_messages::MediaWidth {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        width: m.get("width").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
     })
 }
 
 fn iface_direct_messages__place__from_json(v: &Value) -> Option<iface_direct_messages::Place> {
     let m = v.as_object()?;
     Some(iface_direct_messages::Place {
-        contained_within: m.get("contained_within").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_direct_messages__place_id__from_json(x)).collect())),
+        contained_within: m.get("contained_within").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
         country: m.get("country").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        country_code: m.get("country_code").filter(|v| !v.is_null()).and_then(|v| iface_direct_messages__country_code__from_json(v)),
+        country_code: m.get("country_code").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         full_name: m.get("full_name").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         geo: m.get("geo").filter(|v| !v.is_null()).and_then(|v| iface_direct_messages__geo__from_json(v)),
-        id: match m.get("id").and_then(|v| iface_direct_messages__place_id__from_json(v)) { Some(x) => x, None => return None },
+        id: m.get("id").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        place_type: m.get("place_type").filter(|v| !v.is_null()).and_then(|v| iface_direct_messages__place_type__from_json(v)),
-    })
-}
-
-fn iface_direct_messages__place_id__from_json(v: &Value) -> Option<iface_direct_messages::PlaceId> {
-    let m = v.as_object()?;
-    Some(iface_direct_messages::PlaceId {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-    })
-}
-
-fn iface_direct_messages__country_code__from_json(v: &Value) -> Option<iface_direct_messages::CountryCode> {
-    let m = v.as_object()?;
-    Some(iface_direct_messages::CountryCode {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        place_type: m.get("place_type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_direct_messages__place_type__from_str)),
     })
 }
 
@@ -1043,7 +851,7 @@ fn iface_direct_messages__geo__from_json(v: &Value) -> Option<iface_direct_messa
     Some(iface_direct_messages::Geo {
         bbox: m.get("bbox").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_f64()).collect())).unwrap_or_default(),
         geometry: m.get("geometry").filter(|v| !v.is_null()).and_then(|v| iface_direct_messages__point__from_json(v)),
-        properties: match m.get("properties").and_then(|v| iface_direct_messages__geo_properties__from_json(v)) { Some(x) => x, None => return None },
+        properties: m.get("properties").and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_direct_messages::GeoPropertiesEntry { key: k.clone(), value: val })).collect())).unwrap_or_default(),
         type_op: match m.get("type").and_then(|v| (v).as_str().and_then(iface_direct_messages__geo_type_op_enum__from_str)) { Some(x) => x, None => return None },
     })
 }
@@ -1051,28 +859,15 @@ fn iface_direct_messages__geo__from_json(v: &Value) -> Option<iface_direct_messa
 fn iface_direct_messages__point__from_json(v: &Value) -> Option<iface_direct_messages::Point> {
     let m = v.as_object()?;
     Some(iface_direct_messages::Point {
-        coordinates: match m.get("coordinates").and_then(|v| iface_direct_messages__position__from_json(v)) { Some(x) => x, None => return None },
+        coordinates: m.get("coordinates").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_f64()).collect())).unwrap_or_default(),
         type_op: match m.get("type").and_then(|v| (v).as_str().and_then(iface_direct_messages__point_type_op_enum__from_str)) { Some(x) => x, None => return None },
     })
 }
 
-fn iface_direct_messages__position__from_json(v: &Value) -> Option<iface_direct_messages::Position> {
+fn iface_direct_messages__geo_properties_entry__from_json(v: &Value) -> Option<iface_direct_messages::GeoPropertiesEntry> {
     let m = v.as_object()?;
-    Some(iface_direct_messages::Position {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-    })
-}
-
-fn iface_direct_messages__geo_properties__from_json(v: &Value) -> Option<iface_direct_messages::GeoProperties> {
-    let m = v.as_object()?;
-    Some(iface_direct_messages::GeoProperties {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-    })
-}
-
-fn iface_direct_messages__place_type__from_json(v: &Value) -> Option<iface_direct_messages::PlaceType> {
-    let m = v.as_object()?;
-    Some(iface_direct_messages::PlaceType {
+    Some(iface_direct_messages::GeoPropertiesEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
@@ -1082,32 +877,18 @@ fn iface_direct_messages__poll__from_json(v: &Value) -> Option<iface_direct_mess
     Some(iface_direct_messages::Poll {
         duration_minutes: m.get("duration_minutes").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
         end_datetime: m.get("end_datetime").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        id: match m.get("id").and_then(|v| iface_direct_messages__poll_id__from_json(v)) { Some(x) => x, None => return None },
+        id: m.get("id").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         options: m.get("options").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_direct_messages__poll_option__from_json(x)).collect())).unwrap_or_default(),
         voting_status: m.get("voting_status").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_direct_messages__poll_voting_status_enum__from_str)),
-    })
-}
-
-fn iface_direct_messages__poll_id__from_json(v: &Value) -> Option<iface_direct_messages::PollId> {
-    let m = v.as_object()?;
-    Some(iface_direct_messages::PollId {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
 fn iface_direct_messages__poll_option__from_json(v: &Value) -> Option<iface_direct_messages::PollOption> {
     let m = v.as_object()?;
     Some(iface_direct_messages::PollOption {
-        label: match m.get("label").and_then(|v| iface_direct_messages__poll_option_label__from_json(v)) { Some(x) => x, None => return None },
+        label: m.get("label").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         position: m.get("position").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
         votes: m.get("votes").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
-    })
-}
-
-fn iface_direct_messages__poll_option_label__from_json(v: &Value) -> Option<iface_direct_messages::PollOptionLabel> {
-    let m = v.as_object()?;
-    Some(iface_direct_messages::PollOptionLabel {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -1115,15 +896,8 @@ fn iface_direct_messages__topic__from_json(v: &Value) -> Option<iface_direct_mes
     let m = v.as_object()?;
     Some(iface_direct_messages::Topic {
         description: m.get("description").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        id: match m.get("id").and_then(|v| iface_direct_messages__topic_id__from_json(v)) { Some(x) => x, None => return None },
+        id: m.get("id").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         name: m.get("name").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-    })
-}
-
-fn iface_direct_messages__topic_id__from_json(v: &Value) -> Option<iface_direct_messages::TopicId> {
-    let m = v.as_object()?;
-    Some(iface_direct_messages::TopicId {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -1131,16 +905,16 @@ fn iface_direct_messages__tweet__from_json(v: &Value) -> Option<iface_direct_mes
     let m = v.as_object()?;
     Some(iface_direct_messages::Tweet {
         attachments: m.get("attachments").filter(|v| !v.is_null()).and_then(|v| iface_direct_messages__tweet_attachments__from_json(v)),
-        author_id: m.get("author_id").filter(|v| !v.is_null()).and_then(|v| iface_direct_messages__user_id__from_json(v)),
+        author_id: m.get("author_id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         context_annotations: m.get("context_annotations").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_direct_messages__context_annotation__from_json(x)).collect())),
-        conversation_id: m.get("conversation_id").filter(|v| !v.is_null()).and_then(|v| iface_direct_messages__tweet_id__from_json(v)),
+        conversation_id: m.get("conversation_id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         created_at: m.get("created_at").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         edit_controls: m.get("edit_controls").filter(|v| !v.is_null()).and_then(|v| iface_direct_messages__tweet_edit_controls__from_json(v)),
-        edit_history_tweet_ids: m.get("edit_history_tweet_ids").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_direct_messages__tweet_id__from_json(x)).collect())).unwrap_or_default(),
+        edit_history_tweet_ids: m.get("edit_history_tweet_ids").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())).unwrap_or_default(),
         entities: m.get("entities").filter(|v| !v.is_null()).and_then(|v| iface_direct_messages__full_text_entities__from_json(v)),
         geo: m.get("geo").filter(|v| !v.is_null()).and_then(|v| iface_direct_messages__tweet_geo__from_json(v)),
-        id: match m.get("id").and_then(|v| iface_direct_messages__tweet_id__from_json(v)) { Some(x) => x, None => return None },
-        in_reply_to_user_id: m.get("in_reply_to_user_id").filter(|v| !v.is_null()).and_then(|v| iface_direct_messages__user_id__from_json(v)),
+        id: m.get("id").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        in_reply_to_user_id: m.get("in_reply_to_user_id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         lang: m.get("lang").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         non_public_metrics: m.get("non_public_metrics").filter(|v| !v.is_null()).and_then(|v| iface_direct_messages__tweet_non_public_metrics__from_json(v)),
         organic_metrics: m.get("organic_metrics").filter(|v| !v.is_null()).and_then(|v| iface_direct_messages__tweet_organic_metrics__from_json(v)),
@@ -1148,9 +922,9 @@ fn iface_direct_messages__tweet__from_json(v: &Value) -> Option<iface_direct_mes
         promoted_metrics: m.get("promoted_metrics").filter(|v| !v.is_null()).and_then(|v| iface_direct_messages__tweet_promoted_metrics__from_json(v)),
         public_metrics: m.get("public_metrics").filter(|v| !v.is_null()).and_then(|v| iface_direct_messages__tweet_public_metrics__from_json(v)),
         referenced_tweets: m.get("referenced_tweets").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_direct_messages__tweet_referenced_tweets_item__from_json(x)).collect())),
-        reply_settings: m.get("reply_settings").filter(|v| !v.is_null()).and_then(|v| iface_direct_messages__reply_settings__from_json(v)),
+        reply_settings: m.get("reply_settings").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_direct_messages__reply_settings__from_str)),
         source: m.get("source").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        text: match m.get("text").and_then(|v| iface_direct_messages__tweet_text__from_json(v)) { Some(x) => x, None => return None },
+        text: m.get("text").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         withheld: m.get("withheld").filter(|v| !v.is_null()).and_then(|v| iface_direct_messages__tweet_withheld__from_json(v)),
     })
 }
@@ -1158,8 +932,8 @@ fn iface_direct_messages__tweet__from_json(v: &Value) -> Option<iface_direct_mes
 fn iface_direct_messages__tweet_attachments__from_json(v: &Value) -> Option<iface_direct_messages::TweetAttachments> {
     let m = v.as_object()?;
     Some(iface_direct_messages::TweetAttachments {
-        media_keys: m.get("media_keys").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_direct_messages__media_key__from_json(x)).collect())),
-        poll_ids: m.get("poll_ids").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_direct_messages__poll_id__from_json(x)).collect())),
+        media_keys: m.get("media_keys").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        poll_ids: m.get("poll_ids").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
     })
 }
 
@@ -1243,15 +1017,8 @@ fn iface_direct_messages__mention_entity__from_json(v: &Value) -> Option<iface_d
     Some(iface_direct_messages::MentionEntity {
         end: m.get("end").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
         start: m.get("start").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
-        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| iface_direct_messages__user_id__from_json(v)),
-        username: match m.get("username").and_then(|v| iface_direct_messages__user_name__from_json(v)) { Some(x) => x, None => return None },
-    })
-}
-
-fn iface_direct_messages__user_name__from_json(v: &Value) -> Option<iface_direct_messages::UserName> {
-    let m = v.as_object()?;
-    Some(iface_direct_messages::UserName {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        username: m.get("username").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -1262,36 +1029,22 @@ fn iface_direct_messages__url_entity__from_json(v: &Value) -> Option<iface_direc
         start: m.get("start").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
         description: m.get("description").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         display_url: m.get("display_url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        expanded_url: m.get("expanded_url").filter(|v| !v.is_null()).and_then(|v| iface_direct_messages__url__from_json(v)),
+        expanded_url: m.get("expanded_url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         images: m.get("images").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_direct_messages__url_image__from_json(x)).collect())),
-        media_key: m.get("media_key").filter(|v| !v.is_null()).and_then(|v| iface_direct_messages__media_key__from_json(v)),
-        status: m.get("status").filter(|v| !v.is_null()).and_then(|v| iface_direct_messages__http_status_code__from_json(v)),
+        media_key: m.get("media_key").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        status: m.get("status").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
         title: m.get("title").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         unwound_url: m.get("unwound_url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        url: match m.get("url").and_then(|v| iface_direct_messages__url__from_json(v)) { Some(x) => x, None => return None },
-    })
-}
-
-fn iface_direct_messages__url__from_json(v: &Value) -> Option<iface_direct_messages::Url> {
-    let m = v.as_object()?;
-    Some(iface_direct_messages::Url {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        url: m.get("url").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
 fn iface_direct_messages__url_image__from_json(v: &Value) -> Option<iface_direct_messages::UrlImage> {
     let m = v.as_object()?;
     Some(iface_direct_messages::UrlImage {
-        height: m.get("height").filter(|v| !v.is_null()).and_then(|v| iface_direct_messages__media_height__from_json(v)),
-        url: m.get("url").filter(|v| !v.is_null()).and_then(|v| iface_direct_messages__url__from_json(v)),
-        width: m.get("width").filter(|v| !v.is_null()).and_then(|v| iface_direct_messages__media_width__from_json(v)),
-    })
-}
-
-fn iface_direct_messages__http_status_code__from_json(v: &Value) -> Option<iface_direct_messages::HttpStatusCode> {
-    let m = v.as_object()?;
-    Some(iface_direct_messages::HttpStatusCode {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        height: m.get("height").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        url: m.get("url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        width: m.get("width").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
     })
 }
 
@@ -1299,7 +1052,7 @@ fn iface_direct_messages__tweet_geo__from_json(v: &Value) -> Option<iface_direct
     let m = v.as_object()?;
     Some(iface_direct_messages::TweetGeo {
         coordinates: m.get("coordinates").filter(|v| !v.is_null()).and_then(|v| iface_direct_messages__point__from_json(v)),
-        place_id: m.get("place_id").filter(|v| !v.is_null()).and_then(|v| iface_direct_messages__place_id__from_json(v)),
+        place_id: m.get("place_id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
     })
 }
 
@@ -1344,22 +1097,8 @@ fn iface_direct_messages__tweet_public_metrics__from_json(v: &Value) -> Option<i
 fn iface_direct_messages__tweet_referenced_tweets_item__from_json(v: &Value) -> Option<iface_direct_messages::TweetReferencedTweetsItem> {
     let m = v.as_object()?;
     Some(iface_direct_messages::TweetReferencedTweetsItem {
-        id: match m.get("id").and_then(|v| iface_direct_messages__tweet_id__from_json(v)) { Some(x) => x, None => return None },
+        id: m.get("id").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         type_op: match m.get("type").and_then(|v| (v).as_str().and_then(iface_direct_messages__tweet_referenced_tweets_item_type_op_enum__from_str)) { Some(x) => x, None => return None },
-    })
-}
-
-fn iface_direct_messages__reply_settings__from_json(v: &Value) -> Option<iface_direct_messages::ReplySettings> {
-    let m = v.as_object()?;
-    Some(iface_direct_messages::ReplySettings {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-    })
-}
-
-fn iface_direct_messages__tweet_text__from_json(v: &Value) -> Option<iface_direct_messages::TweetText> {
-    let m = v.as_object()?;
-    Some(iface_direct_messages::TweetText {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -1367,7 +1106,7 @@ fn iface_direct_messages__tweet_withheld__from_json(v: &Value) -> Option<iface_d
     let m = v.as_object()?;
     Some(iface_direct_messages::TweetWithheld {
         copyright: m.get("copyright").and_then(|v| (v).as_bool()).unwrap_or_default(),
-        country_codes: m.get("country_codes").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_direct_messages__country_code__from_json(x)).collect())).unwrap_or_default(),
+        country_codes: m.get("country_codes").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())).unwrap_or_default(),
         scope: m.get("scope").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_direct_messages__tweet_withheld_scope_enum__from_str)),
     })
 }
@@ -1378,15 +1117,15 @@ fn iface_direct_messages__user__from_json(v: &Value) -> Option<iface_direct_mess
         created_at: m.get("created_at").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         description: m.get("description").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         entities: m.get("entities").filter(|v| !v.is_null()).and_then(|v| iface_direct_messages__user_entities__from_json(v)),
-        id: match m.get("id").and_then(|v| iface_direct_messages__user_id__from_json(v)) { Some(x) => x, None => return None },
+        id: m.get("id").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         location: m.get("location").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         name: m.get("name").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-        pinned_tweet_id: m.get("pinned_tweet_id").filter(|v| !v.is_null()).and_then(|v| iface_direct_messages__tweet_id__from_json(v)),
+        pinned_tweet_id: m.get("pinned_tweet_id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         profile_image_url: m.get("profile_image_url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         protected: m.get("protected").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
         public_metrics: m.get("public_metrics").filter(|v| !v.is_null()).and_then(|v| iface_direct_messages__user_public_metrics__from_json(v)),
         url: m.get("url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        username: match m.get("username").and_then(|v| iface_direct_messages__user_name__from_json(v)) { Some(x) => x, None => return None },
+        username: m.get("username").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         verified: m.get("verified").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
         verified_type: m.get("verified_type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         withheld: m.get("withheld").filter(|v| !v.is_null()).and_then(|v| iface_direct_messages__user_withheld__from_json(v)),
@@ -1421,7 +1160,7 @@ fn iface_direct_messages__user_public_metrics__from_json(v: &Value) -> Option<if
 fn iface_direct_messages__user_withheld__from_json(v: &Value) -> Option<iface_direct_messages::UserWithheld> {
     let m = v.as_object()?;
     Some(iface_direct_messages::UserWithheld {
-        country_codes: m.get("country_codes").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_direct_messages__country_code__from_json(x)).collect())).unwrap_or_default(),
+        country_codes: m.get("country_codes").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())).unwrap_or_default(),
         scope: m.get("scope").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_direct_messages__user_withheld_scope_enum__from_str)),
     })
 }
@@ -1429,30 +1168,9 @@ fn iface_direct_messages__user_withheld__from_json(v: &Value) -> Option<iface_di
 fn iface_direct_messages__get2_dm_conversations_with_participant_id_dm_events_response_meta__from_json(v: &Value) -> Option<iface_direct_messages::Get2DmConversationsWithParticipantIdDmEventsResponseMeta> {
     let m = v.as_object()?;
     Some(iface_direct_messages::Get2DmConversationsWithParticipantIdDmEventsResponseMeta {
-        next_token: m.get("next_token").filter(|v| !v.is_null()).and_then(|v| iface_direct_messages__next_token__from_json(v)),
-        previous_token: m.get("previous_token").filter(|v| !v.is_null()).and_then(|v| iface_direct_messages__previous_token__from_json(v)),
-        result_count: m.get("result_count").filter(|v| !v.is_null()).and_then(|v| iface_direct_messages__result_count__from_json(v)),
-    })
-}
-
-fn iface_direct_messages__next_token__from_json(v: &Value) -> Option<iface_direct_messages::NextToken> {
-    let m = v.as_object()?;
-    Some(iface_direct_messages::NextToken {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-    })
-}
-
-fn iface_direct_messages__previous_token__from_json(v: &Value) -> Option<iface_direct_messages::PreviousToken> {
-    let m = v.as_object()?;
-    Some(iface_direct_messages::PreviousToken {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-    })
-}
-
-fn iface_direct_messages__result_count__from_json(v: &Value) -> Option<iface_direct_messages::ResultCount> {
-    let m = v.as_object()?;
-    Some(iface_direct_messages::ResultCount {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        next_token: m.get("next_token").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        previous_token: m.get("previous_token").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        result_count: m.get("result_count").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
     })
 }
 
@@ -1469,9 +1187,9 @@ fn iface_direct_messages__get2_dm_conversations_id_dm_events_response__from_json
 fn iface_direct_messages__get2_dm_conversations_id_dm_events_response_meta__from_json(v: &Value) -> Option<iface_direct_messages::Get2DmConversationsIdDmEventsResponseMeta> {
     let m = v.as_object()?;
     Some(iface_direct_messages::Get2DmConversationsIdDmEventsResponseMeta {
-        next_token: m.get("next_token").filter(|v| !v.is_null()).and_then(|v| iface_direct_messages__next_token__from_json(v)),
-        previous_token: m.get("previous_token").filter(|v| !v.is_null()).and_then(|v| iface_direct_messages__previous_token__from_json(v)),
-        result_count: m.get("result_count").filter(|v| !v.is_null()).and_then(|v| iface_direct_messages__result_count__from_json(v)),
+        next_token: m.get("next_token").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        previous_token: m.get("previous_token").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        result_count: m.get("result_count").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
     })
 }
 
@@ -1488,9 +1206,9 @@ fn iface_direct_messages__get2_dm_events_response__from_json(v: &Value) -> Optio
 fn iface_direct_messages__get2_dm_events_response_meta__from_json(v: &Value) -> Option<iface_direct_messages::Get2DmEventsResponseMeta> {
     let m = v.as_object()?;
     Some(iface_direct_messages::Get2DmEventsResponseMeta {
-        next_token: m.get("next_token").filter(|v| !v.is_null()).and_then(|v| iface_direct_messages__next_token__from_json(v)),
-        previous_token: m.get("previous_token").filter(|v| !v.is_null()).and_then(|v| iface_direct_messages__previous_token__from_json(v)),
-        result_count: m.get("result_count").filter(|v| !v.is_null()).and_then(|v| iface_direct_messages__result_count__from_json(v)),
+        next_token: m.get("next_token").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        previous_token: m.get("previous_token").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        result_count: m.get("result_count").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
     })
 }
 
@@ -1508,6 +1226,18 @@ fn iface_direct_messages__geo_type_op_enum__from_str(s: &str) -> Option<iface_di
     }
 }
 
+fn iface_direct_messages__place_type__from_str(s: &str) -> Option<iface_direct_messages::PlaceType> {
+    match s {
+        "poi" => Some(iface_direct_messages::PlaceType::Poi),
+        "neighborhood" => Some(iface_direct_messages::PlaceType::Neighborhood),
+        "city" => Some(iface_direct_messages::PlaceType::City),
+        "admin" => Some(iface_direct_messages::PlaceType::Admin),
+        "country" => Some(iface_direct_messages::PlaceType::Country),
+        "unknown" => Some(iface_direct_messages::PlaceType::Unknown),
+        _ => None,
+    }
+}
+
 fn iface_direct_messages__poll_voting_status_enum__from_str(s: &str) -> Option<iface_direct_messages::PollVotingStatusEnum> {
     match s {
         "open" => Some(iface_direct_messages::PollVotingStatusEnum::Open),
@@ -1521,6 +1251,16 @@ fn iface_direct_messages__tweet_referenced_tweets_item_type_op_enum__from_str(s:
         "retweeted" => Some(iface_direct_messages::TweetReferencedTweetsItemTypeOpEnum::Retweeted),
         "quoted" => Some(iface_direct_messages::TweetReferencedTweetsItemTypeOpEnum::Quoted),
         "replied_to" => Some(iface_direct_messages::TweetReferencedTweetsItemTypeOpEnum::RepliedTo),
+        _ => None,
+    }
+}
+
+fn iface_direct_messages__reply_settings__from_str(s: &str) -> Option<iface_direct_messages::ReplySettings> {
+    match s {
+        "everyone" => Some(iface_direct_messages::ReplySettings::Everyone),
+        "mentionedUsers" => Some(iface_direct_messages::ReplySettings::MentionedUsers),
+        "following" => Some(iface_direct_messages::ReplySettings::Following),
+        "other" => Some(iface_direct_messages::ReplySettings::Other),
         _ => None,
     }
 }

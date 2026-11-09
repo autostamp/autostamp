@@ -143,9 +143,207 @@ fn iface_badges__get_badges_name_sort_enum__to_str(e: &iface_badges::GetBadgesNa
     }
 }
 
-fn iface_badges__badges__to_json(p: &iface_badges::Badges) -> Value {
+fn iface_badges__badges_item__to_json(p: &iface_badges::BadgesItem) -> Value {
     let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
+    m.insert("award_count".into(), match (&p.award_count) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("badge_id".into(), match (&p.badge_id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("badge_type".into(), match (&p.badge_type) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("description".into(), match (&p.description) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("link".into(), match (&p.link) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("rank".into(), match (&p.rank) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("user".into(), match (&p.user) { Some(v) => iface_badges__badges_item_user__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_badges__badges_item_user__to_json(p: &iface_badges::BadgesItemUser) -> Value {
+    let mut m = Map::new();
+    m.insert("accept_rate".into(), match (&p.accept_rate) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("badge_counts".into(), match (&p.badge_counts) { Some(v) => iface_badges__badges_item_user_badge_counts__to_json(v), None => Value::Null });
+    m.insert("display_name".into(), match (&p.display_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("link".into(), match (&p.link) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("profile_image".into(), match (&p.profile_image) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("reputation".into(), match (&p.reputation) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("user_id".into(), match (&p.user_id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("user_type".into(), match (&p.user_type) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_badges__badges_item_user_badge_counts__to_json(p: &iface_badges::BadgesItemUserBadgeCounts) -> Value {
+    let mut m = Map::new();
+    m.insert("bronze".into(), match (&p.bronze) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("gold".into(), match (&p.gold) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("silver".into(), match (&p.silver) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_badges__badges_item_v2__to_json(p: &iface_badges::BadgesItemV2) -> Value {
+    let mut m = Map::new();
+    m.insert("award_count".into(), match (&p.award_count) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("badge_id".into(), match (&p.badge_id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("badge_type".into(), match (&p.badge_type) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("description".into(), match (&p.description) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("link".into(), match (&p.link) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("rank".into(), match (&p.rank) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("user".into(), match (&p.user) { Some(v) => iface_badges__badges_item_v2_user__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_badges__badges_item_v2_user__to_json(p: &iface_badges::BadgesItemV2User) -> Value {
+    let mut m = Map::new();
+    m.insert("accept_rate".into(), match (&p.accept_rate) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("badge_counts".into(), match (&p.badge_counts) { Some(v) => iface_badges__badges_item_v2_user_badge_counts__to_json(v), None => Value::Null });
+    m.insert("display_name".into(), match (&p.display_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("link".into(), match (&p.link) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("profile_image".into(), match (&p.profile_image) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("reputation".into(), match (&p.reputation) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("user_id".into(), match (&p.user_id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("user_type".into(), match (&p.user_type) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_badges__badges_item_v2_user_badge_counts__to_json(p: &iface_badges::BadgesItemV2UserBadgeCounts) -> Value {
+    let mut m = Map::new();
+    m.insert("bronze".into(), match (&p.bronze) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("gold".into(), match (&p.gold) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("silver".into(), match (&p.silver) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_badges__badges_item_v3__to_json(p: &iface_badges::BadgesItemV3) -> Value {
+    let mut m = Map::new();
+    m.insert("award_count".into(), match (&p.award_count) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("badge_id".into(), match (&p.badge_id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("badge_type".into(), match (&p.badge_type) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("description".into(), match (&p.description) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("link".into(), match (&p.link) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("rank".into(), match (&p.rank) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("user".into(), match (&p.user) { Some(v) => iface_badges__badges_item_v3_user__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_badges__badges_item_v3_user__to_json(p: &iface_badges::BadgesItemV3User) -> Value {
+    let mut m = Map::new();
+    m.insert("accept_rate".into(), match (&p.accept_rate) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("badge_counts".into(), match (&p.badge_counts) { Some(v) => iface_badges__badges_item_v3_user_badge_counts__to_json(v), None => Value::Null });
+    m.insert("display_name".into(), match (&p.display_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("link".into(), match (&p.link) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("profile_image".into(), match (&p.profile_image) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("reputation".into(), match (&p.reputation) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("user_id".into(), match (&p.user_id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("user_type".into(), match (&p.user_type) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_badges__badges_item_v3_user_badge_counts__to_json(p: &iface_badges::BadgesItemV3UserBadgeCounts) -> Value {
+    let mut m = Map::new();
+    m.insert("bronze".into(), match (&p.bronze) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("gold".into(), match (&p.gold) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("silver".into(), match (&p.silver) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_badges__badges_item_v4__to_json(p: &iface_badges::BadgesItemV4) -> Value {
+    let mut m = Map::new();
+    m.insert("award_count".into(), match (&p.award_count) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("badge_id".into(), match (&p.badge_id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("badge_type".into(), match (&p.badge_type) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("description".into(), match (&p.description) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("link".into(), match (&p.link) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("rank".into(), match (&p.rank) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("user".into(), match (&p.user) { Some(v) => iface_badges__badges_item_v4_user__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_badges__badges_item_v4_user__to_json(p: &iface_badges::BadgesItemV4User) -> Value {
+    let mut m = Map::new();
+    m.insert("accept_rate".into(), match (&p.accept_rate) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("badge_counts".into(), match (&p.badge_counts) { Some(v) => iface_badges__badges_item_v4_user_badge_counts__to_json(v), None => Value::Null });
+    m.insert("display_name".into(), match (&p.display_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("link".into(), match (&p.link) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("profile_image".into(), match (&p.profile_image) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("reputation".into(), match (&p.reputation) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("user_id".into(), match (&p.user_id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("user_type".into(), match (&p.user_type) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_badges__badges_item_v4_user_badge_counts__to_json(p: &iface_badges::BadgesItemV4UserBadgeCounts) -> Value {
+    let mut m = Map::new();
+    m.insert("bronze".into(), match (&p.bronze) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("gold".into(), match (&p.gold) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("silver".into(), match (&p.silver) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_badges__badges_item_v5__to_json(p: &iface_badges::BadgesItemV5) -> Value {
+    let mut m = Map::new();
+    m.insert("award_count".into(), match (&p.award_count) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("badge_id".into(), match (&p.badge_id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("badge_type".into(), match (&p.badge_type) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("description".into(), match (&p.description) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("link".into(), match (&p.link) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("rank".into(), match (&p.rank) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("user".into(), match (&p.user) { Some(v) => iface_badges__badges_item_v5_user__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_badges__badges_item_v5_user__to_json(p: &iface_badges::BadgesItemV5User) -> Value {
+    let mut m = Map::new();
+    m.insert("accept_rate".into(), match (&p.accept_rate) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("badge_counts".into(), match (&p.badge_counts) { Some(v) => iface_badges__badges_item_v5_user_badge_counts__to_json(v), None => Value::Null });
+    m.insert("display_name".into(), match (&p.display_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("link".into(), match (&p.link) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("profile_image".into(), match (&p.profile_image) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("reputation".into(), match (&p.reputation) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("user_id".into(), match (&p.user_id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("user_type".into(), match (&p.user_type) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_badges__badges_item_v5_user_badge_counts__to_json(p: &iface_badges::BadgesItemV5UserBadgeCounts) -> Value {
+    let mut m = Map::new();
+    m.insert("bronze".into(), match (&p.bronze) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("gold".into(), match (&p.gold) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("silver".into(), match (&p.silver) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_badges__badges_item_v6__to_json(p: &iface_badges::BadgesItemV6) -> Value {
+    let mut m = Map::new();
+    m.insert("award_count".into(), match (&p.award_count) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("badge_id".into(), match (&p.badge_id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("badge_type".into(), match (&p.badge_type) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("description".into(), match (&p.description) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("link".into(), match (&p.link) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("rank".into(), match (&p.rank) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("user".into(), match (&p.user) { Some(v) => iface_badges__badges_item_v6_user__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_badges__badges_item_v6_user__to_json(p: &iface_badges::BadgesItemV6User) -> Value {
+    let mut m = Map::new();
+    m.insert("accept_rate".into(), match (&p.accept_rate) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("badge_counts".into(), match (&p.badge_counts) { Some(v) => iface_badges__badges_item_v6_user_badge_counts__to_json(v), None => Value::Null });
+    m.insert("display_name".into(), match (&p.display_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("link".into(), match (&p.link) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("profile_image".into(), match (&p.profile_image) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("reputation".into(), match (&p.reputation) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("user_id".into(), match (&p.user_id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("user_type".into(), match (&p.user_type) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_badges__badges_item_v6_user_badge_counts__to_json(p: &iface_badges::BadgesItemV6UserBadgeCounts) -> Value {
+    let mut m = Map::new();
+    m.insert("bronze".into(), match (&p.bronze) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("gold".into(), match (&p.gold) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("silver".into(), match (&p.silver) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
@@ -242,19 +440,234 @@ fn iface_badges__get_badges_ids_recipients_params__to_json(p: &iface_badges::Get
     Value::Object(m)
 }
 
-fn iface_badges__badges__from_json(v: &Value) -> Option<iface_badges::Badges> {
+fn iface_badges__badges_item__from_json(v: &Value) -> Option<iface_badges::BadgesItem> {
     let m = v.as_object()?;
-    Some(iface_badges::Badges {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    Some(iface_badges::BadgesItem {
+        award_count: m.get("award_count").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        badge_id: m.get("badge_id").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        badge_type: m.get("badge_type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        description: m.get("description").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        link: m.get("link").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        rank: m.get("rank").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        user: m.get("user").filter(|v| !v.is_null()).and_then(|v| iface_badges__badges_item_user__from_json(v)),
     })
 }
 
-fn iface_badges__get_badges__ok(body: String) -> Result<iface_badges::Badges, crate::runtime::DispatchError> {
+fn iface_badges__badges_item_user__from_json(v: &Value) -> Option<iface_badges::BadgesItemUser> {
+    let m = v.as_object()?;
+    Some(iface_badges::BadgesItemUser {
+        accept_rate: m.get("accept_rate").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        badge_counts: m.get("badge_counts").filter(|v| !v.is_null()).and_then(|v| iface_badges__badges_item_user_badge_counts__from_json(v)),
+        display_name: m.get("display_name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        link: m.get("link").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        profile_image: m.get("profile_image").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        reputation: m.get("reputation").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        user_id: m.get("user_id").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        user_type: m.get("user_type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_badges__badges_item_user_badge_counts__from_json(v: &Value) -> Option<iface_badges::BadgesItemUserBadgeCounts> {
+    let m = v.as_object()?;
+    Some(iface_badges::BadgesItemUserBadgeCounts {
+        bronze: m.get("bronze").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        gold: m.get("gold").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        silver: m.get("silver").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+    })
+}
+
+fn iface_badges__badges_item_v2__from_json(v: &Value) -> Option<iface_badges::BadgesItemV2> {
+    let m = v.as_object()?;
+    Some(iface_badges::BadgesItemV2 {
+        award_count: m.get("award_count").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        badge_id: m.get("badge_id").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        badge_type: m.get("badge_type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        description: m.get("description").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        link: m.get("link").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        rank: m.get("rank").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        user: m.get("user").filter(|v| !v.is_null()).and_then(|v| iface_badges__badges_item_v2_user__from_json(v)),
+    })
+}
+
+fn iface_badges__badges_item_v2_user__from_json(v: &Value) -> Option<iface_badges::BadgesItemV2User> {
+    let m = v.as_object()?;
+    Some(iface_badges::BadgesItemV2User {
+        accept_rate: m.get("accept_rate").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        badge_counts: m.get("badge_counts").filter(|v| !v.is_null()).and_then(|v| iface_badges__badges_item_v2_user_badge_counts__from_json(v)),
+        display_name: m.get("display_name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        link: m.get("link").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        profile_image: m.get("profile_image").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        reputation: m.get("reputation").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        user_id: m.get("user_id").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        user_type: m.get("user_type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_badges__badges_item_v2_user_badge_counts__from_json(v: &Value) -> Option<iface_badges::BadgesItemV2UserBadgeCounts> {
+    let m = v.as_object()?;
+    Some(iface_badges::BadgesItemV2UserBadgeCounts {
+        bronze: m.get("bronze").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        gold: m.get("gold").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        silver: m.get("silver").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+    })
+}
+
+fn iface_badges__badges_item_v3__from_json(v: &Value) -> Option<iface_badges::BadgesItemV3> {
+    let m = v.as_object()?;
+    Some(iface_badges::BadgesItemV3 {
+        award_count: m.get("award_count").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        badge_id: m.get("badge_id").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        badge_type: m.get("badge_type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        description: m.get("description").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        link: m.get("link").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        rank: m.get("rank").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        user: m.get("user").filter(|v| !v.is_null()).and_then(|v| iface_badges__badges_item_v3_user__from_json(v)),
+    })
+}
+
+fn iface_badges__badges_item_v3_user__from_json(v: &Value) -> Option<iface_badges::BadgesItemV3User> {
+    let m = v.as_object()?;
+    Some(iface_badges::BadgesItemV3User {
+        accept_rate: m.get("accept_rate").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        badge_counts: m.get("badge_counts").filter(|v| !v.is_null()).and_then(|v| iface_badges__badges_item_v3_user_badge_counts__from_json(v)),
+        display_name: m.get("display_name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        link: m.get("link").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        profile_image: m.get("profile_image").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        reputation: m.get("reputation").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        user_id: m.get("user_id").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        user_type: m.get("user_type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_badges__badges_item_v3_user_badge_counts__from_json(v: &Value) -> Option<iface_badges::BadgesItemV3UserBadgeCounts> {
+    let m = v.as_object()?;
+    Some(iface_badges::BadgesItemV3UserBadgeCounts {
+        bronze: m.get("bronze").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        gold: m.get("gold").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        silver: m.get("silver").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+    })
+}
+
+fn iface_badges__badges_item_v4__from_json(v: &Value) -> Option<iface_badges::BadgesItemV4> {
+    let m = v.as_object()?;
+    Some(iface_badges::BadgesItemV4 {
+        award_count: m.get("award_count").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        badge_id: m.get("badge_id").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        badge_type: m.get("badge_type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        description: m.get("description").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        link: m.get("link").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        rank: m.get("rank").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        user: m.get("user").filter(|v| !v.is_null()).and_then(|v| iface_badges__badges_item_v4_user__from_json(v)),
+    })
+}
+
+fn iface_badges__badges_item_v4_user__from_json(v: &Value) -> Option<iface_badges::BadgesItemV4User> {
+    let m = v.as_object()?;
+    Some(iface_badges::BadgesItemV4User {
+        accept_rate: m.get("accept_rate").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        badge_counts: m.get("badge_counts").filter(|v| !v.is_null()).and_then(|v| iface_badges__badges_item_v4_user_badge_counts__from_json(v)),
+        display_name: m.get("display_name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        link: m.get("link").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        profile_image: m.get("profile_image").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        reputation: m.get("reputation").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        user_id: m.get("user_id").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        user_type: m.get("user_type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_badges__badges_item_v4_user_badge_counts__from_json(v: &Value) -> Option<iface_badges::BadgesItemV4UserBadgeCounts> {
+    let m = v.as_object()?;
+    Some(iface_badges::BadgesItemV4UserBadgeCounts {
+        bronze: m.get("bronze").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        gold: m.get("gold").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        silver: m.get("silver").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+    })
+}
+
+fn iface_badges__badges_item_v5__from_json(v: &Value) -> Option<iface_badges::BadgesItemV5> {
+    let m = v.as_object()?;
+    Some(iface_badges::BadgesItemV5 {
+        award_count: m.get("award_count").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        badge_id: m.get("badge_id").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        badge_type: m.get("badge_type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        description: m.get("description").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        link: m.get("link").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        rank: m.get("rank").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        user: m.get("user").filter(|v| !v.is_null()).and_then(|v| iface_badges__badges_item_v5_user__from_json(v)),
+    })
+}
+
+fn iface_badges__badges_item_v5_user__from_json(v: &Value) -> Option<iface_badges::BadgesItemV5User> {
+    let m = v.as_object()?;
+    Some(iface_badges::BadgesItemV5User {
+        accept_rate: m.get("accept_rate").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        badge_counts: m.get("badge_counts").filter(|v| !v.is_null()).and_then(|v| iface_badges__badges_item_v5_user_badge_counts__from_json(v)),
+        display_name: m.get("display_name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        link: m.get("link").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        profile_image: m.get("profile_image").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        reputation: m.get("reputation").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        user_id: m.get("user_id").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        user_type: m.get("user_type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_badges__badges_item_v5_user_badge_counts__from_json(v: &Value) -> Option<iface_badges::BadgesItemV5UserBadgeCounts> {
+    let m = v.as_object()?;
+    Some(iface_badges::BadgesItemV5UserBadgeCounts {
+        bronze: m.get("bronze").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        gold: m.get("gold").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        silver: m.get("silver").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+    })
+}
+
+fn iface_badges__badges_item_v6__from_json(v: &Value) -> Option<iface_badges::BadgesItemV6> {
+    let m = v.as_object()?;
+    Some(iface_badges::BadgesItemV6 {
+        award_count: m.get("award_count").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        badge_id: m.get("badge_id").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        badge_type: m.get("badge_type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        description: m.get("description").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        link: m.get("link").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        rank: m.get("rank").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        user: m.get("user").filter(|v| !v.is_null()).and_then(|v| iface_badges__badges_item_v6_user__from_json(v)),
+    })
+}
+
+fn iface_badges__badges_item_v6_user__from_json(v: &Value) -> Option<iface_badges::BadgesItemV6User> {
+    let m = v.as_object()?;
+    Some(iface_badges::BadgesItemV6User {
+        accept_rate: m.get("accept_rate").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        badge_counts: m.get("badge_counts").filter(|v| !v.is_null()).and_then(|v| iface_badges__badges_item_v6_user_badge_counts__from_json(v)),
+        display_name: m.get("display_name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        link: m.get("link").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        profile_image: m.get("profile_image").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        reputation: m.get("reputation").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        user_id: m.get("user_id").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        user_type: m.get("user_type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_badges__badges_item_v6_user_badge_counts__from_json(v: &Value) -> Option<iface_badges::BadgesItemV6UserBadgeCounts> {
+    let m = v.as_object()?;
+    Some(iface_badges::BadgesItemV6UserBadgeCounts {
+        bronze: m.get("bronze").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        gold: m.get("gold").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        silver: m.get("silver").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+    })
+}
+
+fn iface_badges__get_badges__ok(body: String) -> Result<Vec<iface_badges::BadgesItem>, crate::runtime::DispatchError> {
     let v: Value = match serde_json::from_str(&body) {
         Ok(v) => v,
         Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
     };
-    match iface_badges__badges__from_json(&v) {
+    match (&v).as_array().map(|a| a.iter().filter_map(|x| iface_badges__badges_item__from_json(x)).collect()) {
         Some(x) => Ok(x),
         None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
@@ -279,12 +692,12 @@ fn iface_badges__get_badges__err(e: crate::runtime::DispatchError) -> iface_badg
     }
 }
 
-fn iface_badges__get_badges_name__ok(body: String) -> Result<iface_badges::Badges, crate::runtime::DispatchError> {
+fn iface_badges__get_badges_name__ok(body: String) -> Result<Vec<iface_badges::BadgesItemV2>, crate::runtime::DispatchError> {
     let v: Value = match serde_json::from_str(&body) {
         Ok(v) => v,
         Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
     };
-    match iface_badges__badges__from_json(&v) {
+    match (&v).as_array().map(|a| a.iter().filter_map(|x| iface_badges__badges_item_v2__from_json(x)).collect()) {
         Some(x) => Ok(x),
         None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
@@ -309,12 +722,12 @@ fn iface_badges__get_badges_name__err(e: crate::runtime::DispatchError) -> iface
     }
 }
 
-fn iface_badges__get_badges_recipients__ok(body: String) -> Result<iface_badges::Badges, crate::runtime::DispatchError> {
+fn iface_badges__get_badges_recipients__ok(body: String) -> Result<Vec<iface_badges::BadgesItemV3>, crate::runtime::DispatchError> {
     let v: Value = match serde_json::from_str(&body) {
         Ok(v) => v,
         Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
     };
-    match iface_badges__badges__from_json(&v) {
+    match (&v).as_array().map(|a| a.iter().filter_map(|x| iface_badges__badges_item_v3__from_json(x)).collect()) {
         Some(x) => Ok(x),
         None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
@@ -339,12 +752,12 @@ fn iface_badges__get_badges_recipients__err(e: crate::runtime::DispatchError) ->
     }
 }
 
-fn iface_badges__get_badges_tags__ok(body: String) -> Result<iface_badges::Badges, crate::runtime::DispatchError> {
+fn iface_badges__get_badges_tags__ok(body: String) -> Result<Vec<iface_badges::BadgesItemV4>, crate::runtime::DispatchError> {
     let v: Value = match serde_json::from_str(&body) {
         Ok(v) => v,
         Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
     };
-    match iface_badges__badges__from_json(&v) {
+    match (&v).as_array().map(|a| a.iter().filter_map(|x| iface_badges__badges_item_v4__from_json(x)).collect()) {
         Some(x) => Ok(x),
         None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
@@ -369,12 +782,12 @@ fn iface_badges__get_badges_tags__err(e: crate::runtime::DispatchError) -> iface
     }
 }
 
-fn iface_badges__get_badges_ids__ok(body: String) -> Result<iface_badges::Badges, crate::runtime::DispatchError> {
+fn iface_badges__get_badges_ids__ok(body: String) -> Result<Vec<iface_badges::BadgesItemV5>, crate::runtime::DispatchError> {
     let v: Value = match serde_json::from_str(&body) {
         Ok(v) => v,
         Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
     };
-    match iface_badges__badges__from_json(&v) {
+    match (&v).as_array().map(|a| a.iter().filter_map(|x| iface_badges__badges_item_v5__from_json(x)).collect()) {
         Some(x) => Ok(x),
         None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
@@ -399,12 +812,12 @@ fn iface_badges__get_badges_ids__err(e: crate::runtime::DispatchError) -> iface_
     }
 }
 
-fn iface_badges__get_badges_ids_recipients__ok(body: String) -> Result<iface_badges::Badges, crate::runtime::DispatchError> {
+fn iface_badges__get_badges_ids_recipients__ok(body: String) -> Result<Vec<iface_badges::BadgesItemV6>, crate::runtime::DispatchError> {
     let v: Value = match serde_json::from_str(&body) {
         Ok(v) => v,
         Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
     };
-    match iface_badges__badges__from_json(&v) {
+    match (&v).as_array().map(|a| a.iter().filter_map(|x| iface_badges__badges_item_v6__from_json(x)).collect()) {
         Some(x) => Ok(x),
         None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
@@ -430,42 +843,42 @@ fn iface_badges__get_badges_ids_recipients__err(e: crate::runtime::DispatchError
 }
 
 impl iface_badges::Guest for crate::Component {
-    fn get_badges(params: iface_badges::GetBadgesParams) -> Result<iface_badges::Badges, iface_badges::GetBadgesError> {
+    fn get_badges(params: iface_badges::GetBadgesParams) -> Result<Vec<iface_badges::BadgesItem>, iface_badges::GetBadgesError> {
         let json = iface_badges__get_badges_params__to_json(&params);
         match dispatch(&OP_BADGES_GET_BADGES, json).and_then(iface_badges__get_badges__ok) {
             Ok(v) => Ok(v),
             Err(e) => Err(iface_badges__get_badges__err(e)),
         }
     }
-    fn get_badges_name(params: iface_badges::GetBadgesNameParams) -> Result<iface_badges::Badges, iface_badges::GetBadgesNameError> {
+    fn get_badges_name(params: iface_badges::GetBadgesNameParams) -> Result<Vec<iface_badges::BadgesItemV2>, iface_badges::GetBadgesNameError> {
         let json = iface_badges__get_badges_name_params__to_json(&params);
         match dispatch(&OP_BADGES_GET_BADGES_NAME, json).and_then(iface_badges__get_badges_name__ok) {
             Ok(v) => Ok(v),
             Err(e) => Err(iface_badges__get_badges_name__err(e)),
         }
     }
-    fn get_badges_recipients(params: iface_badges::GetBadgesRecipientsParams) -> Result<iface_badges::Badges, iface_badges::GetBadgesRecipientsError> {
+    fn get_badges_recipients(params: iface_badges::GetBadgesRecipientsParams) -> Result<Vec<iface_badges::BadgesItemV3>, iface_badges::GetBadgesRecipientsError> {
         let json = iface_badges__get_badges_recipients_params__to_json(&params);
         match dispatch(&OP_BADGES_GET_BADGES_RECIPIENTS, json).and_then(iface_badges__get_badges_recipients__ok) {
             Ok(v) => Ok(v),
             Err(e) => Err(iface_badges__get_badges_recipients__err(e)),
         }
     }
-    fn get_badges_tags(params: iface_badges::GetBadgesTagsParams) -> Result<iface_badges::Badges, iface_badges::GetBadgesTagsError> {
+    fn get_badges_tags(params: iface_badges::GetBadgesTagsParams) -> Result<Vec<iface_badges::BadgesItemV4>, iface_badges::GetBadgesTagsError> {
         let json = iface_badges__get_badges_tags_params__to_json(&params);
         match dispatch(&OP_BADGES_GET_BADGES_TAGS, json).and_then(iface_badges__get_badges_tags__ok) {
             Ok(v) => Ok(v),
             Err(e) => Err(iface_badges__get_badges_tags__err(e)),
         }
     }
-    fn get_badges_ids(params: iface_badges::GetBadgesIdsParams) -> Result<iface_badges::Badges, iface_badges::GetBadgesIdsError> {
+    fn get_badges_ids(params: iface_badges::GetBadgesIdsParams) -> Result<Vec<iface_badges::BadgesItemV5>, iface_badges::GetBadgesIdsError> {
         let json = iface_badges__get_badges_ids_params__to_json(&params);
         match dispatch(&OP_BADGES_GET_BADGES_IDS, json).and_then(iface_badges__get_badges_ids__ok) {
             Ok(v) => Ok(v),
             Err(e) => Err(iface_badges__get_badges_ids__err(e)),
         }
     }
-    fn get_badges_ids_recipients(params: iface_badges::GetBadgesIdsRecipientsParams) -> Result<iface_badges::Badges, iface_badges::GetBadgesIdsRecipientsError> {
+    fn get_badges_ids_recipients(params: iface_badges::GetBadgesIdsRecipientsParams) -> Result<Vec<iface_badges::BadgesItemV6>, iface_badges::GetBadgesIdsRecipientsError> {
         let json = iface_badges__get_badges_ids_recipients_params__to_json(&params);
         match dispatch(&OP_BADGES_GET_BADGES_IDS_RECIPIENTS, json).and_then(iface_badges__get_badges_ids_recipients__ok) {
             Ok(v) => Ok(v),

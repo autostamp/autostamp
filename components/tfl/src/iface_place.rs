@@ -262,9 +262,10 @@ fn iface_place__tfl_api_presentation_entities_train_loading__to_json(p: &iface_p
     Value::Object(m)
 }
 
-fn iface_place__system_object__to_json(p: &iface_place::SystemObject) -> Value {
+fn iface_place__system_object_entry__to_json(p: &iface_place::SystemObjectEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -272,6 +273,20 @@ fn iface_place__tfl_api_presentation_entities_place_category__to_json(p: &iface_
     let mut m = Map::new();
     m.insert("availableKeys".into(), match (&p.available_keys) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
     m.insert("category".into(), match (&p.category) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_place__system_object_entry_v2__to_json(p: &iface_place::SystemObjectEntryV2) -> Value {
+    let mut m = Map::new();
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
+}
+
+fn iface_place__system_object_entry_v3__to_json(p: &iface_place::SystemObjectEntryV3) -> Value {
+    let mut m = Map::new();
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -471,10 +486,11 @@ fn iface_place__tfl_api_presentation_entities_train_loading__from_json(v: &Value
     })
 }
 
-fn iface_place__system_object__from_json(v: &Value) -> Option<iface_place::SystemObject> {
+fn iface_place__system_object_entry__from_json(v: &Value) -> Option<iface_place::SystemObjectEntry> {
     let m = v.as_object()?;
-    Some(iface_place::SystemObject {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_place::SystemObjectEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -483,6 +499,22 @@ fn iface_place__tfl_api_presentation_entities_place_category__from_json(v: &Valu
     Some(iface_place::TflApiPresentationEntitiesPlaceCategory {
         available_keys: m.get("availableKeys").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
         category: m.get("category").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_place__system_object_entry_v2__from_json(v: &Value) -> Option<iface_place::SystemObjectEntryV2> {
+    let m = v.as_object()?;
+    Some(iface_place::SystemObjectEntryV2 {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_place__system_object_entry_v3__from_json(v: &Value) -> Option<iface_place::SystemObjectEntryV3> {
+    let m = v.as_object()?;
+    Some(iface_place::SystemObjectEntryV3 {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -531,12 +563,12 @@ fn iface_place__get_by_geo__err(e: crate::runtime::DispatchError) -> String {
     }
 }
 
-fn iface_place__get_streets_by_post_code__ok(body: String) -> Result<iface_place::SystemObject, crate::runtime::DispatchError> {
+fn iface_place__get_streets_by_post_code__ok(body: String) -> Result<Vec<iface_place::SystemObjectEntry>, crate::runtime::DispatchError> {
     let v: Value = match serde_json::from_str(&body) {
         Ok(v) => v,
         Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
     };
-    match iface_place__system_object__from_json(&v) {
+    match (&v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_place::SystemObjectEntry { key: k.clone(), value: val })).collect()) {
         Some(x) => Ok(x),
         None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
@@ -639,12 +671,12 @@ fn iface_place__get__err(e: crate::runtime::DispatchError) -> String {
     }
 }
 
-fn iface_place__get_at__ok(body: String) -> Result<iface_place::SystemObject, crate::runtime::DispatchError> {
+fn iface_place__get_at__ok(body: String) -> Result<Vec<iface_place::SystemObjectEntryV2>, crate::runtime::DispatchError> {
     let v: Value = match serde_json::from_str(&body) {
         Ok(v) => v,
         Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
     };
-    match iface_place__system_object__from_json(&v) {
+    match (&v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_place::SystemObjectEntryV2 { key: k.clone(), value: val })).collect()) {
         Some(x) => Ok(x),
         None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
@@ -657,12 +689,12 @@ fn iface_place__get_at__err(e: crate::runtime::DispatchError) -> String {
     }
 }
 
-fn iface_place__get_overlay__ok(body: String) -> Result<iface_place::SystemObject, crate::runtime::DispatchError> {
+fn iface_place__get_overlay__ok(body: String) -> Result<Vec<iface_place::SystemObjectEntryV3>, crate::runtime::DispatchError> {
     let v: Value = match serde_json::from_str(&body) {
         Ok(v) => v,
         Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
     };
-    match iface_place__system_object__from_json(&v) {
+    match (&v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_place::SystemObjectEntryV3 { key: k.clone(), value: val })).collect()) {
         Some(x) => Ok(x),
         None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
@@ -683,7 +715,7 @@ impl iface_place::Guest for crate::Component {
             Err(e) => Err(iface_place__get_by_geo__err(e)),
         }
     }
-    fn get_streets_by_post_code(params: iface_place::GetStreetsByPostCodeParams) -> Result<iface_place::SystemObject, String> {
+    fn get_streets_by_post_code(params: iface_place::GetStreetsByPostCodeParams) -> Result<Vec<iface_place::SystemObjectEntry>, String> {
         let json = iface_place__get_streets_by_post_code_params__to_json(&params);
         match dispatch(&OP_PLACE_GET_STREETS_BY_POST_CODE, json).and_then(iface_place__get_streets_by_post_code__ok) {
             Ok(v) => Ok(v),
@@ -723,14 +755,14 @@ impl iface_place::Guest for crate::Component {
             Err(e) => Err(iface_place__get__err(e)),
         }
     }
-    fn get_at(params: iface_place::GetAtParams) -> Result<iface_place::SystemObject, String> {
+    fn get_at(params: iface_place::GetAtParams) -> Result<Vec<iface_place::SystemObjectEntryV2>, String> {
         let json = iface_place__get_at_params__to_json(&params);
         match dispatch(&OP_PLACE_GET_AT, json).and_then(iface_place__get_at__ok) {
             Ok(v) => Ok(v),
             Err(e) => Err(iface_place__get_at__err(e)),
         }
     }
-    fn get_overlay(params: iface_place::GetOverlayParams) -> Result<iface_place::SystemObject, String> {
+    fn get_overlay(params: iface_place::GetOverlayParams) -> Result<Vec<iface_place::SystemObjectEntryV3>, String> {
         let json = iface_place__get_overlay_params__to_json(&params);
         match dispatch(&OP_PLACE_GET_OVERLAY, json).and_then(iface_place__get_overlay__ok) {
             Ok(v) => Ok(v),

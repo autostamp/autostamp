@@ -172,15 +172,17 @@ fn iface_link_branding__v200_response_dns_owner_cname__to_json(p: &iface_link_br
     Value::Object(m)
 }
 
-fn iface_link_branding__delete_whitelabel_links_subuser_response__to_json(p: &iface_link_branding::DeleteWhitelabelLinksSubuserResponse) -> Value {
+fn iface_link_branding__delete_whitelabel_links_subuser_response_entry__to_json(p: &iface_link_branding::DeleteWhitelabelLinksSubuserResponseEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
-fn iface_link_branding__delete_whitelabel_links_id_response__to_json(p: &iface_link_branding::DeleteWhitelabelLinksIdResponse) -> Value {
+fn iface_link_branding__delete_whitelabel_links_id_response_entry__to_json(p: &iface_link_branding::DeleteWhitelabelLinksIdResponseEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -327,17 +329,19 @@ fn iface_link_branding__v200_response_dns_owner_cname__from_json(v: &Value) -> O
     })
 }
 
-fn iface_link_branding__delete_whitelabel_links_subuser_response__from_json(v: &Value) -> Option<iface_link_branding::DeleteWhitelabelLinksSubuserResponse> {
+fn iface_link_branding__delete_whitelabel_links_subuser_response_entry__from_json(v: &Value) -> Option<iface_link_branding::DeleteWhitelabelLinksSubuserResponseEntry> {
     let m = v.as_object()?;
-    Some(iface_link_branding::DeleteWhitelabelLinksSubuserResponse {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_link_branding::DeleteWhitelabelLinksSubuserResponseEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
-fn iface_link_branding__delete_whitelabel_links_id_response__from_json(v: &Value) -> Option<iface_link_branding::DeleteWhitelabelLinksIdResponse> {
+fn iface_link_branding__delete_whitelabel_links_id_response_entry__from_json(v: &Value) -> Option<iface_link_branding::DeleteWhitelabelLinksIdResponseEntry> {
     let m = v.as_object()?;
-    Some(iface_link_branding::DeleteWhitelabelLinksIdResponse {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_link_branding::DeleteWhitelabelLinksIdResponseEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -455,12 +459,12 @@ fn iface_link_branding__get_whitelabel_links_subuser__err(e: crate::runtime::Dis
     }
 }
 
-fn iface_link_branding__delete_whitelabel_links_subuser__ok(body: String) -> Result<iface_link_branding::DeleteWhitelabelLinksSubuserResponse, crate::runtime::DispatchError> {
+fn iface_link_branding__delete_whitelabel_links_subuser__ok(body: String) -> Result<Vec<iface_link_branding::DeleteWhitelabelLinksSubuserResponseEntry>, crate::runtime::DispatchError> {
     let v: Value = match serde_json::from_str(&body) {
         Ok(v) => v,
         Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
     };
-    match iface_link_branding__delete_whitelabel_links_subuser_response__from_json(&v) {
+    match (&v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_link_branding::DeleteWhitelabelLinksSubuserResponseEntry { key: k.clone(), value: val })).collect()) {
         Some(x) => Ok(x),
         None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
@@ -509,12 +513,12 @@ fn iface_link_branding__patch_whitelabel_links_id__err(e: crate::runtime::Dispat
     }
 }
 
-fn iface_link_branding__delete_whitelabel_links_id__ok(body: String) -> Result<iface_link_branding::DeleteWhitelabelLinksIdResponse, crate::runtime::DispatchError> {
+fn iface_link_branding__delete_whitelabel_links_id__ok(body: String) -> Result<Vec<iface_link_branding::DeleteWhitelabelLinksIdResponseEntry>, crate::runtime::DispatchError> {
     let v: Value = match serde_json::from_str(&body) {
         Ok(v) => v,
         Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
     };
-    match iface_link_branding__delete_whitelabel_links_id_response__from_json(&v) {
+    match (&v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_link_branding::DeleteWhitelabelLinksIdResponseEntry { key: k.clone(), value: val })).collect()) {
         Some(x) => Ok(x),
         None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
@@ -595,7 +599,7 @@ impl iface_link_branding::Guest for crate::Component {
             Err(e) => Err(iface_link_branding__get_whitelabel_links_subuser__err(e)),
         }
     }
-    fn delete_whitelabel_links_subuser(params: iface_link_branding::DeleteWhitelabelLinksSubuserParams) -> Result<iface_link_branding::DeleteWhitelabelLinksSubuserResponse, String> {
+    fn delete_whitelabel_links_subuser(params: iface_link_branding::DeleteWhitelabelLinksSubuserParams) -> Result<Vec<iface_link_branding::DeleteWhitelabelLinksSubuserResponseEntry>, String> {
         let json = iface_link_branding__delete_whitelabel_links_subuser_params__to_json(&params);
         match dispatch(&OP_LINK_BRANDING_DELETE_WHITELABEL_LINKS_SUBUSER, json).and_then(iface_link_branding__delete_whitelabel_links_subuser__ok) {
             Ok(v) => Ok(v),
@@ -616,7 +620,7 @@ impl iface_link_branding::Guest for crate::Component {
             Err(e) => Err(iface_link_branding__patch_whitelabel_links_id__err(e)),
         }
     }
-    fn delete_whitelabel_links_id(params: iface_link_branding::DeleteWhitelabelLinksIdParams) -> Result<iface_link_branding::DeleteWhitelabelLinksIdResponse, String> {
+    fn delete_whitelabel_links_id(params: iface_link_branding::DeleteWhitelabelLinksIdParams) -> Result<Vec<iface_link_branding::DeleteWhitelabelLinksIdResponseEntry>, String> {
         let json = iface_link_branding__delete_whitelabel_links_id_params__to_json(&params);
         match dispatch(&OP_LINK_BRANDING_DELETE_WHITELABEL_LINKS_ID, json).and_then(iface_link_branding__delete_whitelabel_links_id__ok) {
             Ok(v) => Ok(v),

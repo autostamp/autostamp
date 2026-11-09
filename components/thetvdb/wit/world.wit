@@ -1,4 +1,4 @@
-package autostamp:thetvdb@0.5.0;
+package autostamp:thetvdb@0.6.0;
 
 interface episodes {
   record episode-record-data {

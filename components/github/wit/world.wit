@@ -1,4 +1,4 @@
-package autostamp:github@0.5.0;
+package autostamp:github@0.6.0;
 
 interface meta {
   record root-v2 {
@@ -253,33 +253,10 @@ interface apps {
 
   /// Configuration object of the webhook
   record webhook-config {
-    content-type: option<webhook-config-content-type>,
-    insecure-ssl: option<webhook-config-insecure-ssl>,
-    secret: option<webhook-config-secret>,
-    url: option<webhook-config-url>
-  }
-
-  /// The media type used to serialize the payloads. Supported values include `json` and `form`. The default is `form`.
-  record webhook-config-content-type {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
-  record webhook-config-insecure-ssl {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
-  /// If provided, the `secret` will be used as the `key` to generate the HMAC hex digest value for [delivery signature headers](https://docs.github.com/webhooks/event-payloads/#delivery-headers).
-  record webhook-config-secret {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
-  /// The URL to which the payloads will be delivered.
-  record webhook-config-url {
-    /// opaque schema; raw JSON
-    value: string
+    content-type: option<string>,
+    insecure-ssl: option<string>,
+    secret: option<string>,
+    url: option<string>
   }
 
   /// Delivery made by a webhook, without request and response information.
@@ -340,39 +317,40 @@ interface apps {
 
   record hook-delivery-request {
     /// The request headers sent with the webhook delivery.
-    headers: hook-delivery-request-headers,
+    headers: list<hook-delivery-request-headers-entry>,
     /// The webhook payload.
-    payload: hook-delivery-request-payload
+    payload: list<hook-delivery-request-payload-entry>
   }
 
-  /// The request headers sent with the webhook delivery.
-  record hook-delivery-request-headers {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record hook-delivery-request-headers-entry {
+    key: string,
+    value: string
   }
 
-  /// The webhook payload.
-  record hook-delivery-request-payload {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record hook-delivery-request-payload-entry {
+    key: string,
+    value: string
   }
 
   record hook-delivery-response {
     /// The response headers received when the delivery was made.
-    headers: hook-delivery-response-headers,
+    headers: list<hook-delivery-response-headers-entry>,
     /// The response payload received.
     payload: string
   }
 
-  /// The response headers received when the delivery was made.
-  record hook-delivery-response-headers {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record hook-delivery-response-headers-entry {
+    key: string,
+    value: string
   }
 
-  record redeliver-webhook-delivery-response {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record redeliver-webhook-delivery-response-entry {
+    key: string,
+    value: string
   }
 
   /// Installation
@@ -1103,10 +1081,10 @@ interface apps {
 
   /// Update a webhook configuration for an app
   record update-webhook-config-for-app-params {
-    content-type: option<webhook-config-content-type>,
-    insecure-ssl: option<webhook-config-insecure-ssl>,
-    secret: option<webhook-config-secret>,
-    url: option<webhook-config-url>
+    content-type: option<string>,
+    insecure-ssl: option<string>,
+    secret: option<string>,
+    url: option<string>
   }
   update-webhook-config-for-app: func(params: update-webhook-config-for-app-params) -> result<webhook-config, string>;
 
@@ -1130,7 +1108,7 @@ interface apps {
   record redeliver-webhook-delivery-params {
     delivery-id: string
   }
-  redeliver-webhook-delivery: func(params: redeliver-webhook-delivery-params) -> result<redeliver-webhook-delivery-response, redeliver-webhook-delivery-error>;
+  redeliver-webhook-delivery: func(params: redeliver-webhook-delivery-params) -> result<list<redeliver-webhook-delivery-response-entry>, redeliver-webhook-delivery-error>;
 
   /// List installations for the authenticated app
   record list-installations-params {
@@ -1432,9 +1410,10 @@ interface codes-of-conduct {
 }
 
 interface emojis {
-  record get-response {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record get-response-entry {
+    key: string,
+    value: string
   }
 
   variant get-error {
@@ -1443,7 +1422,7 @@ interface emojis {
   }
 
   /// Get emojis
-  get: func() -> result<get-response, get-error>;
+  get: func() -> result<list<get-response-entry>, get-error>;
 
 }
 
@@ -1507,31 +1486,25 @@ interface dependabot {
 
   /// A Dependabot alert.
   record alert-with-repository {
-    created-at: alert-created-at,
+    created-at: string,
     /// Details for the vulnerable dependency.
     dependency: alert-with-repository-dependency,
-    dismissed-at: alert-dismissed-at,
+    dismissed-at: string,
     dismissed-by: nullable-simple-user,
     /// An optional comment associated with the alert's dismissal.
     dismissed-comment: string,
     /// The reason that the alert was dismissed.
     dismissed-reason: alert-with-repository-dismissed-reason-enum,
-    fixed-at: alert-fixed-at,
-    html-url: alert-html-url,
-    number: alert-number,
+    fixed-at: string,
+    html-url: string,
+    number: s32,
     repository: simple-repository,
     security-advisory: alert-security-advisory,
     security-vulnerability: alert-security-vulnerability,
     /// The state of the Dependabot alert.
     state: alert-with-repository-state-enum,
-    updated-at: alert-updated-at,
-    url: alert-url
-  }
-
-  /// The time that the alert was created in ISO 8601 format: `YYYY-MM-DDTHH:MM:SSZ`.
-  record alert-created-at {
-    /// opaque schema; raw JSON
-    value: string
+    updated-at: string,
+    url: string
   }
 
   /// Details for the vulnerable dependency.
@@ -1549,12 +1522,6 @@ interface dependabot {
     ecosystem: string,
     /// The unique package name within its ecosystem.
     name: string
-  }
-
-  /// The time that the alert was dismissed in ISO 8601 format: `YYYY-MM-DDTHH:MM:SSZ`.
-  record alert-dismissed-at {
-    /// opaque schema; raw JSON
-    value: string
   }
 
   /// A GitHub user.
@@ -1580,24 +1547,6 @@ interface dependabot {
     subscriptions-url: string,
     type-op: string,
     url: string
-  }
-
-  /// The time that the alert was no longer detected and was considered fixed in ISO 8601 format: `YYYY-MM-DDTHH:MM:SSZ`.
-  record alert-fixed-at {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
-  /// The GitHub URL of the alert resource.
-  record alert-html-url {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
-  /// The security alert number.
-  record alert-number {
-    /// opaque schema; raw JSON
-    value: string
   }
 
   /// A GitHub repository.
@@ -1797,18 +1746,6 @@ interface dependabot {
     identifier: string
   }
 
-  /// The time that the alert was last updated in ISO 8601 format: `YYYY-MM-DDTHH:MM:SSZ`.
-  record alert-updated-at {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
-  /// The REST API URL of the alert resource.
-  record alert-url {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
   record list-org-secrets-response {
     secrets: list<organization-dependabot-secret>,
     total-count: s32
@@ -1981,24 +1918,24 @@ interface dependabot {
 
   /// A Dependabot alert.
   record alert {
-    created-at: alert-created-at,
+    created-at: string,
     /// Details for the vulnerable dependency.
     dependency: alert-dependency,
-    dismissed-at: alert-dismissed-at,
+    dismissed-at: string,
     dismissed-by: nullable-simple-user,
     /// An optional comment associated with the alert's dismissal.
     dismissed-comment: string,
     /// The reason that the alert was dismissed.
     dismissed-reason: alert-with-repository-dismissed-reason-enum,
-    fixed-at: alert-fixed-at,
-    html-url: alert-html-url,
-    number: alert-number,
+    fixed-at: string,
+    html-url: string,
+    number: s32,
     security-advisory: alert-security-advisory,
     security-vulnerability: alert-security-vulnerability,
     /// The state of the Dependabot alert.
     state: alert-with-repository-state-enum,
-    updated-at: alert-updated-at,
-    url: alert-url
+    updated-at: string,
+    url: string
   }
 
   /// Details for the vulnerable dependency.
@@ -2397,6 +2334,18 @@ interface secret-scanning {
     desc,
   }
 
+  enum alert-resolution {
+    false-positive,
+    wont-fix,
+    revoked,
+    used-in-tests,
+  }
+
+  enum alert-state {
+    open,
+    resolved,
+  }
+
   enum location-type-op-enum {
     commit,
     issue-title,
@@ -2405,11 +2354,11 @@ interface secret-scanning {
   }
 
   record organization-secret-scanning-alert {
-    created-at: option<alert-created-at>,
-    html-url: option<alert-html-url>,
+    created-at: option<string>,
+    html-url: option<string>,
     /// The REST API URL of the code locations for this alert.
     locations-url: option<string>,
-    number: option<alert-number>,
+    number: option<s32>,
     /// Whether push protection was bypassed for the detected secret.
     push-protection-bypassed: option<bool>,
     /// The time that push protection was bypassed in ISO 8601 format: `YYYY-MM-DDTHH:MM:SSZ`.
@@ -2430,26 +2379,8 @@ interface secret-scanning {
     /// For a list of built-in patterns, see "[Secret scanning patterns](https://docs.github.com/code-security/secret-scanning/secret-scanning-patterns#supported-secrets-for-advanced-security)."
     secret-type-display-name: option<string>,
     state: option<alert-state>,
-    updated-at: option<nullable-alert-updated-at>,
-    url: option<alert-url>
-  }
-
-  /// The time that the alert was created in ISO 8601 format: `YYYY-MM-DDTHH:MM:SSZ`.
-  record alert-created-at {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
-  /// The GitHub URL of the alert resource.
-  record alert-html-url {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
-  /// The security alert number.
-  record alert-number {
-    /// opaque schema; raw JSON
-    value: string
+    updated-at: option<string>,
+    url: option<string>
   }
 
   /// A GitHub user.
@@ -2597,36 +2528,12 @@ interface secret-scanning {
     url: string
   }
 
-  /// **Required when the `state` is `resolved`.** The reason for resolving the alert.
-  record alert-resolution {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
-  /// Sets the state of the secret scanning alert. You must provide `resolution` when you set the state to `resolved`.
-  record alert-state {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
-  /// The time that the alert was last updated in ISO 8601 format: `YYYY-MM-DDTHH:MM:SSZ`.
-  record nullable-alert-updated-at {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
-  /// The REST API URL of the alert resource.
-  record alert-url {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
   record alert {
-    created-at: option<alert-created-at>,
-    html-url: option<alert-html-url>,
+    created-at: option<string>,
+    html-url: option<string>,
     /// The REST API URL of the code locations for this alert.
     locations-url: option<string>,
-    number: option<alert-number>,
+    number: option<s32>,
     /// Whether push protection was bypassed for the detected secret.
     push-protection-bypassed: option<bool>,
     /// The time that push protection was bypassed in ISO 8601 format: `YYYY-MM-DDTHH:MM:SSZ`.
@@ -2646,14 +2553,8 @@ interface secret-scanning {
     /// For a list of built-in patterns, see "[Secret scanning patterns](https://docs.github.com/code-security/secret-scanning/secret-scanning-patterns#supported-secrets-for-advanced-security)."
     secret-type-display-name: option<string>,
     state: option<alert-state>,
-    updated-at: option<nullable-alert-updated-at>,
-    url: option<alert-url>
-  }
-
-  /// An optional comment when closing an alert. Cannot be updated or deleted. Must be `null` when changing `state` to `open`.
-  record alert-resolution-comment {
-    /// opaque schema; raw JSON
-    value: string
+    updated-at: option<string>,
+    url: option<string>
   }
 
   record location {
@@ -2799,7 +2700,7 @@ interface secret-scanning {
     /// The number that identifies an alert. You can find this at the end of the URL for a code scanning alert within GitHub, and in the `number` field in the response from the `GET /repos/{owner}/{repo}/code-scanning/alerts` operation.
     alert-number: string,
     resolution: option<alert-resolution>,
-    resolution-comment: option<alert-resolution-comment>,
+    resolution-comment: option<string>,
     state: alert-state
   }
   update-alert: func(params: update-alert-params) -> result<alert, update-alert-error>;
@@ -2822,6 +2723,17 @@ interface secret-scanning {
 }
 
 interface activity {
+  enum author-association {
+    collaborator,
+    contributor,
+    first-timer,
+    first-time-contributor,
+    mannequin,
+    member,
+    none,
+    owner,
+  }
+
   enum nullable-milestone-state-enum {
     open,
     closed,
@@ -2918,12 +2830,6 @@ interface activity {
     /// URL for the issue comment
     url: string,
     user: nullable-simple-user
-  }
-
-  /// How the author is associated with the repository.
-  record author-association {
-    /// opaque schema; raw JSON
-    value: string
   }
 
   /// GitHub apps are a new way to extend GitHub. They can be installed directly on organizations and user accounts and granted access to specific repositories. They come with granular permissions and built-in webhooks. GitHub apps are first class actors within GitHub.
@@ -4068,6 +3974,17 @@ interface activity {
 }
 
 interface gists {
+  enum author-association {
+    collaborator,
+    contributor,
+    first-timer,
+    first-time-contributor,
+    mannequin,
+    member,
+    none,
+    owner,
+  }
+
   /// Base Gist
   record base-gist {
     comments: s32,
@@ -4075,7 +3992,7 @@ interface gists {
     commits-url: string,
     created-at: string,
     description: string,
-    files: base-gist-files,
+    files: list<base-gist-files-entry>,
     forks: option<list<string>>,
     forks-url: string,
     git-pull-url: string,
@@ -4092,9 +4009,18 @@ interface gists {
     user: nullable-simple-user
   }
 
-  record base-gist-files {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  record base-gist-files-value {
+    filename: option<string>,
+    language: option<string>,
+    raw-url: option<string>,
+    size: option<s32>,
+    type-op: option<string>
+  }
+
+  /// one entry of a string-keyed map (free-form object)
+  record base-gist-files-entry {
+    key: string,
+    value: base-gist-files-value
   }
 
   /// A GitHub user.
@@ -4147,10 +4073,15 @@ interface gists {
     url: string
   }
 
-  /// Names and content for the files that make up the gist
-  record create-body-files {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  record create-body-files-value {
+    /// Content of the file
+    content: string
+  }
+
+  /// one entry of a string-keyed map (free-form object)
+  record create-body-files-entry {
+    key: string,
+    value: create-body-files-value
   }
 
   /// Gist Simple
@@ -4160,7 +4091,7 @@ interface gists {
     commits-url: option<string>,
     created-at: option<string>,
     description: option<string>,
-    files: option<gist-simple-files>,
+    files: option<list<gist-simple-files-entry>>,
     /// Gist
     fork-of: option<gist-simple-fork-of>,
     forks: option<list<gist-simple-forks-item>>,
@@ -4179,9 +4110,20 @@ interface gists {
     user: option<string>
   }
 
-  record gist-simple-files {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  record gist-simple-files-value {
+    content: option<string>,
+    filename: option<string>,
+    language: option<string>,
+    raw-url: option<string>,
+    size: option<s32>,
+    truncated: option<bool>,
+    type-op: option<string>
+  }
+
+  /// one entry of a string-keyed map (free-form object)
+  record gist-simple-files-entry {
+    key: string,
+    value: gist-simple-files-value
   }
 
   /// Gist
@@ -4191,7 +4133,7 @@ interface gists {
     commits-url: string,
     created-at: string,
     description: string,
-    files: gist-simple-fork-of-files,
+    files: list<gist-simple-fork-of-files-entry>,
     forks: option<list<string>>,
     forks-url: string,
     git-pull-url: string,
@@ -4208,9 +4150,18 @@ interface gists {
     user: nullable-simple-user
   }
 
-  record gist-simple-fork-of-files {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  record gist-simple-fork-of-files-value {
+    filename: option<string>,
+    language: option<string>,
+    raw-url: option<string>,
+    size: option<s32>,
+    type-op: option<string>
+  }
+
+  /// one entry of a string-keyed map (free-form object)
+  record gist-simple-fork-of-files-entry {
+    key: string,
+    value: gist-simple-fork-of-files-value
   }
 
   record gist-simple-forks-item {
@@ -4286,13 +4237,17 @@ interface gists {
     total: option<s32>
   }
 
-  /// The gist files to be updated, renamed, or deleted. Each `key` must match the current filename
-  /// (including extension) of the targeted gist file. For example: `hello.py`.
-  /// 
-  /// To delete a file, set the whole file to null. For example: `hello.py : null`.
-  record update-body-files {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  record update-body-files-value {
+    /// The new content of the file.
+    content: option<string>,
+    /// The new filename for the file.
+    filename: option<string>
+  }
+
+  /// one entry of a string-keyed map (free-form object)
+  record update-body-files-entry {
+    key: string,
+    value: update-body-files-value
   }
 
   /// A comment made to a gist.
@@ -4306,12 +4261,6 @@ interface gists {
     updated-at: string,
     url: string,
     user: nullable-simple-user
-  }
-
-  /// How the author is associated with the repository.
-  record author-association {
-    /// opaque schema; raw JSON
-    value: string
   }
 
   /// Gist Commit
@@ -4481,7 +4430,7 @@ interface gists {
     /// Description of the gist
     description: option<string>,
     /// Names and content for the files that make up the gist
-    files: create-body-files,
+    files: list<create-body-files-entry>,
     public: option<string>
   }
   create: func(params: create-params) -> result<gist-simple, create-error>;
@@ -4523,7 +4472,7 @@ interface gists {
     description: option<string>,
     /// The gist files to be updated, renamed, or deleted. Each `key` must match the current filename
     /// (including extension) of the targeted gist file. For example: `hello.py`.
-    files: option<update-body-files>
+    files: option<list<update-body-files-entry>>
   }
   update: func(params: update-params) -> result<gist-simple, update-error>;
 
@@ -4711,6 +4660,17 @@ interface issues {
     desc,
   }
 
+  enum author-association {
+    collaborator,
+    contributor,
+    first-timer,
+    first-time-contributor,
+    mannequin,
+    member,
+    none,
+    owner,
+  }
+
   enum nullable-milestone-state-enum {
     open,
     closed,
@@ -4860,12 +4820,6 @@ interface issues {
     subscriptions-url: string,
     type-op: string,
     url: string
-  }
-
-  /// How the author is associated with the repository.
-  record author-association {
-    /// opaque schema; raw JSON
-    value: string
   }
 
   /// A collection of related issues and pull requests.
@@ -5408,12 +5362,6 @@ interface issues {
     pull: bool,
     push: bool,
     triage: bool
-  }
-
-  /// Issue Event for Issue
-  record issue-event-for-issue {
-    /// opaque schema; raw JSON
-    value: string
   }
 
   /// Color-coded labels help you categorize and filter your issues (just like labels in Gmail).
@@ -5984,7 +5932,7 @@ interface issues {
     /// Page number of the results to fetch.
     page: option<s32>
   }
-  list-events: func(params: list-events-params) -> result<list<issue-event-for-issue>, list-events-error>;
+  list-events: func(params: list-events-params) -> result<list<string>, list-events-error>;
 
   /// List labels for an issue
   record list-labels-on-issue-params {
@@ -6654,51 +6602,28 @@ interface orgs {
 
   /// Key/value pairs to provide settings for this webhook. [These are defined below](https://docs.github.com/rest/reference/orgs#create-hook-config-params).
   record create-webhook-body-config {
-    content-type: option<webhook-config-content-type>,
-    insecure-ssl: option<webhook-config-insecure-ssl>,
+    content-type: option<string>,
+    insecure-ssl: option<string>,
     password: option<string>,
-    secret: option<webhook-config-secret>,
-    url: webhook-config-url,
+    secret: option<string>,
+    url: string,
     username: option<string>
-  }
-
-  /// The media type used to serialize the payloads. Supported values include `json` and `form`. The default is `form`.
-  record webhook-config-content-type {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
-  record webhook-config-insecure-ssl {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
-  /// If provided, the `secret` will be used as the `key` to generate the HMAC hex digest value for [delivery signature headers](https://docs.github.com/webhooks/event-payloads/#delivery-headers).
-  record webhook-config-secret {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
-  /// The URL to which the payloads will be delivered.
-  record webhook-config-url {
-    /// opaque schema; raw JSON
-    value: string
   }
 
   /// Key/value pairs to provide settings for this webhook. [These are defined below](https://docs.github.com/rest/reference/orgs#update-hook-config-params).
   record update-webhook-body-config {
-    content-type: option<webhook-config-content-type>,
-    insecure-ssl: option<webhook-config-insecure-ssl>,
-    secret: option<webhook-config-secret>,
-    url: webhook-config-url
+    content-type: option<string>,
+    insecure-ssl: option<string>,
+    secret: option<string>,
+    url: string
   }
 
   /// Configuration object of the webhook
   record webhook-config {
-    content-type: option<webhook-config-content-type>,
-    insecure-ssl: option<webhook-config-insecure-ssl>,
-    secret: option<webhook-config-secret>,
-    url: option<webhook-config-url>
+    content-type: option<string>,
+    insecure-ssl: option<string>,
+    secret: option<string>,
+    url: option<string>
   }
 
   /// Delivery made by a webhook, without request and response information.
@@ -6759,39 +6684,40 @@ interface orgs {
 
   record hook-delivery-request {
     /// The request headers sent with the webhook delivery.
-    headers: hook-delivery-request-headers,
+    headers: list<hook-delivery-request-headers-entry>,
     /// The webhook payload.
-    payload: hook-delivery-request-payload
+    payload: list<hook-delivery-request-payload-entry>
   }
 
-  /// The request headers sent with the webhook delivery.
-  record hook-delivery-request-headers {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record hook-delivery-request-headers-entry {
+    key: string,
+    value: string
   }
 
-  /// The webhook payload.
-  record hook-delivery-request-payload {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record hook-delivery-request-payload-entry {
+    key: string,
+    value: string
   }
 
   record hook-delivery-response {
     /// The response headers received when the delivery was made.
-    headers: hook-delivery-response-headers,
+    headers: list<hook-delivery-response-headers-entry>,
     /// The response payload received.
     payload: string
   }
 
-  /// The response headers received when the delivery was made.
-  record hook-delivery-response-headers {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record hook-delivery-response-headers-entry {
+    key: string,
+    value: string
   }
 
-  record redeliver-webhook-delivery-response {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record redeliver-webhook-delivery-response-entry {
+    key: string,
+    value: string
   }
 
   record list-app-installations-response {
@@ -7421,10 +7347,10 @@ interface orgs {
     org: string,
     /// The unique identifier of the hook.
     hook-id: string,
-    content-type: option<webhook-config-content-type>,
-    insecure-ssl: option<webhook-config-insecure-ssl>,
-    secret: option<webhook-config-secret>,
-    url: option<webhook-config-url>
+    content-type: option<string>,
+    insecure-ssl: option<string>,
+    secret: option<string>,
+    url: option<string>
   }
   update-webhook-config-for-org: func(params: update-webhook-config-for-org-params) -> result<webhook-config, string>;
 
@@ -7460,7 +7386,7 @@ interface orgs {
     hook-id: string,
     delivery-id: string
   }
-  redeliver-webhook-delivery: func(params: redeliver-webhook-delivery-params) -> result<redeliver-webhook-delivery-response, redeliver-webhook-delivery-error>;
+  redeliver-webhook-delivery: func(params: redeliver-webhook-delivery-params) -> result<list<redeliver-webhook-delivery-response-entry>, redeliver-webhook-delivery-error>;
 
   /// Ping an organization webhook
   record ping-webhook-params {
@@ -7756,6 +7682,18 @@ interface orgs {
 }
 
 interface actions {
+  enum allowed-actions {
+    all,
+    local-only,
+    selected,
+  }
+
+  enum enabled-repositories {
+    all,
+    none,
+    selected,
+  }
+
   enum repository-merge-commit-message-enum {
     pr-body,
     pr-title,
@@ -7776,6 +7714,11 @@ interface actions {
   enum repository-squash-merge-commit-title-enum {
     pr-title,
     commit-or-pr-title,
+  }
+
+  enum default-workflow-permissions {
+    read,
+    write,
   }
 
   enum security-and-analysis-advanced-security-status-enum {
@@ -7870,6 +7813,11 @@ interface actions {
     all,
   }
 
+  enum deployment-reviewer-type {
+    user,
+    team,
+  }
+
   enum review-pending-deployments-for-run-body-state-enum {
     approved,
     rejected,
@@ -7908,27 +7856,9 @@ interface actions {
   record organization-permissions {
     allowed-actions: option<allowed-actions>,
     enabled-repositories: enabled-repositories,
-    selected-actions-url: option<selected-actions-url>,
+    selected-actions-url: option<string>,
     /// The API URL to use to get or set the selected repositories that are allowed to run GitHub Actions, when `enabled_repositories` is set to `selected`.
     selected-repositories-url: option<string>
-  }
-
-  /// The permissions policy that controls the actions and reusable workflows that are allowed to run.
-  record allowed-actions {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
-  /// The policy that controls the repositories in the organization that are allowed to run GitHub Actions.
-  record enabled-repositories {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
-  /// The API URL to use to get or set the actions and reusable workflows that are allowed to run, when `allowed_actions` is set to `selected`.
-  record selected-actions-url {
-    /// opaque schema; raw JSON
-    value: string
   }
 
   record list-selected-repositories-enabled-github-actions-organization-response {
@@ -8277,20 +8207,8 @@ interface actions {
   }
 
   record get-default-workflow-permissions {
-    can-approve-pull-request-reviews: can-approve-pull-request-reviews,
+    can-approve-pull-request-reviews: bool,
     default-workflow-permissions: default-workflow-permissions
-  }
-
-  /// Whether GitHub Actions can approve pull requests. Enabling this can be a security risk.
-  record can-approve-pull-request-reviews {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
-  /// The default workflow permissions granted to the GITHUB_TOKEN when running workflows.
-  record default-workflow-permissions {
-    /// opaque schema; raw JSON
-    value: string
   }
 
   record list-required-workflows-response {
@@ -8501,7 +8419,7 @@ interface actions {
   record authentication-token {
     /// The time this token expires
     expires-at: string,
-    permissions: option<authentication-token-permissions>,
+    permissions: option<list<authentication-token-permissions-entry>>,
     /// The repositories this token has access to
     repositories: option<list<repository>>,
     /// Describe whether all repositories have been selected or there's a selection involved
@@ -8511,9 +8429,10 @@ interface actions {
     token: string
   }
 
-  record authentication-token-permissions {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record authentication-token-permissions-entry {
+    key: string,
+    value: string
   }
 
   record list-labels-for-self-hosted-runner-for-org-response {
@@ -8679,13 +8598,6 @@ interface actions {
     repository-id: option<s32>
   }
 
-  /// The full Git reference, formatted as `refs/heads/<branch name>`,
-  /// `refs/pull/<number>/merge`, or `refs/pull/<number>/head`.
-  record code-scanning-ref {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
   /// Repository actions caches
   record cache-list {
     /// Array of caches
@@ -8771,14 +8683,8 @@ interface actions {
 
   record repository-permissions-v2 {
     allowed-actions: option<allowed-actions>,
-    enabled: enabled,
-    selected-actions-url: option<selected-actions-url>
-  }
-
-  /// Whether GitHub Actions is enabled on the repository.
-  record enabled {
-    /// opaque schema; raw JSON
-    value: string
+    enabled: bool,
+    selected-actions-url: option<string>
   }
 
   record workflow-access-to-repository {
@@ -9014,12 +8920,6 @@ interface actions {
     type-op: option<deployment-reviewer-type>
   }
 
-  /// The type of reviewer.
-  record deployment-reviewer-type {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
   /// A request for a specific ref(branch,sha,tag) to be deployed
   record deployment {
     created-at: string,
@@ -9178,10 +9078,10 @@ interface actions {
     url: string
   }
 
-  /// Input keys and values configured in the workflow file. The maximum number of properties is 10. Any default properties configured in the workflow file will be used when `inputs` are omitted.
-  record create-workflow-dispatch-body-inputs {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record create-workflow-dispatch-body-inputs-entry {
+    key: string,
+    value: string
   }
 
   record list-workflow-runs-response {
@@ -9497,7 +9397,7 @@ interface actions {
   record set-github-actions-default-workflow-permissions-organization-params {
     /// The organization name. The name is not case sensitive.
     org: string,
-    can-approve-pull-request-reviews: option<can-approve-pull-request-reviews>,
+    can-approve-pull-request-reviews: option<bool>,
     default-workflow-permissions: option<default-workflow-permissions>
   }
   set-github-actions-default-workflow-permissions-organization: func(params: set-github-actions-default-workflow-permissions-organization-params) -> result<string, string>;
@@ -10012,7 +9912,7 @@ interface actions {
     /// Page number of the results to fetch.
     page: option<s32>,
     /// The Git reference for the results you want to list. The `ref` for a branch can be formatted either as `refs/heads/<branch name>` or simply `<branch name>`. To reference a pull request use `refs/pull/<number>/merge`.
-    ref: option<code-scanning-ref>,
+    ref: option<string>,
     /// An explicit key or prefix for identifying the cache
     key: option<string>,
     /// The property to sort the results by. `created_at` means when the cache was created. `last_accessed_at` means when the cache was last accessed. `size_in_bytes` is the size of the cache in bytes.
@@ -10031,7 +9931,7 @@ interface actions {
     /// A key for identifying the cache.
     key: string,
     /// The Git reference for the results you want to list. The `ref` for a branch can be formatted either as `refs/heads/<branch name>` or simply `<branch name>`. To reference a pull request use `refs/pull/<number>/merge`.
-    ref: option<code-scanning-ref>
+    ref: option<string>
   }
   delete-actions-cache-by-key: func(params: delete-actions-cache-by-key-params) -> result<cache-list, string>;
 
@@ -10119,7 +10019,7 @@ interface actions {
     /// The name of the repository. The name is not case sensitive.
     repo: string,
     allowed-actions: option<allowed-actions>,
-    enabled: enabled
+    enabled: bool
   }
   set-github-actions-permissions-repository: func(params: set-github-actions-permissions-repository-params) -> result<string, string>;
 
@@ -10184,7 +10084,7 @@ interface actions {
     owner: string,
     /// The name of the repository. The name is not case sensitive.
     repo: string,
-    can-approve-pull-request-reviews: option<can-approve-pull-request-reviews>,
+    can-approve-pull-request-reviews: option<bool>,
     default-workflow-permissions: option<default-workflow-permissions>
   }
   set-github-actions-default-workflow-permissions-repository: func(params: set-github-actions-default-workflow-permissions-repository-params) -> result<string, set-github-actions-default-workflow-permissions-repository-error>;
@@ -10759,7 +10659,7 @@ interface actions {
     /// The ID of the workflow. You can also pass the workflow file name as a string.
     workflow-id: string,
     /// Input keys and values configured in the workflow file. The maximum number of properties is 10. Any default properties configured in the workflow file will be used when `inputs` are omitted.
-    inputs: option<create-workflow-dispatch-body-inputs>,
+    inputs: option<list<create-workflow-dispatch-body-inputs-entry>>,
     /// The git reference for the workflow. The reference can be a branch or tag name.
     ref: string
   }
@@ -10985,9 +10885,39 @@ interface code-scanning {
     desc,
   }
 
+  enum alert-state {
+    open,
+    closed,
+    dismissed,
+    fixed,
+  }
+
   enum list-alerts-for-org-sort-enum {
     created,
     updated,
+  }
+
+  enum alert-severity {
+    critical,
+    high,
+    medium,
+    low,
+    warning,
+    note,
+    error,
+  }
+
+  enum alert-dismissed-reason {
+    false-positive,
+    won-t-fix,
+    used-in-tests,
+  }
+
+  enum alert-classification {
+    source,
+    generated,
+    test,
+    library,
   }
 
   enum alert-rule-security-severity-level-enum {
@@ -11004,6 +10934,11 @@ interface code-scanning {
     error,
   }
 
+  enum alert-set-state {
+    open,
+    dismissed,
+  }
+
   enum list-recent-analyses-sort-enum {
     created,
   }
@@ -11014,59 +10949,23 @@ interface code-scanning {
     failed,
   }
 
-  /// The name of the tool used to generate the code scanning analysis.
-  record analysis-tool-name {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
-  /// The GUID of the tool used to generate the code scanning analysis, if provided in the uploaded SARIF data.
-  record analysis-tool-guid {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
-  /// State of a code scanning alert.
-  record alert-state {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
-  /// Severity of a code scanning alert.
-  record alert-severity {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
   record organization-alert-items {
-    created-at: alert-created-at,
-    dismissed-at: alert-dismissed-at,
+    created-at: string,
+    dismissed-at: string,
     dismissed-by: nullable-simple-user,
-    dismissed-comment: option<alert-dismissed-comment>,
+    dismissed-comment: option<string>,
     dismissed-reason: alert-dismissed-reason,
-    fixed-at: option<alert-fixed-at>,
-    html-url: alert-html-url,
-    instances-url: alert-instances-url,
+    fixed-at: option<string>,
+    html-url: string,
+    instances-url: string,
     most-recent-instance: alert-instance,
-    number: alert-number,
+    number: s32,
     repository: simple-repository,
     rule: alert-rule,
     state: alert-state,
     tool: analysis-tool,
-    updated-at: option<alert-updated-at>,
-    url: alert-url
-  }
-
-  /// The time that the alert was created in ISO 8601 format: `YYYY-MM-DDTHH:MM:SSZ`.
-  record alert-created-at {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
-  /// The time that the alert was dismissed in ISO 8601 format: `YYYY-MM-DDTHH:MM:SSZ`.
-  record alert-dismissed-at {
-    /// opaque schema; raw JSON
-    value: string
+    updated-at: option<string>,
+    url: string
   }
 
   /// A GitHub user.
@@ -11094,73 +10993,19 @@ interface code-scanning {
     url: string
   }
 
-  /// The dismissal comment associated with the dismissal of the alert.
-  record alert-dismissed-comment {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
-  /// **Required when the state is dismissed.** The reason for dismissing or closing the alert.
-  record alert-dismissed-reason {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
-  /// The time that the alert was no longer detected and was considered fixed in ISO 8601 format: `YYYY-MM-DDTHH:MM:SSZ`.
-  record alert-fixed-at {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
-  /// The GitHub URL of the alert resource.
-  record alert-html-url {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
-  /// The REST API URL for fetching the list of instances for an alert.
-  record alert-instances-url {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
   record alert-instance {
-    analysis-key: option<analysis-analysis-key>,
-    category: option<analysis-category>,
+    analysis-key: option<string>,
+    category: option<string>,
     /// Classifications that have been applied to the file that triggered the alert.
     /// For example identifying it as documentation, or a generated file.
     classifications: option<list<alert-classification>>,
     commit-sha: option<string>,
-    environment: option<alert-environment>,
+    environment: option<string>,
     html-url: option<string>,
     location: option<alert-location>,
     message: option<alert-instance-message>,
-    ref: option<ref>,
+    ref: option<string>,
     state: option<alert-state>
-  }
-
-  /// Identifies the configuration under which the analysis was executed. For example, in GitHub Actions this includes the workflow filename and job name.
-  record analysis-analysis-key {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
-  /// Identifies the configuration under which the analysis was executed. Used to distinguish between multiple analyses for the same tool and commit, but performed on different languages or different parts of the code.
-  record analysis-category {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
-  /// A classification of the file. For example to identify it as generated.
-  record alert-classification {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
-  /// Identifies the variable values associated with the environment in which the analysis that generated this alert instance was performed, such as the language that was analyzed.
-  record alert-environment {
-    /// opaque schema; raw JSON
-    value: string
   }
 
   /// Describe a region within a file for the alert.
@@ -11174,19 +11019,6 @@ interface code-scanning {
 
   record alert-instance-message {
     text: option<string>
-  }
-
-  /// The full Git reference, formatted as `refs/heads/<branch name>`,
-  /// `refs/pull/<number>/merge`, or `refs/pull/<number>/head`.
-  record ref {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
-  /// The security alert number.
-  record alert-number {
-    /// opaque schema; raw JSON
-    value: string
   }
 
   /// A GitHub repository.
@@ -11331,45 +11163,27 @@ interface code-scanning {
   }
 
   record analysis-tool {
-    guid: option<analysis-tool-guid>,
-    name: option<analysis-tool-name>,
-    version: option<analysis-tool-version>
-  }
-
-  /// The version of the tool used to generate the code scanning analysis.
-  record analysis-tool-version {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
-  /// The time that the alert was last updated in ISO 8601 format: `YYYY-MM-DDTHH:MM:SSZ`.
-  record alert-updated-at {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
-  /// The REST API URL of the alert resource.
-  record alert-url {
-    /// opaque schema; raw JSON
-    value: string
+    guid: option<string>,
+    name: option<string>,
+    version: option<string>
   }
 
   record alert-items {
-    created-at: alert-created-at,
-    dismissed-at: alert-dismissed-at,
+    created-at: string,
+    dismissed-at: string,
     dismissed-by: nullable-simple-user,
-    dismissed-comment: option<alert-dismissed-comment>,
+    dismissed-comment: option<string>,
     dismissed-reason: alert-dismissed-reason,
-    fixed-at: option<alert-fixed-at>,
-    html-url: alert-html-url,
-    instances-url: alert-instances-url,
+    fixed-at: option<string>,
+    html-url: string,
+    instances-url: string,
     most-recent-instance: alert-instance,
-    number: alert-number,
+    number: s32,
     rule: alert-rule-summary,
     state: alert-state,
     tool: analysis-tool,
-    updated-at: option<alert-updated-at>,
-    url: alert-url
+    updated-at: option<string>,
+    url: string
   }
 
   record alert-rule-summary {
@@ -11386,79 +11200,43 @@ interface code-scanning {
   }
 
   record alert {
-    created-at: alert-created-at,
-    dismissed-at: alert-dismissed-at,
+    created-at: string,
+    dismissed-at: string,
     dismissed-by: nullable-simple-user,
-    dismissed-comment: option<alert-dismissed-comment>,
+    dismissed-comment: option<string>,
     dismissed-reason: alert-dismissed-reason,
-    fixed-at: option<alert-fixed-at>,
-    html-url: alert-html-url,
-    instances-url: alert-instances-url,
+    fixed-at: option<string>,
+    html-url: string,
+    instances-url: string,
     most-recent-instance: alert-instance,
-    number: alert-number,
+    number: s32,
     rule: alert-rule,
     state: alert-state,
     tool: analysis-tool,
-    updated-at: option<alert-updated-at>,
-    url: alert-url
-  }
-
-  /// Sets the state of the code scanning alert. You must provide `dismissed_reason` when you set the state to `dismissed`.
-  record alert-set-state {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
-  /// An identifier for the upload.
-  record analysis-sarif-id {
-    /// opaque schema; raw JSON
-    value: string
+    updated-at: option<string>,
+    url: string
   }
 
   record analysis {
-    analysis-key: analysis-analysis-key,
-    category: option<analysis-category>,
-    commit-sha: analysis-commit-sha,
-    created-at: analysis-created-at,
+    analysis-key: string,
+    category: option<string>,
+    commit-sha: string,
+    created-at: string,
     deletable: bool,
-    environment: analysis-environment,
+    environment: string,
     error: string,
     /// Unique identifier for this analysis.
     id: s32,
-    ref: ref,
+    ref: string,
     /// The total number of results in the analysis.
     results-count: s32,
     /// The total number of rules used in the analysis.
     rules-count: s32,
-    sarif-id: analysis-sarif-id,
+    sarif-id: string,
     tool: analysis-tool,
-    url: analysis-url,
+    url: string,
     /// Warning generated when processing the analysis
     warning: string
-  }
-
-  /// The SHA of the commit to which the analysis you are uploading relates.
-  record analysis-commit-sha {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
-  /// The time that the analysis was created in ISO 8601 format: `YYYY-MM-DDTHH:MM:SSZ`.
-  record analysis-created-at {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
-  /// Identifies the variable values associated with the environment in which this analysis was performed.
-  record analysis-environment {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
-  /// The REST API URL of the analysis resource.
-  record analysis-url {
-    /// opaque schema; raw JSON
-    value: string
   }
 
   /// Successful deletion of a code scanning analysis
@@ -11490,14 +11268,8 @@ interface code-scanning {
     url: string
   }
 
-  /// A Base64 string representing the SARIF file to upload. You must first compress your SARIF file using [`gzip`](http://www.gnu.org/software/gzip/manual/gzip.html) and then translate the contents of the file into a Base64 encoding string. For more information, see "[SARIF support for code scanning](https://docs.github.com/code-security/secure-coding/sarif-support-for-code-scanning)."
-  record analysis-sarif-file {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
   record sarifs-receipt {
-    id: option<analysis-sarif-id>,
+    id: option<string>,
     /// The REST API URL for checking the status of the upload.
     url: option<string>
   }
@@ -11605,9 +11377,9 @@ interface code-scanning {
     /// The organization name. The name is not case sensitive.
     org: string,
     /// The name of a code scanning tool. Only results by this tool will be listed. You can specify the tool by using either `tool_name` or `tool_guid`, but not both.
-    tool-name: option<analysis-tool-name>,
+    tool-name: option<string>,
     /// The GUID of a code scanning tool. Only results by this tool will be listed. Note that some code scanning tools may not include a GUID in their analysis data. You can specify the tool by using either `tool_guid` or `tool_name`, but not both.
-    tool-guid: option<analysis-tool-guid>,
+    tool-guid: option<string>,
     /// A cursor, as given in the [Link header](https://docs.github.com/rest/overview/resources-in-the-rest-api#link-header). If specified, the query only searches for results before this cursor.
     before: option<string>,
     /// A cursor, as given in the [Link header](https://docs.github.com/rest/overview/resources-in-the-rest-api#link-header). If specified, the query only searches for results after this cursor.
@@ -11634,15 +11406,15 @@ interface code-scanning {
     /// The name of the repository. The name is not case sensitive.
     repo: string,
     /// The name of a code scanning tool. Only results by this tool will be listed. You can specify the tool by using either `tool_name` or `tool_guid`, but not both.
-    tool-name: option<analysis-tool-name>,
+    tool-name: option<string>,
     /// The GUID of a code scanning tool. Only results by this tool will be listed. Note that some code scanning tools may not include a GUID in their analysis data. You can specify the tool by using either `tool_guid` or `tool_name`, but not both.
-    tool-guid: option<analysis-tool-guid>,
+    tool-guid: option<string>,
     /// Page number of the results to fetch.
     page: option<s32>,
     /// The number of results per page (max 100).
     per-page: option<s32>,
     /// The Git reference for the results you want to list. The `ref` for a branch can be formatted either as `refs/heads/<branch name>` or simply `<branch name>`. To reference a pull request use `refs/pull/<number>/merge`.
-    ref: option<ref>,
+    ref: option<string>,
     /// The direction to sort the results by.
     direction: option<list-alerts-for-org-direction-enum>,
     /// The property by which to sort the results.
@@ -11673,7 +11445,7 @@ interface code-scanning {
     repo: string,
     /// The number that identifies an alert. You can find this at the end of the URL for a code scanning alert within GitHub, and in the `number` field in the response from the `GET /repos/{owner}/{repo}/code-scanning/alerts` operation.
     alert-number: string,
-    dismissed-comment: option<alert-dismissed-comment>,
+    dismissed-comment: option<string>,
     dismissed-reason: option<alert-dismissed-reason>,
     state: alert-set-state
   }
@@ -11692,7 +11464,7 @@ interface code-scanning {
     /// The number of results per page (max 100).
     per-page: option<s32>,
     /// The Git reference for the results you want to list. The `ref` for a branch can be formatted either as `refs/heads/<branch name>` or simply `<branch name>`. To reference a pull request use `refs/pull/<number>/merge`.
-    ref: option<ref>
+    ref: option<string>
   }
   list-alert-instances: func(params: list-alert-instances-params) -> result<list<alert-instance>, list-alert-instances-error>;
 
@@ -11703,17 +11475,17 @@ interface code-scanning {
     /// The name of the repository. The name is not case sensitive.
     repo: string,
     /// The name of a code scanning tool. Only results by this tool will be listed. You can specify the tool by using either `tool_name` or `tool_guid`, but not both.
-    tool-name: option<analysis-tool-name>,
+    tool-name: option<string>,
     /// The GUID of a code scanning tool. Only results by this tool will be listed. Note that some code scanning tools may not include a GUID in their analysis data. You can specify the tool by using either `tool_guid` or `tool_name`, but not both.
-    tool-guid: option<analysis-tool-guid>,
+    tool-guid: option<string>,
     /// Page number of the results to fetch.
     page: option<s32>,
     /// The number of results per page (max 100).
     per-page: option<s32>,
     /// The Git reference for the analyses you want to list. The `ref` for a branch can be formatted either as `refs/heads/<branch name>` or simply `<branch name>`. To reference a pull request use `refs/pull/<number>/merge`.
-    ref: option<ref>,
+    ref: option<string>,
     /// Filter analyses belonging to the same SARIF upload.
-    sarif-id: option<analysis-sarif-id>,
+    sarif-id: option<string>,
     /// The direction to sort the results by.
     direction: option<list-alerts-for-org-direction-enum>,
     /// The property by which to sort the results.
@@ -11774,9 +11546,9 @@ interface code-scanning {
     /// The base directory used in the analysis, as it appears in the SARIF file.
     /// This property is used to convert file paths from absolute to relative, so that alerts can be mapped to their correct location in the repository.
     checkout-uri: option<string>,
-    commit-sha: analysis-commit-sha,
-    ref: ref,
-    sarif: analysis-sarif-file,
+    commit-sha: string,
+    ref: string,
+    sarif: string,
     /// The time that the analysis run began. This is a timestamp in [ISO 8601](https://en.wikipedia.org/wiki/ISO_8601) format: `YYYY-MM-DDTHH:MM:SSZ`.
     started-at: option<string>,
     /// The name of the tool used to generate the code scanning analysis. If this parameter is not used, the tool name defaults to "API". If the uploaded SARIF contains a tool GUID, this will be available for filtering using the `tool_guid` parameter of operations such as `GET /repos/{owner}/{repo}/code-scanning/alerts`.
@@ -12182,9 +11954,10 @@ interface codespaces {
     total-count: s32
   }
 
-  record delete-from-organization-response {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record delete-from-organization-response-entry {
+    key: string,
+    value: string
   }
 
   record list-in-repository-for-authenticated-user-response {
@@ -12285,9 +12058,10 @@ interface codespaces {
     total-count: s32
   }
 
-  record delete-for-authenticated-user-response {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record delete-for-authenticated-user-response-entry {
+    key: string,
+    value: string
   }
 
   /// An export of a codespace. Also, latest export details for a codespace can be fetched with id = latest
@@ -13537,7 +13311,7 @@ interface codespaces {
     /// The name of the codespace.
     codespace-name: string
   }
-  delete-from-organization: func(params: delete-from-organization-params) -> result<delete-from-organization-response, delete-from-organization-error>;
+  delete-from-organization: func(params: delete-from-organization-params) -> result<list<delete-from-organization-response-entry>, delete-from-organization-error>;
 
   /// Stop a codespace for an organization user
   record stop-in-organization-params {
@@ -13832,7 +13606,7 @@ interface codespaces {
     /// The name of the codespace.
     codespace-name: string
   }
-  delete-for-authenticated-user: func(params: delete-for-authenticated-user-params) -> result<delete-for-authenticated-user-response, delete-for-authenticated-user-error>;
+  delete-for-authenticated-user: func(params: delete-for-authenticated-user-params) -> result<list<delete-for-authenticated-user-response-entry>, delete-for-authenticated-user-error>;
 
   /// Export a codespace for the authenticated user
   record export-for-authenticated-user-params {
@@ -13885,16 +13659,18 @@ interface codespaces {
 }
 
 interface interactions {
-  /// The duration of the interaction restriction. Default: `one_day`.
-  record interaction-expiry {
-    /// opaque schema; raw JSON
-    value: string
+  enum interaction-expiry {
+    one-day,
+    three-days,
+    one-week,
+    one-month,
+    six-months,
   }
 
-  /// The type of GitHub user that can comment, open issues, or create pull requests while the interaction limit is in effect.
-  record interaction-group {
-    /// opaque schema; raw JSON
-    value: string
+  enum interaction-group {
+    existing-users,
+    contributors-only,
+    collaborators-only,
   }
 
   /// Interaction limit settings.
@@ -16374,6 +16150,17 @@ interface repos {
     maintain,
   }
 
+  enum author-association {
+    collaborator,
+    contributor,
+    first-timer,
+    first-time-contributor,
+    mannequin,
+    member,
+    none,
+    owner,
+  }
+
   enum auto-merge-merge-method-enum {
     merge,
     squash,
@@ -16416,6 +16203,11 @@ interface repos {
     queued,
     pending,
     success,
+  }
+
+  enum deployment-reviewer-type {
+    user,
+    team,
   }
 
   enum list-forks-sort-enum {
@@ -18154,12 +17946,6 @@ interface repos {
     user: nullable-simple-user
   }
 
-  /// How the author is associated with the repository.
-  record author-association {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
   record reaction-rollup {
     v1: s32,
     v1-v2: s32,
@@ -18608,10 +18394,10 @@ interface repos {
     url: string
   }
 
-  /// JSON payload with extra information about the webhook event that your action or workflow may use. The maximum number of top-level properties is 10.
-  record create-dispatch-event-body-client-payload {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record create-dispatch-event-body-client-payload-entry {
+    key: string,
+    value: string
   }
 
   record get-all-environments-response {
@@ -18651,18 +18437,6 @@ interface repos {
     type-op: option<deployment-reviewer-type>
   }
 
-  /// The type of reviewer.
-  record deployment-reviewer-type {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
-  /// The amount of time to delay a job after the job is initially triggered. The time (in minutes) must be an integer between 0 and 43,200 (30 days).
-  record wait-timer {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
   record list-deployment-branch-policies-response {
     branch-policies: list<deployment-branch-policy>,
     /// The number of deployment branch policies for the environment.
@@ -18700,39 +18474,16 @@ interface repos {
   }
 
   record hook-config {
-    content-type: option<webhook-config-content-type>,
+    content-type: option<string>,
     digest: option<string>,
     email: option<string>,
-    insecure-ssl: option<webhook-config-insecure-ssl>,
+    insecure-ssl: option<string>,
     password: option<string>,
     room: option<string>,
-    secret: option<webhook-config-secret>,
+    secret: option<string>,
     subdomain: option<string>,
     token: option<string>,
-    url: option<webhook-config-url>
-  }
-
-  /// The media type used to serialize the payloads. Supported values include `json` and `form`. The default is `form`.
-  record webhook-config-content-type {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
-  record webhook-config-insecure-ssl {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
-  /// If provided, the `secret` will be used as the `key` to generate the HMAC hex digest value for [delivery signature headers](https://docs.github.com/webhooks/event-payloads/#delivery-headers).
-  record webhook-config-secret {
-    /// opaque schema; raw JSON
-    value: string
-  }
-
-  /// The URL to which the payloads will be delivered.
-  record webhook-config-url {
-    /// opaque schema; raw JSON
-    value: string
+    url: option<string>
   }
 
   record hook-response {
@@ -18743,30 +18494,30 @@ interface repos {
 
   /// Key/value pairs to provide settings for this webhook. [These are defined below](https://docs.github.com/rest/reference/repos#create-hook-config-params).
   record create-webhook-body-config {
-    content-type: option<webhook-config-content-type>,
+    content-type: option<string>,
     digest: option<string>,
-    insecure-ssl: option<webhook-config-insecure-ssl>,
-    secret: option<webhook-config-secret>,
+    insecure-ssl: option<string>,
+    secret: option<string>,
     token: option<string>,
-    url: option<webhook-config-url>
+    url: option<string>
   }
 
   /// Key/value pairs to provide settings for this webhook. [These are defined below](https://docs.github.com/rest/reference/repos#create-hook-config-params).
   record update-webhook-body-config {
     address: option<string>,
-    content-type: option<webhook-config-content-type>,
-    insecure-ssl: option<webhook-config-insecure-ssl>,
+    content-type: option<string>,
+    insecure-ssl: option<string>,
     room: option<string>,
-    secret: option<webhook-config-secret>,
-    url: webhook-config-url
+    secret: option<string>,
+    url: string
   }
 
   /// Configuration object of the webhook
   record webhook-config {
-    content-type: option<webhook-config-content-type>,
-    insecure-ssl: option<webhook-config-insecure-ssl>,
-    secret: option<webhook-config-secret>,
-    url: option<webhook-config-url>
+    content-type: option<string>,
+    insecure-ssl: option<string>,
+    secret: option<string>,
+    url: option<string>
   }
 
   /// Delivery made by a webhook, without request and response information.
@@ -18827,39 +18578,40 @@ interface repos {
 
   record hook-delivery-request {
     /// The request headers sent with the webhook delivery.
-    headers: hook-delivery-request-headers,
+    headers: list<hook-delivery-request-headers-entry>,
     /// The webhook payload.
-    payload: hook-delivery-request-payload
+    payload: list<hook-delivery-request-payload-entry>
   }
 
-  /// The request headers sent with the webhook delivery.
-  record hook-delivery-request-headers {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record hook-delivery-request-headers-entry {
+    key: string,
+    value: string
   }
 
-  /// The webhook payload.
-  record hook-delivery-request-payload {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record hook-delivery-request-payload-entry {
+    key: string,
+    value: string
   }
 
   record hook-delivery-response {
     /// The response headers received when the delivery was made.
-    headers: hook-delivery-response-headers,
+    headers: list<hook-delivery-response-headers-entry>,
     /// The response payload received.
     payload: string
   }
 
-  /// The response headers received when the delivery was made.
-  record hook-delivery-response-headers {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record hook-delivery-response-headers-entry {
+    key: string,
+    value: string
   }
 
-  record redeliver-webhook-delivery-response {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record redeliver-webhook-delivery-response-entry {
+    key: string,
+    value: string
   }
 
   /// An SSH key granting access to a single repository.
@@ -18875,15 +18627,16 @@ interface repos {
     verified: bool
   }
 
-  /// Language
-  record language {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record language-entry {
+    key: string,
+    value: s32
   }
 
-  record enable-lfs-for-repo-response {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record enable-lfs-for-repo-response-entry {
+    key: string,
+    value: string
   }
 
   /// Results of a successful merge upstream request
@@ -19121,12 +18874,6 @@ interface repos {
     body: string,
     /// The generated name of the release
     name: string
-  }
-
-  /// Code Frequency Stat
-  record code-frequency-stat {
-    /// opaque schema; raw JSON
-    value: string
   }
 
   /// Commit Activity
@@ -21048,7 +20795,7 @@ interface repos {
     /// The name of the repository. The name is not case sensitive.
     repo: string,
     /// JSON payload with extra information about the webhook event that your action or workflow may use. The maximum number of top-level properties is 10.
-    client-payload: option<create-dispatch-event-body-client-payload>,
+    client-payload: option<list<create-dispatch-event-body-client-payload-entry>>,
     /// A custom webhook event name. Must be 100 characters or fewer.
     event-type: string
   }
@@ -21089,7 +20836,7 @@ interface repos {
     deployment-branch-policy: option<deployment-branch-policy-settings>,
     /// The people or teams that may review jobs that reference the environment. You can list up to six users or teams as reviewers. The reviewers must have at least read access to the repository. Only one of the required reviewers needs to approve the job for it to proceed.
     reviewers: option<list<create-or-update-environment-body-reviewers-item>>,
-    wait-timer: option<wait-timer>
+    wait-timer: option<s32>
   }
   create-or-update-environment: func(params: create-or-update-environment-params) -> result<environment, create-or-update-environment-error>;
 
@@ -21297,10 +21044,10 @@ interface repos {
     repo: string,
     /// The unique identifier of the hook.
     hook-id: string,
-    content-type: option<webhook-config-content-type>,
-    insecure-ssl: option<webhook-config-insecure-ssl>,
-    secret: option<webhook-config-secret>,
-    url: option<webhook-config-url>
+    content-type: option<string>,
+    insecure-ssl: option<string>,
+    secret: option<string>,
+    url: option<string>
   }
   update-webhook-config-for-repo: func(params: update-webhook-config-for-repo-params) -> result<webhook-config, string>;
 
@@ -21342,7 +21089,7 @@ interface repos {
     hook-id: string,
     delivery-id: string
   }
-  redeliver-webhook-delivery: func(params: redeliver-webhook-delivery-params) -> result<redeliver-webhook-delivery-response, redeliver-webhook-delivery-error>;
+  redeliver-webhook-delivery: func(params: redeliver-webhook-delivery-params) -> result<list<redeliver-webhook-delivery-response-entry>, redeliver-webhook-delivery-error>;
 
   /// Ping a repository webhook
   record ping-webhook-params {
@@ -21461,7 +21208,7 @@ interface repos {
     /// The name of the repository. The name is not case sensitive.
     repo: string
   }
-  list-languages: func(params: list-languages-params) -> result<language, string>;
+  list-languages: func(params: list-languages-params) -> result<list<language-entry>, string>;
 
   /// Enable Git LFS for a repository
   record enable-lfs-for-repo-params {
@@ -21470,7 +21217,7 @@ interface repos {
     /// The name of the repository. The name is not case sensitive.
     repo: string
   }
-  enable-lfs-for-repo: func(params: enable-lfs-for-repo-params) -> result<enable-lfs-for-repo-response, enable-lfs-for-repo-error>;
+  enable-lfs-for-repo: func(params: enable-lfs-for-repo-params) -> result<list<enable-lfs-for-repo-response-entry>, enable-lfs-for-repo-error>;
 
   /// Disable Git LFS for a repository
   record disable-lfs-for-repo-params {
@@ -21845,7 +21592,7 @@ interface repos {
     /// The name of the repository. The name is not case sensitive.
     repo: string
   }
-  get-code-frequency-stats: func(params: get-code-frequency-stats-params) -> result<list<code-frequency-stat>, string>;
+  get-code-frequency-stats: func(params: get-code-frequency-stats-params) -> result<list<list<s32>>, string>;
 
   /// Get the last year of commit activity
   record get-commit-activity-stats-params {
@@ -21881,7 +21628,7 @@ interface repos {
     /// The name of the repository. The name is not case sensitive.
     repo: string
   }
-  get-punch-card-stats: func(params: get-punch-card-stats-params) -> result<list<code-frequency-stat>, string>;
+  get-punch-card-stats: func(params: get-punch-card-stats-params) -> result<list<list<s32>>, string>;
 
   /// Create a commit status
   record create-commit-status-params {
@@ -25437,10 +25184,46 @@ interface checks {
 }
 
 interface dependency-graph {
-  /// A diff of the dependencies between two commits.
-  record diff {
-    /// opaque schema; raw JSON
-    value: string
+  enum diff-item-change-type-enum {
+    added,
+    removed,
+  }
+
+  enum diff-item-scope-enum {
+    unknown,
+    runtime,
+    development,
+  }
+
+  enum dependency-relationship-enum {
+    direct,
+    indirect,
+  }
+
+  enum dependency-scope-enum {
+    runtime,
+    development,
+  }
+
+  record diff-item {
+    change-type: diff-item-change-type-enum,
+    ecosystem: string,
+    license: string,
+    manifest: string,
+    name: string,
+    package-url: string,
+    /// Where the dependency is utilized. `development` means that the dependency is only utilized in the development environment. `runtime` means that the dependency is utilized at runtime and in the development environment.
+    scope: diff-item-scope-enum,
+    source-repository-url: string,
+    version: string,
+    vulnerabilities: list<diff-item-vulnerabilities-item>
+  }
+
+  record diff-item-vulnerabilities-item {
+    advisory-ghsa-id: string,
+    advisory-summary: string,
+    advisory-url: string,
+    severity: string
   }
 
   /// A description of the detector used.
@@ -25462,16 +25245,60 @@ interface dependency-graph {
     id: string
   }
 
-  /// A collection of package manifests, which are a collection of related dependencies declared in a file or representing a logical group of dependencies.
-  record snapshot-manifests {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  record manifest {
+    file: option<manifest-file>,
+    metadata: option<list<metadata-entry>>,
+    /// The name of the manifest.
+    name: string,
+    /// A collection of resolved package dependencies.
+    resolved: option<list<manifest-resolved-entry>>
   }
 
-  /// User-defined metadata to store domain-specific information limited to 8 keys with scalar values.
-  record metadata {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  record manifest-file {
+    /// The path of the manifest file relative to the root of the Git repository.
+    source-location: option<string>
+  }
+
+  /// one entry of a string-keyed map (free-form object)
+  record metadata-entry {
+    key: string,
+    value: string
+  }
+
+  record dependency {
+    /// Array of package-url (PURLs) of direct child dependencies.
+    dependencies: option<list<string>>,
+    metadata: option<list<metadata-entry-v2>>,
+    /// Package-url (PURL) of dependency. See https://github.com/package-url/purl-spec for more details.
+    package-url: option<string>,
+    /// A notation of whether a dependency is requested directly by this manifest or is a dependency of another dependency.
+    relationship: option<dependency-relationship-enum>,
+    /// A notation of whether the dependency is required for the primary build artifact (runtime) or is only used for development. Future versions of this specification may allow for more granular scopes.
+    scope: option<dependency-scope-enum>
+  }
+
+  /// one entry of a string-keyed map (free-form object)
+  record metadata-entry-v2 {
+    key: string,
+    value: string
+  }
+
+  /// one entry of a string-keyed map (free-form object)
+  record manifest-resolved-entry {
+    key: string,
+    value: dependency
+  }
+
+  /// one entry of a string-keyed map (free-form object)
+  record snapshot-manifests-entry {
+    key: string,
+    value: manifest
+  }
+
+  /// one entry of a string-keyed map (free-form object)
+  record metadata-entry-v3 {
+    key: string,
+    value: string
   }
 
   record create-repository-snapshot-response {
@@ -25502,7 +25329,7 @@ interface dependency-graph {
     /// The full path, relative to the repository root, of the dependency manifest file.
     name: option<string>
   }
-  diff-range: func(params: diff-range-params) -> result<diff, diff-range-error>;
+  diff-range: func(params: diff-range-params) -> result<list<diff-item>, diff-range-error>;
 
   /// Create a snapshot of dependencies for a repository
   record create-repository-snapshot-params {
@@ -25514,8 +25341,8 @@ interface dependency-graph {
     detector: snapshot-detector,
     job: snapshot-job,
     /// A collection of package manifests, which are a collection of related dependencies declared in a file or representing a logical group of dependencies.
-    manifests: option<snapshot-manifests>,
-    metadata: option<metadata>,
+    manifests: option<list<snapshot-manifests-entry>>,
+    metadata: option<list<metadata-entry-v3>>,
     /// The repository branch that triggered this snapshot.
     ref: string,
     /// The time at which the snapshot was scanned.
@@ -25999,6 +25826,17 @@ interface pulls {
     desc,
   }
 
+  enum author-association {
+    collaborator,
+    contributor,
+    first-timer,
+    first-time-contributor,
+    mannequin,
+    member,
+    none,
+    owner,
+  }
+
   enum auto-merge-merge-method-enum {
     merge,
     squash,
@@ -26179,12 +26017,6 @@ interface pulls {
     subscriptions-url: string,
     type-op: string,
     url: string
-  }
-
-  /// How the author is associated with the repository.
-  record author-association {
-    /// opaque schema; raw JSON
-    value: string
   }
 
   /// The status of auto merging a pull request.
@@ -27838,6 +27670,17 @@ interface search {
     updated,
   }
 
+  enum author-association {
+    collaborator,
+    contributor,
+    first-timer,
+    first-time-contributor,
+    mannequin,
+    member,
+    none,
+    owner,
+  }
+
   enum nullable-milestone-state-enum {
     open,
     closed,
@@ -27902,7 +27745,7 @@ interface search {
     repository: minimal-repository,
     score: f64,
     sha: string,
-    text-matches: option<result-text-matches>,
+    text-matches: option<list<result-text-matches-item>>,
     url: string
   }
 
@@ -28066,9 +27909,17 @@ interface search {
     status: option<security-and-analysis-advanced-security-status-enum>
   }
 
-  record result-text-matches {
-    /// opaque schema; raw JSON
-    value: string
+  record result-text-matches-item {
+    fragment: option<string>,
+    matches: option<list<result-text-matches-item-matches-item>>,
+    object-type: option<string>,
+    object-url: option<string>,
+    property: option<string>
+  }
+
+  record result-text-matches-item-matches-item {
+    indices: option<list<s32>>,
+    text: option<string>
   }
 
   record commits-response {
@@ -28089,7 +27940,7 @@ interface search {
     repository: minimal-repository,
     score: f64,
     sha: string,
-    text-matches: option<result-text-matches>,
+    text-matches: option<list<result-text-matches-item-v2>>,
     url: string
   }
 
@@ -28159,6 +28010,19 @@ interface search {
     url: option<string>
   }
 
+  record result-text-matches-item-v2 {
+    fragment: option<string>,
+    matches: option<list<result-text-matches-item-v2-matches-item>>,
+    object-type: option<string>,
+    object-url: option<string>,
+    property: option<string>
+  }
+
+  record result-text-matches-item-v2-matches-item {
+    indices: option<list<s32>>,
+    text: option<string>
+  }
+
   record issues-and-pull-requests-response {
     incomplete-results: bool,
     items: list<issue-search-result-item>,
@@ -28196,18 +28060,12 @@ interface search {
     score: f64,
     state: string,
     state-reason: option<string>,
-    text-matches: option<result-text-matches>,
+    text-matches: option<list<result-text-matches-item-v3>>,
     timeline-url: option<string>,
     title: string,
     updated-at: string,
     url: string,
     user: nullable-simple-user
-  }
-
-  /// How the author is associated with the repository.
-  record author-association {
-    /// opaque schema; raw JSON
-    value: string
   }
 
   record issue-search-result-item-labels-item {
@@ -28580,6 +28438,19 @@ interface search {
     triage: option<bool>
   }
 
+  record result-text-matches-item-v3 {
+    fragment: option<string>,
+    matches: option<list<result-text-matches-item-v3-matches-item>>,
+    object-type: option<string>,
+    object-url: option<string>,
+    property: option<string>
+  }
+
+  record result-text-matches-item-v3-matches-item {
+    indices: option<list<s32>>,
+    text: option<string>
+  }
+
   record labels-response {
     incomplete-results: bool,
     items: list<label-search-result-item>,
@@ -28595,8 +28466,21 @@ interface search {
     name: string,
     node-id: string,
     score: f64,
-    text-matches: option<result-text-matches>,
+    text-matches: option<list<result-text-matches-item-v4>>,
     url: string
+  }
+
+  record result-text-matches-item-v4 {
+    fragment: option<string>,
+    matches: option<list<result-text-matches-item-v4-matches-item>>,
+    object-type: option<string>,
+    object-url: option<string>,
+    property: option<string>
+  }
+
+  record result-text-matches-item-v4-matches-item {
+    indices: option<list<s32>>,
+    text: option<string>
   }
 
   record repos-response {
@@ -28688,7 +28572,7 @@ interface search {
     tags-url: string,
     teams-url: string,
     temp-clone-token: option<string>,
-    text-matches: option<result-text-matches>,
+    text-matches: option<list<result-text-matches-item-v5>>,
     topics: option<list<string>>,
     trees-url: string,
     updated-at: string,
@@ -28706,6 +28590,19 @@ interface search {
     pull: bool,
     push: bool,
     triage: option<bool>
+  }
+
+  record result-text-matches-item-v5 {
+    fragment: option<string>,
+    matches: option<list<result-text-matches-item-v5-matches-item>>,
+    object-type: option<string>,
+    object-url: option<string>,
+    property: option<string>
+  }
+
+  record result-text-matches-item-v5-matches-item {
+    indices: option<list<s32>>,
+    text: option<string>
   }
 
   record topics-response {
@@ -28730,7 +28627,7 @@ interface search {
     repository-count: option<s32>,
     score: f64,
     short-description: string,
-    text-matches: option<result-text-matches>,
+    text-matches: option<list<result-text-matches-item-v6>>,
     updated-at: string
   }
 
@@ -28754,6 +28651,19 @@ interface search {
     name: option<string>,
     relation-type: option<string>,
     topic-id: option<s32>
+  }
+
+  record result-text-matches-item-v6 {
+    fragment: option<string>,
+    matches: option<list<result-text-matches-item-v6-matches-item>>,
+    object-type: option<string>,
+    object-url: option<string>,
+    property: option<string>
+  }
+
+  record result-text-matches-item-v6-matches-item {
+    indices: option<list<s32>>,
+    text: option<string>
   }
 
   record users-response {
@@ -28794,10 +28704,23 @@ interface search {
     starred-url: string,
     subscriptions-url: string,
     suspended-at: option<string>,
-    text-matches: option<result-text-matches>,
+    text-matches: option<list<result-text-matches-item-v7>>,
     type-op: string,
     updated-at: option<string>,
     url: string
+  }
+
+  record result-text-matches-item-v7 {
+    fragment: option<string>,
+    matches: option<list<result-text-matches-item-v7-matches-item>>,
+    object-type: option<string>,
+    object-url: option<string>,
+    property: option<string>
+  }
+
+  record result-text-matches-item-v7-matches-item {
+    indices: option<list<s32>>,
+    text: option<string>
   }
 
   variant code-error {

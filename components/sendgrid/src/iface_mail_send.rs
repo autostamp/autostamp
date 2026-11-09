@@ -69,9 +69,10 @@ fn iface_mail_send__from_email_object__to_json(p: &iface_mail_send::FromEmailObj
     Value::Object(m)
 }
 
-fn iface_mail_send__post_mail_send_body_headers__to_json(p: &iface_mail_send::PostMailSendBodyHeaders) -> Value {
+fn iface_mail_send__post_mail_send_body_headers_entry__to_json(p: &iface_mail_send::PostMailSendBodyHeadersEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -128,14 +129,14 @@ fn iface_mail_send__post_mail_send_body_personalizations_item__to_json(p: &iface
     let mut m = Map::new();
     m.insert("bcc".into(), match (&p.bcc) { Some(v) => Value::Array((v).iter().map(|v| iface_mail_send__cc_bcc_email_object__to_json(v)).collect()), None => Value::Null });
     m.insert("cc".into(), match (&p.cc) { Some(v) => Value::Array((v).iter().map(|v| iface_mail_send__cc_bcc_email_object__to_json(v)).collect()), None => Value::Null });
-    m.insert("custom_args".into(), match (&p.custom_args) { Some(v) => iface_mail_send__post_mail_send_body_personalizations_item_custom_args__to_json(v), None => Value::Null });
-    m.insert("dynamic_template_data".into(), match (&p.dynamic_template_data) { Some(v) => iface_mail_send__post_mail_send_body_personalizations_item_dynamic_template_data__to_json(v), None => Value::Null });
+    m.insert("custom_args".into(), match (&p.custom_args) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
+    m.insert("dynamic_template_data".into(), match (&p.dynamic_template_data) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("from".into(), match (&p.from_op) { Some(v) => iface_mail_send__from_email_object__to_json(v), None => Value::Null });
-    m.insert("headers".into(), match (&p.headers) { Some(v) => iface_mail_send__post_mail_send_body_personalizations_item_headers__to_json(v), None => Value::Null });
+    m.insert("headers".into(), match (&p.headers) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("send_at".into(), match (&p.send_at) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("subject".into(), match (&p.subject) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("substitutions".into(), match (&p.substitutions) { Some(v) => iface_mail_send__post_mail_send_body_personalizations_item_substitutions__to_json(v), None => Value::Null });
-    m.insert("to".into(), iface_mail_send__to_email_array__to_json(&p.to));
+    m.insert("substitutions".into(), match (&p.substitutions) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
+    m.insert("to".into(), Value::Array((&p.to).iter().map(|v| iface_mail_send__to_email_array_item__to_json(v)).collect()));
     Value::Object(m)
 }
 
@@ -146,33 +147,38 @@ fn iface_mail_send__cc_bcc_email_object__to_json(p: &iface_mail_send::CcBccEmail
     Value::Object(m)
 }
 
-fn iface_mail_send__post_mail_send_body_personalizations_item_custom_args__to_json(p: &iface_mail_send::PostMailSendBodyPersonalizationsItemCustomArgs) -> Value {
+fn iface_mail_send__post_mail_send_body_personalizations_item_custom_args_entry__to_json(p: &iface_mail_send::PostMailSendBodyPersonalizationsItemCustomArgsEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_mail_send__post_mail_send_body_personalizations_item_dynamic_template_data__to_json(p: &iface_mail_send::PostMailSendBodyPersonalizationsItemDynamicTemplateData) -> Value {
-    let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_mail_send__post_mail_send_body_personalizations_item_headers__to_json(p: &iface_mail_send::PostMailSendBodyPersonalizationsItemHeaders) -> Value {
-    let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_mail_send__post_mail_send_body_personalizations_item_substitutions__to_json(p: &iface_mail_send::PostMailSendBodyPersonalizationsItemSubstitutions) -> Value {
-    let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_mail_send__to_email_array__to_json(p: &iface_mail_send::ToEmailArray) -> Value {
-    let mut m = Map::new();
+    m.insert("key".into(), Value::String((&p.key).clone()));
     m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
+}
+
+fn iface_mail_send__post_mail_send_body_personalizations_item_dynamic_template_data_entry__to_json(p: &iface_mail_send::PostMailSendBodyPersonalizationsItemDynamicTemplateDataEntry) -> Value {
+    let mut m = Map::new();
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
+}
+
+fn iface_mail_send__post_mail_send_body_personalizations_item_headers_entry__to_json(p: &iface_mail_send::PostMailSendBodyPersonalizationsItemHeadersEntry) -> Value {
+    let mut m = Map::new();
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
+}
+
+fn iface_mail_send__post_mail_send_body_personalizations_item_substitutions_entry__to_json(p: &iface_mail_send::PostMailSendBodyPersonalizationsItemSubstitutionsEntry) -> Value {
+    let mut m = Map::new();
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
+}
+
+fn iface_mail_send__to_email_array_item__to_json(p: &iface_mail_send::ToEmailArrayItem) -> Value {
+    let mut m = Map::new();
+    m.insert("email".into(), Value::String((&p.email).clone()));
+    m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -242,7 +248,7 @@ fn iface_mail_send__post_mail_send_params__to_json(p: &iface_mail_send::PostMail
     m.insert("content".into(), Value::Array((&p.content).iter().map(|v| iface_mail_send__post_mail_send_body_content_item__to_json(v)).collect()));
     m.insert("custom_args".into(), match (&p.custom_args) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("from".into(), iface_mail_send__from_email_object__to_json(&p.from_op));
-    m.insert("headers".into(), match (&p.headers) { Some(v) => iface_mail_send__post_mail_send_body_headers__to_json(v), None => Value::Null });
+    m.insert("headers".into(), match (&p.headers) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("ip_pool_name".into(), match (&p.ip_pool_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("mail_settings".into(), match (&p.mail_settings) { Some(v) => iface_mail_send__post_mail_send_body_mail_settings__to_json(v), None => Value::Null });
     m.insert("personalizations".into(), Value::Array((&p.personalizations).iter().map(|v| iface_mail_send__post_mail_send_body_personalizations_item__to_json(v)).collect()));

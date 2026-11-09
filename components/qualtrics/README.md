@@ -11,8 +11,8 @@ triggered.
 
 | Setting | Value |
 | --- | --- |
-| Package | `autostamp:qualtrics@0.5.0` |
-| Published version | `0.5.0+qualtrics-0.2` |
+| Package | `autostamp:qualtrics@0.6.0` |
+| Published version | `0.6.0+qualtrics-0.2` |
 | Tag filter | all tags |
 | Operations generated | 8 |
 | Infer API-key credentials | enabled — not triggered |

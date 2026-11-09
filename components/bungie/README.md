@@ -20,8 +20,8 @@ triggered.
 
 | Setting | Value |
 | --- | --- |
-| Package | `autostamp:bungie@0.5.0` |
-| Published version | `0.5.0+bungie-2.18.0` |
+| Package | `autostamp:bungie@0.6.0` |
+| Published version | `0.6.0+bungie-2.18.0` |
 | Tag filter | all tags |
 | Operations generated | 134 |
 | Infer API-key credentials | enabled — not triggered |

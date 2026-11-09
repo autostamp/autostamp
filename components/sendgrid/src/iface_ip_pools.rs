@@ -96,9 +96,10 @@ fn iface_ip_pools__get_ips_pools_pool_name_response__to_json(p: &iface_ip_pools:
     Value::Object(m)
 }
 
-fn iface_ip_pools__delete_ips_pools_pool_name_response__to_json(p: &iface_ip_pools::DeleteIpsPoolsPoolNameResponse) -> Value {
+fn iface_ip_pools__delete_ips_pools_pool_name_response_entry__to_json(p: &iface_ip_pools::DeleteIpsPoolsPoolNameResponseEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -111,9 +112,10 @@ fn iface_ip_pools__post_ips_pools_pool_name_ips_response__to_json(p: &iface_ip_p
     Value::Object(m)
 }
 
-fn iface_ip_pools__delete_ips_pools_pool_name_ips_ip_response__to_json(p: &iface_ip_pools::DeleteIpsPoolsPoolNameIpsIpResponse) -> Value {
+fn iface_ip_pools__delete_ips_pools_pool_name_ips_ip_response_entry__to_json(p: &iface_ip_pools::DeleteIpsPoolsPoolNameIpsIpResponseEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -171,10 +173,11 @@ fn iface_ip_pools__get_ips_pools_pool_name_response__from_json(v: &Value) -> Opt
     })
 }
 
-fn iface_ip_pools__delete_ips_pools_pool_name_response__from_json(v: &Value) -> Option<iface_ip_pools::DeleteIpsPoolsPoolNameResponse> {
+fn iface_ip_pools__delete_ips_pools_pool_name_response_entry__from_json(v: &Value) -> Option<iface_ip_pools::DeleteIpsPoolsPoolNameResponseEntry> {
     let m = v.as_object()?;
-    Some(iface_ip_pools::DeleteIpsPoolsPoolNameResponse {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_ip_pools::DeleteIpsPoolsPoolNameResponseEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -188,10 +191,11 @@ fn iface_ip_pools__post_ips_pools_pool_name_ips_response__from_json(v: &Value) -
     })
 }
 
-fn iface_ip_pools__delete_ips_pools_pool_name_ips_ip_response__from_json(v: &Value) -> Option<iface_ip_pools::DeleteIpsPoolsPoolNameIpsIpResponse> {
+fn iface_ip_pools__delete_ips_pools_pool_name_ips_ip_response_entry__from_json(v: &Value) -> Option<iface_ip_pools::DeleteIpsPoolsPoolNameIpsIpResponseEntry> {
     let m = v.as_object()?;
-    Some(iface_ip_pools::DeleteIpsPoolsPoolNameIpsIpResponse {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_ip_pools::DeleteIpsPoolsPoolNameIpsIpResponseEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -273,12 +277,12 @@ fn iface_ip_pools__put_ips_pools_pool_name__err(e: crate::runtime::DispatchError
     }
 }
 
-fn iface_ip_pools__delete_ips_pools_pool_name__ok(body: String) -> Result<iface_ip_pools::DeleteIpsPoolsPoolNameResponse, crate::runtime::DispatchError> {
+fn iface_ip_pools__delete_ips_pools_pool_name__ok(body: String) -> Result<Vec<iface_ip_pools::DeleteIpsPoolsPoolNameResponseEntry>, crate::runtime::DispatchError> {
     let v: Value = match serde_json::from_str(&body) {
         Ok(v) => v,
         Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
     };
-    match iface_ip_pools__delete_ips_pools_pool_name_response__from_json(&v) {
+    match (&v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_ip_pools::DeleteIpsPoolsPoolNameResponseEntry { key: k.clone(), value: val })).collect()) {
         Some(x) => Ok(x),
         None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
@@ -315,12 +319,12 @@ fn iface_ip_pools__post_ips_pools_pool_name_ips__err(e: crate::runtime::Dispatch
     }
 }
 
-fn iface_ip_pools__delete_ips_pools_pool_name_ips_ip__ok(body: String) -> Result<iface_ip_pools::DeleteIpsPoolsPoolNameIpsIpResponse, crate::runtime::DispatchError> {
+fn iface_ip_pools__delete_ips_pools_pool_name_ips_ip__ok(body: String) -> Result<Vec<iface_ip_pools::DeleteIpsPoolsPoolNameIpsIpResponseEntry>, crate::runtime::DispatchError> {
     let v: Value = match serde_json::from_str(&body) {
         Ok(v) => v,
         Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
     };
-    match iface_ip_pools__delete_ips_pools_pool_name_ips_ip_response__from_json(&v) {
+    match (&v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_ip_pools::DeleteIpsPoolsPoolNameIpsIpResponseEntry { key: k.clone(), value: val })).collect()) {
         Some(x) => Ok(x),
         None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
@@ -364,7 +368,7 @@ impl iface_ip_pools::Guest for crate::Component {
             Err(e) => Err(iface_ip_pools__put_ips_pools_pool_name__err(e)),
         }
     }
-    fn delete_ips_pools_pool_name(params: iface_ip_pools::DeleteIpsPoolsPoolNameParams) -> Result<iface_ip_pools::DeleteIpsPoolsPoolNameResponse, iface_ip_pools::DeleteIpsPoolsPoolNameError> {
+    fn delete_ips_pools_pool_name(params: iface_ip_pools::DeleteIpsPoolsPoolNameParams) -> Result<Vec<iface_ip_pools::DeleteIpsPoolsPoolNameResponseEntry>, iface_ip_pools::DeleteIpsPoolsPoolNameError> {
         let json = iface_ip_pools__delete_ips_pools_pool_name_params__to_json(&params);
         match dispatch(&OP_IP_POOLS_DELETE_IPS_POOLS_POOL_NAME, json).and_then(iface_ip_pools__delete_ips_pools_pool_name__ok) {
             Ok(v) => Ok(v),
@@ -378,7 +382,7 @@ impl iface_ip_pools::Guest for crate::Component {
             Err(e) => Err(iface_ip_pools__post_ips_pools_pool_name_ips__err(e)),
         }
     }
-    fn delete_ips_pools_pool_name_ips_ip(params: iface_ip_pools::DeleteIpsPoolsPoolNameIpsIpParams) -> Result<iface_ip_pools::DeleteIpsPoolsPoolNameIpsIpResponse, iface_ip_pools::DeleteIpsPoolsPoolNameIpsIpError> {
+    fn delete_ips_pools_pool_name_ips_ip(params: iface_ip_pools::DeleteIpsPoolsPoolNameIpsIpParams) -> Result<Vec<iface_ip_pools::DeleteIpsPoolsPoolNameIpsIpResponseEntry>, iface_ip_pools::DeleteIpsPoolsPoolNameIpsIpError> {
         let json = iface_ip_pools__delete_ips_pools_pool_name_ips_ip_params__to_json(&params);
         match dispatch(&OP_IP_POOLS_DELETE_IPS_POOLS_POOL_NAME_IPS_IP, json).and_then(iface_ip_pools__delete_ips_pools_pool_name_ips_ip__ok) {
             Ok(v) => Ok(v),

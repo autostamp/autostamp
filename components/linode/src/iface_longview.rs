@@ -127,9 +127,9 @@ fn iface_longview__subscription_id_enum__to_str(e: &iface_longview::Subscription
 fn iface_longview__get_longview_clients_response__to_json(p: &iface_longview::GetLongviewClientsResponse) -> Value {
     let mut m = Map::new();
     m.insert("data".into(), match (&p.data) { Some(v) => Value::Array((v).iter().map(|v| iface_longview__client__to_json(v)).collect()), None => Value::Null });
-    m.insert("page".into(), match (&p.page) { Some(v) => iface_longview__pagination_envelope_properties_page__to_json(v), None => Value::Null });
-    m.insert("pages".into(), match (&p.pages) { Some(v) => iface_longview__pagination_envelope_properties_pages__to_json(v), None => Value::Null });
-    m.insert("results".into(), match (&p.results) { Some(v) => iface_longview__pagination_envelope_properties_results__to_json(v), None => Value::Null });
+    m.insert("page".into(), match (&p.page) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("pages".into(), match (&p.pages) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("results".into(), match (&p.results) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
@@ -153,27 +153,10 @@ fn iface_longview__client_apps__to_json(p: &iface_longview::ClientApps) -> Value
     Value::Object(m)
 }
 
-fn iface_longview__pagination_envelope_properties_page__to_json(p: &iface_longview::PaginationEnvelopePropertiesPage) -> Value {
+fn iface_longview__delete_longview_client_response_entry__to_json(p: &iface_longview::DeleteLongviewClientResponseEntry) -> Value {
     let mut m = Map::new();
+    m.insert("key".into(), Value::String((&p.key).clone()));
     m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_longview__pagination_envelope_properties_pages__to_json(p: &iface_longview::PaginationEnvelopePropertiesPages) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_longview__pagination_envelope_properties_results__to_json(p: &iface_longview::PaginationEnvelopePropertiesResults) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_longview__delete_longview_client_response__to_json(p: &iface_longview::DeleteLongviewClientResponse) -> Value {
-    let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -196,9 +179,9 @@ fn iface_longview__subscription_price__to_json(p: &iface_longview::SubscriptionP
 fn iface_longview__get_longview_subscriptions_response__to_json(p: &iface_longview::GetLongviewSubscriptionsResponse) -> Value {
     let mut m = Map::new();
     m.insert("data".into(), match (&p.data) { Some(v) => Value::Array((v).iter().map(|v| iface_longview__subscription__to_json(v)).collect()), None => Value::Null });
-    m.insert("page".into(), match (&p.page) { Some(v) => iface_longview__pagination_envelope_properties_page__to_json(v), None => Value::Null });
-    m.insert("pages".into(), match (&p.pages) { Some(v) => iface_longview__pagination_envelope_properties_pages__to_json(v), None => Value::Null });
-    m.insert("results".into(), match (&p.results) { Some(v) => iface_longview__pagination_envelope_properties_results__to_json(v), None => Value::Null });
+    m.insert("page".into(), match (&p.page) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("pages".into(), match (&p.pages) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("results".into(), match (&p.results) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
@@ -269,9 +252,9 @@ fn iface_longview__get_longview_clients_response__from_json(v: &Value) -> Option
     let m = v.as_object()?;
     Some(iface_longview::GetLongviewClientsResponse {
         data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_longview__client__from_json(x)).collect())),
-        page: m.get("page").filter(|v| !v.is_null()).and_then(|v| iface_longview__pagination_envelope_properties_page__from_json(v)),
-        pages: m.get("pages").filter(|v| !v.is_null()).and_then(|v| iface_longview__pagination_envelope_properties_pages__from_json(v)),
-        results: m.get("results").filter(|v| !v.is_null()).and_then(|v| iface_longview__pagination_envelope_properties_results__from_json(v)),
+        page: m.get("page").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        pages: m.get("pages").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        results: m.get("results").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
     })
 }
 
@@ -297,31 +280,11 @@ fn iface_longview__client_apps__from_json(v: &Value) -> Option<iface_longview::C
     })
 }
 
-fn iface_longview__pagination_envelope_properties_page__from_json(v: &Value) -> Option<iface_longview::PaginationEnvelopePropertiesPage> {
+fn iface_longview__delete_longview_client_response_entry__from_json(v: &Value) -> Option<iface_longview::DeleteLongviewClientResponseEntry> {
     let m = v.as_object()?;
-    Some(iface_longview::PaginationEnvelopePropertiesPage {
+    Some(iface_longview::DeleteLongviewClientResponseEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-    })
-}
-
-fn iface_longview__pagination_envelope_properties_pages__from_json(v: &Value) -> Option<iface_longview::PaginationEnvelopePropertiesPages> {
-    let m = v.as_object()?;
-    Some(iface_longview::PaginationEnvelopePropertiesPages {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-    })
-}
-
-fn iface_longview__pagination_envelope_properties_results__from_json(v: &Value) -> Option<iface_longview::PaginationEnvelopePropertiesResults> {
-    let m = v.as_object()?;
-    Some(iface_longview::PaginationEnvelopePropertiesResults {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-    })
-}
-
-fn iface_longview__delete_longview_client_response__from_json(v: &Value) -> Option<iface_longview::DeleteLongviewClientResponse> {
-    let m = v.as_object()?;
-    Some(iface_longview::DeleteLongviewClientResponse {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
     })
 }
 
@@ -347,9 +310,9 @@ fn iface_longview__get_longview_subscriptions_response__from_json(v: &Value) -> 
     let m = v.as_object()?;
     Some(iface_longview::GetLongviewSubscriptionsResponse {
         data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_longview__subscription__from_json(x)).collect())),
-        page: m.get("page").filter(|v| !v.is_null()).and_then(|v| iface_longview__pagination_envelope_properties_page__from_json(v)),
-        pages: m.get("pages").filter(|v| !v.is_null()).and_then(|v| iface_longview__pagination_envelope_properties_pages__from_json(v)),
-        results: m.get("results").filter(|v| !v.is_null()).and_then(|v| iface_longview__pagination_envelope_properties_results__from_json(v)),
+        page: m.get("page").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        pages: m.get("pages").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        results: m.get("results").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
     })
 }
 
@@ -435,12 +398,12 @@ fn iface_longview__update_longview_client__err(e: crate::runtime::DispatchError)
     }
 }
 
-fn iface_longview__delete_longview_client__ok(body: String) -> Result<iface_longview::DeleteLongviewClientResponse, crate::runtime::DispatchError> {
+fn iface_longview__delete_longview_client__ok(body: String) -> Result<Vec<iface_longview::DeleteLongviewClientResponseEntry>, crate::runtime::DispatchError> {
     let v: Value = match serde_json::from_str(&body) {
         Ok(v) => v,
         Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
     };
-    match iface_longview__delete_longview_client_response__from_json(&v) {
+    match (&v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_longview::DeleteLongviewClientResponseEntry { key: k.clone(), value: val })).collect()) {
         Some(x) => Ok(x),
         None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
@@ -554,7 +517,7 @@ impl iface_longview::Guest for crate::Component {
             Err(e) => Err(iface_longview__update_longview_client__err(e)),
         }
     }
-    fn delete_longview_client(params: iface_longview::DeleteLongviewClientParams) -> Result<iface_longview::DeleteLongviewClientResponse, String> {
+    fn delete_longview_client(params: iface_longview::DeleteLongviewClientParams) -> Result<Vec<iface_longview::DeleteLongviewClientResponseEntry>, String> {
         let json = iface_longview__delete_longview_client_params__to_json(&params);
         match dispatch(&OP_LONGVIEW_DELETE_LONGVIEW_CLIENT, json).and_then(iface_longview__delete_longview_client__ok) {
             Ok(v) => Ok(v),

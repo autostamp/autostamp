@@ -139,13 +139,14 @@ fn iface_attachments__get_attachment_response__to_json(p: &iface_attachments::Ge
 
 fn iface_attachments__delete_attachment_response__to_json(p: &iface_attachments::DeleteAttachmentResponse) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => iface_attachments__empty_response__to_json(v), None => Value::Null });
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_attachments__empty_response__to_json(p: &iface_attachments::EmptyResponse) -> Value {
+fn iface_attachments__empty_response_entry__to_json(p: &iface_attachments::EmptyResponseEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -250,14 +251,15 @@ fn iface_attachments__get_attachment_response__from_json(v: &Value) -> Option<if
 fn iface_attachments__delete_attachment_response__from_json(v: &Value) -> Option<iface_attachments::DeleteAttachmentResponse> {
     let m = v.as_object()?;
     Some(iface_attachments::DeleteAttachmentResponse {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| iface_attachments__empty_response__from_json(v)),
+        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_attachments::EmptyResponseEntry { key: k.clone(), value: val })).collect())),
     })
 }
 
-fn iface_attachments__empty_response__from_json(v: &Value) -> Option<iface_attachments::EmptyResponse> {
+fn iface_attachments__empty_response_entry__from_json(v: &Value) -> Option<iface_attachments::EmptyResponseEntry> {
     let m = v.as_object()?;
-    Some(iface_attachments::EmptyResponse {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_attachments::EmptyResponseEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 

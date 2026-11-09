@@ -21,27 +21,29 @@ fn iface_directory_currency__directory_data_currency_information_interface__to_j
     m.insert("default_display_currency_code".into(), Value::String((&p.default_display_currency_code).clone()));
     m.insert("default_display_currency_symbol".into(), Value::String((&p.default_display_currency_symbol).clone()));
     m.insert("exchange_rates".into(), Value::Array((&p.exchange_rates).iter().map(|v| iface_directory_currency__directory_data_exchange_rate_interface__to_json(v)).collect()));
-    m.insert("extension_attributes".into(), match (&p.extension_attributes) { Some(v) => iface_directory_currency__directory_data_currency_information_extension_interface__to_json(v), None => Value::Null });
+    m.insert("extension_attributes".into(), match (&p.extension_attributes) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     Value::Object(m)
 }
 
 fn iface_directory_currency__directory_data_exchange_rate_interface__to_json(p: &iface_directory_currency::DirectoryDataExchangeRateInterface) -> Value {
     let mut m = Map::new();
     m.insert("currency_to".into(), Value::String((&p.currency_to).clone()));
-    m.insert("extension_attributes".into(), match (&p.extension_attributes) { Some(v) => iface_directory_currency__directory_data_exchange_rate_extension_interface__to_json(v), None => Value::Null });
+    m.insert("extension_attributes".into(), match (&p.extension_attributes) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("rate".into(), serde_json::Number::from_f64(*(&p.rate)).map(Value::Number).unwrap_or(Value::Null));
     Value::Object(m)
 }
 
-fn iface_directory_currency__directory_data_exchange_rate_extension_interface__to_json(p: &iface_directory_currency::DirectoryDataExchangeRateExtensionInterface) -> Value {
+fn iface_directory_currency__directory_data_exchange_rate_extension_interface_entry__to_json(p: &iface_directory_currency::DirectoryDataExchangeRateExtensionInterfaceEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
-fn iface_directory_currency__directory_data_currency_information_extension_interface__to_json(p: &iface_directory_currency::DirectoryDataCurrencyInformationExtensionInterface) -> Value {
+fn iface_directory_currency__directory_data_currency_information_extension_interface_entry__to_json(p: &iface_directory_currency::DirectoryDataCurrencyInformationExtensionInterfaceEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -54,7 +56,7 @@ fn iface_directory_currency__directory_data_currency_information_interface__from
         default_display_currency_code: m.get("default_display_currency_code").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         default_display_currency_symbol: m.get("default_display_currency_symbol").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         exchange_rates: m.get("exchange_rates").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_directory_currency__directory_data_exchange_rate_interface__from_json(x)).collect())).unwrap_or_default(),
-        extension_attributes: m.get("extension_attributes").filter(|v| !v.is_null()).and_then(|v| iface_directory_currency__directory_data_currency_information_extension_interface__from_json(v)),
+        extension_attributes: m.get("extension_attributes").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_directory_currency::DirectoryDataCurrencyInformationExtensionInterfaceEntry { key: k.clone(), value: val })).collect())),
     })
 }
 
@@ -62,22 +64,24 @@ fn iface_directory_currency__directory_data_exchange_rate_interface__from_json(v
     let m = v.as_object()?;
     Some(iface_directory_currency::DirectoryDataExchangeRateInterface {
         currency_to: m.get("currency_to").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-        extension_attributes: m.get("extension_attributes").filter(|v| !v.is_null()).and_then(|v| iface_directory_currency__directory_data_exchange_rate_extension_interface__from_json(v)),
+        extension_attributes: m.get("extension_attributes").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_directory_currency::DirectoryDataExchangeRateExtensionInterfaceEntry { key: k.clone(), value: val })).collect())),
         rate: m.get("rate").and_then(|v| (v).as_f64()).unwrap_or_default(),
     })
 }
 
-fn iface_directory_currency__directory_data_exchange_rate_extension_interface__from_json(v: &Value) -> Option<iface_directory_currency::DirectoryDataExchangeRateExtensionInterface> {
+fn iface_directory_currency__directory_data_exchange_rate_extension_interface_entry__from_json(v: &Value) -> Option<iface_directory_currency::DirectoryDataExchangeRateExtensionInterfaceEntry> {
     let m = v.as_object()?;
-    Some(iface_directory_currency::DirectoryDataExchangeRateExtensionInterface {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_directory_currency::DirectoryDataExchangeRateExtensionInterfaceEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
-fn iface_directory_currency__directory_data_currency_information_extension_interface__from_json(v: &Value) -> Option<iface_directory_currency::DirectoryDataCurrencyInformationExtensionInterface> {
+fn iface_directory_currency__directory_data_currency_information_extension_interface_entry__from_json(v: &Value) -> Option<iface_directory_currency::DirectoryDataCurrencyInformationExtensionInterfaceEntry> {
     let m = v.as_object()?;
-    Some(iface_directory_currency::DirectoryDataCurrencyInformationExtensionInterface {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_directory_currency::DirectoryDataCurrencyInformationExtensionInterfaceEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 

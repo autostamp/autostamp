@@ -18,7 +18,7 @@ fn iface_requisition_lists__requisition_list_data_requisition_list_interface__to
     let mut m = Map::new();
     m.insert("customer_id".into(), Value::Number(serde_json::Number::from(*(&p.customer_id))));
     m.insert("description".into(), Value::String((&p.description).clone()));
-    m.insert("extension_attributes".into(), match (&p.extension_attributes) { Some(v) => iface_requisition_lists__requisition_list_data_requisition_list_extension_interface__to_json(v), None => Value::Null });
+    m.insert("extension_attributes".into(), match (&p.extension_attributes) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("id".into(), Value::Number(serde_json::Number::from(*(&p.id))));
     m.insert("items".into(), Value::Array((&p.items).iter().map(|v| iface_requisition_lists__requisition_list_data_requisition_list_item_interface__to_json(v)).collect()));
     m.insert("name".into(), Value::String((&p.name).clone()));
@@ -26,16 +26,17 @@ fn iface_requisition_lists__requisition_list_data_requisition_list_interface__to
     Value::Object(m)
 }
 
-fn iface_requisition_lists__requisition_list_data_requisition_list_extension_interface__to_json(p: &iface_requisition_lists::RequisitionListDataRequisitionListExtensionInterface) -> Value {
+fn iface_requisition_lists__requisition_list_data_requisition_list_extension_interface_entry__to_json(p: &iface_requisition_lists::RequisitionListDataRequisitionListExtensionInterfaceEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
 fn iface_requisition_lists__requisition_list_data_requisition_list_item_interface__to_json(p: &iface_requisition_lists::RequisitionListDataRequisitionListItemInterface) -> Value {
     let mut m = Map::new();
     m.insert("added_at".into(), Value::String((&p.added_at).clone()));
-    m.insert("extension_attributes".into(), match (&p.extension_attributes) { Some(v) => iface_requisition_lists__requisition_list_data_requisition_list_item_extension_interface__to_json(v), None => Value::Null });
+    m.insert("extension_attributes".into(), match (&p.extension_attributes) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("id".into(), Value::Number(serde_json::Number::from(*(&p.id))));
     m.insert("options".into(), Value::Array((&p.options).iter().map(|v| Value::String((v).clone())).collect()));
     m.insert("qty".into(), serde_json::Number::from_f64(*(&p.qty)).map(Value::Number).unwrap_or(Value::Null));
@@ -45,9 +46,10 @@ fn iface_requisition_lists__requisition_list_data_requisition_list_item_interfac
     Value::Object(m)
 }
 
-fn iface_requisition_lists__requisition_list_data_requisition_list_item_extension_interface__to_json(p: &iface_requisition_lists::RequisitionListDataRequisitionListItemExtensionInterface) -> Value {
+fn iface_requisition_lists__requisition_list_data_requisition_list_item_extension_interface_entry__to_json(p: &iface_requisition_lists::RequisitionListDataRequisitionListItemExtensionInterfaceEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -62,7 +64,7 @@ fn iface_requisition_lists__requisition_list_data_requisition_list_interface__fr
     Some(iface_requisition_lists::RequisitionListDataRequisitionListInterface {
         customer_id: m.get("customer_id").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
         description: m.get("description").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-        extension_attributes: m.get("extension_attributes").filter(|v| !v.is_null()).and_then(|v| iface_requisition_lists__requisition_list_data_requisition_list_extension_interface__from_json(v)),
+        extension_attributes: m.get("extension_attributes").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_requisition_lists::RequisitionListDataRequisitionListExtensionInterfaceEntry { key: k.clone(), value: val })).collect())),
         id: m.get("id").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
         items: m.get("items").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_requisition_lists__requisition_list_data_requisition_list_item_interface__from_json(x)).collect())).unwrap_or_default(),
         name: m.get("name").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
@@ -70,10 +72,11 @@ fn iface_requisition_lists__requisition_list_data_requisition_list_interface__fr
     })
 }
 
-fn iface_requisition_lists__requisition_list_data_requisition_list_extension_interface__from_json(v: &Value) -> Option<iface_requisition_lists::RequisitionListDataRequisitionListExtensionInterface> {
+fn iface_requisition_lists__requisition_list_data_requisition_list_extension_interface_entry__from_json(v: &Value) -> Option<iface_requisition_lists::RequisitionListDataRequisitionListExtensionInterfaceEntry> {
     let m = v.as_object()?;
-    Some(iface_requisition_lists::RequisitionListDataRequisitionListExtensionInterface {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_requisition_lists::RequisitionListDataRequisitionListExtensionInterfaceEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -81,7 +84,7 @@ fn iface_requisition_lists__requisition_list_data_requisition_list_item_interfac
     let m = v.as_object()?;
     Some(iface_requisition_lists::RequisitionListDataRequisitionListItemInterface {
         added_at: m.get("added_at").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-        extension_attributes: m.get("extension_attributes").filter(|v| !v.is_null()).and_then(|v| iface_requisition_lists__requisition_list_data_requisition_list_item_extension_interface__from_json(v)),
+        extension_attributes: m.get("extension_attributes").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_requisition_lists::RequisitionListDataRequisitionListItemExtensionInterfaceEntry { key: k.clone(), value: val })).collect())),
         id: m.get("id").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
         options: m.get("options").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())).unwrap_or_default(),
         qty: m.get("qty").and_then(|v| (v).as_f64()).unwrap_or_default(),
@@ -91,10 +94,11 @@ fn iface_requisition_lists__requisition_list_data_requisition_list_item_interfac
     })
 }
 
-fn iface_requisition_lists__requisition_list_data_requisition_list_item_extension_interface__from_json(v: &Value) -> Option<iface_requisition_lists::RequisitionListDataRequisitionListItemExtensionInterface> {
+fn iface_requisition_lists__requisition_list_data_requisition_list_item_extension_interface_entry__from_json(v: &Value) -> Option<iface_requisition_lists::RequisitionListDataRequisitionListItemExtensionInterfaceEntry> {
     let m = v.as_object()?;
-    Some(iface_requisition_lists::RequisitionListDataRequisitionListItemExtensionInterface {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_requisition_lists::RequisitionListDataRequisitionListItemExtensionInterfaceEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 

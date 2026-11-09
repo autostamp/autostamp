@@ -74,15 +74,16 @@ fn iface_sales_rules_rule_id__sales_rule_data_condition_interface__to_json(p: &i
     m.insert("attribute_name".into(), match (&p.attribute_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("condition_type".into(), Value::String((&p.condition_type).clone()));
     m.insert("conditions".into(), match (&p.conditions) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
-    m.insert("extension_attributes".into(), match (&p.extension_attributes) { Some(v) => iface_sales_rules_rule_id__sales_rule_data_condition_extension_interface__to_json(v), None => Value::Null });
+    m.insert("extension_attributes".into(), match (&p.extension_attributes) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("operator".into(), Value::String((&p.operator).clone()));
     m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
-fn iface_sales_rules_rule_id__sales_rule_data_condition_extension_interface__to_json(p: &iface_sales_rules_rule_id::SalesRuleDataConditionExtensionInterface) -> Value {
+fn iface_sales_rules_rule_id__sales_rule_data_condition_extension_interface_entry__to_json(p: &iface_sales_rules_rule_id::SalesRuleDataConditionExtensionInterfaceEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -94,15 +95,16 @@ fn iface_sales_rules_rule_id__sales_rule_data_rule_extension_interface__to_json(
 
 fn iface_sales_rules_rule_id__sales_rule_data_rule_label_interface__to_json(p: &iface_sales_rules_rule_id::SalesRuleDataRuleLabelInterface) -> Value {
     let mut m = Map::new();
-    m.insert("extension_attributes".into(), match (&p.extension_attributes) { Some(v) => iface_sales_rules_rule_id__sales_rule_data_rule_label_extension_interface__to_json(v), None => Value::Null });
+    m.insert("extension_attributes".into(), match (&p.extension_attributes) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("store_id".into(), Value::Number(serde_json::Number::from(*(&p.store_id))));
     m.insert("store_label".into(), Value::String((&p.store_label).clone()));
     Value::Object(m)
 }
 
-fn iface_sales_rules_rule_id__sales_rule_data_rule_label_extension_interface__to_json(p: &iface_sales_rules_rule_id::SalesRuleDataRuleLabelExtensionInterface) -> Value {
+fn iface_sales_rules_rule_id__sales_rule_data_rule_label_extension_interface_entry__to_json(p: &iface_sales_rules_rule_id::SalesRuleDataRuleLabelExtensionInterfaceEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -166,16 +168,17 @@ fn iface_sales_rules_rule_id__sales_rule_data_condition_interface__from_json(v: 
         attribute_name: m.get("attribute_name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         condition_type: m.get("condition_type").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         conditions: m.get("conditions").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
-        extension_attributes: m.get("extension_attributes").filter(|v| !v.is_null()).and_then(|v| iface_sales_rules_rule_id__sales_rule_data_condition_extension_interface__from_json(v)),
+        extension_attributes: m.get("extension_attributes").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_sales_rules_rule_id::SalesRuleDataConditionExtensionInterfaceEntry { key: k.clone(), value: val })).collect())),
         operator: m.get("operator").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
-fn iface_sales_rules_rule_id__sales_rule_data_condition_extension_interface__from_json(v: &Value) -> Option<iface_sales_rules_rule_id::SalesRuleDataConditionExtensionInterface> {
+fn iface_sales_rules_rule_id__sales_rule_data_condition_extension_interface_entry__from_json(v: &Value) -> Option<iface_sales_rules_rule_id::SalesRuleDataConditionExtensionInterfaceEntry> {
     let m = v.as_object()?;
-    Some(iface_sales_rules_rule_id::SalesRuleDataConditionExtensionInterface {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_sales_rules_rule_id::SalesRuleDataConditionExtensionInterfaceEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -189,16 +192,17 @@ fn iface_sales_rules_rule_id__sales_rule_data_rule_extension_interface__from_jso
 fn iface_sales_rules_rule_id__sales_rule_data_rule_label_interface__from_json(v: &Value) -> Option<iface_sales_rules_rule_id::SalesRuleDataRuleLabelInterface> {
     let m = v.as_object()?;
     Some(iface_sales_rules_rule_id::SalesRuleDataRuleLabelInterface {
-        extension_attributes: m.get("extension_attributes").filter(|v| !v.is_null()).and_then(|v| iface_sales_rules_rule_id__sales_rule_data_rule_label_extension_interface__from_json(v)),
+        extension_attributes: m.get("extension_attributes").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_sales_rules_rule_id::SalesRuleDataRuleLabelExtensionInterfaceEntry { key: k.clone(), value: val })).collect())),
         store_id: m.get("store_id").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
         store_label: m.get("store_label").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
-fn iface_sales_rules_rule_id__sales_rule_data_rule_label_extension_interface__from_json(v: &Value) -> Option<iface_sales_rules_rule_id::SalesRuleDataRuleLabelExtensionInterface> {
+fn iface_sales_rules_rule_id__sales_rule_data_rule_label_extension_interface_entry__from_json(v: &Value) -> Option<iface_sales_rules_rule_id::SalesRuleDataRuleLabelExtensionInterfaceEntry> {
     let m = v.as_object()?;
-    Some(iface_sales_rules_rule_id::SalesRuleDataRuleLabelExtensionInterface {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_sales_rules_rule_id::SalesRuleDataRuleLabelExtensionInterfaceEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 

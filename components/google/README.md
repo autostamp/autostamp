@@ -11,8 +11,8 @@ triggered.
 
 | Setting | Value |
 | --- | --- |
-| Package | `autostamp:google@0.5.0` |
-| Published version | `0.5.0+google-v3` |
+| Package | `autostamp:google@0.6.0` |
+| Published version | `0.6.0+google-v3` |
 | Tag filter | all tags |
 | Operations generated | 23 |
 | Infer API-key credentials | enabled — not triggered |

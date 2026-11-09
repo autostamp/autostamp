@@ -252,9 +252,14 @@ fn iface_messages__info_response_smtp_events_item__to_json(p: &iface_messages::I
     Value::Object(m)
 }
 
-fn iface_messages__list_scheduled_response__to_json(p: &iface_messages::ListScheduledResponse) -> Value {
+fn iface_messages__list_scheduled_response_item__to_json(p: &iface_messages::ListScheduledResponseItem) -> Value {
     let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
+    m.insert("_id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("created_at".into(), match (&p.created_at) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("from_email".into(), match (&p.from_email) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("send_at".into(), match (&p.send_at) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("subject".into(), match (&p.subject) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("to".into(), match (&p.to) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -302,21 +307,72 @@ fn iface_messages__parse_response_to_item__to_json(p: &iface_messages::ParseResp
     Value::Object(m)
 }
 
-fn iface_messages__timeseries__to_json(p: &iface_messages::Timeseries) -> Value {
+fn iface_messages__timeseries_item__to_json(p: &iface_messages::TimeseriesItem) -> Value {
     let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
+    m.insert("clicks".into(), match (&p.clicks) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("complaints".into(), match (&p.complaints) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("hard_bounces".into(), match (&p.hard_bounces) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("opens".into(), match (&p.opens) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("rejects".into(), match (&p.rejects) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("sent".into(), match (&p.sent) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("soft_bounces".into(), match (&p.soft_bounces) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("time".into(), match (&p.time) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("unique_clicks".into(), match (&p.unique_clicks) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("unique_opens".into(), match (&p.unique_opens) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("unsubs".into(), match (&p.unsubs) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_messages__search_response__to_json(p: &iface_messages::SearchResponse) -> Value {
+fn iface_messages__search_response_item__to_json(p: &iface_messages::SearchResponseItem) -> Value {
     let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
+    m.insert("_id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("clicks".into(), match (&p.clicks) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("clicks_detail".into(), match (&p.clicks_detail) { Some(v) => Value::Array((v).iter().map(|v| iface_messages__search_response_item_clicks_detail_item__to_json(v)).collect()), None => Value::Null });
+    m.insert("email".into(), match (&p.email) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("metadata".into(), match (&p.metadata) { Some(v) => iface_messages__search_response_item_metadata__to_json(v), None => Value::Null });
+    m.insert("opens".into(), match (&p.opens) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("opens_detail".into(), match (&p.opens_detail) { Some(v) => Value::Array((v).iter().map(|v| iface_messages__search_response_item_opens_detail_item__to_json(v)).collect()), None => Value::Null });
+    m.insert("sender".into(), match (&p.sender) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("state".into(), match (&p.state) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("subject".into(), match (&p.subject) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("tags".into(), match (&p.tags) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("template".into(), match (&p.template) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("ts".into(), match (&p.ts) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_messages__message_send_status__to_json(p: &iface_messages::MessageSendStatus) -> Value {
+fn iface_messages__search_response_item_clicks_detail_item__to_json(p: &iface_messages::SearchResponseItemClicksDetailItem) -> Value {
     let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
+    m.insert("ip".into(), match (&p.ip) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("location".into(), match (&p.location) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("ts".into(), match (&p.ts) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("ua".into(), match (&p.ua) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("url".into(), match (&p.url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_messages__search_response_item_metadata__to_json(p: &iface_messages::SearchResponseItemMetadata) -> Value {
+    let mut m = Map::new();
+    m.insert("user_id".into(), match (&p.user_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("website".into(), match (&p.website) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_messages__search_response_item_opens_detail_item__to_json(p: &iface_messages::SearchResponseItemOpensDetailItem) -> Value {
+    let mut m = Map::new();
+    m.insert("ip".into(), match (&p.ip) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("location".into(), match (&p.location) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("ts".into(), match (&p.ts) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("ua".into(), match (&p.ua) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_messages__message_send_status_item__to_json(p: &iface_messages::MessageSendStatusItem) -> Value {
+    let mut m = Map::new();
+    m.insert("_id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("email".into(), match (&p.email) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("reject_reason".into(), match (&p.reject_reason) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("status".into(), match (&p.status) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -433,6 +489,15 @@ fn iface_messages__send_template_template_content_item__to_json(p: &iface_messag
     Value::Object(m)
 }
 
+fn iface_messages__message_send_status_item_v2__to_json(p: &iface_messages::MessageSendStatusItemV2) -> Value {
+    let mut m = Map::new();
+    m.insert("_id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("email".into(), match (&p.email) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("reject_reason".into(), match (&p.reject_reason) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("status".into(), match (&p.status) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
 fn iface_messages__send_message__to_json(p: &iface_messages::SendMessage) -> Value {
     let mut m = Map::new();
     m.insert("attachments".into(), match (&p.attachments) { Some(v) => Value::Array((v).iter().map(|v| iface_messages__send_message_attachments_item__to_json(v)).collect()), None => Value::Null });
@@ -536,6 +601,15 @@ fn iface_messages__send_message_to_item__to_json(p: &iface_messages::SendMessage
     m.insert("email".into(), match (&p.email) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("type".into(), match (&p.type_op) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_messages__message_send_status_item_v3__to_json(p: &iface_messages::MessageSendStatusItemV3) -> Value {
+    let mut m = Map::new();
+    m.insert("_id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("email".into(), match (&p.email) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("reject_reason".into(), match (&p.reject_reason) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("status".into(), match (&p.status) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -753,10 +827,15 @@ fn iface_messages__info_response_smtp_events_item__from_json(v: &Value) -> Optio
     })
 }
 
-fn iface_messages__list_scheduled_response__from_json(v: &Value) -> Option<iface_messages::ListScheduledResponse> {
+fn iface_messages__list_scheduled_response_item__from_json(v: &Value) -> Option<iface_messages::ListScheduledResponseItem> {
     let m = v.as_object()?;
-    Some(iface_messages::ListScheduledResponse {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    Some(iface_messages::ListScheduledResponseItem {
+        id: m.get("_id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        created_at: m.get("created_at").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        from_email: m.get("from_email").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        send_at: m.get("send_at").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        subject: m.get("subject").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        to: m.get("to").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
     })
 }
 
@@ -809,24 +888,98 @@ fn iface_messages__parse_response_to_item__from_json(v: &Value) -> Option<iface_
     })
 }
 
-fn iface_messages__timeseries__from_json(v: &Value) -> Option<iface_messages::Timeseries> {
+fn iface_messages__timeseries_item__from_json(v: &Value) -> Option<iface_messages::TimeseriesItem> {
     let m = v.as_object()?;
-    Some(iface_messages::Timeseries {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    Some(iface_messages::TimeseriesItem {
+        clicks: m.get("clicks").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        complaints: m.get("complaints").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        hard_bounces: m.get("hard_bounces").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        opens: m.get("opens").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        rejects: m.get("rejects").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        sent: m.get("sent").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        soft_bounces: m.get("soft_bounces").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        time: m.get("time").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        unique_clicks: m.get("unique_clicks").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        unique_opens: m.get("unique_opens").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        unsubs: m.get("unsubs").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
     })
 }
 
-fn iface_messages__search_response__from_json(v: &Value) -> Option<iface_messages::SearchResponse> {
+fn iface_messages__search_response_item__from_json(v: &Value) -> Option<iface_messages::SearchResponseItem> {
     let m = v.as_object()?;
-    Some(iface_messages::SearchResponse {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    Some(iface_messages::SearchResponseItem {
+        id: m.get("_id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        clicks: m.get("clicks").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        clicks_detail: m.get("clicks_detail").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_messages__search_response_item_clicks_detail_item__from_json(x)).collect())),
+        email: m.get("email").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        metadata: m.get("metadata").filter(|v| !v.is_null()).and_then(|v| iface_messages__search_response_item_metadata__from_json(v)),
+        opens: m.get("opens").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        opens_detail: m.get("opens_detail").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_messages__search_response_item_opens_detail_item__from_json(x)).collect())),
+        sender: m.get("sender").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        state: m.get("state").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        subject: m.get("subject").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        tags: m.get("tags").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        template: m.get("template").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        ts: m.get("ts").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
     })
 }
 
-fn iface_messages__message_send_status__from_json(v: &Value) -> Option<iface_messages::MessageSendStatus> {
+fn iface_messages__search_response_item_clicks_detail_item__from_json(v: &Value) -> Option<iface_messages::SearchResponseItemClicksDetailItem> {
     let m = v.as_object()?;
-    Some(iface_messages::MessageSendStatus {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    Some(iface_messages::SearchResponseItemClicksDetailItem {
+        ip: m.get("ip").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        location: m.get("location").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        ts: m.get("ts").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        ua: m.get("ua").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        url: m.get("url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_messages__search_response_item_metadata__from_json(v: &Value) -> Option<iface_messages::SearchResponseItemMetadata> {
+    let m = v.as_object()?;
+    Some(iface_messages::SearchResponseItemMetadata {
+        user_id: m.get("user_id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        website: m.get("website").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_messages__search_response_item_opens_detail_item__from_json(v: &Value) -> Option<iface_messages::SearchResponseItemOpensDetailItem> {
+    let m = v.as_object()?;
+    Some(iface_messages::SearchResponseItemOpensDetailItem {
+        ip: m.get("ip").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        location: m.get("location").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        ts: m.get("ts").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        ua: m.get("ua").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_messages__message_send_status_item__from_json(v: &Value) -> Option<iface_messages::MessageSendStatusItem> {
+    let m = v.as_object()?;
+    Some(iface_messages::MessageSendStatusItem {
+        id: m.get("_id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        email: m.get("email").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        reject_reason: m.get("reject_reason").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        status: m.get("status").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_messages__message_send_status_item_v2__from_json(v: &Value) -> Option<iface_messages::MessageSendStatusItemV2> {
+    let m = v.as_object()?;
+    Some(iface_messages::MessageSendStatusItemV2 {
+        id: m.get("_id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        email: m.get("email").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        reject_reason: m.get("reject_reason").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        status: m.get("status").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_messages__message_send_status_item_v3__from_json(v: &Value) -> Option<iface_messages::MessageSendStatusItemV3> {
+    let m = v.as_object()?;
+    Some(iface_messages::MessageSendStatusItemV3 {
+        id: m.get("_id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        email: m.get("email").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        reject_reason: m.get("reject_reason").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        status: m.get("status").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
     })
 }
 
@@ -884,12 +1037,12 @@ fn iface_messages__post_messages_info_json__err(e: crate::runtime::DispatchError
     }
 }
 
-fn iface_messages__post_messages_list_scheduled_json__ok(body: String) -> Result<iface_messages::ListScheduledResponse, crate::runtime::DispatchError> {
+fn iface_messages__post_messages_list_scheduled_json__ok(body: String) -> Result<Vec<iface_messages::ListScheduledResponseItem>, crate::runtime::DispatchError> {
     let v: Value = match serde_json::from_str(&body) {
         Ok(v) => v,
         Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
     };
-    match iface_messages__list_scheduled_response__from_json(&v) {
+    match (&v).as_array().map(|a| a.iter().filter_map(|x| iface_messages__list_scheduled_response_item__from_json(x)).collect()) {
         Some(x) => Ok(x),
         None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
@@ -938,12 +1091,12 @@ fn iface_messages__post_messages_reschedule_json__err(e: crate::runtime::Dispatc
     }
 }
 
-fn iface_messages__post_messages_search_time_series_json__ok(body: String) -> Result<iface_messages::Timeseries, crate::runtime::DispatchError> {
+fn iface_messages__post_messages_search_time_series_json__ok(body: String) -> Result<Vec<iface_messages::TimeseriesItem>, crate::runtime::DispatchError> {
     let v: Value = match serde_json::from_str(&body) {
         Ok(v) => v,
         Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
     };
-    match iface_messages__timeseries__from_json(&v) {
+    match (&v).as_array().map(|a| a.iter().filter_map(|x| iface_messages__timeseries_item__from_json(x)).collect()) {
         Some(x) => Ok(x),
         None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
@@ -956,12 +1109,12 @@ fn iface_messages__post_messages_search_time_series_json__err(e: crate::runtime:
     }
 }
 
-fn iface_messages__post_messages_search_json__ok(body: String) -> Result<iface_messages::SearchResponse, crate::runtime::DispatchError> {
+fn iface_messages__post_messages_search_json__ok(body: String) -> Result<Vec<iface_messages::SearchResponseItem>, crate::runtime::DispatchError> {
     let v: Value = match serde_json::from_str(&body) {
         Ok(v) => v,
         Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
     };
-    match iface_messages__search_response__from_json(&v) {
+    match (&v).as_array().map(|a| a.iter().filter_map(|x| iface_messages__search_response_item__from_json(x)).collect()) {
         Some(x) => Ok(x),
         None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
@@ -974,12 +1127,12 @@ fn iface_messages__post_messages_search_json__err(e: crate::runtime::DispatchErr
     }
 }
 
-fn iface_messages__post_messages_send_raw_json__ok(body: String) -> Result<iface_messages::MessageSendStatus, crate::runtime::DispatchError> {
+fn iface_messages__post_messages_send_raw_json__ok(body: String) -> Result<Vec<iface_messages::MessageSendStatusItem>, crate::runtime::DispatchError> {
     let v: Value = match serde_json::from_str(&body) {
         Ok(v) => v,
         Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
     };
-    match iface_messages__message_send_status__from_json(&v) {
+    match (&v).as_array().map(|a| a.iter().filter_map(|x| iface_messages__message_send_status_item__from_json(x)).collect()) {
         Some(x) => Ok(x),
         None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
@@ -992,12 +1145,12 @@ fn iface_messages__post_messages_send_raw_json__err(e: crate::runtime::DispatchE
     }
 }
 
-fn iface_messages__post_messages_send_template_json__ok(body: String) -> Result<iface_messages::MessageSendStatus, crate::runtime::DispatchError> {
+fn iface_messages__post_messages_send_template_json__ok(body: String) -> Result<Vec<iface_messages::MessageSendStatusItemV2>, crate::runtime::DispatchError> {
     let v: Value = match serde_json::from_str(&body) {
         Ok(v) => v,
         Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
     };
-    match iface_messages__message_send_status__from_json(&v) {
+    match (&v).as_array().map(|a| a.iter().filter_map(|x| iface_messages__message_send_status_item_v2__from_json(x)).collect()) {
         Some(x) => Ok(x),
         None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
@@ -1010,12 +1163,12 @@ fn iface_messages__post_messages_send_template_json__err(e: crate::runtime::Disp
     }
 }
 
-fn iface_messages__post_messages_send_json__ok(body: String) -> Result<iface_messages::MessageSendStatus, crate::runtime::DispatchError> {
+fn iface_messages__post_messages_send_json__ok(body: String) -> Result<Vec<iface_messages::MessageSendStatusItemV3>, crate::runtime::DispatchError> {
     let v: Value = match serde_json::from_str(&body) {
         Ok(v) => v,
         Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
     };
-    match iface_messages__message_send_status__from_json(&v) {
+    match (&v).as_array().map(|a| a.iter().filter_map(|x| iface_messages__message_send_status_item_v3__from_json(x)).collect()) {
         Some(x) => Ok(x),
         None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
@@ -1050,7 +1203,7 @@ impl iface_messages::Guest for crate::Component {
             Err(e) => Err(iface_messages__post_messages_info_json__err(e)),
         }
     }
-    fn post_messages_list_scheduled_json(params: iface_messages::PostMessagesListScheduledJsonParams) -> Result<iface_messages::ListScheduledResponse, String> {
+    fn post_messages_list_scheduled_json(params: iface_messages::PostMessagesListScheduledJsonParams) -> Result<Vec<iface_messages::ListScheduledResponseItem>, String> {
         let json = iface_messages__post_messages_list_scheduled_json_params__to_json(&params);
         match dispatch(&OP_MESSAGES_POST_MESSAGES_LIST_SCHEDULED_JSON, json).and_then(iface_messages__post_messages_list_scheduled_json__ok) {
             Ok(v) => Ok(v),
@@ -1071,35 +1224,35 @@ impl iface_messages::Guest for crate::Component {
             Err(e) => Err(iface_messages__post_messages_reschedule_json__err(e)),
         }
     }
-    fn post_messages_search_time_series_json(params: iface_messages::PostMessagesSearchTimeSeriesJsonParams) -> Result<iface_messages::Timeseries, String> {
+    fn post_messages_search_time_series_json(params: iface_messages::PostMessagesSearchTimeSeriesJsonParams) -> Result<Vec<iface_messages::TimeseriesItem>, String> {
         let json = iface_messages__post_messages_search_time_series_json_params__to_json(&params);
         match dispatch(&OP_MESSAGES_POST_MESSAGES_SEARCH_TIME_SERIES_JSON, json).and_then(iface_messages__post_messages_search_time_series_json__ok) {
             Ok(v) => Ok(v),
             Err(e) => Err(iface_messages__post_messages_search_time_series_json__err(e)),
         }
     }
-    fn post_messages_search_json(params: iface_messages::PostMessagesSearchJsonParams) -> Result<iface_messages::SearchResponse, String> {
+    fn post_messages_search_json(params: iface_messages::PostMessagesSearchJsonParams) -> Result<Vec<iface_messages::SearchResponseItem>, String> {
         let json = iface_messages__post_messages_search_json_params__to_json(&params);
         match dispatch(&OP_MESSAGES_POST_MESSAGES_SEARCH_JSON, json).and_then(iface_messages__post_messages_search_json__ok) {
             Ok(v) => Ok(v),
             Err(e) => Err(iface_messages__post_messages_search_json__err(e)),
         }
     }
-    fn post_messages_send_raw_json(params: iface_messages::PostMessagesSendRawJsonParams) -> Result<iface_messages::MessageSendStatus, String> {
+    fn post_messages_send_raw_json(params: iface_messages::PostMessagesSendRawJsonParams) -> Result<Vec<iface_messages::MessageSendStatusItem>, String> {
         let json = iface_messages__post_messages_send_raw_json_params__to_json(&params);
         match dispatch(&OP_MESSAGES_POST_MESSAGES_SEND_RAW_JSON, json).and_then(iface_messages__post_messages_send_raw_json__ok) {
             Ok(v) => Ok(v),
             Err(e) => Err(iface_messages__post_messages_send_raw_json__err(e)),
         }
     }
-    fn post_messages_send_template_json(params: iface_messages::PostMessagesSendTemplateJsonParams) -> Result<iface_messages::MessageSendStatus, String> {
+    fn post_messages_send_template_json(params: iface_messages::PostMessagesSendTemplateJsonParams) -> Result<Vec<iface_messages::MessageSendStatusItemV2>, String> {
         let json = iface_messages__post_messages_send_template_json_params__to_json(&params);
         match dispatch(&OP_MESSAGES_POST_MESSAGES_SEND_TEMPLATE_JSON, json).and_then(iface_messages__post_messages_send_template_json__ok) {
             Ok(v) => Ok(v),
             Err(e) => Err(iface_messages__post_messages_send_template_json__err(e)),
         }
     }
-    fn post_messages_send_json(params: iface_messages::PostMessagesSendJsonParams) -> Result<iface_messages::MessageSendStatus, String> {
+    fn post_messages_send_json(params: iface_messages::PostMessagesSendJsonParams) -> Result<Vec<iface_messages::MessageSendStatusItemV3>, String> {
         let json = iface_messages__post_messages_send_json_params__to_json(&params);
         match dispatch(&OP_MESSAGES_POST_MESSAGES_SEND_JSON, json).and_then(iface_messages__post_messages_send_json__ok) {
             Ok(v) => Ok(v),

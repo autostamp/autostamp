@@ -627,9 +627,10 @@ fn iface_orders__put_order_action_trigger_dates_request_type_subscriptions_item_
     }
 }
 
-fn iface_orders__order_object_custom_fields__to_json(p: &iface_orders::OrderObjectCustomFields) -> Value {
+fn iface_orders__order_object_custom_fields_entry__to_json(p: &iface_orders::OrderObjectCustomFieldsEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -647,7 +648,7 @@ fn iface_orders__account__to_json(p: &iface_orders::Account) -> Value {
     m.insert("creditMemoTemplateId".into(), match (&p.credit_memo_template_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("crmId".into(), match (&p.crm_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("currency".into(), Value::String((&p.currency).clone()));
-    m.insert("customFields".into(), match (&p.custom_fields) { Some(v) => iface_orders__account_object_custom_fields__to_json(v), None => Value::Null });
+    m.insert("customFields".into(), match (&p.custom_fields) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("customerServiceRepName".into(), match (&p.customer_service_rep_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("debitMemoTemplateId".into(), match (&p.debit_memo_template_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("hpmCreditCardPaymentMethodId".into(), match (&p.hpm_credit_card_payment_method_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -718,9 +719,10 @@ fn iface_orders__account_credit_card_holder__to_json(p: &iface_orders::AccountCr
     Value::Object(m)
 }
 
-fn iface_orders__account_object_custom_fields__to_json(p: &iface_orders::AccountObjectCustomFields) -> Value {
+fn iface_orders__account_object_custom_fields_entry__to_json(p: &iface_orders::AccountObjectCustomFieldsEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -842,7 +844,7 @@ fn iface_orders__create_order_order_line_item__to_json(p: &iface_orders::CreateO
     m.insert("UOM".into(), match (&p.uom) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("amountPerUnit".into(), match (&p.amount_per_unit) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
     m.insert("billTargetDate".into(), match (&p.bill_target_date) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("customFields".into(), match (&p.custom_fields) { Some(v) => iface_orders__order_line_item_custom_fields__to_json(v), None => Value::Null });
+    m.insert("customFields".into(), match (&p.custom_fields) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("deferredRevenueAccountingCode".into(), match (&p.deferred_revenue_accounting_code) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("description".into(), match (&p.description) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("itemName".into(), match (&p.item_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -863,9 +865,10 @@ fn iface_orders__create_order_order_line_item__to_json(p: &iface_orders::CreateO
     Value::Object(m)
 }
 
-fn iface_orders__order_line_item_custom_fields__to_json(p: &iface_orders::OrderLineItemCustomFields) -> Value {
+fn iface_orders__order_line_item_custom_fields_entry__to_json(p: &iface_orders::OrderLineItemCustomFieldsEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -910,7 +913,7 @@ fn iface_orders__processing_options_electronic_payment_options__to_json(p: &ifac
 
 fn iface_orders__post_order_request_type_subscriptions_item__to_json(p: &iface_orders::PostOrderRequestTypeSubscriptionsItem) -> Value {
     let mut m = Map::new();
-    m.insert("customFields".into(), match (&p.custom_fields) { Some(v) => iface_orders__subscription_object_custom_fields__to_json(v), None => Value::Null });
+    m.insert("customFields".into(), match (&p.custom_fields) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("orderActions".into(), match (&p.order_actions) { Some(v) => Value::Array((v).iter().map(|v| iface_orders__create_order_order_action__to_json(v)).collect()), None => Value::Null });
     m.insert("quote".into(), match (&p.quote) { Some(v) => iface_orders__quote_object_fields__to_json(v), None => Value::Null });
     m.insert("ramp".into(), match (&p.ramp) { Some(v) => iface_orders__ramp_request__to_json(v), None => Value::Null });
@@ -918,9 +921,10 @@ fn iface_orders__post_order_request_type_subscriptions_item__to_json(p: &iface_o
     Value::Object(m)
 }
 
-fn iface_orders__subscription_object_custom_fields__to_json(p: &iface_orders::SubscriptionObjectCustomFields) -> Value {
+fn iface_orders__subscription_object_custom_fields_entry__to_json(p: &iface_orders::SubscriptionObjectCustomFieldsEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -929,7 +933,7 @@ fn iface_orders__create_order_order_action__to_json(p: &iface_orders::CreateOrde
     m.insert("addProduct".into(), match (&p.add_product) { Some(v) => iface_orders__create_order_rate_plan_override__to_json(v), None => Value::Null });
     m.insert("cancelSubscription".into(), match (&p.cancel_subscription) { Some(v) => iface_orders__cancel_subscription__to_json(v), None => Value::Null });
     m.insert("createSubscription".into(), match (&p.create_subscription) { Some(v) => iface_orders__create_order_create_subscription__to_json(v), None => Value::Null });
-    m.insert("customFields".into(), match (&p.custom_fields) { Some(v) => iface_orders__order_action_object_custom_fields__to_json(v), None => Value::Null });
+    m.insert("customFields".into(), match (&p.custom_fields) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("ownerTransfer".into(), match (&p.owner_transfer) { Some(v) => iface_orders__owner_transfer__to_json(v), None => Value::Null });
     m.insert("removeProduct".into(), match (&p.remove_product) { Some(v) => iface_orders__remove_product__to_json(v), None => Value::Null });
     m.insert("resume".into(), match (&p.resume) { Some(v) => iface_orders__create_order_resume__to_json(v), None => Value::Null });
@@ -944,7 +948,7 @@ fn iface_orders__create_order_order_action__to_json(p: &iface_orders::CreateOrde
 fn iface_orders__create_order_rate_plan_override__to_json(p: &iface_orders::CreateOrderRatePlanOverride) -> Value {
     let mut m = Map::new();
     m.insert("chargeOverrides".into(), match (&p.charge_overrides) { Some(v) => Value::Array((v).iter().map(|v| iface_orders__create_order_charge_override__to_json(v)).collect()), None => Value::Null });
-    m.insert("customFields".into(), match (&p.custom_fields) { Some(v) => iface_orders__rate_plan_object_custom_fields__to_json(v), None => Value::Null });
+    m.insert("customFields".into(), match (&p.custom_fields) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("productRatePlanId".into(), Value::String((&p.product_rate_plan_id).clone()));
     m.insert("uniqueToken".into(), match (&p.unique_token) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
@@ -954,7 +958,7 @@ fn iface_orders__create_order_charge_override__to_json(p: &iface_orders::CreateO
     let mut m = Map::new();
     m.insert("billing".into(), match (&p.billing) { Some(v) => iface_orders__create_order_charge_override_billing__to_json(v), None => Value::Null });
     m.insert("chargeNumber".into(), match (&p.charge_number) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("customFields".into(), match (&p.custom_fields) { Some(v) => iface_orders__rate_plan_charge_object_custom_fields__to_json(v), None => Value::Null });
+    m.insert("customFields".into(), match (&p.custom_fields) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("description".into(), match (&p.description) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("endDate".into(), match (&p.end_date) { Some(v) => iface_orders__end_conditions__to_json(v), None => Value::Null });
     m.insert("pricing".into(), match (&p.pricing) { Some(v) => iface_orders__create_order_charge_override_pricing__to_json(v), None => Value::Null });
@@ -979,9 +983,10 @@ fn iface_orders__create_order_charge_override_billing__to_json(p: &iface_orders:
     Value::Object(m)
 }
 
-fn iface_orders__rate_plan_charge_object_custom_fields__to_json(p: &iface_orders::RatePlanChargeObjectCustomFields) -> Value {
+fn iface_orders__rate_plan_charge_object_custom_fields_entry__to_json(p: &iface_orders::RatePlanChargeObjectCustomFieldsEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -1182,9 +1187,10 @@ fn iface_orders__create_order_trigger_params__to_json(p: &iface_orders::CreateOr
     Value::Object(m)
 }
 
-fn iface_orders__rate_plan_object_custom_fields__to_json(p: &iface_orders::RatePlanObjectCustomFields) -> Value {
+fn iface_orders__rate_plan_object_custom_fields_entry__to_json(p: &iface_orders::RatePlanObjectCustomFieldsEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -1221,7 +1227,7 @@ fn iface_orders__create_order_create_subscription_new_subscription_owner_account
     m.insert("creditMemoTemplateId".into(), match (&p.credit_memo_template_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("crmId".into(), match (&p.crm_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("currency".into(), Value::String((&p.currency).clone()));
-    m.insert("customFields".into(), match (&p.custom_fields) { Some(v) => iface_orders__account_object_custom_fields__to_json(v), None => Value::Null });
+    m.insert("customFields".into(), match (&p.custom_fields) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("customerServiceRepName".into(), match (&p.customer_service_rep_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("debitMemoTemplateId".into(), match (&p.debit_memo_template_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("hpmCreditCardPaymentMethodId".into(), match (&p.hpm_credit_card_payment_method_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -1238,6 +1244,13 @@ fn iface_orders__create_order_create_subscription_new_subscription_owner_account
     m.insert("salesRep".into(), match (&p.sales_rep) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("soldToContact".into(), match (&p.sold_to_contact) { Some(v) => iface_orders__sold_to_contact_post_order__to_json(v), None => Value::Null });
     m.insert("taxInfo".into(), match (&p.tax_info) { Some(v) => iface_orders__tax_info__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_orders__account_object_custom_fields_entry_v2__to_json(p: &iface_orders::AccountObjectCustomFieldsEntryV2) -> Value {
+    let mut m = Map::new();
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -1266,9 +1279,10 @@ fn iface_orders__renewal_term__to_json(p: &iface_orders::RenewalTerm) -> Value {
     Value::Object(m)
 }
 
-fn iface_orders__order_action_object_custom_fields__to_json(p: &iface_orders::OrderActionObjectCustomFields) -> Value {
+fn iface_orders__order_action_object_custom_fields_entry__to_json(p: &iface_orders::OrderActionObjectCustomFieldsEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -1333,7 +1347,7 @@ fn iface_orders__trigger_date__to_json(p: &iface_orders::TriggerDate) -> Value {
 fn iface_orders__create_order_rate_plan_update__to_json(p: &iface_orders::CreateOrderRatePlanUpdate) -> Value {
     let mut m = Map::new();
     m.insert("chargeUpdates".into(), match (&p.charge_updates) { Some(v) => Value::Array((v).iter().map(|v| iface_orders__create_order_charge_update__to_json(v)).collect()), None => Value::Null });
-    m.insert("customFields".into(), match (&p.custom_fields) { Some(v) => iface_orders__rate_plan_object_custom_fields__to_json(v), None => Value::Null });
+    m.insert("customFields".into(), match (&p.custom_fields) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("ratePlanId".into(), match (&p.rate_plan_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("specificUpdateDate".into(), match (&p.specific_update_date) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("uniqueToken".into(), match (&p.unique_token) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -1344,7 +1358,7 @@ fn iface_orders__create_order_charge_update__to_json(p: &iface_orders::CreateOrd
     let mut m = Map::new();
     m.insert("billing".into(), match (&p.billing) { Some(v) => iface_orders__billing_update__to_json(v), None => Value::Null });
     m.insert("chargeNumber".into(), match (&p.charge_number) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("customFields".into(), match (&p.custom_fields) { Some(v) => iface_orders__rate_plan_charge_object_custom_fields__to_json(v), None => Value::Null });
+    m.insert("customFields".into(), match (&p.custom_fields) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("description".into(), match (&p.description) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("effectiveDate".into(), match (&p.effective_date) { Some(v) => iface_orders__create_order_update_product_trigger_params__to_json(v), None => Value::Null });
     m.insert("pricing".into(), match (&p.pricing) { Some(v) => iface_orders__create_order_pricing_update__to_json(v), None => Value::Null });
@@ -1355,6 +1369,13 @@ fn iface_orders__create_order_charge_update__to_json(p: &iface_orders::CreateOrd
 fn iface_orders__billing_update__to_json(p: &iface_orders::BillingUpdate) -> Value {
     let mut m = Map::new();
     m.insert("billingPeriodAlignment".into(), match (&p.billing_period_alignment) { Some(v) => Value::String(iface_orders__create_order_charge_override_billing_billing_period_alignment_enum__to_str(v).into()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_orders__rate_plan_charge_object_custom_fields_entry_v2__to_json(p: &iface_orders::RatePlanChargeObjectCustomFieldsEntryV2) -> Value {
+    let mut m = Map::new();
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -1476,6 +1497,13 @@ fn iface_orders__usage_volume_pricing_update__to_json(p: &iface_orders::UsageVol
     Value::Object(m)
 }
 
+fn iface_orders__rate_plan_object_custom_fields_entry_v2__to_json(p: &iface_orders::RatePlanObjectCustomFieldsEntryV2) -> Value {
+    let mut m = Map::new();
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
+}
+
 fn iface_orders__quote_object_fields__to_json(p: &iface_orders::QuoteObjectFields) -> Value {
     let mut m = Map::new();
     m.insert("OpportunityCloseDate__QT".into(), match (&p.opportunity_close_date_qt) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -1512,13 +1540,27 @@ fn iface_orders__ramp_interval_request__to_json(p: &iface_orders::RampIntervalRe
     Value::Object(m)
 }
 
+fn iface_orders__order_object_custom_fields_entry_v2__to_json(p: &iface_orders::OrderObjectCustomFieldsEntryV2) -> Value {
+    let mut m = Map::new();
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
+}
+
 fn iface_orders__preview_account_info__to_json(p: &iface_orders::PreviewAccountInfo) -> Value {
     let mut m = Map::new();
     m.insert("billCycleDay".into(), Value::Number(serde_json::Number::from(*(&p.bill_cycle_day))));
     m.insert("currency".into(), Value::String((&p.currency).clone()));
-    m.insert("customFields".into(), match (&p.custom_fields) { Some(v) => iface_orders__account_object_custom_fields__to_json(v), None => Value::Null });
+    m.insert("customFields".into(), match (&p.custom_fields) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("soldToContact".into(), match (&p.sold_to_contact) { Some(v) => iface_orders__preview_contact_info__to_json(v), None => Value::Null });
     m.insert("taxInfo".into(), match (&p.tax_info) { Some(v) => iface_orders__tax_info__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_orders__account_object_custom_fields_entry_v3__to_json(p: &iface_orders::AccountObjectCustomFieldsEntryV3) -> Value {
+    let mut m = Map::new();
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -1544,11 +1586,18 @@ fn iface_orders__preview_options__to_json(p: &iface_orders::PreviewOptions) -> V
 
 fn iface_orders__post_order_preview_request_type_subscriptions_item__to_json(p: &iface_orders::PostOrderPreviewRequestTypeSubscriptionsItem) -> Value {
     let mut m = Map::new();
-    m.insert("customFields".into(), match (&p.custom_fields) { Some(v) => iface_orders__subscription_object_custom_fields__to_json(v), None => Value::Null });
+    m.insert("customFields".into(), match (&p.custom_fields) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("orderActions".into(), match (&p.order_actions) { Some(v) => Value::Array((v).iter().map(|v| iface_orders__preview_order_order_action__to_json(v)).collect()), None => Value::Null });
     m.insert("quote".into(), match (&p.quote) { Some(v) => iface_orders__quote_object_fields__to_json(v), None => Value::Null });
     m.insert("ramp".into(), match (&p.ramp) { Some(v) => iface_orders__ramp_request__to_json(v), None => Value::Null });
     m.insert("subscriptionNumber".into(), match (&p.subscription_number) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_orders__subscription_object_custom_fields_entry_v2__to_json(p: &iface_orders::SubscriptionObjectCustomFieldsEntryV2) -> Value {
+    let mut m = Map::new();
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -1557,7 +1606,7 @@ fn iface_orders__preview_order_order_action__to_json(p: &iface_orders::PreviewOr
     m.insert("addProduct".into(), match (&p.add_product) { Some(v) => iface_orders__preview_order_rate_plan_override__to_json(v), None => Value::Null });
     m.insert("cancelSubscription".into(), match (&p.cancel_subscription) { Some(v) => iface_orders__cancel_subscription__to_json(v), None => Value::Null });
     m.insert("createSubscription".into(), match (&p.create_subscription) { Some(v) => iface_orders__preview_order_create_subscription__to_json(v), None => Value::Null });
-    m.insert("customFields".into(), match (&p.custom_fields) { Some(v) => iface_orders__order_action_object_custom_fields__to_json(v), None => Value::Null });
+    m.insert("customFields".into(), match (&p.custom_fields) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("ownerTransfer".into(), match (&p.owner_transfer) { Some(v) => iface_orders__owner_transfer__to_json(v), None => Value::Null });
     m.insert("removeProduct".into(), match (&p.remove_product) { Some(v) => iface_orders__remove_product__to_json(v), None => Value::Null });
     m.insert("resume".into(), match (&p.resume) { Some(v) => iface_orders__create_order_resume__to_json(v), None => Value::Null });
@@ -1572,7 +1621,7 @@ fn iface_orders__preview_order_order_action__to_json(p: &iface_orders::PreviewOr
 fn iface_orders__preview_order_rate_plan_override__to_json(p: &iface_orders::PreviewOrderRatePlanOverride) -> Value {
     let mut m = Map::new();
     m.insert("chargeOverrides".into(), match (&p.charge_overrides) { Some(v) => Value::Array((v).iter().map(|v| iface_orders__preview_order_charge_override__to_json(v)).collect()), None => Value::Null });
-    m.insert("customFields".into(), match (&p.custom_fields) { Some(v) => iface_orders__rate_plan_object_custom_fields__to_json(v), None => Value::Null });
+    m.insert("customFields".into(), match (&p.custom_fields) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("productRatePlanId".into(), Value::String((&p.product_rate_plan_id).clone()));
     m.insert("uniqueToken".into(), match (&p.unique_token) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
@@ -1582,7 +1631,7 @@ fn iface_orders__preview_order_charge_override__to_json(p: &iface_orders::Previe
     let mut m = Map::new();
     m.insert("billing".into(), match (&p.billing) { Some(v) => iface_orders__preview_order_charge_override_billing__to_json(v), None => Value::Null });
     m.insert("chargeNumber".into(), match (&p.charge_number) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("customFields".into(), match (&p.custom_fields) { Some(v) => iface_orders__rate_plan_charge_object_custom_fields__to_json(v), None => Value::Null });
+    m.insert("customFields".into(), match (&p.custom_fields) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("description".into(), match (&p.description) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("endDate".into(), match (&p.end_date) { Some(v) => iface_orders__end_conditions__to_json(v), None => Value::Null });
     m.insert("pricing".into(), match (&p.pricing) { Some(v) => iface_orders__preview_order_charge_override_pricing__to_json(v), None => Value::Null });
@@ -1604,6 +1653,13 @@ fn iface_orders__preview_order_charge_override_billing__to_json(p: &iface_orders
     m.insert("billingTiming".into(), match (&p.billing_timing) { Some(v) => Value::String(iface_orders__create_order_charge_override_billing_billing_timing_enum__to_str(v).into()), None => Value::Null });
     m.insert("specificBillingPeriod".into(), match (&p.specific_billing_period) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("weeklyBillCycleDay".into(), match (&p.weekly_bill_cycle_day) { Some(v) => Value::String(iface_orders__create_order_charge_override_billing_weekly_bill_cycle_day_enum__to_str(v).into()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_orders__rate_plan_charge_object_custom_fields_entry_v3__to_json(p: &iface_orders::RatePlanChargeObjectCustomFieldsEntryV3) -> Value {
+    let mut m = Map::new();
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -1635,6 +1691,13 @@ fn iface_orders__preview_order_trigger_params__to_json(p: &iface_orders::Preview
     Value::Object(m)
 }
 
+fn iface_orders__rate_plan_object_custom_fields_entry_v3__to_json(p: &iface_orders::RatePlanObjectCustomFieldsEntryV3) -> Value {
+    let mut m = Map::new();
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
+}
+
 fn iface_orders__preview_order_create_subscription__to_json(p: &iface_orders::PreviewOrderCreateSubscription) -> Value {
     let mut m = Map::new();
     m.insert("invoiceSeparately".into(), match (&p.invoice_separately) { Some(v) => Value::Bool(*(v)), None => Value::Null });
@@ -1661,7 +1724,7 @@ fn iface_orders__preview_order_create_subscription_new_subscription_owner_accoun
     m.insert("creditMemoTemplateId".into(), match (&p.credit_memo_template_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("crmId".into(), match (&p.crm_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("currency".into(), Value::String((&p.currency).clone()));
-    m.insert("customFields".into(), match (&p.custom_fields) { Some(v) => iface_orders__account_object_custom_fields__to_json(v), None => Value::Null });
+    m.insert("customFields".into(), match (&p.custom_fields) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("customerServiceRepName".into(), match (&p.customer_service_rep_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("debitMemoTemplateId".into(), match (&p.debit_memo_template_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("hpmCreditCardPaymentMethodId".into(), match (&p.hpm_credit_card_payment_method_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -1678,6 +1741,13 @@ fn iface_orders__preview_order_create_subscription_new_subscription_owner_accoun
     m.insert("salesRep".into(), match (&p.sales_rep) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("soldToContact".into(), match (&p.sold_to_contact) { Some(v) => iface_orders__sold_to_contact_post_order__to_json(v), None => Value::Null });
     m.insert("taxInfo".into(), match (&p.tax_info) { Some(v) => iface_orders__tax_info__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_orders__account_object_custom_fields_entry_v4__to_json(p: &iface_orders::AccountObjectCustomFieldsEntryV4) -> Value {
+    let mut m = Map::new();
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -1699,10 +1769,17 @@ fn iface_orders__preview_order_create_subscription_terms_initial_term__to_json(p
     Value::Object(m)
 }
 
+fn iface_orders__order_action_object_custom_fields_entry_v2__to_json(p: &iface_orders::OrderActionObjectCustomFieldsEntryV2) -> Value {
+    let mut m = Map::new();
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
+}
+
 fn iface_orders__preview_order_rate_plan_update__to_json(p: &iface_orders::PreviewOrderRatePlanUpdate) -> Value {
     let mut m = Map::new();
     m.insert("chargeUpdates".into(), match (&p.charge_updates) { Some(v) => Value::Array((v).iter().map(|v| iface_orders__preview_order_charge_update__to_json(v)).collect()), None => Value::Null });
-    m.insert("customFields".into(), match (&p.custom_fields) { Some(v) => iface_orders__rate_plan_object_custom_fields__to_json(v), None => Value::Null });
+    m.insert("customFields".into(), match (&p.custom_fields) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("ratePlanId".into(), match (&p.rate_plan_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("specificUpdateDate".into(), match (&p.specific_update_date) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("uniqueToken".into(), match (&p.unique_token) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -1713,11 +1790,18 @@ fn iface_orders__preview_order_charge_update__to_json(p: &iface_orders::PreviewO
     let mut m = Map::new();
     m.insert("billing".into(), match (&p.billing) { Some(v) => iface_orders__billing_update__to_json(v), None => Value::Null });
     m.insert("chargeNumber".into(), match (&p.charge_number) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("customFields".into(), match (&p.custom_fields) { Some(v) => iface_orders__rate_plan_charge_object_custom_fields__to_json(v), None => Value::Null });
+    m.insert("customFields".into(), match (&p.custom_fields) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("description".into(), match (&p.description) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("effectiveDate".into(), match (&p.effective_date) { Some(v) => iface_orders__preview_order_trigger_params__to_json(v), None => Value::Null });
     m.insert("pricing".into(), match (&p.pricing) { Some(v) => iface_orders__preview_order_pricing_update__to_json(v), None => Value::Null });
     m.insert("uniqueToken".into(), match (&p.unique_token) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_orders__rate_plan_charge_object_custom_fields_entry_v4__to_json(p: &iface_orders::RatePlanChargeObjectCustomFieldsEntryV4) -> Value {
+    let mut m = Map::new();
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -1738,6 +1822,20 @@ fn iface_orders__preview_order_pricing_update__to_json(p: &iface_orders::Preview
     Value::Object(m)
 }
 
+fn iface_orders__rate_plan_object_custom_fields_entry_v4__to_json(p: &iface_orders::RatePlanObjectCustomFieldsEntryV4) -> Value {
+    let mut m = Map::new();
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
+}
+
+fn iface_orders__order_object_custom_fields_entry_v3__to_json(p: &iface_orders::OrderObjectCustomFieldsEntryV3) -> Value {
+    let mut m = Map::new();
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
+}
+
 fn iface_orders__put_order_patch_request_type_subscriptions_item__to_json(p: &iface_orders::PutOrderPatchRequestTypeSubscriptionsItem) -> Value {
     let mut m = Map::new();
     m.insert("orderActions".into(), match (&p.order_actions) { Some(v) => Value::Array((v).iter().map(|v| iface_orders__put_order_patch_request_type_subscriptions_item_order_actions_item__to_json(v)).collect()), None => Value::Null });
@@ -1747,9 +1845,16 @@ fn iface_orders__put_order_patch_request_type_subscriptions_item__to_json(p: &if
 
 fn iface_orders__put_order_patch_request_type_subscriptions_item_order_actions_item__to_json(p: &iface_orders::PutOrderPatchRequestTypeSubscriptionsItemOrderActionsItem) -> Value {
     let mut m = Map::new();
-    m.insert("customFields".into(), match (&p.custom_fields) { Some(v) => iface_orders__order_action_object_custom_fields__to_json(v), None => Value::Null });
+    m.insert("customFields".into(), match (&p.custom_fields) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("orderActionId".into(), match (&p.order_action_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("sequence".into(), match (&p.sequence) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_orders__order_action_object_custom_fields_entry_v3__to_json(p: &iface_orders::OrderActionObjectCustomFieldsEntryV3) -> Value {
+    let mut m = Map::new();
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -1782,10 +1887,17 @@ fn iface_orders__put_order_action_trigger_dates_request_type_subscriptions_item_
     Value::Object(m)
 }
 
+fn iface_orders__subscription_object_custom_fields_entry_v3__to_json(p: &iface_orders::SubscriptionObjectCustomFieldsEntryV3) -> Value {
+    let mut m = Map::new();
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
+}
+
 fn iface_orders__put_subscription_patch_request_type_rate_plans_item__to_json(p: &iface_orders::PutSubscriptionPatchRequestTypeRatePlansItem) -> Value {
     let mut m = Map::new();
     m.insert("charges".into(), match (&p.charges) { Some(v) => Value::Array((v).iter().map(|v| iface_orders__put_subscription_patch_request_type_rate_plans_item_charges_item__to_json(v)).collect()), None => Value::Null });
-    m.insert("customFields".into(), match (&p.custom_fields) { Some(v) => iface_orders__rate_plan_object_custom_fields__to_json(v), None => Value::Null });
+    m.insert("customFields".into(), match (&p.custom_fields) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("ratePlanId".into(), Value::String((&p.rate_plan_id).clone()));
     Value::Object(m)
 }
@@ -1794,7 +1906,21 @@ fn iface_orders__put_subscription_patch_request_type_rate_plans_item_charges_ite
     let mut m = Map::new();
     m.insert("chargeId".into(), match (&p.charge_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("chargeNumber".into(), match (&p.charge_number) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("customFields".into(), match (&p.custom_fields) { Some(v) => iface_orders__rate_plan_charge_object_custom_fields__to_json(v), None => Value::Null });
+    m.insert("customFields".into(), match (&p.custom_fields) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_orders__rate_plan_charge_object_custom_fields_entry_v5__to_json(p: &iface_orders::RatePlanChargeObjectCustomFieldsEntryV5) -> Value {
+    let mut m = Map::new();
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
+}
+
+fn iface_orders__rate_plan_object_custom_fields_entry_v5__to_json(p: &iface_orders::RatePlanObjectCustomFieldsEntryV5) -> Value {
+    let mut m = Map::new();
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -1811,7 +1937,7 @@ fn iface_orders__post_create_order_asynchronously_params__to_json(p: &iface_orde
     m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("return_ids".into(), match (&p.return_ids) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     m.insert("zuora_version".into(), match (&p.zuora_version) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("custom_fields".into(), match (&p.custom_fields) { Some(v) => iface_orders__order_object_custom_fields__to_json(v), None => Value::Null });
+    m.insert("custom_fields".into(), match (&p.custom_fields) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("description".into(), match (&p.description) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("existing_account_number".into(), match (&p.existing_account_number) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("new_account".into(), match (&p.new_account) { Some(v) => iface_orders__account__to_json(v), None => Value::Null });
@@ -1827,7 +1953,7 @@ fn iface_orders__post_preview_order_asynchronously_params__to_json(p: &iface_ord
     let mut m = Map::new();
     m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("custom_fields".into(), match (&p.custom_fields) { Some(v) => iface_orders__order_object_custom_fields__to_json(v), None => Value::Null });
+    m.insert("custom_fields".into(), match (&p.custom_fields) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("description".into(), match (&p.description) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("existing_account_number".into(), match (&p.existing_account_number) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("order_date".into(), Value::String((&p.order_date).clone()));
@@ -1857,7 +1983,7 @@ fn iface_orders__post_order_params__to_json(p: &iface_orders::PostOrderParams) -
     m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("return_ids".into(), match (&p.return_ids) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     m.insert("zuora_version".into(), match (&p.zuora_version) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("custom_fields".into(), match (&p.custom_fields) { Some(v) => iface_orders__order_object_custom_fields__to_json(v), None => Value::Null });
+    m.insert("custom_fields".into(), match (&p.custom_fields) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("description".into(), match (&p.description) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("existing_account_number".into(), match (&p.existing_account_number) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("new_account".into(), match (&p.new_account) { Some(v) => iface_orders__account__to_json(v), None => Value::Null });
@@ -1886,7 +2012,7 @@ fn iface_orders__post_preview_order_params__to_json(p: &iface_orders::PostPrevie
     let mut m = Map::new();
     m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("custom_fields".into(), match (&p.custom_fields) { Some(v) => iface_orders__order_object_custom_fields__to_json(v), None => Value::Null });
+    m.insert("custom_fields".into(), match (&p.custom_fields) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("description".into(), match (&p.description) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("existing_account_number".into(), match (&p.existing_account_number) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("order_date".into(), Value::String((&p.order_date).clone()));
@@ -1956,7 +2082,7 @@ fn iface_orders__put_update_order_custom_fields_params__to_json(p: &iface_orders
     m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("order_number".into(), Value::String((&p.order_number).clone()));
-    m.insert("custom_fields".into(), match (&p.custom_fields) { Some(v) => iface_orders__order_object_custom_fields__to_json(v), None => Value::Null });
+    m.insert("custom_fields".into(), match (&p.custom_fields) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("subscriptions".into(), match (&p.subscriptions) { Some(v) => Value::Array((v).iter().map(|v| iface_orders__put_order_patch_request_type_subscriptions_item__to_json(v)).collect()), None => Value::Null });
     Value::Object(m)
 }
@@ -1986,7 +2112,7 @@ fn iface_orders__put_update_subscription_custom_fields_params__to_json(p: &iface
     m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("subscription_number".into(), Value::String((&p.subscription_number).clone()));
-    m.insert("custom_fields".into(), match (&p.custom_fields) { Some(v) => iface_orders__subscription_object_custom_fields__to_json(v), None => Value::Null });
+    m.insert("custom_fields".into(), match (&p.custom_fields) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("rate_plans".into(), match (&p.rate_plans) { Some(v) => Value::Array((v).iter().map(|v| iface_orders__put_subscription_patch_request_type_rate_plans_item__to_json(v)).collect()), None => Value::Null });
     Value::Object(m)
 }

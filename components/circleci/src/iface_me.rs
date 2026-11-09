@@ -35,10 +35,10 @@ fn iface_me__user__to_json(p: &iface_me::User) -> Value {
     m.insert("in_beta_program".into(), match (&p.in_beta_program) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     m.insert("login".into(), match (&p.login) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("organization_prefs".into(), match (&p.organization_prefs) { Some(v) => iface_me__user_organization_prefs__to_json(v), None => Value::Null });
+    m.insert("organization_prefs".into(), match (&p.organization_prefs) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("parallelism".into(), match (&p.parallelism) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("plan".into(), match (&p.plan) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("projects".into(), match (&p.projects) { Some(v) => iface_me__user_projects__to_json(v), None => Value::Null });
+    m.insert("projects".into(), match (&p.projects) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("pusher_id".into(), match (&p.pusher_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("selected_email".into(), match (&p.selected_email) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("sign_in_count".into(), match (&p.sign_in_count) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
@@ -46,15 +46,17 @@ fn iface_me__user__to_json(p: &iface_me::User) -> Value {
     Value::Object(m)
 }
 
-fn iface_me__user_organization_prefs__to_json(p: &iface_me::UserOrganizationPrefs) -> Value {
+fn iface_me__user_organization_prefs_entry__to_json(p: &iface_me::UserOrganizationPrefsEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
-fn iface_me__user_projects__to_json(p: &iface_me::UserProjects) -> Value {
+fn iface_me__user_projects_entry__to_json(p: &iface_me::UserProjectsEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -80,10 +82,10 @@ fn iface_me__user__from_json(v: &Value) -> Option<iface_me::User> {
         in_beta_program: m.get("in_beta_program").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
         login: m.get("login").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        organization_prefs: m.get("organization_prefs").filter(|v| !v.is_null()).and_then(|v| iface_me__user_organization_prefs__from_json(v)),
+        organization_prefs: m.get("organization_prefs").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_me::UserOrganizationPrefsEntry { key: k.clone(), value: val })).collect())),
         parallelism: m.get("parallelism").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
         plan: m.get("plan").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        projects: m.get("projects").filter(|v| !v.is_null()).and_then(|v| iface_me__user_projects__from_json(v)),
+        projects: m.get("projects").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_me::UserProjectsEntry { key: k.clone(), value: val })).collect())),
         pusher_id: m.get("pusher_id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         selected_email: m.get("selected_email").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         sign_in_count: m.get("sign_in_count").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
@@ -91,17 +93,19 @@ fn iface_me__user__from_json(v: &Value) -> Option<iface_me::User> {
     })
 }
 
-fn iface_me__user_organization_prefs__from_json(v: &Value) -> Option<iface_me::UserOrganizationPrefs> {
+fn iface_me__user_organization_prefs_entry__from_json(v: &Value) -> Option<iface_me::UserOrganizationPrefsEntry> {
     let m = v.as_object()?;
-    Some(iface_me::UserOrganizationPrefs {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_me::UserOrganizationPrefsEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
-fn iface_me__user_projects__from_json(v: &Value) -> Option<iface_me::UserProjects> {
+fn iface_me__user_projects_entry__from_json(v: &Value) -> Option<iface_me::UserProjectsEntry> {
     let m = v.as_object()?;
-    Some(iface_me::UserProjects {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_me::UserProjectsEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 

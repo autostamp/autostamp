@@ -64,7 +64,7 @@ fn iface_distributions__response_result_op__to_json(p: &iface_distributions::Res
 fn iface_distributions__response_result_op_elements_item__to_json(p: &iface_distributions::ResponseResultOpElementsItem) -> Value {
     let mut m = Map::new();
     m.insert("createdDate".into(), Value::String((&p.created_date).clone()));
-    m.insert("customHeaders".into(), iface_distributions__response_result_op_elements_item_custom_headers__to_json(&p.custom_headers));
+    m.insert("customHeaders".into(), Value::Object((&p.custom_headers).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()));
     m.insert("embeddedData".into(), Value::String((&p.embedded_data).clone()));
     m.insert("headers".into(), iface_distributions__response_result_op_elements_item_headers__to_json(&p.headers));
     m.insert("id".into(), Value::String((&p.id).clone()));
@@ -82,9 +82,10 @@ fn iface_distributions__response_result_op_elements_item__to_json(p: &iface_dist
     Value::Object(m)
 }
 
-fn iface_distributions__response_result_op_elements_item_custom_headers__to_json(p: &iface_distributions::ResponseResultOpElementsItemCustomHeaders) -> Value {
+fn iface_distributions__response_result_op_elements_item_custom_headers_entry__to_json(p: &iface_distributions::ResponseResultOpElementsItemCustomHeadersEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -224,7 +225,7 @@ fn iface_distributions__response_result_op_elements_item__from_json(v: &Value) -
     let m = v.as_object()?;
     Some(iface_distributions::ResponseResultOpElementsItem {
         created_date: m.get("createdDate").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-        custom_headers: match m.get("customHeaders").and_then(|v| iface_distributions__response_result_op_elements_item_custom_headers__from_json(v)) { Some(x) => x, None => return None },
+        custom_headers: m.get("customHeaders").and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_distributions::ResponseResultOpElementsItemCustomHeadersEntry { key: k.clone(), value: val })).collect())).unwrap_or_default(),
         embedded_data: m.get("embeddedData").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         headers: match m.get("headers").and_then(|v| iface_distributions__response_result_op_elements_item_headers__from_json(v)) { Some(x) => x, None => return None },
         id: m.get("id").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
@@ -242,10 +243,11 @@ fn iface_distributions__response_result_op_elements_item__from_json(v: &Value) -
     })
 }
 
-fn iface_distributions__response_result_op_elements_item_custom_headers__from_json(v: &Value) -> Option<iface_distributions::ResponseResultOpElementsItemCustomHeaders> {
+fn iface_distributions__response_result_op_elements_item_custom_headers_entry__from_json(v: &Value) -> Option<iface_distributions::ResponseResultOpElementsItemCustomHeadersEntry> {
     let m = v.as_object()?;
-    Some(iface_distributions::ResponseResultOpElementsItemCustomHeaders {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_distributions::ResponseResultOpElementsItemCustomHeadersEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 

@@ -96,63 +96,45 @@ const OP_FILES_UPLOAD: OpSpec = OpSpec {
 
 fn iface_files__delete_response__to_json(p: &iface_files::DeleteResponse) -> Value {
     let mut m = Map::new();
-    m.insert("ok".into(), iface_files__defs_ok_true__to_json(&p.ok));
-    Value::Object(m)
-}
-
-fn iface_files__defs_ok_true__to_json(p: &iface_files::DefsOkTrue) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
+    m.insert("ok".into(), Value::Bool(*(&p.ok)));
     Value::Object(m)
 }
 
 fn iface_files__info_response__to_json(p: &iface_files::InfoResponse) -> Value {
     let mut m = Map::new();
-    m.insert("comments".into(), iface_files__objs_comments__to_json(&p.comments));
+    m.insert("comments".into(), Value::Array((&p.comments).iter().map(|v| Value::String((v).clone())).collect()));
     m.insert("content_html".into(), match (&p.content_html) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("editor".into(), match (&p.editor) { Some(v) => iface_files__defs_user_id__to_json(v), None => Value::Null });
+    m.insert("editor".into(), match (&p.editor) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("file".into(), iface_files__objs_file__to_json(&p.file));
-    m.insert("ok".into(), iface_files__defs_ok_true__to_json(&p.ok));
+    m.insert("ok".into(), Value::Bool(*(&p.ok)));
     m.insert("paging".into(), match (&p.paging) { Some(v) => iface_files__objs_paging__to_json(v), None => Value::Null });
     m.insert("response_metadata".into(), match (&p.response_metadata) { Some(v) => iface_files__objs_response_metadata__to_json(v), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_files__objs_comments__to_json(p: &iface_files::ObjsComments) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_files__defs_user_id__to_json(p: &iface_files::DefsUserId) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
 fn iface_files__objs_file__to_json(p: &iface_files::ObjsFile) -> Value {
     let mut m = Map::new();
-    m.insert("channels".into(), match (&p.channels) { Some(v) => Value::Array((v).iter().map(|v| iface_files__defs_channel_id__to_json(v)).collect()), None => Value::Null });
+    m.insert("channels".into(), match (&p.channels) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
     m.insert("comments_count".into(), match (&p.comments_count) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("created".into(), match (&p.created) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("date_delete".into(), match (&p.date_delete) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("display_as_bot".into(), match (&p.display_as_bot) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     m.insert("editable".into(), match (&p.editable) { Some(v) => Value::Bool(*(v)), None => Value::Null });
-    m.insert("editor".into(), match (&p.editor) { Some(v) => iface_files__defs_user_id__to_json(v), None => Value::Null });
+    m.insert("editor".into(), match (&p.editor) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("external_id".into(), match (&p.external_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("external_type".into(), match (&p.external_type) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("external_url".into(), match (&p.external_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("filetype".into(), match (&p.filetype) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("groups".into(), match (&p.groups) { Some(v) => Value::Array((v).iter().map(|v| iface_files__defs_group_id__to_json(v)).collect()), None => Value::Null });
+    m.insert("groups".into(), match (&p.groups) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
     m.insert("has_rich_preview".into(), match (&p.has_rich_preview) { Some(v) => Value::Bool(*(v)), None => Value::Null });
-    m.insert("id".into(), match (&p.id) { Some(v) => iface_files__defs_file_id__to_json(v), None => Value::Null });
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("image_exif_rotation".into(), match (&p.image_exif_rotation) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    m.insert("ims".into(), match (&p.ims) { Some(v) => Value::Array((v).iter().map(|v| iface_files__defs_dm_id__to_json(v)).collect()), None => Value::Null });
+    m.insert("ims".into(), match (&p.ims) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
     m.insert("is_external".into(), match (&p.is_external) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     m.insert("is_public".into(), match (&p.is_public) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     m.insert("is_starred".into(), match (&p.is_starred) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     m.insert("is_tombstoned".into(), match (&p.is_tombstoned) { Some(v) => Value::Bool(*(v)), None => Value::Null });
-    m.insert("last_editor".into(), match (&p.last_editor) { Some(v) => iface_files__defs_user_id__to_json(v), None => Value::Null });
+    m.insert("last_editor".into(), match (&p.last_editor) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("mimetype".into(), match (&p.mimetype) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("mode".into(), match (&p.mode) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -163,14 +145,14 @@ fn iface_files__objs_file__to_json(p: &iface_files::ObjsFile) -> Value {
     m.insert("permalink".into(), match (&p.permalink) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("permalink_public".into(), match (&p.permalink_public) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("pinned_info".into(), match (&p.pinned_info) { Some(v) => iface_files__defs_pinned_info__to_json(v), None => Value::Null });
-    m.insert("pinned_to".into(), match (&p.pinned_to) { Some(v) => Value::Array((v).iter().map(|v| iface_files__defs_channel__to_json(v)).collect()), None => Value::Null });
+    m.insert("pinned_to".into(), match (&p.pinned_to) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
     m.insert("pretty_type".into(), match (&p.pretty_type) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("preview".into(), match (&p.preview) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("public_url_shared".into(), match (&p.public_url_shared) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     m.insert("reactions".into(), match (&p.reactions) { Some(v) => Value::Array((v).iter().map(|v| iface_files__objs_reaction__to_json(v)).collect()), None => Value::Null });
     m.insert("shares".into(), match (&p.shares) { Some(v) => iface_files__objs_file_shares__to_json(v), None => Value::Null });
     m.insert("size".into(), match (&p.size) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    m.insert("source_team".into(), match (&p.source_team) { Some(v) => iface_files__defs_team__to_json(v), None => Value::Null });
+    m.insert("source_team".into(), match (&p.source_team) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("state".into(), match (&p.state) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("thumb_1024".into(), match (&p.thumb_v1024) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("thumb_1024_h".into(), match (&p.thumb_v1024_h) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
@@ -200,32 +182,8 @@ fn iface_files__objs_file__to_json(p: &iface_files::ObjsFile) -> Value {
     m.insert("url_private".into(), match (&p.url_private) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("url_private_download".into(), match (&p.url_private_download) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("user".into(), match (&p.user) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("user_team".into(), match (&p.user_team) { Some(v) => iface_files__defs_team__to_json(v), None => Value::Null });
+    m.insert("user_team".into(), match (&p.user_team) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("username".into(), match (&p.username) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_files__defs_channel_id__to_json(p: &iface_files::DefsChannelId) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_files__defs_group_id__to_json(p: &iface_files::DefsGroupId) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_files__defs_file_id__to_json(p: &iface_files::DefsFileId) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_files__defs_dm_id__to_json(p: &iface_files::DefsDmId) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -235,17 +193,11 @@ fn iface_files__defs_pinned_info__to_json(p: &iface_files::DefsPinnedInfo) -> Va
     Value::Object(m)
 }
 
-fn iface_files__defs_channel__to_json(p: &iface_files::DefsChannel) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
 fn iface_files__objs_reaction__to_json(p: &iface_files::ObjsReaction) -> Value {
     let mut m = Map::new();
     m.insert("count".into(), Value::Number(serde_json::Number::from(*(&p.count))));
     m.insert("name".into(), Value::String((&p.name).clone()));
-    m.insert("users".into(), Value::Array((&p.users).iter().map(|v| iface_files__defs_user_id__to_json(v)).collect()));
+    m.insert("users".into(), Value::Array((&p.users).iter().map(|v| Value::String((v).clone())).collect()));
     Value::Object(m)
 }
 
@@ -253,12 +205,6 @@ fn iface_files__objs_file_shares__to_json(p: &iface_files::ObjsFileShares) -> Va
     let mut m = Map::new();
     m.insert("private".into(), match (&p.private) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("public".into(), match (&p.public) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_files__defs_team__to_json(p: &iface_files::DefsTeam) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -282,7 +228,7 @@ fn iface_files__objs_response_metadata__to_json(p: &iface_files::ObjsResponseMet
 fn iface_files__list_op_response__to_json(p: &iface_files::ListOpResponse) -> Value {
     let mut m = Map::new();
     m.insert("files".into(), Value::Array((&p.files).iter().map(|v| iface_files__objs_file__to_json(v)).collect()));
-    m.insert("ok".into(), iface_files__defs_ok_true__to_json(&p.ok));
+    m.insert("ok".into(), Value::Bool(*(&p.ok)));
     m.insert("paging".into(), iface_files__objs_paging__to_json(&p.paging));
     Value::Object(m)
 }
@@ -290,21 +236,21 @@ fn iface_files__list_op_response__to_json(p: &iface_files::ListOpResponse) -> Va
 fn iface_files__revoke_public_url_response__to_json(p: &iface_files::RevokePublicUrlResponse) -> Value {
     let mut m = Map::new();
     m.insert("file".into(), iface_files__objs_file__to_json(&p.file));
-    m.insert("ok".into(), iface_files__defs_ok_true__to_json(&p.ok));
+    m.insert("ok".into(), Value::Bool(*(&p.ok)));
     Value::Object(m)
 }
 
 fn iface_files__shared_public_url_response__to_json(p: &iface_files::SharedPublicUrlResponse) -> Value {
     let mut m = Map::new();
     m.insert("file".into(), iface_files__objs_file__to_json(&p.file));
-    m.insert("ok".into(), iface_files__defs_ok_true__to_json(&p.ok));
+    m.insert("ok".into(), Value::Bool(*(&p.ok)));
     Value::Object(m)
 }
 
 fn iface_files__upload_response__to_json(p: &iface_files::UploadResponse) -> Value {
     let mut m = Map::new();
     m.insert("file".into(), iface_files__objs_file__to_json(&p.file));
-    m.insert("ok".into(), iface_files__defs_ok_true__to_json(&p.ok));
+    m.insert("ok".into(), Value::Bool(*(&p.ok)));
     Value::Object(m)
 }
 
@@ -371,68 +317,47 @@ fn iface_files__upload_params__to_json(p: &iface_files::UploadParams) -> Value {
 fn iface_files__delete_response__from_json(v: &Value) -> Option<iface_files::DeleteResponse> {
     let m = v.as_object()?;
     Some(iface_files::DeleteResponse {
-        ok: match m.get("ok").and_then(|v| iface_files__defs_ok_true__from_json(v)) { Some(x) => x, None => return None },
-    })
-}
-
-fn iface_files__defs_ok_true__from_json(v: &Value) -> Option<iface_files::DefsOkTrue> {
-    let m = v.as_object()?;
-    Some(iface_files::DefsOkTrue {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        ok: m.get("ok").and_then(|v| (v).as_bool()).unwrap_or_default(),
     })
 }
 
 fn iface_files__info_response__from_json(v: &Value) -> Option<iface_files::InfoResponse> {
     let m = v.as_object()?;
     Some(iface_files::InfoResponse {
-        comments: match m.get("comments").and_then(|v| iface_files__objs_comments__from_json(v)) { Some(x) => x, None => return None },
+        comments: m.get("comments").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())).unwrap_or_default(),
         content_html: m.get("content_html").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        editor: m.get("editor").filter(|v| !v.is_null()).and_then(|v| iface_files__defs_user_id__from_json(v)),
+        editor: m.get("editor").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         file: match m.get("file").and_then(|v| iface_files__objs_file__from_json(v)) { Some(x) => x, None => return None },
-        ok: match m.get("ok").and_then(|v| iface_files__defs_ok_true__from_json(v)) { Some(x) => x, None => return None },
+        ok: m.get("ok").and_then(|v| (v).as_bool()).unwrap_or_default(),
         paging: m.get("paging").filter(|v| !v.is_null()).and_then(|v| iface_files__objs_paging__from_json(v)),
         response_metadata: m.get("response_metadata").filter(|v| !v.is_null()).and_then(|v| iface_files__objs_response_metadata__from_json(v)),
-    })
-}
-
-fn iface_files__objs_comments__from_json(v: &Value) -> Option<iface_files::ObjsComments> {
-    let m = v.as_object()?;
-    Some(iface_files::ObjsComments {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-    })
-}
-
-fn iface_files__defs_user_id__from_json(v: &Value) -> Option<iface_files::DefsUserId> {
-    let m = v.as_object()?;
-    Some(iface_files::DefsUserId {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
 fn iface_files__objs_file__from_json(v: &Value) -> Option<iface_files::ObjsFile> {
     let m = v.as_object()?;
     Some(iface_files::ObjsFile {
-        channels: m.get("channels").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_files__defs_channel_id__from_json(x)).collect())),
+        channels: m.get("channels").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
         comments_count: m.get("comments_count").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
         created: m.get("created").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
         date_delete: m.get("date_delete").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
         display_as_bot: m.get("display_as_bot").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
         editable: m.get("editable").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
-        editor: m.get("editor").filter(|v| !v.is_null()).and_then(|v| iface_files__defs_user_id__from_json(v)),
+        editor: m.get("editor").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         external_id: m.get("external_id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         external_type: m.get("external_type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         external_url: m.get("external_url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         filetype: m.get("filetype").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        groups: m.get("groups").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_files__defs_group_id__from_json(x)).collect())),
+        groups: m.get("groups").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
         has_rich_preview: m.get("has_rich_preview").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
-        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| iface_files__defs_file_id__from_json(v)),
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         image_exif_rotation: m.get("image_exif_rotation").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
-        ims: m.get("ims").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_files__defs_dm_id__from_json(x)).collect())),
+        ims: m.get("ims").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
         is_external: m.get("is_external").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
         is_public: m.get("is_public").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
         is_starred: m.get("is_starred").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
         is_tombstoned: m.get("is_tombstoned").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
-        last_editor: m.get("last_editor").filter(|v| !v.is_null()).and_then(|v| iface_files__defs_user_id__from_json(v)),
+        last_editor: m.get("last_editor").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         mimetype: m.get("mimetype").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         mode: m.get("mode").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
@@ -443,14 +368,14 @@ fn iface_files__objs_file__from_json(v: &Value) -> Option<iface_files::ObjsFile>
         permalink: m.get("permalink").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         permalink_public: m.get("permalink_public").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         pinned_info: m.get("pinned_info").filter(|v| !v.is_null()).and_then(|v| iface_files__defs_pinned_info__from_json(v)),
-        pinned_to: m.get("pinned_to").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_files__defs_channel__from_json(x)).collect())),
+        pinned_to: m.get("pinned_to").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
         pretty_type: m.get("pretty_type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         preview: m.get("preview").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         public_url_shared: m.get("public_url_shared").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
         reactions: m.get("reactions").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_files__objs_reaction__from_json(x)).collect())),
         shares: m.get("shares").filter(|v| !v.is_null()).and_then(|v| iface_files__objs_file_shares__from_json(v)),
         size: m.get("size").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
-        source_team: m.get("source_team").filter(|v| !v.is_null()).and_then(|v| iface_files__defs_team__from_json(v)),
+        source_team: m.get("source_team").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         state: m.get("state").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         thumb_v1024: m.get("thumb_1024").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         thumb_v1024_h: m.get("thumb_1024_h").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
@@ -480,36 +405,8 @@ fn iface_files__objs_file__from_json(v: &Value) -> Option<iface_files::ObjsFile>
         url_private: m.get("url_private").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         url_private_download: m.get("url_private_download").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         user: m.get("user").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        user_team: m.get("user_team").filter(|v| !v.is_null()).and_then(|v| iface_files__defs_team__from_json(v)),
+        user_team: m.get("user_team").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         username: m.get("username").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-    })
-}
-
-fn iface_files__defs_channel_id__from_json(v: &Value) -> Option<iface_files::DefsChannelId> {
-    let m = v.as_object()?;
-    Some(iface_files::DefsChannelId {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-    })
-}
-
-fn iface_files__defs_group_id__from_json(v: &Value) -> Option<iface_files::DefsGroupId> {
-    let m = v.as_object()?;
-    Some(iface_files::DefsGroupId {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-    })
-}
-
-fn iface_files__defs_file_id__from_json(v: &Value) -> Option<iface_files::DefsFileId> {
-    let m = v.as_object()?;
-    Some(iface_files::DefsFileId {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-    })
-}
-
-fn iface_files__defs_dm_id__from_json(v: &Value) -> Option<iface_files::DefsDmId> {
-    let m = v.as_object()?;
-    Some(iface_files::DefsDmId {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -520,19 +417,12 @@ fn iface_files__defs_pinned_info__from_json(v: &Value) -> Option<iface_files::De
     })
 }
 
-fn iface_files__defs_channel__from_json(v: &Value) -> Option<iface_files::DefsChannel> {
-    let m = v.as_object()?;
-    Some(iface_files::DefsChannel {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-    })
-}
-
 fn iface_files__objs_reaction__from_json(v: &Value) -> Option<iface_files::ObjsReaction> {
     let m = v.as_object()?;
     Some(iface_files::ObjsReaction {
         count: m.get("count").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
         name: m.get("name").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-        users: m.get("users").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_files__defs_user_id__from_json(x)).collect())).unwrap_or_default(),
+        users: m.get("users").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())).unwrap_or_default(),
     })
 }
 
@@ -541,13 +431,6 @@ fn iface_files__objs_file_shares__from_json(v: &Value) -> Option<iface_files::Ob
     Some(iface_files::ObjsFileShares {
         private: m.get("private").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         public: m.get("public").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-    })
-}
-
-fn iface_files__defs_team__from_json(v: &Value) -> Option<iface_files::DefsTeam> {
-    let m = v.as_object()?;
-    Some(iface_files::DefsTeam {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -574,7 +457,7 @@ fn iface_files__list_op_response__from_json(v: &Value) -> Option<iface_files::Li
     let m = v.as_object()?;
     Some(iface_files::ListOpResponse {
         files: m.get("files").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_files__objs_file__from_json(x)).collect())).unwrap_or_default(),
-        ok: match m.get("ok").and_then(|v| iface_files__defs_ok_true__from_json(v)) { Some(x) => x, None => return None },
+        ok: m.get("ok").and_then(|v| (v).as_bool()).unwrap_or_default(),
         paging: match m.get("paging").and_then(|v| iface_files__objs_paging__from_json(v)) { Some(x) => x, None => return None },
     })
 }
@@ -583,7 +466,7 @@ fn iface_files__revoke_public_url_response__from_json(v: &Value) -> Option<iface
     let m = v.as_object()?;
     Some(iface_files::RevokePublicUrlResponse {
         file: match m.get("file").and_then(|v| iface_files__objs_file__from_json(v)) { Some(x) => x, None => return None },
-        ok: match m.get("ok").and_then(|v| iface_files__defs_ok_true__from_json(v)) { Some(x) => x, None => return None },
+        ok: m.get("ok").and_then(|v| (v).as_bool()).unwrap_or_default(),
     })
 }
 
@@ -591,7 +474,7 @@ fn iface_files__shared_public_url_response__from_json(v: &Value) -> Option<iface
     let m = v.as_object()?;
     Some(iface_files::SharedPublicUrlResponse {
         file: match m.get("file").and_then(|v| iface_files__objs_file__from_json(v)) { Some(x) => x, None => return None },
-        ok: match m.get("ok").and_then(|v| iface_files__defs_ok_true__from_json(v)) { Some(x) => x, None => return None },
+        ok: m.get("ok").and_then(|v| (v).as_bool()).unwrap_or_default(),
     })
 }
 
@@ -599,7 +482,7 @@ fn iface_files__upload_response__from_json(v: &Value) -> Option<iface_files::Upl
     let m = v.as_object()?;
     Some(iface_files::UploadResponse {
         file: match m.get("file").and_then(|v| iface_files__objs_file__from_json(v)) { Some(x) => x, None => return None },
-        ok: match m.get("ok").and_then(|v| iface_files__defs_ok_true__from_json(v)) { Some(x) => x, None => return None },
+        ok: m.get("ok").and_then(|v| (v).as_bool()).unwrap_or_default(),
     })
 }
 

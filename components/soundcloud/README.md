@@ -21,8 +21,8 @@ triggered.
 
 | Setting | Value |
 | --- | --- |
-| Package | `autostamp:soundcloud@0.5.0` |
-| Published version | `0.5.0+soundcloud-1.0.0` |
+| Package | `autostamp:soundcloud@0.6.0` |
+| Published version | `0.6.0+soundcloud-1.0.0` |
 | Tag filter | all tags |
 | Operations generated | 59 |
 | Infer API-key credentials | enabled — not triggered |

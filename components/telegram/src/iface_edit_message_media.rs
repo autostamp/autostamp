@@ -18,12 +18,6 @@ const OP_EDIT_MESSAGE_MEDIA_POST_EDIT_MESSAGE_MEDIA: OpSpec = OpSpec {
     ],
 };
 
-fn iface_edit_message_media__input_media__to_json(p: &iface_edit_message_media::InputMedia) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
 fn iface_edit_message_media__inline_keyboard_markup__to_json(p: &iface_edit_message_media::InlineKeyboardMarkup) -> Value {
     let mut m = Map::new();
     m.insert("inline_keyboard".into(), Value::Array((&p.inline_keyboard).iter().map(|v| Value::Array((v).iter().map(|v| iface_edit_message_media__inline_keyboard_button__to_json(v)).collect())).collect()));
@@ -69,7 +63,7 @@ fn iface_edit_message_media__post_edit_message_media_params__to_json(p: &iface_e
     let mut m = Map::new();
     m.insert("chat_id".into(), match (&p.chat_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("inline_message_id".into(), match (&p.inline_message_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("media".into(), iface_edit_message_media__input_media__to_json(&p.media));
+    m.insert("media".into(), Value::String((&p.media).clone()));
     m.insert("message_id".into(), match (&p.message_id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("reply_markup".into(), match (&p.reply_markup) { Some(v) => iface_edit_message_media__inline_keyboard_markup__to_json(v), None => Value::Null });
     Value::Object(m)

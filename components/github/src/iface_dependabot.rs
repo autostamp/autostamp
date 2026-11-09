@@ -349,27 +349,21 @@ fn iface_dependabot__update_alert_body_state_enum__to_str(e: &iface_dependabot::
 
 fn iface_dependabot__alert_with_repository__to_json(p: &iface_dependabot::AlertWithRepository) -> Value {
     let mut m = Map::new();
-    m.insert("created_at".into(), iface_dependabot__alert_created_at__to_json(&p.created_at));
+    m.insert("created_at".into(), Value::String((&p.created_at).clone()));
     m.insert("dependency".into(), iface_dependabot__alert_with_repository_dependency__to_json(&p.dependency));
-    m.insert("dismissed_at".into(), iface_dependabot__alert_dismissed_at__to_json(&p.dismissed_at));
+    m.insert("dismissed_at".into(), Value::String((&p.dismissed_at).clone()));
     m.insert("dismissed_by".into(), iface_dependabot__nullable_simple_user__to_json(&p.dismissed_by));
     m.insert("dismissed_comment".into(), Value::String((&p.dismissed_comment).clone()));
     m.insert("dismissed_reason".into(), Value::String(iface_dependabot__alert_with_repository_dismissed_reason_enum__to_str(&p.dismissed_reason).into()));
-    m.insert("fixed_at".into(), iface_dependabot__alert_fixed_at__to_json(&p.fixed_at));
-    m.insert("html_url".into(), iface_dependabot__alert_html_url__to_json(&p.html_url));
-    m.insert("number".into(), iface_dependabot__alert_number__to_json(&p.number));
+    m.insert("fixed_at".into(), Value::String((&p.fixed_at).clone()));
+    m.insert("html_url".into(), Value::String((&p.html_url).clone()));
+    m.insert("number".into(), Value::Number(serde_json::Number::from(*(&p.number))));
     m.insert("repository".into(), iface_dependabot__simple_repository__to_json(&p.repository));
     m.insert("security_advisory".into(), iface_dependabot__alert_security_advisory__to_json(&p.security_advisory));
     m.insert("security_vulnerability".into(), iface_dependabot__alert_security_vulnerability__to_json(&p.security_vulnerability));
     m.insert("state".into(), Value::String(iface_dependabot__alert_with_repository_state_enum__to_str(&p.state).into()));
-    m.insert("updated_at".into(), iface_dependabot__alert_updated_at__to_json(&p.updated_at));
-    m.insert("url".into(), iface_dependabot__alert_url__to_json(&p.url));
-    Value::Object(m)
-}
-
-fn iface_dependabot__alert_created_at__to_json(p: &iface_dependabot::AlertCreatedAt) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
+    m.insert("updated_at".into(), Value::String((&p.updated_at).clone()));
+    m.insert("url".into(), Value::String((&p.url).clone()));
     Value::Object(m)
 }
 
@@ -385,12 +379,6 @@ fn iface_dependabot__alert_package__to_json(p: &iface_dependabot::AlertPackage) 
     let mut m = Map::new();
     m.insert("ecosystem".into(), Value::String((&p.ecosystem).clone()));
     m.insert("name".into(), Value::String((&p.name).clone()));
-    Value::Object(m)
-}
-
-fn iface_dependabot__alert_dismissed_at__to_json(p: &iface_dependabot::AlertDismissedAt) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -417,24 +405,6 @@ fn iface_dependabot__nullable_simple_user__to_json(p: &iface_dependabot::Nullabl
     m.insert("subscriptions_url".into(), Value::String((&p.subscriptions_url).clone()));
     m.insert("type".into(), Value::String((&p.type_op).clone()));
     m.insert("url".into(), Value::String((&p.url).clone()));
-    Value::Object(m)
-}
-
-fn iface_dependabot__alert_fixed_at__to_json(p: &iface_dependabot::AlertFixedAt) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_dependabot__alert_html_url__to_json(p: &iface_dependabot::AlertHtmlUrl) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_dependabot__alert_number__to_json(p: &iface_dependabot::AlertNumber) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -572,18 +542,6 @@ fn iface_dependabot__alert_security_vulnerability__to_json(p: &iface_dependabot:
 fn iface_dependabot__alert_security_vulnerability_first_patched_version__to_json(p: &iface_dependabot::AlertSecurityVulnerabilityFirstPatchedVersion) -> Value {
     let mut m = Map::new();
     m.insert("identifier".into(), Value::String((&p.identifier).clone()));
-    Value::Object(m)
-}
-
-fn iface_dependabot__alert_updated_at__to_json(p: &iface_dependabot::AlertUpdatedAt) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_dependabot__alert_url__to_json(p: &iface_dependabot::AlertUrl) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -774,20 +732,20 @@ fn iface_dependabot__security_and_analysis_secret_scanning_push_protection__to_j
 
 fn iface_dependabot__alert__to_json(p: &iface_dependabot::Alert) -> Value {
     let mut m = Map::new();
-    m.insert("created_at".into(), iface_dependabot__alert_created_at__to_json(&p.created_at));
+    m.insert("created_at".into(), Value::String((&p.created_at).clone()));
     m.insert("dependency".into(), iface_dependabot__alert_dependency__to_json(&p.dependency));
-    m.insert("dismissed_at".into(), iface_dependabot__alert_dismissed_at__to_json(&p.dismissed_at));
+    m.insert("dismissed_at".into(), Value::String((&p.dismissed_at).clone()));
     m.insert("dismissed_by".into(), iface_dependabot__nullable_simple_user__to_json(&p.dismissed_by));
     m.insert("dismissed_comment".into(), Value::String((&p.dismissed_comment).clone()));
     m.insert("dismissed_reason".into(), Value::String(iface_dependabot__alert_with_repository_dismissed_reason_enum__to_str(&p.dismissed_reason).into()));
-    m.insert("fixed_at".into(), iface_dependabot__alert_fixed_at__to_json(&p.fixed_at));
-    m.insert("html_url".into(), iface_dependabot__alert_html_url__to_json(&p.html_url));
-    m.insert("number".into(), iface_dependabot__alert_number__to_json(&p.number));
+    m.insert("fixed_at".into(), Value::String((&p.fixed_at).clone()));
+    m.insert("html_url".into(), Value::String((&p.html_url).clone()));
+    m.insert("number".into(), Value::Number(serde_json::Number::from(*(&p.number))));
     m.insert("security_advisory".into(), iface_dependabot__alert_security_advisory__to_json(&p.security_advisory));
     m.insert("security_vulnerability".into(), iface_dependabot__alert_security_vulnerability__to_json(&p.security_vulnerability));
     m.insert("state".into(), Value::String(iface_dependabot__alert_with_repository_state_enum__to_str(&p.state).into()));
-    m.insert("updated_at".into(), iface_dependabot__alert_updated_at__to_json(&p.updated_at));
-    m.insert("url".into(), iface_dependabot__alert_url__to_json(&p.url));
+    m.insert("updated_at".into(), Value::String((&p.updated_at).clone()));
+    m.insert("url".into(), Value::String((&p.url).clone()));
     Value::Object(m)
 }
 
@@ -1007,28 +965,21 @@ fn iface_dependabot__delete_repo_secret_params__to_json(p: &iface_dependabot::De
 fn iface_dependabot__alert_with_repository__from_json(v: &Value) -> Option<iface_dependabot::AlertWithRepository> {
     let m = v.as_object()?;
     Some(iface_dependabot::AlertWithRepository {
-        created_at: match m.get("created_at").and_then(|v| iface_dependabot__alert_created_at__from_json(v)) { Some(x) => x, None => return None },
+        created_at: m.get("created_at").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         dependency: match m.get("dependency").and_then(|v| iface_dependabot__alert_with_repository_dependency__from_json(v)) { Some(x) => x, None => return None },
-        dismissed_at: match m.get("dismissed_at").and_then(|v| iface_dependabot__alert_dismissed_at__from_json(v)) { Some(x) => x, None => return None },
+        dismissed_at: m.get("dismissed_at").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         dismissed_by: match m.get("dismissed_by").and_then(|v| iface_dependabot__nullable_simple_user__from_json(v)) { Some(x) => x, None => return None },
         dismissed_comment: m.get("dismissed_comment").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         dismissed_reason: match m.get("dismissed_reason").and_then(|v| (v).as_str().and_then(iface_dependabot__alert_with_repository_dismissed_reason_enum__from_str)) { Some(x) => x, None => return None },
-        fixed_at: match m.get("fixed_at").and_then(|v| iface_dependabot__alert_fixed_at__from_json(v)) { Some(x) => x, None => return None },
-        html_url: match m.get("html_url").and_then(|v| iface_dependabot__alert_html_url__from_json(v)) { Some(x) => x, None => return None },
-        number: match m.get("number").and_then(|v| iface_dependabot__alert_number__from_json(v)) { Some(x) => x, None => return None },
+        fixed_at: m.get("fixed_at").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        html_url: m.get("html_url").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        number: m.get("number").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
         repository: match m.get("repository").and_then(|v| iface_dependabot__simple_repository__from_json(v)) { Some(x) => x, None => return None },
         security_advisory: match m.get("security_advisory").and_then(|v| iface_dependabot__alert_security_advisory__from_json(v)) { Some(x) => x, None => return None },
         security_vulnerability: match m.get("security_vulnerability").and_then(|v| iface_dependabot__alert_security_vulnerability__from_json(v)) { Some(x) => x, None => return None },
         state: match m.get("state").and_then(|v| (v).as_str().and_then(iface_dependabot__alert_with_repository_state_enum__from_str)) { Some(x) => x, None => return None },
-        updated_at: match m.get("updated_at").and_then(|v| iface_dependabot__alert_updated_at__from_json(v)) { Some(x) => x, None => return None },
-        url: match m.get("url").and_then(|v| iface_dependabot__alert_url__from_json(v)) { Some(x) => x, None => return None },
-    })
-}
-
-fn iface_dependabot__alert_created_at__from_json(v: &Value) -> Option<iface_dependabot::AlertCreatedAt> {
-    let m = v.as_object()?;
-    Some(iface_dependabot::AlertCreatedAt {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        updated_at: m.get("updated_at").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        url: m.get("url").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -1046,13 +997,6 @@ fn iface_dependabot__alert_package__from_json(v: &Value) -> Option<iface_dependa
     Some(iface_dependabot::AlertPackage {
         ecosystem: m.get("ecosystem").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         name: m.get("name").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-    })
-}
-
-fn iface_dependabot__alert_dismissed_at__from_json(v: &Value) -> Option<iface_dependabot::AlertDismissedAt> {
-    let m = v.as_object()?;
-    Some(iface_dependabot::AlertDismissedAt {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -1080,27 +1024,6 @@ fn iface_dependabot__nullable_simple_user__from_json(v: &Value) -> Option<iface_
         subscriptions_url: m.get("subscriptions_url").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         type_op: m.get("type").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         url: m.get("url").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-    })
-}
-
-fn iface_dependabot__alert_fixed_at__from_json(v: &Value) -> Option<iface_dependabot::AlertFixedAt> {
-    let m = v.as_object()?;
-    Some(iface_dependabot::AlertFixedAt {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-    })
-}
-
-fn iface_dependabot__alert_html_url__from_json(v: &Value) -> Option<iface_dependabot::AlertHtmlUrl> {
-    let m = v.as_object()?;
-    Some(iface_dependabot::AlertHtmlUrl {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-    })
-}
-
-fn iface_dependabot__alert_number__from_json(v: &Value) -> Option<iface_dependabot::AlertNumber> {
-    let m = v.as_object()?;
-    Some(iface_dependabot::AlertNumber {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -1247,20 +1170,6 @@ fn iface_dependabot__alert_security_vulnerability_first_patched_version__from_js
     let m = v.as_object()?;
     Some(iface_dependabot::AlertSecurityVulnerabilityFirstPatchedVersion {
         identifier: m.get("identifier").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-    })
-}
-
-fn iface_dependabot__alert_updated_at__from_json(v: &Value) -> Option<iface_dependabot::AlertUpdatedAt> {
-    let m = v.as_object()?;
-    Some(iface_dependabot::AlertUpdatedAt {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-    })
-}
-
-fn iface_dependabot__alert_url__from_json(v: &Value) -> Option<iface_dependabot::AlertUrl> {
-    let m = v.as_object()?;
-    Some(iface_dependabot::AlertUrl {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -1465,20 +1374,20 @@ fn iface_dependabot__security_and_analysis_secret_scanning_push_protection__from
 fn iface_dependabot__alert__from_json(v: &Value) -> Option<iface_dependabot::Alert> {
     let m = v.as_object()?;
     Some(iface_dependabot::Alert {
-        created_at: match m.get("created_at").and_then(|v| iface_dependabot__alert_created_at__from_json(v)) { Some(x) => x, None => return None },
+        created_at: m.get("created_at").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         dependency: match m.get("dependency").and_then(|v| iface_dependabot__alert_dependency__from_json(v)) { Some(x) => x, None => return None },
-        dismissed_at: match m.get("dismissed_at").and_then(|v| iface_dependabot__alert_dismissed_at__from_json(v)) { Some(x) => x, None => return None },
+        dismissed_at: m.get("dismissed_at").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         dismissed_by: match m.get("dismissed_by").and_then(|v| iface_dependabot__nullable_simple_user__from_json(v)) { Some(x) => x, None => return None },
         dismissed_comment: m.get("dismissed_comment").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         dismissed_reason: match m.get("dismissed_reason").and_then(|v| (v).as_str().and_then(iface_dependabot__alert_with_repository_dismissed_reason_enum__from_str)) { Some(x) => x, None => return None },
-        fixed_at: match m.get("fixed_at").and_then(|v| iface_dependabot__alert_fixed_at__from_json(v)) { Some(x) => x, None => return None },
-        html_url: match m.get("html_url").and_then(|v| iface_dependabot__alert_html_url__from_json(v)) { Some(x) => x, None => return None },
-        number: match m.get("number").and_then(|v| iface_dependabot__alert_number__from_json(v)) { Some(x) => x, None => return None },
+        fixed_at: m.get("fixed_at").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        html_url: m.get("html_url").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        number: m.get("number").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
         security_advisory: match m.get("security_advisory").and_then(|v| iface_dependabot__alert_security_advisory__from_json(v)) { Some(x) => x, None => return None },
         security_vulnerability: match m.get("security_vulnerability").and_then(|v| iface_dependabot__alert_security_vulnerability__from_json(v)) { Some(x) => x, None => return None },
         state: match m.get("state").and_then(|v| (v).as_str().and_then(iface_dependabot__alert_with_repository_state_enum__from_str)) { Some(x) => x, None => return None },
-        updated_at: match m.get("updated_at").and_then(|v| iface_dependabot__alert_updated_at__from_json(v)) { Some(x) => x, None => return None },
-        url: match m.get("url").and_then(|v| iface_dependabot__alert_url__from_json(v)) { Some(x) => x, None => return None },
+        updated_at: m.get("updated_at").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        url: m.get("url").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 

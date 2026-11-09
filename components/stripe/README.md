@@ -20,8 +20,8 @@ triggered.
 
 | Setting | Value |
 | --- | --- |
-| Package | `autostamp:stripe@0.5.0` |
-| Published version | `0.5.0+stripe-2022-11-15` |
+| Package | `autostamp:stripe@0.6.0` |
+| Published version | `0.6.0+stripe-2022-11-15` |
 | Tag filter | all tags |
 | Operations generated | 452 |
 | Infer API-key credentials | enabled — not triggered |

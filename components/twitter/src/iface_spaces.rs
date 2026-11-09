@@ -180,6 +180,17 @@ fn iface_spaces__geo_type_op_enum__to_str(e: &iface_spaces::GeoTypeOpEnum) -> &'
     }
 }
 
+fn iface_spaces__place_type__to_str(e: &iface_spaces::PlaceType) -> &'static str {
+    match e {
+        iface_spaces::PlaceType::Poi => "poi",
+        iface_spaces::PlaceType::Neighborhood => "neighborhood",
+        iface_spaces::PlaceType::City => "city",
+        iface_spaces::PlaceType::Admin => "admin",
+        iface_spaces::PlaceType::Country => "country",
+        iface_spaces::PlaceType::Unknown => "unknown",
+    }
+}
+
 fn iface_spaces__poll_voting_status_enum__to_str(e: &iface_spaces::PollVotingStatusEnum) -> &'static str {
     match e {
         iface_spaces::PollVotingStatusEnum::Open => "open",
@@ -192,6 +203,15 @@ fn iface_spaces__tweet_referenced_tweets_item_type_op_enum__to_str(e: &iface_spa
         iface_spaces::TweetReferencedTweetsItemTypeOpEnum::Retweeted => "retweeted",
         iface_spaces::TweetReferencedTweetsItemTypeOpEnum::Quoted => "quoted",
         iface_spaces::TweetReferencedTweetsItemTypeOpEnum::RepliedTo => "replied_to",
+    }
+}
+
+fn iface_spaces__reply_settings__to_str(e: &iface_spaces::ReplySettings) -> &'static str {
+    match e {
+        iface_spaces::ReplySettings::Everyone => "everyone",
+        iface_spaces::ReplySettings::MentionedUsers => "mentionedUsers",
+        iface_spaces::ReplySettings::Following => "following",
+        iface_spaces::ReplySettings::Other => "other",
     }
 }
 
@@ -315,34 +335,22 @@ fn iface_spaces__get2_spaces_response__to_json(p: &iface_spaces::Get2SpacesRespo
 fn iface_spaces__space__to_json(p: &iface_spaces::Space) -> Value {
     let mut m = Map::new();
     m.insert("created_at".into(), match (&p.created_at) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("creator_id".into(), match (&p.creator_id) { Some(v) => iface_spaces__user_id__to_json(v), None => Value::Null });
+    m.insert("creator_id".into(), match (&p.creator_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("ended_at".into(), match (&p.ended_at) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("host_ids".into(), match (&p.host_ids) { Some(v) => Value::Array((v).iter().map(|v| iface_spaces__user_id__to_json(v)).collect()), None => Value::Null });
-    m.insert("id".into(), iface_spaces__space_id__to_json(&p.id));
-    m.insert("invited_user_ids".into(), match (&p.invited_user_ids) { Some(v) => Value::Array((v).iter().map(|v| iface_spaces__user_id__to_json(v)).collect()), None => Value::Null });
+    m.insert("host_ids".into(), match (&p.host_ids) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("id".into(), Value::String((&p.id).clone()));
+    m.insert("invited_user_ids".into(), match (&p.invited_user_ids) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
     m.insert("is_ticketed".into(), match (&p.is_ticketed) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     m.insert("lang".into(), match (&p.lang) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("participant_count".into(), match (&p.participant_count) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("scheduled_start".into(), match (&p.scheduled_start) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("speaker_ids".into(), match (&p.speaker_ids) { Some(v) => Value::Array((v).iter().map(|v| iface_spaces__user_id__to_json(v)).collect()), None => Value::Null });
+    m.insert("speaker_ids".into(), match (&p.speaker_ids) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
     m.insert("started_at".into(), match (&p.started_at) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("state".into(), Value::String(iface_spaces__space_state_enum__to_str(&p.state).into()));
     m.insert("subscriber_count".into(), match (&p.subscriber_count) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("title".into(), match (&p.title) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("topics".into(), match (&p.topics) { Some(v) => Value::Array((v).iter().map(|v| iface_spaces__space_topics_item__to_json(v)).collect()), None => Value::Null });
     m.insert("updated_at".into(), match (&p.updated_at) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_spaces__user_id__to_json(p: &iface_spaces::UserId) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_spaces__space_id__to_json(p: &iface_spaces::SpaceId) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -376,53 +384,23 @@ fn iface_spaces__expansions__to_json(p: &iface_spaces::Expansions) -> Value {
 
 fn iface_spaces__media__to_json(p: &iface_spaces::Media) -> Value {
     let mut m = Map::new();
-    m.insert("height".into(), match (&p.height) { Some(v) => iface_spaces__media_height__to_json(v), None => Value::Null });
-    m.insert("media_key".into(), match (&p.media_key) { Some(v) => iface_spaces__media_key__to_json(v), None => Value::Null });
+    m.insert("height".into(), match (&p.height) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("media_key".into(), match (&p.media_key) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("type".into(), Value::String((&p.type_op).clone()));
-    m.insert("width".into(), match (&p.width) { Some(v) => iface_spaces__media_width__to_json(v), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_spaces__media_height__to_json(p: &iface_spaces::MediaHeight) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_spaces__media_key__to_json(p: &iface_spaces::MediaKey) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_spaces__media_width__to_json(p: &iface_spaces::MediaWidth) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
+    m.insert("width".into(), match (&p.width) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
 fn iface_spaces__place__to_json(p: &iface_spaces::Place) -> Value {
     let mut m = Map::new();
-    m.insert("contained_within".into(), match (&p.contained_within) { Some(v) => Value::Array((v).iter().map(|v| iface_spaces__place_id__to_json(v)).collect()), None => Value::Null });
+    m.insert("contained_within".into(), match (&p.contained_within) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
     m.insert("country".into(), match (&p.country) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("country_code".into(), match (&p.country_code) { Some(v) => iface_spaces__country_code__to_json(v), None => Value::Null });
+    m.insert("country_code".into(), match (&p.country_code) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("full_name".into(), Value::String((&p.full_name).clone()));
     m.insert("geo".into(), match (&p.geo) { Some(v) => iface_spaces__geo__to_json(v), None => Value::Null });
-    m.insert("id".into(), iface_spaces__place_id__to_json(&p.id));
+    m.insert("id".into(), Value::String((&p.id).clone()));
     m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("place_type".into(), match (&p.place_type) { Some(v) => iface_spaces__place_type__to_json(v), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_spaces__place_id__to_json(p: &iface_spaces::PlaceId) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_spaces__country_code__to_json(p: &iface_spaces::CountryCode) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
+    m.insert("place_type".into(), match (&p.place_type) { Some(v) => Value::String(iface_spaces__place_type__to_str(v).into()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -430,32 +408,21 @@ fn iface_spaces__geo__to_json(p: &iface_spaces::Geo) -> Value {
     let mut m = Map::new();
     m.insert("bbox".into(), Value::Array((&p.bbox).iter().map(|v| serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null)).collect()));
     m.insert("geometry".into(), match (&p.geometry) { Some(v) => iface_spaces__point__to_json(v), None => Value::Null });
-    m.insert("properties".into(), iface_spaces__geo_properties__to_json(&p.properties));
+    m.insert("properties".into(), Value::Object((&p.properties).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()));
     m.insert("type".into(), Value::String(iface_spaces__geo_type_op_enum__to_str(&p.type_op).into()));
     Value::Object(m)
 }
 
 fn iface_spaces__point__to_json(p: &iface_spaces::Point) -> Value {
     let mut m = Map::new();
-    m.insert("coordinates".into(), iface_spaces__position__to_json(&p.coordinates));
+    m.insert("coordinates".into(), Value::Array((&p.coordinates).iter().map(|v| serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null)).collect()));
     m.insert("type".into(), Value::String(iface_spaces__point_type_op_enum__to_str(&p.type_op).into()));
     Value::Object(m)
 }
 
-fn iface_spaces__position__to_json(p: &iface_spaces::Position) -> Value {
+fn iface_spaces__geo_properties_entry__to_json(p: &iface_spaces::GeoPropertiesEntry) -> Value {
     let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_spaces__geo_properties__to_json(p: &iface_spaces::GeoProperties) -> Value {
-    let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_spaces__place_type__to_json(p: &iface_spaces::PlaceType) -> Value {
-    let mut m = Map::new();
+    m.insert("key".into(), Value::String((&p.key).clone()));
     m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
@@ -464,59 +431,41 @@ fn iface_spaces__poll__to_json(p: &iface_spaces::Poll) -> Value {
     let mut m = Map::new();
     m.insert("duration_minutes".into(), match (&p.duration_minutes) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("end_datetime".into(), match (&p.end_datetime) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("id".into(), iface_spaces__poll_id__to_json(&p.id));
+    m.insert("id".into(), Value::String((&p.id).clone()));
     m.insert("options".into(), Value::Array((&p.options).iter().map(|v| iface_spaces__poll_option__to_json(v)).collect()));
     m.insert("voting_status".into(), match (&p.voting_status) { Some(v) => Value::String(iface_spaces__poll_voting_status_enum__to_str(v).into()), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_spaces__poll_id__to_json(p: &iface_spaces::PollId) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
 fn iface_spaces__poll_option__to_json(p: &iface_spaces::PollOption) -> Value {
     let mut m = Map::new();
-    m.insert("label".into(), iface_spaces__poll_option_label__to_json(&p.label));
+    m.insert("label".into(), Value::String((&p.label).clone()));
     m.insert("position".into(), Value::Number(serde_json::Number::from(*(&p.position))));
     m.insert("votes".into(), Value::Number(serde_json::Number::from(*(&p.votes))));
-    Value::Object(m)
-}
-
-fn iface_spaces__poll_option_label__to_json(p: &iface_spaces::PollOptionLabel) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
 fn iface_spaces__topic__to_json(p: &iface_spaces::Topic) -> Value {
     let mut m = Map::new();
     m.insert("description".into(), match (&p.description) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("id".into(), iface_spaces__topic_id__to_json(&p.id));
+    m.insert("id".into(), Value::String((&p.id).clone()));
     m.insert("name".into(), Value::String((&p.name).clone()));
-    Value::Object(m)
-}
-
-fn iface_spaces__topic_id__to_json(p: &iface_spaces::TopicId) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
 fn iface_spaces__tweet__to_json(p: &iface_spaces::Tweet) -> Value {
     let mut m = Map::new();
     m.insert("attachments".into(), match (&p.attachments) { Some(v) => iface_spaces__tweet_attachments__to_json(v), None => Value::Null });
-    m.insert("author_id".into(), match (&p.author_id) { Some(v) => iface_spaces__user_id__to_json(v), None => Value::Null });
+    m.insert("author_id".into(), match (&p.author_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("context_annotations".into(), match (&p.context_annotations) { Some(v) => Value::Array((v).iter().map(|v| iface_spaces__context_annotation__to_json(v)).collect()), None => Value::Null });
-    m.insert("conversation_id".into(), match (&p.conversation_id) { Some(v) => iface_spaces__tweet_id__to_json(v), None => Value::Null });
+    m.insert("conversation_id".into(), match (&p.conversation_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("created_at".into(), match (&p.created_at) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("edit_controls".into(), match (&p.edit_controls) { Some(v) => iface_spaces__tweet_edit_controls__to_json(v), None => Value::Null });
-    m.insert("edit_history_tweet_ids".into(), Value::Array((&p.edit_history_tweet_ids).iter().map(|v| iface_spaces__tweet_id__to_json(v)).collect()));
+    m.insert("edit_history_tweet_ids".into(), Value::Array((&p.edit_history_tweet_ids).iter().map(|v| Value::String((v).clone())).collect()));
     m.insert("entities".into(), match (&p.entities) { Some(v) => iface_spaces__full_text_entities__to_json(v), None => Value::Null });
     m.insert("geo".into(), match (&p.geo) { Some(v) => iface_spaces__tweet_geo__to_json(v), None => Value::Null });
-    m.insert("id".into(), iface_spaces__tweet_id__to_json(&p.id));
-    m.insert("in_reply_to_user_id".into(), match (&p.in_reply_to_user_id) { Some(v) => iface_spaces__user_id__to_json(v), None => Value::Null });
+    m.insert("id".into(), Value::String((&p.id).clone()));
+    m.insert("in_reply_to_user_id".into(), match (&p.in_reply_to_user_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("lang".into(), match (&p.lang) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("non_public_metrics".into(), match (&p.non_public_metrics) { Some(v) => iface_spaces__tweet_non_public_metrics__to_json(v), None => Value::Null });
     m.insert("organic_metrics".into(), match (&p.organic_metrics) { Some(v) => iface_spaces__tweet_organic_metrics__to_json(v), None => Value::Null });
@@ -524,17 +473,17 @@ fn iface_spaces__tweet__to_json(p: &iface_spaces::Tweet) -> Value {
     m.insert("promoted_metrics".into(), match (&p.promoted_metrics) { Some(v) => iface_spaces__tweet_promoted_metrics__to_json(v), None => Value::Null });
     m.insert("public_metrics".into(), match (&p.public_metrics) { Some(v) => iface_spaces__tweet_public_metrics__to_json(v), None => Value::Null });
     m.insert("referenced_tweets".into(), match (&p.referenced_tweets) { Some(v) => Value::Array((v).iter().map(|v| iface_spaces__tweet_referenced_tweets_item__to_json(v)).collect()), None => Value::Null });
-    m.insert("reply_settings".into(), match (&p.reply_settings) { Some(v) => iface_spaces__reply_settings__to_json(v), None => Value::Null });
+    m.insert("reply_settings".into(), match (&p.reply_settings) { Some(v) => Value::String(iface_spaces__reply_settings__to_str(v).into()), None => Value::Null });
     m.insert("source".into(), match (&p.source) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("text".into(), iface_spaces__tweet_text__to_json(&p.text));
+    m.insert("text".into(), Value::String((&p.text).clone()));
     m.insert("withheld".into(), match (&p.withheld) { Some(v) => iface_spaces__tweet_withheld__to_json(v), None => Value::Null });
     Value::Object(m)
 }
 
 fn iface_spaces__tweet_attachments__to_json(p: &iface_spaces::TweetAttachments) -> Value {
     let mut m = Map::new();
-    m.insert("media_keys".into(), match (&p.media_keys) { Some(v) => Value::Array((v).iter().map(|v| iface_spaces__media_key__to_json(v)).collect()), None => Value::Null });
-    m.insert("poll_ids".into(), match (&p.poll_ids) { Some(v) => Value::Array((v).iter().map(|v| iface_spaces__poll_id__to_json(v)).collect()), None => Value::Null });
+    m.insert("media_keys".into(), match (&p.media_keys) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("poll_ids".into(), match (&p.poll_ids) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -558,12 +507,6 @@ fn iface_spaces__context_annotation_entity_fields__to_json(p: &iface_spaces::Con
     m.insert("description".into(), match (&p.description) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("id".into(), Value::String((&p.id).clone()));
     m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_spaces__tweet_id__to_json(p: &iface_spaces::TweetId) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -615,14 +558,8 @@ fn iface_spaces__mention_entity__to_json(p: &iface_spaces::MentionEntity) -> Val
     let mut m = Map::new();
     m.insert("end".into(), Value::Number(serde_json::Number::from(*(&p.end))));
     m.insert("start".into(), Value::Number(serde_json::Number::from(*(&p.start))));
-    m.insert("id".into(), match (&p.id) { Some(v) => iface_spaces__user_id__to_json(v), None => Value::Null });
-    m.insert("username".into(), iface_spaces__user_name__to_json(&p.username));
-    Value::Object(m)
-}
-
-fn iface_spaces__user_name__to_json(p: &iface_spaces::UserName) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("username".into(), Value::String((&p.username).clone()));
     Value::Object(m)
 }
 
@@ -632,40 +569,28 @@ fn iface_spaces__url_entity__to_json(p: &iface_spaces::UrlEntity) -> Value {
     m.insert("start".into(), Value::Number(serde_json::Number::from(*(&p.start))));
     m.insert("description".into(), match (&p.description) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("display_url".into(), match (&p.display_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("expanded_url".into(), match (&p.expanded_url) { Some(v) => iface_spaces__url__to_json(v), None => Value::Null });
+    m.insert("expanded_url".into(), match (&p.expanded_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("images".into(), match (&p.images) { Some(v) => Value::Array((v).iter().map(|v| iface_spaces__url_image__to_json(v)).collect()), None => Value::Null });
-    m.insert("media_key".into(), match (&p.media_key) { Some(v) => iface_spaces__media_key__to_json(v), None => Value::Null });
-    m.insert("status".into(), match (&p.status) { Some(v) => iface_spaces__http_status_code__to_json(v), None => Value::Null });
+    m.insert("media_key".into(), match (&p.media_key) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("status".into(), match (&p.status) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("title".into(), match (&p.title) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("unwound_url".into(), match (&p.unwound_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("url".into(), iface_spaces__url__to_json(&p.url));
-    Value::Object(m)
-}
-
-fn iface_spaces__url__to_json(p: &iface_spaces::Url) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
+    m.insert("url".into(), Value::String((&p.url).clone()));
     Value::Object(m)
 }
 
 fn iface_spaces__url_image__to_json(p: &iface_spaces::UrlImage) -> Value {
     let mut m = Map::new();
-    m.insert("height".into(), match (&p.height) { Some(v) => iface_spaces__media_height__to_json(v), None => Value::Null });
-    m.insert("url".into(), match (&p.url) { Some(v) => iface_spaces__url__to_json(v), None => Value::Null });
-    m.insert("width".into(), match (&p.width) { Some(v) => iface_spaces__media_width__to_json(v), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_spaces__http_status_code__to_json(p: &iface_spaces::HttpStatusCode) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
+    m.insert("height".into(), match (&p.height) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("url".into(), match (&p.url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("width".into(), match (&p.width) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
 fn iface_spaces__tweet_geo__to_json(p: &iface_spaces::TweetGeo) -> Value {
     let mut m = Map::new();
     m.insert("coordinates".into(), match (&p.coordinates) { Some(v) => iface_spaces__point__to_json(v), None => Value::Null });
-    m.insert("place_id".into(), match (&p.place_id) { Some(v) => iface_spaces__place_id__to_json(v), None => Value::Null });
+    m.insert("place_id".into(), match (&p.place_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -705,27 +630,15 @@ fn iface_spaces__tweet_public_metrics__to_json(p: &iface_spaces::TweetPublicMetr
 
 fn iface_spaces__tweet_referenced_tweets_item__to_json(p: &iface_spaces::TweetReferencedTweetsItem) -> Value {
     let mut m = Map::new();
-    m.insert("id".into(), iface_spaces__tweet_id__to_json(&p.id));
+    m.insert("id".into(), Value::String((&p.id).clone()));
     m.insert("type".into(), Value::String(iface_spaces__tweet_referenced_tweets_item_type_op_enum__to_str(&p.type_op).into()));
-    Value::Object(m)
-}
-
-fn iface_spaces__reply_settings__to_json(p: &iface_spaces::ReplySettings) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_spaces__tweet_text__to_json(p: &iface_spaces::TweetText) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
 fn iface_spaces__tweet_withheld__to_json(p: &iface_spaces::TweetWithheld) -> Value {
     let mut m = Map::new();
     m.insert("copyright".into(), Value::Bool(*(&p.copyright)));
-    m.insert("country_codes".into(), Value::Array((&p.country_codes).iter().map(|v| iface_spaces__country_code__to_json(v)).collect()));
+    m.insert("country_codes".into(), Value::Array((&p.country_codes).iter().map(|v| Value::String((v).clone())).collect()));
     m.insert("scope".into(), match (&p.scope) { Some(v) => Value::String(iface_spaces__tweet_withheld_scope_enum__to_str(v).into()), None => Value::Null });
     Value::Object(m)
 }
@@ -735,15 +648,15 @@ fn iface_spaces__user__to_json(p: &iface_spaces::User) -> Value {
     m.insert("created_at".into(), match (&p.created_at) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("description".into(), match (&p.description) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("entities".into(), match (&p.entities) { Some(v) => iface_spaces__user_entities__to_json(v), None => Value::Null });
-    m.insert("id".into(), iface_spaces__user_id__to_json(&p.id));
+    m.insert("id".into(), Value::String((&p.id).clone()));
     m.insert("location".into(), match (&p.location) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("name".into(), Value::String((&p.name).clone()));
-    m.insert("pinned_tweet_id".into(), match (&p.pinned_tweet_id) { Some(v) => iface_spaces__tweet_id__to_json(v), None => Value::Null });
+    m.insert("pinned_tweet_id".into(), match (&p.pinned_tweet_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("profile_image_url".into(), match (&p.profile_image_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("protected".into(), match (&p.protected) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     m.insert("public_metrics".into(), match (&p.public_metrics) { Some(v) => iface_spaces__user_public_metrics__to_json(v), None => Value::Null });
     m.insert("url".into(), match (&p.url) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("username".into(), iface_spaces__user_name__to_json(&p.username));
+    m.insert("username".into(), Value::String((&p.username).clone()));
     m.insert("verified".into(), match (&p.verified) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     m.insert("verified_type".into(), match (&p.verified_type) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("withheld".into(), match (&p.withheld) { Some(v) => iface_spaces__user_withheld__to_json(v), None => Value::Null });
@@ -774,7 +687,7 @@ fn iface_spaces__user_public_metrics__to_json(p: &iface_spaces::UserPublicMetric
 
 fn iface_spaces__user_withheld__to_json(p: &iface_spaces::UserWithheld) -> Value {
     let mut m = Map::new();
-    m.insert("country_codes".into(), Value::Array((&p.country_codes).iter().map(|v| iface_spaces__country_code__to_json(v)).collect()));
+    m.insert("country_codes".into(), Value::Array((&p.country_codes).iter().map(|v| Value::String((v).clone())).collect()));
     m.insert("scope".into(), match (&p.scope) { Some(v) => Value::String(iface_spaces__user_withheld_scope_enum__to_str(v).into()), None => Value::Null });
     Value::Object(m)
 }
@@ -790,13 +703,7 @@ fn iface_spaces__get2_spaces_by_creator_ids_response__to_json(p: &iface_spaces::
 
 fn iface_spaces__get2_spaces_by_creator_ids_response_meta__to_json(p: &iface_spaces::Get2SpacesByCreatorIdsResponseMeta) -> Value {
     let mut m = Map::new();
-    m.insert("result_count".into(), match (&p.result_count) { Some(v) => iface_spaces__result_count__to_json(v), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_spaces__result_count__to_json(p: &iface_spaces::ResultCount) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
+    m.insert("result_count".into(), match (&p.result_count) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
@@ -811,7 +718,7 @@ fn iface_spaces__get2_spaces_search_response__to_json(p: &iface_spaces::Get2Spac
 
 fn iface_spaces__get2_spaces_search_response_meta__to_json(p: &iface_spaces::Get2SpacesSearchResponseMeta) -> Value {
     let mut m = Map::new();
-    m.insert("result_count".into(), match (&p.result_count) { Some(v) => iface_spaces__result_count__to_json(v), None => Value::Null });
+    m.insert("result_count".into(), match (&p.result_count) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
@@ -820,12 +727,6 @@ fn iface_spaces__get2_spaces_id_response__to_json(p: &iface_spaces::Get2SpacesId
     m.insert("data".into(), match (&p.data) { Some(v) => iface_spaces__space__to_json(v), None => Value::Null });
     m.insert("errors".into(), match (&p.errors) { Some(v) => Value::Array((v).iter().map(|v| iface_spaces__problem__to_json(v)).collect()), None => Value::Null });
     m.insert("includes".into(), match (&p.includes) { Some(v) => iface_spaces__expansions__to_json(v), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_spaces__pagination_token32__to_json(p: &iface_spaces::PaginationToken32) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -840,21 +741,9 @@ fn iface_spaces__get2_spaces_id_buyers_response__to_json(p: &iface_spaces::Get2S
 
 fn iface_spaces__get2_spaces_id_buyers_response_meta__to_json(p: &iface_spaces::Get2SpacesIdBuyersResponseMeta) -> Value {
     let mut m = Map::new();
-    m.insert("next_token".into(), match (&p.next_token) { Some(v) => iface_spaces__next_token__to_json(v), None => Value::Null });
-    m.insert("previous_token".into(), match (&p.previous_token) { Some(v) => iface_spaces__previous_token__to_json(v), None => Value::Null });
-    m.insert("result_count".into(), match (&p.result_count) { Some(v) => iface_spaces__result_count__to_json(v), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_spaces__next_token__to_json(p: &iface_spaces::NextToken) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_spaces__previous_token__to_json(p: &iface_spaces::PreviousToken) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
+    m.insert("next_token".into(), match (&p.next_token) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("previous_token".into(), match (&p.previous_token) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("result_count".into(), match (&p.result_count) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
@@ -869,9 +758,9 @@ fn iface_spaces__get2_spaces_id_tweets_response__to_json(p: &iface_spaces::Get2S
 
 fn iface_spaces__get2_spaces_id_tweets_response_meta__to_json(p: &iface_spaces::Get2SpacesIdTweetsResponseMeta) -> Value {
     let mut m = Map::new();
-    m.insert("next_token".into(), match (&p.next_token) { Some(v) => iface_spaces__next_token__to_json(v), None => Value::Null });
-    m.insert("previous_token".into(), match (&p.previous_token) { Some(v) => iface_spaces__previous_token__to_json(v), None => Value::Null });
-    m.insert("result_count".into(), match (&p.result_count) { Some(v) => iface_spaces__result_count__to_json(v), None => Value::Null });
+    m.insert("next_token".into(), match (&p.next_token) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("previous_token".into(), match (&p.previous_token) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("result_count".into(), match (&p.result_count) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
@@ -887,7 +776,7 @@ fn iface_spaces__find_spaces_by_ids_params__to_json(p: &iface_spaces::FindSpaces
 
 fn iface_spaces__find_spaces_by_creator_ids_params__to_json(p: &iface_spaces::FindSpacesByCreatorIdsParams) -> Value {
     let mut m = Map::new();
-    m.insert("user_ids".into(), Value::Array((&p.user_ids).iter().map(|v| iface_spaces__user_id__to_json(v)).collect()));
+    m.insert("user_ids".into(), Value::Array((&p.user_ids).iter().map(|v| Value::String((v).clone())).collect()));
     m.insert("space_fields".into(), match (&p.space_fields) { Some(v) => Value::Array((v).iter().map(|v| Value::String(iface_spaces__find_spaces_by_ids_space_fields_item_enum__to_str(v).into())).collect()), None => Value::Null });
     m.insert("expansions".into(), match (&p.expansions) { Some(v) => Value::Array((v).iter().map(|v| Value::String(iface_spaces__find_spaces_by_ids_expansions_item_enum__to_str(v).into())).collect()), None => Value::Null });
     m.insert("user_fields".into(), match (&p.user_fields) { Some(v) => Value::Array((v).iter().map(|v| Value::String(iface_spaces__find_spaces_by_ids_user_fields_item_enum__to_str(v).into())).collect()), None => Value::Null });
@@ -920,7 +809,7 @@ fn iface_spaces__find_space_by_id_params__to_json(p: &iface_spaces::FindSpaceByI
 fn iface_spaces__space_buyers_params__to_json(p: &iface_spaces::SpaceBuyersParams) -> Value {
     let mut m = Map::new();
     m.insert("id".into(), Value::String((&p.id).clone()));
-    m.insert("pagination_token".into(), match (&p.pagination_token) { Some(v) => iface_spaces__pagination_token32__to_json(v), None => Value::Null });
+    m.insert("pagination_token".into(), match (&p.pagination_token) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("max_results".into(), match (&p.max_results) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("user_fields".into(), match (&p.user_fields) { Some(v) => Value::Array((v).iter().map(|v| Value::String(iface_spaces__find_spaces_by_ids_user_fields_item_enum__to_str(v).into())).collect()), None => Value::Null });
     m.insert("expansions".into(), match (&p.expansions) { Some(v) => Value::Array((v).iter().map(|v| Value::String(iface_spaces__space_buyers_expansions_item_enum__to_str(v).into())).collect()), None => Value::Null });
@@ -954,36 +843,22 @@ fn iface_spaces__space__from_json(v: &Value) -> Option<iface_spaces::Space> {
     let m = v.as_object()?;
     Some(iface_spaces::Space {
         created_at: m.get("created_at").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        creator_id: m.get("creator_id").filter(|v| !v.is_null()).and_then(|v| iface_spaces__user_id__from_json(v)),
+        creator_id: m.get("creator_id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         ended_at: m.get("ended_at").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        host_ids: m.get("host_ids").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_spaces__user_id__from_json(x)).collect())),
-        id: match m.get("id").and_then(|v| iface_spaces__space_id__from_json(v)) { Some(x) => x, None => return None },
-        invited_user_ids: m.get("invited_user_ids").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_spaces__user_id__from_json(x)).collect())),
+        host_ids: m.get("host_ids").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        id: m.get("id").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        invited_user_ids: m.get("invited_user_ids").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
         is_ticketed: m.get("is_ticketed").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
         lang: m.get("lang").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         participant_count: m.get("participant_count").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
         scheduled_start: m.get("scheduled_start").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        speaker_ids: m.get("speaker_ids").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_spaces__user_id__from_json(x)).collect())),
+        speaker_ids: m.get("speaker_ids").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
         started_at: m.get("started_at").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         state: match m.get("state").and_then(|v| (v).as_str().and_then(iface_spaces__space_state_enum__from_str)) { Some(x) => x, None => return None },
         subscriber_count: m.get("subscriber_count").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
         title: m.get("title").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         topics: m.get("topics").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_spaces__space_topics_item__from_json(x)).collect())),
         updated_at: m.get("updated_at").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-    })
-}
-
-fn iface_spaces__user_id__from_json(v: &Value) -> Option<iface_spaces::UserId> {
-    let m = v.as_object()?;
-    Some(iface_spaces::UserId {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-    })
-}
-
-fn iface_spaces__space_id__from_json(v: &Value) -> Option<iface_spaces::SpaceId> {
-    let m = v.as_object()?;
-    Some(iface_spaces::SpaceId {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -1021,59 +896,24 @@ fn iface_spaces__expansions__from_json(v: &Value) -> Option<iface_spaces::Expans
 fn iface_spaces__media__from_json(v: &Value) -> Option<iface_spaces::Media> {
     let m = v.as_object()?;
     Some(iface_spaces::Media {
-        height: m.get("height").filter(|v| !v.is_null()).and_then(|v| iface_spaces__media_height__from_json(v)),
-        media_key: m.get("media_key").filter(|v| !v.is_null()).and_then(|v| iface_spaces__media_key__from_json(v)),
+        height: m.get("height").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        media_key: m.get("media_key").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         type_op: m.get("type").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-        width: m.get("width").filter(|v| !v.is_null()).and_then(|v| iface_spaces__media_width__from_json(v)),
-    })
-}
-
-fn iface_spaces__media_height__from_json(v: &Value) -> Option<iface_spaces::MediaHeight> {
-    let m = v.as_object()?;
-    Some(iface_spaces::MediaHeight {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-    })
-}
-
-fn iface_spaces__media_key__from_json(v: &Value) -> Option<iface_spaces::MediaKey> {
-    let m = v.as_object()?;
-    Some(iface_spaces::MediaKey {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-    })
-}
-
-fn iface_spaces__media_width__from_json(v: &Value) -> Option<iface_spaces::MediaWidth> {
-    let m = v.as_object()?;
-    Some(iface_spaces::MediaWidth {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        width: m.get("width").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
     })
 }
 
 fn iface_spaces__place__from_json(v: &Value) -> Option<iface_spaces::Place> {
     let m = v.as_object()?;
     Some(iface_spaces::Place {
-        contained_within: m.get("contained_within").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_spaces__place_id__from_json(x)).collect())),
+        contained_within: m.get("contained_within").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
         country: m.get("country").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        country_code: m.get("country_code").filter(|v| !v.is_null()).and_then(|v| iface_spaces__country_code__from_json(v)),
+        country_code: m.get("country_code").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         full_name: m.get("full_name").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         geo: m.get("geo").filter(|v| !v.is_null()).and_then(|v| iface_spaces__geo__from_json(v)),
-        id: match m.get("id").and_then(|v| iface_spaces__place_id__from_json(v)) { Some(x) => x, None => return None },
+        id: m.get("id").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        place_type: m.get("place_type").filter(|v| !v.is_null()).and_then(|v| iface_spaces__place_type__from_json(v)),
-    })
-}
-
-fn iface_spaces__place_id__from_json(v: &Value) -> Option<iface_spaces::PlaceId> {
-    let m = v.as_object()?;
-    Some(iface_spaces::PlaceId {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-    })
-}
-
-fn iface_spaces__country_code__from_json(v: &Value) -> Option<iface_spaces::CountryCode> {
-    let m = v.as_object()?;
-    Some(iface_spaces::CountryCode {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        place_type: m.get("place_type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_spaces__place_type__from_str)),
     })
 }
 
@@ -1082,7 +922,7 @@ fn iface_spaces__geo__from_json(v: &Value) -> Option<iface_spaces::Geo> {
     Some(iface_spaces::Geo {
         bbox: m.get("bbox").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_f64()).collect())).unwrap_or_default(),
         geometry: m.get("geometry").filter(|v| !v.is_null()).and_then(|v| iface_spaces__point__from_json(v)),
-        properties: match m.get("properties").and_then(|v| iface_spaces__geo_properties__from_json(v)) { Some(x) => x, None => return None },
+        properties: m.get("properties").and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_spaces::GeoPropertiesEntry { key: k.clone(), value: val })).collect())).unwrap_or_default(),
         type_op: match m.get("type").and_then(|v| (v).as_str().and_then(iface_spaces__geo_type_op_enum__from_str)) { Some(x) => x, None => return None },
     })
 }
@@ -1090,28 +930,15 @@ fn iface_spaces__geo__from_json(v: &Value) -> Option<iface_spaces::Geo> {
 fn iface_spaces__point__from_json(v: &Value) -> Option<iface_spaces::Point> {
     let m = v.as_object()?;
     Some(iface_spaces::Point {
-        coordinates: match m.get("coordinates").and_then(|v| iface_spaces__position__from_json(v)) { Some(x) => x, None => return None },
+        coordinates: m.get("coordinates").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_f64()).collect())).unwrap_or_default(),
         type_op: match m.get("type").and_then(|v| (v).as_str().and_then(iface_spaces__point_type_op_enum__from_str)) { Some(x) => x, None => return None },
     })
 }
 
-fn iface_spaces__position__from_json(v: &Value) -> Option<iface_spaces::Position> {
+fn iface_spaces__geo_properties_entry__from_json(v: &Value) -> Option<iface_spaces::GeoPropertiesEntry> {
     let m = v.as_object()?;
-    Some(iface_spaces::Position {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-    })
-}
-
-fn iface_spaces__geo_properties__from_json(v: &Value) -> Option<iface_spaces::GeoProperties> {
-    let m = v.as_object()?;
-    Some(iface_spaces::GeoProperties {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-    })
-}
-
-fn iface_spaces__place_type__from_json(v: &Value) -> Option<iface_spaces::PlaceType> {
-    let m = v.as_object()?;
-    Some(iface_spaces::PlaceType {
+    Some(iface_spaces::GeoPropertiesEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
@@ -1121,32 +948,18 @@ fn iface_spaces__poll__from_json(v: &Value) -> Option<iface_spaces::Poll> {
     Some(iface_spaces::Poll {
         duration_minutes: m.get("duration_minutes").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
         end_datetime: m.get("end_datetime").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        id: match m.get("id").and_then(|v| iface_spaces__poll_id__from_json(v)) { Some(x) => x, None => return None },
+        id: m.get("id").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         options: m.get("options").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_spaces__poll_option__from_json(x)).collect())).unwrap_or_default(),
         voting_status: m.get("voting_status").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_spaces__poll_voting_status_enum__from_str)),
-    })
-}
-
-fn iface_spaces__poll_id__from_json(v: &Value) -> Option<iface_spaces::PollId> {
-    let m = v.as_object()?;
-    Some(iface_spaces::PollId {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
 fn iface_spaces__poll_option__from_json(v: &Value) -> Option<iface_spaces::PollOption> {
     let m = v.as_object()?;
     Some(iface_spaces::PollOption {
-        label: match m.get("label").and_then(|v| iface_spaces__poll_option_label__from_json(v)) { Some(x) => x, None => return None },
+        label: m.get("label").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         position: m.get("position").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
         votes: m.get("votes").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
-    })
-}
-
-fn iface_spaces__poll_option_label__from_json(v: &Value) -> Option<iface_spaces::PollOptionLabel> {
-    let m = v.as_object()?;
-    Some(iface_spaces::PollOptionLabel {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -1154,15 +967,8 @@ fn iface_spaces__topic__from_json(v: &Value) -> Option<iface_spaces::Topic> {
     let m = v.as_object()?;
     Some(iface_spaces::Topic {
         description: m.get("description").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        id: match m.get("id").and_then(|v| iface_spaces__topic_id__from_json(v)) { Some(x) => x, None => return None },
+        id: m.get("id").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         name: m.get("name").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-    })
-}
-
-fn iface_spaces__topic_id__from_json(v: &Value) -> Option<iface_spaces::TopicId> {
-    let m = v.as_object()?;
-    Some(iface_spaces::TopicId {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -1170,16 +976,16 @@ fn iface_spaces__tweet__from_json(v: &Value) -> Option<iface_spaces::Tweet> {
     let m = v.as_object()?;
     Some(iface_spaces::Tweet {
         attachments: m.get("attachments").filter(|v| !v.is_null()).and_then(|v| iface_spaces__tweet_attachments__from_json(v)),
-        author_id: m.get("author_id").filter(|v| !v.is_null()).and_then(|v| iface_spaces__user_id__from_json(v)),
+        author_id: m.get("author_id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         context_annotations: m.get("context_annotations").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_spaces__context_annotation__from_json(x)).collect())),
-        conversation_id: m.get("conversation_id").filter(|v| !v.is_null()).and_then(|v| iface_spaces__tweet_id__from_json(v)),
+        conversation_id: m.get("conversation_id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         created_at: m.get("created_at").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         edit_controls: m.get("edit_controls").filter(|v| !v.is_null()).and_then(|v| iface_spaces__tweet_edit_controls__from_json(v)),
-        edit_history_tweet_ids: m.get("edit_history_tweet_ids").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_spaces__tweet_id__from_json(x)).collect())).unwrap_or_default(),
+        edit_history_tweet_ids: m.get("edit_history_tweet_ids").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())).unwrap_or_default(),
         entities: m.get("entities").filter(|v| !v.is_null()).and_then(|v| iface_spaces__full_text_entities__from_json(v)),
         geo: m.get("geo").filter(|v| !v.is_null()).and_then(|v| iface_spaces__tweet_geo__from_json(v)),
-        id: match m.get("id").and_then(|v| iface_spaces__tweet_id__from_json(v)) { Some(x) => x, None => return None },
-        in_reply_to_user_id: m.get("in_reply_to_user_id").filter(|v| !v.is_null()).and_then(|v| iface_spaces__user_id__from_json(v)),
+        id: m.get("id").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        in_reply_to_user_id: m.get("in_reply_to_user_id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         lang: m.get("lang").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         non_public_metrics: m.get("non_public_metrics").filter(|v| !v.is_null()).and_then(|v| iface_spaces__tweet_non_public_metrics__from_json(v)),
         organic_metrics: m.get("organic_metrics").filter(|v| !v.is_null()).and_then(|v| iface_spaces__tweet_organic_metrics__from_json(v)),
@@ -1187,9 +993,9 @@ fn iface_spaces__tweet__from_json(v: &Value) -> Option<iface_spaces::Tweet> {
         promoted_metrics: m.get("promoted_metrics").filter(|v| !v.is_null()).and_then(|v| iface_spaces__tweet_promoted_metrics__from_json(v)),
         public_metrics: m.get("public_metrics").filter(|v| !v.is_null()).and_then(|v| iface_spaces__tweet_public_metrics__from_json(v)),
         referenced_tweets: m.get("referenced_tweets").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_spaces__tweet_referenced_tweets_item__from_json(x)).collect())),
-        reply_settings: m.get("reply_settings").filter(|v| !v.is_null()).and_then(|v| iface_spaces__reply_settings__from_json(v)),
+        reply_settings: m.get("reply_settings").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_spaces__reply_settings__from_str)),
         source: m.get("source").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        text: match m.get("text").and_then(|v| iface_spaces__tweet_text__from_json(v)) { Some(x) => x, None => return None },
+        text: m.get("text").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         withheld: m.get("withheld").filter(|v| !v.is_null()).and_then(|v| iface_spaces__tweet_withheld__from_json(v)),
     })
 }
@@ -1197,8 +1003,8 @@ fn iface_spaces__tweet__from_json(v: &Value) -> Option<iface_spaces::Tweet> {
 fn iface_spaces__tweet_attachments__from_json(v: &Value) -> Option<iface_spaces::TweetAttachments> {
     let m = v.as_object()?;
     Some(iface_spaces::TweetAttachments {
-        media_keys: m.get("media_keys").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_spaces__media_key__from_json(x)).collect())),
-        poll_ids: m.get("poll_ids").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_spaces__poll_id__from_json(x)).collect())),
+        media_keys: m.get("media_keys").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        poll_ids: m.get("poll_ids").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
     })
 }
 
@@ -1225,13 +1031,6 @@ fn iface_spaces__context_annotation_entity_fields__from_json(v: &Value) -> Optio
         description: m.get("description").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         id: m.get("id").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-    })
-}
-
-fn iface_spaces__tweet_id__from_json(v: &Value) -> Option<iface_spaces::TweetId> {
-    let m = v.as_object()?;
-    Some(iface_spaces::TweetId {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -1289,15 +1088,8 @@ fn iface_spaces__mention_entity__from_json(v: &Value) -> Option<iface_spaces::Me
     Some(iface_spaces::MentionEntity {
         end: m.get("end").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
         start: m.get("start").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
-        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| iface_spaces__user_id__from_json(v)),
-        username: match m.get("username").and_then(|v| iface_spaces__user_name__from_json(v)) { Some(x) => x, None => return None },
-    })
-}
-
-fn iface_spaces__user_name__from_json(v: &Value) -> Option<iface_spaces::UserName> {
-    let m = v.as_object()?;
-    Some(iface_spaces::UserName {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        username: m.get("username").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -1308,36 +1100,22 @@ fn iface_spaces__url_entity__from_json(v: &Value) -> Option<iface_spaces::UrlEnt
         start: m.get("start").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
         description: m.get("description").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         display_url: m.get("display_url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        expanded_url: m.get("expanded_url").filter(|v| !v.is_null()).and_then(|v| iface_spaces__url__from_json(v)),
+        expanded_url: m.get("expanded_url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         images: m.get("images").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_spaces__url_image__from_json(x)).collect())),
-        media_key: m.get("media_key").filter(|v| !v.is_null()).and_then(|v| iface_spaces__media_key__from_json(v)),
-        status: m.get("status").filter(|v| !v.is_null()).and_then(|v| iface_spaces__http_status_code__from_json(v)),
+        media_key: m.get("media_key").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        status: m.get("status").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
         title: m.get("title").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         unwound_url: m.get("unwound_url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        url: match m.get("url").and_then(|v| iface_spaces__url__from_json(v)) { Some(x) => x, None => return None },
-    })
-}
-
-fn iface_spaces__url__from_json(v: &Value) -> Option<iface_spaces::Url> {
-    let m = v.as_object()?;
-    Some(iface_spaces::Url {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        url: m.get("url").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
 fn iface_spaces__url_image__from_json(v: &Value) -> Option<iface_spaces::UrlImage> {
     let m = v.as_object()?;
     Some(iface_spaces::UrlImage {
-        height: m.get("height").filter(|v| !v.is_null()).and_then(|v| iface_spaces__media_height__from_json(v)),
-        url: m.get("url").filter(|v| !v.is_null()).and_then(|v| iface_spaces__url__from_json(v)),
-        width: m.get("width").filter(|v| !v.is_null()).and_then(|v| iface_spaces__media_width__from_json(v)),
-    })
-}
-
-fn iface_spaces__http_status_code__from_json(v: &Value) -> Option<iface_spaces::HttpStatusCode> {
-    let m = v.as_object()?;
-    Some(iface_spaces::HttpStatusCode {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        height: m.get("height").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        url: m.get("url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        width: m.get("width").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
     })
 }
 
@@ -1345,7 +1123,7 @@ fn iface_spaces__tweet_geo__from_json(v: &Value) -> Option<iface_spaces::TweetGe
     let m = v.as_object()?;
     Some(iface_spaces::TweetGeo {
         coordinates: m.get("coordinates").filter(|v| !v.is_null()).and_then(|v| iface_spaces__point__from_json(v)),
-        place_id: m.get("place_id").filter(|v| !v.is_null()).and_then(|v| iface_spaces__place_id__from_json(v)),
+        place_id: m.get("place_id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
     })
 }
 
@@ -1390,22 +1168,8 @@ fn iface_spaces__tweet_public_metrics__from_json(v: &Value) -> Option<iface_spac
 fn iface_spaces__tweet_referenced_tweets_item__from_json(v: &Value) -> Option<iface_spaces::TweetReferencedTweetsItem> {
     let m = v.as_object()?;
     Some(iface_spaces::TweetReferencedTweetsItem {
-        id: match m.get("id").and_then(|v| iface_spaces__tweet_id__from_json(v)) { Some(x) => x, None => return None },
+        id: m.get("id").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         type_op: match m.get("type").and_then(|v| (v).as_str().and_then(iface_spaces__tweet_referenced_tweets_item_type_op_enum__from_str)) { Some(x) => x, None => return None },
-    })
-}
-
-fn iface_spaces__reply_settings__from_json(v: &Value) -> Option<iface_spaces::ReplySettings> {
-    let m = v.as_object()?;
-    Some(iface_spaces::ReplySettings {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-    })
-}
-
-fn iface_spaces__tweet_text__from_json(v: &Value) -> Option<iface_spaces::TweetText> {
-    let m = v.as_object()?;
-    Some(iface_spaces::TweetText {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -1413,7 +1177,7 @@ fn iface_spaces__tweet_withheld__from_json(v: &Value) -> Option<iface_spaces::Tw
     let m = v.as_object()?;
     Some(iface_spaces::TweetWithheld {
         copyright: m.get("copyright").and_then(|v| (v).as_bool()).unwrap_or_default(),
-        country_codes: m.get("country_codes").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_spaces__country_code__from_json(x)).collect())).unwrap_or_default(),
+        country_codes: m.get("country_codes").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())).unwrap_or_default(),
         scope: m.get("scope").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_spaces__tweet_withheld_scope_enum__from_str)),
     })
 }
@@ -1424,15 +1188,15 @@ fn iface_spaces__user__from_json(v: &Value) -> Option<iface_spaces::User> {
         created_at: m.get("created_at").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         description: m.get("description").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         entities: m.get("entities").filter(|v| !v.is_null()).and_then(|v| iface_spaces__user_entities__from_json(v)),
-        id: match m.get("id").and_then(|v| iface_spaces__user_id__from_json(v)) { Some(x) => x, None => return None },
+        id: m.get("id").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         location: m.get("location").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         name: m.get("name").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-        pinned_tweet_id: m.get("pinned_tweet_id").filter(|v| !v.is_null()).and_then(|v| iface_spaces__tweet_id__from_json(v)),
+        pinned_tweet_id: m.get("pinned_tweet_id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         profile_image_url: m.get("profile_image_url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         protected: m.get("protected").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
         public_metrics: m.get("public_metrics").filter(|v| !v.is_null()).and_then(|v| iface_spaces__user_public_metrics__from_json(v)),
         url: m.get("url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        username: match m.get("username").and_then(|v| iface_spaces__user_name__from_json(v)) { Some(x) => x, None => return None },
+        username: m.get("username").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         verified: m.get("verified").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
         verified_type: m.get("verified_type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         withheld: m.get("withheld").filter(|v| !v.is_null()).and_then(|v| iface_spaces__user_withheld__from_json(v)),
@@ -1467,7 +1231,7 @@ fn iface_spaces__user_public_metrics__from_json(v: &Value) -> Option<iface_space
 fn iface_spaces__user_withheld__from_json(v: &Value) -> Option<iface_spaces::UserWithheld> {
     let m = v.as_object()?;
     Some(iface_spaces::UserWithheld {
-        country_codes: m.get("country_codes").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_spaces__country_code__from_json(x)).collect())).unwrap_or_default(),
+        country_codes: m.get("country_codes").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())).unwrap_or_default(),
         scope: m.get("scope").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_spaces__user_withheld_scope_enum__from_str)),
     })
 }
@@ -1485,14 +1249,7 @@ fn iface_spaces__get2_spaces_by_creator_ids_response__from_json(v: &Value) -> Op
 fn iface_spaces__get2_spaces_by_creator_ids_response_meta__from_json(v: &Value) -> Option<iface_spaces::Get2SpacesByCreatorIdsResponseMeta> {
     let m = v.as_object()?;
     Some(iface_spaces::Get2SpacesByCreatorIdsResponseMeta {
-        result_count: m.get("result_count").filter(|v| !v.is_null()).and_then(|v| iface_spaces__result_count__from_json(v)),
-    })
-}
-
-fn iface_spaces__result_count__from_json(v: &Value) -> Option<iface_spaces::ResultCount> {
-    let m = v.as_object()?;
-    Some(iface_spaces::ResultCount {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        result_count: m.get("result_count").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
     })
 }
 
@@ -1509,7 +1266,7 @@ fn iface_spaces__get2_spaces_search_response__from_json(v: &Value) -> Option<ifa
 fn iface_spaces__get2_spaces_search_response_meta__from_json(v: &Value) -> Option<iface_spaces::Get2SpacesSearchResponseMeta> {
     let m = v.as_object()?;
     Some(iface_spaces::Get2SpacesSearchResponseMeta {
-        result_count: m.get("result_count").filter(|v| !v.is_null()).and_then(|v| iface_spaces__result_count__from_json(v)),
+        result_count: m.get("result_count").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
     })
 }
 
@@ -1535,23 +1292,9 @@ fn iface_spaces__get2_spaces_id_buyers_response__from_json(v: &Value) -> Option<
 fn iface_spaces__get2_spaces_id_buyers_response_meta__from_json(v: &Value) -> Option<iface_spaces::Get2SpacesIdBuyersResponseMeta> {
     let m = v.as_object()?;
     Some(iface_spaces::Get2SpacesIdBuyersResponseMeta {
-        next_token: m.get("next_token").filter(|v| !v.is_null()).and_then(|v| iface_spaces__next_token__from_json(v)),
-        previous_token: m.get("previous_token").filter(|v| !v.is_null()).and_then(|v| iface_spaces__previous_token__from_json(v)),
-        result_count: m.get("result_count").filter(|v| !v.is_null()).and_then(|v| iface_spaces__result_count__from_json(v)),
-    })
-}
-
-fn iface_spaces__next_token__from_json(v: &Value) -> Option<iface_spaces::NextToken> {
-    let m = v.as_object()?;
-    Some(iface_spaces::NextToken {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-    })
-}
-
-fn iface_spaces__previous_token__from_json(v: &Value) -> Option<iface_spaces::PreviousToken> {
-    let m = v.as_object()?;
-    Some(iface_spaces::PreviousToken {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        next_token: m.get("next_token").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        previous_token: m.get("previous_token").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        result_count: m.get("result_count").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
     })
 }
 
@@ -1568,9 +1311,9 @@ fn iface_spaces__get2_spaces_id_tweets_response__from_json(v: &Value) -> Option<
 fn iface_spaces__get2_spaces_id_tweets_response_meta__from_json(v: &Value) -> Option<iface_spaces::Get2SpacesIdTweetsResponseMeta> {
     let m = v.as_object()?;
     Some(iface_spaces::Get2SpacesIdTweetsResponseMeta {
-        next_token: m.get("next_token").filter(|v| !v.is_null()).and_then(|v| iface_spaces__next_token__from_json(v)),
-        previous_token: m.get("previous_token").filter(|v| !v.is_null()).and_then(|v| iface_spaces__previous_token__from_json(v)),
-        result_count: m.get("result_count").filter(|v| !v.is_null()).and_then(|v| iface_spaces__result_count__from_json(v)),
+        next_token: m.get("next_token").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        previous_token: m.get("previous_token").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        result_count: m.get("result_count").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
     })
 }
 
@@ -1597,6 +1340,18 @@ fn iface_spaces__geo_type_op_enum__from_str(s: &str) -> Option<iface_spaces::Geo
     }
 }
 
+fn iface_spaces__place_type__from_str(s: &str) -> Option<iface_spaces::PlaceType> {
+    match s {
+        "poi" => Some(iface_spaces::PlaceType::Poi),
+        "neighborhood" => Some(iface_spaces::PlaceType::Neighborhood),
+        "city" => Some(iface_spaces::PlaceType::City),
+        "admin" => Some(iface_spaces::PlaceType::Admin),
+        "country" => Some(iface_spaces::PlaceType::Country),
+        "unknown" => Some(iface_spaces::PlaceType::Unknown),
+        _ => None,
+    }
+}
+
 fn iface_spaces__poll_voting_status_enum__from_str(s: &str) -> Option<iface_spaces::PollVotingStatusEnum> {
     match s {
         "open" => Some(iface_spaces::PollVotingStatusEnum::Open),
@@ -1610,6 +1365,16 @@ fn iface_spaces__tweet_referenced_tweets_item_type_op_enum__from_str(s: &str) ->
         "retweeted" => Some(iface_spaces::TweetReferencedTweetsItemTypeOpEnum::Retweeted),
         "quoted" => Some(iface_spaces::TweetReferencedTweetsItemTypeOpEnum::Quoted),
         "replied_to" => Some(iface_spaces::TweetReferencedTweetsItemTypeOpEnum::RepliedTo),
+        _ => None,
+    }
+}
+
+fn iface_spaces__reply_settings__from_str(s: &str) -> Option<iface_spaces::ReplySettings> {
+    match s {
+        "everyone" => Some(iface_spaces::ReplySettings::Everyone),
+        "mentionedUsers" => Some(iface_spaces::ReplySettings::MentionedUsers),
+        "following" => Some(iface_spaces::ReplySettings::Following),
+        "other" => Some(iface_spaces::ReplySettings::Other),
         _ => None,
     }
 }

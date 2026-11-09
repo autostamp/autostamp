@@ -1,4 +1,4 @@
-package autostamp:polygon@0.5.0;
+package autostamp:polygon@0.6.0;
 
 interface stocks {
   record company {

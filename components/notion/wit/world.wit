@@ -1,4 +1,4 @@
-package autostamp:notion@0.5.0;
+package autostamp:notion@0.6.0;
 
 interface blocks {
   record retrieve-a-block-response {
@@ -150,7 +150,7 @@ interface blocks {
     object: option<string>,
     paragraph: option<retrieve-block-children-response-results-item-paragraph>,
     type-op: option<string>,
-    unsupported: option<retrieve-block-children-response-results-item-unsupported>
+    unsupported: option<list<retrieve-block-children-response-results-item-unsupported-entry>>
   }
 
   record retrieve-block-children-response-results-item-paragraph {
@@ -179,9 +179,10 @@ interface blocks {
     link: option<string>
   }
 
-  record retrieve-block-children-response-results-item-unsupported {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record retrieve-block-children-response-results-item-unsupported-entry {
+    key: string,
+    value: string
   }
 
   record append-block-children-body-children-item {
@@ -278,8 +279,14 @@ interface blocks {
 
 
 interface comments {
+  /// one entry of a string-keyed map (free-form object)
+  record retrieve-comments-body-entry {
+    key: string,
+    value: string
+  }
+
   record retrieve-comments-response {
-    comment: option<retrieve-comments-response-comment>,
+    comment: option<list<retrieve-comments-response-comment-entry>>,
     has-more: option<bool>,
     next-cursor: option<string>,
     object: option<string>,
@@ -287,9 +294,10 @@ interface comments {
     type-op: option<string>
   }
 
-  record retrieve-comments-response-comment {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record retrieve-comments-response-comment-entry {
+    key: string,
+    value: string
   }
 
   record retrieve-comments-response-results-item {
@@ -340,8 +348,7 @@ interface comments {
     block-id: option<string>,
     page-size: option<string>,
     notion-version: option<string>,
-    /// JSON-encoded free-form object payload
-    data: option<string>
+    body: option<list<retrieve-comments-body-entry>>
   }
   retrieve-comments: func(params: retrieve-comments-params) -> result<retrieve-comments-response, string>;
 
@@ -413,24 +420,26 @@ interface databases {
     id: option<string>,
     name: option<string>,
     type-op: option<string>,
-    url: option<retrieve-a-database-response-properties-link-url>
+    url: option<list<retrieve-a-database-response-properties-link-url-entry>>
   }
 
-  record retrieve-a-database-response-properties-link-url {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record retrieve-a-database-response-properties-link-url-entry {
+    key: string,
+    value: string
   }
 
   record retrieve-a-database-response-properties-name {
     id: option<string>,
     name: option<string>,
-    title: option<retrieve-a-database-response-properties-name-title>,
+    title: option<list<retrieve-a-database-response-properties-name-title-entry>>,
     type-op: option<string>
   }
 
-  record retrieve-a-database-response-properties-name-title {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record retrieve-a-database-response-properties-name-title-entry {
+    key: string,
+    value: string
   }
 
   record retrieve-a-database-response-properties-publisher {
@@ -451,27 +460,29 @@ interface databases {
   }
 
   record retrieve-a-database-response-properties-publishing-release-date {
-    date: option<retrieve-a-database-response-properties-publishing-release-date-date>,
+    date: option<list<retrieve-a-database-response-properties-publishing-release-date-date-entry>>,
     id: option<string>,
     name: option<string>,
     type-op: option<string>
   }
 
-  record retrieve-a-database-response-properties-publishing-release-date-date {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record retrieve-a-database-response-properties-publishing-release-date-date-entry {
+    key: string,
+    value: string
   }
 
   record retrieve-a-database-response-properties-read {
-    checkbox: option<retrieve-a-database-response-properties-read-checkbox>,
+    checkbox: option<list<retrieve-a-database-response-properties-read-checkbox-entry>>,
     id: option<string>,
     name: option<string>,
     type-op: option<string>
   }
 
-  record retrieve-a-database-response-properties-read-checkbox {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record retrieve-a-database-response-properties-read-checkbox-entry {
+    key: string,
+    value: string
   }
 
   record retrieve-a-database-response-properties-score-v5 {
@@ -511,13 +522,14 @@ interface databases {
   record retrieve-a-database-response-properties-summary {
     id: option<string>,
     name: option<string>,
-    rich-text: option<retrieve-a-database-response-properties-summary-rich-text>,
+    rich-text: option<list<retrieve-a-database-response-properties-summary-rich-text-entry>>,
     type-op: option<string>
   }
 
-  record retrieve-a-database-response-properties-summary-rich-text {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record retrieve-a-database-response-properties-summary-rich-text-entry {
+    key: string,
+    value: string
   }
 
   record retrieve-a-database-response-properties-type-op {
@@ -564,12 +576,13 @@ interface databases {
   }
 
   record update-a-database-body-properties-wine-pairing {
-    rich-text: option<update-a-database-body-properties-wine-pairing-rich-text>
+    rich-text: option<list<update-a-database-body-properties-wine-pairing-rich-text-entry>>
   }
 
-  record update-a-database-body-properties-wine-pairing-rich-text {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record update-a-database-body-properties-wine-pairing-rich-text-entry {
+    key: string,
+    value: string
   }
 
   record update-a-database-body-title-item {
@@ -646,24 +659,26 @@ interface databases {
     id: option<string>,
     name: option<string>,
     type-op: option<string>,
-    url: option<update-a-database-response-properties-link-url>
+    url: option<list<update-a-database-response-properties-link-url-entry>>
   }
 
-  record update-a-database-response-properties-link-url {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record update-a-database-response-properties-link-url-entry {
+    key: string,
+    value: string
   }
 
   record update-a-database-response-properties-name {
     id: option<string>,
     name: option<string>,
-    title: option<update-a-database-response-properties-name-title>,
+    title: option<list<update-a-database-response-properties-name-title-entry>>,
     type-op: option<string>
   }
 
-  record update-a-database-response-properties-name-title {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record update-a-database-response-properties-name-title-entry {
+    key: string,
+    value: string
   }
 
   record update-a-database-response-properties-publisher {
@@ -684,27 +699,29 @@ interface databases {
   }
 
   record update-a-database-response-properties-publishing-release-date {
-    date: option<update-a-database-response-properties-publishing-release-date-date>,
+    date: option<list<update-a-database-response-properties-publishing-release-date-date-entry>>,
     id: option<string>,
     name: option<string>,
     type-op: option<string>
   }
 
-  record update-a-database-response-properties-publishing-release-date-date {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record update-a-database-response-properties-publishing-release-date-date-entry {
+    key: string,
+    value: string
   }
 
   record update-a-database-response-properties-read {
-    checkbox: option<update-a-database-response-properties-read-checkbox>,
+    checkbox: option<list<update-a-database-response-properties-read-checkbox-entry>>,
     id: option<string>,
     name: option<string>,
     type-op: option<string>
   }
 
-  record update-a-database-response-properties-read-checkbox {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record update-a-database-response-properties-read-checkbox-entry {
+    key: string,
+    value: string
   }
 
   record update-a-database-response-properties-score-v5 {
@@ -744,13 +761,14 @@ interface databases {
   record update-a-database-response-properties-summary {
     id: option<string>,
     name: option<string>,
-    rich-text: option<update-a-database-response-properties-summary-rich-text>,
+    rich-text: option<list<update-a-database-response-properties-summary-rich-text-entry>>,
     type-op: option<string>
   }
 
-  record update-a-database-response-properties-summary-rich-text {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record update-a-database-response-properties-summary-rich-text-entry {
+    key: string,
+    value: string
   }
 
   record update-a-database-response-properties-type-op {
@@ -773,13 +791,14 @@ interface databases {
   record update-a-database-response-properties-wine-pairing {
     id: option<string>,
     name: option<string>,
-    rich-text: option<update-a-database-response-properties-wine-pairing-rich-text>,
+    rich-text: option<list<update-a-database-response-properties-wine-pairing-rich-text-entry>>,
     type-op: option<string>
   }
 
-  record update-a-database-response-properties-wine-pairing-rich-text {
-    /// JSON-encoded free-form object payload
-    data: option<string>
+  /// one entry of a string-keyed map (free-form object)
+  record update-a-database-response-properties-wine-pairing-rich-text-entry {
+    key: string,
+    value: string
   }
 
   record update-a-database-response-title-item {
@@ -1292,6 +1311,12 @@ interface pages {
 }
 
 interface users {
+  /// one entry of a string-keyed map (free-form object)
+  record retrieve-a-user-body-entry {
+    key: string,
+    value: string
+  }
+
   record retrieve-a-user-response {
     avatar-url: option<string>,
     id: option<string>,
@@ -1309,8 +1334,7 @@ interface users {
   record retrieve-a-user-params {
     id: string,
     notion-version: option<string>,
-    /// JSON-encoded free-form object payload
-    data: option<string>
+    body: option<list<retrieve-a-user-body-entry>>
   }
   retrieve-a-user: func(params: retrieve-a-user-params) -> result<retrieve-a-user-response, string>;
 

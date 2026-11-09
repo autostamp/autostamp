@@ -62,7 +62,7 @@ fn iface_cdr_usage_reports__cdr_usage_report_response__to_json(p: &iface_cdr_usa
     m.insert("product_breakdown".into(), match (&p.product_breakdown) { Some(v) => Value::String(iface_cdr_usage_reports__get_usage_report_sync_product_breakdown_enum__to_str(v).into()), None => Value::Null });
     m.insert("record_type".into(), match (&p.record_type) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("report_url".into(), match (&p.report_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("result".into(), match (&p.result_op) { Some(v) => iface_cdr_usage_reports__cdr_usage_report_response_result_op__to_json(v), None => Value::Null });
+    m.insert("result".into(), match (&p.result_op) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("start_time".into(), match (&p.start_time) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("status".into(), match (&p.status) { Some(v) => Value::String(iface_cdr_usage_reports__cdr_usage_report_response_status_enum__to_str(v).into()), None => Value::Null });
     m.insert("updated_at".into(), match (&p.updated_at) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -75,9 +75,10 @@ fn iface_cdr_usage_reports__cdr_usage_report_response_connections__to_json(p: &i
     Value::Object(m)
 }
 
-fn iface_cdr_usage_reports__cdr_usage_report_response_result_op__to_json(p: &iface_cdr_usage_reports::CdrUsageReportResponseResultOp) -> Value {
+fn iface_cdr_usage_reports__cdr_usage_report_response_result_op_entry__to_json(p: &iface_cdr_usage_reports::CdrUsageReportResponseResultOpEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -109,7 +110,7 @@ fn iface_cdr_usage_reports__cdr_usage_report_response__from_json(v: &Value) -> O
         product_breakdown: m.get("product_breakdown").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_cdr_usage_reports__get_usage_report_sync_product_breakdown_enum__from_str)),
         record_type: m.get("record_type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         report_url: m.get("report_url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        result_op: m.get("result").filter(|v| !v.is_null()).and_then(|v| iface_cdr_usage_reports__cdr_usage_report_response_result_op__from_json(v)),
+        result_op: m.get("result").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_cdr_usage_reports::CdrUsageReportResponseResultOpEntry { key: k.clone(), value: val })).collect())),
         start_time: m.get("start_time").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         status: m.get("status").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_cdr_usage_reports__cdr_usage_report_response_status_enum__from_str)),
         updated_at: m.get("updated_at").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
@@ -123,10 +124,11 @@ fn iface_cdr_usage_reports__cdr_usage_report_response_connections__from_json(v: 
     })
 }
 
-fn iface_cdr_usage_reports__cdr_usage_report_response_result_op__from_json(v: &Value) -> Option<iface_cdr_usage_reports::CdrUsageReportResponseResultOp> {
+fn iface_cdr_usage_reports__cdr_usage_report_response_result_op_entry__from_json(v: &Value) -> Option<iface_cdr_usage_reports::CdrUsageReportResponseResultOpEntry> {
     let m = v.as_object()?;
-    Some(iface_cdr_usage_reports::CdrUsageReportResponseResultOp {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_cdr_usage_reports::CdrUsageReportResponseResultOpEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 

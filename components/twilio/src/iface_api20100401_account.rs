@@ -54,10 +54,19 @@ const OP_API20100401_ACCOUNT_UPDATE_ACCOUNT: OpSpec = OpSpec {
     ],
 };
 
-fn iface_api20100401_account__account_enum_status__to_json(p: &iface_api20100401_account::AccountEnumStatus) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
+fn iface_api20100401_account__account_enum_status__to_str(e: &iface_api20100401_account::AccountEnumStatus) -> &'static str {
+    match e {
+        iface_api20100401_account::AccountEnumStatus::Active => "active",
+        iface_api20100401_account::AccountEnumStatus::Suspended => "suspended",
+        iface_api20100401_account::AccountEnumStatus::Closed => "closed",
+    }
+}
+
+fn iface_api20100401_account__account_enum_type__to_str(e: &iface_api20100401_account::AccountEnumType) -> &'static str {
+    match e {
+        iface_api20100401_account::AccountEnumType::Trial => "Trial",
+        iface_api20100401_account::AccountEnumType::Full => "Full",
+    }
 }
 
 fn iface_api20100401_account__list_account_response__to_json(p: &iface_api20100401_account::ListAccountResponse) -> Value {
@@ -82,23 +91,17 @@ fn iface_api20100401_account__api_v2010_account__to_json(p: &iface_api20100401_a
     m.insert("friendly_name".into(), match (&p.friendly_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("owner_account_sid".into(), match (&p.owner_account_sid) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("sid".into(), match (&p.sid) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("status".into(), match (&p.status) { Some(v) => iface_api20100401_account__account_enum_status__to_json(v), None => Value::Null });
+    m.insert("status".into(), match (&p.status) { Some(v) => Value::String(iface_api20100401_account__account_enum_status__to_str(v).into()), None => Value::Null });
     m.insert("subresource_uris".into(), match (&p.subresource_uris) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("type".into(), match (&p.type_op) { Some(v) => iface_api20100401_account__account_enum_type__to_json(v), None => Value::Null });
+    m.insert("type".into(), match (&p.type_op) { Some(v) => Value::String(iface_api20100401_account__account_enum_type__to_str(v).into()), None => Value::Null });
     m.insert("uri".into(), match (&p.uri) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_api20100401_account__account_enum_type__to_json(p: &iface_api20100401_account::AccountEnumType) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
 fn iface_api20100401_account__list_account_params__to_json(p: &iface_api20100401_account::ListAccountParams) -> Value {
     let mut m = Map::new();
     m.insert("friendly_name".into(), match (&p.friendly_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("status".into(), match (&p.status) { Some(v) => iface_api20100401_account__account_enum_status__to_json(v), None => Value::Null });
+    m.insert("status".into(), match (&p.status) { Some(v) => Value::String(iface_api20100401_account__account_enum_status__to_str(v).into()), None => Value::Null });
     m.insert("page_size".into(), match (&p.page_size) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("page".into(), match (&p.page) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("page_token".into(), match (&p.page_token) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -121,15 +124,8 @@ fn iface_api20100401_account__update_account_params__to_json(p: &iface_api201004
     let mut m = Map::new();
     m.insert("sid".into(), Value::String((&p.sid).clone()));
     m.insert("friendly_name".into(), match (&p.friendly_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("status".into(), match (&p.status) { Some(v) => iface_api20100401_account__account_enum_status__to_json(v), None => Value::Null });
+    m.insert("status".into(), match (&p.status) { Some(v) => Value::String(iface_api20100401_account__account_enum_status__to_str(v).into()), None => Value::Null });
     Value::Object(m)
-}
-
-fn iface_api20100401_account__account_enum_status__from_json(v: &Value) -> Option<iface_api20100401_account::AccountEnumStatus> {
-    let m = v.as_object()?;
-    Some(iface_api20100401_account::AccountEnumStatus {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-    })
 }
 
 fn iface_api20100401_account__list_account_response__from_json(v: &Value) -> Option<iface_api20100401_account::ListAccountResponse> {
@@ -156,18 +152,28 @@ fn iface_api20100401_account__api_v2010_account__from_json(v: &Value) -> Option<
         friendly_name: m.get("friendly_name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         owner_account_sid: m.get("owner_account_sid").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         sid: m.get("sid").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        status: m.get("status").filter(|v| !v.is_null()).and_then(|v| iface_api20100401_account__account_enum_status__from_json(v)),
+        status: m.get("status").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_api20100401_account__account_enum_status__from_str)),
         subresource_uris: m.get("subresource_uris").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        type_op: m.get("type").filter(|v| !v.is_null()).and_then(|v| iface_api20100401_account__account_enum_type__from_json(v)),
+        type_op: m.get("type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_api20100401_account__account_enum_type__from_str)),
         uri: m.get("uri").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
     })
 }
 
-fn iface_api20100401_account__account_enum_type__from_json(v: &Value) -> Option<iface_api20100401_account::AccountEnumType> {
-    let m = v.as_object()?;
-    Some(iface_api20100401_account::AccountEnumType {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-    })
+fn iface_api20100401_account__account_enum_status__from_str(s: &str) -> Option<iface_api20100401_account::AccountEnumStatus> {
+    match s {
+        "active" => Some(iface_api20100401_account::AccountEnumStatus::Active),
+        "suspended" => Some(iface_api20100401_account::AccountEnumStatus::Suspended),
+        "closed" => Some(iface_api20100401_account::AccountEnumStatus::Closed),
+        _ => None,
+    }
+}
+
+fn iface_api20100401_account__account_enum_type__from_str(s: &str) -> Option<iface_api20100401_account::AccountEnumType> {
+    match s {
+        "Trial" => Some(iface_api20100401_account::AccountEnumType::Trial),
+        "Full" => Some(iface_api20100401_account::AccountEnumType::Full),
+        _ => None,
+    }
 }
 
 fn iface_api20100401_account__list_account__ok(body: String) -> Result<iface_api20100401_account::ListAccountResponse, crate::runtime::DispatchError> {

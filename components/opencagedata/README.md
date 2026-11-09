@@ -11,8 +11,8 @@ triggered.
 
 | Setting | Value |
 | --- | --- |
-| Package | `autostamp:opencagedata@0.5.0` |
-| Published version | `0.5.0+opencagedata-1` |
+| Package | `autostamp:opencagedata@0.6.0` |
+| Published version | `0.6.0+opencagedata-1` |
 | Tag filter | all tags |
 | Operations generated | 1 |
 | Infer API-key credentials | enabled — not triggered |

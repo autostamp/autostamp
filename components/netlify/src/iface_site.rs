@@ -205,7 +205,7 @@ fn iface_site__site__to_json(p: &iface_site::Site) -> Value {
     m.insert("admin_url".into(), match (&p.admin_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("build_image".into(), match (&p.build_image) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("build_settings".into(), match (&p.build_settings) { Some(v) => iface_site__repo_info__to_json(v), None => Value::Null });
-    m.insert("capabilities".into(), match (&p.capabilities) { Some(v) => iface_site__site_capabilities__to_json(v), None => Value::Null });
+    m.insert("capabilities".into(), match (&p.capabilities) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::Object((&e.value).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()))).collect()), None => Value::Null });
     m.insert("created_at".into(), match (&p.created_at) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("custom_domain".into(), match (&p.custom_domain) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("default_hooks_data".into(), match (&p.default_hooks_data) { Some(v) => iface_site__site_default_hooks_data__to_json(v), None => Value::Null });
@@ -241,7 +241,7 @@ fn iface_site__repo_info__to_json(p: &iface_site::RepoInfo) -> Value {
     m.insert("cmd".into(), match (&p.cmd) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("deploy_key_id".into(), match (&p.deploy_key_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("dir".into(), match (&p.dir) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("env".into(), match (&p.env) { Some(v) => iface_site__repo_info_env__to_json(v), None => Value::Null });
+    m.insert("env".into(), match (&p.env) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("functions_dir".into(), match (&p.functions_dir) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("id".into(), match (&p.id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("installation_id".into(), match (&p.installation_id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
@@ -255,15 +255,24 @@ fn iface_site__repo_info__to_json(p: &iface_site::RepoInfo) -> Value {
     Value::Object(m)
 }
 
-fn iface_site__repo_info_env__to_json(p: &iface_site::RepoInfoEnv) -> Value {
+fn iface_site__repo_info_env_entry__to_json(p: &iface_site::RepoInfoEnvEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
-fn iface_site__site_capabilities__to_json(p: &iface_site::SiteCapabilities) -> Value {
+fn iface_site__site_capabilities_value_entry__to_json(p: &iface_site::SiteCapabilitiesValueEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
+}
+
+fn iface_site__site_capabilities_entry__to_json(p: &iface_site::SiteCapabilitiesEntry) -> Value {
+    let mut m = Map::new();
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::Object((&p.value).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()));
     Value::Object(m)
 }
 
@@ -351,9 +360,17 @@ fn iface_site__deploy_site_capabilities__to_json(p: &iface_site::DeploySiteCapab
     Value::Object(m)
 }
 
-fn iface_site__setup_capabilities__to_json(p: &iface_site::SetupCapabilities) -> Value {
+fn iface_site__setup_capabilities_value_entry__to_json(p: &iface_site::SetupCapabilitiesValueEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
+}
+
+fn iface_site__setup_capabilities_entry__to_json(p: &iface_site::SetupCapabilitiesEntry) -> Value {
+    let mut m = Map::new();
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::Object((&p.value).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()));
     Value::Object(m)
 }
 
@@ -402,7 +419,7 @@ fn iface_site__create_site_params__to_json(p: &iface_site::CreateSiteParams) -> 
     m.insert("admin_url".into(), match (&p.admin_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("build_image".into(), match (&p.build_image) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("build_settings".into(), match (&p.build_settings) { Some(v) => iface_site__repo_info__to_json(v), None => Value::Null });
-    m.insert("capabilities".into(), match (&p.capabilities) { Some(v) => iface_site__setup_capabilities__to_json(v), None => Value::Null });
+    m.insert("capabilities".into(), match (&p.capabilities) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::Object((&e.value).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()))).collect()), None => Value::Null });
     m.insert("created_at".into(), match (&p.created_at) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("custom_domain".into(), match (&p.custom_domain) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("default_hooks_data".into(), match (&p.default_hooks_data) { Some(v) => iface_site__setup_default_hooks_data__to_json(v), None => Value::Null });
@@ -447,7 +464,7 @@ fn iface_site__update_site_params__to_json(p: &iface_site::UpdateSiteParams) -> 
     m.insert("admin_url".into(), match (&p.admin_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("build_image".into(), match (&p.build_image) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("build_settings".into(), match (&p.build_settings) { Some(v) => iface_site__repo_info__to_json(v), None => Value::Null });
-    m.insert("capabilities".into(), match (&p.capabilities) { Some(v) => iface_site__setup_capabilities__to_json(v), None => Value::Null });
+    m.insert("capabilities".into(), match (&p.capabilities) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::Object((&e.value).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()))).collect()), None => Value::Null });
     m.insert("created_at".into(), match (&p.created_at) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("custom_domain".into(), match (&p.custom_domain) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("default_hooks_data".into(), match (&p.default_hooks_data) { Some(v) => iface_site__setup_default_hooks_data__to_json(v), None => Value::Null });
@@ -508,7 +525,7 @@ fn iface_site__create_site_in_team_params__to_json(p: &iface_site::CreateSiteInT
     m.insert("admin_url".into(), match (&p.admin_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("build_image".into(), match (&p.build_image) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("build_settings".into(), match (&p.build_settings) { Some(v) => iface_site__repo_info__to_json(v), None => Value::Null });
-    m.insert("capabilities".into(), match (&p.capabilities) { Some(v) => iface_site__setup_capabilities__to_json(v), None => Value::Null });
+    m.insert("capabilities".into(), match (&p.capabilities) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::Object((&e.value).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()))).collect()), None => Value::Null });
     m.insert("created_at".into(), match (&p.created_at) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("custom_domain".into(), match (&p.custom_domain) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("default_hooks_data".into(), match (&p.default_hooks_data) { Some(v) => iface_site__setup_default_hooks_data__to_json(v), None => Value::Null });
@@ -547,7 +564,7 @@ fn iface_site__site__from_json(v: &Value) -> Option<iface_site::Site> {
         admin_url: m.get("admin_url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         build_image: m.get("build_image").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         build_settings: m.get("build_settings").filter(|v| !v.is_null()).and_then(|v| iface_site__repo_info__from_json(v)),
-        capabilities: m.get("capabilities").filter(|v| !v.is_null()).and_then(|v| iface_site__site_capabilities__from_json(v)),
+        capabilities: m.get("capabilities").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_site::SiteCapabilitiesValueEntry { key: k.clone(), value: val })).collect())).map(|val| iface_site::SiteCapabilitiesEntry { key: k.clone(), value: val })).collect())),
         created_at: m.get("created_at").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         custom_domain: m.get("custom_domain").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         default_hooks_data: m.get("default_hooks_data").filter(|v| !v.is_null()).and_then(|v| iface_site__site_default_hooks_data__from_json(v)),
@@ -584,7 +601,7 @@ fn iface_site__repo_info__from_json(v: &Value) -> Option<iface_site::RepoInfo> {
         cmd: m.get("cmd").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         deploy_key_id: m.get("deploy_key_id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         dir: m.get("dir").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        env: m.get("env").filter(|v| !v.is_null()).and_then(|v| iface_site__repo_info_env__from_json(v)),
+        env: m.get("env").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_site::RepoInfoEnvEntry { key: k.clone(), value: val })).collect())),
         functions_dir: m.get("functions_dir").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
         installation_id: m.get("installation_id").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
@@ -598,17 +615,27 @@ fn iface_site__repo_info__from_json(v: &Value) -> Option<iface_site::RepoInfo> {
     })
 }
 
-fn iface_site__repo_info_env__from_json(v: &Value) -> Option<iface_site::RepoInfoEnv> {
+fn iface_site__repo_info_env_entry__from_json(v: &Value) -> Option<iface_site::RepoInfoEnvEntry> {
     let m = v.as_object()?;
-    Some(iface_site::RepoInfoEnv {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_site::RepoInfoEnvEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
-fn iface_site__site_capabilities__from_json(v: &Value) -> Option<iface_site::SiteCapabilities> {
+fn iface_site__site_capabilities_value_entry__from_json(v: &Value) -> Option<iface_site::SiteCapabilitiesValueEntry> {
     let m = v.as_object()?;
-    Some(iface_site::SiteCapabilities {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_site::SiteCapabilitiesValueEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_site__site_capabilities_entry__from_json(v: &Value) -> Option<iface_site::SiteCapabilitiesEntry> {
+    let m = v.as_object()?;
+    Some(iface_site::SiteCapabilitiesEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_site::SiteCapabilitiesValueEntry { key: k.clone(), value: val })).collect())).unwrap_or_default(),
     })
 }
 

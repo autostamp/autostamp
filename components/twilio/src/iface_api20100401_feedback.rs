@@ -17,10 +17,11 @@ const OP_API20100401_FEEDBACK_CREATE_MESSAGE_FEEDBACK: OpSpec = OpSpec {
     ],
 };
 
-fn iface_api20100401_feedback__message_feedback_enum_outcome__to_json(p: &iface_api20100401_feedback::MessageFeedbackEnumOutcome) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
+fn iface_api20100401_feedback__message_feedback_enum_outcome__to_str(e: &iface_api20100401_feedback::MessageFeedbackEnumOutcome) -> &'static str {
+    match e {
+        iface_api20100401_feedback::MessageFeedbackEnumOutcome::Confirmed => "confirmed",
+        iface_api20100401_feedback::MessageFeedbackEnumOutcome::Unconfirmed => "unconfirmed",
+    }
 }
 
 fn iface_api20100401_feedback__api_v2010_account_message_message_feedback__to_json(p: &iface_api20100401_feedback::ApiV2010AccountMessageMessageFeedback) -> Value {
@@ -29,7 +30,7 @@ fn iface_api20100401_feedback__api_v2010_account_message_message_feedback__to_js
     m.insert("date_created".into(), match (&p.date_created) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("date_updated".into(), match (&p.date_updated) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("message_sid".into(), match (&p.message_sid) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("outcome".into(), match (&p.outcome) { Some(v) => iface_api20100401_feedback__message_feedback_enum_outcome__to_json(v), None => Value::Null });
+    m.insert("outcome".into(), match (&p.outcome) { Some(v) => Value::String(iface_api20100401_feedback__message_feedback_enum_outcome__to_str(v).into()), None => Value::Null });
     m.insert("uri".into(), match (&p.uri) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
@@ -38,15 +39,8 @@ fn iface_api20100401_feedback__create_message_feedback_params__to_json(p: &iface
     let mut m = Map::new();
     m.insert("account_sid".into(), Value::String((&p.account_sid).clone()));
     m.insert("message_sid".into(), Value::String((&p.message_sid).clone()));
-    m.insert("outcome".into(), match (&p.outcome) { Some(v) => iface_api20100401_feedback__message_feedback_enum_outcome__to_json(v), None => Value::Null });
+    m.insert("outcome".into(), match (&p.outcome) { Some(v) => Value::String(iface_api20100401_feedback__message_feedback_enum_outcome__to_str(v).into()), None => Value::Null });
     Value::Object(m)
-}
-
-fn iface_api20100401_feedback__message_feedback_enum_outcome__from_json(v: &Value) -> Option<iface_api20100401_feedback::MessageFeedbackEnumOutcome> {
-    let m = v.as_object()?;
-    Some(iface_api20100401_feedback::MessageFeedbackEnumOutcome {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-    })
 }
 
 fn iface_api20100401_feedback__api_v2010_account_message_message_feedback__from_json(v: &Value) -> Option<iface_api20100401_feedback::ApiV2010AccountMessageMessageFeedback> {
@@ -56,9 +50,17 @@ fn iface_api20100401_feedback__api_v2010_account_message_message_feedback__from_
         date_created: m.get("date_created").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         date_updated: m.get("date_updated").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         message_sid: m.get("message_sid").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-        outcome: m.get("outcome").filter(|v| !v.is_null()).and_then(|v| iface_api20100401_feedback__message_feedback_enum_outcome__from_json(v)),
+        outcome: m.get("outcome").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_api20100401_feedback__message_feedback_enum_outcome__from_str)),
         uri: m.get("uri").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
     })
+}
+
+fn iface_api20100401_feedback__message_feedback_enum_outcome__from_str(s: &str) -> Option<iface_api20100401_feedback::MessageFeedbackEnumOutcome> {
+    match s {
+        "confirmed" => Some(iface_api20100401_feedback::MessageFeedbackEnumOutcome::Confirmed),
+        "unconfirmed" => Some(iface_api20100401_feedback::MessageFeedbackEnumOutcome::Unconfirmed),
+        _ => None,
+    }
 }
 
 fn iface_api20100401_feedback__create_message_feedback__ok(body: String) -> Result<iface_api20100401_feedback::ApiV2010AccountMessageMessageFeedback, crate::runtime::DispatchError> {

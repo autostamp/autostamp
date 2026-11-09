@@ -18,16 +18,17 @@ fn iface_carts_quote_id_gift_cards__gift_card_account_data_gift_card_account_int
     let mut m = Map::new();
     m.insert("base_gift_cards_amount".into(), serde_json::Number::from_f64(*(&p.base_gift_cards_amount)).map(Value::Number).unwrap_or(Value::Null));
     m.insert("base_gift_cards_amount_used".into(), serde_json::Number::from_f64(*(&p.base_gift_cards_amount_used)).map(Value::Number).unwrap_or(Value::Null));
-    m.insert("extension_attributes".into(), match (&p.extension_attributes) { Some(v) => iface_carts_quote_id_gift_cards__gift_card_account_data_gift_card_account_extension_interface__to_json(v), None => Value::Null });
+    m.insert("extension_attributes".into(), match (&p.extension_attributes) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("gift_cards".into(), Value::Array((&p.gift_cards).iter().map(|v| Value::String((v).clone())).collect()));
     m.insert("gift_cards_amount".into(), serde_json::Number::from_f64(*(&p.gift_cards_amount)).map(Value::Number).unwrap_or(Value::Null));
     m.insert("gift_cards_amount_used".into(), serde_json::Number::from_f64(*(&p.gift_cards_amount_used)).map(Value::Number).unwrap_or(Value::Null));
     Value::Object(m)
 }
 
-fn iface_carts_quote_id_gift_cards__gift_card_account_data_gift_card_account_extension_interface__to_json(p: &iface_carts_quote_id_gift_cards::GiftCardAccountDataGiftCardAccountExtensionInterface) -> Value {
+fn iface_carts_quote_id_gift_cards__gift_card_account_data_gift_card_account_extension_interface_entry__to_json(p: &iface_carts_quote_id_gift_cards::GiftCardAccountDataGiftCardAccountExtensionInterfaceEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -42,17 +43,18 @@ fn iface_carts_quote_id_gift_cards__gift_card_account_data_gift_card_account_int
     Some(iface_carts_quote_id_gift_cards::GiftCardAccountDataGiftCardAccountInterface {
         base_gift_cards_amount: m.get("base_gift_cards_amount").and_then(|v| (v).as_f64()).unwrap_or_default(),
         base_gift_cards_amount_used: m.get("base_gift_cards_amount_used").and_then(|v| (v).as_f64()).unwrap_or_default(),
-        extension_attributes: m.get("extension_attributes").filter(|v| !v.is_null()).and_then(|v| iface_carts_quote_id_gift_cards__gift_card_account_data_gift_card_account_extension_interface__from_json(v)),
+        extension_attributes: m.get("extension_attributes").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_carts_quote_id_gift_cards::GiftCardAccountDataGiftCardAccountExtensionInterfaceEntry { key: k.clone(), value: val })).collect())),
         gift_cards: m.get("gift_cards").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())).unwrap_or_default(),
         gift_cards_amount: m.get("gift_cards_amount").and_then(|v| (v).as_f64()).unwrap_or_default(),
         gift_cards_amount_used: m.get("gift_cards_amount_used").and_then(|v| (v).as_f64()).unwrap_or_default(),
     })
 }
 
-fn iface_carts_quote_id_gift_cards__gift_card_account_data_gift_card_account_extension_interface__from_json(v: &Value) -> Option<iface_carts_quote_id_gift_cards::GiftCardAccountDataGiftCardAccountExtensionInterface> {
+fn iface_carts_quote_id_gift_cards__gift_card_account_data_gift_card_account_extension_interface_entry__from_json(v: &Value) -> Option<iface_carts_quote_id_gift_cards::GiftCardAccountDataGiftCardAccountExtensionInterfaceEntry> {
     let m = v.as_object()?;
-    Some(iface_carts_quote_id_gift_cards::GiftCardAccountDataGiftCardAccountExtensionInterface {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_carts_quote_id_gift_cards::GiftCardAccountDataGiftCardAccountExtensionInterfaceEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 

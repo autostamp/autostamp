@@ -179,7 +179,7 @@ const OP_WORKFLOWS_POST_RUN_WORKFLOW: OpSpec = OpSpec {
         FieldSpec { snake: "zuora_entity_ids", wire: "Zuora-Entity-Ids", location: FieldLocation::Header },
         FieldSpec { snake: "zuora_track_id", wire: "Zuora-Track-Id", location: FieldLocation::Header },
         FieldSpec { snake: "workflow_id", wire: "workflow_id", location: FieldLocation::Path },
-        FieldSpec { snake: "data", wire: "data", location: FieldLocation::Body },
+        FieldSpec { snake: "body", wire: "body", location: FieldLocation::Body },
     ],
     auth: &[
     ],
@@ -270,7 +270,7 @@ fn iface_workflows__task__to_json(p: &iface_workflows::Task) -> Value {
     m.insert("action_type".into(), match (&p.action_type) { Some(v) => Value::String(iface_workflows__task_action_type_enum__to_str(v).into()), None => Value::Null });
     m.insert("call_type".into(), match (&p.call_type) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("concurrent_limit".into(), match (&p.concurrent_limit) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    m.insert("data".into(), match (&p.data) { Some(v) => iface_workflows__task_data__to_json(v), None => Value::Null });
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("end_time".into(), match (&p.end_time) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("error".into(), match (&p.error) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("error_class".into(), match (&p.error_class) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -282,7 +282,7 @@ fn iface_workflows__task__to_json(p: &iface_workflows::Task) -> Value {
     m.insert("object_id".into(), match (&p.object_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("original_task_id".into(), match (&p.original_task_id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("original_workflow_id".into(), match (&p.original_workflow_id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    m.insert("parameters".into(), match (&p.parameters) { Some(v) => iface_workflows__task_parameters__to_json(v), None => Value::Null });
+    m.insert("parameters".into(), match (&p.parameters) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("start_time".into(), match (&p.start_time) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("status".into(), match (&p.status) { Some(v) => Value::String(iface_workflows__task_status_enum__to_str(v).into()), None => Value::Null });
     m.insert("tags".into(), match (&p.tags) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
@@ -291,15 +291,17 @@ fn iface_workflows__task__to_json(p: &iface_workflows::Task) -> Value {
     Value::Object(m)
 }
 
-fn iface_workflows__task_data__to_json(p: &iface_workflows::TaskData) -> Value {
+fn iface_workflows__task_data_entry__to_json(p: &iface_workflows::TaskDataEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
-fn iface_workflows__task_parameters__to_json(p: &iface_workflows::TaskParameters) -> Value {
+fn iface_workflows__task_parameters_entry__to_json(p: &iface_workflows::TaskParametersEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -331,6 +333,13 @@ fn iface_workflows__update_task__to_json(p: &iface_workflows::UpdateTask) -> Val
     m.insert("status".into(), match (&p.status) { Some(v) => Value::String(iface_workflows__task_status_enum__to_str(v).into()), None => Value::Null });
     m.insert("tags".into(), match (&p.tags) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
     m.insert("workflow_id".into(), match (&p.workflow_id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_workflows__post_run_workflow_body_entry__to_json(p: &iface_workflows::PostRunWorkflowBodyEntry) -> Value {
+    let mut m = Map::new();
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -463,7 +472,7 @@ fn iface_workflows__post_run_workflow_params__to_json(p: &iface_workflows::PostR
     m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("workflow_id".into(), Value::String((&p.workflow_id).clone()));
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("body".into(), match (&p.body) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     Value::Object(m)
 }
 

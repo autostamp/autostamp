@@ -1342,15 +1342,16 @@ fn iface_issue_tracker__error__to_json(p: &iface_issue_tracker::Error) -> Value 
 
 fn iface_issue_tracker__error_error__to_json(p: &iface_issue_tracker::ErrorError) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => iface_issue_tracker__error_error_data__to_json(v), None => Value::Null });
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("detail".into(), match (&p.detail) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("message".into(), Value::String((&p.message).clone()));
     Value::Object(m)
 }
 
-fn iface_issue_tracker__error_error_data__to_json(p: &iface_issue_tracker::ErrorErrorData) -> Value {
+fn iface_issue_tracker__error_error_data_entry__to_json(p: &iface_issue_tracker::ErrorErrorDataEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -2552,16 +2553,17 @@ fn iface_issue_tracker__error__from_json(v: &Value) -> Option<iface_issue_tracke
 fn iface_issue_tracker__error_error__from_json(v: &Value) -> Option<iface_issue_tracker::ErrorError> {
     let m = v.as_object()?;
     Some(iface_issue_tracker::ErrorError {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| iface_issue_tracker__error_error_data__from_json(v)),
+        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_issue_tracker::ErrorErrorDataEntry { key: k.clone(), value: val })).collect())),
         detail: m.get("detail").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         message: m.get("message").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
-fn iface_issue_tracker__error_error_data__from_json(v: &Value) -> Option<iface_issue_tracker::ErrorErrorData> {
+fn iface_issue_tracker__error_error_data_entry__from_json(v: &Value) -> Option<iface_issue_tracker::ErrorErrorDataEntry> {
     let m = v.as_object()?;
-    Some(iface_issue_tracker::ErrorErrorData {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_issue_tracker::ErrorErrorDataEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 

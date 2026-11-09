@@ -617,7 +617,7 @@ fn iface_apps__list_op_response_apps_item_active_deployment_progress_steps_item_
     m.insert("reason".into(), match (&p.reason) { Some(v) => iface_apps__list_op_response_apps_item_active_deployment_progress_steps_item_reason__to_json(v), None => Value::Null });
     m.insert("started_at".into(), match (&p.started_at) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("status".into(), match (&p.status) { Some(v) => Value::String(iface_apps__list_op_response_apps_item_active_deployment_progress_steps_item_status_enum__to_str(v).into()), None => Value::Null });
-    m.insert("steps".into(), match (&p.steps) { Some(v) => Value::Array((v).iter().map(|v| iface_apps__list_op_response_apps_item_active_deployment_progress_steps_item_steps_item__to_json(v)).collect()), None => Value::Null });
+    m.insert("steps".into(), match (&p.steps) { Some(v) => Value::Array((v).iter().map(|v| Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect())).collect()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -628,9 +628,10 @@ fn iface_apps__list_op_response_apps_item_active_deployment_progress_steps_item_
     Value::Object(m)
 }
 
-fn iface_apps__list_op_response_apps_item_active_deployment_progress_steps_item_steps_item__to_json(p: &iface_apps::ListOpResponseAppsItemActiveDeploymentProgressStepsItemStepsItem) -> Value {
+fn iface_apps__list_op_response_apps_item_active_deployment_progress_steps_item_steps_item_entry__to_json(p: &iface_apps::ListOpResponseAppsItemActiveDeploymentProgressStepsItemStepsItemEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -643,7 +644,7 @@ fn iface_apps__list_op_response_apps_item_active_deployment_progress_summary_ste
     m.insert("reason".into(), match (&p.reason) { Some(v) => iface_apps__list_op_response_apps_item_active_deployment_progress_summary_steps_item_reason__to_json(v), None => Value::Null });
     m.insert("started_at".into(), match (&p.started_at) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("status".into(), match (&p.status) { Some(v) => Value::String(iface_apps__list_op_response_apps_item_active_deployment_progress_steps_item_status_enum__to_str(v).into()), None => Value::Null });
-    m.insert("steps".into(), match (&p.steps) { Some(v) => Value::Array((v).iter().map(|v| iface_apps__list_op_response_apps_item_active_deployment_progress_summary_steps_item_steps_item__to_json(v)).collect()), None => Value::Null });
+    m.insert("steps".into(), match (&p.steps) { Some(v) => Value::Array((v).iter().map(|v| Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect())).collect()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -654,9 +655,10 @@ fn iface_apps__list_op_response_apps_item_active_deployment_progress_summary_ste
     Value::Object(m)
 }
 
-fn iface_apps__list_op_response_apps_item_active_deployment_progress_summary_steps_item_steps_item__to_json(p: &iface_apps::ListOpResponseAppsItemActiveDeploymentProgressSummaryStepsItemStepsItem) -> Value {
+fn iface_apps__list_op_response_apps_item_active_deployment_progress_summary_steps_item_steps_item_entry__to_json(p: &iface_apps::ListOpResponseAppsItemActiveDeploymentProgressSummaryStepsItemStepsItemEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -1127,13 +1129,14 @@ fn iface_apps__list_op_response_apps_item_domains_item__to_json(p: &iface_apps::
 
 fn iface_apps__list_op_response_apps_item_domains_item_progress__to_json(p: &iface_apps::ListOpResponseAppsItemDomainsItemProgress) -> Value {
     let mut m = Map::new();
-    m.insert("steps".into(), match (&p.steps) { Some(v) => Value::Array((v).iter().map(|v| iface_apps__list_op_response_apps_item_domains_item_progress_steps_item__to_json(v)).collect()), None => Value::Null });
+    m.insert("steps".into(), match (&p.steps) { Some(v) => Value::Array((v).iter().map(|v| Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect())).collect()), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_apps__list_op_response_apps_item_domains_item_progress_steps_item__to_json(p: &iface_apps::ListOpResponseAppsItemDomainsItemProgressStepsItem) -> Value {
+fn iface_apps__list_op_response_apps_item_domains_item_progress_steps_item_entry__to_json(p: &iface_apps::ListOpResponseAppsItemDomainsItemProgressStepsItemEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -1210,7 +1213,7 @@ fn iface_apps__list_op_response_apps_item_in_progress_deployment_progress_steps_
     m.insert("reason".into(), match (&p.reason) { Some(v) => iface_apps__list_op_response_apps_item_in_progress_deployment_progress_steps_item_reason__to_json(v), None => Value::Null });
     m.insert("started_at".into(), match (&p.started_at) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("status".into(), match (&p.status) { Some(v) => Value::String(iface_apps__list_op_response_apps_item_active_deployment_progress_steps_item_status_enum__to_str(v).into()), None => Value::Null });
-    m.insert("steps".into(), match (&p.steps) { Some(v) => Value::Array((v).iter().map(|v| iface_apps__list_op_response_apps_item_in_progress_deployment_progress_steps_item_steps_item__to_json(v)).collect()), None => Value::Null });
+    m.insert("steps".into(), match (&p.steps) { Some(v) => Value::Array((v).iter().map(|v| Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect())).collect()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -1221,9 +1224,10 @@ fn iface_apps__list_op_response_apps_item_in_progress_deployment_progress_steps_
     Value::Object(m)
 }
 
-fn iface_apps__list_op_response_apps_item_in_progress_deployment_progress_steps_item_steps_item__to_json(p: &iface_apps::ListOpResponseAppsItemInProgressDeploymentProgressStepsItemStepsItem) -> Value {
+fn iface_apps__list_op_response_apps_item_in_progress_deployment_progress_steps_item_steps_item_entry__to_json(p: &iface_apps::ListOpResponseAppsItemInProgressDeploymentProgressStepsItemStepsItemEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -1236,7 +1240,7 @@ fn iface_apps__list_op_response_apps_item_in_progress_deployment_progress_summar
     m.insert("reason".into(), match (&p.reason) { Some(v) => iface_apps__list_op_response_apps_item_in_progress_deployment_progress_summary_steps_item_reason__to_json(v), None => Value::Null });
     m.insert("started_at".into(), match (&p.started_at) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("status".into(), match (&p.status) { Some(v) => Value::String(iface_apps__list_op_response_apps_item_active_deployment_progress_steps_item_status_enum__to_str(v).into()), None => Value::Null });
-    m.insert("steps".into(), match (&p.steps) { Some(v) => Value::Array((v).iter().map(|v| iface_apps__list_op_response_apps_item_in_progress_deployment_progress_summary_steps_item_steps_item__to_json(v)).collect()), None => Value::Null });
+    m.insert("steps".into(), match (&p.steps) { Some(v) => Value::Array((v).iter().map(|v| Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect())).collect()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -1247,9 +1251,10 @@ fn iface_apps__list_op_response_apps_item_in_progress_deployment_progress_summar
     Value::Object(m)
 }
 
-fn iface_apps__list_op_response_apps_item_in_progress_deployment_progress_summary_steps_item_steps_item__to_json(p: &iface_apps::ListOpResponseAppsItemInProgressDeploymentProgressSummaryStepsItemStepsItem) -> Value {
+fn iface_apps__list_op_response_apps_item_in_progress_deployment_progress_summary_steps_item_steps_item_entry__to_json(p: &iface_apps::ListOpResponseAppsItemInProgressDeploymentProgressSummaryStepsItemStepsItemEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -1762,7 +1767,7 @@ fn iface_apps__list_op_response_apps_item_pending_deployment_progress_steps_item
     m.insert("reason".into(), match (&p.reason) { Some(v) => iface_apps__list_op_response_apps_item_pending_deployment_progress_steps_item_reason__to_json(v), None => Value::Null });
     m.insert("started_at".into(), match (&p.started_at) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("status".into(), match (&p.status) { Some(v) => Value::String(iface_apps__list_op_response_apps_item_active_deployment_progress_steps_item_status_enum__to_str(v).into()), None => Value::Null });
-    m.insert("steps".into(), match (&p.steps) { Some(v) => Value::Array((v).iter().map(|v| iface_apps__list_op_response_apps_item_pending_deployment_progress_steps_item_steps_item__to_json(v)).collect()), None => Value::Null });
+    m.insert("steps".into(), match (&p.steps) { Some(v) => Value::Array((v).iter().map(|v| Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect())).collect()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -1773,9 +1778,10 @@ fn iface_apps__list_op_response_apps_item_pending_deployment_progress_steps_item
     Value::Object(m)
 }
 
-fn iface_apps__list_op_response_apps_item_pending_deployment_progress_steps_item_steps_item__to_json(p: &iface_apps::ListOpResponseAppsItemPendingDeploymentProgressStepsItemStepsItem) -> Value {
+fn iface_apps__list_op_response_apps_item_pending_deployment_progress_steps_item_steps_item_entry__to_json(p: &iface_apps::ListOpResponseAppsItemPendingDeploymentProgressStepsItemStepsItemEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -1788,7 +1794,7 @@ fn iface_apps__list_op_response_apps_item_pending_deployment_progress_summary_st
     m.insert("reason".into(), match (&p.reason) { Some(v) => iface_apps__list_op_response_apps_item_pending_deployment_progress_summary_steps_item_reason__to_json(v), None => Value::Null });
     m.insert("started_at".into(), match (&p.started_at) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("status".into(), match (&p.status) { Some(v) => Value::String(iface_apps__list_op_response_apps_item_active_deployment_progress_steps_item_status_enum__to_str(v).into()), None => Value::Null });
-    m.insert("steps".into(), match (&p.steps) { Some(v) => Value::Array((v).iter().map(|v| iface_apps__list_op_response_apps_item_pending_deployment_progress_summary_steps_item_steps_item__to_json(v)).collect()), None => Value::Null });
+    m.insert("steps".into(), match (&p.steps) { Some(v) => Value::Array((v).iter().map(|v| Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect())).collect()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -1799,9 +1805,10 @@ fn iface_apps__list_op_response_apps_item_pending_deployment_progress_summary_st
     Value::Object(m)
 }
 
-fn iface_apps__list_op_response_apps_item_pending_deployment_progress_summary_steps_item_steps_item__to_json(p: &iface_apps::ListOpResponseAppsItemPendingDeploymentProgressSummaryStepsItemStepsItem) -> Value {
+fn iface_apps__list_op_response_apps_item_pending_deployment_progress_summary_steps_item_steps_item_entry__to_json(p: &iface_apps::ListOpResponseAppsItemPendingDeploymentProgressSummaryStepsItemStepsItemEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -2314,7 +2321,7 @@ fn iface_apps__list_op_response_apps_item_pinned_deployment_progress_steps_item_
     m.insert("reason".into(), match (&p.reason) { Some(v) => iface_apps__list_op_response_apps_item_pinned_deployment_progress_steps_item_reason__to_json(v), None => Value::Null });
     m.insert("started_at".into(), match (&p.started_at) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("status".into(), match (&p.status) { Some(v) => Value::String(iface_apps__list_op_response_apps_item_active_deployment_progress_steps_item_status_enum__to_str(v).into()), None => Value::Null });
-    m.insert("steps".into(), match (&p.steps) { Some(v) => Value::Array((v).iter().map(|v| iface_apps__list_op_response_apps_item_pinned_deployment_progress_steps_item_steps_item__to_json(v)).collect()), None => Value::Null });
+    m.insert("steps".into(), match (&p.steps) { Some(v) => Value::Array((v).iter().map(|v| Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect())).collect()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -2325,9 +2332,10 @@ fn iface_apps__list_op_response_apps_item_pinned_deployment_progress_steps_item_
     Value::Object(m)
 }
 
-fn iface_apps__list_op_response_apps_item_pinned_deployment_progress_steps_item_steps_item__to_json(p: &iface_apps::ListOpResponseAppsItemPinnedDeploymentProgressStepsItemStepsItem) -> Value {
+fn iface_apps__list_op_response_apps_item_pinned_deployment_progress_steps_item_steps_item_entry__to_json(p: &iface_apps::ListOpResponseAppsItemPinnedDeploymentProgressStepsItemStepsItemEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -2340,7 +2348,7 @@ fn iface_apps__list_op_response_apps_item_pinned_deployment_progress_summary_ste
     m.insert("reason".into(), match (&p.reason) { Some(v) => iface_apps__list_op_response_apps_item_pinned_deployment_progress_summary_steps_item_reason__to_json(v), None => Value::Null });
     m.insert("started_at".into(), match (&p.started_at) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("status".into(), match (&p.status) { Some(v) => Value::String(iface_apps__list_op_response_apps_item_active_deployment_progress_steps_item_status_enum__to_str(v).into()), None => Value::Null });
-    m.insert("steps".into(), match (&p.steps) { Some(v) => Value::Array((v).iter().map(|v| iface_apps__list_op_response_apps_item_pinned_deployment_progress_summary_steps_item_steps_item__to_json(v)).collect()), None => Value::Null });
+    m.insert("steps".into(), match (&p.steps) { Some(v) => Value::Array((v).iter().map(|v| Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect())).collect()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -2351,9 +2359,10 @@ fn iface_apps__list_op_response_apps_item_pinned_deployment_progress_summary_ste
     Value::Object(m)
 }
 
-fn iface_apps__list_op_response_apps_item_pinned_deployment_progress_summary_steps_item_steps_item__to_json(p: &iface_apps::ListOpResponseAppsItemPinnedDeploymentProgressSummaryStepsItemStepsItem) -> Value {
+fn iface_apps__list_op_response_apps_item_pinned_deployment_progress_summary_steps_item_steps_item_entry__to_json(p: &iface_apps::ListOpResponseAppsItemPinnedDeploymentProgressSummaryStepsItemStepsItemEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -3784,7 +3793,7 @@ fn iface_apps__create_response_app_active_deployment_progress_steps_item__to_jso
     m.insert("reason".into(), match (&p.reason) { Some(v) => iface_apps__create_response_app_active_deployment_progress_steps_item_reason__to_json(v), None => Value::Null });
     m.insert("started_at".into(), match (&p.started_at) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("status".into(), match (&p.status) { Some(v) => Value::String(iface_apps__list_op_response_apps_item_active_deployment_progress_steps_item_status_enum__to_str(v).into()), None => Value::Null });
-    m.insert("steps".into(), match (&p.steps) { Some(v) => Value::Array((v).iter().map(|v| iface_apps__create_response_app_active_deployment_progress_steps_item_steps_item__to_json(v)).collect()), None => Value::Null });
+    m.insert("steps".into(), match (&p.steps) { Some(v) => Value::Array((v).iter().map(|v| Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect())).collect()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -3795,9 +3804,10 @@ fn iface_apps__create_response_app_active_deployment_progress_steps_item_reason_
     Value::Object(m)
 }
 
-fn iface_apps__create_response_app_active_deployment_progress_steps_item_steps_item__to_json(p: &iface_apps::CreateResponseAppActiveDeploymentProgressStepsItemStepsItem) -> Value {
+fn iface_apps__create_response_app_active_deployment_progress_steps_item_steps_item_entry__to_json(p: &iface_apps::CreateResponseAppActiveDeploymentProgressStepsItemStepsItemEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -3810,7 +3820,7 @@ fn iface_apps__create_response_app_active_deployment_progress_summary_steps_item
     m.insert("reason".into(), match (&p.reason) { Some(v) => iface_apps__create_response_app_active_deployment_progress_summary_steps_item_reason__to_json(v), None => Value::Null });
     m.insert("started_at".into(), match (&p.started_at) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("status".into(), match (&p.status) { Some(v) => Value::String(iface_apps__list_op_response_apps_item_active_deployment_progress_steps_item_status_enum__to_str(v).into()), None => Value::Null });
-    m.insert("steps".into(), match (&p.steps) { Some(v) => Value::Array((v).iter().map(|v| iface_apps__create_response_app_active_deployment_progress_summary_steps_item_steps_item__to_json(v)).collect()), None => Value::Null });
+    m.insert("steps".into(), match (&p.steps) { Some(v) => Value::Array((v).iter().map(|v| Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect())).collect()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -3821,9 +3831,10 @@ fn iface_apps__create_response_app_active_deployment_progress_summary_steps_item
     Value::Object(m)
 }
 
-fn iface_apps__create_response_app_active_deployment_progress_summary_steps_item_steps_item__to_json(p: &iface_apps::CreateResponseAppActiveDeploymentProgressSummaryStepsItemStepsItem) -> Value {
+fn iface_apps__create_response_app_active_deployment_progress_summary_steps_item_steps_item_entry__to_json(p: &iface_apps::CreateResponseAppActiveDeploymentProgressSummaryStepsItemStepsItemEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -4294,13 +4305,14 @@ fn iface_apps__create_response_app_domains_item__to_json(p: &iface_apps::CreateR
 
 fn iface_apps__create_response_app_domains_item_progress__to_json(p: &iface_apps::CreateResponseAppDomainsItemProgress) -> Value {
     let mut m = Map::new();
-    m.insert("steps".into(), match (&p.steps) { Some(v) => Value::Array((v).iter().map(|v| iface_apps__create_response_app_domains_item_progress_steps_item__to_json(v)).collect()), None => Value::Null });
+    m.insert("steps".into(), match (&p.steps) { Some(v) => Value::Array((v).iter().map(|v| Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect())).collect()), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_apps__create_response_app_domains_item_progress_steps_item__to_json(p: &iface_apps::CreateResponseAppDomainsItemProgressStepsItem) -> Value {
+fn iface_apps__create_response_app_domains_item_progress_steps_item_entry__to_json(p: &iface_apps::CreateResponseAppDomainsItemProgressStepsItemEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -4377,7 +4389,7 @@ fn iface_apps__create_response_app_in_progress_deployment_progress_steps_item__t
     m.insert("reason".into(), match (&p.reason) { Some(v) => iface_apps__create_response_app_in_progress_deployment_progress_steps_item_reason__to_json(v), None => Value::Null });
     m.insert("started_at".into(), match (&p.started_at) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("status".into(), match (&p.status) { Some(v) => Value::String(iface_apps__list_op_response_apps_item_active_deployment_progress_steps_item_status_enum__to_str(v).into()), None => Value::Null });
-    m.insert("steps".into(), match (&p.steps) { Some(v) => Value::Array((v).iter().map(|v| iface_apps__create_response_app_in_progress_deployment_progress_steps_item_steps_item__to_json(v)).collect()), None => Value::Null });
+    m.insert("steps".into(), match (&p.steps) { Some(v) => Value::Array((v).iter().map(|v| Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect())).collect()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -4388,9 +4400,10 @@ fn iface_apps__create_response_app_in_progress_deployment_progress_steps_item_re
     Value::Object(m)
 }
 
-fn iface_apps__create_response_app_in_progress_deployment_progress_steps_item_steps_item__to_json(p: &iface_apps::CreateResponseAppInProgressDeploymentProgressStepsItemStepsItem) -> Value {
+fn iface_apps__create_response_app_in_progress_deployment_progress_steps_item_steps_item_entry__to_json(p: &iface_apps::CreateResponseAppInProgressDeploymentProgressStepsItemStepsItemEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -4403,7 +4416,7 @@ fn iface_apps__create_response_app_in_progress_deployment_progress_summary_steps
     m.insert("reason".into(), match (&p.reason) { Some(v) => iface_apps__create_response_app_in_progress_deployment_progress_summary_steps_item_reason__to_json(v), None => Value::Null });
     m.insert("started_at".into(), match (&p.started_at) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("status".into(), match (&p.status) { Some(v) => Value::String(iface_apps__list_op_response_apps_item_active_deployment_progress_steps_item_status_enum__to_str(v).into()), None => Value::Null });
-    m.insert("steps".into(), match (&p.steps) { Some(v) => Value::Array((v).iter().map(|v| iface_apps__create_response_app_in_progress_deployment_progress_summary_steps_item_steps_item__to_json(v)).collect()), None => Value::Null });
+    m.insert("steps".into(), match (&p.steps) { Some(v) => Value::Array((v).iter().map(|v| Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect())).collect()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -4414,9 +4427,10 @@ fn iface_apps__create_response_app_in_progress_deployment_progress_summary_steps
     Value::Object(m)
 }
 
-fn iface_apps__create_response_app_in_progress_deployment_progress_summary_steps_item_steps_item__to_json(p: &iface_apps::CreateResponseAppInProgressDeploymentProgressSummaryStepsItemStepsItem) -> Value {
+fn iface_apps__create_response_app_in_progress_deployment_progress_summary_steps_item_steps_item_entry__to_json(p: &iface_apps::CreateResponseAppInProgressDeploymentProgressSummaryStepsItemStepsItemEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -4929,7 +4943,7 @@ fn iface_apps__create_response_app_pending_deployment_progress_steps_item__to_js
     m.insert("reason".into(), match (&p.reason) { Some(v) => iface_apps__create_response_app_pending_deployment_progress_steps_item_reason__to_json(v), None => Value::Null });
     m.insert("started_at".into(), match (&p.started_at) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("status".into(), match (&p.status) { Some(v) => Value::String(iface_apps__list_op_response_apps_item_active_deployment_progress_steps_item_status_enum__to_str(v).into()), None => Value::Null });
-    m.insert("steps".into(), match (&p.steps) { Some(v) => Value::Array((v).iter().map(|v| iface_apps__create_response_app_pending_deployment_progress_steps_item_steps_item__to_json(v)).collect()), None => Value::Null });
+    m.insert("steps".into(), match (&p.steps) { Some(v) => Value::Array((v).iter().map(|v| Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect())).collect()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -4940,9 +4954,10 @@ fn iface_apps__create_response_app_pending_deployment_progress_steps_item_reason
     Value::Object(m)
 }
 
-fn iface_apps__create_response_app_pending_deployment_progress_steps_item_steps_item__to_json(p: &iface_apps::CreateResponseAppPendingDeploymentProgressStepsItemStepsItem) -> Value {
+fn iface_apps__create_response_app_pending_deployment_progress_steps_item_steps_item_entry__to_json(p: &iface_apps::CreateResponseAppPendingDeploymentProgressStepsItemStepsItemEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -4955,7 +4970,7 @@ fn iface_apps__create_response_app_pending_deployment_progress_summary_steps_ite
     m.insert("reason".into(), match (&p.reason) { Some(v) => iface_apps__create_response_app_pending_deployment_progress_summary_steps_item_reason__to_json(v), None => Value::Null });
     m.insert("started_at".into(), match (&p.started_at) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("status".into(), match (&p.status) { Some(v) => Value::String(iface_apps__list_op_response_apps_item_active_deployment_progress_steps_item_status_enum__to_str(v).into()), None => Value::Null });
-    m.insert("steps".into(), match (&p.steps) { Some(v) => Value::Array((v).iter().map(|v| iface_apps__create_response_app_pending_deployment_progress_summary_steps_item_steps_item__to_json(v)).collect()), None => Value::Null });
+    m.insert("steps".into(), match (&p.steps) { Some(v) => Value::Array((v).iter().map(|v| Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect())).collect()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -4966,9 +4981,10 @@ fn iface_apps__create_response_app_pending_deployment_progress_summary_steps_ite
     Value::Object(m)
 }
 
-fn iface_apps__create_response_app_pending_deployment_progress_summary_steps_item_steps_item__to_json(p: &iface_apps::CreateResponseAppPendingDeploymentProgressSummaryStepsItemStepsItem) -> Value {
+fn iface_apps__create_response_app_pending_deployment_progress_summary_steps_item_steps_item_entry__to_json(p: &iface_apps::CreateResponseAppPendingDeploymentProgressSummaryStepsItemStepsItemEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -5481,7 +5497,7 @@ fn iface_apps__create_response_app_pinned_deployment_progress_steps_item__to_jso
     m.insert("reason".into(), match (&p.reason) { Some(v) => iface_apps__create_response_app_pinned_deployment_progress_steps_item_reason__to_json(v), None => Value::Null });
     m.insert("started_at".into(), match (&p.started_at) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("status".into(), match (&p.status) { Some(v) => Value::String(iface_apps__list_op_response_apps_item_active_deployment_progress_steps_item_status_enum__to_str(v).into()), None => Value::Null });
-    m.insert("steps".into(), match (&p.steps) { Some(v) => Value::Array((v).iter().map(|v| iface_apps__create_response_app_pinned_deployment_progress_steps_item_steps_item__to_json(v)).collect()), None => Value::Null });
+    m.insert("steps".into(), match (&p.steps) { Some(v) => Value::Array((v).iter().map(|v| Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect())).collect()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -5492,9 +5508,10 @@ fn iface_apps__create_response_app_pinned_deployment_progress_steps_item_reason_
     Value::Object(m)
 }
 
-fn iface_apps__create_response_app_pinned_deployment_progress_steps_item_steps_item__to_json(p: &iface_apps::CreateResponseAppPinnedDeploymentProgressStepsItemStepsItem) -> Value {
+fn iface_apps__create_response_app_pinned_deployment_progress_steps_item_steps_item_entry__to_json(p: &iface_apps::CreateResponseAppPinnedDeploymentProgressStepsItemStepsItemEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -5507,7 +5524,7 @@ fn iface_apps__create_response_app_pinned_deployment_progress_summary_steps_item
     m.insert("reason".into(), match (&p.reason) { Some(v) => iface_apps__create_response_app_pinned_deployment_progress_summary_steps_item_reason__to_json(v), None => Value::Null });
     m.insert("started_at".into(), match (&p.started_at) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("status".into(), match (&p.status) { Some(v) => Value::String(iface_apps__list_op_response_apps_item_active_deployment_progress_steps_item_status_enum__to_str(v).into()), None => Value::Null });
-    m.insert("steps".into(), match (&p.steps) { Some(v) => Value::Array((v).iter().map(|v| iface_apps__create_response_app_pinned_deployment_progress_summary_steps_item_steps_item__to_json(v)).collect()), None => Value::Null });
+    m.insert("steps".into(), match (&p.steps) { Some(v) => Value::Array((v).iter().map(|v| Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect())).collect()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -5518,9 +5535,10 @@ fn iface_apps__create_response_app_pinned_deployment_progress_summary_steps_item
     Value::Object(m)
 }
 
-fn iface_apps__create_response_app_pinned_deployment_progress_summary_steps_item_steps_item__to_json(p: &iface_apps::CreateResponseAppPinnedDeploymentProgressSummaryStepsItemStepsItem) -> Value {
+fn iface_apps__create_response_app_pinned_deployment_progress_summary_steps_item_steps_item_entry__to_json(p: &iface_apps::CreateResponseAppPinnedDeploymentProgressSummaryStepsItemStepsItemEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -7600,7 +7618,7 @@ fn iface_apps__list_deployments_response_deployments_item_progress_steps_item__t
     m.insert("reason".into(), match (&p.reason) { Some(v) => iface_apps__list_deployments_response_deployments_item_progress_steps_item_reason__to_json(v), None => Value::Null });
     m.insert("started_at".into(), match (&p.started_at) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("status".into(), match (&p.status) { Some(v) => Value::String(iface_apps__list_op_response_apps_item_active_deployment_progress_steps_item_status_enum__to_str(v).into()), None => Value::Null });
-    m.insert("steps".into(), match (&p.steps) { Some(v) => Value::Array((v).iter().map(|v| iface_apps__list_deployments_response_deployments_item_progress_steps_item_steps_item__to_json(v)).collect()), None => Value::Null });
+    m.insert("steps".into(), match (&p.steps) { Some(v) => Value::Array((v).iter().map(|v| Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect())).collect()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -7611,9 +7629,10 @@ fn iface_apps__list_deployments_response_deployments_item_progress_steps_item_re
     Value::Object(m)
 }
 
-fn iface_apps__list_deployments_response_deployments_item_progress_steps_item_steps_item__to_json(p: &iface_apps::ListDeploymentsResponseDeploymentsItemProgressStepsItemStepsItem) -> Value {
+fn iface_apps__list_deployments_response_deployments_item_progress_steps_item_steps_item_entry__to_json(p: &iface_apps::ListDeploymentsResponseDeploymentsItemProgressStepsItemStepsItemEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -7626,7 +7645,7 @@ fn iface_apps__list_deployments_response_deployments_item_progress_summary_steps
     m.insert("reason".into(), match (&p.reason) { Some(v) => iface_apps__list_deployments_response_deployments_item_progress_summary_steps_item_reason__to_json(v), None => Value::Null });
     m.insert("started_at".into(), match (&p.started_at) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("status".into(), match (&p.status) { Some(v) => Value::String(iface_apps__list_op_response_apps_item_active_deployment_progress_steps_item_status_enum__to_str(v).into()), None => Value::Null });
-    m.insert("steps".into(), match (&p.steps) { Some(v) => Value::Array((v).iter().map(|v| iface_apps__list_deployments_response_deployments_item_progress_summary_steps_item_steps_item__to_json(v)).collect()), None => Value::Null });
+    m.insert("steps".into(), match (&p.steps) { Some(v) => Value::Array((v).iter().map(|v| Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect())).collect()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -7637,9 +7656,10 @@ fn iface_apps__list_deployments_response_deployments_item_progress_summary_steps
     Value::Object(m)
 }
 
-fn iface_apps__list_deployments_response_deployments_item_progress_summary_steps_item_steps_item__to_json(p: &iface_apps::ListDeploymentsResponseDeploymentsItemProgressSummaryStepsItemStepsItem) -> Value {
+fn iface_apps__list_deployments_response_deployments_item_progress_summary_steps_item_steps_item_entry__to_json(p: &iface_apps::ListDeploymentsResponseDeploymentsItemProgressSummaryStepsItemStepsItemEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -8170,7 +8190,7 @@ fn iface_apps__create_deployment_response_deployment_progress_steps_item__to_jso
     m.insert("reason".into(), match (&p.reason) { Some(v) => iface_apps__create_deployment_response_deployment_progress_steps_item_reason__to_json(v), None => Value::Null });
     m.insert("started_at".into(), match (&p.started_at) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("status".into(), match (&p.status) { Some(v) => Value::String(iface_apps__list_op_response_apps_item_active_deployment_progress_steps_item_status_enum__to_str(v).into()), None => Value::Null });
-    m.insert("steps".into(), match (&p.steps) { Some(v) => Value::Array((v).iter().map(|v| iface_apps__create_deployment_response_deployment_progress_steps_item_steps_item__to_json(v)).collect()), None => Value::Null });
+    m.insert("steps".into(), match (&p.steps) { Some(v) => Value::Array((v).iter().map(|v| Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect())).collect()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -8181,9 +8201,10 @@ fn iface_apps__create_deployment_response_deployment_progress_steps_item_reason_
     Value::Object(m)
 }
 
-fn iface_apps__create_deployment_response_deployment_progress_steps_item_steps_item__to_json(p: &iface_apps::CreateDeploymentResponseDeploymentProgressStepsItemStepsItem) -> Value {
+fn iface_apps__create_deployment_response_deployment_progress_steps_item_steps_item_entry__to_json(p: &iface_apps::CreateDeploymentResponseDeploymentProgressStepsItemStepsItemEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -8196,7 +8217,7 @@ fn iface_apps__create_deployment_response_deployment_progress_summary_steps_item
     m.insert("reason".into(), match (&p.reason) { Some(v) => iface_apps__create_deployment_response_deployment_progress_summary_steps_item_reason__to_json(v), None => Value::Null });
     m.insert("started_at".into(), match (&p.started_at) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("status".into(), match (&p.status) { Some(v) => Value::String(iface_apps__list_op_response_apps_item_active_deployment_progress_steps_item_status_enum__to_str(v).into()), None => Value::Null });
-    m.insert("steps".into(), match (&p.steps) { Some(v) => Value::Array((v).iter().map(|v| iface_apps__create_deployment_response_deployment_progress_summary_steps_item_steps_item__to_json(v)).collect()), None => Value::Null });
+    m.insert("steps".into(), match (&p.steps) { Some(v) => Value::Array((v).iter().map(|v| Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect())).collect()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -8207,9 +8228,10 @@ fn iface_apps__create_deployment_response_deployment_progress_summary_steps_item
     Value::Object(m)
 }
 
-fn iface_apps__create_deployment_response_deployment_progress_summary_steps_item_steps_item__to_json(p: &iface_apps::CreateDeploymentResponseDeploymentProgressSummaryStepsItemStepsItem) -> Value {
+fn iface_apps__create_deployment_response_deployment_progress_summary_steps_item_steps_item_entry__to_json(p: &iface_apps::CreateDeploymentResponseDeploymentProgressSummaryStepsItemStepsItemEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -8728,7 +8750,7 @@ fn iface_apps__get_deployment_response_deployment_progress_steps_item__to_json(p
     m.insert("reason".into(), match (&p.reason) { Some(v) => iface_apps__get_deployment_response_deployment_progress_steps_item_reason__to_json(v), None => Value::Null });
     m.insert("started_at".into(), match (&p.started_at) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("status".into(), match (&p.status) { Some(v) => Value::String(iface_apps__list_op_response_apps_item_active_deployment_progress_steps_item_status_enum__to_str(v).into()), None => Value::Null });
-    m.insert("steps".into(), match (&p.steps) { Some(v) => Value::Array((v).iter().map(|v| iface_apps__get_deployment_response_deployment_progress_steps_item_steps_item__to_json(v)).collect()), None => Value::Null });
+    m.insert("steps".into(), match (&p.steps) { Some(v) => Value::Array((v).iter().map(|v| Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect())).collect()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -8739,9 +8761,10 @@ fn iface_apps__get_deployment_response_deployment_progress_steps_item_reason__to
     Value::Object(m)
 }
 
-fn iface_apps__get_deployment_response_deployment_progress_steps_item_steps_item__to_json(p: &iface_apps::GetDeploymentResponseDeploymentProgressStepsItemStepsItem) -> Value {
+fn iface_apps__get_deployment_response_deployment_progress_steps_item_steps_item_entry__to_json(p: &iface_apps::GetDeploymentResponseDeploymentProgressStepsItemStepsItemEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -8754,7 +8777,7 @@ fn iface_apps__get_deployment_response_deployment_progress_summary_steps_item__t
     m.insert("reason".into(), match (&p.reason) { Some(v) => iface_apps__get_deployment_response_deployment_progress_summary_steps_item_reason__to_json(v), None => Value::Null });
     m.insert("started_at".into(), match (&p.started_at) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("status".into(), match (&p.status) { Some(v) => Value::String(iface_apps__list_op_response_apps_item_active_deployment_progress_steps_item_status_enum__to_str(v).into()), None => Value::Null });
-    m.insert("steps".into(), match (&p.steps) { Some(v) => Value::Array((v).iter().map(|v| iface_apps__get_deployment_response_deployment_progress_summary_steps_item_steps_item__to_json(v)).collect()), None => Value::Null });
+    m.insert("steps".into(), match (&p.steps) { Some(v) => Value::Array((v).iter().map(|v| Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect())).collect()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -8765,9 +8788,10 @@ fn iface_apps__get_deployment_response_deployment_progress_summary_steps_item_re
     Value::Object(m)
 }
 
-fn iface_apps__get_deployment_response_deployment_progress_summary_steps_item_steps_item__to_json(p: &iface_apps::GetDeploymentResponseDeploymentProgressSummaryStepsItemStepsItem) -> Value {
+fn iface_apps__get_deployment_response_deployment_progress_summary_steps_item_steps_item_entry__to_json(p: &iface_apps::GetDeploymentResponseDeploymentProgressSummaryStepsItemStepsItemEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -9286,7 +9310,7 @@ fn iface_apps__cancel_deployment_response_deployment_progress_steps_item__to_jso
     m.insert("reason".into(), match (&p.reason) { Some(v) => iface_apps__cancel_deployment_response_deployment_progress_steps_item_reason__to_json(v), None => Value::Null });
     m.insert("started_at".into(), match (&p.started_at) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("status".into(), match (&p.status) { Some(v) => Value::String(iface_apps__list_op_response_apps_item_active_deployment_progress_steps_item_status_enum__to_str(v).into()), None => Value::Null });
-    m.insert("steps".into(), match (&p.steps) { Some(v) => Value::Array((v).iter().map(|v| iface_apps__cancel_deployment_response_deployment_progress_steps_item_steps_item__to_json(v)).collect()), None => Value::Null });
+    m.insert("steps".into(), match (&p.steps) { Some(v) => Value::Array((v).iter().map(|v| Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect())).collect()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -9297,9 +9321,10 @@ fn iface_apps__cancel_deployment_response_deployment_progress_steps_item_reason_
     Value::Object(m)
 }
 
-fn iface_apps__cancel_deployment_response_deployment_progress_steps_item_steps_item__to_json(p: &iface_apps::CancelDeploymentResponseDeploymentProgressStepsItemStepsItem) -> Value {
+fn iface_apps__cancel_deployment_response_deployment_progress_steps_item_steps_item_entry__to_json(p: &iface_apps::CancelDeploymentResponseDeploymentProgressStepsItemStepsItemEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -9312,7 +9337,7 @@ fn iface_apps__cancel_deployment_response_deployment_progress_summary_steps_item
     m.insert("reason".into(), match (&p.reason) { Some(v) => iface_apps__cancel_deployment_response_deployment_progress_summary_steps_item_reason__to_json(v), None => Value::Null });
     m.insert("started_at".into(), match (&p.started_at) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("status".into(), match (&p.status) { Some(v) => Value::String(iface_apps__list_op_response_apps_item_active_deployment_progress_steps_item_status_enum__to_str(v).into()), None => Value::Null });
-    m.insert("steps".into(), match (&p.steps) { Some(v) => Value::Array((v).iter().map(|v| iface_apps__cancel_deployment_response_deployment_progress_summary_steps_item_steps_item__to_json(v)).collect()), None => Value::Null });
+    m.insert("steps".into(), match (&p.steps) { Some(v) => Value::Array((v).iter().map(|v| Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect())).collect()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -9323,9 +9348,10 @@ fn iface_apps__cancel_deployment_response_deployment_progress_summary_steps_item
     Value::Object(m)
 }
 
-fn iface_apps__cancel_deployment_response_deployment_progress_summary_steps_item_steps_item__to_json(p: &iface_apps::CancelDeploymentResponseDeploymentProgressSummaryStepsItemStepsItem) -> Value {
+fn iface_apps__cancel_deployment_response_deployment_progress_summary_steps_item_steps_item_entry__to_json(p: &iface_apps::CancelDeploymentResponseDeploymentProgressSummaryStepsItemStepsItemEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -9879,7 +9905,7 @@ fn iface_apps__create_rollback_response_deployment_progress_steps_item__to_json(
     m.insert("reason".into(), match (&p.reason) { Some(v) => iface_apps__create_rollback_response_deployment_progress_steps_item_reason__to_json(v), None => Value::Null });
     m.insert("started_at".into(), match (&p.started_at) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("status".into(), match (&p.status) { Some(v) => Value::String(iface_apps__list_op_response_apps_item_active_deployment_progress_steps_item_status_enum__to_str(v).into()), None => Value::Null });
-    m.insert("steps".into(), match (&p.steps) { Some(v) => Value::Array((v).iter().map(|v| iface_apps__create_rollback_response_deployment_progress_steps_item_steps_item__to_json(v)).collect()), None => Value::Null });
+    m.insert("steps".into(), match (&p.steps) { Some(v) => Value::Array((v).iter().map(|v| Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect())).collect()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -9890,9 +9916,10 @@ fn iface_apps__create_rollback_response_deployment_progress_steps_item_reason__t
     Value::Object(m)
 }
 
-fn iface_apps__create_rollback_response_deployment_progress_steps_item_steps_item__to_json(p: &iface_apps::CreateRollbackResponseDeploymentProgressStepsItemStepsItem) -> Value {
+fn iface_apps__create_rollback_response_deployment_progress_steps_item_steps_item_entry__to_json(p: &iface_apps::CreateRollbackResponseDeploymentProgressStepsItemStepsItemEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -9905,7 +9932,7 @@ fn iface_apps__create_rollback_response_deployment_progress_summary_steps_item__
     m.insert("reason".into(), match (&p.reason) { Some(v) => iface_apps__create_rollback_response_deployment_progress_summary_steps_item_reason__to_json(v), None => Value::Null });
     m.insert("started_at".into(), match (&p.started_at) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("status".into(), match (&p.status) { Some(v) => Value::String(iface_apps__list_op_response_apps_item_active_deployment_progress_steps_item_status_enum__to_str(v).into()), None => Value::Null });
-    m.insert("steps".into(), match (&p.steps) { Some(v) => Value::Array((v).iter().map(|v| iface_apps__create_rollback_response_deployment_progress_summary_steps_item_steps_item__to_json(v)).collect()), None => Value::Null });
+    m.insert("steps".into(), match (&p.steps) { Some(v) => Value::Array((v).iter().map(|v| Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect())).collect()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -9916,9 +9943,10 @@ fn iface_apps__create_rollback_response_deployment_progress_summary_steps_item_r
     Value::Object(m)
 }
 
-fn iface_apps__create_rollback_response_deployment_progress_summary_steps_item_steps_item__to_json(p: &iface_apps::CreateRollbackResponseDeploymentProgressSummaryStepsItemStepsItem) -> Value {
+fn iface_apps__create_rollback_response_deployment_progress_summary_steps_item_steps_item_entry__to_json(p: &iface_apps::CreateRollbackResponseDeploymentProgressSummaryStepsItemStepsItemEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -10437,7 +10465,7 @@ fn iface_apps__revert_rollback_response_deployment_progress_steps_item__to_json(
     m.insert("reason".into(), match (&p.reason) { Some(v) => iface_apps__revert_rollback_response_deployment_progress_steps_item_reason__to_json(v), None => Value::Null });
     m.insert("started_at".into(), match (&p.started_at) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("status".into(), match (&p.status) { Some(v) => Value::String(iface_apps__list_op_response_apps_item_active_deployment_progress_steps_item_status_enum__to_str(v).into()), None => Value::Null });
-    m.insert("steps".into(), match (&p.steps) { Some(v) => Value::Array((v).iter().map(|v| iface_apps__revert_rollback_response_deployment_progress_steps_item_steps_item__to_json(v)).collect()), None => Value::Null });
+    m.insert("steps".into(), match (&p.steps) { Some(v) => Value::Array((v).iter().map(|v| Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect())).collect()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -10448,9 +10476,10 @@ fn iface_apps__revert_rollback_response_deployment_progress_steps_item_reason__t
     Value::Object(m)
 }
 
-fn iface_apps__revert_rollback_response_deployment_progress_steps_item_steps_item__to_json(p: &iface_apps::RevertRollbackResponseDeploymentProgressStepsItemStepsItem) -> Value {
+fn iface_apps__revert_rollback_response_deployment_progress_steps_item_steps_item_entry__to_json(p: &iface_apps::RevertRollbackResponseDeploymentProgressStepsItemStepsItemEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -10463,7 +10492,7 @@ fn iface_apps__revert_rollback_response_deployment_progress_summary_steps_item__
     m.insert("reason".into(), match (&p.reason) { Some(v) => iface_apps__revert_rollback_response_deployment_progress_summary_steps_item_reason__to_json(v), None => Value::Null });
     m.insert("started_at".into(), match (&p.started_at) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("status".into(), match (&p.status) { Some(v) => Value::String(iface_apps__list_op_response_apps_item_active_deployment_progress_steps_item_status_enum__to_str(v).into()), None => Value::Null });
-    m.insert("steps".into(), match (&p.steps) { Some(v) => Value::Array((v).iter().map(|v| iface_apps__revert_rollback_response_deployment_progress_summary_steps_item_steps_item__to_json(v)).collect()), None => Value::Null });
+    m.insert("steps".into(), match (&p.steps) { Some(v) => Value::Array((v).iter().map(|v| Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect())).collect()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -10474,9 +10503,10 @@ fn iface_apps__revert_rollback_response_deployment_progress_summary_steps_item_r
     Value::Object(m)
 }
 
-fn iface_apps__revert_rollback_response_deployment_progress_summary_steps_item_steps_item__to_json(p: &iface_apps::RevertRollbackResponseDeploymentProgressSummaryStepsItemStepsItem) -> Value {
+fn iface_apps__revert_rollback_response_deployment_progress_summary_steps_item_steps_item_entry__to_json(p: &iface_apps::RevertRollbackResponseDeploymentProgressSummaryStepsItemStepsItemEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -11042,7 +11072,7 @@ fn iface_apps__get_response_app_active_deployment_progress_steps_item__to_json(p
     m.insert("reason".into(), match (&p.reason) { Some(v) => iface_apps__get_response_app_active_deployment_progress_steps_item_reason__to_json(v), None => Value::Null });
     m.insert("started_at".into(), match (&p.started_at) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("status".into(), match (&p.status) { Some(v) => Value::String(iface_apps__list_op_response_apps_item_active_deployment_progress_steps_item_status_enum__to_str(v).into()), None => Value::Null });
-    m.insert("steps".into(), match (&p.steps) { Some(v) => Value::Array((v).iter().map(|v| iface_apps__get_response_app_active_deployment_progress_steps_item_steps_item__to_json(v)).collect()), None => Value::Null });
+    m.insert("steps".into(), match (&p.steps) { Some(v) => Value::Array((v).iter().map(|v| Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect())).collect()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -11053,9 +11083,10 @@ fn iface_apps__get_response_app_active_deployment_progress_steps_item_reason__to
     Value::Object(m)
 }
 
-fn iface_apps__get_response_app_active_deployment_progress_steps_item_steps_item__to_json(p: &iface_apps::GetResponseAppActiveDeploymentProgressStepsItemStepsItem) -> Value {
+fn iface_apps__get_response_app_active_deployment_progress_steps_item_steps_item_entry__to_json(p: &iface_apps::GetResponseAppActiveDeploymentProgressStepsItemStepsItemEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -11068,7 +11099,7 @@ fn iface_apps__get_response_app_active_deployment_progress_summary_steps_item__t
     m.insert("reason".into(), match (&p.reason) { Some(v) => iface_apps__get_response_app_active_deployment_progress_summary_steps_item_reason__to_json(v), None => Value::Null });
     m.insert("started_at".into(), match (&p.started_at) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("status".into(), match (&p.status) { Some(v) => Value::String(iface_apps__list_op_response_apps_item_active_deployment_progress_steps_item_status_enum__to_str(v).into()), None => Value::Null });
-    m.insert("steps".into(), match (&p.steps) { Some(v) => Value::Array((v).iter().map(|v| iface_apps__get_response_app_active_deployment_progress_summary_steps_item_steps_item__to_json(v)).collect()), None => Value::Null });
+    m.insert("steps".into(), match (&p.steps) { Some(v) => Value::Array((v).iter().map(|v| Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect())).collect()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -11079,9 +11110,10 @@ fn iface_apps__get_response_app_active_deployment_progress_summary_steps_item_re
     Value::Object(m)
 }
 
-fn iface_apps__get_response_app_active_deployment_progress_summary_steps_item_steps_item__to_json(p: &iface_apps::GetResponseAppActiveDeploymentProgressSummaryStepsItemStepsItem) -> Value {
+fn iface_apps__get_response_app_active_deployment_progress_summary_steps_item_steps_item_entry__to_json(p: &iface_apps::GetResponseAppActiveDeploymentProgressSummaryStepsItemStepsItemEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -11552,13 +11584,14 @@ fn iface_apps__get_response_app_domains_item__to_json(p: &iface_apps::GetRespons
 
 fn iface_apps__get_response_app_domains_item_progress__to_json(p: &iface_apps::GetResponseAppDomainsItemProgress) -> Value {
     let mut m = Map::new();
-    m.insert("steps".into(), match (&p.steps) { Some(v) => Value::Array((v).iter().map(|v| iface_apps__get_response_app_domains_item_progress_steps_item__to_json(v)).collect()), None => Value::Null });
+    m.insert("steps".into(), match (&p.steps) { Some(v) => Value::Array((v).iter().map(|v| Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect())).collect()), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_apps__get_response_app_domains_item_progress_steps_item__to_json(p: &iface_apps::GetResponseAppDomainsItemProgressStepsItem) -> Value {
+fn iface_apps__get_response_app_domains_item_progress_steps_item_entry__to_json(p: &iface_apps::GetResponseAppDomainsItemProgressStepsItemEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -11635,7 +11668,7 @@ fn iface_apps__get_response_app_in_progress_deployment_progress_steps_item__to_j
     m.insert("reason".into(), match (&p.reason) { Some(v) => iface_apps__get_response_app_in_progress_deployment_progress_steps_item_reason__to_json(v), None => Value::Null });
     m.insert("started_at".into(), match (&p.started_at) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("status".into(), match (&p.status) { Some(v) => Value::String(iface_apps__list_op_response_apps_item_active_deployment_progress_steps_item_status_enum__to_str(v).into()), None => Value::Null });
-    m.insert("steps".into(), match (&p.steps) { Some(v) => Value::Array((v).iter().map(|v| iface_apps__get_response_app_in_progress_deployment_progress_steps_item_steps_item__to_json(v)).collect()), None => Value::Null });
+    m.insert("steps".into(), match (&p.steps) { Some(v) => Value::Array((v).iter().map(|v| Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect())).collect()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -11646,9 +11679,10 @@ fn iface_apps__get_response_app_in_progress_deployment_progress_steps_item_reaso
     Value::Object(m)
 }
 
-fn iface_apps__get_response_app_in_progress_deployment_progress_steps_item_steps_item__to_json(p: &iface_apps::GetResponseAppInProgressDeploymentProgressStepsItemStepsItem) -> Value {
+fn iface_apps__get_response_app_in_progress_deployment_progress_steps_item_steps_item_entry__to_json(p: &iface_apps::GetResponseAppInProgressDeploymentProgressStepsItemStepsItemEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -11661,7 +11695,7 @@ fn iface_apps__get_response_app_in_progress_deployment_progress_summary_steps_it
     m.insert("reason".into(), match (&p.reason) { Some(v) => iface_apps__get_response_app_in_progress_deployment_progress_summary_steps_item_reason__to_json(v), None => Value::Null });
     m.insert("started_at".into(), match (&p.started_at) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("status".into(), match (&p.status) { Some(v) => Value::String(iface_apps__list_op_response_apps_item_active_deployment_progress_steps_item_status_enum__to_str(v).into()), None => Value::Null });
-    m.insert("steps".into(), match (&p.steps) { Some(v) => Value::Array((v).iter().map(|v| iface_apps__get_response_app_in_progress_deployment_progress_summary_steps_item_steps_item__to_json(v)).collect()), None => Value::Null });
+    m.insert("steps".into(), match (&p.steps) { Some(v) => Value::Array((v).iter().map(|v| Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect())).collect()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -11672,9 +11706,10 @@ fn iface_apps__get_response_app_in_progress_deployment_progress_summary_steps_it
     Value::Object(m)
 }
 
-fn iface_apps__get_response_app_in_progress_deployment_progress_summary_steps_item_steps_item__to_json(p: &iface_apps::GetResponseAppInProgressDeploymentProgressSummaryStepsItemStepsItem) -> Value {
+fn iface_apps__get_response_app_in_progress_deployment_progress_summary_steps_item_steps_item_entry__to_json(p: &iface_apps::GetResponseAppInProgressDeploymentProgressSummaryStepsItemStepsItemEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -12187,7 +12222,7 @@ fn iface_apps__get_response_app_pending_deployment_progress_steps_item__to_json(
     m.insert("reason".into(), match (&p.reason) { Some(v) => iface_apps__get_response_app_pending_deployment_progress_steps_item_reason__to_json(v), None => Value::Null });
     m.insert("started_at".into(), match (&p.started_at) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("status".into(), match (&p.status) { Some(v) => Value::String(iface_apps__list_op_response_apps_item_active_deployment_progress_steps_item_status_enum__to_str(v).into()), None => Value::Null });
-    m.insert("steps".into(), match (&p.steps) { Some(v) => Value::Array((v).iter().map(|v| iface_apps__get_response_app_pending_deployment_progress_steps_item_steps_item__to_json(v)).collect()), None => Value::Null });
+    m.insert("steps".into(), match (&p.steps) { Some(v) => Value::Array((v).iter().map(|v| Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect())).collect()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -12198,9 +12233,10 @@ fn iface_apps__get_response_app_pending_deployment_progress_steps_item_reason__t
     Value::Object(m)
 }
 
-fn iface_apps__get_response_app_pending_deployment_progress_steps_item_steps_item__to_json(p: &iface_apps::GetResponseAppPendingDeploymentProgressStepsItemStepsItem) -> Value {
+fn iface_apps__get_response_app_pending_deployment_progress_steps_item_steps_item_entry__to_json(p: &iface_apps::GetResponseAppPendingDeploymentProgressStepsItemStepsItemEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -12213,7 +12249,7 @@ fn iface_apps__get_response_app_pending_deployment_progress_summary_steps_item__
     m.insert("reason".into(), match (&p.reason) { Some(v) => iface_apps__get_response_app_pending_deployment_progress_summary_steps_item_reason__to_json(v), None => Value::Null });
     m.insert("started_at".into(), match (&p.started_at) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("status".into(), match (&p.status) { Some(v) => Value::String(iface_apps__list_op_response_apps_item_active_deployment_progress_steps_item_status_enum__to_str(v).into()), None => Value::Null });
-    m.insert("steps".into(), match (&p.steps) { Some(v) => Value::Array((v).iter().map(|v| iface_apps__get_response_app_pending_deployment_progress_summary_steps_item_steps_item__to_json(v)).collect()), None => Value::Null });
+    m.insert("steps".into(), match (&p.steps) { Some(v) => Value::Array((v).iter().map(|v| Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect())).collect()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -12224,9 +12260,10 @@ fn iface_apps__get_response_app_pending_deployment_progress_summary_steps_item_r
     Value::Object(m)
 }
 
-fn iface_apps__get_response_app_pending_deployment_progress_summary_steps_item_steps_item__to_json(p: &iface_apps::GetResponseAppPendingDeploymentProgressSummaryStepsItemStepsItem) -> Value {
+fn iface_apps__get_response_app_pending_deployment_progress_summary_steps_item_steps_item_entry__to_json(p: &iface_apps::GetResponseAppPendingDeploymentProgressSummaryStepsItemStepsItemEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -12739,7 +12776,7 @@ fn iface_apps__get_response_app_pinned_deployment_progress_steps_item__to_json(p
     m.insert("reason".into(), match (&p.reason) { Some(v) => iface_apps__get_response_app_pinned_deployment_progress_steps_item_reason__to_json(v), None => Value::Null });
     m.insert("started_at".into(), match (&p.started_at) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("status".into(), match (&p.status) { Some(v) => Value::String(iface_apps__list_op_response_apps_item_active_deployment_progress_steps_item_status_enum__to_str(v).into()), None => Value::Null });
-    m.insert("steps".into(), match (&p.steps) { Some(v) => Value::Array((v).iter().map(|v| iface_apps__get_response_app_pinned_deployment_progress_steps_item_steps_item__to_json(v)).collect()), None => Value::Null });
+    m.insert("steps".into(), match (&p.steps) { Some(v) => Value::Array((v).iter().map(|v| Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect())).collect()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -12750,9 +12787,10 @@ fn iface_apps__get_response_app_pinned_deployment_progress_steps_item_reason__to
     Value::Object(m)
 }
 
-fn iface_apps__get_response_app_pinned_deployment_progress_steps_item_steps_item__to_json(p: &iface_apps::GetResponseAppPinnedDeploymentProgressStepsItemStepsItem) -> Value {
+fn iface_apps__get_response_app_pinned_deployment_progress_steps_item_steps_item_entry__to_json(p: &iface_apps::GetResponseAppPinnedDeploymentProgressStepsItemStepsItemEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -12765,7 +12803,7 @@ fn iface_apps__get_response_app_pinned_deployment_progress_summary_steps_item__t
     m.insert("reason".into(), match (&p.reason) { Some(v) => iface_apps__get_response_app_pinned_deployment_progress_summary_steps_item_reason__to_json(v), None => Value::Null });
     m.insert("started_at".into(), match (&p.started_at) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("status".into(), match (&p.status) { Some(v) => Value::String(iface_apps__list_op_response_apps_item_active_deployment_progress_steps_item_status_enum__to_str(v).into()), None => Value::Null });
-    m.insert("steps".into(), match (&p.steps) { Some(v) => Value::Array((v).iter().map(|v| iface_apps__get_response_app_pinned_deployment_progress_summary_steps_item_steps_item__to_json(v)).collect()), None => Value::Null });
+    m.insert("steps".into(), match (&p.steps) { Some(v) => Value::Array((v).iter().map(|v| Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect())).collect()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -12776,9 +12814,10 @@ fn iface_apps__get_response_app_pinned_deployment_progress_summary_steps_item_re
     Value::Object(m)
 }
 
-fn iface_apps__get_response_app_pinned_deployment_progress_summary_steps_item_steps_item__to_json(p: &iface_apps::GetResponseAppPinnedDeploymentProgressSummaryStepsItemStepsItem) -> Value {
+fn iface_apps__get_response_app_pinned_deployment_progress_summary_steps_item_steps_item_entry__to_json(p: &iface_apps::GetResponseAppPinnedDeploymentProgressSummaryStepsItemStepsItemEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -14197,7 +14236,7 @@ fn iface_apps__update_response_app_active_deployment_progress_steps_item__to_jso
     m.insert("reason".into(), match (&p.reason) { Some(v) => iface_apps__update_response_app_active_deployment_progress_steps_item_reason__to_json(v), None => Value::Null });
     m.insert("started_at".into(), match (&p.started_at) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("status".into(), match (&p.status) { Some(v) => Value::String(iface_apps__list_op_response_apps_item_active_deployment_progress_steps_item_status_enum__to_str(v).into()), None => Value::Null });
-    m.insert("steps".into(), match (&p.steps) { Some(v) => Value::Array((v).iter().map(|v| iface_apps__update_response_app_active_deployment_progress_steps_item_steps_item__to_json(v)).collect()), None => Value::Null });
+    m.insert("steps".into(), match (&p.steps) { Some(v) => Value::Array((v).iter().map(|v| Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect())).collect()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -14208,9 +14247,10 @@ fn iface_apps__update_response_app_active_deployment_progress_steps_item_reason_
     Value::Object(m)
 }
 
-fn iface_apps__update_response_app_active_deployment_progress_steps_item_steps_item__to_json(p: &iface_apps::UpdateResponseAppActiveDeploymentProgressStepsItemStepsItem) -> Value {
+fn iface_apps__update_response_app_active_deployment_progress_steps_item_steps_item_entry__to_json(p: &iface_apps::UpdateResponseAppActiveDeploymentProgressStepsItemStepsItemEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -14223,7 +14263,7 @@ fn iface_apps__update_response_app_active_deployment_progress_summary_steps_item
     m.insert("reason".into(), match (&p.reason) { Some(v) => iface_apps__update_response_app_active_deployment_progress_summary_steps_item_reason__to_json(v), None => Value::Null });
     m.insert("started_at".into(), match (&p.started_at) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("status".into(), match (&p.status) { Some(v) => Value::String(iface_apps__list_op_response_apps_item_active_deployment_progress_steps_item_status_enum__to_str(v).into()), None => Value::Null });
-    m.insert("steps".into(), match (&p.steps) { Some(v) => Value::Array((v).iter().map(|v| iface_apps__update_response_app_active_deployment_progress_summary_steps_item_steps_item__to_json(v)).collect()), None => Value::Null });
+    m.insert("steps".into(), match (&p.steps) { Some(v) => Value::Array((v).iter().map(|v| Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect())).collect()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -14234,9 +14274,10 @@ fn iface_apps__update_response_app_active_deployment_progress_summary_steps_item
     Value::Object(m)
 }
 
-fn iface_apps__update_response_app_active_deployment_progress_summary_steps_item_steps_item__to_json(p: &iface_apps::UpdateResponseAppActiveDeploymentProgressSummaryStepsItemStepsItem) -> Value {
+fn iface_apps__update_response_app_active_deployment_progress_summary_steps_item_steps_item_entry__to_json(p: &iface_apps::UpdateResponseAppActiveDeploymentProgressSummaryStepsItemStepsItemEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -14707,13 +14748,14 @@ fn iface_apps__update_response_app_domains_item__to_json(p: &iface_apps::UpdateR
 
 fn iface_apps__update_response_app_domains_item_progress__to_json(p: &iface_apps::UpdateResponseAppDomainsItemProgress) -> Value {
     let mut m = Map::new();
-    m.insert("steps".into(), match (&p.steps) { Some(v) => Value::Array((v).iter().map(|v| iface_apps__update_response_app_domains_item_progress_steps_item__to_json(v)).collect()), None => Value::Null });
+    m.insert("steps".into(), match (&p.steps) { Some(v) => Value::Array((v).iter().map(|v| Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect())).collect()), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_apps__update_response_app_domains_item_progress_steps_item__to_json(p: &iface_apps::UpdateResponseAppDomainsItemProgressStepsItem) -> Value {
+fn iface_apps__update_response_app_domains_item_progress_steps_item_entry__to_json(p: &iface_apps::UpdateResponseAppDomainsItemProgressStepsItemEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -14790,7 +14832,7 @@ fn iface_apps__update_response_app_in_progress_deployment_progress_steps_item__t
     m.insert("reason".into(), match (&p.reason) { Some(v) => iface_apps__update_response_app_in_progress_deployment_progress_steps_item_reason__to_json(v), None => Value::Null });
     m.insert("started_at".into(), match (&p.started_at) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("status".into(), match (&p.status) { Some(v) => Value::String(iface_apps__list_op_response_apps_item_active_deployment_progress_steps_item_status_enum__to_str(v).into()), None => Value::Null });
-    m.insert("steps".into(), match (&p.steps) { Some(v) => Value::Array((v).iter().map(|v| iface_apps__update_response_app_in_progress_deployment_progress_steps_item_steps_item__to_json(v)).collect()), None => Value::Null });
+    m.insert("steps".into(), match (&p.steps) { Some(v) => Value::Array((v).iter().map(|v| Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect())).collect()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -14801,9 +14843,10 @@ fn iface_apps__update_response_app_in_progress_deployment_progress_steps_item_re
     Value::Object(m)
 }
 
-fn iface_apps__update_response_app_in_progress_deployment_progress_steps_item_steps_item__to_json(p: &iface_apps::UpdateResponseAppInProgressDeploymentProgressStepsItemStepsItem) -> Value {
+fn iface_apps__update_response_app_in_progress_deployment_progress_steps_item_steps_item_entry__to_json(p: &iface_apps::UpdateResponseAppInProgressDeploymentProgressStepsItemStepsItemEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -14816,7 +14859,7 @@ fn iface_apps__update_response_app_in_progress_deployment_progress_summary_steps
     m.insert("reason".into(), match (&p.reason) { Some(v) => iface_apps__update_response_app_in_progress_deployment_progress_summary_steps_item_reason__to_json(v), None => Value::Null });
     m.insert("started_at".into(), match (&p.started_at) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("status".into(), match (&p.status) { Some(v) => Value::String(iface_apps__list_op_response_apps_item_active_deployment_progress_steps_item_status_enum__to_str(v).into()), None => Value::Null });
-    m.insert("steps".into(), match (&p.steps) { Some(v) => Value::Array((v).iter().map(|v| iface_apps__update_response_app_in_progress_deployment_progress_summary_steps_item_steps_item__to_json(v)).collect()), None => Value::Null });
+    m.insert("steps".into(), match (&p.steps) { Some(v) => Value::Array((v).iter().map(|v| Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect())).collect()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -14827,9 +14870,10 @@ fn iface_apps__update_response_app_in_progress_deployment_progress_summary_steps
     Value::Object(m)
 }
 
-fn iface_apps__update_response_app_in_progress_deployment_progress_summary_steps_item_steps_item__to_json(p: &iface_apps::UpdateResponseAppInProgressDeploymentProgressSummaryStepsItemStepsItem) -> Value {
+fn iface_apps__update_response_app_in_progress_deployment_progress_summary_steps_item_steps_item_entry__to_json(p: &iface_apps::UpdateResponseAppInProgressDeploymentProgressSummaryStepsItemStepsItemEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -15342,7 +15386,7 @@ fn iface_apps__update_response_app_pending_deployment_progress_steps_item__to_js
     m.insert("reason".into(), match (&p.reason) { Some(v) => iface_apps__update_response_app_pending_deployment_progress_steps_item_reason__to_json(v), None => Value::Null });
     m.insert("started_at".into(), match (&p.started_at) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("status".into(), match (&p.status) { Some(v) => Value::String(iface_apps__list_op_response_apps_item_active_deployment_progress_steps_item_status_enum__to_str(v).into()), None => Value::Null });
-    m.insert("steps".into(), match (&p.steps) { Some(v) => Value::Array((v).iter().map(|v| iface_apps__update_response_app_pending_deployment_progress_steps_item_steps_item__to_json(v)).collect()), None => Value::Null });
+    m.insert("steps".into(), match (&p.steps) { Some(v) => Value::Array((v).iter().map(|v| Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect())).collect()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -15353,9 +15397,10 @@ fn iface_apps__update_response_app_pending_deployment_progress_steps_item_reason
     Value::Object(m)
 }
 
-fn iface_apps__update_response_app_pending_deployment_progress_steps_item_steps_item__to_json(p: &iface_apps::UpdateResponseAppPendingDeploymentProgressStepsItemStepsItem) -> Value {
+fn iface_apps__update_response_app_pending_deployment_progress_steps_item_steps_item_entry__to_json(p: &iface_apps::UpdateResponseAppPendingDeploymentProgressStepsItemStepsItemEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -15368,7 +15413,7 @@ fn iface_apps__update_response_app_pending_deployment_progress_summary_steps_ite
     m.insert("reason".into(), match (&p.reason) { Some(v) => iface_apps__update_response_app_pending_deployment_progress_summary_steps_item_reason__to_json(v), None => Value::Null });
     m.insert("started_at".into(), match (&p.started_at) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("status".into(), match (&p.status) { Some(v) => Value::String(iface_apps__list_op_response_apps_item_active_deployment_progress_steps_item_status_enum__to_str(v).into()), None => Value::Null });
-    m.insert("steps".into(), match (&p.steps) { Some(v) => Value::Array((v).iter().map(|v| iface_apps__update_response_app_pending_deployment_progress_summary_steps_item_steps_item__to_json(v)).collect()), None => Value::Null });
+    m.insert("steps".into(), match (&p.steps) { Some(v) => Value::Array((v).iter().map(|v| Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect())).collect()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -15379,9 +15424,10 @@ fn iface_apps__update_response_app_pending_deployment_progress_summary_steps_ite
     Value::Object(m)
 }
 
-fn iface_apps__update_response_app_pending_deployment_progress_summary_steps_item_steps_item__to_json(p: &iface_apps::UpdateResponseAppPendingDeploymentProgressSummaryStepsItemStepsItem) -> Value {
+fn iface_apps__update_response_app_pending_deployment_progress_summary_steps_item_steps_item_entry__to_json(p: &iface_apps::UpdateResponseAppPendingDeploymentProgressSummaryStepsItemStepsItemEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -15894,7 +15940,7 @@ fn iface_apps__update_response_app_pinned_deployment_progress_steps_item__to_jso
     m.insert("reason".into(), match (&p.reason) { Some(v) => iface_apps__update_response_app_pinned_deployment_progress_steps_item_reason__to_json(v), None => Value::Null });
     m.insert("started_at".into(), match (&p.started_at) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("status".into(), match (&p.status) { Some(v) => Value::String(iface_apps__list_op_response_apps_item_active_deployment_progress_steps_item_status_enum__to_str(v).into()), None => Value::Null });
-    m.insert("steps".into(), match (&p.steps) { Some(v) => Value::Array((v).iter().map(|v| iface_apps__update_response_app_pinned_deployment_progress_steps_item_steps_item__to_json(v)).collect()), None => Value::Null });
+    m.insert("steps".into(), match (&p.steps) { Some(v) => Value::Array((v).iter().map(|v| Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect())).collect()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -15905,9 +15951,10 @@ fn iface_apps__update_response_app_pinned_deployment_progress_steps_item_reason_
     Value::Object(m)
 }
 
-fn iface_apps__update_response_app_pinned_deployment_progress_steps_item_steps_item__to_json(p: &iface_apps::UpdateResponseAppPinnedDeploymentProgressStepsItemStepsItem) -> Value {
+fn iface_apps__update_response_app_pinned_deployment_progress_steps_item_steps_item_entry__to_json(p: &iface_apps::UpdateResponseAppPinnedDeploymentProgressStepsItemStepsItemEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -15920,7 +15967,7 @@ fn iface_apps__update_response_app_pinned_deployment_progress_summary_steps_item
     m.insert("reason".into(), match (&p.reason) { Some(v) => iface_apps__update_response_app_pinned_deployment_progress_summary_steps_item_reason__to_json(v), None => Value::Null });
     m.insert("started_at".into(), match (&p.started_at) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("status".into(), match (&p.status) { Some(v) => Value::String(iface_apps__list_op_response_apps_item_active_deployment_progress_steps_item_status_enum__to_str(v).into()), None => Value::Null });
-    m.insert("steps".into(), match (&p.steps) { Some(v) => Value::Array((v).iter().map(|v| iface_apps__update_response_app_pinned_deployment_progress_summary_steps_item_steps_item__to_json(v)).collect()), None => Value::Null });
+    m.insert("steps".into(), match (&p.steps) { Some(v) => Value::Array((v).iter().map(|v| Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect())).collect()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -15931,9 +15978,10 @@ fn iface_apps__update_response_app_pinned_deployment_progress_summary_steps_item
     Value::Object(m)
 }
 
-fn iface_apps__update_response_app_pinned_deployment_progress_summary_steps_item_steps_item__to_json(p: &iface_apps::UpdateResponseAppPinnedDeploymentProgressSummaryStepsItemStepsItem) -> Value {
+fn iface_apps__update_response_app_pinned_deployment_progress_summary_steps_item_steps_item_entry__to_json(p: &iface_apps::UpdateResponseAppPinnedDeploymentProgressSummaryStepsItemStepsItemEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -17117,7 +17165,7 @@ fn iface_apps__list_op_response_apps_item_active_deployment_progress_steps_item_
         reason: m.get("reason").filter(|v| !v.is_null()).and_then(|v| iface_apps__list_op_response_apps_item_active_deployment_progress_steps_item_reason__from_json(v)),
         started_at: m.get("started_at").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         status: m.get("status").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_apps__list_op_response_apps_item_active_deployment_progress_steps_item_status_enum__from_str)),
-        steps: m.get("steps").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_apps__list_op_response_apps_item_active_deployment_progress_steps_item_steps_item__from_json(x)).collect())),
+        steps: m.get("steps").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_apps::ListOpResponseAppsItemActiveDeploymentProgressStepsItemStepsItemEntry { key: k.clone(), value: val })).collect())).collect())),
     })
 }
 
@@ -17129,10 +17177,11 @@ fn iface_apps__list_op_response_apps_item_active_deployment_progress_steps_item_
     })
 }
 
-fn iface_apps__list_op_response_apps_item_active_deployment_progress_steps_item_steps_item__from_json(v: &Value) -> Option<iface_apps::ListOpResponseAppsItemActiveDeploymentProgressStepsItemStepsItem> {
+fn iface_apps__list_op_response_apps_item_active_deployment_progress_steps_item_steps_item_entry__from_json(v: &Value) -> Option<iface_apps::ListOpResponseAppsItemActiveDeploymentProgressStepsItemStepsItemEntry> {
     let m = v.as_object()?;
-    Some(iface_apps::ListOpResponseAppsItemActiveDeploymentProgressStepsItemStepsItem {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_apps::ListOpResponseAppsItemActiveDeploymentProgressStepsItemStepsItemEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -17146,7 +17195,7 @@ fn iface_apps__list_op_response_apps_item_active_deployment_progress_summary_ste
         reason: m.get("reason").filter(|v| !v.is_null()).and_then(|v| iface_apps__list_op_response_apps_item_active_deployment_progress_summary_steps_item_reason__from_json(v)),
         started_at: m.get("started_at").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         status: m.get("status").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_apps__list_op_response_apps_item_active_deployment_progress_steps_item_status_enum__from_str)),
-        steps: m.get("steps").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_apps__list_op_response_apps_item_active_deployment_progress_summary_steps_item_steps_item__from_json(x)).collect())),
+        steps: m.get("steps").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_apps::ListOpResponseAppsItemActiveDeploymentProgressSummaryStepsItemStepsItemEntry { key: k.clone(), value: val })).collect())).collect())),
     })
 }
 
@@ -17158,10 +17207,11 @@ fn iface_apps__list_op_response_apps_item_active_deployment_progress_summary_ste
     })
 }
 
-fn iface_apps__list_op_response_apps_item_active_deployment_progress_summary_steps_item_steps_item__from_json(v: &Value) -> Option<iface_apps::ListOpResponseAppsItemActiveDeploymentProgressSummaryStepsItemStepsItem> {
+fn iface_apps__list_op_response_apps_item_active_deployment_progress_summary_steps_item_steps_item_entry__from_json(v: &Value) -> Option<iface_apps::ListOpResponseAppsItemActiveDeploymentProgressSummaryStepsItemStepsItemEntry> {
     let m = v.as_object()?;
-    Some(iface_apps::ListOpResponseAppsItemActiveDeploymentProgressSummaryStepsItemStepsItem {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_apps::ListOpResponseAppsItemActiveDeploymentProgressSummaryStepsItemStepsItemEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -17685,14 +17735,15 @@ fn iface_apps__list_op_response_apps_item_domains_item__from_json(v: &Value) -> 
 fn iface_apps__list_op_response_apps_item_domains_item_progress__from_json(v: &Value) -> Option<iface_apps::ListOpResponseAppsItemDomainsItemProgress> {
     let m = v.as_object()?;
     Some(iface_apps::ListOpResponseAppsItemDomainsItemProgress {
-        steps: m.get("steps").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_apps__list_op_response_apps_item_domains_item_progress_steps_item__from_json(x)).collect())),
+        steps: m.get("steps").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_apps::ListOpResponseAppsItemDomainsItemProgressStepsItemEntry { key: k.clone(), value: val })).collect())).collect())),
     })
 }
 
-fn iface_apps__list_op_response_apps_item_domains_item_progress_steps_item__from_json(v: &Value) -> Option<iface_apps::ListOpResponseAppsItemDomainsItemProgressStepsItem> {
+fn iface_apps__list_op_response_apps_item_domains_item_progress_steps_item_entry__from_json(v: &Value) -> Option<iface_apps::ListOpResponseAppsItemDomainsItemProgressStepsItemEntry> {
     let m = v.as_object()?;
-    Some(iface_apps::ListOpResponseAppsItemDomainsItemProgressStepsItem {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_apps::ListOpResponseAppsItemDomainsItemProgressStepsItemEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -17776,7 +17827,7 @@ fn iface_apps__list_op_response_apps_item_in_progress_deployment_progress_steps_
         reason: m.get("reason").filter(|v| !v.is_null()).and_then(|v| iface_apps__list_op_response_apps_item_in_progress_deployment_progress_steps_item_reason__from_json(v)),
         started_at: m.get("started_at").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         status: m.get("status").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_apps__list_op_response_apps_item_active_deployment_progress_steps_item_status_enum__from_str)),
-        steps: m.get("steps").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_apps__list_op_response_apps_item_in_progress_deployment_progress_steps_item_steps_item__from_json(x)).collect())),
+        steps: m.get("steps").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_apps::ListOpResponseAppsItemInProgressDeploymentProgressStepsItemStepsItemEntry { key: k.clone(), value: val })).collect())).collect())),
     })
 }
 
@@ -17788,10 +17839,11 @@ fn iface_apps__list_op_response_apps_item_in_progress_deployment_progress_steps_
     })
 }
 
-fn iface_apps__list_op_response_apps_item_in_progress_deployment_progress_steps_item_steps_item__from_json(v: &Value) -> Option<iface_apps::ListOpResponseAppsItemInProgressDeploymentProgressStepsItemStepsItem> {
+fn iface_apps__list_op_response_apps_item_in_progress_deployment_progress_steps_item_steps_item_entry__from_json(v: &Value) -> Option<iface_apps::ListOpResponseAppsItemInProgressDeploymentProgressStepsItemStepsItemEntry> {
     let m = v.as_object()?;
-    Some(iface_apps::ListOpResponseAppsItemInProgressDeploymentProgressStepsItemStepsItem {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_apps::ListOpResponseAppsItemInProgressDeploymentProgressStepsItemStepsItemEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -17805,7 +17857,7 @@ fn iface_apps__list_op_response_apps_item_in_progress_deployment_progress_summar
         reason: m.get("reason").filter(|v| !v.is_null()).and_then(|v| iface_apps__list_op_response_apps_item_in_progress_deployment_progress_summary_steps_item_reason__from_json(v)),
         started_at: m.get("started_at").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         status: m.get("status").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_apps__list_op_response_apps_item_active_deployment_progress_steps_item_status_enum__from_str)),
-        steps: m.get("steps").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_apps__list_op_response_apps_item_in_progress_deployment_progress_summary_steps_item_steps_item__from_json(x)).collect())),
+        steps: m.get("steps").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_apps::ListOpResponseAppsItemInProgressDeploymentProgressSummaryStepsItemStepsItemEntry { key: k.clone(), value: val })).collect())).collect())),
     })
 }
 
@@ -17817,10 +17869,11 @@ fn iface_apps__list_op_response_apps_item_in_progress_deployment_progress_summar
     })
 }
 
-fn iface_apps__list_op_response_apps_item_in_progress_deployment_progress_summary_steps_item_steps_item__from_json(v: &Value) -> Option<iface_apps::ListOpResponseAppsItemInProgressDeploymentProgressSummaryStepsItemStepsItem> {
+fn iface_apps__list_op_response_apps_item_in_progress_deployment_progress_summary_steps_item_steps_item_entry__from_json(v: &Value) -> Option<iface_apps::ListOpResponseAppsItemInProgressDeploymentProgressSummaryStepsItemStepsItemEntry> {
     let m = v.as_object()?;
-    Some(iface_apps::ListOpResponseAppsItemInProgressDeploymentProgressSummaryStepsItemStepsItem {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_apps::ListOpResponseAppsItemInProgressDeploymentProgressSummaryStepsItemStepsItemEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -18389,7 +18442,7 @@ fn iface_apps__list_op_response_apps_item_pending_deployment_progress_steps_item
         reason: m.get("reason").filter(|v| !v.is_null()).and_then(|v| iface_apps__list_op_response_apps_item_pending_deployment_progress_steps_item_reason__from_json(v)),
         started_at: m.get("started_at").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         status: m.get("status").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_apps__list_op_response_apps_item_active_deployment_progress_steps_item_status_enum__from_str)),
-        steps: m.get("steps").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_apps__list_op_response_apps_item_pending_deployment_progress_steps_item_steps_item__from_json(x)).collect())),
+        steps: m.get("steps").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_apps::ListOpResponseAppsItemPendingDeploymentProgressStepsItemStepsItemEntry { key: k.clone(), value: val })).collect())).collect())),
     })
 }
 
@@ -18401,10 +18454,11 @@ fn iface_apps__list_op_response_apps_item_pending_deployment_progress_steps_item
     })
 }
 
-fn iface_apps__list_op_response_apps_item_pending_deployment_progress_steps_item_steps_item__from_json(v: &Value) -> Option<iface_apps::ListOpResponseAppsItemPendingDeploymentProgressStepsItemStepsItem> {
+fn iface_apps__list_op_response_apps_item_pending_deployment_progress_steps_item_steps_item_entry__from_json(v: &Value) -> Option<iface_apps::ListOpResponseAppsItemPendingDeploymentProgressStepsItemStepsItemEntry> {
     let m = v.as_object()?;
-    Some(iface_apps::ListOpResponseAppsItemPendingDeploymentProgressStepsItemStepsItem {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_apps::ListOpResponseAppsItemPendingDeploymentProgressStepsItemStepsItemEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -18418,7 +18472,7 @@ fn iface_apps__list_op_response_apps_item_pending_deployment_progress_summary_st
         reason: m.get("reason").filter(|v| !v.is_null()).and_then(|v| iface_apps__list_op_response_apps_item_pending_deployment_progress_summary_steps_item_reason__from_json(v)),
         started_at: m.get("started_at").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         status: m.get("status").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_apps__list_op_response_apps_item_active_deployment_progress_steps_item_status_enum__from_str)),
-        steps: m.get("steps").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_apps__list_op_response_apps_item_pending_deployment_progress_summary_steps_item_steps_item__from_json(x)).collect())),
+        steps: m.get("steps").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_apps::ListOpResponseAppsItemPendingDeploymentProgressSummaryStepsItemStepsItemEntry { key: k.clone(), value: val })).collect())).collect())),
     })
 }
 
@@ -18430,10 +18484,11 @@ fn iface_apps__list_op_response_apps_item_pending_deployment_progress_summary_st
     })
 }
 
-fn iface_apps__list_op_response_apps_item_pending_deployment_progress_summary_steps_item_steps_item__from_json(v: &Value) -> Option<iface_apps::ListOpResponseAppsItemPendingDeploymentProgressSummaryStepsItemStepsItem> {
+fn iface_apps__list_op_response_apps_item_pending_deployment_progress_summary_steps_item_steps_item_entry__from_json(v: &Value) -> Option<iface_apps::ListOpResponseAppsItemPendingDeploymentProgressSummaryStepsItemStepsItemEntry> {
     let m = v.as_object()?;
-    Some(iface_apps::ListOpResponseAppsItemPendingDeploymentProgressSummaryStepsItemStepsItem {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_apps::ListOpResponseAppsItemPendingDeploymentProgressSummaryStepsItemStepsItemEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -19002,7 +19057,7 @@ fn iface_apps__list_op_response_apps_item_pinned_deployment_progress_steps_item_
         reason: m.get("reason").filter(|v| !v.is_null()).and_then(|v| iface_apps__list_op_response_apps_item_pinned_deployment_progress_steps_item_reason__from_json(v)),
         started_at: m.get("started_at").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         status: m.get("status").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_apps__list_op_response_apps_item_active_deployment_progress_steps_item_status_enum__from_str)),
-        steps: m.get("steps").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_apps__list_op_response_apps_item_pinned_deployment_progress_steps_item_steps_item__from_json(x)).collect())),
+        steps: m.get("steps").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_apps::ListOpResponseAppsItemPinnedDeploymentProgressStepsItemStepsItemEntry { key: k.clone(), value: val })).collect())).collect())),
     })
 }
 
@@ -19014,10 +19069,11 @@ fn iface_apps__list_op_response_apps_item_pinned_deployment_progress_steps_item_
     })
 }
 
-fn iface_apps__list_op_response_apps_item_pinned_deployment_progress_steps_item_steps_item__from_json(v: &Value) -> Option<iface_apps::ListOpResponseAppsItemPinnedDeploymentProgressStepsItemStepsItem> {
+fn iface_apps__list_op_response_apps_item_pinned_deployment_progress_steps_item_steps_item_entry__from_json(v: &Value) -> Option<iface_apps::ListOpResponseAppsItemPinnedDeploymentProgressStepsItemStepsItemEntry> {
     let m = v.as_object()?;
-    Some(iface_apps::ListOpResponseAppsItemPinnedDeploymentProgressStepsItemStepsItem {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_apps::ListOpResponseAppsItemPinnedDeploymentProgressStepsItemStepsItemEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -19031,7 +19087,7 @@ fn iface_apps__list_op_response_apps_item_pinned_deployment_progress_summary_ste
         reason: m.get("reason").filter(|v| !v.is_null()).and_then(|v| iface_apps__list_op_response_apps_item_pinned_deployment_progress_summary_steps_item_reason__from_json(v)),
         started_at: m.get("started_at").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         status: m.get("status").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_apps__list_op_response_apps_item_active_deployment_progress_steps_item_status_enum__from_str)),
-        steps: m.get("steps").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_apps__list_op_response_apps_item_pinned_deployment_progress_summary_steps_item_steps_item__from_json(x)).collect())),
+        steps: m.get("steps").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_apps::ListOpResponseAppsItemPinnedDeploymentProgressSummaryStepsItemStepsItemEntry { key: k.clone(), value: val })).collect())).collect())),
     })
 }
 
@@ -19043,10 +19099,11 @@ fn iface_apps__list_op_response_apps_item_pinned_deployment_progress_summary_ste
     })
 }
 
-fn iface_apps__list_op_response_apps_item_pinned_deployment_progress_summary_steps_item_steps_item__from_json(v: &Value) -> Option<iface_apps::ListOpResponseAppsItemPinnedDeploymentProgressSummaryStepsItemStepsItem> {
+fn iface_apps__list_op_response_apps_item_pinned_deployment_progress_summary_steps_item_steps_item_entry__from_json(v: &Value) -> Option<iface_apps::ListOpResponseAppsItemPinnedDeploymentProgressSummaryStepsItemStepsItemEntry> {
     let m = v.as_object()?;
-    Some(iface_apps::ListOpResponseAppsItemPinnedDeploymentProgressSummaryStepsItemStepsItem {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_apps::ListOpResponseAppsItemPinnedDeploymentProgressSummaryStepsItemStepsItemEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -20154,7 +20211,7 @@ fn iface_apps__create_response_app_active_deployment_progress_steps_item__from_j
         reason: m.get("reason").filter(|v| !v.is_null()).and_then(|v| iface_apps__create_response_app_active_deployment_progress_steps_item_reason__from_json(v)),
         started_at: m.get("started_at").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         status: m.get("status").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_apps__list_op_response_apps_item_active_deployment_progress_steps_item_status_enum__from_str)),
-        steps: m.get("steps").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_apps__create_response_app_active_deployment_progress_steps_item_steps_item__from_json(x)).collect())),
+        steps: m.get("steps").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_apps::CreateResponseAppActiveDeploymentProgressStepsItemStepsItemEntry { key: k.clone(), value: val })).collect())).collect())),
     })
 }
 
@@ -20166,10 +20223,11 @@ fn iface_apps__create_response_app_active_deployment_progress_steps_item_reason_
     })
 }
 
-fn iface_apps__create_response_app_active_deployment_progress_steps_item_steps_item__from_json(v: &Value) -> Option<iface_apps::CreateResponseAppActiveDeploymentProgressStepsItemStepsItem> {
+fn iface_apps__create_response_app_active_deployment_progress_steps_item_steps_item_entry__from_json(v: &Value) -> Option<iface_apps::CreateResponseAppActiveDeploymentProgressStepsItemStepsItemEntry> {
     let m = v.as_object()?;
-    Some(iface_apps::CreateResponseAppActiveDeploymentProgressStepsItemStepsItem {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_apps::CreateResponseAppActiveDeploymentProgressStepsItemStepsItemEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -20183,7 +20241,7 @@ fn iface_apps__create_response_app_active_deployment_progress_summary_steps_item
         reason: m.get("reason").filter(|v| !v.is_null()).and_then(|v| iface_apps__create_response_app_active_deployment_progress_summary_steps_item_reason__from_json(v)),
         started_at: m.get("started_at").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         status: m.get("status").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_apps__list_op_response_apps_item_active_deployment_progress_steps_item_status_enum__from_str)),
-        steps: m.get("steps").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_apps__create_response_app_active_deployment_progress_summary_steps_item_steps_item__from_json(x)).collect())),
+        steps: m.get("steps").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_apps::CreateResponseAppActiveDeploymentProgressSummaryStepsItemStepsItemEntry { key: k.clone(), value: val })).collect())).collect())),
     })
 }
 
@@ -20195,10 +20253,11 @@ fn iface_apps__create_response_app_active_deployment_progress_summary_steps_item
     })
 }
 
-fn iface_apps__create_response_app_active_deployment_progress_summary_steps_item_steps_item__from_json(v: &Value) -> Option<iface_apps::CreateResponseAppActiveDeploymentProgressSummaryStepsItemStepsItem> {
+fn iface_apps__create_response_app_active_deployment_progress_summary_steps_item_steps_item_entry__from_json(v: &Value) -> Option<iface_apps::CreateResponseAppActiveDeploymentProgressSummaryStepsItemStepsItemEntry> {
     let m = v.as_object()?;
-    Some(iface_apps::CreateResponseAppActiveDeploymentProgressSummaryStepsItemStepsItem {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_apps::CreateResponseAppActiveDeploymentProgressSummaryStepsItemStepsItemEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -20722,14 +20781,15 @@ fn iface_apps__create_response_app_domains_item__from_json(v: &Value) -> Option<
 fn iface_apps__create_response_app_domains_item_progress__from_json(v: &Value) -> Option<iface_apps::CreateResponseAppDomainsItemProgress> {
     let m = v.as_object()?;
     Some(iface_apps::CreateResponseAppDomainsItemProgress {
-        steps: m.get("steps").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_apps__create_response_app_domains_item_progress_steps_item__from_json(x)).collect())),
+        steps: m.get("steps").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_apps::CreateResponseAppDomainsItemProgressStepsItemEntry { key: k.clone(), value: val })).collect())).collect())),
     })
 }
 
-fn iface_apps__create_response_app_domains_item_progress_steps_item__from_json(v: &Value) -> Option<iface_apps::CreateResponseAppDomainsItemProgressStepsItem> {
+fn iface_apps__create_response_app_domains_item_progress_steps_item_entry__from_json(v: &Value) -> Option<iface_apps::CreateResponseAppDomainsItemProgressStepsItemEntry> {
     let m = v.as_object()?;
-    Some(iface_apps::CreateResponseAppDomainsItemProgressStepsItem {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_apps::CreateResponseAppDomainsItemProgressStepsItemEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -20813,7 +20873,7 @@ fn iface_apps__create_response_app_in_progress_deployment_progress_steps_item__f
         reason: m.get("reason").filter(|v| !v.is_null()).and_then(|v| iface_apps__create_response_app_in_progress_deployment_progress_steps_item_reason__from_json(v)),
         started_at: m.get("started_at").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         status: m.get("status").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_apps__list_op_response_apps_item_active_deployment_progress_steps_item_status_enum__from_str)),
-        steps: m.get("steps").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_apps__create_response_app_in_progress_deployment_progress_steps_item_steps_item__from_json(x)).collect())),
+        steps: m.get("steps").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_apps::CreateResponseAppInProgressDeploymentProgressStepsItemStepsItemEntry { key: k.clone(), value: val })).collect())).collect())),
     })
 }
 
@@ -20825,10 +20885,11 @@ fn iface_apps__create_response_app_in_progress_deployment_progress_steps_item_re
     })
 }
 
-fn iface_apps__create_response_app_in_progress_deployment_progress_steps_item_steps_item__from_json(v: &Value) -> Option<iface_apps::CreateResponseAppInProgressDeploymentProgressStepsItemStepsItem> {
+fn iface_apps__create_response_app_in_progress_deployment_progress_steps_item_steps_item_entry__from_json(v: &Value) -> Option<iface_apps::CreateResponseAppInProgressDeploymentProgressStepsItemStepsItemEntry> {
     let m = v.as_object()?;
-    Some(iface_apps::CreateResponseAppInProgressDeploymentProgressStepsItemStepsItem {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_apps::CreateResponseAppInProgressDeploymentProgressStepsItemStepsItemEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -20842,7 +20903,7 @@ fn iface_apps__create_response_app_in_progress_deployment_progress_summary_steps
         reason: m.get("reason").filter(|v| !v.is_null()).and_then(|v| iface_apps__create_response_app_in_progress_deployment_progress_summary_steps_item_reason__from_json(v)),
         started_at: m.get("started_at").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         status: m.get("status").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_apps__list_op_response_apps_item_active_deployment_progress_steps_item_status_enum__from_str)),
-        steps: m.get("steps").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_apps__create_response_app_in_progress_deployment_progress_summary_steps_item_steps_item__from_json(x)).collect())),
+        steps: m.get("steps").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_apps::CreateResponseAppInProgressDeploymentProgressSummaryStepsItemStepsItemEntry { key: k.clone(), value: val })).collect())).collect())),
     })
 }
 
@@ -20854,10 +20915,11 @@ fn iface_apps__create_response_app_in_progress_deployment_progress_summary_steps
     })
 }
 
-fn iface_apps__create_response_app_in_progress_deployment_progress_summary_steps_item_steps_item__from_json(v: &Value) -> Option<iface_apps::CreateResponseAppInProgressDeploymentProgressSummaryStepsItemStepsItem> {
+fn iface_apps__create_response_app_in_progress_deployment_progress_summary_steps_item_steps_item_entry__from_json(v: &Value) -> Option<iface_apps::CreateResponseAppInProgressDeploymentProgressSummaryStepsItemStepsItemEntry> {
     let m = v.as_object()?;
-    Some(iface_apps::CreateResponseAppInProgressDeploymentProgressSummaryStepsItemStepsItem {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_apps::CreateResponseAppInProgressDeploymentProgressSummaryStepsItemStepsItemEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -21426,7 +21488,7 @@ fn iface_apps__create_response_app_pending_deployment_progress_steps_item__from_
         reason: m.get("reason").filter(|v| !v.is_null()).and_then(|v| iface_apps__create_response_app_pending_deployment_progress_steps_item_reason__from_json(v)),
         started_at: m.get("started_at").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         status: m.get("status").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_apps__list_op_response_apps_item_active_deployment_progress_steps_item_status_enum__from_str)),
-        steps: m.get("steps").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_apps__create_response_app_pending_deployment_progress_steps_item_steps_item__from_json(x)).collect())),
+        steps: m.get("steps").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_apps::CreateResponseAppPendingDeploymentProgressStepsItemStepsItemEntry { key: k.clone(), value: val })).collect())).collect())),
     })
 }
 
@@ -21438,10 +21500,11 @@ fn iface_apps__create_response_app_pending_deployment_progress_steps_item_reason
     })
 }
 
-fn iface_apps__create_response_app_pending_deployment_progress_steps_item_steps_item__from_json(v: &Value) -> Option<iface_apps::CreateResponseAppPendingDeploymentProgressStepsItemStepsItem> {
+fn iface_apps__create_response_app_pending_deployment_progress_steps_item_steps_item_entry__from_json(v: &Value) -> Option<iface_apps::CreateResponseAppPendingDeploymentProgressStepsItemStepsItemEntry> {
     let m = v.as_object()?;
-    Some(iface_apps::CreateResponseAppPendingDeploymentProgressStepsItemStepsItem {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_apps::CreateResponseAppPendingDeploymentProgressStepsItemStepsItemEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -21455,7 +21518,7 @@ fn iface_apps__create_response_app_pending_deployment_progress_summary_steps_ite
         reason: m.get("reason").filter(|v| !v.is_null()).and_then(|v| iface_apps__create_response_app_pending_deployment_progress_summary_steps_item_reason__from_json(v)),
         started_at: m.get("started_at").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         status: m.get("status").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_apps__list_op_response_apps_item_active_deployment_progress_steps_item_status_enum__from_str)),
-        steps: m.get("steps").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_apps__create_response_app_pending_deployment_progress_summary_steps_item_steps_item__from_json(x)).collect())),
+        steps: m.get("steps").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_apps::CreateResponseAppPendingDeploymentProgressSummaryStepsItemStepsItemEntry { key: k.clone(), value: val })).collect())).collect())),
     })
 }
 
@@ -21467,10 +21530,11 @@ fn iface_apps__create_response_app_pending_deployment_progress_summary_steps_ite
     })
 }
 
-fn iface_apps__create_response_app_pending_deployment_progress_summary_steps_item_steps_item__from_json(v: &Value) -> Option<iface_apps::CreateResponseAppPendingDeploymentProgressSummaryStepsItemStepsItem> {
+fn iface_apps__create_response_app_pending_deployment_progress_summary_steps_item_steps_item_entry__from_json(v: &Value) -> Option<iface_apps::CreateResponseAppPendingDeploymentProgressSummaryStepsItemStepsItemEntry> {
     let m = v.as_object()?;
-    Some(iface_apps::CreateResponseAppPendingDeploymentProgressSummaryStepsItemStepsItem {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_apps::CreateResponseAppPendingDeploymentProgressSummaryStepsItemStepsItemEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -22039,7 +22103,7 @@ fn iface_apps__create_response_app_pinned_deployment_progress_steps_item__from_j
         reason: m.get("reason").filter(|v| !v.is_null()).and_then(|v| iface_apps__create_response_app_pinned_deployment_progress_steps_item_reason__from_json(v)),
         started_at: m.get("started_at").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         status: m.get("status").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_apps__list_op_response_apps_item_active_deployment_progress_steps_item_status_enum__from_str)),
-        steps: m.get("steps").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_apps__create_response_app_pinned_deployment_progress_steps_item_steps_item__from_json(x)).collect())),
+        steps: m.get("steps").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_apps::CreateResponseAppPinnedDeploymentProgressStepsItemStepsItemEntry { key: k.clone(), value: val })).collect())).collect())),
     })
 }
 
@@ -22051,10 +22115,11 @@ fn iface_apps__create_response_app_pinned_deployment_progress_steps_item_reason_
     })
 }
 
-fn iface_apps__create_response_app_pinned_deployment_progress_steps_item_steps_item__from_json(v: &Value) -> Option<iface_apps::CreateResponseAppPinnedDeploymentProgressStepsItemStepsItem> {
+fn iface_apps__create_response_app_pinned_deployment_progress_steps_item_steps_item_entry__from_json(v: &Value) -> Option<iface_apps::CreateResponseAppPinnedDeploymentProgressStepsItemStepsItemEntry> {
     let m = v.as_object()?;
-    Some(iface_apps::CreateResponseAppPinnedDeploymentProgressStepsItemStepsItem {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_apps::CreateResponseAppPinnedDeploymentProgressStepsItemStepsItemEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -22068,7 +22133,7 @@ fn iface_apps__create_response_app_pinned_deployment_progress_summary_steps_item
         reason: m.get("reason").filter(|v| !v.is_null()).and_then(|v| iface_apps__create_response_app_pinned_deployment_progress_summary_steps_item_reason__from_json(v)),
         started_at: m.get("started_at").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         status: m.get("status").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_apps__list_op_response_apps_item_active_deployment_progress_steps_item_status_enum__from_str)),
-        steps: m.get("steps").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_apps__create_response_app_pinned_deployment_progress_summary_steps_item_steps_item__from_json(x)).collect())),
+        steps: m.get("steps").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_apps::CreateResponseAppPinnedDeploymentProgressSummaryStepsItemStepsItemEntry { key: k.clone(), value: val })).collect())).collect())),
     })
 }
 
@@ -22080,10 +22145,11 @@ fn iface_apps__create_response_app_pinned_deployment_progress_summary_steps_item
     })
 }
 
-fn iface_apps__create_response_app_pinned_deployment_progress_summary_steps_item_steps_item__from_json(v: &Value) -> Option<iface_apps::CreateResponseAppPinnedDeploymentProgressSummaryStepsItemStepsItem> {
+fn iface_apps__create_response_app_pinned_deployment_progress_summary_steps_item_steps_item_entry__from_json(v: &Value) -> Option<iface_apps::CreateResponseAppPinnedDeploymentProgressSummaryStepsItemStepsItemEntry> {
     let m = v.as_object()?;
-    Some(iface_apps::CreateResponseAppPinnedDeploymentProgressSummaryStepsItemStepsItem {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_apps::CreateResponseAppPinnedDeploymentProgressSummaryStepsItemStepsItemEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -23906,7 +23972,7 @@ fn iface_apps__list_deployments_response_deployments_item_progress_steps_item__f
         reason: m.get("reason").filter(|v| !v.is_null()).and_then(|v| iface_apps__list_deployments_response_deployments_item_progress_steps_item_reason__from_json(v)),
         started_at: m.get("started_at").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         status: m.get("status").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_apps__list_op_response_apps_item_active_deployment_progress_steps_item_status_enum__from_str)),
-        steps: m.get("steps").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_apps__list_deployments_response_deployments_item_progress_steps_item_steps_item__from_json(x)).collect())),
+        steps: m.get("steps").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_apps::ListDeploymentsResponseDeploymentsItemProgressStepsItemStepsItemEntry { key: k.clone(), value: val })).collect())).collect())),
     })
 }
 
@@ -23918,10 +23984,11 @@ fn iface_apps__list_deployments_response_deployments_item_progress_steps_item_re
     })
 }
 
-fn iface_apps__list_deployments_response_deployments_item_progress_steps_item_steps_item__from_json(v: &Value) -> Option<iface_apps::ListDeploymentsResponseDeploymentsItemProgressStepsItemStepsItem> {
+fn iface_apps__list_deployments_response_deployments_item_progress_steps_item_steps_item_entry__from_json(v: &Value) -> Option<iface_apps::ListDeploymentsResponseDeploymentsItemProgressStepsItemStepsItemEntry> {
     let m = v.as_object()?;
-    Some(iface_apps::ListDeploymentsResponseDeploymentsItemProgressStepsItemStepsItem {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_apps::ListDeploymentsResponseDeploymentsItemProgressStepsItemStepsItemEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -23935,7 +24002,7 @@ fn iface_apps__list_deployments_response_deployments_item_progress_summary_steps
         reason: m.get("reason").filter(|v| !v.is_null()).and_then(|v| iface_apps__list_deployments_response_deployments_item_progress_summary_steps_item_reason__from_json(v)),
         started_at: m.get("started_at").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         status: m.get("status").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_apps__list_op_response_apps_item_active_deployment_progress_steps_item_status_enum__from_str)),
-        steps: m.get("steps").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_apps__list_deployments_response_deployments_item_progress_summary_steps_item_steps_item__from_json(x)).collect())),
+        steps: m.get("steps").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_apps::ListDeploymentsResponseDeploymentsItemProgressSummaryStepsItemStepsItemEntry { key: k.clone(), value: val })).collect())).collect())),
     })
 }
 
@@ -23947,10 +24014,11 @@ fn iface_apps__list_deployments_response_deployments_item_progress_summary_steps
     })
 }
 
-fn iface_apps__list_deployments_response_deployments_item_progress_summary_steps_item_steps_item__from_json(v: &Value) -> Option<iface_apps::ListDeploymentsResponseDeploymentsItemProgressSummaryStepsItemStepsItem> {
+fn iface_apps__list_deployments_response_deployments_item_progress_summary_steps_item_steps_item_entry__from_json(v: &Value) -> Option<iface_apps::ListDeploymentsResponseDeploymentsItemProgressSummaryStepsItemStepsItemEntry> {
     let m = v.as_object()?;
-    Some(iface_apps::ListDeploymentsResponseDeploymentsItemProgressSummaryStepsItemStepsItem {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_apps::ListDeploymentsResponseDeploymentsItemProgressSummaryStepsItemStepsItemEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -24540,7 +24608,7 @@ fn iface_apps__create_deployment_response_deployment_progress_steps_item__from_j
         reason: m.get("reason").filter(|v| !v.is_null()).and_then(|v| iface_apps__create_deployment_response_deployment_progress_steps_item_reason__from_json(v)),
         started_at: m.get("started_at").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         status: m.get("status").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_apps__list_op_response_apps_item_active_deployment_progress_steps_item_status_enum__from_str)),
-        steps: m.get("steps").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_apps__create_deployment_response_deployment_progress_steps_item_steps_item__from_json(x)).collect())),
+        steps: m.get("steps").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_apps::CreateDeploymentResponseDeploymentProgressStepsItemStepsItemEntry { key: k.clone(), value: val })).collect())).collect())),
     })
 }
 
@@ -24552,10 +24620,11 @@ fn iface_apps__create_deployment_response_deployment_progress_steps_item_reason_
     })
 }
 
-fn iface_apps__create_deployment_response_deployment_progress_steps_item_steps_item__from_json(v: &Value) -> Option<iface_apps::CreateDeploymentResponseDeploymentProgressStepsItemStepsItem> {
+fn iface_apps__create_deployment_response_deployment_progress_steps_item_steps_item_entry__from_json(v: &Value) -> Option<iface_apps::CreateDeploymentResponseDeploymentProgressStepsItemStepsItemEntry> {
     let m = v.as_object()?;
-    Some(iface_apps::CreateDeploymentResponseDeploymentProgressStepsItemStepsItem {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_apps::CreateDeploymentResponseDeploymentProgressStepsItemStepsItemEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -24569,7 +24638,7 @@ fn iface_apps__create_deployment_response_deployment_progress_summary_steps_item
         reason: m.get("reason").filter(|v| !v.is_null()).and_then(|v| iface_apps__create_deployment_response_deployment_progress_summary_steps_item_reason__from_json(v)),
         started_at: m.get("started_at").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         status: m.get("status").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_apps__list_op_response_apps_item_active_deployment_progress_steps_item_status_enum__from_str)),
-        steps: m.get("steps").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_apps__create_deployment_response_deployment_progress_summary_steps_item_steps_item__from_json(x)).collect())),
+        steps: m.get("steps").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_apps::CreateDeploymentResponseDeploymentProgressSummaryStepsItemStepsItemEntry { key: k.clone(), value: val })).collect())).collect())),
     })
 }
 
@@ -24581,10 +24650,11 @@ fn iface_apps__create_deployment_response_deployment_progress_summary_steps_item
     })
 }
 
-fn iface_apps__create_deployment_response_deployment_progress_summary_steps_item_steps_item__from_json(v: &Value) -> Option<iface_apps::CreateDeploymentResponseDeploymentProgressSummaryStepsItemStepsItem> {
+fn iface_apps__create_deployment_response_deployment_progress_summary_steps_item_steps_item_entry__from_json(v: &Value) -> Option<iface_apps::CreateDeploymentResponseDeploymentProgressSummaryStepsItemStepsItemEntry> {
     let m = v.as_object()?;
-    Some(iface_apps::CreateDeploymentResponseDeploymentProgressSummaryStepsItemStepsItem {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_apps::CreateDeploymentResponseDeploymentProgressSummaryStepsItemStepsItemEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -25160,7 +25230,7 @@ fn iface_apps__get_deployment_response_deployment_progress_steps_item__from_json
         reason: m.get("reason").filter(|v| !v.is_null()).and_then(|v| iface_apps__get_deployment_response_deployment_progress_steps_item_reason__from_json(v)),
         started_at: m.get("started_at").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         status: m.get("status").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_apps__list_op_response_apps_item_active_deployment_progress_steps_item_status_enum__from_str)),
-        steps: m.get("steps").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_apps__get_deployment_response_deployment_progress_steps_item_steps_item__from_json(x)).collect())),
+        steps: m.get("steps").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_apps::GetDeploymentResponseDeploymentProgressStepsItemStepsItemEntry { key: k.clone(), value: val })).collect())).collect())),
     })
 }
 
@@ -25172,10 +25242,11 @@ fn iface_apps__get_deployment_response_deployment_progress_steps_item_reason__fr
     })
 }
 
-fn iface_apps__get_deployment_response_deployment_progress_steps_item_steps_item__from_json(v: &Value) -> Option<iface_apps::GetDeploymentResponseDeploymentProgressStepsItemStepsItem> {
+fn iface_apps__get_deployment_response_deployment_progress_steps_item_steps_item_entry__from_json(v: &Value) -> Option<iface_apps::GetDeploymentResponseDeploymentProgressStepsItemStepsItemEntry> {
     let m = v.as_object()?;
-    Some(iface_apps::GetDeploymentResponseDeploymentProgressStepsItemStepsItem {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_apps::GetDeploymentResponseDeploymentProgressStepsItemStepsItemEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -25189,7 +25260,7 @@ fn iface_apps__get_deployment_response_deployment_progress_summary_steps_item__f
         reason: m.get("reason").filter(|v| !v.is_null()).and_then(|v| iface_apps__get_deployment_response_deployment_progress_summary_steps_item_reason__from_json(v)),
         started_at: m.get("started_at").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         status: m.get("status").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_apps__list_op_response_apps_item_active_deployment_progress_steps_item_status_enum__from_str)),
-        steps: m.get("steps").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_apps__get_deployment_response_deployment_progress_summary_steps_item_steps_item__from_json(x)).collect())),
+        steps: m.get("steps").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_apps::GetDeploymentResponseDeploymentProgressSummaryStepsItemStepsItemEntry { key: k.clone(), value: val })).collect())).collect())),
     })
 }
 
@@ -25201,10 +25272,11 @@ fn iface_apps__get_deployment_response_deployment_progress_summary_steps_item_re
     })
 }
 
-fn iface_apps__get_deployment_response_deployment_progress_summary_steps_item_steps_item__from_json(v: &Value) -> Option<iface_apps::GetDeploymentResponseDeploymentProgressSummaryStepsItemStepsItem> {
+fn iface_apps__get_deployment_response_deployment_progress_summary_steps_item_steps_item_entry__from_json(v: &Value) -> Option<iface_apps::GetDeploymentResponseDeploymentProgressSummaryStepsItemStepsItemEntry> {
     let m = v.as_object()?;
-    Some(iface_apps::GetDeploymentResponseDeploymentProgressSummaryStepsItemStepsItem {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_apps::GetDeploymentResponseDeploymentProgressSummaryStepsItemStepsItemEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -25780,7 +25852,7 @@ fn iface_apps__cancel_deployment_response_deployment_progress_steps_item__from_j
         reason: m.get("reason").filter(|v| !v.is_null()).and_then(|v| iface_apps__cancel_deployment_response_deployment_progress_steps_item_reason__from_json(v)),
         started_at: m.get("started_at").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         status: m.get("status").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_apps__list_op_response_apps_item_active_deployment_progress_steps_item_status_enum__from_str)),
-        steps: m.get("steps").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_apps__cancel_deployment_response_deployment_progress_steps_item_steps_item__from_json(x)).collect())),
+        steps: m.get("steps").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_apps::CancelDeploymentResponseDeploymentProgressStepsItemStepsItemEntry { key: k.clone(), value: val })).collect())).collect())),
     })
 }
 
@@ -25792,10 +25864,11 @@ fn iface_apps__cancel_deployment_response_deployment_progress_steps_item_reason_
     })
 }
 
-fn iface_apps__cancel_deployment_response_deployment_progress_steps_item_steps_item__from_json(v: &Value) -> Option<iface_apps::CancelDeploymentResponseDeploymentProgressStepsItemStepsItem> {
+fn iface_apps__cancel_deployment_response_deployment_progress_steps_item_steps_item_entry__from_json(v: &Value) -> Option<iface_apps::CancelDeploymentResponseDeploymentProgressStepsItemStepsItemEntry> {
     let m = v.as_object()?;
-    Some(iface_apps::CancelDeploymentResponseDeploymentProgressStepsItemStepsItem {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_apps::CancelDeploymentResponseDeploymentProgressStepsItemStepsItemEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -25809,7 +25882,7 @@ fn iface_apps__cancel_deployment_response_deployment_progress_summary_steps_item
         reason: m.get("reason").filter(|v| !v.is_null()).and_then(|v| iface_apps__cancel_deployment_response_deployment_progress_summary_steps_item_reason__from_json(v)),
         started_at: m.get("started_at").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         status: m.get("status").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_apps__list_op_response_apps_item_active_deployment_progress_steps_item_status_enum__from_str)),
-        steps: m.get("steps").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_apps__cancel_deployment_response_deployment_progress_summary_steps_item_steps_item__from_json(x)).collect())),
+        steps: m.get("steps").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_apps::CancelDeploymentResponseDeploymentProgressSummaryStepsItemStepsItemEntry { key: k.clone(), value: val })).collect())).collect())),
     })
 }
 
@@ -25821,10 +25894,11 @@ fn iface_apps__cancel_deployment_response_deployment_progress_summary_steps_item
     })
 }
 
-fn iface_apps__cancel_deployment_response_deployment_progress_summary_steps_item_steps_item__from_json(v: &Value) -> Option<iface_apps::CancelDeploymentResponseDeploymentProgressSummaryStepsItemStepsItem> {
+fn iface_apps__cancel_deployment_response_deployment_progress_summary_steps_item_steps_item_entry__from_json(v: &Value) -> Option<iface_apps::CancelDeploymentResponseDeploymentProgressSummaryStepsItemStepsItemEntry> {
     let m = v.as_object()?;
-    Some(iface_apps::CancelDeploymentResponseDeploymentProgressSummaryStepsItemStepsItem {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_apps::CancelDeploymentResponseDeploymentProgressSummaryStepsItemStepsItemEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -26440,7 +26514,7 @@ fn iface_apps__create_rollback_response_deployment_progress_steps_item__from_jso
         reason: m.get("reason").filter(|v| !v.is_null()).and_then(|v| iface_apps__create_rollback_response_deployment_progress_steps_item_reason__from_json(v)),
         started_at: m.get("started_at").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         status: m.get("status").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_apps__list_op_response_apps_item_active_deployment_progress_steps_item_status_enum__from_str)),
-        steps: m.get("steps").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_apps__create_rollback_response_deployment_progress_steps_item_steps_item__from_json(x)).collect())),
+        steps: m.get("steps").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_apps::CreateRollbackResponseDeploymentProgressStepsItemStepsItemEntry { key: k.clone(), value: val })).collect())).collect())),
     })
 }
 
@@ -26452,10 +26526,11 @@ fn iface_apps__create_rollback_response_deployment_progress_steps_item_reason__f
     })
 }
 
-fn iface_apps__create_rollback_response_deployment_progress_steps_item_steps_item__from_json(v: &Value) -> Option<iface_apps::CreateRollbackResponseDeploymentProgressStepsItemStepsItem> {
+fn iface_apps__create_rollback_response_deployment_progress_steps_item_steps_item_entry__from_json(v: &Value) -> Option<iface_apps::CreateRollbackResponseDeploymentProgressStepsItemStepsItemEntry> {
     let m = v.as_object()?;
-    Some(iface_apps::CreateRollbackResponseDeploymentProgressStepsItemStepsItem {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_apps::CreateRollbackResponseDeploymentProgressStepsItemStepsItemEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -26469,7 +26544,7 @@ fn iface_apps__create_rollback_response_deployment_progress_summary_steps_item__
         reason: m.get("reason").filter(|v| !v.is_null()).and_then(|v| iface_apps__create_rollback_response_deployment_progress_summary_steps_item_reason__from_json(v)),
         started_at: m.get("started_at").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         status: m.get("status").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_apps__list_op_response_apps_item_active_deployment_progress_steps_item_status_enum__from_str)),
-        steps: m.get("steps").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_apps__create_rollback_response_deployment_progress_summary_steps_item_steps_item__from_json(x)).collect())),
+        steps: m.get("steps").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_apps::CreateRollbackResponseDeploymentProgressSummaryStepsItemStepsItemEntry { key: k.clone(), value: val })).collect())).collect())),
     })
 }
 
@@ -26481,10 +26556,11 @@ fn iface_apps__create_rollback_response_deployment_progress_summary_steps_item_r
     })
 }
 
-fn iface_apps__create_rollback_response_deployment_progress_summary_steps_item_steps_item__from_json(v: &Value) -> Option<iface_apps::CreateRollbackResponseDeploymentProgressSummaryStepsItemStepsItem> {
+fn iface_apps__create_rollback_response_deployment_progress_summary_steps_item_steps_item_entry__from_json(v: &Value) -> Option<iface_apps::CreateRollbackResponseDeploymentProgressSummaryStepsItemStepsItemEntry> {
     let m = v.as_object()?;
-    Some(iface_apps::CreateRollbackResponseDeploymentProgressSummaryStepsItemStepsItem {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_apps::CreateRollbackResponseDeploymentProgressSummaryStepsItemStepsItemEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -27060,7 +27136,7 @@ fn iface_apps__revert_rollback_response_deployment_progress_steps_item__from_jso
         reason: m.get("reason").filter(|v| !v.is_null()).and_then(|v| iface_apps__revert_rollback_response_deployment_progress_steps_item_reason__from_json(v)),
         started_at: m.get("started_at").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         status: m.get("status").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_apps__list_op_response_apps_item_active_deployment_progress_steps_item_status_enum__from_str)),
-        steps: m.get("steps").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_apps__revert_rollback_response_deployment_progress_steps_item_steps_item__from_json(x)).collect())),
+        steps: m.get("steps").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_apps::RevertRollbackResponseDeploymentProgressStepsItemStepsItemEntry { key: k.clone(), value: val })).collect())).collect())),
     })
 }
 
@@ -27072,10 +27148,11 @@ fn iface_apps__revert_rollback_response_deployment_progress_steps_item_reason__f
     })
 }
 
-fn iface_apps__revert_rollback_response_deployment_progress_steps_item_steps_item__from_json(v: &Value) -> Option<iface_apps::RevertRollbackResponseDeploymentProgressStepsItemStepsItem> {
+fn iface_apps__revert_rollback_response_deployment_progress_steps_item_steps_item_entry__from_json(v: &Value) -> Option<iface_apps::RevertRollbackResponseDeploymentProgressStepsItemStepsItemEntry> {
     let m = v.as_object()?;
-    Some(iface_apps::RevertRollbackResponseDeploymentProgressStepsItemStepsItem {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_apps::RevertRollbackResponseDeploymentProgressStepsItemStepsItemEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -27089,7 +27166,7 @@ fn iface_apps__revert_rollback_response_deployment_progress_summary_steps_item__
         reason: m.get("reason").filter(|v| !v.is_null()).and_then(|v| iface_apps__revert_rollback_response_deployment_progress_summary_steps_item_reason__from_json(v)),
         started_at: m.get("started_at").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         status: m.get("status").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_apps__list_op_response_apps_item_active_deployment_progress_steps_item_status_enum__from_str)),
-        steps: m.get("steps").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_apps__revert_rollback_response_deployment_progress_summary_steps_item_steps_item__from_json(x)).collect())),
+        steps: m.get("steps").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_apps::RevertRollbackResponseDeploymentProgressSummaryStepsItemStepsItemEntry { key: k.clone(), value: val })).collect())).collect())),
     })
 }
 
@@ -27101,10 +27178,11 @@ fn iface_apps__revert_rollback_response_deployment_progress_summary_steps_item_r
     })
 }
 
-fn iface_apps__revert_rollback_response_deployment_progress_summary_steps_item_steps_item__from_json(v: &Value) -> Option<iface_apps::RevertRollbackResponseDeploymentProgressSummaryStepsItemStepsItem> {
+fn iface_apps__revert_rollback_response_deployment_progress_summary_steps_item_steps_item_entry__from_json(v: &Value) -> Option<iface_apps::RevertRollbackResponseDeploymentProgressSummaryStepsItemStepsItemEntry> {
     let m = v.as_object()?;
-    Some(iface_apps::RevertRollbackResponseDeploymentProgressSummaryStepsItemStepsItem {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_apps::RevertRollbackResponseDeploymentProgressSummaryStepsItemStepsItemEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -27731,7 +27809,7 @@ fn iface_apps__get_response_app_active_deployment_progress_steps_item__from_json
         reason: m.get("reason").filter(|v| !v.is_null()).and_then(|v| iface_apps__get_response_app_active_deployment_progress_steps_item_reason__from_json(v)),
         started_at: m.get("started_at").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         status: m.get("status").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_apps__list_op_response_apps_item_active_deployment_progress_steps_item_status_enum__from_str)),
-        steps: m.get("steps").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_apps__get_response_app_active_deployment_progress_steps_item_steps_item__from_json(x)).collect())),
+        steps: m.get("steps").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_apps::GetResponseAppActiveDeploymentProgressStepsItemStepsItemEntry { key: k.clone(), value: val })).collect())).collect())),
     })
 }
 
@@ -27743,10 +27821,11 @@ fn iface_apps__get_response_app_active_deployment_progress_steps_item_reason__fr
     })
 }
 
-fn iface_apps__get_response_app_active_deployment_progress_steps_item_steps_item__from_json(v: &Value) -> Option<iface_apps::GetResponseAppActiveDeploymentProgressStepsItemStepsItem> {
+fn iface_apps__get_response_app_active_deployment_progress_steps_item_steps_item_entry__from_json(v: &Value) -> Option<iface_apps::GetResponseAppActiveDeploymentProgressStepsItemStepsItemEntry> {
     let m = v.as_object()?;
-    Some(iface_apps::GetResponseAppActiveDeploymentProgressStepsItemStepsItem {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_apps::GetResponseAppActiveDeploymentProgressStepsItemStepsItemEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -27760,7 +27839,7 @@ fn iface_apps__get_response_app_active_deployment_progress_summary_steps_item__f
         reason: m.get("reason").filter(|v| !v.is_null()).and_then(|v| iface_apps__get_response_app_active_deployment_progress_summary_steps_item_reason__from_json(v)),
         started_at: m.get("started_at").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         status: m.get("status").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_apps__list_op_response_apps_item_active_deployment_progress_steps_item_status_enum__from_str)),
-        steps: m.get("steps").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_apps__get_response_app_active_deployment_progress_summary_steps_item_steps_item__from_json(x)).collect())),
+        steps: m.get("steps").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_apps::GetResponseAppActiveDeploymentProgressSummaryStepsItemStepsItemEntry { key: k.clone(), value: val })).collect())).collect())),
     })
 }
 
@@ -27772,10 +27851,11 @@ fn iface_apps__get_response_app_active_deployment_progress_summary_steps_item_re
     })
 }
 
-fn iface_apps__get_response_app_active_deployment_progress_summary_steps_item_steps_item__from_json(v: &Value) -> Option<iface_apps::GetResponseAppActiveDeploymentProgressSummaryStepsItemStepsItem> {
+fn iface_apps__get_response_app_active_deployment_progress_summary_steps_item_steps_item_entry__from_json(v: &Value) -> Option<iface_apps::GetResponseAppActiveDeploymentProgressSummaryStepsItemStepsItemEntry> {
     let m = v.as_object()?;
-    Some(iface_apps::GetResponseAppActiveDeploymentProgressSummaryStepsItemStepsItem {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_apps::GetResponseAppActiveDeploymentProgressSummaryStepsItemStepsItemEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -28299,14 +28379,15 @@ fn iface_apps__get_response_app_domains_item__from_json(v: &Value) -> Option<ifa
 fn iface_apps__get_response_app_domains_item_progress__from_json(v: &Value) -> Option<iface_apps::GetResponseAppDomainsItemProgress> {
     let m = v.as_object()?;
     Some(iface_apps::GetResponseAppDomainsItemProgress {
-        steps: m.get("steps").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_apps__get_response_app_domains_item_progress_steps_item__from_json(x)).collect())),
+        steps: m.get("steps").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_apps::GetResponseAppDomainsItemProgressStepsItemEntry { key: k.clone(), value: val })).collect())).collect())),
     })
 }
 
-fn iface_apps__get_response_app_domains_item_progress_steps_item__from_json(v: &Value) -> Option<iface_apps::GetResponseAppDomainsItemProgressStepsItem> {
+fn iface_apps__get_response_app_domains_item_progress_steps_item_entry__from_json(v: &Value) -> Option<iface_apps::GetResponseAppDomainsItemProgressStepsItemEntry> {
     let m = v.as_object()?;
-    Some(iface_apps::GetResponseAppDomainsItemProgressStepsItem {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_apps::GetResponseAppDomainsItemProgressStepsItemEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -28390,7 +28471,7 @@ fn iface_apps__get_response_app_in_progress_deployment_progress_steps_item__from
         reason: m.get("reason").filter(|v| !v.is_null()).and_then(|v| iface_apps__get_response_app_in_progress_deployment_progress_steps_item_reason__from_json(v)),
         started_at: m.get("started_at").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         status: m.get("status").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_apps__list_op_response_apps_item_active_deployment_progress_steps_item_status_enum__from_str)),
-        steps: m.get("steps").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_apps__get_response_app_in_progress_deployment_progress_steps_item_steps_item__from_json(x)).collect())),
+        steps: m.get("steps").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_apps::GetResponseAppInProgressDeploymentProgressStepsItemStepsItemEntry { key: k.clone(), value: val })).collect())).collect())),
     })
 }
 
@@ -28402,10 +28483,11 @@ fn iface_apps__get_response_app_in_progress_deployment_progress_steps_item_reaso
     })
 }
 
-fn iface_apps__get_response_app_in_progress_deployment_progress_steps_item_steps_item__from_json(v: &Value) -> Option<iface_apps::GetResponseAppInProgressDeploymentProgressStepsItemStepsItem> {
+fn iface_apps__get_response_app_in_progress_deployment_progress_steps_item_steps_item_entry__from_json(v: &Value) -> Option<iface_apps::GetResponseAppInProgressDeploymentProgressStepsItemStepsItemEntry> {
     let m = v.as_object()?;
-    Some(iface_apps::GetResponseAppInProgressDeploymentProgressStepsItemStepsItem {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_apps::GetResponseAppInProgressDeploymentProgressStepsItemStepsItemEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -28419,7 +28501,7 @@ fn iface_apps__get_response_app_in_progress_deployment_progress_summary_steps_it
         reason: m.get("reason").filter(|v| !v.is_null()).and_then(|v| iface_apps__get_response_app_in_progress_deployment_progress_summary_steps_item_reason__from_json(v)),
         started_at: m.get("started_at").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         status: m.get("status").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_apps__list_op_response_apps_item_active_deployment_progress_steps_item_status_enum__from_str)),
-        steps: m.get("steps").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_apps__get_response_app_in_progress_deployment_progress_summary_steps_item_steps_item__from_json(x)).collect())),
+        steps: m.get("steps").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_apps::GetResponseAppInProgressDeploymentProgressSummaryStepsItemStepsItemEntry { key: k.clone(), value: val })).collect())).collect())),
     })
 }
 
@@ -28431,10 +28513,11 @@ fn iface_apps__get_response_app_in_progress_deployment_progress_summary_steps_it
     })
 }
 
-fn iface_apps__get_response_app_in_progress_deployment_progress_summary_steps_item_steps_item__from_json(v: &Value) -> Option<iface_apps::GetResponseAppInProgressDeploymentProgressSummaryStepsItemStepsItem> {
+fn iface_apps__get_response_app_in_progress_deployment_progress_summary_steps_item_steps_item_entry__from_json(v: &Value) -> Option<iface_apps::GetResponseAppInProgressDeploymentProgressSummaryStepsItemStepsItemEntry> {
     let m = v.as_object()?;
-    Some(iface_apps::GetResponseAppInProgressDeploymentProgressSummaryStepsItemStepsItem {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_apps::GetResponseAppInProgressDeploymentProgressSummaryStepsItemStepsItemEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -29003,7 +29086,7 @@ fn iface_apps__get_response_app_pending_deployment_progress_steps_item__from_jso
         reason: m.get("reason").filter(|v| !v.is_null()).and_then(|v| iface_apps__get_response_app_pending_deployment_progress_steps_item_reason__from_json(v)),
         started_at: m.get("started_at").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         status: m.get("status").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_apps__list_op_response_apps_item_active_deployment_progress_steps_item_status_enum__from_str)),
-        steps: m.get("steps").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_apps__get_response_app_pending_deployment_progress_steps_item_steps_item__from_json(x)).collect())),
+        steps: m.get("steps").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_apps::GetResponseAppPendingDeploymentProgressStepsItemStepsItemEntry { key: k.clone(), value: val })).collect())).collect())),
     })
 }
 
@@ -29015,10 +29098,11 @@ fn iface_apps__get_response_app_pending_deployment_progress_steps_item_reason__f
     })
 }
 
-fn iface_apps__get_response_app_pending_deployment_progress_steps_item_steps_item__from_json(v: &Value) -> Option<iface_apps::GetResponseAppPendingDeploymentProgressStepsItemStepsItem> {
+fn iface_apps__get_response_app_pending_deployment_progress_steps_item_steps_item_entry__from_json(v: &Value) -> Option<iface_apps::GetResponseAppPendingDeploymentProgressStepsItemStepsItemEntry> {
     let m = v.as_object()?;
-    Some(iface_apps::GetResponseAppPendingDeploymentProgressStepsItemStepsItem {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_apps::GetResponseAppPendingDeploymentProgressStepsItemStepsItemEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -29032,7 +29116,7 @@ fn iface_apps__get_response_app_pending_deployment_progress_summary_steps_item__
         reason: m.get("reason").filter(|v| !v.is_null()).and_then(|v| iface_apps__get_response_app_pending_deployment_progress_summary_steps_item_reason__from_json(v)),
         started_at: m.get("started_at").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         status: m.get("status").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_apps__list_op_response_apps_item_active_deployment_progress_steps_item_status_enum__from_str)),
-        steps: m.get("steps").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_apps__get_response_app_pending_deployment_progress_summary_steps_item_steps_item__from_json(x)).collect())),
+        steps: m.get("steps").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_apps::GetResponseAppPendingDeploymentProgressSummaryStepsItemStepsItemEntry { key: k.clone(), value: val })).collect())).collect())),
     })
 }
 
@@ -29044,10 +29128,11 @@ fn iface_apps__get_response_app_pending_deployment_progress_summary_steps_item_r
     })
 }
 
-fn iface_apps__get_response_app_pending_deployment_progress_summary_steps_item_steps_item__from_json(v: &Value) -> Option<iface_apps::GetResponseAppPendingDeploymentProgressSummaryStepsItemStepsItem> {
+fn iface_apps__get_response_app_pending_deployment_progress_summary_steps_item_steps_item_entry__from_json(v: &Value) -> Option<iface_apps::GetResponseAppPendingDeploymentProgressSummaryStepsItemStepsItemEntry> {
     let m = v.as_object()?;
-    Some(iface_apps::GetResponseAppPendingDeploymentProgressSummaryStepsItemStepsItem {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_apps::GetResponseAppPendingDeploymentProgressSummaryStepsItemStepsItemEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -29616,7 +29701,7 @@ fn iface_apps__get_response_app_pinned_deployment_progress_steps_item__from_json
         reason: m.get("reason").filter(|v| !v.is_null()).and_then(|v| iface_apps__get_response_app_pinned_deployment_progress_steps_item_reason__from_json(v)),
         started_at: m.get("started_at").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         status: m.get("status").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_apps__list_op_response_apps_item_active_deployment_progress_steps_item_status_enum__from_str)),
-        steps: m.get("steps").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_apps__get_response_app_pinned_deployment_progress_steps_item_steps_item__from_json(x)).collect())),
+        steps: m.get("steps").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_apps::GetResponseAppPinnedDeploymentProgressStepsItemStepsItemEntry { key: k.clone(), value: val })).collect())).collect())),
     })
 }
 
@@ -29628,10 +29713,11 @@ fn iface_apps__get_response_app_pinned_deployment_progress_steps_item_reason__fr
     })
 }
 
-fn iface_apps__get_response_app_pinned_deployment_progress_steps_item_steps_item__from_json(v: &Value) -> Option<iface_apps::GetResponseAppPinnedDeploymentProgressStepsItemStepsItem> {
+fn iface_apps__get_response_app_pinned_deployment_progress_steps_item_steps_item_entry__from_json(v: &Value) -> Option<iface_apps::GetResponseAppPinnedDeploymentProgressStepsItemStepsItemEntry> {
     let m = v.as_object()?;
-    Some(iface_apps::GetResponseAppPinnedDeploymentProgressStepsItemStepsItem {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_apps::GetResponseAppPinnedDeploymentProgressStepsItemStepsItemEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -29645,7 +29731,7 @@ fn iface_apps__get_response_app_pinned_deployment_progress_summary_steps_item__f
         reason: m.get("reason").filter(|v| !v.is_null()).and_then(|v| iface_apps__get_response_app_pinned_deployment_progress_summary_steps_item_reason__from_json(v)),
         started_at: m.get("started_at").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         status: m.get("status").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_apps__list_op_response_apps_item_active_deployment_progress_steps_item_status_enum__from_str)),
-        steps: m.get("steps").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_apps__get_response_app_pinned_deployment_progress_summary_steps_item_steps_item__from_json(x)).collect())),
+        steps: m.get("steps").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_apps::GetResponseAppPinnedDeploymentProgressSummaryStepsItemStepsItemEntry { key: k.clone(), value: val })).collect())).collect())),
     })
 }
 
@@ -29657,10 +29743,11 @@ fn iface_apps__get_response_app_pinned_deployment_progress_summary_steps_item_re
     })
 }
 
-fn iface_apps__get_response_app_pinned_deployment_progress_summary_steps_item_steps_item__from_json(v: &Value) -> Option<iface_apps::GetResponseAppPinnedDeploymentProgressSummaryStepsItemStepsItem> {
+fn iface_apps__get_response_app_pinned_deployment_progress_summary_steps_item_steps_item_entry__from_json(v: &Value) -> Option<iface_apps::GetResponseAppPinnedDeploymentProgressSummaryStepsItemStepsItemEntry> {
     let m = v.as_object()?;
-    Some(iface_apps::GetResponseAppPinnedDeploymentProgressSummaryStepsItemStepsItem {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_apps::GetResponseAppPinnedDeploymentProgressSummaryStepsItemStepsItemEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -30754,7 +30841,7 @@ fn iface_apps__update_response_app_active_deployment_progress_steps_item__from_j
         reason: m.get("reason").filter(|v| !v.is_null()).and_then(|v| iface_apps__update_response_app_active_deployment_progress_steps_item_reason__from_json(v)),
         started_at: m.get("started_at").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         status: m.get("status").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_apps__list_op_response_apps_item_active_deployment_progress_steps_item_status_enum__from_str)),
-        steps: m.get("steps").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_apps__update_response_app_active_deployment_progress_steps_item_steps_item__from_json(x)).collect())),
+        steps: m.get("steps").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_apps::UpdateResponseAppActiveDeploymentProgressStepsItemStepsItemEntry { key: k.clone(), value: val })).collect())).collect())),
     })
 }
 
@@ -30766,10 +30853,11 @@ fn iface_apps__update_response_app_active_deployment_progress_steps_item_reason_
     })
 }
 
-fn iface_apps__update_response_app_active_deployment_progress_steps_item_steps_item__from_json(v: &Value) -> Option<iface_apps::UpdateResponseAppActiveDeploymentProgressStepsItemStepsItem> {
+fn iface_apps__update_response_app_active_deployment_progress_steps_item_steps_item_entry__from_json(v: &Value) -> Option<iface_apps::UpdateResponseAppActiveDeploymentProgressStepsItemStepsItemEntry> {
     let m = v.as_object()?;
-    Some(iface_apps::UpdateResponseAppActiveDeploymentProgressStepsItemStepsItem {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_apps::UpdateResponseAppActiveDeploymentProgressStepsItemStepsItemEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -30783,7 +30871,7 @@ fn iface_apps__update_response_app_active_deployment_progress_summary_steps_item
         reason: m.get("reason").filter(|v| !v.is_null()).and_then(|v| iface_apps__update_response_app_active_deployment_progress_summary_steps_item_reason__from_json(v)),
         started_at: m.get("started_at").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         status: m.get("status").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_apps__list_op_response_apps_item_active_deployment_progress_steps_item_status_enum__from_str)),
-        steps: m.get("steps").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_apps__update_response_app_active_deployment_progress_summary_steps_item_steps_item__from_json(x)).collect())),
+        steps: m.get("steps").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_apps::UpdateResponseAppActiveDeploymentProgressSummaryStepsItemStepsItemEntry { key: k.clone(), value: val })).collect())).collect())),
     })
 }
 
@@ -30795,10 +30883,11 @@ fn iface_apps__update_response_app_active_deployment_progress_summary_steps_item
     })
 }
 
-fn iface_apps__update_response_app_active_deployment_progress_summary_steps_item_steps_item__from_json(v: &Value) -> Option<iface_apps::UpdateResponseAppActiveDeploymentProgressSummaryStepsItemStepsItem> {
+fn iface_apps__update_response_app_active_deployment_progress_summary_steps_item_steps_item_entry__from_json(v: &Value) -> Option<iface_apps::UpdateResponseAppActiveDeploymentProgressSummaryStepsItemStepsItemEntry> {
     let m = v.as_object()?;
-    Some(iface_apps::UpdateResponseAppActiveDeploymentProgressSummaryStepsItemStepsItem {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_apps::UpdateResponseAppActiveDeploymentProgressSummaryStepsItemStepsItemEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -31322,14 +31411,15 @@ fn iface_apps__update_response_app_domains_item__from_json(v: &Value) -> Option<
 fn iface_apps__update_response_app_domains_item_progress__from_json(v: &Value) -> Option<iface_apps::UpdateResponseAppDomainsItemProgress> {
     let m = v.as_object()?;
     Some(iface_apps::UpdateResponseAppDomainsItemProgress {
-        steps: m.get("steps").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_apps__update_response_app_domains_item_progress_steps_item__from_json(x)).collect())),
+        steps: m.get("steps").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_apps::UpdateResponseAppDomainsItemProgressStepsItemEntry { key: k.clone(), value: val })).collect())).collect())),
     })
 }
 
-fn iface_apps__update_response_app_domains_item_progress_steps_item__from_json(v: &Value) -> Option<iface_apps::UpdateResponseAppDomainsItemProgressStepsItem> {
+fn iface_apps__update_response_app_domains_item_progress_steps_item_entry__from_json(v: &Value) -> Option<iface_apps::UpdateResponseAppDomainsItemProgressStepsItemEntry> {
     let m = v.as_object()?;
-    Some(iface_apps::UpdateResponseAppDomainsItemProgressStepsItem {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_apps::UpdateResponseAppDomainsItemProgressStepsItemEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -31413,7 +31503,7 @@ fn iface_apps__update_response_app_in_progress_deployment_progress_steps_item__f
         reason: m.get("reason").filter(|v| !v.is_null()).and_then(|v| iface_apps__update_response_app_in_progress_deployment_progress_steps_item_reason__from_json(v)),
         started_at: m.get("started_at").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         status: m.get("status").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_apps__list_op_response_apps_item_active_deployment_progress_steps_item_status_enum__from_str)),
-        steps: m.get("steps").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_apps__update_response_app_in_progress_deployment_progress_steps_item_steps_item__from_json(x)).collect())),
+        steps: m.get("steps").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_apps::UpdateResponseAppInProgressDeploymentProgressStepsItemStepsItemEntry { key: k.clone(), value: val })).collect())).collect())),
     })
 }
 
@@ -31425,10 +31515,11 @@ fn iface_apps__update_response_app_in_progress_deployment_progress_steps_item_re
     })
 }
 
-fn iface_apps__update_response_app_in_progress_deployment_progress_steps_item_steps_item__from_json(v: &Value) -> Option<iface_apps::UpdateResponseAppInProgressDeploymentProgressStepsItemStepsItem> {
+fn iface_apps__update_response_app_in_progress_deployment_progress_steps_item_steps_item_entry__from_json(v: &Value) -> Option<iface_apps::UpdateResponseAppInProgressDeploymentProgressStepsItemStepsItemEntry> {
     let m = v.as_object()?;
-    Some(iface_apps::UpdateResponseAppInProgressDeploymentProgressStepsItemStepsItem {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_apps::UpdateResponseAppInProgressDeploymentProgressStepsItemStepsItemEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -31442,7 +31533,7 @@ fn iface_apps__update_response_app_in_progress_deployment_progress_summary_steps
         reason: m.get("reason").filter(|v| !v.is_null()).and_then(|v| iface_apps__update_response_app_in_progress_deployment_progress_summary_steps_item_reason__from_json(v)),
         started_at: m.get("started_at").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         status: m.get("status").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_apps__list_op_response_apps_item_active_deployment_progress_steps_item_status_enum__from_str)),
-        steps: m.get("steps").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_apps__update_response_app_in_progress_deployment_progress_summary_steps_item_steps_item__from_json(x)).collect())),
+        steps: m.get("steps").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_apps::UpdateResponseAppInProgressDeploymentProgressSummaryStepsItemStepsItemEntry { key: k.clone(), value: val })).collect())).collect())),
     })
 }
 
@@ -31454,10 +31545,11 @@ fn iface_apps__update_response_app_in_progress_deployment_progress_summary_steps
     })
 }
 
-fn iface_apps__update_response_app_in_progress_deployment_progress_summary_steps_item_steps_item__from_json(v: &Value) -> Option<iface_apps::UpdateResponseAppInProgressDeploymentProgressSummaryStepsItemStepsItem> {
+fn iface_apps__update_response_app_in_progress_deployment_progress_summary_steps_item_steps_item_entry__from_json(v: &Value) -> Option<iface_apps::UpdateResponseAppInProgressDeploymentProgressSummaryStepsItemStepsItemEntry> {
     let m = v.as_object()?;
-    Some(iface_apps::UpdateResponseAppInProgressDeploymentProgressSummaryStepsItemStepsItem {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_apps::UpdateResponseAppInProgressDeploymentProgressSummaryStepsItemStepsItemEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -32026,7 +32118,7 @@ fn iface_apps__update_response_app_pending_deployment_progress_steps_item__from_
         reason: m.get("reason").filter(|v| !v.is_null()).and_then(|v| iface_apps__update_response_app_pending_deployment_progress_steps_item_reason__from_json(v)),
         started_at: m.get("started_at").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         status: m.get("status").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_apps__list_op_response_apps_item_active_deployment_progress_steps_item_status_enum__from_str)),
-        steps: m.get("steps").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_apps__update_response_app_pending_deployment_progress_steps_item_steps_item__from_json(x)).collect())),
+        steps: m.get("steps").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_apps::UpdateResponseAppPendingDeploymentProgressStepsItemStepsItemEntry { key: k.clone(), value: val })).collect())).collect())),
     })
 }
 
@@ -32038,10 +32130,11 @@ fn iface_apps__update_response_app_pending_deployment_progress_steps_item_reason
     })
 }
 
-fn iface_apps__update_response_app_pending_deployment_progress_steps_item_steps_item__from_json(v: &Value) -> Option<iface_apps::UpdateResponseAppPendingDeploymentProgressStepsItemStepsItem> {
+fn iface_apps__update_response_app_pending_deployment_progress_steps_item_steps_item_entry__from_json(v: &Value) -> Option<iface_apps::UpdateResponseAppPendingDeploymentProgressStepsItemStepsItemEntry> {
     let m = v.as_object()?;
-    Some(iface_apps::UpdateResponseAppPendingDeploymentProgressStepsItemStepsItem {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_apps::UpdateResponseAppPendingDeploymentProgressStepsItemStepsItemEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -32055,7 +32148,7 @@ fn iface_apps__update_response_app_pending_deployment_progress_summary_steps_ite
         reason: m.get("reason").filter(|v| !v.is_null()).and_then(|v| iface_apps__update_response_app_pending_deployment_progress_summary_steps_item_reason__from_json(v)),
         started_at: m.get("started_at").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         status: m.get("status").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_apps__list_op_response_apps_item_active_deployment_progress_steps_item_status_enum__from_str)),
-        steps: m.get("steps").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_apps__update_response_app_pending_deployment_progress_summary_steps_item_steps_item__from_json(x)).collect())),
+        steps: m.get("steps").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_apps::UpdateResponseAppPendingDeploymentProgressSummaryStepsItemStepsItemEntry { key: k.clone(), value: val })).collect())).collect())),
     })
 }
 
@@ -32067,10 +32160,11 @@ fn iface_apps__update_response_app_pending_deployment_progress_summary_steps_ite
     })
 }
 
-fn iface_apps__update_response_app_pending_deployment_progress_summary_steps_item_steps_item__from_json(v: &Value) -> Option<iface_apps::UpdateResponseAppPendingDeploymentProgressSummaryStepsItemStepsItem> {
+fn iface_apps__update_response_app_pending_deployment_progress_summary_steps_item_steps_item_entry__from_json(v: &Value) -> Option<iface_apps::UpdateResponseAppPendingDeploymentProgressSummaryStepsItemStepsItemEntry> {
     let m = v.as_object()?;
-    Some(iface_apps::UpdateResponseAppPendingDeploymentProgressSummaryStepsItemStepsItem {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_apps::UpdateResponseAppPendingDeploymentProgressSummaryStepsItemStepsItemEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -32639,7 +32733,7 @@ fn iface_apps__update_response_app_pinned_deployment_progress_steps_item__from_j
         reason: m.get("reason").filter(|v| !v.is_null()).and_then(|v| iface_apps__update_response_app_pinned_deployment_progress_steps_item_reason__from_json(v)),
         started_at: m.get("started_at").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         status: m.get("status").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_apps__list_op_response_apps_item_active_deployment_progress_steps_item_status_enum__from_str)),
-        steps: m.get("steps").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_apps__update_response_app_pinned_deployment_progress_steps_item_steps_item__from_json(x)).collect())),
+        steps: m.get("steps").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_apps::UpdateResponseAppPinnedDeploymentProgressStepsItemStepsItemEntry { key: k.clone(), value: val })).collect())).collect())),
     })
 }
 
@@ -32651,10 +32745,11 @@ fn iface_apps__update_response_app_pinned_deployment_progress_steps_item_reason_
     })
 }
 
-fn iface_apps__update_response_app_pinned_deployment_progress_steps_item_steps_item__from_json(v: &Value) -> Option<iface_apps::UpdateResponseAppPinnedDeploymentProgressStepsItemStepsItem> {
+fn iface_apps__update_response_app_pinned_deployment_progress_steps_item_steps_item_entry__from_json(v: &Value) -> Option<iface_apps::UpdateResponseAppPinnedDeploymentProgressStepsItemStepsItemEntry> {
     let m = v.as_object()?;
-    Some(iface_apps::UpdateResponseAppPinnedDeploymentProgressStepsItemStepsItem {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_apps::UpdateResponseAppPinnedDeploymentProgressStepsItemStepsItemEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -32668,7 +32763,7 @@ fn iface_apps__update_response_app_pinned_deployment_progress_summary_steps_item
         reason: m.get("reason").filter(|v| !v.is_null()).and_then(|v| iface_apps__update_response_app_pinned_deployment_progress_summary_steps_item_reason__from_json(v)),
         started_at: m.get("started_at").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         status: m.get("status").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_apps__list_op_response_apps_item_active_deployment_progress_steps_item_status_enum__from_str)),
-        steps: m.get("steps").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_apps__update_response_app_pinned_deployment_progress_summary_steps_item_steps_item__from_json(x)).collect())),
+        steps: m.get("steps").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_apps::UpdateResponseAppPinnedDeploymentProgressSummaryStepsItemStepsItemEntry { key: k.clone(), value: val })).collect())).collect())),
     })
 }
 
@@ -32680,10 +32775,11 @@ fn iface_apps__update_response_app_pinned_deployment_progress_summary_steps_item
     })
 }
 
-fn iface_apps__update_response_app_pinned_deployment_progress_summary_steps_item_steps_item__from_json(v: &Value) -> Option<iface_apps::UpdateResponseAppPinnedDeploymentProgressSummaryStepsItemStepsItem> {
+fn iface_apps__update_response_app_pinned_deployment_progress_summary_steps_item_steps_item_entry__from_json(v: &Value) -> Option<iface_apps::UpdateResponseAppPinnedDeploymentProgressSummaryStepsItemStepsItemEntry> {
     let m = v.as_object()?;
-    Some(iface_apps::UpdateResponseAppPinnedDeploymentProgressSummaryStepsItemStepsItem {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_apps::UpdateResponseAppPinnedDeploymentProgressSummaryStepsItemStepsItemEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 

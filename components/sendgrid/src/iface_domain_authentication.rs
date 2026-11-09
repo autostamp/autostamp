@@ -161,9 +161,64 @@ const OP_DOMAIN_AUTHENTICATION_POST_WHITELABEL_DOMAINS_ID_VALIDATE: OpSpec = OpS
     ],
 };
 
-fn iface_domain_authentication__v200_response__to_json(p: &iface_domain_authentication::V200Response) -> Value {
+fn iface_domain_authentication__v200_response_item__to_json(p: &iface_domain_authentication::V200ResponseItem) -> Value {
     let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
+    m.insert("automatic_security".into(), Value::Bool(*(&p.automatic_security)));
+    m.insert("custom_spf".into(), Value::Bool(*(&p.custom_spf)));
+    m.insert("default".into(), Value::Bool(*(&p.default)));
+    m.insert("dns".into(), iface_domain_authentication__v200_response_item_dns__to_json(&p.dns));
+    m.insert("domain".into(), Value::String((&p.domain).clone()));
+    m.insert("id".into(), serde_json::Number::from_f64(*(&p.id)).map(Value::Number).unwrap_or(Value::Null));
+    m.insert("ips".into(), Value::Array((&p.ips).iter().map(|v| Value::String((v).clone())).collect()));
+    m.insert("legacy".into(), Value::Bool(*(&p.legacy)));
+    m.insert("subdomain".into(), Value::String((&p.subdomain).clone()));
+    m.insert("user_id".into(), serde_json::Number::from_f64(*(&p.user_id)).map(Value::Number).unwrap_or(Value::Null));
+    m.insert("username".into(), Value::String((&p.username).clone()));
+    m.insert("valid".into(), Value::Bool(*(&p.valid)));
+    m.insert("last_validation_attempt_at".into(), match (&p.last_validation_attempt_at) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("subusers".into(), match (&p.subusers) { Some(v) => Value::Array((v).iter().map(|v| iface_domain_authentication__v200_response_item_subusers_item__to_json(v)).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_domain_authentication__v200_response_item_dns__to_json(p: &iface_domain_authentication::V200ResponseItemDns) -> Value {
+    let mut m = Map::new();
+    m.insert("dkim1".into(), iface_domain_authentication__v200_response_item_dns_dkim1__to_json(&p.dkim1));
+    m.insert("dkim2".into(), iface_domain_authentication__v200_response_item_dns_dkim2__to_json(&p.dkim2));
+    m.insert("mail_cname".into(), iface_domain_authentication__v200_response_item_dns_mail_cname__to_json(&p.mail_cname));
+    Value::Object(m)
+}
+
+fn iface_domain_authentication__v200_response_item_dns_dkim1__to_json(p: &iface_domain_authentication::V200ResponseItemDnsDkim1) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), Value::String((&p.data).clone()));
+    m.insert("host".into(), Value::String((&p.host).clone()));
+    m.insert("type".into(), Value::String((&p.type_op).clone()));
+    m.insert("valid".into(), Value::Bool(*(&p.valid)));
+    Value::Object(m)
+}
+
+fn iface_domain_authentication__v200_response_item_dns_dkim2__to_json(p: &iface_domain_authentication::V200ResponseItemDnsDkim2) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), Value::String((&p.data).clone()));
+    m.insert("host".into(), Value::String((&p.host).clone()));
+    m.insert("type".into(), Value::String((&p.type_op).clone()));
+    m.insert("valid".into(), Value::Bool(*(&p.valid)));
+    Value::Object(m)
+}
+
+fn iface_domain_authentication__v200_response_item_dns_mail_cname__to_json(p: &iface_domain_authentication::V200ResponseItemDnsMailCname) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), Value::String((&p.data).clone()));
+    m.insert("host".into(), Value::String((&p.host).clone()));
+    m.insert("type".into(), Value::String((&p.type_op).clone()));
+    m.insert("valid".into(), Value::Bool(*(&p.valid)));
+    Value::Object(m)
+}
+
+fn iface_domain_authentication__v200_response_item_subusers_item__to_json(p: &iface_domain_authentication::V200ResponseItemSubusersItem) -> Value {
+    let mut m = Map::new();
+    m.insert("user_id".into(), match (&p.user_id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("username".into(), match (&p.username) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -216,6 +271,67 @@ fn iface_domain_authentication__authentication_domain_dns_mail_cname__to_json(p:
     m.insert("host".into(), Value::String((&p.host).clone()));
     m.insert("type".into(), Value::String((&p.type_op).clone()));
     m.insert("valid".into(), Value::Bool(*(&p.valid)));
+    Value::Object(m)
+}
+
+fn iface_domain_authentication__v200_response_item_v2__to_json(p: &iface_domain_authentication::V200ResponseItemV2) -> Value {
+    let mut m = Map::new();
+    m.insert("automatic_security".into(), Value::Bool(*(&p.automatic_security)));
+    m.insert("custom_spf".into(), Value::Bool(*(&p.custom_spf)));
+    m.insert("default".into(), Value::Bool(*(&p.default)));
+    m.insert("dns".into(), iface_domain_authentication__v200_response_item_v2_dns__to_json(&p.dns));
+    m.insert("domain".into(), Value::String((&p.domain).clone()));
+    m.insert("id".into(), serde_json::Number::from_f64(*(&p.id)).map(Value::Number).unwrap_or(Value::Null));
+    m.insert("ips".into(), Value::Array((&p.ips).iter().map(|v| Value::String((v).clone())).collect()));
+    m.insert("legacy".into(), Value::Bool(*(&p.legacy)));
+    m.insert("subdomain".into(), Value::String((&p.subdomain).clone()));
+    m.insert("user_id".into(), serde_json::Number::from_f64(*(&p.user_id)).map(Value::Number).unwrap_or(Value::Null));
+    m.insert("username".into(), Value::String((&p.username).clone()));
+    m.insert("valid".into(), Value::Bool(*(&p.valid)));
+    m.insert("last_validation_attempt_at".into(), match (&p.last_validation_attempt_at) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("subusers".into(), match (&p.subusers) { Some(v) => Value::Array((v).iter().map(|v| iface_domain_authentication__v200_response_item_v2_subusers_item__to_json(v)).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_domain_authentication__v200_response_item_v2_dns__to_json(p: &iface_domain_authentication::V200ResponseItemV2Dns) -> Value {
+    let mut m = Map::new();
+    m.insert("dkim1".into(), iface_domain_authentication__v200_response_item_v2_dns_dkim1__to_json(&p.dkim1));
+    m.insert("dkim2".into(), iface_domain_authentication__v200_response_item_v2_dns_dkim2__to_json(&p.dkim2));
+    m.insert("mail_cname".into(), iface_domain_authentication__v200_response_item_v2_dns_mail_cname__to_json(&p.mail_cname));
+    Value::Object(m)
+}
+
+fn iface_domain_authentication__v200_response_item_v2_dns_dkim1__to_json(p: &iface_domain_authentication::V200ResponseItemV2DnsDkim1) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), Value::String((&p.data).clone()));
+    m.insert("host".into(), Value::String((&p.host).clone()));
+    m.insert("type".into(), Value::String((&p.type_op).clone()));
+    m.insert("valid".into(), Value::Bool(*(&p.valid)));
+    Value::Object(m)
+}
+
+fn iface_domain_authentication__v200_response_item_v2_dns_dkim2__to_json(p: &iface_domain_authentication::V200ResponseItemV2DnsDkim2) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), Value::String((&p.data).clone()));
+    m.insert("host".into(), Value::String((&p.host).clone()));
+    m.insert("type".into(), Value::String((&p.type_op).clone()));
+    m.insert("valid".into(), Value::Bool(*(&p.valid)));
+    Value::Object(m)
+}
+
+fn iface_domain_authentication__v200_response_item_v2_dns_mail_cname__to_json(p: &iface_domain_authentication::V200ResponseItemV2DnsMailCname) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), Value::String((&p.data).clone()));
+    m.insert("host".into(), Value::String((&p.host).clone()));
+    m.insert("type".into(), Value::String((&p.type_op).clone()));
+    m.insert("valid".into(), Value::Bool(*(&p.valid)));
+    Value::Object(m)
+}
+
+fn iface_domain_authentication__v200_response_item_v2_subusers_item__to_json(p: &iface_domain_authentication::V200ResponseItemV2SubusersItem) -> Value {
+    let mut m = Map::new();
+    m.insert("user_id".into(), match (&p.user_id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("username".into(), match (&p.username) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -281,15 +397,78 @@ fn iface_domain_authentication__domain_spf_dns_subdomain_spf__to_json(p: &iface_
     Value::Object(m)
 }
 
-fn iface_domain_authentication__delete_whitelabel_domains_subuser_response__to_json(p: &iface_domain_authentication::DeleteWhitelabelDomainsSubuserResponse) -> Value {
+fn iface_domain_authentication__delete_whitelabel_domains_subuser_response_entry__to_json(p: &iface_domain_authentication::DeleteWhitelabelDomainsSubuserResponseEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
-fn iface_domain_authentication__delete_whitelabel_domains_domain_id_response__to_json(p: &iface_domain_authentication::DeleteWhitelabelDomainsDomainIdResponse) -> Value {
+fn iface_domain_authentication__v200_response_item_v3__to_json(p: &iface_domain_authentication::V200ResponseItemV3) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("automatic_security".into(), Value::Bool(*(&p.automatic_security)));
+    m.insert("custom_spf".into(), Value::Bool(*(&p.custom_spf)));
+    m.insert("default".into(), Value::Bool(*(&p.default)));
+    m.insert("dns".into(), iface_domain_authentication__v200_response_item_v3_dns__to_json(&p.dns));
+    m.insert("domain".into(), Value::String((&p.domain).clone()));
+    m.insert("id".into(), serde_json::Number::from_f64(*(&p.id)).map(Value::Number).unwrap_or(Value::Null));
+    m.insert("ips".into(), Value::Array((&p.ips).iter().map(|v| Value::String((v).clone())).collect()));
+    m.insert("legacy".into(), Value::Bool(*(&p.legacy)));
+    m.insert("subdomain".into(), Value::String((&p.subdomain).clone()));
+    m.insert("user_id".into(), serde_json::Number::from_f64(*(&p.user_id)).map(Value::Number).unwrap_or(Value::Null));
+    m.insert("username".into(), Value::String((&p.username).clone()));
+    m.insert("valid".into(), Value::Bool(*(&p.valid)));
+    m.insert("last_validation_attempt_at".into(), match (&p.last_validation_attempt_at) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("subusers".into(), match (&p.subusers) { Some(v) => Value::Array((v).iter().map(|v| iface_domain_authentication__v200_response_item_v3_subusers_item__to_json(v)).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_domain_authentication__v200_response_item_v3_dns__to_json(p: &iface_domain_authentication::V200ResponseItemV3Dns) -> Value {
+    let mut m = Map::new();
+    m.insert("dkim1".into(), iface_domain_authentication__v200_response_item_v3_dns_dkim1__to_json(&p.dkim1));
+    m.insert("dkim2".into(), iface_domain_authentication__v200_response_item_v3_dns_dkim2__to_json(&p.dkim2));
+    m.insert("mail_cname".into(), iface_domain_authentication__v200_response_item_v3_dns_mail_cname__to_json(&p.mail_cname));
+    Value::Object(m)
+}
+
+fn iface_domain_authentication__v200_response_item_v3_dns_dkim1__to_json(p: &iface_domain_authentication::V200ResponseItemV3DnsDkim1) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), Value::String((&p.data).clone()));
+    m.insert("host".into(), Value::String((&p.host).clone()));
+    m.insert("type".into(), Value::String((&p.type_op).clone()));
+    m.insert("valid".into(), Value::Bool(*(&p.valid)));
+    Value::Object(m)
+}
+
+fn iface_domain_authentication__v200_response_item_v3_dns_dkim2__to_json(p: &iface_domain_authentication::V200ResponseItemV3DnsDkim2) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), Value::String((&p.data).clone()));
+    m.insert("host".into(), Value::String((&p.host).clone()));
+    m.insert("type".into(), Value::String((&p.type_op).clone()));
+    m.insert("valid".into(), Value::Bool(*(&p.valid)));
+    Value::Object(m)
+}
+
+fn iface_domain_authentication__v200_response_item_v3_dns_mail_cname__to_json(p: &iface_domain_authentication::V200ResponseItemV3DnsMailCname) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), Value::String((&p.data).clone()));
+    m.insert("host".into(), Value::String((&p.host).clone()));
+    m.insert("type".into(), Value::String((&p.type_op).clone()));
+    m.insert("valid".into(), Value::Bool(*(&p.valid)));
+    Value::Object(m)
+}
+
+fn iface_domain_authentication__v200_response_item_v3_subusers_item__to_json(p: &iface_domain_authentication::V200ResponseItemV3SubusersItem) -> Value {
+    let mut m = Map::new();
+    m.insert("user_id".into(), match (&p.user_id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("username".into(), match (&p.username) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_domain_authentication__delete_whitelabel_domains_domain_id_response_entry__to_json(p: &iface_domain_authentication::DeleteWhitelabelDomainsDomainIdResponseEntry) -> Value {
+    let mut m = Map::new();
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -435,10 +614,70 @@ fn iface_domain_authentication__post_whitelabel_domains_id_validate_params__to_j
     Value::Object(m)
 }
 
-fn iface_domain_authentication__v200_response__from_json(v: &Value) -> Option<iface_domain_authentication::V200Response> {
+fn iface_domain_authentication__v200_response_item__from_json(v: &Value) -> Option<iface_domain_authentication::V200ResponseItem> {
     let m = v.as_object()?;
-    Some(iface_domain_authentication::V200Response {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    Some(iface_domain_authentication::V200ResponseItem {
+        automatic_security: m.get("automatic_security").and_then(|v| (v).as_bool()).unwrap_or_default(),
+        custom_spf: m.get("custom_spf").and_then(|v| (v).as_bool()).unwrap_or_default(),
+        default: m.get("default").and_then(|v| (v).as_bool()).unwrap_or_default(),
+        dns: match m.get("dns").and_then(|v| iface_domain_authentication__v200_response_item_dns__from_json(v)) { Some(x) => x, None => return None },
+        domain: m.get("domain").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        id: m.get("id").and_then(|v| (v).as_f64()).unwrap_or_default(),
+        ips: m.get("ips").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())).unwrap_or_default(),
+        legacy: m.get("legacy").and_then(|v| (v).as_bool()).unwrap_or_default(),
+        subdomain: m.get("subdomain").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        user_id: m.get("user_id").and_then(|v| (v).as_f64()).unwrap_or_default(),
+        username: m.get("username").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        valid: m.get("valid").and_then(|v| (v).as_bool()).unwrap_or_default(),
+        last_validation_attempt_at: m.get("last_validation_attempt_at").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        subusers: m.get("subusers").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_domain_authentication__v200_response_item_subusers_item__from_json(x)).collect())),
+    })
+}
+
+fn iface_domain_authentication__v200_response_item_dns__from_json(v: &Value) -> Option<iface_domain_authentication::V200ResponseItemDns> {
+    let m = v.as_object()?;
+    Some(iface_domain_authentication::V200ResponseItemDns {
+        dkim1: match m.get("dkim1").and_then(|v| iface_domain_authentication__v200_response_item_dns_dkim1__from_json(v)) { Some(x) => x, None => return None },
+        dkim2: match m.get("dkim2").and_then(|v| iface_domain_authentication__v200_response_item_dns_dkim2__from_json(v)) { Some(x) => x, None => return None },
+        mail_cname: match m.get("mail_cname").and_then(|v| iface_domain_authentication__v200_response_item_dns_mail_cname__from_json(v)) { Some(x) => x, None => return None },
+    })
+}
+
+fn iface_domain_authentication__v200_response_item_dns_dkim1__from_json(v: &Value) -> Option<iface_domain_authentication::V200ResponseItemDnsDkim1> {
+    let m = v.as_object()?;
+    Some(iface_domain_authentication::V200ResponseItemDnsDkim1 {
+        data: m.get("data").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        host: m.get("host").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        type_op: m.get("type").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        valid: m.get("valid").and_then(|v| (v).as_bool()).unwrap_or_default(),
+    })
+}
+
+fn iface_domain_authentication__v200_response_item_dns_dkim2__from_json(v: &Value) -> Option<iface_domain_authentication::V200ResponseItemDnsDkim2> {
+    let m = v.as_object()?;
+    Some(iface_domain_authentication::V200ResponseItemDnsDkim2 {
+        data: m.get("data").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        host: m.get("host").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        type_op: m.get("type").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        valid: m.get("valid").and_then(|v| (v).as_bool()).unwrap_or_default(),
+    })
+}
+
+fn iface_domain_authentication__v200_response_item_dns_mail_cname__from_json(v: &Value) -> Option<iface_domain_authentication::V200ResponseItemDnsMailCname> {
+    let m = v.as_object()?;
+    Some(iface_domain_authentication::V200ResponseItemDnsMailCname {
+        data: m.get("data").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        host: m.get("host").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        type_op: m.get("type").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        valid: m.get("valid").and_then(|v| (v).as_bool()).unwrap_or_default(),
+    })
+}
+
+fn iface_domain_authentication__v200_response_item_subusers_item__from_json(v: &Value) -> Option<iface_domain_authentication::V200ResponseItemSubusersItem> {
+    let m = v.as_object()?;
+    Some(iface_domain_authentication::V200ResponseItemSubusersItem {
+        user_id: m.get("user_id").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        username: m.get("username").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
     })
 }
 
@@ -496,6 +735,73 @@ fn iface_domain_authentication__authentication_domain_dns_mail_cname__from_json(
         host: m.get("host").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         type_op: m.get("type").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         valid: m.get("valid").and_then(|v| (v).as_bool()).unwrap_or_default(),
+    })
+}
+
+fn iface_domain_authentication__v200_response_item_v2__from_json(v: &Value) -> Option<iface_domain_authentication::V200ResponseItemV2> {
+    let m = v.as_object()?;
+    Some(iface_domain_authentication::V200ResponseItemV2 {
+        automatic_security: m.get("automatic_security").and_then(|v| (v).as_bool()).unwrap_or_default(),
+        custom_spf: m.get("custom_spf").and_then(|v| (v).as_bool()).unwrap_or_default(),
+        default: m.get("default").and_then(|v| (v).as_bool()).unwrap_or_default(),
+        dns: match m.get("dns").and_then(|v| iface_domain_authentication__v200_response_item_v2_dns__from_json(v)) { Some(x) => x, None => return None },
+        domain: m.get("domain").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        id: m.get("id").and_then(|v| (v).as_f64()).unwrap_or_default(),
+        ips: m.get("ips").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())).unwrap_or_default(),
+        legacy: m.get("legacy").and_then(|v| (v).as_bool()).unwrap_or_default(),
+        subdomain: m.get("subdomain").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        user_id: m.get("user_id").and_then(|v| (v).as_f64()).unwrap_or_default(),
+        username: m.get("username").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        valid: m.get("valid").and_then(|v| (v).as_bool()).unwrap_or_default(),
+        last_validation_attempt_at: m.get("last_validation_attempt_at").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        subusers: m.get("subusers").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_domain_authentication__v200_response_item_v2_subusers_item__from_json(x)).collect())),
+    })
+}
+
+fn iface_domain_authentication__v200_response_item_v2_dns__from_json(v: &Value) -> Option<iface_domain_authentication::V200ResponseItemV2Dns> {
+    let m = v.as_object()?;
+    Some(iface_domain_authentication::V200ResponseItemV2Dns {
+        dkim1: match m.get("dkim1").and_then(|v| iface_domain_authentication__v200_response_item_v2_dns_dkim1__from_json(v)) { Some(x) => x, None => return None },
+        dkim2: match m.get("dkim2").and_then(|v| iface_domain_authentication__v200_response_item_v2_dns_dkim2__from_json(v)) { Some(x) => x, None => return None },
+        mail_cname: match m.get("mail_cname").and_then(|v| iface_domain_authentication__v200_response_item_v2_dns_mail_cname__from_json(v)) { Some(x) => x, None => return None },
+    })
+}
+
+fn iface_domain_authentication__v200_response_item_v2_dns_dkim1__from_json(v: &Value) -> Option<iface_domain_authentication::V200ResponseItemV2DnsDkim1> {
+    let m = v.as_object()?;
+    Some(iface_domain_authentication::V200ResponseItemV2DnsDkim1 {
+        data: m.get("data").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        host: m.get("host").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        type_op: m.get("type").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        valid: m.get("valid").and_then(|v| (v).as_bool()).unwrap_or_default(),
+    })
+}
+
+fn iface_domain_authentication__v200_response_item_v2_dns_dkim2__from_json(v: &Value) -> Option<iface_domain_authentication::V200ResponseItemV2DnsDkim2> {
+    let m = v.as_object()?;
+    Some(iface_domain_authentication::V200ResponseItemV2DnsDkim2 {
+        data: m.get("data").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        host: m.get("host").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        type_op: m.get("type").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        valid: m.get("valid").and_then(|v| (v).as_bool()).unwrap_or_default(),
+    })
+}
+
+fn iface_domain_authentication__v200_response_item_v2_dns_mail_cname__from_json(v: &Value) -> Option<iface_domain_authentication::V200ResponseItemV2DnsMailCname> {
+    let m = v.as_object()?;
+    Some(iface_domain_authentication::V200ResponseItemV2DnsMailCname {
+        data: m.get("data").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        host: m.get("host").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        type_op: m.get("type").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        valid: m.get("valid").and_then(|v| (v).as_bool()).unwrap_or_default(),
+    })
+}
+
+fn iface_domain_authentication__v200_response_item_v2_subusers_item__from_json(v: &Value) -> Option<iface_domain_authentication::V200ResponseItemV2SubusersItem> {
+    let m = v.as_object()?;
+    Some(iface_domain_authentication::V200ResponseItemV2SubusersItem {
+        user_id: m.get("user_id").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        username: m.get("username").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
     })
 }
 
@@ -567,17 +873,86 @@ fn iface_domain_authentication__domain_spf_dns_subdomain_spf__from_json(v: &Valu
     })
 }
 
-fn iface_domain_authentication__delete_whitelabel_domains_subuser_response__from_json(v: &Value) -> Option<iface_domain_authentication::DeleteWhitelabelDomainsSubuserResponse> {
+fn iface_domain_authentication__delete_whitelabel_domains_subuser_response_entry__from_json(v: &Value) -> Option<iface_domain_authentication::DeleteWhitelabelDomainsSubuserResponseEntry> {
     let m = v.as_object()?;
-    Some(iface_domain_authentication::DeleteWhitelabelDomainsSubuserResponse {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_domain_authentication::DeleteWhitelabelDomainsSubuserResponseEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
-fn iface_domain_authentication__delete_whitelabel_domains_domain_id_response__from_json(v: &Value) -> Option<iface_domain_authentication::DeleteWhitelabelDomainsDomainIdResponse> {
+fn iface_domain_authentication__v200_response_item_v3__from_json(v: &Value) -> Option<iface_domain_authentication::V200ResponseItemV3> {
     let m = v.as_object()?;
-    Some(iface_domain_authentication::DeleteWhitelabelDomainsDomainIdResponse {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_domain_authentication::V200ResponseItemV3 {
+        automatic_security: m.get("automatic_security").and_then(|v| (v).as_bool()).unwrap_or_default(),
+        custom_spf: m.get("custom_spf").and_then(|v| (v).as_bool()).unwrap_or_default(),
+        default: m.get("default").and_then(|v| (v).as_bool()).unwrap_or_default(),
+        dns: match m.get("dns").and_then(|v| iface_domain_authentication__v200_response_item_v3_dns__from_json(v)) { Some(x) => x, None => return None },
+        domain: m.get("domain").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        id: m.get("id").and_then(|v| (v).as_f64()).unwrap_or_default(),
+        ips: m.get("ips").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())).unwrap_or_default(),
+        legacy: m.get("legacy").and_then(|v| (v).as_bool()).unwrap_or_default(),
+        subdomain: m.get("subdomain").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        user_id: m.get("user_id").and_then(|v| (v).as_f64()).unwrap_or_default(),
+        username: m.get("username").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        valid: m.get("valid").and_then(|v| (v).as_bool()).unwrap_or_default(),
+        last_validation_attempt_at: m.get("last_validation_attempt_at").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        subusers: m.get("subusers").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_domain_authentication__v200_response_item_v3_subusers_item__from_json(x)).collect())),
+    })
+}
+
+fn iface_domain_authentication__v200_response_item_v3_dns__from_json(v: &Value) -> Option<iface_domain_authentication::V200ResponseItemV3Dns> {
+    let m = v.as_object()?;
+    Some(iface_domain_authentication::V200ResponseItemV3Dns {
+        dkim1: match m.get("dkim1").and_then(|v| iface_domain_authentication__v200_response_item_v3_dns_dkim1__from_json(v)) { Some(x) => x, None => return None },
+        dkim2: match m.get("dkim2").and_then(|v| iface_domain_authentication__v200_response_item_v3_dns_dkim2__from_json(v)) { Some(x) => x, None => return None },
+        mail_cname: match m.get("mail_cname").and_then(|v| iface_domain_authentication__v200_response_item_v3_dns_mail_cname__from_json(v)) { Some(x) => x, None => return None },
+    })
+}
+
+fn iface_domain_authentication__v200_response_item_v3_dns_dkim1__from_json(v: &Value) -> Option<iface_domain_authentication::V200ResponseItemV3DnsDkim1> {
+    let m = v.as_object()?;
+    Some(iface_domain_authentication::V200ResponseItemV3DnsDkim1 {
+        data: m.get("data").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        host: m.get("host").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        type_op: m.get("type").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        valid: m.get("valid").and_then(|v| (v).as_bool()).unwrap_or_default(),
+    })
+}
+
+fn iface_domain_authentication__v200_response_item_v3_dns_dkim2__from_json(v: &Value) -> Option<iface_domain_authentication::V200ResponseItemV3DnsDkim2> {
+    let m = v.as_object()?;
+    Some(iface_domain_authentication::V200ResponseItemV3DnsDkim2 {
+        data: m.get("data").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        host: m.get("host").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        type_op: m.get("type").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        valid: m.get("valid").and_then(|v| (v).as_bool()).unwrap_or_default(),
+    })
+}
+
+fn iface_domain_authentication__v200_response_item_v3_dns_mail_cname__from_json(v: &Value) -> Option<iface_domain_authentication::V200ResponseItemV3DnsMailCname> {
+    let m = v.as_object()?;
+    Some(iface_domain_authentication::V200ResponseItemV3DnsMailCname {
+        data: m.get("data").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        host: m.get("host").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        type_op: m.get("type").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        valid: m.get("valid").and_then(|v| (v).as_bool()).unwrap_or_default(),
+    })
+}
+
+fn iface_domain_authentication__v200_response_item_v3_subusers_item__from_json(v: &Value) -> Option<iface_domain_authentication::V200ResponseItemV3SubusersItem> {
+    let m = v.as_object()?;
+    Some(iface_domain_authentication::V200ResponseItemV3SubusersItem {
+        user_id: m.get("user_id").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        username: m.get("username").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_domain_authentication__delete_whitelabel_domains_domain_id_response_entry__from_json(v: &Value) -> Option<iface_domain_authentication::DeleteWhitelabelDomainsDomainIdResponseEntry> {
+    let m = v.as_object()?;
+    Some(iface_domain_authentication::DeleteWhitelabelDomainsDomainIdResponseEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -632,12 +1007,12 @@ fn iface_domain_authentication__post_whitelabel_domains_id_validate_response_val
     })
 }
 
-fn iface_domain_authentication__get_whitelabel_domains__ok(body: String) -> Result<iface_domain_authentication::V200Response, crate::runtime::DispatchError> {
+fn iface_domain_authentication__get_whitelabel_domains__ok(body: String) -> Result<Vec<iface_domain_authentication::V200ResponseItem>, crate::runtime::DispatchError> {
     let v: Value = match serde_json::from_str(&body) {
         Ok(v) => v,
         Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
     };
-    match iface_domain_authentication__v200_response__from_json(&v) {
+    match (&v).as_array().map(|a| a.iter().filter_map(|x| iface_domain_authentication__v200_response_item__from_json(x)).collect()) {
         Some(x) => Ok(x),
         None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
@@ -668,12 +1043,12 @@ fn iface_domain_authentication__post_whitelabel_domains__err(e: crate::runtime::
     }
 }
 
-fn iface_domain_authentication__get_whitelabel_domains_default__ok(body: String) -> Result<iface_domain_authentication::V200Response, crate::runtime::DispatchError> {
+fn iface_domain_authentication__get_whitelabel_domains_default__ok(body: String) -> Result<Vec<iface_domain_authentication::V200ResponseItemV2>, crate::runtime::DispatchError> {
     let v: Value = match serde_json::from_str(&body) {
         Ok(v) => v,
         Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
     };
-    match iface_domain_authentication__v200_response__from_json(&v) {
+    match (&v).as_array().map(|a| a.iter().filter_map(|x| iface_domain_authentication__v200_response_item_v2__from_json(x)).collect()) {
         Some(x) => Ok(x),
         None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
@@ -704,12 +1079,12 @@ fn iface_domain_authentication__get_whitelabel_domains_subuser__err(e: crate::ru
     }
 }
 
-fn iface_domain_authentication__delete_whitelabel_domains_subuser__ok(body: String) -> Result<iface_domain_authentication::DeleteWhitelabelDomainsSubuserResponse, crate::runtime::DispatchError> {
+fn iface_domain_authentication__delete_whitelabel_domains_subuser__ok(body: String) -> Result<Vec<iface_domain_authentication::DeleteWhitelabelDomainsSubuserResponseEntry>, crate::runtime::DispatchError> {
     let v: Value = match serde_json::from_str(&body) {
         Ok(v) => v,
         Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
     };
-    match iface_domain_authentication__delete_whitelabel_domains_subuser_response__from_json(&v) {
+    match (&v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_domain_authentication::DeleteWhitelabelDomainsSubuserResponseEntry { key: k.clone(), value: val })).collect()) {
         Some(x) => Ok(x),
         None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
@@ -740,12 +1115,12 @@ fn iface_domain_authentication__get_whitelabel_domains_domain_id__err(e: crate::
     }
 }
 
-fn iface_domain_authentication__patch_whitelabel_domains_domain_id__ok(body: String) -> Result<iface_domain_authentication::V200Response, crate::runtime::DispatchError> {
+fn iface_domain_authentication__patch_whitelabel_domains_domain_id__ok(body: String) -> Result<Vec<iface_domain_authentication::V200ResponseItemV3>, crate::runtime::DispatchError> {
     let v: Value = match serde_json::from_str(&body) {
         Ok(v) => v,
         Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
     };
-    match iface_domain_authentication__v200_response__from_json(&v) {
+    match (&v).as_array().map(|a| a.iter().filter_map(|x| iface_domain_authentication__v200_response_item_v3__from_json(x)).collect()) {
         Some(x) => Ok(x),
         None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
@@ -758,12 +1133,12 @@ fn iface_domain_authentication__patch_whitelabel_domains_domain_id__err(e: crate
     }
 }
 
-fn iface_domain_authentication__delete_whitelabel_domains_domain_id__ok(body: String) -> Result<iface_domain_authentication::DeleteWhitelabelDomainsDomainIdResponse, crate::runtime::DispatchError> {
+fn iface_domain_authentication__delete_whitelabel_domains_domain_id__ok(body: String) -> Result<Vec<iface_domain_authentication::DeleteWhitelabelDomainsDomainIdResponseEntry>, crate::runtime::DispatchError> {
     let v: Value = match serde_json::from_str(&body) {
         Ok(v) => v,
         Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
     };
-    match iface_domain_authentication__delete_whitelabel_domains_domain_id_response__from_json(&v) {
+    match (&v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_domain_authentication::DeleteWhitelabelDomainsDomainIdResponseEntry { key: k.clone(), value: val })).collect()) {
         Some(x) => Ok(x),
         None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
@@ -852,7 +1227,7 @@ fn iface_domain_authentication__post_whitelabel_domains_id_validate__err(e: crat
 }
 
 impl iface_domain_authentication::Guest for crate::Component {
-    fn get_whitelabel_domains(params: iface_domain_authentication::GetWhitelabelDomainsParams) -> Result<iface_domain_authentication::V200Response, String> {
+    fn get_whitelabel_domains(params: iface_domain_authentication::GetWhitelabelDomainsParams) -> Result<Vec<iface_domain_authentication::V200ResponseItem>, String> {
         let json = iface_domain_authentication__get_whitelabel_domains_params__to_json(&params);
         match dispatch(&OP_DOMAIN_AUTHENTICATION_GET_WHITELABEL_DOMAINS, json).and_then(iface_domain_authentication__get_whitelabel_domains__ok) {
             Ok(v) => Ok(v),
@@ -866,7 +1241,7 @@ impl iface_domain_authentication::Guest for crate::Component {
             Err(e) => Err(iface_domain_authentication__post_whitelabel_domains__err(e)),
         }
     }
-    fn get_whitelabel_domains_default(params: iface_domain_authentication::GetWhitelabelDomainsDefaultParams) -> Result<iface_domain_authentication::V200Response, String> {
+    fn get_whitelabel_domains_default(params: iface_domain_authentication::GetWhitelabelDomainsDefaultParams) -> Result<Vec<iface_domain_authentication::V200ResponseItemV2>, String> {
         let json = iface_domain_authentication__get_whitelabel_domains_default_params__to_json(&params);
         match dispatch(&OP_DOMAIN_AUTHENTICATION_GET_WHITELABEL_DOMAINS_DEFAULT, json).and_then(iface_domain_authentication__get_whitelabel_domains_default__ok) {
             Ok(v) => Ok(v),
@@ -880,7 +1255,7 @@ impl iface_domain_authentication::Guest for crate::Component {
             Err(e) => Err(iface_domain_authentication__get_whitelabel_domains_subuser__err(e)),
         }
     }
-    fn delete_whitelabel_domains_subuser(params: iface_domain_authentication::DeleteWhitelabelDomainsSubuserParams) -> Result<iface_domain_authentication::DeleteWhitelabelDomainsSubuserResponse, String> {
+    fn delete_whitelabel_domains_subuser(params: iface_domain_authentication::DeleteWhitelabelDomainsSubuserParams) -> Result<Vec<iface_domain_authentication::DeleteWhitelabelDomainsSubuserResponseEntry>, String> {
         let json = iface_domain_authentication__delete_whitelabel_domains_subuser_params__to_json(&params);
         match dispatch(&OP_DOMAIN_AUTHENTICATION_DELETE_WHITELABEL_DOMAINS_SUBUSER, json).and_then(iface_domain_authentication__delete_whitelabel_domains_subuser__ok) {
             Ok(v) => Ok(v),
@@ -894,14 +1269,14 @@ impl iface_domain_authentication::Guest for crate::Component {
             Err(e) => Err(iface_domain_authentication__get_whitelabel_domains_domain_id__err(e)),
         }
     }
-    fn patch_whitelabel_domains_domain_id(params: iface_domain_authentication::PatchWhitelabelDomainsDomainIdParams) -> Result<iface_domain_authentication::V200Response, String> {
+    fn patch_whitelabel_domains_domain_id(params: iface_domain_authentication::PatchWhitelabelDomainsDomainIdParams) -> Result<Vec<iface_domain_authentication::V200ResponseItemV3>, String> {
         let json = iface_domain_authentication__patch_whitelabel_domains_domain_id_params__to_json(&params);
         match dispatch(&OP_DOMAIN_AUTHENTICATION_PATCH_WHITELABEL_DOMAINS_DOMAIN_ID, json).and_then(iface_domain_authentication__patch_whitelabel_domains_domain_id__ok) {
             Ok(v) => Ok(v),
             Err(e) => Err(iface_domain_authentication__patch_whitelabel_domains_domain_id__err(e)),
         }
     }
-    fn delete_whitelabel_domains_domain_id(params: iface_domain_authentication::DeleteWhitelabelDomainsDomainIdParams) -> Result<iface_domain_authentication::DeleteWhitelabelDomainsDomainIdResponse, String> {
+    fn delete_whitelabel_domains_domain_id(params: iface_domain_authentication::DeleteWhitelabelDomainsDomainIdParams) -> Result<Vec<iface_domain_authentication::DeleteWhitelabelDomainsDomainIdResponseEntry>, String> {
         let json = iface_domain_authentication__delete_whitelabel_domains_domain_id_params__to_json(&params);
         match dispatch(&OP_DOMAIN_AUTHENTICATION_DELETE_WHITELABEL_DOMAINS_DOMAIN_ID, json).and_then(iface_domain_authentication__delete_whitelabel_domains_domain_id__ok) {
             Ok(v) => Ok(v),

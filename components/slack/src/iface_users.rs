@@ -134,7 +134,7 @@ const OP_USERS_SET_PRESENCE: OpSpec = OpSpec {
 fn iface_users__conversations_response__to_json(p: &iface_users::ConversationsResponse) -> Value {
     let mut m = Map::new();
     m.insert("channels".into(), Value::Array((&p.channels).iter().map(|v| iface_users__objs_conversation__to_json(v)).collect()));
-    m.insert("ok".into(), iface_users__defs_ok_true__to_json(&p.ok));
+    m.insert("ok".into(), Value::Bool(*(&p.ok)));
     m.insert("response_metadata".into(), match (&p.response_metadata) { Some(v) => iface_users__conversations_response_response_metadata__to_json(v), None => Value::Null });
     Value::Object(m)
 }
@@ -142,12 +142,6 @@ fn iface_users__conversations_response__to_json(p: &iface_users::ConversationsRe
 fn iface_users__objs_conversation__to_json(p: &iface_users::ObjsConversation) -> Value {
     let mut m = Map::new();
     m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_users__defs_ok_true__to_json(p: &iface_users::DefsOkTrue) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -159,7 +153,7 @@ fn iface_users__conversations_response_response_metadata__to_json(p: &iface_user
 
 fn iface_users__delete_photo_response__to_json(p: &iface_users::DeletePhotoResponse) -> Value {
     let mut m = Map::new();
-    m.insert("ok".into(), iface_users__defs_ok_true__to_json(&p.ok));
+    m.insert("ok".into(), Value::Bool(*(&p.ok)));
     Value::Object(m)
 }
 
@@ -169,7 +163,7 @@ fn iface_users__get_presence_response__to_json(p: &iface_users::GetPresenceRespo
     m.insert("connection_count".into(), match (&p.connection_count) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("last_activity".into(), match (&p.last_activity) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("manual_away".into(), match (&p.manual_away) { Some(v) => Value::Bool(*(v)), None => Value::Null });
-    m.insert("ok".into(), iface_users__defs_ok_true__to_json(&p.ok));
+    m.insert("ok".into(), Value::Bool(*(&p.ok)));
     m.insert("online".into(), match (&p.online) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     m.insert("presence".into(), Value::String((&p.presence).clone()));
     Value::Object(m)
@@ -177,7 +171,7 @@ fn iface_users__get_presence_response__to_json(p: &iface_users::GetPresenceRespo
 
 fn iface_users__info_response__to_json(p: &iface_users::InfoResponse) -> Value {
     let mut m = Map::new();
-    m.insert("ok".into(), iface_users__defs_ok_true__to_json(&p.ok));
+    m.insert("ok".into(), Value::Bool(*(&p.ok)));
     m.insert("user".into(), iface_users__objs_user__to_json(&p.user));
     Value::Object(m)
 }
@@ -192,7 +186,7 @@ fn iface_users__list_op_response__to_json(p: &iface_users::ListOpResponse) -> Va
     let mut m = Map::new();
     m.insert("cache_ts".into(), Value::Number(serde_json::Number::from(*(&p.cache_ts))));
     m.insert("members".into(), Value::Array((&p.members).iter().map(|v| iface_users__objs_user__to_json(v)).collect()));
-    m.insert("ok".into(), iface_users__defs_ok_true__to_json(&p.ok));
+    m.insert("ok".into(), Value::Bool(*(&p.ok)));
     m.insert("response_metadata".into(), match (&p.response_metadata) { Some(v) => iface_users__objs_response_metadata__to_json(v), None => Value::Null });
     Value::Object(m)
 }
@@ -205,20 +199,20 @@ fn iface_users__objs_response_metadata__to_json(p: &iface_users::ObjsResponseMet
 
 fn iface_users__lookup_by_email_response__to_json(p: &iface_users::LookupByEmailResponse) -> Value {
     let mut m = Map::new();
-    m.insert("ok".into(), iface_users__defs_ok_true__to_json(&p.ok));
+    m.insert("ok".into(), Value::Bool(*(&p.ok)));
     m.insert("user".into(), iface_users__objs_user__to_json(&p.user));
     Value::Object(m)
 }
 
 fn iface_users__set_active_response__to_json(p: &iface_users::SetActiveResponse) -> Value {
     let mut m = Map::new();
-    m.insert("ok".into(), iface_users__defs_ok_true__to_json(&p.ok));
+    m.insert("ok".into(), Value::Bool(*(&p.ok)));
     Value::Object(m)
 }
 
 fn iface_users__set_photo_response__to_json(p: &iface_users::SetPhotoResponse) -> Value {
     let mut m = Map::new();
-    m.insert("ok".into(), iface_users__defs_ok_true__to_json(&p.ok));
+    m.insert("ok".into(), Value::Bool(*(&p.ok)));
     m.insert("profile".into(), iface_users__set_photo_response_profile__to_json(&p.profile));
     Value::Object(m)
 }
@@ -239,7 +233,7 @@ fn iface_users__set_photo_response_profile__to_json(p: &iface_users::SetPhotoRes
 
 fn iface_users__set_presence_response__to_json(p: &iface_users::SetPresenceResponse) -> Value {
     let mut m = Map::new();
-    m.insert("ok".into(), iface_users__defs_ok_true__to_json(&p.ok));
+    m.insert("ok".into(), Value::Bool(*(&p.ok)));
     Value::Object(m)
 }
 
@@ -324,7 +318,7 @@ fn iface_users__conversations_response__from_json(v: &Value) -> Option<iface_use
     let m = v.as_object()?;
     Some(iface_users::ConversationsResponse {
         channels: m.get("channels").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_users__objs_conversation__from_json(x)).collect())).unwrap_or_default(),
-        ok: match m.get("ok").and_then(|v| iface_users__defs_ok_true__from_json(v)) { Some(x) => x, None => return None },
+        ok: m.get("ok").and_then(|v| (v).as_bool()).unwrap_or_default(),
         response_metadata: m.get("response_metadata").filter(|v| !v.is_null()).and_then(|v| iface_users__conversations_response_response_metadata__from_json(v)),
     })
 }
@@ -333,13 +327,6 @@ fn iface_users__objs_conversation__from_json(v: &Value) -> Option<iface_users::O
     let m = v.as_object()?;
     Some(iface_users::ObjsConversation {
         data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
-    })
-}
-
-fn iface_users__defs_ok_true__from_json(v: &Value) -> Option<iface_users::DefsOkTrue> {
-    let m = v.as_object()?;
-    Some(iface_users::DefsOkTrue {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -353,7 +340,7 @@ fn iface_users__conversations_response_response_metadata__from_json(v: &Value) -
 fn iface_users__delete_photo_response__from_json(v: &Value) -> Option<iface_users::DeletePhotoResponse> {
     let m = v.as_object()?;
     Some(iface_users::DeletePhotoResponse {
-        ok: match m.get("ok").and_then(|v| iface_users__defs_ok_true__from_json(v)) { Some(x) => x, None => return None },
+        ok: m.get("ok").and_then(|v| (v).as_bool()).unwrap_or_default(),
     })
 }
 
@@ -364,7 +351,7 @@ fn iface_users__get_presence_response__from_json(v: &Value) -> Option<iface_user
         connection_count: m.get("connection_count").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
         last_activity: m.get("last_activity").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
         manual_away: m.get("manual_away").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
-        ok: match m.get("ok").and_then(|v| iface_users__defs_ok_true__from_json(v)) { Some(x) => x, None => return None },
+        ok: m.get("ok").and_then(|v| (v).as_bool()).unwrap_or_default(),
         online: m.get("online").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
         presence: m.get("presence").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
@@ -373,7 +360,7 @@ fn iface_users__get_presence_response__from_json(v: &Value) -> Option<iface_user
 fn iface_users__info_response__from_json(v: &Value) -> Option<iface_users::InfoResponse> {
     let m = v.as_object()?;
     Some(iface_users::InfoResponse {
-        ok: match m.get("ok").and_then(|v| iface_users__defs_ok_true__from_json(v)) { Some(x) => x, None => return None },
+        ok: m.get("ok").and_then(|v| (v).as_bool()).unwrap_or_default(),
         user: match m.get("user").and_then(|v| iface_users__objs_user__from_json(v)) { Some(x) => x, None => return None },
     })
 }
@@ -390,7 +377,7 @@ fn iface_users__list_op_response__from_json(v: &Value) -> Option<iface_users::Li
     Some(iface_users::ListOpResponse {
         cache_ts: m.get("cache_ts").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
         members: m.get("members").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_users__objs_user__from_json(x)).collect())).unwrap_or_default(),
-        ok: match m.get("ok").and_then(|v| iface_users__defs_ok_true__from_json(v)) { Some(x) => x, None => return None },
+        ok: m.get("ok").and_then(|v| (v).as_bool()).unwrap_or_default(),
         response_metadata: m.get("response_metadata").filter(|v| !v.is_null()).and_then(|v| iface_users__objs_response_metadata__from_json(v)),
     })
 }
@@ -405,7 +392,7 @@ fn iface_users__objs_response_metadata__from_json(v: &Value) -> Option<iface_use
 fn iface_users__lookup_by_email_response__from_json(v: &Value) -> Option<iface_users::LookupByEmailResponse> {
     let m = v.as_object()?;
     Some(iface_users::LookupByEmailResponse {
-        ok: match m.get("ok").and_then(|v| iface_users__defs_ok_true__from_json(v)) { Some(x) => x, None => return None },
+        ok: m.get("ok").and_then(|v| (v).as_bool()).unwrap_or_default(),
         user: match m.get("user").and_then(|v| iface_users__objs_user__from_json(v)) { Some(x) => x, None => return None },
     })
 }
@@ -413,14 +400,14 @@ fn iface_users__lookup_by_email_response__from_json(v: &Value) -> Option<iface_u
 fn iface_users__set_active_response__from_json(v: &Value) -> Option<iface_users::SetActiveResponse> {
     let m = v.as_object()?;
     Some(iface_users::SetActiveResponse {
-        ok: match m.get("ok").and_then(|v| iface_users__defs_ok_true__from_json(v)) { Some(x) => x, None => return None },
+        ok: m.get("ok").and_then(|v| (v).as_bool()).unwrap_or_default(),
     })
 }
 
 fn iface_users__set_photo_response__from_json(v: &Value) -> Option<iface_users::SetPhotoResponse> {
     let m = v.as_object()?;
     Some(iface_users::SetPhotoResponse {
-        ok: match m.get("ok").and_then(|v| iface_users__defs_ok_true__from_json(v)) { Some(x) => x, None => return None },
+        ok: m.get("ok").and_then(|v| (v).as_bool()).unwrap_or_default(),
         profile: match m.get("profile").and_then(|v| iface_users__set_photo_response_profile__from_json(v)) { Some(x) => x, None => return None },
     })
 }
@@ -443,7 +430,7 @@ fn iface_users__set_photo_response_profile__from_json(v: &Value) -> Option<iface
 fn iface_users__set_presence_response__from_json(v: &Value) -> Option<iface_users::SetPresenceResponse> {
     let m = v.as_object()?;
     Some(iface_users::SetPresenceResponse {
-        ok: match m.get("ok").and_then(|v| iface_users__defs_ok_true__from_json(v)) { Some(x) => x, None => return None },
+        ok: m.get("ok").and_then(|v| (v).as_bool()).unwrap_or_default(),
     })
 }
 

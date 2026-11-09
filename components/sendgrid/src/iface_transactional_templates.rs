@@ -160,9 +160,10 @@ fn iface_transactional_templates__transactional_template_warning__to_json(p: &if
     Value::Object(m)
 }
 
-fn iface_transactional_templates__delete_templates_template_id_response__to_json(p: &iface_transactional_templates::DeleteTemplatesTemplateIdResponse) -> Value {
+fn iface_transactional_templates__delete_templates_template_id_response_entry__to_json(p: &iface_transactional_templates::DeleteTemplatesTemplateIdResponseEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -276,10 +277,11 @@ fn iface_transactional_templates__transactional_template_warning__from_json(v: &
     })
 }
 
-fn iface_transactional_templates__delete_templates_template_id_response__from_json(v: &Value) -> Option<iface_transactional_templates::DeleteTemplatesTemplateIdResponse> {
+fn iface_transactional_templates__delete_templates_template_id_response_entry__from_json(v: &Value) -> Option<iface_transactional_templates::DeleteTemplatesTemplateIdResponseEntry> {
     let m = v.as_object()?;
-    Some(iface_transactional_templates::DeleteTemplatesTemplateIdResponse {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_transactional_templates::DeleteTemplatesTemplateIdResponseEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -392,12 +394,12 @@ fn iface_transactional_templates__patch_templates_template_id__err(e: crate::run
     }
 }
 
-fn iface_transactional_templates__delete_templates_template_id__ok(body: String) -> Result<iface_transactional_templates::DeleteTemplatesTemplateIdResponse, crate::runtime::DispatchError> {
+fn iface_transactional_templates__delete_templates_template_id__ok(body: String) -> Result<Vec<iface_transactional_templates::DeleteTemplatesTemplateIdResponseEntry>, crate::runtime::DispatchError> {
     let v: Value = match serde_json::from_str(&body) {
         Ok(v) => v,
         Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
     };
-    match iface_transactional_templates__delete_templates_template_id_response__from_json(&v) {
+    match (&v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_transactional_templates::DeleteTemplatesTemplateIdResponseEntry { key: k.clone(), value: val })).collect()) {
         Some(x) => Ok(x),
         None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
@@ -446,7 +448,7 @@ impl iface_transactional_templates::Guest for crate::Component {
             Err(e) => Err(iface_transactional_templates__patch_templates_template_id__err(e)),
         }
     }
-    fn delete_templates_template_id(params: iface_transactional_templates::DeleteTemplatesTemplateIdParams) -> Result<iface_transactional_templates::DeleteTemplatesTemplateIdResponse, String> {
+    fn delete_templates_template_id(params: iface_transactional_templates::DeleteTemplatesTemplateIdParams) -> Result<Vec<iface_transactional_templates::DeleteTemplatesTemplateIdResponseEntry>, String> {
         let json = iface_transactional_templates__delete_templates_template_id_params__to_json(&params);
         match dispatch(&OP_TRANSACTIONAL_TEMPLATES_DELETE_TEMPLATES_TEMPLATE_ID, json).and_then(iface_transactional_templates__delete_templates_template_id__ok) {
             Ok(v) => Ok(v),

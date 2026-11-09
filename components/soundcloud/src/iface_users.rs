@@ -192,15 +192,45 @@ fn iface_users__complete_user_quota__to_json(p: &iface_users::CompleteUserQuota)
     Value::Object(m)
 }
 
-fn iface_users__comments_list__to_json(p: &iface_users::CommentsList) -> Value {
+fn iface_users__comment__to_json(p: &iface_users::Comment) -> Value {
     let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
+    m.insert("body".into(), match (&p.body) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("created_at".into(), match (&p.created_at) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("kind".into(), match (&p.kind) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("timestamp".into(), match (&p.timestamp) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("track_id".into(), match (&p.track_id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("uri".into(), match (&p.uri) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("user".into(), match (&p.user) { Some(v) => iface_users__comment_user__to_json(v), None => Value::Null });
+    m.insert("user_id".into(), match (&p.user_id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_users__web_profiles__to_json(p: &iface_users::WebProfiles) -> Value {
+fn iface_users__comment_user__to_json(p: &iface_users::CommentUser) -> Value {
     let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
+    m.insert("avatar_url".into(), match (&p.avatar_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("followers_count".into(), match (&p.followers_count) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("followings_count".into(), match (&p.followings_count) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("kind".into(), match (&p.kind) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("last_modified".into(), match (&p.last_modified) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("permalink".into(), match (&p.permalink) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("permalink_url".into(), match (&p.permalink_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("reposts_count".into(), match (&p.reposts_count) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("uri".into(), match (&p.uri) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("username".into(), match (&p.username) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_users__web_profiles_item__to_json(p: &iface_users::WebProfilesItem) -> Value {
+    let mut m = Map::new();
+    m.insert("created_at".into(), match (&p.created_at) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("kind".into(), match (&p.kind) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("service".into(), match (&p.service) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("title".into(), match (&p.title) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("url".into(), match (&p.url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("username".into(), match (&p.username) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -326,17 +356,48 @@ fn iface_users__complete_user_quota__from_json(v: &Value) -> Option<iface_users:
     })
 }
 
-fn iface_users__comments_list__from_json(v: &Value) -> Option<iface_users::CommentsList> {
+fn iface_users__comment__from_json(v: &Value) -> Option<iface_users::Comment> {
     let m = v.as_object()?;
-    Some(iface_users::CommentsList {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    Some(iface_users::Comment {
+        body: m.get("body").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        created_at: m.get("created_at").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        kind: m.get("kind").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        timestamp: m.get("timestamp").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        track_id: m.get("track_id").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        uri: m.get("uri").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        user: m.get("user").filter(|v| !v.is_null()).and_then(|v| iface_users__comment_user__from_json(v)),
+        user_id: m.get("user_id").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
     })
 }
 
-fn iface_users__web_profiles__from_json(v: &Value) -> Option<iface_users::WebProfiles> {
+fn iface_users__comment_user__from_json(v: &Value) -> Option<iface_users::CommentUser> {
     let m = v.as_object()?;
-    Some(iface_users::WebProfiles {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    Some(iface_users::CommentUser {
+        avatar_url: m.get("avatar_url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        followers_count: m.get("followers_count").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        followings_count: m.get("followings_count").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        kind: m.get("kind").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        last_modified: m.get("last_modified").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        permalink: m.get("permalink").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        permalink_url: m.get("permalink_url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        reposts_count: m.get("reposts_count").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        uri: m.get("uri").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        username: m.get("username").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_users__web_profiles_item__from_json(v: &Value) -> Option<iface_users::WebProfilesItem> {
+    let m = v.as_object()?;
+    Some(iface_users::WebProfilesItem {
+        created_at: m.get("created_at").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        kind: m.get("kind").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        service: m.get("service").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        title: m.get("title").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        url: m.get("url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        username: m.get("username").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
     })
 }
 
@@ -362,12 +423,12 @@ fn iface_users__get_users_user_id__err(e: crate::runtime::DispatchError) -> ifac
     }
 }
 
-fn iface_users__get_users_user_id_comments__ok(body: String) -> Result<iface_users::CommentsList, crate::runtime::DispatchError> {
+fn iface_users__get_users_user_id_comments__ok(body: String) -> Result<Vec<iface_users::Comment>, crate::runtime::DispatchError> {
     let v: Value = match serde_json::from_str(&body) {
         Ok(v) => v,
         Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
     };
-    match iface_users__comments_list__from_json(&v) {
+    match (&v).as_array().map(|a| a.iter().filter_map(|x| iface_users__comment__from_json(x)).collect()) {
         Some(x) => Ok(x),
         None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
@@ -492,12 +553,12 @@ fn iface_users__get_users_user_id_tracks__err(e: crate::runtime::DispatchError) 
     }
 }
 
-fn iface_users__get_users_user_id_web_profiles__ok(body: String) -> Result<iface_users::WebProfiles, crate::runtime::DispatchError> {
+fn iface_users__get_users_user_id_web_profiles__ok(body: String) -> Result<Vec<iface_users::WebProfilesItem>, crate::runtime::DispatchError> {
     let v: Value = match serde_json::from_str(&body) {
         Ok(v) => v,
         Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
     };
-    match iface_users__web_profiles__from_json(&v) {
+    match (&v).as_array().map(|a| a.iter().filter_map(|x| iface_users__web_profiles_item__from_json(x)).collect()) {
         Some(x) => Ok(x),
         None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
@@ -522,7 +583,7 @@ impl iface_users::Guest for crate::Component {
             Err(e) => Err(iface_users__get_users_user_id__err(e)),
         }
     }
-    fn get_users_user_id_comments(params: iface_users::GetUsersUserIdCommentsParams) -> Result<iface_users::CommentsList, iface_users::GetUsersUserIdCommentsError> {
+    fn get_users_user_id_comments(params: iface_users::GetUsersUserIdCommentsParams) -> Result<Vec<iface_users::Comment>, iface_users::GetUsersUserIdCommentsError> {
         let json = iface_users__get_users_user_id_comments_params__to_json(&params);
         match dispatch(&OP_USERS_GET_USERS_USER_ID_COMMENTS, json).and_then(iface_users__get_users_user_id_comments__ok) {
             Ok(v) => Ok(v),
@@ -578,7 +639,7 @@ impl iface_users::Guest for crate::Component {
             Err(e) => Err(iface_users__get_users_user_id_tracks__err(e)),
         }
     }
-    fn get_users_user_id_web_profiles(params: iface_users::GetUsersUserIdWebProfilesParams) -> Result<iface_users::WebProfiles, iface_users::GetUsersUserIdWebProfilesError> {
+    fn get_users_user_id_web_profiles(params: iface_users::GetUsersUserIdWebProfilesParams) -> Result<Vec<iface_users::WebProfilesItem>, iface_users::GetUsersUserIdWebProfilesError> {
         let json = iface_users__get_users_user_id_web_profiles_params__to_json(&params);
         match dispatch(&OP_USERS_GET_USERS_USER_ID_WEB_PROFILES, json).and_then(iface_users__get_users_user_id_web_profiles__ok) {
             Ok(v) => Ok(v),

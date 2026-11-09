@@ -17,7 +17,7 @@ const OP_DIRECTORY_COUNTRIES_COUNTRY_ID_DIRECTORY_COUNTRY_INFORMATION_ACQUIRER_V
 fn iface_directory_countries_country_id__directory_data_country_information_interface__to_json(p: &iface_directory_countries_country_id::DirectoryDataCountryInformationInterface) -> Value {
     let mut m = Map::new();
     m.insert("available_regions".into(), match (&p.available_regions) { Some(v) => Value::Array((v).iter().map(|v| iface_directory_countries_country_id__directory_data_region_information_interface__to_json(v)).collect()), None => Value::Null });
-    m.insert("extension_attributes".into(), match (&p.extension_attributes) { Some(v) => iface_directory_countries_country_id__directory_data_country_information_extension_interface__to_json(v), None => Value::Null });
+    m.insert("extension_attributes".into(), match (&p.extension_attributes) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("full_name_english".into(), Value::String((&p.full_name_english).clone()));
     m.insert("full_name_locale".into(), Value::String((&p.full_name_locale).clone()));
     m.insert("id".into(), Value::String((&p.id).clone()));
@@ -29,21 +29,23 @@ fn iface_directory_countries_country_id__directory_data_country_information_inte
 fn iface_directory_countries_country_id__directory_data_region_information_interface__to_json(p: &iface_directory_countries_country_id::DirectoryDataRegionInformationInterface) -> Value {
     let mut m = Map::new();
     m.insert("code".into(), Value::String((&p.code).clone()));
-    m.insert("extension_attributes".into(), match (&p.extension_attributes) { Some(v) => iface_directory_countries_country_id__directory_data_region_information_extension_interface__to_json(v), None => Value::Null });
+    m.insert("extension_attributes".into(), match (&p.extension_attributes) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("id".into(), Value::String((&p.id).clone()));
     m.insert("name".into(), Value::String((&p.name).clone()));
     Value::Object(m)
 }
 
-fn iface_directory_countries_country_id__directory_data_region_information_extension_interface__to_json(p: &iface_directory_countries_country_id::DirectoryDataRegionInformationExtensionInterface) -> Value {
+fn iface_directory_countries_country_id__directory_data_region_information_extension_interface_entry__to_json(p: &iface_directory_countries_country_id::DirectoryDataRegionInformationExtensionInterfaceEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
-fn iface_directory_countries_country_id__directory_data_country_information_extension_interface__to_json(p: &iface_directory_countries_country_id::DirectoryDataCountryInformationExtensionInterface) -> Value {
+fn iface_directory_countries_country_id__directory_data_country_information_extension_interface_entry__to_json(p: &iface_directory_countries_country_id::DirectoryDataCountryInformationExtensionInterfaceEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -57,7 +59,7 @@ fn iface_directory_countries_country_id__directory_data_country_information_inte
     let m = v.as_object()?;
     Some(iface_directory_countries_country_id::DirectoryDataCountryInformationInterface {
         available_regions: m.get("available_regions").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_directory_countries_country_id__directory_data_region_information_interface__from_json(x)).collect())),
-        extension_attributes: m.get("extension_attributes").filter(|v| !v.is_null()).and_then(|v| iface_directory_countries_country_id__directory_data_country_information_extension_interface__from_json(v)),
+        extension_attributes: m.get("extension_attributes").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_directory_countries_country_id::DirectoryDataCountryInformationExtensionInterfaceEntry { key: k.clone(), value: val })).collect())),
         full_name_english: m.get("full_name_english").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         full_name_locale: m.get("full_name_locale").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         id: m.get("id").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
@@ -70,23 +72,25 @@ fn iface_directory_countries_country_id__directory_data_region_information_inter
     let m = v.as_object()?;
     Some(iface_directory_countries_country_id::DirectoryDataRegionInformationInterface {
         code: m.get("code").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-        extension_attributes: m.get("extension_attributes").filter(|v| !v.is_null()).and_then(|v| iface_directory_countries_country_id__directory_data_region_information_extension_interface__from_json(v)),
+        extension_attributes: m.get("extension_attributes").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_directory_countries_country_id::DirectoryDataRegionInformationExtensionInterfaceEntry { key: k.clone(), value: val })).collect())),
         id: m.get("id").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         name: m.get("name").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
-fn iface_directory_countries_country_id__directory_data_region_information_extension_interface__from_json(v: &Value) -> Option<iface_directory_countries_country_id::DirectoryDataRegionInformationExtensionInterface> {
+fn iface_directory_countries_country_id__directory_data_region_information_extension_interface_entry__from_json(v: &Value) -> Option<iface_directory_countries_country_id::DirectoryDataRegionInformationExtensionInterfaceEntry> {
     let m = v.as_object()?;
-    Some(iface_directory_countries_country_id::DirectoryDataRegionInformationExtensionInterface {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_directory_countries_country_id::DirectoryDataRegionInformationExtensionInterfaceEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
-fn iface_directory_countries_country_id__directory_data_country_information_extension_interface__from_json(v: &Value) -> Option<iface_directory_countries_country_id::DirectoryDataCountryInformationExtensionInterface> {
+fn iface_directory_countries_country_id__directory_data_country_information_extension_interface_entry__from_json(v: &Value) -> Option<iface_directory_countries_country_id::DirectoryDataCountryInformationExtensionInterfaceEntry> {
     let m = v.as_object()?;
-    Some(iface_directory_countries_country_id::DirectoryDataCountryInformationExtensionInterface {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_directory_countries_country_id::DirectoryDataCountryInformationExtensionInterfaceEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 

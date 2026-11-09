@@ -852,54 +852,30 @@ fn iface_orgs__org_hook_config__to_json(p: &iface_orgs::OrgHookConfig) -> Value 
 
 fn iface_orgs__create_webhook_body_config__to_json(p: &iface_orgs::CreateWebhookBodyConfig) -> Value {
     let mut m = Map::new();
-    m.insert("content_type".into(), match (&p.content_type) { Some(v) => iface_orgs__webhook_config_content_type__to_json(v), None => Value::Null });
-    m.insert("insecure_ssl".into(), match (&p.insecure_ssl) { Some(v) => iface_orgs__webhook_config_insecure_ssl__to_json(v), None => Value::Null });
+    m.insert("content_type".into(), match (&p.content_type) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("insecure_ssl".into(), match (&p.insecure_ssl) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("password".into(), match (&p.password) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("secret".into(), match (&p.secret) { Some(v) => iface_orgs__webhook_config_secret__to_json(v), None => Value::Null });
-    m.insert("url".into(), iface_orgs__webhook_config_url__to_json(&p.url));
+    m.insert("secret".into(), match (&p.secret) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("url".into(), Value::String((&p.url).clone()));
     m.insert("username".into(), match (&p.username) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_orgs__webhook_config_content_type__to_json(p: &iface_orgs::WebhookConfigContentType) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_orgs__webhook_config_insecure_ssl__to_json(p: &iface_orgs::WebhookConfigInsecureSsl) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_orgs__webhook_config_secret__to_json(p: &iface_orgs::WebhookConfigSecret) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_orgs__webhook_config_url__to_json(p: &iface_orgs::WebhookConfigUrl) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
 fn iface_orgs__update_webhook_body_config__to_json(p: &iface_orgs::UpdateWebhookBodyConfig) -> Value {
     let mut m = Map::new();
-    m.insert("content_type".into(), match (&p.content_type) { Some(v) => iface_orgs__webhook_config_content_type__to_json(v), None => Value::Null });
-    m.insert("insecure_ssl".into(), match (&p.insecure_ssl) { Some(v) => iface_orgs__webhook_config_insecure_ssl__to_json(v), None => Value::Null });
-    m.insert("secret".into(), match (&p.secret) { Some(v) => iface_orgs__webhook_config_secret__to_json(v), None => Value::Null });
-    m.insert("url".into(), iface_orgs__webhook_config_url__to_json(&p.url));
+    m.insert("content_type".into(), match (&p.content_type) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("insecure_ssl".into(), match (&p.insecure_ssl) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("secret".into(), match (&p.secret) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("url".into(), Value::String((&p.url).clone()));
     Value::Object(m)
 }
 
 fn iface_orgs__webhook_config__to_json(p: &iface_orgs::WebhookConfig) -> Value {
     let mut m = Map::new();
-    m.insert("content_type".into(), match (&p.content_type) { Some(v) => iface_orgs__webhook_config_content_type__to_json(v), None => Value::Null });
-    m.insert("insecure_ssl".into(), match (&p.insecure_ssl) { Some(v) => iface_orgs__webhook_config_insecure_ssl__to_json(v), None => Value::Null });
-    m.insert("secret".into(), match (&p.secret) { Some(v) => iface_orgs__webhook_config_secret__to_json(v), None => Value::Null });
-    m.insert("url".into(), match (&p.url) { Some(v) => iface_orgs__webhook_config_url__to_json(v), None => Value::Null });
+    m.insert("content_type".into(), match (&p.content_type) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("insecure_ssl".into(), match (&p.insecure_ssl) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("secret".into(), match (&p.secret) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("url".into(), match (&p.url) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -940,39 +916,43 @@ fn iface_orgs__hook_delivery__to_json(p: &iface_orgs::HookDelivery) -> Value {
 
 fn iface_orgs__hook_delivery_request__to_json(p: &iface_orgs::HookDeliveryRequest) -> Value {
     let mut m = Map::new();
-    m.insert("headers".into(), iface_orgs__hook_delivery_request_headers__to_json(&p.headers));
-    m.insert("payload".into(), iface_orgs__hook_delivery_request_payload__to_json(&p.payload));
+    m.insert("headers".into(), Value::Object((&p.headers).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()));
+    m.insert("payload".into(), Value::Object((&p.payload).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()));
     Value::Object(m)
 }
 
-fn iface_orgs__hook_delivery_request_headers__to_json(p: &iface_orgs::HookDeliveryRequestHeaders) -> Value {
+fn iface_orgs__hook_delivery_request_headers_entry__to_json(p: &iface_orgs::HookDeliveryRequestHeadersEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
-fn iface_orgs__hook_delivery_request_payload__to_json(p: &iface_orgs::HookDeliveryRequestPayload) -> Value {
+fn iface_orgs__hook_delivery_request_payload_entry__to_json(p: &iface_orgs::HookDeliveryRequestPayloadEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
 fn iface_orgs__hook_delivery_response__to_json(p: &iface_orgs::HookDeliveryResponse) -> Value {
     let mut m = Map::new();
-    m.insert("headers".into(), iface_orgs__hook_delivery_response_headers__to_json(&p.headers));
+    m.insert("headers".into(), Value::Object((&p.headers).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()));
     m.insert("payload".into(), Value::String((&p.payload).clone()));
     Value::Object(m)
 }
 
-fn iface_orgs__hook_delivery_response_headers__to_json(p: &iface_orgs::HookDeliveryResponseHeaders) -> Value {
+fn iface_orgs__hook_delivery_response_headers_entry__to_json(p: &iface_orgs::HookDeliveryResponseHeadersEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
-fn iface_orgs__redeliver_webhook_delivery_response__to_json(p: &iface_orgs::RedeliverWebhookDeliveryResponse) -> Value {
+fn iface_orgs__redeliver_webhook_delivery_response_entry__to_json(p: &iface_orgs::RedeliverWebhookDeliveryResponseEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -1297,10 +1277,10 @@ fn iface_orgs__update_webhook_config_for_org_params__to_json(p: &iface_orgs::Upd
     let mut m = Map::new();
     m.insert("org".into(), Value::String((&p.org).clone()));
     m.insert("hook_id".into(), Value::String((&p.hook_id).clone()));
-    m.insert("content_type".into(), match (&p.content_type) { Some(v) => iface_orgs__webhook_config_content_type__to_json(v), None => Value::Null });
-    m.insert("insecure_ssl".into(), match (&p.insecure_ssl) { Some(v) => iface_orgs__webhook_config_insecure_ssl__to_json(v), None => Value::Null });
-    m.insert("secret".into(), match (&p.secret) { Some(v) => iface_orgs__webhook_config_secret__to_json(v), None => Value::Null });
-    m.insert("url".into(), match (&p.url) { Some(v) => iface_orgs__webhook_config_url__to_json(v), None => Value::Null });
+    m.insert("content_type".into(), match (&p.content_type) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("insecure_ssl".into(), match (&p.insecure_ssl) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("secret".into(), match (&p.secret) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("url".into(), match (&p.url) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -1707,41 +1687,13 @@ fn iface_orgs__org_hook_config__from_json(v: &Value) -> Option<iface_orgs::OrgHo
     })
 }
 
-fn iface_orgs__webhook_config_content_type__from_json(v: &Value) -> Option<iface_orgs::WebhookConfigContentType> {
-    let m = v.as_object()?;
-    Some(iface_orgs::WebhookConfigContentType {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-    })
-}
-
-fn iface_orgs__webhook_config_insecure_ssl__from_json(v: &Value) -> Option<iface_orgs::WebhookConfigInsecureSsl> {
-    let m = v.as_object()?;
-    Some(iface_orgs::WebhookConfigInsecureSsl {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-    })
-}
-
-fn iface_orgs__webhook_config_secret__from_json(v: &Value) -> Option<iface_orgs::WebhookConfigSecret> {
-    let m = v.as_object()?;
-    Some(iface_orgs::WebhookConfigSecret {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-    })
-}
-
-fn iface_orgs__webhook_config_url__from_json(v: &Value) -> Option<iface_orgs::WebhookConfigUrl> {
-    let m = v.as_object()?;
-    Some(iface_orgs::WebhookConfigUrl {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-    })
-}
-
 fn iface_orgs__webhook_config__from_json(v: &Value) -> Option<iface_orgs::WebhookConfig> {
     let m = v.as_object()?;
     Some(iface_orgs::WebhookConfig {
-        content_type: m.get("content_type").filter(|v| !v.is_null()).and_then(|v| iface_orgs__webhook_config_content_type__from_json(v)),
-        insecure_ssl: m.get("insecure_ssl").filter(|v| !v.is_null()).and_then(|v| iface_orgs__webhook_config_insecure_ssl__from_json(v)),
-        secret: m.get("secret").filter(|v| !v.is_null()).and_then(|v| iface_orgs__webhook_config_secret__from_json(v)),
-        url: m.get("url").filter(|v| !v.is_null()).and_then(|v| iface_orgs__webhook_config_url__from_json(v)),
+        content_type: m.get("content_type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        insecure_ssl: m.get("insecure_ssl").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        secret: m.get("secret").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        url: m.get("url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
     })
 }
 
@@ -1785,44 +1737,48 @@ fn iface_orgs__hook_delivery__from_json(v: &Value) -> Option<iface_orgs::HookDel
 fn iface_orgs__hook_delivery_request__from_json(v: &Value) -> Option<iface_orgs::HookDeliveryRequest> {
     let m = v.as_object()?;
     Some(iface_orgs::HookDeliveryRequest {
-        headers: match m.get("headers").and_then(|v| iface_orgs__hook_delivery_request_headers__from_json(v)) { Some(x) => x, None => return None },
-        payload: match m.get("payload").and_then(|v| iface_orgs__hook_delivery_request_payload__from_json(v)) { Some(x) => x, None => return None },
+        headers: m.get("headers").and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_orgs::HookDeliveryRequestHeadersEntry { key: k.clone(), value: val })).collect())).unwrap_or_default(),
+        payload: m.get("payload").and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_orgs::HookDeliveryRequestPayloadEntry { key: k.clone(), value: val })).collect())).unwrap_or_default(),
     })
 }
 
-fn iface_orgs__hook_delivery_request_headers__from_json(v: &Value) -> Option<iface_orgs::HookDeliveryRequestHeaders> {
+fn iface_orgs__hook_delivery_request_headers_entry__from_json(v: &Value) -> Option<iface_orgs::HookDeliveryRequestHeadersEntry> {
     let m = v.as_object()?;
-    Some(iface_orgs::HookDeliveryRequestHeaders {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_orgs::HookDeliveryRequestHeadersEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
-fn iface_orgs__hook_delivery_request_payload__from_json(v: &Value) -> Option<iface_orgs::HookDeliveryRequestPayload> {
+fn iface_orgs__hook_delivery_request_payload_entry__from_json(v: &Value) -> Option<iface_orgs::HookDeliveryRequestPayloadEntry> {
     let m = v.as_object()?;
-    Some(iface_orgs::HookDeliveryRequestPayload {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_orgs::HookDeliveryRequestPayloadEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
 fn iface_orgs__hook_delivery_response__from_json(v: &Value) -> Option<iface_orgs::HookDeliveryResponse> {
     let m = v.as_object()?;
     Some(iface_orgs::HookDeliveryResponse {
-        headers: match m.get("headers").and_then(|v| iface_orgs__hook_delivery_response_headers__from_json(v)) { Some(x) => x, None => return None },
+        headers: m.get("headers").and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_orgs::HookDeliveryResponseHeadersEntry { key: k.clone(), value: val })).collect())).unwrap_or_default(),
         payload: m.get("payload").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
-fn iface_orgs__hook_delivery_response_headers__from_json(v: &Value) -> Option<iface_orgs::HookDeliveryResponseHeaders> {
+fn iface_orgs__hook_delivery_response_headers_entry__from_json(v: &Value) -> Option<iface_orgs::HookDeliveryResponseHeadersEntry> {
     let m = v.as_object()?;
-    Some(iface_orgs::HookDeliveryResponseHeaders {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_orgs::HookDeliveryResponseHeadersEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
-fn iface_orgs__redeliver_webhook_delivery_response__from_json(v: &Value) -> Option<iface_orgs::RedeliverWebhookDeliveryResponse> {
+fn iface_orgs__redeliver_webhook_delivery_response_entry__from_json(v: &Value) -> Option<iface_orgs::RedeliverWebhookDeliveryResponseEntry> {
     let m = v.as_object()?;
-    Some(iface_orgs::RedeliverWebhookDeliveryResponse {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_orgs::RedeliverWebhookDeliveryResponseEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
@@ -2397,12 +2353,12 @@ fn iface_orgs__get_webhook_delivery__err(e: crate::runtime::DispatchError) -> if
     }
 }
 
-fn iface_orgs__redeliver_webhook_delivery__ok(body: String) -> Result<iface_orgs::RedeliverWebhookDeliveryResponse, crate::runtime::DispatchError> {
+fn iface_orgs__redeliver_webhook_delivery__ok(body: String) -> Result<Vec<iface_orgs::RedeliverWebhookDeliveryResponseEntry>, crate::runtime::DispatchError> {
     let v: Value = match serde_json::from_str(&body) {
         Ok(v) => v,
         Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
     };
-    match iface_orgs__redeliver_webhook_delivery_response__from_json(&v) {
+    match (&v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_orgs::RedeliverWebhookDeliveryResponseEntry { key: k.clone(), value: val })).collect()) {
         Some(x) => Ok(x),
         None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
@@ -3037,7 +2993,7 @@ impl iface_orgs::Guest for crate::Component {
             Err(e) => Err(iface_orgs__get_webhook_delivery__err(e)),
         }
     }
-    fn redeliver_webhook_delivery(params: iface_orgs::RedeliverWebhookDeliveryParams) -> Result<iface_orgs::RedeliverWebhookDeliveryResponse, iface_orgs::RedeliverWebhookDeliveryError> {
+    fn redeliver_webhook_delivery(params: iface_orgs::RedeliverWebhookDeliveryParams) -> Result<Vec<iface_orgs::RedeliverWebhookDeliveryResponseEntry>, iface_orgs::RedeliverWebhookDeliveryError> {
         let json = iface_orgs__redeliver_webhook_delivery_params__to_json(&params);
         match dispatch(&OP_ORGS_REDELIVER_WEBHOOK_DELIVERY, json).and_then(iface_orgs__redeliver_webhook_delivery__ok) {
             Ok(v) => Ok(v),

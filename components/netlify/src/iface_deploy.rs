@@ -225,21 +225,31 @@ fn iface_deploy__deploy_site_capabilities__to_json(p: &iface_deploy::DeploySiteC
     Value::Object(m)
 }
 
-fn iface_deploy__files_files__to_json(p: &iface_deploy::FilesFiles) -> Value {
+fn iface_deploy__files_files_entry__to_json(p: &iface_deploy::FilesFilesEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
-fn iface_deploy__files_functions__to_json(p: &iface_deploy::FilesFunctions) -> Value {
+fn iface_deploy__files_functions_entry__to_json(p: &iface_deploy::FilesFunctionsEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
-fn iface_deploy__files_functions_config__to_json(p: &iface_deploy::FilesFunctionsConfig) -> Value {
+fn iface_deploy__function_config__to_json(p: &iface_deploy::FunctionConfig) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("display_name".into(), match (&p.display_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("generator".into(), match (&p.generator) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_deploy__files_functions_config_entry__to_json(p: &iface_deploy::FilesFunctionsConfigEntry) -> Value {
+    let mut m = Map::new();
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), iface_deploy__function_config__to_json(&p.value));
     Value::Object(m)
 }
 
@@ -298,11 +308,11 @@ fn iface_deploy__create_site_deploy_params__to_json(p: &iface_deploy::CreateSite
     m.insert("async".into(), match (&p.async_op) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     m.insert("branch_v2".into(), match (&p.branch_v2) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("draft".into(), match (&p.draft) { Some(v) => Value::Bool(*(v)), None => Value::Null });
-    m.insert("files".into(), match (&p.files) { Some(v) => iface_deploy__files_files__to_json(v), None => Value::Null });
+    m.insert("files".into(), match (&p.files) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("framework".into(), match (&p.framework) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("function_schedules".into(), match (&p.function_schedules) { Some(v) => Value::Array((v).iter().map(|v| iface_deploy__function_schedule__to_json(v)).collect()), None => Value::Null });
-    m.insert("functions".into(), match (&p.functions) { Some(v) => iface_deploy__files_functions__to_json(v), None => Value::Null });
-    m.insert("functions_config".into(), match (&p.functions_config) { Some(v) => iface_deploy__files_functions_config__to_json(v), None => Value::Null });
+    m.insert("functions".into(), match (&p.functions) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
+    m.insert("functions_config".into(), match (&p.functions_config) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), iface_deploy__function_config__to_json(&e.value))).collect()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -320,11 +330,11 @@ fn iface_deploy__update_site_deploy_params__to_json(p: &iface_deploy::UpdateSite
     m.insert("async".into(), match (&p.async_op) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     m.insert("branch".into(), match (&p.branch) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("draft".into(), match (&p.draft) { Some(v) => Value::Bool(*(v)), None => Value::Null });
-    m.insert("files".into(), match (&p.files) { Some(v) => iface_deploy__files_files__to_json(v), None => Value::Null });
+    m.insert("files".into(), match (&p.files) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("framework".into(), match (&p.framework) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("function_schedules".into(), match (&p.function_schedules) { Some(v) => Value::Array((v).iter().map(|v| iface_deploy__function_schedule__to_json(v)).collect()), None => Value::Null });
-    m.insert("functions".into(), match (&p.functions) { Some(v) => iface_deploy__files_functions__to_json(v), None => Value::Null });
-    m.insert("functions_config".into(), match (&p.functions_config) { Some(v) => iface_deploy__files_functions_config__to_json(v), None => Value::Null });
+    m.insert("functions".into(), match (&p.functions) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
+    m.insert("functions_config".into(), match (&p.functions_config) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), iface_deploy__function_config__to_json(&e.value))).collect()), None => Value::Null });
     Value::Object(m)
 }
 

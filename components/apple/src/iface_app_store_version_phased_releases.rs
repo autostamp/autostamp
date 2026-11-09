@@ -38,6 +38,15 @@ const OP_APP_STORE_VERSION_PHASED_RELEASES_DELETE_INSTANCE: OpSpec = OpSpec {
     ],
 };
 
+fn iface_app_store_version_phased_releases__phased_release_state__to_str(e: &iface_app_store_version_phased_releases::PhasedReleaseState) -> &'static str {
+    match e {
+        iface_app_store_version_phased_releases::PhasedReleaseState::Inactive => "INACTIVE",
+        iface_app_store_version_phased_releases::PhasedReleaseState::Active => "ACTIVE",
+        iface_app_store_version_phased_releases::PhasedReleaseState::Paused => "PAUSED",
+        iface_app_store_version_phased_releases::PhasedReleaseState::Complete => "COMPLETE",
+    }
+}
+
 fn iface_app_store_version_phased_releases__app_store_version_phased_release_create_request_data_relationships_app_store_version_data_type_op_enum__to_str(e: &iface_app_store_version_phased_releases::AppStoreVersionPhasedReleaseCreateRequestDataRelationshipsAppStoreVersionDataTypeOpEnum) -> &'static str {
     match e {
         iface_app_store_version_phased_releases::AppStoreVersionPhasedReleaseCreateRequestDataRelationshipsAppStoreVersionDataTypeOpEnum::AppStoreVersions => "appStoreVersions",
@@ -60,13 +69,7 @@ fn iface_app_store_version_phased_releases__app_store_version_phased_release_cre
 
 fn iface_app_store_version_phased_releases__app_store_version_phased_release_create_request_data_attributes__to_json(p: &iface_app_store_version_phased_releases::AppStoreVersionPhasedReleaseCreateRequestDataAttributes) -> Value {
     let mut m = Map::new();
-    m.insert("phasedReleaseState".into(), match (&p.phased_release_state) { Some(v) => iface_app_store_version_phased_releases__phased_release_state__to_json(v), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_app_store_version_phased_releases__phased_release_state__to_json(p: &iface_app_store_version_phased_releases::PhasedReleaseState) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
+    m.insert("phasedReleaseState".into(), match (&p.phased_release_state) { Some(v) => Value::String(iface_app_store_version_phased_releases__phased_release_state__to_str(v).into()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -108,7 +111,7 @@ fn iface_app_store_version_phased_releases__app_store_version_phased_release__to
 fn iface_app_store_version_phased_releases__app_store_version_phased_release_attributes__to_json(p: &iface_app_store_version_phased_releases::AppStoreVersionPhasedReleaseAttributes) -> Value {
     let mut m = Map::new();
     m.insert("currentDayNumber".into(), match (&p.current_day_number) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    m.insert("phasedReleaseState".into(), match (&p.phased_release_state) { Some(v) => iface_app_store_version_phased_releases__phased_release_state__to_json(v), None => Value::Null });
+    m.insert("phasedReleaseState".into(), match (&p.phased_release_state) { Some(v) => Value::String(iface_app_store_version_phased_releases__phased_release_state__to_str(v).into()), None => Value::Null });
     m.insert("startDate".into(), match (&p.start_date) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("totalPauseDuration".into(), match (&p.total_pause_duration) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
@@ -136,7 +139,7 @@ fn iface_app_store_version_phased_releases__app_store_version_phased_release_upd
 
 fn iface_app_store_version_phased_releases__app_store_version_phased_release_update_request_data_attributes__to_json(p: &iface_app_store_version_phased_releases::AppStoreVersionPhasedReleaseUpdateRequestDataAttributes) -> Value {
     let mut m = Map::new();
-    m.insert("phasedReleaseState".into(), match (&p.phased_release_state) { Some(v) => iface_app_store_version_phased_releases__phased_release_state__to_json(v), None => Value::Null });
+    m.insert("phasedReleaseState".into(), match (&p.phased_release_state) { Some(v) => Value::String(iface_app_store_version_phased_releases__phased_release_state__to_str(v).into()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -157,13 +160,6 @@ fn iface_app_store_version_phased_releases__delete_instance_params__to_json(p: &
     let mut m = Map::new();
     m.insert("id".into(), Value::String((&p.id).clone()));
     Value::Object(m)
-}
-
-fn iface_app_store_version_phased_releases__phased_release_state__from_json(v: &Value) -> Option<iface_app_store_version_phased_releases::PhasedReleaseState> {
-    let m = v.as_object()?;
-    Some(iface_app_store_version_phased_releases::PhasedReleaseState {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-    })
 }
 
 fn iface_app_store_version_phased_releases__app_store_version_phased_release_response__from_json(v: &Value) -> Option<iface_app_store_version_phased_releases::AppStoreVersionPhasedReleaseResponse> {
@@ -188,7 +184,7 @@ fn iface_app_store_version_phased_releases__app_store_version_phased_release_att
     let m = v.as_object()?;
     Some(iface_app_store_version_phased_releases::AppStoreVersionPhasedReleaseAttributes {
         current_day_number: m.get("currentDayNumber").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
-        phased_release_state: m.get("phasedReleaseState").filter(|v| !v.is_null()).and_then(|v| iface_app_store_version_phased_releases__phased_release_state__from_json(v)),
+        phased_release_state: m.get("phasedReleaseState").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_app_store_version_phased_releases__phased_release_state__from_str)),
         start_date: m.get("startDate").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
         total_pause_duration: m.get("totalPauseDuration").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
     })
@@ -206,6 +202,16 @@ fn iface_app_store_version_phased_releases__document_links__from_json(v: &Value)
     Some(iface_app_store_version_phased_releases::DocumentLinks {
         self_: m.get("self").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
+}
+
+fn iface_app_store_version_phased_releases__phased_release_state__from_str(s: &str) -> Option<iface_app_store_version_phased_releases::PhasedReleaseState> {
+    match s {
+        "INACTIVE" => Some(iface_app_store_version_phased_releases::PhasedReleaseState::Inactive),
+        "ACTIVE" => Some(iface_app_store_version_phased_releases::PhasedReleaseState::Active),
+        "PAUSED" => Some(iface_app_store_version_phased_releases::PhasedReleaseState::Paused),
+        "COMPLETE" => Some(iface_app_store_version_phased_releases::PhasedReleaseState::Complete),
+        _ => None,
+    }
 }
 
 fn iface_app_store_version_phased_releases__app_store_version_phased_release_create_request_data_type_op_enum__from_str(s: &str) -> Option<iface_app_store_version_phased_releases::AppStoreVersionPhasedReleaseCreateRequestDataTypeOpEnum> {

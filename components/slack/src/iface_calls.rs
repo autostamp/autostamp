@@ -65,31 +65,25 @@ const OP_CALLS_UPDATE: OpSpec = OpSpec {
 
 fn iface_calls__add_response__to_json(p: &iface_calls::AddResponse) -> Value {
     let mut m = Map::new();
-    m.insert("ok".into(), iface_calls__defs_ok_true__to_json(&p.ok));
-    Value::Object(m)
-}
-
-fn iface_calls__defs_ok_true__to_json(p: &iface_calls::DefsOkTrue) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
+    m.insert("ok".into(), Value::Bool(*(&p.ok)));
     Value::Object(m)
 }
 
 fn iface_calls__end_response__to_json(p: &iface_calls::EndResponse) -> Value {
     let mut m = Map::new();
-    m.insert("ok".into(), iface_calls__defs_ok_true__to_json(&p.ok));
+    m.insert("ok".into(), Value::Bool(*(&p.ok)));
     Value::Object(m)
 }
 
 fn iface_calls__info_response__to_json(p: &iface_calls::InfoResponse) -> Value {
     let mut m = Map::new();
-    m.insert("ok".into(), iface_calls__defs_ok_true__to_json(&p.ok));
+    m.insert("ok".into(), Value::Bool(*(&p.ok)));
     Value::Object(m)
 }
 
 fn iface_calls__update_response__to_json(p: &iface_calls::UpdateResponse) -> Value {
     let mut m = Map::new();
-    m.insert("ok".into(), iface_calls__defs_ok_true__to_json(&p.ok));
+    m.insert("ok".into(), Value::Bool(*(&p.ok)));
     Value::Object(m)
 }
 
@@ -135,35 +129,28 @@ fn iface_calls__update_params__to_json(p: &iface_calls::UpdateParams) -> Value {
 fn iface_calls__add_response__from_json(v: &Value) -> Option<iface_calls::AddResponse> {
     let m = v.as_object()?;
     Some(iface_calls::AddResponse {
-        ok: match m.get("ok").and_then(|v| iface_calls__defs_ok_true__from_json(v)) { Some(x) => x, None => return None },
-    })
-}
-
-fn iface_calls__defs_ok_true__from_json(v: &Value) -> Option<iface_calls::DefsOkTrue> {
-    let m = v.as_object()?;
-    Some(iface_calls::DefsOkTrue {
-        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        ok: m.get("ok").and_then(|v| (v).as_bool()).unwrap_or_default(),
     })
 }
 
 fn iface_calls__end_response__from_json(v: &Value) -> Option<iface_calls::EndResponse> {
     let m = v.as_object()?;
     Some(iface_calls::EndResponse {
-        ok: match m.get("ok").and_then(|v| iface_calls__defs_ok_true__from_json(v)) { Some(x) => x, None => return None },
+        ok: m.get("ok").and_then(|v| (v).as_bool()).unwrap_or_default(),
     })
 }
 
 fn iface_calls__info_response__from_json(v: &Value) -> Option<iface_calls::InfoResponse> {
     let m = v.as_object()?;
     Some(iface_calls::InfoResponse {
-        ok: match m.get("ok").and_then(|v| iface_calls__defs_ok_true__from_json(v)) { Some(x) => x, None => return None },
+        ok: m.get("ok").and_then(|v| (v).as_bool()).unwrap_or_default(),
     })
 }
 
 fn iface_calls__update_response__from_json(v: &Value) -> Option<iface_calls::UpdateResponse> {
     let m = v.as_object()?;
     Some(iface_calls::UpdateResponse {
-        ok: match m.get("ok").and_then(|v| iface_calls__defs_ok_true__from_json(v)) { Some(x) => x, None => return None },
+        ok: m.get("ok").and_then(|v| (v).as_bool()).unwrap_or_default(),
     })
 }
 

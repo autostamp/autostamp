@@ -33,7 +33,7 @@ fn iface_transactions__sales_data_transaction_interface__to_json(p: &iface_trans
     m.insert("additional_information".into(), match (&p.additional_information) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
     m.insert("child_transactions".into(), Value::Array((&p.child_transactions).iter().map(|v| Value::String((v).clone())).collect()));
     m.insert("created_at".into(), Value::String((&p.created_at).clone()));
-    m.insert("extension_attributes".into(), match (&p.extension_attributes) { Some(v) => iface_transactions__sales_data_transaction_extension_interface__to_json(v), None => Value::Null });
+    m.insert("extension_attributes".into(), match (&p.extension_attributes) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("is_closed".into(), Value::Number(serde_json::Number::from(*(&p.is_closed))));
     m.insert("order_id".into(), Value::Number(serde_json::Number::from(*(&p.order_id))));
     m.insert("parent_id".into(), match (&p.parent_id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
@@ -45,9 +45,10 @@ fn iface_transactions__sales_data_transaction_interface__to_json(p: &iface_trans
     Value::Object(m)
 }
 
-fn iface_transactions__sales_data_transaction_extension_interface__to_json(p: &iface_transactions::SalesDataTransactionExtensionInterface) -> Value {
+fn iface_transactions__sales_data_transaction_extension_interface_entry__to_json(p: &iface_transactions::SalesDataTransactionExtensionInterfaceEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
@@ -108,7 +109,7 @@ fn iface_transactions__sales_data_transaction_interface__from_json(v: &Value) ->
         additional_information: m.get("additional_information").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
         child_transactions: m.get("child_transactions").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())).unwrap_or_default(),
         created_at: m.get("created_at").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
-        extension_attributes: m.get("extension_attributes").filter(|v| !v.is_null()).and_then(|v| iface_transactions__sales_data_transaction_extension_interface__from_json(v)),
+        extension_attributes: m.get("extension_attributes").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_transactions::SalesDataTransactionExtensionInterfaceEntry { key: k.clone(), value: val })).collect())),
         is_closed: m.get("is_closed").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
         order_id: m.get("order_id").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
         parent_id: m.get("parent_id").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
@@ -120,10 +121,11 @@ fn iface_transactions__sales_data_transaction_interface__from_json(v: &Value) ->
     })
 }
 
-fn iface_transactions__sales_data_transaction_extension_interface__from_json(v: &Value) -> Option<iface_transactions::SalesDataTransactionExtensionInterface> {
+fn iface_transactions__sales_data_transaction_extension_interface_entry__from_json(v: &Value) -> Option<iface_transactions::SalesDataTransactionExtensionInterfaceEntry> {
     let m = v.as_object()?;
-    Some(iface_transactions::SalesDataTransactionExtensionInterface {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_transactions::SalesDataTransactionExtensionInterfaceEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 

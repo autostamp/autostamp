@@ -15,31 +15,33 @@ const OP_PRODUCTS_ATTRIBUTES_TYPES_CATALOG_PRODUCT_ATTRIBUTE_TYPES_LIST_V1_GET_I
 
 fn iface_products_attributes_types__catalog_data_product_attribute_type_interface__to_json(p: &iface_products_attributes_types::CatalogDataProductAttributeTypeInterface) -> Value {
     let mut m = Map::new();
-    m.insert("extension_attributes".into(), match (&p.extension_attributes) { Some(v) => iface_products_attributes_types__catalog_data_product_attribute_type_extension_interface__to_json(v), None => Value::Null });
+    m.insert("extension_attributes".into(), match (&p.extension_attributes) { Some(v) => Value::Object((v).iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()), None => Value::Null });
     m.insert("label".into(), Value::String((&p.label).clone()));
     m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
-fn iface_products_attributes_types__catalog_data_product_attribute_type_extension_interface__to_json(p: &iface_products_attributes_types::CatalogDataProductAttributeTypeExtensionInterface) -> Value {
+fn iface_products_attributes_types__catalog_data_product_attribute_type_extension_interface_entry__to_json(p: &iface_products_attributes_types::CatalogDataProductAttributeTypeExtensionInterfaceEntry) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
 fn iface_products_attributes_types__catalog_data_product_attribute_type_interface__from_json(v: &Value) -> Option<iface_products_attributes_types::CatalogDataProductAttributeTypeInterface> {
     let m = v.as_object()?;
     Some(iface_products_attributes_types::CatalogDataProductAttributeTypeInterface {
-        extension_attributes: m.get("extension_attributes").filter(|v| !v.is_null()).and_then(|v| iface_products_attributes_types__catalog_data_product_attribute_type_extension_interface__from_json(v)),
+        extension_attributes: m.get("extension_attributes").filter(|v| !v.is_null()).and_then(|v| (v).as_object().map(|o| o.iter().filter_map(|(k, x)| ((x).as_str().map(|s| s.to_string())).map(|val| iface_products_attributes_types::CatalogDataProductAttributeTypeExtensionInterfaceEntry { key: k.clone(), value: val })).collect())),
         label: m.get("label").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
         value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
-fn iface_products_attributes_types__catalog_data_product_attribute_type_extension_interface__from_json(v: &Value) -> Option<iface_products_attributes_types::CatalogDataProductAttributeTypeExtensionInterface> {
+fn iface_products_attributes_types__catalog_data_product_attribute_type_extension_interface_entry__from_json(v: &Value) -> Option<iface_products_attributes_types::CatalogDataProductAttributeTypeExtensionInterfaceEntry> {
     let m = v.as_object()?;
-    Some(iface_products_attributes_types::CatalogDataProductAttributeTypeExtensionInterface {
-        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    Some(iface_products_attributes_types::CatalogDataProductAttributeTypeExtensionInterfaceEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
     })
 }
 
